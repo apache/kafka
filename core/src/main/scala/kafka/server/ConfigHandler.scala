@@ -23,6 +23,7 @@ import DynamicConfig.Broker._
 import kafka.api.ApiVersion
 import kafka.controller.KafkaController
 import kafka.log.{LogConfig, LogManager}
+import kafka.network.ConnectionQuotas
 import kafka.security.CredentialProvider
 import kafka.server.Constants._
 import kafka.server.QuotaFactory.QuotaManagers
@@ -182,6 +183,23 @@ class UserConfigHandler(private val quotaManagers: QuotaManagers, val credential
     updateQuotaConfig(Some(sanitizedUser), sanitizedClientId, config)
     if (!sanitizedClientId.isDefined && sanitizedUser != ConfigEntityName.Default)
       credentialProvider.updateCredentials(Sanitizer.desanitize(sanitizedUser), config)
+  }
+}
+
+class IpConfigHandler(private val connectionQuotas: ConnectionQuotas) extends ConfigHandler with Logging {
+
+  def processConfigChanges(ip: String, config: Properties): Unit = {
+    val ipConnectionRateQuota =
+      if (config.containsKey(DynamicConfig.Ip.IpConnectionRateOverrideProp))
+        Some(config.getProperty(DynamicConfig.Ip.IpConnectionRateOverrideProp).toInt)
+      else
+        None
+    val updatedIp =
+      if (ip != ConfigEntityName.Default)
+        Some(ip)
+      else
+        None
+    connectionQuotas.updateIpConnectionRate(updatedIp, ipConnectionRateQuota)
   }
 }
 

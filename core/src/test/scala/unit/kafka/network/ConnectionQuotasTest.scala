@@ -410,6 +410,67 @@ class ConnectionQuotasTest {
   }
 
   @Test
+  def testIpConnectionRateWhenActualRateBelowLimit(): Unit = {
+    val ipConnectionRateLimit = 30
+    val connCreateIntervalMs = 25 // connection creation rate = 40/sec per listener (3 * 40 = 120/sec total)
+    val props = brokerPropsWithDefaultConnectionLimits
+    val config = KafkaConfig.fromProps(props)
+    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    addListenersAndVerify(config, connectionQuotas)
+    val externalListener = listeners("EXTERNAL")
+    connectionQuotas.updateIpConnectionRate(Some(externalListener.defaultIp.getHostAddress), Some(ipConnectionRateLimit))
+    // create connections with the rate < ip quota and verify there is no throttling
+    var future = executor.submit((() => acceptConnections(connectionQuotas, externalListener, ipConnectionRateLimit,
+      connCreateIntervalMs)): Runnable)
+    future.get(2, TimeUnit.SECONDS)
+    assertEquals(s"Number of connections on $externalListener:",
+      ipConnectionRateLimit, connectionQuotas.get(externalListener.defaultIp))
+
+    val adminListener = listeners("ADMIN")
+    val unthrottledRate = 50
+    // create connections with an IP with no quota and verify there is no throttling
+    future = executor.submit((() => acceptConnections(connectionQuotas, adminListener, unthrottledRate,
+      connCreateIntervalMs)): Runnable)
+    future.get(2, TimeUnit.SECONDS)
+
+    assertEquals(s"Number of connections on $adminListener:",
+      unthrottledRate, connectionQuotas.get(adminListener.defaultIp))
+
+    // acceptor shouldn't block for IP rate throttling
+    verifyNoBlockedPercentRecordedOnAllListeners()
+  }
+
+  @Test
+  def testIpConnectionRateWhenActualRateAboveLimit(): Unit = {
+    val ipConnectionRateLimit = 20
+    val props = brokerPropsWithDefaultConnectionLimits
+    val config = KafkaConfig.fromProps(props)
+    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    addListenersAndVerify(config, connectionQuotas)
+    val externalListener = listeners("EXTERNAL")
+    connectionQuotas.updateIpConnectionRate(Some(externalListener.defaultIp.getHostAddress), Some(ipConnectionRateLimit))
+    // create connections with the rate > ip quota
+    val connectionRate = 40
+    assertThrows[ConnectionThrottledException] {
+     acceptConnections(connectionQuotas, externalListener, connectionRate)
+    }
+    assertEquals(s"Number of connections on $externalListener:",
+      ipConnectionRateLimit, connectionQuotas.get(externalListener.defaultIp))
+
+    // verify that default quota applies to IPs without a quota override
+    connectionQuotas.updateIpConnectionRate(None, Some(ipConnectionRateLimit))
+    val adminListener = listeners("ADMIN")
+    assertThrows[ConnectionThrottledException] {
+      acceptConnections(connectionQuotas, adminListener, connectionRate)
+    }
+    assertEquals(s"Number of connections on $adminListener:",
+      ipConnectionRateLimit, connectionQuotas.get(adminListener.defaultIp))
+
+    // acceptor shouldn't block for IP rate throttling
+    verifyNoBlockedPercentRecordedOnAllListeners()
+  }
+
+  @Test
   def testMaxListenerConnectionListenerMustBeAboveZero(): Unit = {
     val config = KafkaConfig.fromProps(brokerPropsWithDefaultConnectionLimits)
     connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
@@ -475,6 +536,57 @@ class ConnectionQuotasTest {
       acceptConnectionsAndVerifyRate(connectionQuotas, listeners("EXTERNAL"), totalConnections, 5, maxBrokerConnectionRate, 20)): Runnable
     ).get(10, TimeUnit.SECONDS)
     assertTrue("Expected BlockedPercentMeter metric for EXTERNAL listener to be recorded", blockedPercentMeters("EXTERNAL").count() > 0)
+  }
+
+  @Test
+  def testIpConnectionRateUpdate(): Unit = {
+    val ipConnectionRateLimit = 20
+    val props = brokerPropsWithDefaultConnectionLimits
+    val config = KafkaConfig.fromProps(props)
+    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    addListenersAndVerify(config, connectionQuotas)
+    val externalListener = listeners("EXTERNAL")
+    connectionQuotas.updateIpConnectionRate(Some(externalListener.defaultIp.getHostAddress), Some(ipConnectionRateLimit))
+    // create connections with the rate > ip quota
+    val connectionRate = 40
+    assertThrows[ConnectionThrottledException] {
+      acceptConnections(connectionQuotas, externalListener, connectionRate)
+    }
+    assertEquals(s"Number of connections on $externalListener:",
+      ipConnectionRateLimit, connectionQuotas.get(externalListener.defaultIp))
+
+    // increase ip quota, we should accept connections up to the new quota limit
+    val updatedRateLimit = 30
+    connectionQuotas.updateIpConnectionRate(Some(externalListener.defaultIp.getHostAddress), Some(updatedRateLimit))
+    assertThrows[ConnectionThrottledException] {
+      acceptConnections(connectionQuotas, externalListener, connectionRate)
+    }
+    assertEquals(s"Number of connections on $externalListener:",
+      updatedRateLimit, connectionQuotas.get(externalListener.defaultIp))
+
+    // remove IP quota, all connections should get accepted
+    connectionQuotas.updateIpConnectionRate(Some(externalListener.defaultIp.getHostAddress), None)
+    acceptConnections(connectionQuotas, externalListener, connectionRate)
+    assertEquals(s"Number of connections on $externalListener:",
+      connectionRate + updatedRateLimit, connectionQuotas.get(externalListener.defaultIp))
+
+    // create connections on a different IP,
+    val adminListener = listeners("ADMIN")
+    acceptConnections(connectionQuotas, adminListener, connectionRate)
+    assertEquals(s"Number of connections on $adminListener:",
+      connectionRate, connectionQuotas.get(adminListener.defaultIp))
+
+    // set a default IP quota, verify that quota gets propagated
+    connectionQuotas.updateIpConnectionRate(None, Some(ipConnectionRateLimit))
+    assertThrows[ConnectionThrottledException] {
+      acceptConnections(connectionQuotas, adminListener, connectionRate)
+    }
+    assertEquals(s"Number of connections on $adminListener:",
+      connectionRate + ipConnectionRateLimit, connectionQuotas.get(adminListener.defaultIp))
+
+
+    // acceptor shouldn't block for IP rate throttling
+    verifyNoBlockedPercentRecordedOnAllListeners()
   }
 
   @Test

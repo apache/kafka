@@ -783,15 +783,7 @@ class SocketServerTest {
     // then shutdown the server
     shutdownServerAndMetrics(server)
 
-    val largeChunkOfBytes = new Array[Byte](1000000)
-    // doing a subsequent send should throw an exception as the connection should be closed.
-    // send a large chunk of bytes to trigger a socket flush
-    try {
-      sendRequest(plainSocket, largeChunkOfBytes, Some(0))
-      fail("expected exception when writing to closed plain socket")
-    } catch {
-      case _: IOException => // expected
-    }
+    verifyRemoteConnectionClosed(plainSocket)
   }
 
   @Test
@@ -877,6 +869,64 @@ class SocketServerTest {
       assertEquals(-1, conn.getInputStream.read())
     } finally {
       shutdownServerAndMetrics(overrideServer)
+    }
+  }
+
+  @Test
+  def testConnectionRatePerIp(): Unit = {
+    val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
+    overrideProps.remove("max.connections.per.ip")
+    overrideProps.put(KafkaConfig.NumQuotaSamplesProp, String.valueOf(2))
+    val connectionRate = 5
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), new Metrics(), Time.SYSTEM, credentialProvider)
+    overrideServer.connectionQuotas.updateIpConnectionRate(None, Some(connectionRate))
+    try {
+      overrideServer.startup()
+      // make the maximum allowable number of connections
+      (0 until connectionRate).map(_ => connect(overrideServer))
+      // now try one more (should get throttled)
+      var conn = connect(overrideServer)
+      verifyRemoteConnectionClosed(conn)
+
+      // new connection should succeed after previous connection closed
+      conn = connect(overrideServer)
+      val serializedBytes = producerRequestBytes()
+      sendRequest(conn, serializedBytes)
+      val request = overrideServer.dataPlaneRequestChannel.receiveRequest(2000)
+      assertNotNull(request)
+    } finally {
+      shutdownServerAndMetrics(overrideServer)
+    }
+  }
+
+  @Test
+  def testThrottledSocketsClosedOnShutdown(): Unit = {
+    val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
+    overrideProps.remove("max.connections.per.ip")
+    overrideProps.put(KafkaConfig.NumQuotaSamplesProp, String.valueOf(2))
+    val connectionRate = 5
+    val time = new MockTime()
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), new Metrics(), time, credentialProvider)
+    overrideServer.connectionQuotas.updateIpConnectionRate(None, Some(connectionRate))
+    overrideServer.startup()
+    // make the maximum allowable number of connections
+    (0 until connectionRate).map(_ => connect(overrideServer))
+    // now try one more (should get throttled)
+    val conn = connect(overrideServer)
+    // don't advance time so that connection never gets unthrottled
+    shutdownServerAndMetrics(overrideServer)
+    verifyRemoteConnectionClosed(conn)
+  }
+
+  private def verifyRemoteConnectionClosed(connection: Socket): Unit = {
+    val largeChunkOfBytes = new Array[Byte](1000000)
+    // doing a subsequent send should throw an exception as the connection should be closed.
+    // send a large chunk of bytes to trigger a socket flush
+    try {
+      sendRequest(connection, largeChunkOfBytes, Some(0))
+      fail("expected exception when writing to closed plain socket")
+    } catch {
+      case _: IOException => // expected
     }
   }
 
