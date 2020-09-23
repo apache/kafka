@@ -130,8 +130,6 @@ class KafkaNetworkChannel(time: Time,
       val request = pendingOutbound.peek()
       endpoints.get(request.destinationId) match {
         case Some(node) =>
-          // FIXME: This check is broken
-
           if (client.connectionFailed(node)) {
             pendingOutbound.poll()
             val apiKey = ApiKeys.forId(request.data.apiKey)
