@@ -502,7 +502,7 @@ public class ImplicitLinkedHashCollectionTest {
             addRandomElement(random, existing, coll);
             addRandomElement(random, existing, coll);
             addRandomElement(random, existing, coll);
-            removeRandomElement(random, existing, coll);
+            removeRandomElement(random, existing);
             expectTraversal(coll.iterator(), existing.iterator());
         }
     }
@@ -561,8 +561,7 @@ public class ImplicitLinkedHashCollectionTest {
     }
 
     @SuppressWarnings("unlikely-arg-type")
-    private void removeRandomElement(Random random, Collection<Integer> existing,
-                                     ImplicitLinkedHashCollection<TestElement> coll) {
+    private void removeRandomElement(Random random, Collection<Integer> existing) {
         int removeIdx = random.nextInt(existing.size());
         Iterator<Integer> iter = existing.iterator();
         Integer element = null;
@@ -581,5 +580,20 @@ public class ImplicitLinkedHashCollectionTest {
         TestElement element1 = coll.find(element2);
         assertFalse(element2.equals(element1));
         assertTrue(element2.elementKeysAreEqual(element1));
+    }
+
+    @Test
+    public void testMoveToEnd() {
+        ImplicitLinkedHashCollection<TestElement> coll = new ImplicitLinkedHashCollection<>();
+        TestElement e1 = new TestElement(1, 1);
+        TestElement e2 = new TestElement(2, 2);
+        TestElement e3 = new TestElement(3, 3);
+        assertTrue(coll.add(e1));
+        assertTrue(coll.add(e2));
+        assertTrue(coll.add(e3));
+        coll.moveToEnd(e1);
+        expectTraversal(coll.iterator(), 2, 3, 1);
+        Assert.assertThrows(RuntimeException.class, () ->
+            coll.moveToEnd(new TestElement(4, 4)));
     }
 }

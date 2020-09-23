@@ -98,6 +98,7 @@ class DelayedRemoteFetchTest extends EasyMockSupport {
 
     val localReadResults: Seq[(TopicPartition, LogReadResult)] = List(
       (tp1, new LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
+        divergingEpoch = None,
         highWatermark = -1L,
         leaderLogStartOffset = -1L,
         leaderLogEndOffset = -1L,
@@ -107,6 +108,7 @@ class DelayedRemoteFetchTest extends EasyMockSupport {
         exception = Some(new Exception()))),
       (tp, new LogReadResult(
         FetchDataInfo(LogOffsetMetadata(fetchInfo.fetchOffset), MemoryRecords.EMPTY, delayedRemoteStorageFetch = Some(remoteFetchInfo)),
+        divergingEpoch = None,
         highWatermark = 2000,
         leaderLogStartOffset = 0,
         leaderLogEndOffset = 2000,

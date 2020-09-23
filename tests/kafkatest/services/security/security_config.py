@@ -203,13 +203,16 @@ class SecurityConfig(TemplateRenderer):
         # If node is not specified, use static jaas config which will be created later.
         # Otherwise use static JAAS configuration files with SASL_SSL and sasl.jaas.config
         # property with SASL_PLAINTEXT so that both code paths are tested by existing tests.
-        # Note that this is an artibtrary choice and it is possible to run all tests with
+        # Note that this is an arbitrary choice and it is possible to run all tests with
         # either static or dynamic jaas config files if required.
         static_jaas_conf = node is None or (self.has_sasl and self.has_ssl)
         if use_inter_broker_mechanism_for_client:
             client_sasl_mechanism_to_use = self.interbroker_sasl_mechanism
         else:
-            client_sasl_mechanism_to_use = self.client_sasl_mechanism
+            # csv is supported here, but client configs only supports a single mechanism,
+            # so arbitrarily take the first one defined in case it has multiple values
+            client_sasl_mechanism_to_use = self.client_sasl_mechanism.split(',')[0].strip()
+
         return SecurityConfig(self.context, self.security_protocol,
                               client_sasl_mechanism=client_sasl_mechanism_to_use,
                               template_props=template_props,
@@ -297,7 +300,8 @@ class SecurityConfig(TemplateRenderer):
                                             self.export_kafka_opts_for_admin_client_as_broker())
 
     def maybe_create_scram_credentials(self, node, connect, path, mechanism, user_name, password, kafka_opts_for_admin_client_as_broker = ""):
-        if self.has_sasl and self.is_sasl_scram(mechanism):
+        # we only need to create these credentials when the client and broker mechanisms are both SASL/SCRAM
+        if self.has_sasl and self.is_sasl_scram(mechanism) and self.is_sasl_scram(self.interbroker_sasl_mechanism):
             cmd = "%s %s %s --entity-name %s --entity-type users --alter --add-config %s=[password=%s]" % \
                   (kafka_opts_for_admin_client_as_broker, path.script("kafka-configs.sh", node), connect,
                   user_name, mechanism, password)

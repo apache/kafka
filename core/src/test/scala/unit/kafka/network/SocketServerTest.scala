@@ -35,15 +35,14 @@ import kafka.utils.Implicits._
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.memory.MemoryPool
-import org.apache.kafka.common.message.SaslAuthenticateRequestData
-import org.apache.kafka.common.message.SaslHandshakeRequestData
+import org.apache.kafka.common.message.{SaslAuthenticateRequestData, SaslHandshakeRequestData, VoteRequestData}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ClientInformation
 import org.apache.kafka.common.network.KafkaChannel.ChannelMuteState
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.MemoryRecords
-import org.apache.kafka.common.requests.{AbstractRequest, ApiVersionsRequest, ProduceRequest, RequestHeader, SaslAuthenticateRequest, SaslHandshakeRequest}
+import org.apache.kafka.common.requests.{AbstractRequest, ApiVersionsRequest, ProduceRequest, RequestHeader, SaslAuthenticateRequest, SaslHandshakeRequest, VoteRequest}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.utils.AppInfoParser
@@ -371,6 +370,31 @@ class SocketServerTest {
     sendRequest(socket2, producerRequestBytes())
 
     testableServer.shutdown()
+  }
+
+  @Test
+  def testDisabledRequestIsRejected(): Unit = {
+    val correlationId = 57
+    val header = new RequestHeader(ApiKeys.VOTE, 0, "", correlationId)
+    val request = new VoteRequest.Builder(new VoteRequestData()).build()
+    val byteBuffer = request.serialize(header)
+    byteBuffer.rewind()
+
+    val socket = connect()
+    val serializedBytes = new Array[Byte](byteBuffer.remaining)
+    byteBuffer.get(serializedBytes)
+
+    val outgoing = new DataOutputStream(socket.getOutputStream)
+    try {
+      outgoing.writeInt(serializedBytes.length)
+      outgoing.write(serializedBytes)
+      outgoing.flush()
+      receiveResponse(socket)
+    } catch {
+      case _: IOException => // we expect the server to close the socket
+    } finally {
+      outgoing.close()
+    }
   }
 
   @Test

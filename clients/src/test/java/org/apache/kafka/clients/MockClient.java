@@ -312,6 +312,14 @@ public class MockClient implements KafkaClient {
         return this.requests;
     }
 
+    public Queue<ClientResponse> responses() {
+        return this.responses;
+    }
+
+    public Queue<FutureResponse> futureResponses() {
+        return this.futureResponses;
+    }
+
     public void respond(AbstractResponse response) {
         respond(response, false);
     }
@@ -556,6 +564,7 @@ public class MockClient implements KafkaClient {
      * to inspect the request body for the type of the request or for specific fields that should be set,
      * and to fail the test if it doesn't match.
      */
+    @FunctionalInterface
     public interface RequestMatcher {
         boolean matches(AbstractRequest body);
     }

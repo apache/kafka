@@ -151,6 +151,7 @@ class DelayedFetchTest extends EasyMockSupport {
     LogReadResult(
       exception = Some(error.exception),
       info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
+      divergingEpoch = None,
       highWatermark = -1L,
       leaderLogStartOffset = -1L,
       leaderLogEndOffset = -1L,

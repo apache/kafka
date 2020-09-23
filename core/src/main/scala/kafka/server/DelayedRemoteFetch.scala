@@ -101,15 +101,15 @@ class DelayedRemoteFetch(remoteFetchTask: RemoteLogManager#AsyncReadTask,
         if (remoteFetchResult.get.error.isDefined) {
           val r = replicaManager.createLogReadResult(remoteFetchResult.get.error.get)
           tp -> FetchPartitionData(r.error, r.highWatermark, r.leaderLogStartOffset, r.info.records,
-            r.lastStableOffset, r.info.abortedTransactions, r.preferredReadReplica, false)
+            divergingEpoch = None, r.lastStableOffset, r.info.abortedTransactions, r.preferredReadReplica, false)
         } else {
           val info = remoteFetchResult.get.info.get
           tp -> FetchPartitionData(result.error, result.highWatermark, result.leaderLogStartOffset, info.records,
-            result.lastStableOffset, info.abortedTransactions, result.preferredReadReplica, false)
+            divergingEpoch = None, result.lastStableOffset, info.abortedTransactions, result.preferredReadReplica, false)
         }
       } else {
         tp -> FetchPartitionData(result.error, result.highWatermark, result.leaderLogStartOffset, result.info.records,
-          result.lastStableOffset, result.info.abortedTransactions, result.preferredReadReplica, false)
+          divergingEpoch = None, result.lastStableOffset, result.info.abortedTransactions, result.preferredReadReplica, false)
       }
     }
 

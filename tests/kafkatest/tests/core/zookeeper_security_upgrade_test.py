@@ -96,7 +96,8 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
         # set acls
         if self.is_secure:
             self.kafka.authorizer_class_name = KafkaService.ACL_AUTHORIZER
-            self.acls.set_acls(security_protocol, self.kafka, self.topic, self.group)
+            # Force use of direct ZooKeeper access because Kafka is not yet started
+            self.acls.set_acls(security_protocol, self.kafka, self.topic, self.group, force_use_zk_connection=True)
 
         if self.no_sasl:
             self.kafka.start()
