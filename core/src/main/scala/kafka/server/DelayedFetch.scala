@@ -165,9 +165,19 @@ class DelayedFetch(delayMs: Long,
       quota = quota)
 
     val fetchPartitionData = logReadResults.map { case (tp, result) =>
-      tp -> FetchPartitionData(result.error, result.highWatermark, result.leaderLogStartOffset, result.info.records,
-        result.lastStableOffset, result.info.abortedTransactions, result.preferredReadReplica,
-        fetchMetadata.isFromFollower && replicaManager.isAddingReplica(tp, fetchMetadata.replicaId))
+      val isReassignmentFetch = fetchMetadata.isFromFollower &&
+        replicaManager.isAddingReplica(tp, fetchMetadata.replicaId)
+
+      tp -> FetchPartitionData(
+        result.error,
+        result.highWatermark,
+        result.leaderLogStartOffset,
+        result.info.records,
+        result.divergingEpoch,
+        result.lastStableOffset,
+        result.info.abortedTransactions,
+        result.preferredReadReplica,
+        isReassignmentFetch)
     }
 
     responseCallback(fetchPartitionData)

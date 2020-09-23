@@ -179,17 +179,22 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     reconfigureServers(props, perBrokerConfig = true, (KafkaConfig.ListenersProp, newListeners))
     waitForListener("EXTERNAL")
 
+    // The expected connection count after each test run
+    val initialConnectionCount = connectionCount
+
     // new broker-wide connection rate limit
     val connRateLimit = 18
 
     // before setting connection rate to 10, verify we can do at least double that by default (no limit)
     verifyConnectionRate(2 * connRateLimit, Int.MaxValue, "PLAINTEXT")
+    waitForConnectionCount(initialConnectionCount)
 
     // Reduce total broker connection rate limit to 18 at the cluster level and verify the limit is enforced
     props.clear()  // so that we do not pass security protocol map which cannot be set at the cluster level
     props.put(KafkaConfig.MaxConnectionCreationRateProp, connRateLimit.toString)
     reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.MaxConnectionCreationRateProp, connRateLimit.toString))
     verifyConnectionRate(10, connRateLimit, "PLAINTEXT")
+    waitForConnectionCount(initialConnectionCount)
 
     // Set 7 conn/sec rate limit for each listener and verify it gets enforced
     val listenerConnRateLimit = 7
@@ -203,6 +208,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
       executor.submit((() => verifyConnectionRate(3, listenerConnRateLimit, listener)): Runnable)
     }
     futures.foreach(_.get(40, TimeUnit.SECONDS))
+    waitForConnectionCount(initialConnectionCount)
 
     // increase connection rate limit on PLAINTEXT (inter-broker) listener to 22 and verify that it will be able to
     // achieve this rate even though total connection rate may exceed broker-wide rate limit, while EXTERNAL listener
@@ -217,6 +223,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
       verifyConnectionRate(5, listenerConnRateLimit, "EXTERNAL")): Runnable)
     plaintextFuture.get(40, TimeUnit.SECONDS)
     externalFuture.get(40, TimeUnit.SECONDS)
+    waitForConnectionCount(initialConnectionCount)
   }
 
   private def reconfigureServers(newProps: Properties, perBrokerConfig: Boolean, aPropToVerify: (String, String)): Unit = {
@@ -317,6 +324,11 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     }
   }
 
+  private def waitForConnectionCount(expectedConnectionCount: Int): Unit = {
+    TestUtils.waitUntilTrue(() => expectedConnectionCount == connectionCount,
+      s"Connections not closed (expected = $expectedConnectionCount current = $connectionCount)")
+  }
+
   /**
    * this method simulates a workload that creates connection, sends produce request, closes connection,
    * and verifies that rate does not exceed the given maximum limit `maxConnectionRate`
@@ -326,8 +338,6 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
    * is at least certain value. Note that throttling is tested and verified more accurately in ConnectionQuotasTest
    */
   private def verifyConnectionRate(minConnectionRate: Int, maxConnectionRate: Int, listener: String): Unit = {
-    val initialConnectionCount = connectionCount
-
     // duration such that the maximum rate should be at most 10% higher than the rate limit. Since all connections
     // can fall in the beginning of quota window, it is OK to create extra 2 seconds (window size) worth of connections
     val runTimeMs = TimeUnit.SECONDS.toMillis(25)
@@ -344,9 +354,5 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     val rateCap = if (maxConnectionRate < Int.MaxValue) 1.1 * maxConnectionRate.toDouble else Int.MaxValue.toDouble
     assertTrue(s"Listener $listener connection rate $actualRate must be below $rateCap", actualRate <= rateCap)
     assertTrue(s"Listener $listener connection rate $actualRate must be above $minConnectionRate", actualRate >= minConnectionRate)
-
-    // make sure the state is the same as before the method call
-    TestUtils.waitUntilTrue(() => initialConnectionCount == connectionCount,
-      s"Connections not closed (initial = $initialConnectionCount current = $connectionCount)")
   }
 }

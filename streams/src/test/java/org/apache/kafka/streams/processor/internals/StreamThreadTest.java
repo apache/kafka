@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -109,6 +110,7 @@ import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getSharedAdminClientId;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
+import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.mock;
@@ -495,6 +497,7 @@ public class StreamThreadTest {
         );
         
         final Consumer<byte[], byte[]> mockConsumer = EasyMock.createNiceMock(Consumer.class);
+        expect(mockConsumer.poll(anyObject())).andStubReturn(ConsumerRecords.empty());
         final EasyMockConsumerClientSupplier mockClientSupplier = new EasyMockConsumerClientSupplier(mockConsumer);
 
         mockClientSupplier.setCluster(createCluster());
@@ -1210,12 +1213,12 @@ public class StreamThreadTest {
             },
             "name");
         internalTopologyBuilder.addStateStore(
-            Stores.keyValueStoreBuilder(
-                Stores.persistentKeyValueStore(storeName),
-                Serdes.String(),
-                Serdes.String()
-            ),
-            "proc"
+                Stores.keyValueStoreBuilder(
+                        Stores.persistentKeyValueStore(storeName),
+                        Serdes.String(),
+                        Serdes.String()
+                ),
+                "proc"
         );
 
         thread.setState(StreamThread.State.STARTING);
@@ -1233,12 +1236,12 @@ public class StreamThreadTest {
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.mainConsumer();
         mockConsumer.assign(assignedPartitions);
         mockConsumer.updateBeginningOffsets(mkMap(
-            mkEntry(t1p1, 0L)
+                mkEntry(t1p1, 0L)
         ));
 
         final MockConsumer<byte[], byte[]> restoreConsumer = (MockConsumer<byte[], byte[]>) thread.restoreConsumer();
         restoreConsumer.updateBeginningOffsets(mkMap(
-            mkEntry(storeChangelogTopicPartition, 0L)
+                mkEntry(storeChangelogTopicPartition, 0L)
         ));
         final MockAdminClient admin = (MockAdminClient) thread.adminClient();
         admin.updateEndOffsets(singletonMap(storeChangelogTopicPartition, 0L));

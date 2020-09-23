@@ -168,15 +168,15 @@ class ControllerMutationQuotaManager(private val config: ClientQuotaManagerConfi
                                      private val quotaCallback: Option[ClientQuotaCallback])
     extends ClientQuotaManager(config, metrics, QuotaType.ControllerMutation, time, threadNamePrefix, quotaCallback) {
 
-  override protected def clientRateMetricName(quotaMetricTags: Map[String, String]): MetricName = {
-    metrics.metricName("mutation-rate", QuotaType.ControllerMutation.toString,
-      "Tracking mutation-rate per user/client-id",
+  override protected def clientQuotaMetricName(quotaMetricTags: Map[String, String]): MetricName = {
+    metrics.metricName("tokens", QuotaType.ControllerMutation.toString,
+      "Tracking remaining tokens in the token bucket per user/client-id",
       quotaMetricTags.asJava)
   }
 
-  private def clientTokenBucketMetricName(quotaMetricTags: Map[String, String]): MetricName = {
-    metrics.metricName("tokens", QuotaType.ControllerMutation.toString,
-      "Tracking remaining tokens in the token bucket per user/client-id",
+  private def clientRateMetricName(quotaMetricTags: Map[String, String]): MetricName = {
+    metrics.metricName("mutation-rate", QuotaType.ControllerMutation.toString,
+      "Tracking mutation-rate per user/client-id",
       quotaMetricTags.asJava)
   }
 
@@ -186,7 +186,7 @@ class ControllerMutationQuotaManager(private val config: ClientQuotaManagerConfi
       new Rate
     )
     sensor.add(
-      clientTokenBucketMetricName(metricTags),
+      clientQuotaMetricName(metricTags),
       new TokenBucket,
       getQuotaMetricConfig(metricTags)
     )

@@ -26,6 +26,7 @@ import kafka.utils.Log4jController
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.DynamicConfig.QuotaConfigs
 import kafka.utils._
+import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.{AlterConfigOp, ScramMechanism}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -1149,7 +1150,7 @@ class AdminManager(val config: KafkaConfig,
         }
       ).toMap
 
-    illegalRequestsByUser.foreach { case (user, errorMessage) =>
+    illegalRequestsByUser.forKeyValue { (user, errorMessage) =>
       retval.results.add(new AlterUserScramCredentialsResult().setUser(user)
         .setErrorCode(if (errorMessage == unknownScramMechanismMsg) {Errors.UNSUPPORTED_SASL_MECHANISM.code} else {Errors.UNACCEPTABLE_CREDENTIAL.code})
         .setErrorMessage(errorMessage)) }
@@ -1214,7 +1215,7 @@ class AdminManager(val config: KafkaConfig,
     }).collect { case (user: String, exception: Exception) => (user, exception) }.toMap
 
     // report failures
-    usersFailedToPrepareProperties.++(usersFailedToPersist).foreach { case (user, exception) =>
+    usersFailedToPrepareProperties.++(usersFailedToPersist).forKeyValue { (user, exception) =>
       val error = Errors.forException(exception)
       retval.results.add(new AlterUserScramCredentialsResult()
         .setUser(user)

@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -49,6 +50,10 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.StateDirectory.LOCK_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
+import static org.hamcrest.CoreMatchers.endsWith;
+import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -531,6 +536,39 @@ public class StateDirectoryTest {
         assertTrue(passed.get());
         assertTrue(runner.taskDirectory.exists());
         assertTrue(runner.taskDirectory.isDirectory());
+    }
+
+    @Test
+    public void shouldLogManualUserCallMessage() {
+        final TaskId taskId = new TaskId(0, 0);
+        final File taskDirectory = directory.directoryForTask(taskId);
+        final File testFile = new File(taskDirectory, "testFile");
+        assertThat(testFile.mkdir(), is(true));
+        assertThat(directory.directoryForTaskIsEmpty(taskId), is(false));
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
+            directory.clean();
+            assertThat(
+                appender.getMessages(),
+                hasItem(endsWith("as user calling cleanup."))
+            );
+        }
+    }
+
+    @Test
+    public void shouldLogStateDirCleanerMessage() {
+        final TaskId taskId = new TaskId(0, 0);
+        final File taskDirectory = directory.directoryForTask(taskId);
+        final File testFile = new File(taskDirectory, "testFile");
+        assertThat(testFile.mkdir(), is(true));
+        assertThat(directory.directoryForTaskIsEmpty(taskId), is(false));
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
+            final long cleanupDelayMs = 0;
+            time.sleep(5000);
+            directory.cleanRemovedTasks(cleanupDelayMs);
+            assertThat(appender.getMessages(), hasItem(endsWith("ms has elapsed (cleanup delay is " +  cleanupDelayMs + "ms).")));
+        }
     }
 
     private static class CreateTaskDirRunner implements Runnable {
