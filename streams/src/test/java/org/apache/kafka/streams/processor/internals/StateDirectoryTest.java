@@ -565,6 +565,7 @@ public class StateDirectoryTest {
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
             final long cleanupDelayMs = 0;
+            time.sleep(5000);
             directory.cleanRemovedTasks(cleanupDelayMs);
             assertThat(appender.getMessages(), hasItem(endsWith("ms has elapsed (cleanup delay is " +  cleanupDelayMs + "ms).")));
         }
