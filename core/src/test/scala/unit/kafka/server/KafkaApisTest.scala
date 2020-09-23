@@ -1305,16 +1305,15 @@ class KafkaApisTest {
 
     createKafkaApis(authorizer = Some(authorizer)).handleIncrementalAlterConfigsRequest(request)
 
-    val expectedIncrementalAlterConfigsResponses = List(validResponse,
+    val expectedIncrementalAlterConfigsResponses = Set(validResponse,
       new IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse()
         .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
         .setErrorMessage(null)
         .setResourceName(unauthorizedTopic)
-        .setResourceType(ResourceType.TOPIC.code)
-    ).asJava
+        .setResourceType(ResourceType.TOPIC.code))
 
     assertEquals(expectedIncrementalAlterConfigsResponses, capturedCallback.getValue.apply(
-      clientResponse).asInstanceOf[IncrementalAlterConfigsResponse].data.responses)
+      clientResponse).asInstanceOf[IncrementalAlterConfigsResponse].data.responses.asScala.toSet)
 
     EasyMock.verify(controller, redirectionManager)
   }

@@ -59,7 +59,8 @@ class InterBrokerSendThreadTest {
   def shouldCreateClientRequestAndSendWhenNodeIsReady(): Unit = {
     val request = new StubRequestBuilder()
     val node = new Node(1, "", 8080)
-    val handler = RequestAndCompletionHandler(node, request, completionHandler, initialPrincipalName)
+    val handler = RequestAndCompletionHandler(node, request, completionHandler,
+      InitialPrincipal(initialPrincipalName, null))
     val sendThread = new InterBrokerSendThread("name", networkClient, time) {
       override val requestTimeoutMs: Int = InterBrokerSendThreadTest.this.requestTimeoutMs
       override def generateRequests() = List[RequestAndCompletionHandler](handler)
@@ -98,7 +99,8 @@ class InterBrokerSendThreadTest {
   def shouldCallCompletionHandlerWithDisconnectedResponseWhenNodeNotReady(): Unit = {
     val request = new StubRequestBuilder
     val node = new Node(1, "", 8080)
-    val requestAndCompletionHandler = RequestAndCompletionHandler(node, request, completionHandler, initialPrincipalName)
+    val requestAndCompletionHandler = RequestAndCompletionHandler(node, request, completionHandler,
+      InitialPrincipal(initialPrincipalName, null))
     val sendThread = new InterBrokerSendThread("name", networkClient, time) {
       override val requestTimeoutMs: Int = InterBrokerSendThreadTest.this.requestTimeoutMs
       override def generateRequests() = List[RequestAndCompletionHandler](requestAndCompletionHandler)
@@ -144,7 +146,7 @@ class InterBrokerSendThreadTest {
   def testFailingExpiredRequests(): Unit = {
     val request = new StubRequestBuilder()
     val node = new Node(1, "", 8080)
-    val handler = RequestAndCompletionHandler(node, request, completionHandler, initialPrincipalName)
+    val handler = RequestAndCompletionHandler(node, request, completionHandler, InitialPrincipal(initialPrincipalName, null))
     val sendThread = new InterBrokerSendThread("name", networkClient, time) {
       override val requestTimeoutMs: Int = InterBrokerSendThreadTest.this.requestTimeoutMs
       override def generateRequests() = List[RequestAndCompletionHandler](handler)

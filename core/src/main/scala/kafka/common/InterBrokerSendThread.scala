@@ -63,8 +63,8 @@ abstract class InterBrokerSendThread(name: String,
           now,
           true,
           requestTimeoutMs,
-          request.initialPrincipalName,
-          request.initialClientId,
+          request.initialPrincipal.name,
+          request.initialPrincipal.clientId,
           completionHandler))
     }
 
@@ -145,11 +145,12 @@ abstract class InterBrokerSendThread(name: String,
   def wakeup(): Unit = networkClient.wakeup()
 }
 
+case class InitialPrincipal(name: String, clientId: String)
+
 case class RequestAndCompletionHandler(destination: Node,
                                        request: AbstractRequest.Builder[_ <: AbstractRequest],
                                        handler: RequestCompletionHandler,
-                                       initialPrincipalName: String = null,
-                                       initialClientId: String = null)
+                                       initialPrincipal: InitialPrincipal = InitialPrincipal(null, null))
 
 private class UnsentRequests {
   private val unsent = new HashMap[Node, ArrayDeque[ClientRequest]]

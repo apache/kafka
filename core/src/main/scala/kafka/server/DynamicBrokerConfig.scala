@@ -293,7 +293,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
                                          fromPersisted: Boolean = false): Unit = CoreUtils.inWriteLock(lock) {
     try {
       val newProps = if (fromPersisted) props else fromPersistentProps(props, perBrokerConfig = true)
-      trimSSLStorePaths(newProps)
+      trimSslStorePaths(newProps)
       dynamicBrokerConfigs.clear()
       dynamicBrokerConfigs ++= newProps.asScala
       updateCurrentConfig()
@@ -334,7 +334,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
       }
   }
 
-  private[server] def maybeAugmentSSLStorePaths(configProps: Properties, previousConfigProps: Map[String, String]): Unit ={
+  private[server] def maybeAugmentSslStorePaths(configProps: Properties, previousConfigProps: Map[String, String]): Unit ={
     val processedFiles = new mutable.HashSet[String]
     reconfigurables
       .filter(reconfigurable => ReloadableFileConfigs.exists(reconfigurable.reconfigurableConfigs.contains))
@@ -352,7 +352,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
         })
   }
 
-  private[server] def trimSSLStorePaths(configProps: Properties): Boolean = {
+  private[server] def trimSslStorePaths(configProps: Properties): Boolean = {
     var fileChanged = false
     val processedFiles = new mutable.HashSet[String]
 

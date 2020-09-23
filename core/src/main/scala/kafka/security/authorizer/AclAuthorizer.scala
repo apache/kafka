@@ -460,7 +460,7 @@ class AclAuthorizer extends Authorizer with Logging {
       val refCount = action.resourceReferenceCount
 
       val initialPrincipalName = requestContext.initialPrincipalName
-      val initialPrincipalMessage = if(initialPrincipalName != null) s", on behalf of initial principal =$initialPrincipalName," else ""
+      val initialPrincipalMessage = if (initialPrincipalName != null) s", on behalf of initial principal =$initialPrincipalName," else ""
       s"Principal = $principal $initialPrincipalMessage is $authResult Operation = $operation " +
         s"from host = $host on resource = $resource for request = $apiKey with resourceRefCount = $refCount"
     }

@@ -19,7 +19,7 @@ package kafka.server
 
 import java.util.concurrent.{LinkedBlockingDeque, TimeUnit}
 
-import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
+import kafka.common.{InitialPrincipal, InterBrokerSendThread, RequestAndCompletionHandler}
 import kafka.network.RequestChannel
 import kafka.utils.Logging
 import org.apache.kafka.clients._
@@ -141,16 +141,15 @@ class BrokerToControllerChannelManagerImpl(metadataCache: kafka.server.MetadataC
     requestQueue.put(BrokerToControllerQueueItem(requestBuilder,
       (response: ClientResponse) => responseToOriginalClient(
         originalRequest, _ => combineResponse(response), callback),
-      originalRequest.header.initialPrincipalName,
-      originalRequest.header.initialClientId))
+      InitialPrincipal(originalRequest.header.initialPrincipalName,
+        originalRequest.header.initialClientId)))
     requestThread.wakeup()
   }
 }
 
 case class BrokerToControllerQueueItem(request: AbstractRequest.Builder[_ <: AbstractRequest],
                                        callback: RequestCompletionHandler,
-                                       initialPrincipalName: String = null,
-                                       initialClientId: String = null)
+                                       initialPrincipal: InitialPrincipal = InitialPrincipal(null, null))
 
 class BrokerToControllerRequestThread(networkClient: KafkaClient,
                                       metadataUpdater: ManualMetadataUpdater,
@@ -174,8 +173,10 @@ class BrokerToControllerRequestThread(networkClient: KafkaClient,
         activeController.get,
         topRequest.request,
         handleResponse(topRequest),
-        topRequest.initialPrincipalName,
-        topRequest.initialClientId)
+        InitialPrincipal(
+          topRequest.initialPrincipal.name,
+          topRequest.initialPrincipal.clientId)
+      )
 
       requestsToSend.enqueue(request)
     }

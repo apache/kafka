@@ -34,16 +34,7 @@ public class IncrementalAlterConfigsResponse extends AbstractResponse {
 
     public IncrementalAlterConfigsResponse(final int requestThrottleMs,
                                            final Map<ConfigResource, ApiError> results) {
-        this.data = new IncrementalAlterConfigsResponseData()
-                        .setThrottleTimeMs(requestThrottleMs);
-
-        addResults(results);
-    }
-
-    public IncrementalAlterConfigsResponse addResults(final Map<ConfigResource, ApiError> results) {
-        List<AlterConfigsResourceResponse> originalResults = data.responses();
-        final List<AlterConfigsResourceResponse> newResults = new ArrayList<>(originalResults);
-
+        final List<AlterConfigsResourceResponse> newResults = new ArrayList<>(results.size());
         results.forEach(
             (resource, error) -> newResults.add(
                 new AlterConfigsResourceResponse()
@@ -52,8 +43,10 @@ public class IncrementalAlterConfigsResponse extends AbstractResponse {
                     .setResourceName(resource.name())
                     .setResourceType(resource.type().id()))
         );
-        this.data.setResponses(newResults);
-        return this;
+
+        this.data = new IncrementalAlterConfigsResponseData()
+                        .setResponses(newResults)
+                        .setThrottleTimeMs(requestThrottleMs);
     }
 
     public static Map<ConfigResource, ApiError> fromResponseData(final IncrementalAlterConfigsResponseData data) {

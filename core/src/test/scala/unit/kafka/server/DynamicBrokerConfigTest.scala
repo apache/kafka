@@ -443,7 +443,7 @@ class DynamicBrokerConfigTest {
     newProps.put(listener.configPrefix +
       SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, "/path/to/new/trust/store/")
 
-    dynamicBrokerConfig.maybeAugmentSSLStorePaths(newProps, oldProps)
+    dynamicBrokerConfig.maybeAugmentSslStorePaths(newProps, oldProps)
 
     val expectedProps = new Properties()
     expectedProps.put(listener.configPrefix +

@@ -171,15 +171,15 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (isForwardingRequest(request)) {
         if (!controller.isActive) {
           sendErrorResponseMaybeThrottle(request, Errors.NOT_CONTROLLER.exception())
-          } else {
-            // For forwarding requests, the authentication failure is not caused by
-            // the original client, but by the broker.
-            val unauthorizedResult = unauthorizedResources.keys.map {
-              resource => resource -> new ApiError(Errors.BROKER_AUTHORIZATION_FAILURE, null)
-            }.toMap
+        } else {
+          // For forwarding requests, the authentication failure is not caused by
+          // the original client, but by the broker.
+          val unauthorizedResult = unauthorizedResources.keys.map {
+            resource => resource -> new ApiError(Errors.BROKER_AUTHORIZATION_FAILURE, null)
+          }.toMap
 
-            process(authorizedResources, unauthorizedResult, requestBody)
-          }
+          process(authorizedResources, unauthorizedResult, requestBody)
+        }
       } else if (!controller.isActive && config.redirectionEnabled &&
         authorizedResources.nonEmpty) {
         redirectionManager.forwardRequest(
@@ -1856,8 +1856,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     val forwardRequestHandler = new ForwardRequestHandler[CreateTopicsRequest,
       CreateTopicsResponse, String, CreatableTopic](request) {
 
-      override def resourceSplitByAuthorization(createTopicsRequest: CreateTopicsRequest):
-      (Map[String, CreatableTopic], Map[String, ApiError]) = {
+      override def resourceSplitByAuthorization(
+        createTopicsRequest: CreateTopicsRequest
+      ): (Map[String, CreatableTopic], Map[String, ApiError]) = {
         val hasClusterAuthorization = authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME,
           logIfDenied = false)
         val topics = createTopicsRequest.data.topics.asScala.map(_.name)
@@ -2866,7 +2867,12 @@ class KafkaApis(val requestChannel: RequestChannel,
       override def mergeResponse(forwardResponse: IncrementalAlterConfigsResponse,
                                  unauthorizedResult: Map[ConfigResource, ApiError]):
       IncrementalAlterConfigsResponse = {
-        forwardResponse.addResults(unauthorizedResult.asJava)
+        val forwardResponseResults = IncrementalAlterConfigsResponse.fromResponseData(
+          forwardResponse.data)
+        forwardResponseResults.putAll(unauthorizedResult.asJava)
+        new IncrementalAlterConfigsResponse(
+          forwardResponse.throttleTimeMs,
+          forwardResponseResults)
       }
     }
     forwardRequestHandler.handle()
@@ -3331,6 +3337,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         true
       } else {
         operation match {
+          // For the following acl operations that could be forwarded potentially, we
+          // added a separate authentication path so that the sender
+          // broker could pass the security check and complete the change.
           case ALTER | ALTER_CONFIGS | CREATE | DELETE =>
             requestContext.fromPrivilegedListener &&
               authorizeAction(requestContext, CLUSTER_ACTION,

@@ -205,7 +205,7 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig,
     else if (brokerConfig.brokerId == brokerId.trim.toInt) {
       val persistentProps = brokerConfig.dynamicConfig.fromPersistentProps(properties, perBrokerConfig = true)
       // The filepath was changed for equivalent replacement, which means we should reload
-      if (brokerConfig.dynamicConfig.trimSSLStorePaths(persistentProps)) {
+      if (brokerConfig.dynamicConfig.trimSslStorePaths(persistentProps)) {
         brokerConfig.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(persistentProps)
       }
 

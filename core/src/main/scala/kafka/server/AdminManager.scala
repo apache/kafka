@@ -525,7 +525,7 @@ class AdminManager(val config: KafkaConfig,
       if (perBrokerConfig) {
         val previousConfigProps = config.dynamicConfig.currentDynamicBrokerConfigs
         this.config.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(configProps)
-        this.config.dynamicConfig.maybeAugmentSSLStorePaths(configProps, previousConfigProps)
+        this.config.dynamicConfig.maybeAugmentSslStorePaths(configProps, previousConfigProps)
       }
 
       adminZkClient.changeBrokerConfig(brokerId,

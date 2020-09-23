@@ -1234,7 +1234,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   private def fetchBrokerConfigsFromZooKeeper(server: KafkaServer): Properties = {
     val props = adminZkClient.fetchEntityConfig(ConfigType.Broker, server.config.brokerId.toString)
     val persistentProps = server.config.dynamicConfig.fromPersistentProps(props, perBrokerConfig = true)
-    server.config.dynamicConfig.trimSSLStorePaths(persistentProps)
+    server.config.dynamicConfig.trimSslStorePaths(persistentProps)
     persistentProps
   }
 
