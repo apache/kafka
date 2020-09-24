@@ -241,6 +241,8 @@
     <suppress checks="ParameterNumber"
               files="ProduceBenchSpec.java"/>
     <suppress checks="ParameterNumber"
+              files="ConsumeBenchSpec.java"/>
+    <suppress checks="ParameterNumber"
               files="SustainedConnectionSpec.java"/>
     <suppress id="dontUseSystemExit"
               files="VerifiableConsumer.java"/>

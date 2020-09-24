@@ -29,6 +29,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -69,6 +70,7 @@ public class ConsumeBenchSpecTest {
     private ConsumeBenchSpec consumeBenchSpec(List<String> activeTopics) {
         return new ConsumeBenchSpec(0, 0, "node", "localhost",
             123, 1234, "cg-1",
-            Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap(), 1, activeTopics);
+            Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap(), 1,
+            Optional.empty(), activeTopics);
     }
 }
