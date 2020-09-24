@@ -1063,8 +1063,8 @@ class GroupCoordinatorTest {
 
     // A static follower rejoin with protocol changing to leader protocol subset won't trigger rebalance if updated
     // group's selectProtocol remain unchanged.
-    val selectedProtocols = getGroup(groupId).selectProtocol
-    val newProtocols = List((selectedProtocols, metadata))
+    val selectedProtocol = getGroup(groupId).selectProtocol
+    val newProtocols = List((selectedProtocol, metadata))
     // Timeout old leader in the meantime.
     val joinGroupResult = staticJoinGroupWithPersistence(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, followerInstanceId, protocolType, newProtocols, clockAdvance = 1)
 
@@ -3824,13 +3824,13 @@ class GroupCoordinatorTest {
   }
 
   private def sendStaticJoinGroupWithPersistence(groupId: String,
-                               memberId: String,
-                               protocolType: String,
-                               protocols: List[(String, Array[Byte])],
-                               groupInstanceId: Option[String],
-                               sessionTimeout: Int,
-                               rebalanceTimeout: Int,
-                               requireKnownMemberId: Boolean = false): Future[JoinGroupResult] = {
+                                                 memberId: String,
+                                                 protocolType: String,
+                                                 protocols: List[(String, Array[Byte])],
+                                                 groupInstanceId: Option[String],
+                                                 sessionTimeout: Int,
+                                                 rebalanceTimeout: Int,
+                                                 requireKnownMemberId: Boolean = false): Future[JoinGroupResult] = {
     val (responseFuture, responseCallback) = setupJoinGroupCallback
 
     val capturedArgument: Capture[scala.collection.Map[TopicPartition, PartitionResponse] => Unit] = EasyMock.newCapture()
@@ -3943,13 +3943,13 @@ class GroupCoordinatorTest {
   }
 
   private def staticJoinGroupWithPersistence(groupId: String,
-                                 memberId: String,
-                                 groupInstanceId: Option[String],
-                                 protocolType: String,
-                                 protocols: List[(String, Array[Byte])],
-                                 clockAdvance: Int,
-                                 sessionTimeout: Int = DefaultSessionTimeout,
-                                 rebalanceTimeout: Int = DefaultRebalanceTimeout): JoinGroupResult = {
+                                             memberId: String,
+                                             groupInstanceId: Option[String],
+                                             protocolType: String,
+                                             protocols: List[(String, Array[Byte])],
+                                             clockAdvance: Int,
+                                             sessionTimeout: Int = DefaultSessionTimeout,
+                                             rebalanceTimeout: Int = DefaultRebalanceTimeout): JoinGroupResult = {
     val responseFuture = sendStaticJoinGroupWithPersistence(groupId, memberId, protocolType, protocols, groupInstanceId, sessionTimeout, rebalanceTimeout)
 
     timer.advanceClock(clockAdvance)
