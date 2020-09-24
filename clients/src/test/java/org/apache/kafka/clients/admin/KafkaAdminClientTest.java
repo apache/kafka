@@ -965,7 +965,6 @@ public class KafkaAdminClientTest {
         }
     }
 
-    @Deprecated
     @Test
     public void testMetadataRetries() throws Exception {
         // We should continue retrying on metadata update failures in spite of retry configuration
@@ -1963,8 +1962,7 @@ public class KafkaAdminClientTest {
     @Test
     public void testDescribeCluster() throws Exception {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(4, 0),
-                AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "100",
-                AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "100")) {
+                AdminClientConfig.RETRIES_CONFIG, "2")) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
             // Prepare the metadata response used for the first describe cluster
@@ -2003,8 +2001,7 @@ public class KafkaAdminClientTest {
     @Test
     public void testListConsumerGroups() throws Exception {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(4, 0),
-                AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "100",
-                AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "500")) {
+                AdminClientConfig.RETRIES_CONFIG, "2")) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
             // Empty metadata response should be retried
@@ -2116,8 +2113,7 @@ public class KafkaAdminClientTest {
         final Time time = new MockTime();
 
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster,
-                AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "0",
-                AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "0")) {
+                AdminClientConfig.RETRIES_CONFIG, "0")) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
             // Empty metadata causes the request to fail since we have no list of brokers
@@ -2130,7 +2126,6 @@ public class KafkaAdminClientTest {
                             Collections.emptyList()));
 
             final ListConsumerGroupsResult result = env.adminClient().listConsumerGroups();
-            time.sleep(1L);
             TestUtils.assertFutureError(result.all(), KafkaException.class);
         }
     }
@@ -2203,7 +2198,6 @@ public class KafkaAdminClientTest {
         }
     }
 
-    @Deprecated
     @Test
     public void testOffsetCommitNumRetries() throws Exception {
         final Cluster cluster = mockCluster(3, 0);
@@ -2275,7 +2269,6 @@ public class KafkaAdminClientTest {
         }
     }
 
-    @Deprecated
     @Test
     public void testDescribeConsumerGroupNumRetries() throws Exception {
         final Cluster cluster = mockCluster(3, 0);
@@ -2576,7 +2569,6 @@ public class KafkaAdminClientTest {
         }
     }
 
-    @Deprecated
     @Test
     public void testListConsumerGroupOffsetsNumRetries() throws Exception {
         final Cluster cluster = mockCluster(3, 0);
@@ -2688,7 +2680,6 @@ public class KafkaAdminClientTest {
         }
     }
 
-    @Deprecated
     @Test
     public void testDeleteConsumerGroupsNumRetries() throws Exception {
         final Cluster cluster = mockCluster(3, 0);
@@ -2852,7 +2843,6 @@ public class KafkaAdminClientTest {
         }
     }
 
-    @Deprecated
     @Test
     public void testDeleteConsumerGroupOffsetsNumRetries() throws Exception {
         final Cluster cluster = mockCluster(3, 0);
@@ -3137,7 +3127,6 @@ public class KafkaAdminClientTest {
         }
     }
 
-    @Deprecated
     @Test
     public void testRemoveMembersFromGroupNumRetries() throws Exception {
         final Cluster cluster = mockCluster(3, 0);
@@ -4394,8 +4383,7 @@ public class KafkaAdminClientTest {
         long defaultApiTimeout = 60000;
         MockTime time = new MockTime();
 
-        try (AdminClientUnitTestEnv env = mockClientEnv(time,
-            AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, String.valueOf(defaultApiTimeout))) {
+        try (AdminClientUnitTestEnv env = mockClientEnv(time, AdminClientConfig.RETRIES_CONFIG, "0")) {
 
             // Provide only one prepared response from node 1
             env.kafkaClient().prepareResponseFrom(
@@ -4597,8 +4585,7 @@ public class KafkaAdminClientTest {
         long defaultApiTimeout = 60000;
         MockTime time = new MockTime();
 
-        try (AdminClientUnitTestEnv env = mockClientEnv(time,
-            AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, String.valueOf(defaultApiTimeout))) {
+        try (AdminClientUnitTestEnv env = mockClientEnv(time, AdminClientConfig.RETRIES_CONFIG, "0")) {
 
             env.kafkaClient().prepareResponseFrom(
                 prepareDescribeLogDirsResponse(Errors.NONE, "/data"),

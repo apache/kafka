@@ -547,7 +547,6 @@ public class KafkaAdminClient extends AdminClient {
         return new LogContext("[AdminClient clientId=" + clientId + "] ");
     }
 
-    @SuppressWarnings("deprecation")
     private KafkaAdminClient(AdminClientConfig config,
                              String clientId,
                              Time time,
