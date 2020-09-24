@@ -81,7 +81,7 @@ def doStreamsArchetype() {
       }
 
       echo 'Cleaning up test-streams-archetype'
-      deleteDir
+      deleteDir()
     }
   }
 }
