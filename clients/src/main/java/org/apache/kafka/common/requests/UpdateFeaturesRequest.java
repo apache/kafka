@@ -95,7 +95,6 @@ public class UpdateFeaturesRequest extends AbstractRequest {
     }
 
     public static UpdateFeaturesRequestData create(Map<String, FeatureUpdate> featureUpdates) {
-        final Map<String, KafkaFutureImpl<Void>> updateFutures = new HashMap<>();
         final UpdateFeaturesRequestData.FeatureUpdateKeyCollection featureUpdatesRequestData
             = new UpdateFeaturesRequestData.FeatureUpdateKeyCollection();
         for (Map.Entry<String, FeatureUpdate> entry : featureUpdates.entrySet()) {
@@ -105,7 +104,6 @@ public class UpdateFeaturesRequest extends AbstractRequest {
                 throw new IllegalArgumentException("Provided feature can not be null or empty.");
             }
 
-            updateFutures.put(feature, new KafkaFutureImpl<>());
             final UpdateFeaturesRequestData.FeatureUpdateKey requestItem =
                 new UpdateFeaturesRequestData.FeatureUpdateKey();
             requestItem.setFeature(feature);

@@ -489,8 +489,7 @@ public class KafkaAdminClientTest {
             Utils.mkMap(Utils.mkEntry("test_feature_1", new SupportedVersionRange((short) 1, (short) 5))));
     }
 
-    private static Features<org.apache.kafka.common.feature.SupportedVersionRange>
-    convertSupportedFeaturesMap(Map<String, SupportedVersionRange> features) {
+    private static Features<org.apache.kafka.common.feature.SupportedVersionRange> convertSupportedFeaturesMap(Map<String, SupportedVersionRange> features) {
         Map<String, org.apache.kafka.common.feature.SupportedVersionRange> featuresMap = new HashMap<>();
         for (Map.Entry<String, SupportedVersionRange> entry : features.entrySet()) {
             SupportedVersionRange versionRange = entry.getValue();
@@ -503,8 +502,7 @@ public class KafkaAdminClientTest {
         return Features.supportedFeatures(featuresMap);
     }
 
-    private static Features<org.apache.kafka.common.feature.FinalizedVersionRange>
-    convertFinalizedFeaturesMap(Map<String, FinalizedVersionRange> features) {
+    private static Features<org.apache.kafka.common.feature.FinalizedVersionRange> convertFinalizedFeaturesMap(Map<String, FinalizedVersionRange> features) {
         Map<String, org.apache.kafka.common.feature.FinalizedVersionRange> featuresMap = new HashMap<>();
         for (Map.Entry<String, FinalizedVersionRange> entry : features.entrySet()) {
             FinalizedVersionRange versionRange = entry.getValue();
