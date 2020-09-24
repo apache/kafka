@@ -24,6 +24,8 @@ import org.apache.kafka.common.message.AlterClientQuotasRequestData;
 import org.apache.kafka.common.message.AlterClientQuotasResponseData;
 import org.apache.kafka.common.message.AlterConfigsRequestData;
 import org.apache.kafka.common.message.AlterConfigsResponseData;
+import org.apache.kafka.common.message.AlterIsrRequestData;
+import org.apache.kafka.common.message.AlterIsrResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData;
@@ -244,7 +246,8 @@ public enum ApiKeys {
     END_QUORUM_EPOCH(54, "EndQuorumEpoch", true, false,
         EndQuorumEpochRequestData.SCHEMAS, EndQuorumEpochResponseData.SCHEMAS),
     DESCRIBE_QUORUM(55, "DescribeQuorum", true, false,
-        DescribeQuorumRequestData.SCHEMAS, DescribeQuorumResponseData.SCHEMAS);
+        DescribeQuorumRequestData.SCHEMAS, DescribeQuorumResponseData.SCHEMAS),
+    ALTER_ISR(56, "AlterIsr", AlterIsrRequestData.SCHEMAS, AlterIsrResponseData.SCHEMAS);
 
     private static final ApiKeys[] ID_TO_TYPE;
     private static final int MIN_API_KEY = 0;

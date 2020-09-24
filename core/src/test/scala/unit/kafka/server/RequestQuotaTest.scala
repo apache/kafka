@@ -579,6 +579,9 @@ class RequestQuotaTest extends BaseRequestTest {
           new EndQuorumEpochRequest.Builder(EndQuorumEpochRequest.singletonRequest(
             tp, 10, 2, 5, Collections.singletonList(3)))
 
+        case ApiKeys.ALTER_ISR =>
+          new AlterIsrRequest.Builder(new AlterIsrRequestData())
+
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }

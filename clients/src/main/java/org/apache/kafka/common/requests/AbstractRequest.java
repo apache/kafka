@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.FetchRequestData;
+import org.apache.kafka.common.message.AlterIsrRequestData;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -254,6 +255,8 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return new BeginQuorumEpochRequest(struct, apiVersion);
             case END_QUORUM_EPOCH:
                 return new EndQuorumEpochRequest(struct, apiVersion);
+            case ALTER_ISR:
+                return new AlterIsrRequest(new AlterIsrRequestData(struct, apiVersion), apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));

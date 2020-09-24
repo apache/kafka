@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.FetchResponseData;
+import org.apache.kafka.common.message.AlterIsrResponseData;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -199,6 +200,8 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return new EndQuorumEpochResponse(struct, version);
             case DESCRIBE_QUORUM:
                 return new DescribeQuorumResponse(struct, version);
+            case ALTER_ISR:
+                return new AlterIsrResponse(new AlterIsrResponseData(struct, version));
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));
