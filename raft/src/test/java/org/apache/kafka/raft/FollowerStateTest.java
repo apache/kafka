@@ -18,15 +18,15 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
 import java.util.OptionalLong;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class FollowerStateTest {
     private final MockTime time = new MockTime();

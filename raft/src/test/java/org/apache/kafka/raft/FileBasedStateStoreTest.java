@@ -18,17 +18,18 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.OptionalInt;
 import java.util.Set;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class FileBasedStateStoreTest {
 
@@ -50,7 +51,8 @@ public class FileBasedStateStoreTest {
 
         // Start another state store and try to read from the same file.
         final FileBasedStateStore secondStateStore = new FileBasedStateStore(stateFile);
-        assertEquals(ElectionState.withElectedLeader(epoch, leaderId, voters), secondStateStore.readElectionState());
+        Assertions
+            .assertEquals(ElectionState.withElectedLeader(epoch, leaderId, voters), secondStateStore.readElectionState());
     }
 
     @Test
@@ -90,7 +92,7 @@ public class FileBasedStateStoreTest {
         assertFalse(stateFile.exists());
     }
 
-    @After
+    @AfterEach
     public void cleanup() throws IOException {
         if (stateStore != null) {
             stateStore.clear();
