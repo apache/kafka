@@ -1210,7 +1210,7 @@ project(':raft') {
   }
 
   javadoc {
-    include "**/org/apache/kafka/raft/*"
+    enabled = false
   }
 }
 
