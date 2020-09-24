@@ -26,7 +26,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.MockLog.LogBatch;
 import org.apache.kafka.raft.MockLog.LogEntry;
 import org.apache.kafka.raft.internals.LogOffset;
-import org.junit.Test;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -49,11 +48,12 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-import static org.junit.Assume.assumeTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class RaftEventSimulationTest {
     private static final TopicPartition METADATA_PARTITION = new TopicPartition("__cluster_metadata", 0);
@@ -938,8 +938,9 @@ public class RaftEventSimulationTest {
                     .filter(entry -> cluster.voters.contains(entry.getKey()))
                     .filter(entry -> entry.getValue().log.endOffset().offset >= highWatermark)
                     .count();
-                assertTrue("Insufficient nodes have reached current high watermark",
-                    numReachedHighWatermark >= cluster.majoritySize());
+                assertTrue(
+                    numReachedHighWatermark >= cluster.majoritySize(),
+                    "Insufficient nodes have reached current high watermark");
             });
         }
     }
@@ -1037,8 +1038,9 @@ public class RaftEventSimulationTest {
                     committedSequenceNumbers.putIfAbsent(offset, sequence);
 
                     int committedSequence = committedSequenceNumbers.get(offset);
-                    assertEquals("Committed sequence at offset " + offset + " changed on node " + nodeId,
-                        committedSequence, sequence);
+                    assertEquals(
+                        committedSequence, sequence,
+                        "Committed sequence at offset " + offset + " changed on node " + nodeId);
                 }
             }
         }
