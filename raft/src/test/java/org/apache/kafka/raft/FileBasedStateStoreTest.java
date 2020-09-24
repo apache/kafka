@@ -24,7 +24,6 @@ import java.io.File;
 import java.io.IOException;
 import java.util.OptionalInt;
 import java.util.Set;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -51,8 +50,7 @@ public class FileBasedStateStoreTest {
 
         // Start another state store and try to read from the same file.
         final FileBasedStateStore secondStateStore = new FileBasedStateStore(stateFile);
-        Assertions
-            .assertEquals(ElectionState.withElectedLeader(epoch, leaderId, voters), secondStateStore.readElectionState());
+        assertEquals(ElectionState.withElectedLeader(epoch, leaderId, voters), secondStateStore.readElectionState());
     }
 
     @Test
