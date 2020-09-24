@@ -79,13 +79,13 @@ public class FetchSessionCacheBenchmark {
         @Param(value = {"0", "1", "10"})
         private int numEvictableEntries;
 
-        private final AtomicLong msSinceEpoch = new AtomicLong(0);
+        // private final AtomicLong msSinceEpoch = new AtomicLong(0);
+        private AtomicLong msSinceEpoch;
 
         private final Time time = new Time() {
             @Override
             public long milliseconds() {
-                // not used
-                return 0;
+                return msSinceEpoch.get();
             }
 
             @Override
@@ -112,6 +112,7 @@ public class FetchSessionCacheBenchmark {
 
         @Setup(Level.Invocation)
         public void setUp() throws Exception {
+            msSinceEpoch = new AtomicLong(0);
             sessionFollower = new ArrayList<>();
             sessions = new ArrayList<>();
             int EVICTION_MS = 500;
@@ -143,7 +144,7 @@ public class FetchSessionCacheBenchmark {
 
             int sessionCount = (int)Math.ceil(cacheUtilization / 100.0 * cacheSize);
             for (int i = 0; i < sessionCount; i++) {
-                boolean isFollower = new Random().nextFloat() > percentPrivileged / 100.0;
+                boolean isFollower = new Random().nextFloat() < percentPrivileged / 100.0;
                 FetchContext context = fetchManager.newContext(FetchMetadata.INITIAL, reqData,
                         new ArrayList<>(), isFollower);
                 FetchResponse<Records> resp = context.updateAndGenerateResponseData(respData);
@@ -154,7 +155,7 @@ public class FetchSessionCacheBenchmark {
                 sessions.add(resp.sessionId());
                 sessionFollower.add(isFollower);
 
-                if (i == numEvictableEntries - 1) {
+                if (i == sessionCount - numEvictableEntries - 1) {
                     msSinceEpoch.set(EVICTION_MS + 1);
                 }
             }
