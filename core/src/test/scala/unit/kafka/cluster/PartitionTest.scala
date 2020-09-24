@@ -176,7 +176,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(Some(4), partition.leaderLogIfLocal.map(_.logEndOffset))
     assertEquals(None, log.latestEpoch)
 
-    val epochEndOffset = partition.lastOffsetForLeaderEpoch(currentLeaderEpoch = Optional.of[Integer](leaderEpoch),
+    val epochEndOffset = partition.lastOffsetForLeaderEpoch(currentLeaderEpoch = Optional.of(leaderEpoch),
       leaderEpoch = leaderEpoch, fetchOnlyFromLeader = true)
     assertEquals(EpochEndOffset.UNDEFINED_EPOCH_OFFSET, epochEndOffset.endOffset)
     assertEquals(EpochEndOffset.UNDEFINED_EPOCH, epochEndOffset.leaderEpoch)
@@ -534,7 +534,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertTrue(timestampAndOffsetOpt.isDefined)
 
     val timestampAndOffset = timestampAndOffsetOpt.get
-    assertEquals(Optional.of(leaderEpoch), timestampAndOffset.leaderEpoch)
+    assertEquals(leaderEpoch, timestampAndOffset.leaderEpoch.get)
   }
 
   /**
