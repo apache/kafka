@@ -146,7 +146,9 @@ class KafkaApis(val requestChannel: RequestChannel,
                 request: T): Unit
 
     /**
-     * Build a forward request to the controller.
+     * Build a forward request to the controller. Note that it is required to use
+     * the exact same request version to build the redirection request, to avoid
+     * returning an unexpected result on the original client side.
      *
      * @param authorizedResources authorized resources by the forwarding broker
      * @param request the original request
@@ -2705,7 +2707,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                                         request: AlterConfigsRequest):
       AbstractRequest.Builder[AlterConfigsRequest] = {
         new AlterConfigsRequest.Builder(
-          authorizedResources.asJava, request.validateOnly())
+          authorizedResources.asJava, request.validateOnly, request.version)
       }
 
       override def mergeResponse(forwardResponse: AlterConfigsResponse,
@@ -2856,12 +2858,13 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       override def createRequestBuilder(authorizedResources: Map[ConfigResource, Seq[AlterConfigOp]],
-                                        incrementalAlterConfigsRequest: IncrementalAlterConfigsRequest):
+                                        request: IncrementalAlterConfigsRequest):
       AbstractRequest.Builder[IncrementalAlterConfigsRequest] = {
         new IncrementalAlterConfigsRequest.Builder(
           authorizedResources.map {
             case (resource, ops) => resource -> ops.asJavaCollection
-          }.asJava, incrementalAlterConfigsRequest.data().validateOnly())
+          }.asJava, request.data.validateOnly,
+          request.version)
       }
 
       override def mergeResponse(forwardResponse: IncrementalAlterConfigsResponse,
