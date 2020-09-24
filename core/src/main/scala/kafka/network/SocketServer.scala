@@ -1263,7 +1263,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
         listenerCounts.remove(listenerName)
         // once listener is removed from maxConnectionsPerListener, no metrics will be recorded into listener's sensor
         // so it is safe to remove sensor here
-        listenerQuota.removeSensors()
+        listenerQuota.close()
         counts.notifyAll() // wake up any waiting acceptors to close cleanly
         config.removeReconfigurable(listenerQuota)
       }
@@ -1303,12 +1303,6 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
     counts.synchronized {
       val startThrottleTimeMs = time.milliseconds
       val throttleTimeMs = math.max(recordConnectionAndGetThrottleTimeMs(listenerName, startThrottleTimeMs), 0)
-      if (throttleTimeMs > 0) {
-        // record throttle time due to hitting connection rate limit
-        // connection could be throttled longer if the limit of the number of active connections is reached as well
-        maxConnectionsPerListener.get(listenerName)
-          .foreach(_.connectionRateThrottleSensor.record(throttleTimeMs.toDouble, startThrottleTimeMs))
-      }
 
       if (throttleTimeMs > 0 || !connectionSlotAvailable(listenerName)) {
         val startNs = time.nanoseconds
@@ -1353,16 +1347,26 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
    * @return delay in milliseconds
    */
   private def recordConnectionAndGetThrottleTimeMs(listenerName: ListenerName, timeMs: Long): Long = {
-    val listenerThrottleTimeMs = maxConnectionsPerListener
+    def recordAndGetListenerThrottleTime(minThrottleTimeMs: Int): Int = {
+      maxConnectionsPerListener
       .get(listenerName)
-      .map(listenerQuota => recordAndGetThrottleTimeMs(listenerQuota.connectionRateSensor, timeMs))
+      .map { listenerQuota =>
+        val listenerThrottleTimeMs = recordAndGetThrottleTimeMs(listenerQuota.connectionRateSensor, timeMs)
+        val throttleTimeMs = math.max(minThrottleTimeMs, listenerThrottleTimeMs)
+        // record throttle time due to hitting connection rate quota
+        if (throttleTimeMs > 0) {
+          listenerQuota.connectionRateThrottleSensor.record(throttleTimeMs.toDouble, timeMs)
+        }
+        throttleTimeMs
+      }
       .getOrElse(0)
+    }
 
     if (protectedListener(listenerName)) {
-      listenerThrottleTimeMs
+      recordAndGetListenerThrottleTime(0)
     } else {
       val brokerThrottleTimeMs = recordAndGetThrottleTimeMs(brokerConnectionRateSensor, timeMs)
-      math.max(brokerThrottleTimeMs, listenerThrottleTimeMs)
+      recordAndGetListenerThrottleTime(brokerThrottleTimeMs)
     }
   }
 
@@ -1427,12 +1431,13 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
 
   def close(): Unit = {
     metrics.removeSensor("ConnectionAcceptRate")
+    maxConnectionsPerListener.values.foreach(_.close())
   }
 
-  class ListenerConnectionQuota(lock: Object, listener: ListenerName) extends ListenerReconfigurable {
+  class ListenerConnectionQuota(lock: Object, listener: ListenerName) extends ListenerReconfigurable with AutoCloseable {
     @volatile private var _maxConnections = Int.MaxValue
-    val connectionRateSensor: Sensor = createConnectionRateQuotaSensor(Int.MaxValue, Some(listener.value))
-    val connectionRateThrottleSensor: Sensor = createConnectionRateThrottleSensor()
+    private[network] val connectionRateSensor = createConnectionRateQuotaSensor(Int.MaxValue, Some(listener.value))
+    private[network] val connectionRateThrottleSensor = createConnectionRateThrottleSensor()
 
     def maxConnections: Int = _maxConnections
 
@@ -1465,7 +1470,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
       }
     }
 
-    def removeSensors(): Unit = {
+    def close(): Unit = {
       metrics.removeSensor(connectionRateSensor.name)
       metrics.removeSensor(connectionRateThrottleSensor.name)
     }
