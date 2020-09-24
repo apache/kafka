@@ -152,7 +152,7 @@ class KafkaApis(val requestChannel: RequestChannel,
      *
      * @param authorizedResources authorized resources by the forwarding broker
      * @param request the original request
-     * @return forward request builder
+     * @return forward request builder and original request version when upgraded
      */
     def createRequestBuilder(authorizedResources: Map[RK, RV],
                              request: T): AbstractRequest.Builder[T]
@@ -2706,8 +2706,14 @@ class KafkaApis(val requestChannel: RequestChannel,
       override def createRequestBuilder(authorizedResources: Map[ConfigResource, Config],
                                         request: AlterConfigsRequest):
       AbstractRequest.Builder[AlterConfigsRequest] = {
+        val redirectVersion = if (request.hasFlexibleVersionSupport) {
+         request.version
+        } else {
+         request.lowestFlexibleVersion
+        }
+
         new AlterConfigsRequest.Builder(
-          authorizedResources.asJava, request.validateOnly, request.version)
+          authorizedResources.asJava, request.validateOnly, redirectVersion)
       }
 
       override def mergeResponse(forwardResponse: AlterConfigsResponse,

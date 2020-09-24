@@ -94,6 +94,17 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
         return version;
     }
 
+    /**
+     * Determine whether there is flexible version support for this AbstractRequest object.
+     */
+    public boolean hasFlexibleVersionSupport() {
+        return false;
+    }
+
+    public short lowestFlexibleVersion() {
+        return -1;
+    }
+
     public Send toSend(String destination, RequestHeader header) {
         return new NetworkSend(destination, serialize(header));
     }

@@ -85,6 +85,10 @@ public class RequestHeader implements AbstractRequestResponse {
         return data.initialPrincipalName();
     }
 
+    public short originalRequestVersion() {
+        return data.originalRequestVersion();
+    }
+
     public String initialClientId() {
         return data.initialClientId();
     }

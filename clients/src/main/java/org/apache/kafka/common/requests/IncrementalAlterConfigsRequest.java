@@ -49,6 +49,12 @@ public class IncrementalAlterConfigsRequest extends AbstractRequest {
         }
 
         public Builder(final Map<ConfigResource, Collection<AlterConfigOp>> configs,
+                       final boolean validateOnly) {
+            super(ApiKeys.INCREMENTAL_ALTER_CONFIGS);
+            this.data = initializeConfigData(configs.keySet(), configs, validateOnly);
+        }
+
+        public Builder(final Map<ConfigResource, Collection<AlterConfigOp>> configs,
                        final boolean validateOnly,
                        final short allowedVersion) {
             super(ApiKeys.INCREMENTAL_ALTER_CONFIGS, allowedVersion);

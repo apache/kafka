@@ -136,6 +136,16 @@ public class AlterConfigsRequest extends AbstractRequest {
     }
 
     @Override
+    public boolean hasFlexibleVersionSupport() {
+        return data.hasFlexibleVersions() && data.lowestFlexibleVersion() <= version();
+    }
+
+    @Override
+    public short lowestFlexibleVersion() {
+        return data.lowestFlexibleVersion();
+    }
+
+    @Override
     protected Struct toStruct() {
         return data.toStruct(version());
     }

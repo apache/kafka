@@ -38,6 +38,20 @@ public interface Message {
     short highestSupportedVersion();
 
     /**
+     * Returns whether flexible versions are defined for this message.
+     */
+    default boolean hasFlexibleVersions() {
+        return false;
+    }
+
+    /**
+     * Returns the lowest flexible version
+     */
+    default short lowestFlexibleVersion() {
+        return -1;
+    }
+
+    /**
      * Returns the number of bytes it would take to write out this message.
      *
      * @param cache         The serialization size cache to populate.

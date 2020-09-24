@@ -101,6 +101,16 @@ public final class MessageDataGenerator implements MessageClassGenerator {
         buffer.printf("%n");
         generateShortAccessor("highestSupportedVersion", parentVersions.highest());
         buffer.printf("%n");
+        if (isTopLevel) {
+            final Versions flexibleVersions = topLevelMessageSpec.get().flexibleVersions();
+            final boolean flexibleVersionDefined = flexibleVersions != Versions.NONE;
+            generateBooleanReader("hasFlexibleVersions", flexibleVersionDefined);
+            buffer.printf("%n");
+            if (flexibleVersionDefined) {
+                generateShortAccessor("lowestFlexibleVersion", flexibleVersions.lowest());
+                buffer.printf("%n");
+            }
+        }
         generateClassReader(className, struct, parentVersions);
         buffer.printf("%n");
         generateClassWriter(className, struct, parentVersions);
@@ -409,6 +419,15 @@ public final class MessageDataGenerator implements MessageClassGenerator {
             buffer.printf("this.prev = ImplicitLinkedHashCollection.INVALID_INDEX;%n");
             buffer.printf("this.next = ImplicitLinkedHashCollection.INVALID_INDEX;%n");
         }
+    }
+
+    private void generateBooleanReader(String name, boolean val) {
+        buffer.printf("@Override%n");
+        buffer.printf("public boolean %s() {%n", name);
+        buffer.incrementIndent();
+        buffer.printf("return %b;%n", val);
+        buffer.decrementIndent();
+        buffer.printf("}%n");
     }
 
     private void generateShortAccessor(String name, short val) {

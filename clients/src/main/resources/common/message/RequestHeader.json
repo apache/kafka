@@ -43,6 +43,9 @@
       "about": "Optional value of the initial principal name when the request is redirected by a broker, for audit logging and quota purpose." },
     { "name": "InitialClientId", "type": "string", "tag": 1, "taggedVersions": "2+",
       "nullableVersions": "2+", "default": "null", "ignorable": true,
-      "about": "Optional value of the initial client id when the request is redirected by a broker, for quota purpose." }
+      "about": "Optional value of the initial client id when the request is redirected by a broker, for quota purpose." },
+    { "name": "OriginalRequestVersion", "type": "int16", "tag": 2, "taggedVersions": "2+",
+      "default": "-1", "ignorable": true,
+      "about": "Optional value of the original request version when the request is upgraded during the redirection to reach minimum flexible version." }
   ]
 }

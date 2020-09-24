@@ -141,8 +141,8 @@ class BrokerToControllerChannelManagerImpl(metadataCache: kafka.server.MetadataC
     requestQueue.put(BrokerToControllerQueueItem(requestBuilder,
       (response: ClientResponse) => responseToOriginalClient(
         originalRequest, _ => combineResponse(response), callback),
-      InitialPrincipal(originalRequest.header.initialPrincipalName,
-        originalRequest.header.initialClientId)))
+      InitialPrincipal(originalRequest.context.principal.getName,
+        originalRequest.context.clientId)))
     requestThread.wakeup()
   }
 }
