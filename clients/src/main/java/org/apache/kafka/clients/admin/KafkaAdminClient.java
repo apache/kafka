@@ -79,6 +79,8 @@ import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData.AlterRepli
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirPartitionResult;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirTopicResult;
 import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData;
+import org.apache.kafka.common.message.ApiVersionsResponseData.FinalizedFeatureKey;
+import org.apache.kafka.common.message.ApiVersionsResponseData.SupportedFeatureKey;
 import org.apache.kafka.common.message.CreateAclsRequestData;
 import org.apache.kafka.common.message.CreateAclsRequestData.AclCreation;
 import org.apache.kafka.common.message.CreateAclsResponseData.AclCreationResult;
@@ -4351,6 +4353,27 @@ public class KafkaAdminClient extends AdminClient {
         Call call = new Call(
             "describeFeatures", calcDeadlineMs(now, options.timeoutMs()), provider) {
 
+            private FeatureMetadata createFeatureMetadata(final ApiVersionsResponse response) {
+                final Map<String, FinalizedVersionRange> finalizedFeatures = new HashMap<>();
+                for (FinalizedFeatureKey key : response.data().finalizedFeatures().valuesSet()) {
+                    finalizedFeatures.put(key.name(), new FinalizedVersionRange(key.minVersionLevel(), key.maxVersionLevel()));
+                }
+
+                Optional<Integer> finalizedFeaturesEpoch;
+                if (response.data().finalizedFeaturesEpoch() >= 0) {
+                    finalizedFeaturesEpoch = Optional.of(response.data().finalizedFeaturesEpoch());
+                } else {
+                    finalizedFeaturesEpoch = Optional.empty();
+                }
+
+                final Map<String, SupportedVersionRange> supportedFeatures = new HashMap<>();
+                for (SupportedFeatureKey key : response.data().supportedFeatures().valuesSet()) {
+                    supportedFeatures.put(key.name(), new SupportedVersionRange(key.minVersion(), key.maxVersion()));
+                }
+
+                return new FeatureMetadata(finalizedFeatures, finalizedFeaturesEpoch, supportedFeatures);
+            }
+
             @Override
             ApiVersionsRequest.Builder createRequest(int timeoutMs) {
                 return new ApiVersionsRequest.Builder();
@@ -4360,7 +4383,7 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse response) {
                 final ApiVersionsResponse apiVersionsResponse = (ApiVersionsResponse) response;
                 if (apiVersionsResponse.data.errorCode() == Errors.NONE.code()) {
-                    future.complete(new FeatureMetadata(apiVersionsResponse));
+                    future.complete(createFeatureMetadata(apiVersionsResponse));
                 } else if (options.sendRequestToController() &&
                            apiVersionsResponse.data.errorCode() == Errors.NOT_CONTROLLER.code()) {
                     handleNotControllerError(Errors.NOT_CONTROLLER);
@@ -4427,7 +4450,7 @@ public class KafkaAdminClient extends AdminClient {
                             feature -> "The controller response did not contain a result for feature " + feature);
                         break;
                     case NOT_CONTROLLER:
-                        handleNotControllerError(Errors.forCode(topLevelError.code()));
+                        handleNotControllerError(topLevelError);
                         break;
                     default:
                         for (Map.Entry<String, KafkaFutureImpl<Void>> entry : updateFutures.entrySet()) {

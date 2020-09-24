@@ -22,9 +22,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import org.apache.kafka.common.message.ApiVersionsResponseData.FinalizedFeatureKey;
-import org.apache.kafka.common.message.ApiVersionsResponseData.SupportedFeatureKey;
-import org.apache.kafka.common.requests.ApiVersionsResponse;
 
 /**
  * Encapsulates details about finalized as well as supported features. This is particularly useful
@@ -44,24 +41,6 @@ public class FeatureMetadata {
         this.finalizedFeatures = new HashMap<>(finalizedFeatures);
         this.finalizedFeaturesEpoch = finalizedFeaturesEpoch;
         this.supportedFeatures = new HashMap<>(supportedFeatures);
-    }
-
-    public FeatureMetadata(ApiVersionsResponse response) {
-        this.supportedFeatures = new HashMap<>();
-        for (SupportedFeatureKey key : response.data().supportedFeatures().valuesSet()) {
-            supportedFeatures.put(key.name(), new SupportedVersionRange(key.minVersion(), key.maxVersion()));
-        }
-
-        this.finalizedFeatures = new HashMap<>();
-        for (FinalizedFeatureKey key : response.data().finalizedFeatures().valuesSet()) {
-            finalizedFeatures.put(key.name(), new FinalizedVersionRange(key.minVersionLevel(), key.maxVersionLevel()));
-        }
-
-        if (response.data().finalizedFeaturesEpoch() >= 0) {
-            this.finalizedFeaturesEpoch = Optional.of(response.data().finalizedFeaturesEpoch());
-        } else {
-            this.finalizedFeaturesEpoch = Optional.empty();
-        }
     }
 
     /**

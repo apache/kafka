@@ -39,8 +39,8 @@ public class SupportedVersionRange {
         if (minVersion < 1 || maxVersion < 1 || maxVersion < minVersion) {
             throw new IllegalArgumentException(
                 String.format(
-                    "Expected minVersion >= 1, maxVersion >= 1 and maxVersion >= minVersion, but received" +
-                        " minVersion: %d, maxVersion: %d", minVersion, maxVersion));
+                    "Expected minVersion >= 1, maxVersion >= 1 and maxVersion >= minVersion," +
+                    " but received minVersion: %d, maxVersion: %d", minVersion, maxVersion));
         }
         this.minVersion = minVersion;
         this.maxVersion = maxVersion;
@@ -74,7 +74,7 @@ public class SupportedVersionRange {
 
     @Override
     public String toString() {
-        return String.format("FinalizedVersionRange{minVersion:%d, maxVersion:%d}", minVersion, maxVersion);
+        return String.format("SupportedVersionRange{minVersion:%d, maxVersion:%d}", minVersion, maxVersion);
     }
 }
 

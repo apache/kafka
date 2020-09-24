@@ -57,7 +57,7 @@ import scala.jdk.CollectionConverters._
  *    NOTE: The difference between the values in this map and the minimum version value for a
  *    broker's supported feature is the following: Version levels below the values specified in this
  *    map are considered deprecated by the controller, whereas version levels below the minimum
- *    version value for a  supported feature are considered unknown/unsupported.
+ *    version value for a supported feature are considered unknown/unsupported.
  */
 class BrokerFeatures private (@volatile var supportedFeatures: Features[SupportedVersionRange],
                               @volatile var defaultFeatureMinVersionLevels: Map[String, Short]) {
@@ -77,10 +77,14 @@ class BrokerFeatures private (@volatile var supportedFeatures: Features[Supporte
    * @param feature   the name of the feature
    *
    * @return          the default minimum version level for the supported feature if its defined.
-   *                  otherwise, returns the minimum version of the supported feature.
+   *                  otherwise, returns the minimum version of the supported feature (if the feature
+   *                  exists) or none.
    */
-  def defaultMinVersionLevel(feature: String): Short = {
-    defaultFeatureMinVersionLevels.getOrElse(feature, supportedFeatures.get(feature).min())
+  def defaultMinVersionLevel(feature: String): Option[Short] = {
+    defaultFeatureMinVersionLevels.get(feature).map(Some(_)).getOrElse {
+      val versionRange = supportedFeatures.get(feature)
+      if (versionRange == null) Option.empty else Some(versionRange.min())
+    }
   }
 
   // For testing only.
@@ -94,11 +98,11 @@ class BrokerFeatures private (@volatile var supportedFeatures: Features[Supporte
    * Returns the default finalized features that a new Kafka cluster with IBP config >= KAFKA_2_7_IV0
    * needs to be bootstrapped with.
    */
-  def getDefaultFinalizedFeatures: Features[FinalizedVersionRange] = {
+  def defaultFinalizedFeatures: Features[FinalizedVersionRange] = {
     Features.finalizedFeatures(
       supportedFeatures.features.asScala.map {
         case(name, versionRange) => (
-          name, new FinalizedVersionRange(defaultMinVersionLevel(name), versionRange.max))
+          name, new FinalizedVersionRange(defaultMinVersionLevel(name).get, versionRange.max))
       }.asJava)
   }
 

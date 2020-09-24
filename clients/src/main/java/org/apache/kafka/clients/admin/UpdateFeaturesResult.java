@@ -28,7 +28,7 @@ public class UpdateFeaturesResult {
     private final Map<String, KafkaFuture<Void>> futures;
 
     /**
-     * @param futures   a map from feature names to future, which can be used to check the status of
+     * @param futures   a map from feature name to future, which can be used to check the status of
      *                  individual feature updates.
      */
     public UpdateFeaturesResult(final Map<String, KafkaFuture<Void>> futures) {

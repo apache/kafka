@@ -169,7 +169,7 @@ class BrokerFeaturesTest {
       "test_feature_1" -> new FinalizedVersionRange(2, 4),
       "test_feature_2" -> new FinalizedVersionRange(3, 3),
       "test_feature_3" -> new FinalizedVersionRange(3, 7))
-    assertEquals(Features.finalizedFeatures(expectedFeatures.asJava), brokerFeatures.getDefaultFinalizedFeatures)
+    assertEquals(Features.finalizedFeatures(expectedFeatures.asJava), brokerFeatures.defaultFinalizedFeatures)
   }
 
   @Test
@@ -183,10 +183,10 @@ class BrokerFeaturesTest {
     val defaultMinVersionLevels = Map[String, Short]("test_feature_1" -> 2)
     brokerFeatures.setDefaultMinVersionLevels(defaultMinVersionLevels)
 
-    assertEquals(2, brokerFeatures.defaultMinVersionLevel("test_feature_1"))
-    assertEquals(1, brokerFeatures.defaultMinVersionLevel("test_feature_2"))
-    assertThrows(
-      classOf[NullPointerException],
-      () => brokerFeatures.defaultMinVersionLevel("test_feature_3"))
+    assertTrue(brokerFeatures.defaultMinVersionLevel("test_feature_1").isDefined)
+    assertEquals(2, brokerFeatures.defaultMinVersionLevel("test_feature_1").get)
+    assertTrue(brokerFeatures.defaultMinVersionLevel("test_feature_2").isDefined)
+    assertEquals(1, brokerFeatures.defaultMinVersionLevel("test_feature_2").get)
+    assertTrue(brokerFeatures.defaultMinVersionLevel("test_nonexistent_feature").isEmpty)
   }
 }

@@ -1328,8 +1328,8 @@ public interface Admin extends AutoCloseable {
     DescribeFeaturesResult describeFeatures(DescribeFeaturesOptions options);
 
     /**
-     * Applies specified updates to finalized features. This operation is not transactional so it
-     * may succeed for some features while fail for others.
+     * Applies specified updates to finalized features. This operation is not transactional so some
+     * updates may succeed while the rest may fail.
      * <p>
      * The API takes in a map of finalized feature names to {@link FeatureUpdate} that needs to be
      * applied. Each entry in the map specifies the finalized feature to be added or updated or
@@ -1339,13 +1339,13 @@ public interface Admin extends AutoCloseable {
      * succeeded or failed in the controller.
      * <ul>
      * <li>Downgrade of feature version level is not a regular operation/intent. It is only allowed
-     * in the controller if the {@link FeatureUpdate} has the allowDowngrade flag set - setting this
+     * in the controller if the {@link FeatureUpdate} has the allowDowngrade flag set. Setting this
      * flag conveys user intent to attempt downgrade of a feature max version level. Note that
      * despite the allowDowngrade flag being set, certain downgrades may be rejected by the
      * controller if it is deemed impossible.</li>
      * <li>Deletion of a finalized feature version is not a regular operation/intent. It could be
      * done by setting the allowDowngrade flag to true in the {@link FeatureUpdate}, and, setting
-     * the max version level to be less than 1.</li>
+     * the max version level to a value less than 1.</li>
      * </ul>
      * <p>
      * The following exceptions can be anticipated when calling {@code get()} on the futures

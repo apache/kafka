@@ -300,16 +300,16 @@ class KafkaController(val config: KafkaConfig,
    * a name and a range of version numbers. A feature can be of two types:
    *
    * 1. Supported feature:
-   * A supported feature is represented by a name (String) and a range of versions (defined by a
-   * {@link SupportedVersionRange}). It refers to a feature that a particular broker advertises
+   * A supported feature is represented by a name (string) and a range of versions (defined by a
+   * SupportedVersionRange). It refers to a feature that a particular broker advertises
    * support for. Each broker advertises the version ranges of its own supported features in its
    * own BrokerIdZNode. The contents of the advertisement are specific to the particular broker and
    * do not represent any guarantee of a cluster-wide availability of the feature for any particular
    * range of versions.
    *
    * 2. Finalized feature:
-   * A finalized feature is represented by a name (String) and a range of version levels (defined
-   * by a {@link FinalizedVersionRange}). Whenever the feature versioning system (KIP-584) is
+   * A finalized feature is represented by a name (string) and a range of version levels (defined
+   * by a FinalizedVersionRange). Whenever the feature versioning system (KIP-584) is
    * enabled, the finalized features are stored in the cluster-wide common FeatureZNode.
    * In comparison to a supported feature, the key difference is that a finalized feature exists
    * in ZK only when it is guaranteed to be supported by any random broker in the cluster for a
@@ -376,7 +376,7 @@ class KafkaController(val config: KafkaConfig,
    *    will switch the FeatureZNode status to disabled with empty features.
    */
   private def enableFeatureVersioning(): Unit = {
-    val defaultFinalizedFeatures = brokerFeatures.getDefaultFinalizedFeatures
+    val defaultFinalizedFeatures = brokerFeatures.defaultFinalizedFeatures
     val (mayBeFeatureZNodeBytes, version) = zkClient.getDataAndVersion(FeatureZNode.path)
     if (version == ZkVersion.UnknownVersion) {
       val newVersion = createFeatureZNode(new FeatureZNode(FeatureZNodeStatus.Enabled, defaultFinalizedFeatures))
@@ -1556,22 +1556,25 @@ class KafkaController(val config: KafkaConfig,
 
   /**
    * Partitions the provided map of brokers and epochs into 2 new maps:
-   *  - The first map contains brokers whose features were found to be compatible with the existing
-   *    finalized features.
-   *  - The second map contains brokers whose features were found to be incompatible with the existing
-   *    finalized features.
+   *  - The first map contains only those brokers whose features were found to be compatible with
+   *    the existing finalized features.
+   *  - The second map contains only those brokers whose features were found to be incompatible with
+   *    the existing finalized features.
    *
    * @param brokersAndEpochs   the map to be partitioned
-   * @return                   two maps: first contains compatible brokers and second contains incompatible brokers
-   *                           as explained above
+   * @return                   two maps: first contains compatible brokers and second contains
+   *                           incompatible brokers as explained above
    */
   private def partitionOnFeatureCompatibility(brokersAndEpochs: Map[Broker, Long]): (Map[Broker, Long], Map[Broker, Long]) = {
+    // There can not be any feature incompatibilities when the feature versioning system is disabled
+    // or when the finalized feature cache is empty. Otherwise, we check if the non-empty contents
+    //  of the cache are compatible with the supported features of each broker.
     brokersAndEpochs.partition {
       case (broker, _) =>
         !config.isFeatureVersioningEnabled ||
-          !featureCache.get.exists(
-            latestFinalizedFeatures =>
-              BrokerFeatures.hasIncompatibleFeatures(broker.features, latestFinalizedFeatures.features))
+        !featureCache.get.exists(
+          latestFinalizedFeatures =>
+            BrokerFeatures.hasIncompatibleFeatures(broker.features, latestFinalizedFeatures.features))
     }
   }
 
@@ -1893,7 +1896,7 @@ class KafkaController(val config: KafkaConfig,
   /**
    * Returns the new FinalizedVersionRange for the feature, if there are no feature
    * incompatibilities seen with all known brokers for the provided feature update.
-   * Otherwise returns an ApiError object containing Errors#INVALID_REQUEST.
+   * Otherwise returns an ApiError object containing Errors.INVALID_REQUEST.
    *
    * @param update   the feature update to be processed (this can not be meant to delete the feature)
    *
@@ -1904,35 +1907,36 @@ class KafkaController(val config: KafkaConfig,
       throw new IllegalArgumentException(s"Provided feature update can not be meant to delete the feature: $update")
     }
 
-    val incompatibilityError = "Could not apply finalized feature update because" +
-      " brokers were found to have incompatible versions for the feature."
-
-    if (brokerFeatures.supportedFeatures.get(update.feature()) == null) {
-      Right(new ApiError(Errors.INVALID_REQUEST, incompatibilityError))
+    val defaultMinVersionLevelOpt = brokerFeatures.defaultMinVersionLevel(update.feature)
+    if (defaultMinVersionLevelOpt.isEmpty) {
+      Right(new ApiError(Errors.INVALID_REQUEST,
+                         "Could not apply finalized feature update because the provided feature" +
+                         " is not supported."))
     } else {
-      val defaultMinVersionLevel = brokerFeatures.defaultMinVersionLevel(update.feature)
       var newVersionRange: FinalizedVersionRange = null
       try {
-        newVersionRange = new FinalizedVersionRange(defaultMinVersionLevel, update.maxVersionLevel)
+        newVersionRange = new FinalizedVersionRange(defaultMinVersionLevelOpt.get, update.maxVersionLevel)
       } catch {
         // Ignoring because it means the provided maxVersionLevel is invalid.
         case _: IllegalArgumentException => {}
       }
       if (newVersionRange == null) {
-       Right(new ApiError(Errors.INVALID_REQUEST,
-                          "Could not apply finalized feature update because the provided" +
-                          s" maxVersionLevel:${update.maxVersionLevel} is lower than the" +
-                          s" default minVersionLevel:$defaultMinVersionLevel."))
+        Right(new ApiError(Errors.INVALID_REQUEST,
+          "Could not apply finalized feature update because the provided" +
+          s" maxVersionLevel:${update.maxVersionLevel} is lower than the" +
+          s" default minVersionLevel:${defaultMinVersionLevelOpt.get}."))
       } else {
+        val newFinalizedFeature =
+          Features.finalizedFeatures(Utils.mkMap(Utils.mkEntry(update.feature, newVersionRange)))
         val numIncompatibleBrokers = controllerContext.liveOrShuttingDownBrokers.count(broker => {
-          val singleFinalizedFeature =
-            Features.finalizedFeatures(Utils.mkMap(Utils.mkEntry(update.feature, newVersionRange)))
-          BrokerFeatures.hasIncompatibleFeatures(broker.features, singleFinalizedFeature)
+          BrokerFeatures.hasIncompatibleFeatures(broker.features, newFinalizedFeature)
         })
         if (numIncompatibleBrokers == 0) {
           Left(newVersionRange)
         } else {
-          Right(new ApiError(Errors.INVALID_REQUEST, incompatibilityError))
+          Right(new ApiError(Errors.INVALID_REQUEST,
+                             "Could not apply finalized feature update because" +
+                             " brokers were found to have incompatible versions for the feature."))
         }
       }
     }
@@ -2061,28 +2065,26 @@ class KafkaController(val config: KafkaConfig,
     // If the existing and target features are the same, then, we skip the update to the
     // FeatureZNode as no changes to the node are required. Otherwise, we replace the contents
     // of the FeatureZNode with the new features. This may result in partial or full modification
-    // of the existing finalized features.
-    if (existingFeatures.equals(targetFeatures)) {
-      callback(Right(errors))
-    } else {
-      try {
+    // of the existing finalized features in ZK.
+    try {
+      if (!existingFeatures.equals(targetFeatures)) {
         val newNode = new FeatureZNode(FeatureZNodeStatus.Enabled, Features.finalizedFeatures(targetFeatures.asJava))
         val newVersion = zkClient.updateFeatureZNode(newNode)
         featureCache.waitUntilEpochOrThrow(newVersion, config.zkConnectionTimeoutMs)
-      } catch {
-        // For all features that correspond to valid FeatureUpdate (i.e. error is Errors.NONE),
-        // we set the error as Errors.FEATURE_UPDATE_FAILED since the FeatureZNode update has failed
-        // for these. For the rest, the existing error is left untouched.
-        case e: Exception =>
-          errors.foreach { case (feature, apiError) =>
-            if (apiError.error() == Errors.NONE) {
-              errors(feature) = new ApiError(Errors.FEATURE_UPDATE_FAILED,
-                Errors.FEATURE_UPDATE_FAILED.message() + " Error: " + e)
-            }
-          }
-      } finally {
-        callback(Right(errors))
       }
+    } catch {
+      // For all features that correspond to valid FeatureUpdate (i.e. error is Errors.NONE),
+      // we set the error as Errors.FEATURE_UPDATE_FAILED since the FeatureZNode update has failed
+      // for these. For the rest, the existing error is left untouched.
+      case e: Exception =>
+        errors.foreach { case (feature, apiError) =>
+          if (apiError.error() == Errors.NONE) {
+            errors(feature) = new ApiError(Errors.FEATURE_UPDATE_FAILED,
+              Errors.FEATURE_UPDATE_FAILED.message() + " Error: " + e)
+          }
+        }
+    } finally {
+      callback(Right(errors))
     }
   }
 

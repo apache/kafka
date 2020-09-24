@@ -98,7 +98,7 @@ public class UpdateFeaturesResponse extends AbstractResponse {
                 .setErrorMessage(error.message());
             results.add(result);
         }
-        UpdateFeaturesResponseData responseData = new UpdateFeaturesResponseData()
+        final UpdateFeaturesResponseData responseData = new UpdateFeaturesResponseData()
             .setThrottleTimeMs(throttleTimeMs)
             .setErrorCode(topLevelError.error().code())
             .setErrorMessage(topLevelError.message())
