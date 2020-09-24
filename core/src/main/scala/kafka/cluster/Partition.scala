@@ -1366,6 +1366,12 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
+  /**
+   * This is called for each partition in the body of an AlterIsr response. For errors which are non-retryable we simply
+   * give up. This leaves [[Partition.isrState]] in an in-flight state (either pending shrink or pending expand).
+   * Since our error was non-retryable we are okay staying in this state until we see new metadata from UpdateMetadata
+   * or LeaderAndIsr
+   */
   private def handleAlterIsrResponse(proposedIsr: Set[Int], result: Either[Errors, LeaderAndIsr]): Unit = {
     inWriteLock(leaderIsrUpdateLock) {
       result match {
@@ -1375,11 +1381,14 @@ class Partition(val topicPartition: TopicPartition,
           case Errors.FENCED_LEADER_EPOCH =>
             debug(s"Controller failed to update ISR to ${proposedIsr.mkString(",")} since we sent an old leader epoch. Giving up.")
           case Errors.INVALID_UPDATE_VERSION =>
-            debug(s"Controller failed to update ISR to ${proposedIsr.mkString(",")} due to invalid zk version. Retrying.")
-            sendAlterIsrRequest(isrState)
+            debug(s"Controller failed to update ISR to ${proposedIsr.mkString(",")} due to invalid zk version. Giving up.")
           case _ =>
-            warn(s"Controller failed to update ISR to ${proposedIsr.mkString(",")} due to $error. Retrying.")
-            sendAlterIsrRequest(isrState)
+            if (isrState.isInflight) {
+              warn(s"Controller failed to update ISR to ${proposedIsr.mkString(",")} due to $error. Retrying.")
+              sendAlterIsrRequest(isrState)
+            } else {
+              warn(s"Ignoring failed ISR update to ${proposedIsr.mkString(",")} since due to $error since we have a committed ISR.")
+            }
         }
         case Right(leaderAndIsr: LeaderAndIsr) =>
           // Success from controller, still need to check a few things

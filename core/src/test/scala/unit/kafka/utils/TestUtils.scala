@@ -1065,7 +1065,7 @@ object TestUtils extends Logging {
                    logDirFailureChannel = new LogDirFailureChannel(logDirs.size))
   }
 
-  class TestAlterIsrManager extends AlterIsrManager {
+  class MockAlterIsrManager extends AlterIsrManager {
     val isrUpdates: mutable.Queue[AlterIsrItem] = new mutable.Queue[AlterIsrItem]()
 
     override def enqueue(alterIsrItem: AlterIsrItem): Boolean = {
@@ -1080,8 +1080,8 @@ object TestUtils extends Logging {
     override def start(): Unit = { }
   }
 
-  def createAlterIsrManager(): TestAlterIsrManager = {
-    new TestAlterIsrManager()
+  def createAlterIsrManager(): MockAlterIsrManager = {
+    new MockAlterIsrManager()
   }
 
   def produceMessages(servers: Seq[KafkaServer],

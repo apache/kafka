@@ -1847,21 +1847,22 @@ class KafkaController(val config: KafkaConfig,
       // Determine which partitions we will accept the new ISR for
       val adjustedIsrs: Map[TopicPartition, LeaderAndIsr] = isrsToAlter.flatMap {
         case (tp: TopicPartition, newLeaderAndIsr: LeaderAndIsr) =>
-          val partitionError: Errors = controllerContext.partitionLeadershipInfo(tp) match {
+          controllerContext.partitionLeadershipInfo(tp) match {
             case Some(leaderIsrAndControllerEpoch) =>
               val currentLeaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
               if (newLeaderAndIsr.leaderEpoch < currentLeaderAndIsr.leaderEpoch) {
-                Errors.FENCED_LEADER_EPOCH
+                partitionResponses(tp) = Left(Errors.FENCED_LEADER_EPOCH)
+                None
+              } else if (newLeaderAndIsr.equalsIgnoreZk(currentLeaderAndIsr)) {
+                // If a partition is already in the desired state, just return it
+                partitionResponses(tp) = Right(currentLeaderAndIsr)
+                None
               } else {
-                Errors.NONE
+                Some(tp -> newLeaderAndIsr)
               }
-            case None => Errors.UNKNOWN_TOPIC_OR_PARTITION
-          }
-          if (partitionError == Errors.NONE) {
-            Some(tp -> newLeaderAndIsr)
-          } else {
-            partitionResponses(tp) = Left(partitionError)
-            None
+            case None =>
+              partitionResponses(tp) = Left(Errors.UNKNOWN_TOPIC_OR_PARTITION)
+              None
           }
       }
 

@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.cluster.Partition
 import kafka.log.{Log, LogManager}
-import kafka.utils.TestUtils.TestAlterIsrManager
+import kafka.utils.TestUtils.MockAlterIsrManager
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
@@ -53,7 +53,7 @@ class IsrExpirationTest {
 
   var replicaManager: ReplicaManager = null
 
-  var alterIsrManager: TestAlterIsrManager = _
+  var alterIsrManager: MockAlterIsrManager = _
 
   @Before
   def setUp(): Unit = {
