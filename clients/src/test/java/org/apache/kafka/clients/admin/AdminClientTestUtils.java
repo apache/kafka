@@ -17,10 +17,8 @@
 package org.apache.kafka.clients.admin;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.clients.admin.CreateTopicsResult.TopicMetadataAndConfig;
-import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 
