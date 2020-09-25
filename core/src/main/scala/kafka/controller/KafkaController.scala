@@ -22,7 +22,7 @@ import java.util.concurrent.TimeUnit
 import kafka.admin.AdminOperationException
 import kafka.api._
 import kafka.common._
-import kafka.controller.KafkaController.{AlterIsrCallback, AlterReassignmentsCallback, ElectLeadersCallback, ListReassignmentsCallback}
+import kafka.controller.KafkaController.AlterIsrCallback
 import kafka.cluster.Broker
 import kafka.controller.KafkaController.{AlterReassignmentsCallback, ElectLeadersCallback, ListReassignmentsCallback, UpdateFeaturesCallback}
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}

@@ -26,9 +26,6 @@ import kafka.metrics.KafkaYammerMetrics
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{LogCaptureAppender, TestUtils}
 import kafka.zk._
-import org.junit.{After, Before, Test}
-import org.junit.Assert.{assertEquals, assertTrue}
-import org.apache.kafka.common.{ElectionType, TopicPartition}
 import org.apache.kafka.common.errors.{ControllerMovedException, StaleBrokerEpochException}
 import org.apache.kafka.common.metrics.KafkaMetric
 import org.apache.kafka.common.protocol.Errors
