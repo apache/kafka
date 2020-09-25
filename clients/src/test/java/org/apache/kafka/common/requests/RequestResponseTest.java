@@ -202,6 +202,7 @@ import static org.apache.kafka.test.TestUtils.toBuffer;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -969,6 +970,17 @@ public class RequestResponseTest {
         bld.build((short) 3);
     }
 
+    @Test
+    public void testDeletableTopicResultErrorMessageIsNullByDefault() {
+        DeletableTopicResult result = new DeletableTopicResult()
+            .setName("topic")
+            .setErrorCode(Errors.THROTTLING_QUOTA_EXCEEDED.code());
+
+        assertEquals("topic", result.name());
+        assertEquals(Errors.THROTTLING_QUOTA_EXCEEDED.code(), result.errorCode());
+        assertNull(result.errorMessage());
+    }
+
     private ResponseHeader createResponseHeader(short headerVersion) {
         return new ResponseHeader(10, headerVersion);
     }
@@ -1709,6 +1721,9 @@ public class RequestResponseTest {
             .setName("t2")
             .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code())
             .setErrorMessage("Error Message"));
+        data.responses().add(new DeletableTopicResult()
+            .setName("t3")
+            .setErrorCode(Errors.NOT_CONTROLLER.code()));
         return new DeleteTopicsResponse(data);
     }
 
