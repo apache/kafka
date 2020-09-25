@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.util.HashMap;
 import org.apache.kafka.common.feature.Features;
 import org.apache.kafka.common.feature.FinalizedVersionRange;
 import org.apache.kafka.common.feature.SupportedVersionRange;
@@ -70,30 +69,6 @@ public class ApiVersionsResponse extends AbstractResponse {
 
     public ApiVersionsResponseData data() {
         return data;
-    }
-
-    public Features<SupportedVersionRange> supportedFeatures() {
-        final Map<String, SupportedVersionRange> features = new HashMap<>();
-
-        for (SupportedFeatureKey key : data.supportedFeatures().valuesSet()) {
-            features.put(key.name(), new SupportedVersionRange(key.minVersion(), key.maxVersion()));
-        }
-
-        return Features.supportedFeatures(features);
-    }
-
-    public Features<FinalizedVersionRange> finalizedFeatures() {
-        final Map<String, FinalizedVersionRange> features = new HashMap<>();
-
-        for (FinalizedFeatureKey key : data.finalizedFeatures().valuesSet()) {
-            features.put(key.name(), new FinalizedVersionRange(key.minVersionLevel(), key.maxVersionLevel()));
-        }
-
-        return Features.finalizedFeatures(features);
-    }
-
-    public int finalizedFeaturesEpoch() {
-        return data.finalizedFeaturesEpoch();
     }
 
     @Override
