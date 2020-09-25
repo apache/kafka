@@ -24,6 +24,7 @@ import kafka.log.LogConfig;
 import kafka.log.LogManager;
 import kafka.log.remote.RemoteLogManager;
 import kafka.log.remote.RemoteLogManagerConfig;
+import kafka.server.AlterIsrManager;
 import kafka.server.BrokerTopicStats;
 import kafka.server.KafkaConfig;
 import kafka.server.LogDirFailureChannel;
@@ -91,6 +92,7 @@ public class CheckpointBench {
     private QuotaFactory.QuotaManagers quotaManagers;
     private LogDirFailureChannel failureChannel;
     private LogManager logManager;
+    private AlterIsrManager alterIsrManager;
 
 
     @SuppressWarnings("deprecation")
@@ -118,12 +120,14 @@ public class CheckpointBench {
                 QuotaFactory.instantiate(this.brokerProperties,
                         this.metrics,
                         this.time, "");
+
         KafkaZkClient zkClient = new KafkaZkClient(null, false, Time.SYSTEM) {
             @Override
             public Properties getEntityConfigs(String rootEntityType, String sanitizedEntityName) {
                 return new Properties();
             }
         };
+        this.alterIsrManager = TestUtils.createAlterIsrManager();
         this.replicaManager = new ReplicaManager(
                 this.brokerProperties,
                 this.metrics,
@@ -137,7 +141,8 @@ public class CheckpointBench {
                 brokerTopicStats,
                 metadataCache,
                 this.failureChannel,
-                Option.empty());
+                Option.empty(),
+                alterIsrManager);
         replicaManager.startup();
 
         List<TopicPartition> topicPartitions = new ArrayList<>();

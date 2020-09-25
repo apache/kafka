@@ -113,6 +113,11 @@ import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.common.message.ListOffsetRequestData.ListOffsetPartition;
+import org.apache.kafka.common.message.ListOffsetRequestData.ListOffsetTopic;
+import org.apache.kafka.common.message.ListOffsetResponseData;
+import org.apache.kafka.common.message.ListOffsetResponseData.ListOffsetPartitionResponse;
+import org.apache.kafka.common.message.ListOffsetResponseData.ListOffsetTopicResponse;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
@@ -1221,28 +1226,39 @@ public class RequestResponseTest {
 
     private ListOffsetRequest createListOffsetRequest(int version) {
         if (version == 0) {
-            Map<TopicPartition, ListOffsetRequest.PartitionData> offsetData = Collections.singletonMap(
-                    new TopicPartition("test", 0),
-                    new ListOffsetRequest.PartitionData(1000000L, 10));
+            ListOffsetTopic topic = new ListOffsetTopic()
+                    .setName("test")
+                    .setPartitions(Arrays.asList(new ListOffsetPartition()
+                            .setPartitionIndex(0)
+                            .setTimestamp(1000000L)
+                            .setMaxNumOffsets(10)));
             return ListOffsetRequest.Builder
                     .forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
-                    .setTargetTimes(offsetData)
+                    .setTargetTimes(Collections.singletonList(topic))
                     .build((short) version);
         } else if (version == 1) {
-            Map<TopicPartition, ListOffsetRequest.PartitionData> offsetData = Collections.singletonMap(
-                    new TopicPartition("test", 0),
-                    new ListOffsetRequest.PartitionData(1000000L, Optional.empty()));
+            ListOffsetTopic topic = new ListOffsetTopic()
+                    .setName("test")
+                    .setPartitions(Arrays.asList(new ListOffsetPartition()
+                            .setPartitionIndex(0)
+                            .setTimestamp(1000000L)));
             return ListOffsetRequest.Builder
                     .forConsumer(true, IsolationLevel.READ_UNCOMMITTED)
-                    .setTargetTimes(offsetData)
+                    .setTargetTimes(Collections.singletonList(topic))
                     .build((short) version);
         } else if (version >= 2 && version <= 5) {
-            Map<TopicPartition, ListOffsetRequest.PartitionData> offsetData = Collections.singletonMap(
-                    new TopicPartition("test", 0),
-                    new ListOffsetRequest.PartitionData(1000000L, Optional.of(5)));
+            ListOffsetPartition partition = new ListOffsetPartition()
+                    .setPartitionIndex(0)
+                    .setTimestamp(1000000L);
+            if (version >= 4) {
+                partition.setCurrentLeaderEpoch(5);
+            }
+            ListOffsetTopic topic = new ListOffsetTopic()
+                    .setName("test")
+                    .setPartitions(Arrays.asList(partition));
             return ListOffsetRequest.Builder
                     .forConsumer(true, IsolationLevel.READ_COMMITTED)
-                    .setTargetTimes(offsetData)
+                    .setTargetTimes(Collections.singletonList(topic))
                     .build((short) version);
         } else {
             throw new IllegalArgumentException("Illegal ListOffsetRequest version " + version);
@@ -1251,15 +1267,28 @@ public class RequestResponseTest {
 
     private ListOffsetResponse createListOffsetResponse(int version) {
         if (version == 0) {
-            Map<TopicPartition, ListOffsetResponse.PartitionData> responseData = new HashMap<>();
-            responseData.put(new TopicPartition("test", 0),
-                    new ListOffsetResponse.PartitionData(Errors.NONE, asList(100L)));
-            return new ListOffsetResponse(responseData);
+            ListOffsetResponseData data = new ListOffsetResponseData()
+                    .setTopics(Collections.singletonList(new ListOffsetTopicResponse()
+                            .setName("test")
+                            .setPartitions(Collections.singletonList(new ListOffsetPartitionResponse()
+                                    .setPartitionIndex(0)
+                                    .setErrorCode(Errors.NONE.code())
+                                    .setOldStyleOffsets(asList(100L))))));
+            return new ListOffsetResponse(data);
         } else if (version >= 1 && version <= 5) {
-            Map<TopicPartition, ListOffsetResponse.PartitionData> responseData = new HashMap<>();
-            responseData.put(new TopicPartition("test", 0),
-                    new ListOffsetResponse.PartitionData(Errors.NONE, 10000L, 100L, Optional.of(27)));
-            return new ListOffsetResponse(responseData);
+            ListOffsetPartitionResponse partition = new ListOffsetPartitionResponse()
+                    .setPartitionIndex(0)
+                    .setErrorCode(Errors.NONE.code())
+                    .setTimestamp(10000L)
+                    .setOffset(100L);
+            if (version >= 4) {
+                partition.setLeaderEpoch(27);
+            }
+            ListOffsetResponseData data = new ListOffsetResponseData()
+                    .setTopics(Collections.singletonList(new ListOffsetTopicResponse()
+                            .setName("test")
+                            .setPartitions(Collections.singletonList(partition))));
+            return new ListOffsetResponse(data);
         } else {
             throw new IllegalArgumentException("Illegal ListOffsetResponse version " + version);
         }

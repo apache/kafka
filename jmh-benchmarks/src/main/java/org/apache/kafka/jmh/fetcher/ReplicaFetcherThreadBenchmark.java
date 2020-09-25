@@ -28,6 +28,7 @@ import kafka.log.LogAppendInfo;
 import kafka.log.LogConfig;
 import kafka.log.LogManager;
 import kafka.log.remote.RemoteLogManager;
+import kafka.server.AlterIsrManager;
 import kafka.server.BrokerState;
 import kafka.server.BrokerTopicStats;
 import kafka.server.FailedPartitions;
@@ -80,7 +81,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -157,9 +157,10 @@ public class ReplicaFetcherThreadBenchmark {
             Mockito.when(partitionStateStore.fetchTopicConfig()).thenReturn(new Properties());
             OffsetCheckpoints offsetCheckpoints = Mockito.mock(OffsetCheckpoints.class);
             Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), tp)).thenReturn(Option.apply(0L));
+            AlterIsrManager isrChannelManager = Mockito.mock(AlterIsrManager.class);
             Partition partition = new Partition(tp, 100, ApiVersion$.MODULE$.latestVersion(),
                     0, Time.SYSTEM, partitionStateStore, new DelayedOperationsMock(tp),
-                    Mockito.mock(MetadataCache.class), logManager);
+                    Mockito.mock(MetadataCache.class), logManager, isrChannelManager);
 
             partition.makeFollower(partitionState, offsetCheckpoints);
             pool.put(tp, partition);

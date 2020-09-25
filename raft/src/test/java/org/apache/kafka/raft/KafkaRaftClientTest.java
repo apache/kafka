@@ -56,8 +56,8 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import java.io.IOException;
@@ -81,13 +81,13 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class KafkaRaftClientTest {
     private static final TopicPartition METADATA_PARTITION = new TopicPartition("metadata", 0);
@@ -106,7 +106,7 @@ public class KafkaRaftClientTest {
     private final Random random = Mockito.spy(new Random(1));
     private final QuorumStateStore quorumStateStore = new MockQuorumStateStore();
 
-    @After
+    @AfterEach
     public void cleanUp() throws IOException {
         quorumStateStore.clear();
     }
@@ -619,8 +619,9 @@ public class KafkaRaftClientTest {
         assertEquals(expected.length, recordList.size());
         for (int i = 0; i < expected.length; i++) {
             Record record = recordList.get(i);
-            assertEquals("Record at offset " + record.offset() + " does not match expected",
-                expected[i], new SimpleRecord(record));
+            assertEquals(
+                expected[i], new SimpleRecord(record),
+                "Record at offset " + record.offset() + " does not match expected");
         }
     }
 
@@ -2128,8 +2129,8 @@ public class KafkaRaftClientTest {
 
     private FetchResponseData.FetchablePartitionResponse assertSentPartitionResponse() {
         List<RaftResponse.Outbound> sentMessages = channel.drainSentResponses(ApiKeys.FETCH);
-        assertEquals("Found unexpected sent messages " + sentMessages,
-            1, sentMessages.size());
+        assertEquals(
+            1, sentMessages.size(), "Found unexpected sent messages " + sentMessages);
         RaftResponse.Outbound raftMessage = sentMessages.get(0);
         assertEquals(ApiKeys.FETCH.id, raftMessage.data.apiKey());
         FetchResponseData response = (FetchResponseData) raftMessage.data();
@@ -2273,8 +2274,8 @@ public class KafkaRaftClientTest {
         long fetchOffset,
         int lastFetchedEpoch
     ) {
-        assertTrue("Unexpected request type " + message.data(),
-            message.data() instanceof FetchRequestData);
+        assertTrue(
+            message.data() instanceof FetchRequestData, "Unexpected request type " + message.data());
         FetchRequestData request = (FetchRequestData) message.data();
 
         assertEquals(1, request.topics().size());
@@ -2402,8 +2403,9 @@ public class KafkaRaftClientTest {
         List<RaftMessage> sentMessages = channel.drainSendQueue();
         assertEquals(1, sentMessages.size());
         RaftMessage raftMessage = sentMessages.get(0);
-        assertTrue("Unexpected request type " + raftMessage.data(),
-            raftMessage.data() instanceof DescribeQuorumResponseData);
+        assertTrue(
+            raftMessage.data() instanceof DescribeQuorumResponseData,
+            "Unexpected request type " + raftMessage.data());
         DescribeQuorumResponseData response = (DescribeQuorumResponseData) raftMessage.data();
 
         DescribeQuorumResponseData expectedResponse = DescribeQuorumResponse.singletonResponse(

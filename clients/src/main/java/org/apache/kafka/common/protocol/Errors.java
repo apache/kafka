@@ -36,6 +36,7 @@ import org.apache.kafka.common.errors.ElectionNotNeededException;
 import org.apache.kafka.common.errors.EligibleLeadersNotAvailableException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.FencedLeaderEpochException;
+import org.apache.kafka.common.errors.InvalidUpdateVersionException;
 import org.apache.kafka.common.errors.FetchSessionIdNotFoundException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
@@ -336,7 +337,8 @@ public enum Errors {
     UNACCEPTABLE_CREDENTIAL(93, "Requested credential would not meet criteria for acceptability.", UnacceptableCredentialException::new),
     INCONSISTENT_VOTER_SET(94, "Indicates that the either the sender or recipient of a " +
             "voter-only request is not one of the expected voters", InconsistentVoterSetException::new),
-    OFFSET_MOVED_TO_TIERED_STORAGE(95, "The requested offset is moved to tiered storage.",
+    INVALID_UPDATE_VERSION(95, "The given update version was invalid.", InvalidUpdateVersionException::new),
+    OFFSET_MOVED_TO_TIERED_STORAGE(96, "The requested offset is moved to tiered storage.",
             OffsetMovedToTieredStorageException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);

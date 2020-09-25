@@ -1068,6 +1068,25 @@ object TestUtils extends Logging {
                    remoteLogManagerConfig = remoteLogManagerConfig)
   }
 
+  class MockAlterIsrManager extends AlterIsrManager {
+    val isrUpdates: mutable.Queue[AlterIsrItem] = new mutable.Queue[AlterIsrItem]()
+
+    override def enqueue(alterIsrItem: AlterIsrItem): Boolean = {
+      isrUpdates += alterIsrItem
+      true
+    }
+
+    override def clearPending(topicPartition: TopicPartition): Unit = {
+      isrUpdates.clear()
+    }
+
+    override def start(): Unit = { }
+  }
+
+  def createAlterIsrManager(): MockAlterIsrManager = {
+    new MockAlterIsrManager()
+  }
+
   def produceMessages(servers: Seq[KafkaServer],
                       records: Seq[ProducerRecord[Array[Byte], Array[Byte]]],
                       acks: Int = -1): Unit = {

@@ -14,15 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.raft;
+package org.apache.kafka.common.errors;
 
-import org.junit.Test;
+public class InvalidUpdateVersionException extends ApiException {
 
-public class VotedStateTest {
+    public InvalidUpdateVersionException(String message) {
+        super(message);
+    }
 
-    @Test
-    public void testElectionTimeout() {
-        // TODO:
+    public InvalidUpdateVersionException(String message, Throwable throwable) {
+        super(message, throwable);
     }
 
 }

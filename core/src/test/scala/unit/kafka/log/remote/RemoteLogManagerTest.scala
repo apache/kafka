@@ -76,10 +76,11 @@ class RemoteLogManagerTest {
     val brokerConfig = KafkaConfig.fromProps(brokerProps)
     val kafkaZkClient: KafkaZkClient = EasyMock.createMock(classOf[KafkaZkClient])
     val quotaManagers = QuotaFactory.instantiate(brokerConfig, metrics, time, "")
+    val alterIsrManager = TestUtils.createAlterIsrManager()
     replicaManager = new ReplicaManager(
       config = brokerConfig, metrics, time, zkClient = kafkaZkClient, new MockScheduler(time),
       logManager, Option(rlmMock), new AtomicBoolean(false), quotaManagers,
-      brokerTopicStats, new MetadataCache(brokerId), new LogDirFailureChannel(brokerConfig.logDirs.size))
+      brokerTopicStats, new MetadataCache(brokerId), new LogDirFailureChannel(brokerConfig.logDirs.size), alterIsrManager)
 
     EasyMock.expect(kafkaZkClient.getEntityConfigs(EasyMock.anyString(), EasyMock.anyString())).andReturn(
       logProps).anyTimes()

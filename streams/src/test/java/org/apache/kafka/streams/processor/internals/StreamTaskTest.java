@@ -1322,10 +1322,10 @@ public class StreamTaskTest {
         task.completeRestoration();
 
         task.prepareCommit();
-        task.postCommit(true);  // should checkpoint
+        task.postCommit(true);   // should checkpoint
 
         task.prepareCommit();
-        task.postCommit(false); // should not checkpoint
+        task.postCommit(false);   // should not checkpoint
 
         EasyMock.verify(stateManager, recordCollector);
     }
@@ -1565,7 +1565,7 @@ public class StreamTaskTest {
         task.postCommit(true);
         EasyMock.verify(stateManager);
     }
-
+    
     @Test
     public void shouldNotCheckpointForSuspendedRunningTaskWithSmallProgress() {
         EasyMock.expect(stateManager.changelogOffsets())
@@ -2251,8 +2251,7 @@ public class StreamTaskTest {
         );
     }
 
-    private ConsumerRecord<byte[], byte[]> getConsumerRecord(final Integer key,
-                                                             final long offset) {
+    private ConsumerRecord<byte[], byte[]> getConsumerRecord(final Integer key, final long offset) {
         return new ConsumerRecord<>(
             topic1,
             1,
