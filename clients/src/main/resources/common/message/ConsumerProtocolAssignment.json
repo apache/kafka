@@ -15,7 +15,7 @@
 
 {
   "type": "data",
-  "name": "ConsumerProtocolAssignmentData",
+  "name": "ConsumerProtocolAssignment",
   // Assignment part of the Consumer Protocol.
   //
   // The current implementation assumes that future versions will not break compatibility. When
@@ -30,6 +30,6 @@
       ]
     },
     { "name": "UserData", "type": "bytes", "versions": "0+", "nullableVersions": "0+",
-      "default": "null" }
+      "default": "null", "zeroCopy": true }
   ]
 }

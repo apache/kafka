@@ -20,8 +20,8 @@ import java.nio.BufferUnderflowException;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.message.ConsumerProtocolAssignmentData;
-import org.apache.kafka.common.message.ConsumerProtocolSubscriptionData;
+import org.apache.kafka.common.message.ConsumerProtocolAssignment;
+import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
@@ -46,13 +46,13 @@ public class ConsumerProtocol {
 
     static {
         // Safety check to ensure that both parts of the consumer protocol remain in sync.
-        if (ConsumerProtocolSubscriptionData.LOWEST_SUPPORTED_VERSION
-                != ConsumerProtocolAssignmentData.LOWEST_SUPPORTED_VERSION)
+        if (ConsumerProtocolSubscription.LOWEST_SUPPORTED_VERSION
+                != ConsumerProtocolAssignment.LOWEST_SUPPORTED_VERSION)
             throw new IllegalStateException("Subscription and Assignment schemas must have the " +
                 "same lowest version");
 
-        if (ConsumerProtocolSubscriptionData.HIGHEST_SUPPORTED_VERSION
-                != ConsumerProtocolAssignmentData.HIGHEST_SUPPORTED_VERSION)
+        if (ConsumerProtocolSubscription.HIGHEST_SUPPORTED_VERSION
+                != ConsumerProtocolAssignment.HIGHEST_SUPPORTED_VERSION)
             throw new IllegalStateException("Subscription and Assignment schemas must have the " +
                 "same highest version");
     }
@@ -66,19 +66,18 @@ public class ConsumerProtocol {
     }
 
     public static ByteBuffer serializeSubscription(final Subscription subscription) {
-        return serializeSubscription(subscription, ConsumerProtocolSubscriptionData.HIGHEST_SUPPORTED_VERSION);
+        return serializeSubscription(subscription, ConsumerProtocolSubscription.HIGHEST_SUPPORTED_VERSION);
     }
 
     public static ByteBuffer serializeSubscription(final Subscription subscription, short version) {
         version = checkSubscriptionVersion(version);
 
-        ConsumerProtocolSubscriptionData data = new ConsumerProtocolSubscriptionData();
+        ConsumerProtocolSubscription data = new ConsumerProtocolSubscription();
         data.setTopics(subscription.topics());
-        if (subscription.userData() != null)
-            data.setUserData(subscription.userData().array());
+        data.setUserData(subscription.userData() != null ? subscription.userData().duplicate() : null);
         Map<String, List<Integer>> partitionsByTopic = CollectionUtils.groupPartitionsByTopic(subscription.ownedPartitions());
         for (Map.Entry<String, List<Integer>> topicEntry : partitionsByTopic.entrySet()) {
-            data.ownedPartitions().add(new ConsumerProtocolSubscriptionData.TopicPartition()
+            data.ownedPartitions().add(new ConsumerProtocolSubscription.TopicPartition()
                 .setTopic(topicEntry.getKey())
                 .setPartitions(topicEntry.getValue()));
         }
@@ -90,21 +89,20 @@ public class ConsumerProtocol {
         version = checkSubscriptionVersion(version);
 
         try {
-            ConsumerProtocolSubscriptionData data =
-                new ConsumerProtocolSubscriptionData(new ByteBufferAccessor(buffer), version);
+            ConsumerProtocolSubscription data =
+                new ConsumerProtocolSubscription(new ByteBufferAccessor(buffer), version);
 
             List<TopicPartition> ownedPartitions = new ArrayList<>();
-            for (ConsumerProtocolSubscriptionData.TopicPartition tp : data.ownedPartitions()) {
+            for (ConsumerProtocolSubscription.TopicPartition tp : data.ownedPartitions()) {
                 for (Integer partition : tp.partitions()) {
                     ownedPartitions.add(new TopicPartition(tp.topic(), partition));
                 }
             }
 
-            ByteBuffer userData = null;
-            if (data.userData() != null)
-                userData = ByteBuffer.wrap(data.userData());
-
-            return new Subscription(data.topics(), userData, ownedPartitions);
+            return new Subscription(
+                data.topics(),
+                data.userData() != null ? data.userData().duplicate() : null,
+                ownedPartitions);
         } catch (BufferUnderflowException e) {
             throw new SchemaException("Buffer underflow while parsing consumer protocol's subscription", e);
         }
@@ -115,22 +113,20 @@ public class ConsumerProtocol {
     }
 
     public static ByteBuffer serializeAssignment(final Assignment assignment) {
-        return serializeAssignment(assignment, ConsumerProtocolAssignmentData.HIGHEST_SUPPORTED_VERSION);
+        return serializeAssignment(assignment, ConsumerProtocolAssignment.HIGHEST_SUPPORTED_VERSION);
     }
 
     public static ByteBuffer serializeAssignment(final Assignment assignment, short version) {
         version = checkAssignmentVersion(version);
 
-        ConsumerProtocolAssignmentData data = new ConsumerProtocolAssignmentData();
+        ConsumerProtocolAssignment data = new ConsumerProtocolAssignment();
+        data.setUserData(assignment.userData() != null ? assignment.userData().duplicate() : null);
         Map<String, List<Integer>> partitionsByTopic = CollectionUtils.groupPartitionsByTopic(assignment.partitions());
         for (Map.Entry<String, List<Integer>> topicEntry : partitionsByTopic.entrySet()) {
-            data.assignedPartitions().add(new ConsumerProtocolAssignmentData.TopicPartition()
+            data.assignedPartitions().add(new ConsumerProtocolAssignment.TopicPartition()
                 .setTopic(topicEntry.getKey())
                 .setPartitions(topicEntry.getValue()));
         }
-
-        if (assignment.userData() != null)
-            data.setUserData(assignment.userData().array());
 
         return serializeMessage(version, data);
     }
@@ -139,21 +135,19 @@ public class ConsumerProtocol {
         version = checkAssignmentVersion(version);
 
         try {
-            ConsumerProtocolAssignmentData data =
-                new ConsumerProtocolAssignmentData(new ByteBufferAccessor(buffer), version);
+            ConsumerProtocolAssignment data =
+                new ConsumerProtocolAssignment(new ByteBufferAccessor(buffer), version);
 
             List<TopicPartition> assignedPartitions = new ArrayList<>();
-            for (ConsumerProtocolAssignmentData.TopicPartition tp : data.assignedPartitions()) {
+            for (ConsumerProtocolAssignment.TopicPartition tp : data.assignedPartitions()) {
                 for (Integer partition : tp.partitions()) {
                     assignedPartitions.add(new TopicPartition(tp.topic(), partition));
                 }
             }
 
-            ByteBuffer userData = null;
-            if (data.userData() != null)
-                userData = ByteBuffer.wrap(data.userData());
-
-            return new Assignment(assignedPartitions, userData);
+            return new Assignment(
+                assignedPartitions,
+                data.userData() != null ? data.userData().duplicate() : null);
         } catch (BufferUnderflowException e) {
             throw new SchemaException("Buffer underflow while parsing consumer protocol's assignment", e);
         }
@@ -164,19 +158,19 @@ public class ConsumerProtocol {
     }
 
     private static short checkSubscriptionVersion(final short version) {
-        if (version < ConsumerProtocolSubscriptionData.LOWEST_SUPPORTED_VERSION)
+        if (version < ConsumerProtocolSubscription.LOWEST_SUPPORTED_VERSION)
             throw new SchemaException("Unsupported subscription version: " + version);
-        else if (version > ConsumerProtocolSubscriptionData.HIGHEST_SUPPORTED_VERSION)
-            return ConsumerProtocolSubscriptionData.HIGHEST_SUPPORTED_VERSION;
+        else if (version > ConsumerProtocolSubscription.HIGHEST_SUPPORTED_VERSION)
+            return ConsumerProtocolSubscription.HIGHEST_SUPPORTED_VERSION;
         else
             return version;
     }
 
     private static short checkAssignmentVersion(final short version) {
-        if (version < ConsumerProtocolAssignmentData.LOWEST_SUPPORTED_VERSION)
+        if (version < ConsumerProtocolAssignment.LOWEST_SUPPORTED_VERSION)
             throw new SchemaException("Unsupported assignment version: " + version);
-        else if (version > ConsumerProtocolAssignmentData.HIGHEST_SUPPORTED_VERSION)
-            return ConsumerProtocolAssignmentData.HIGHEST_SUPPORTED_VERSION;
+        else if (version > ConsumerProtocolAssignment.HIGHEST_SUPPORTED_VERSION)
+            return ConsumerProtocolAssignment.HIGHEST_SUPPORTED_VERSION;
         else
             return version;
     }

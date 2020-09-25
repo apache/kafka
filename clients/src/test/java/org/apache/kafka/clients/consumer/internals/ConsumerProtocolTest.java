@@ -19,8 +19,8 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.message.ConsumerProtocolAssignmentData;
-import org.apache.kafka.common.message.ConsumerProtocolSubscriptionData;
+import org.apache.kafka.common.message.ConsumerProtocolAssignment;
+import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
@@ -109,14 +109,14 @@ public class ConsumerProtocolTest {
             new Field("topics", new ArrayOf(Type.STRING)),
             new Field("user_data", Type.NULLABLE_BYTES),
             new Field("owned_partitions", new ArrayOf(
-                ConsumerProtocolSubscriptionData.TopicPartition.SCHEMA_1)),
+                ConsumerProtocolSubscription.TopicPartition.SCHEMA_1)),
             new Field("foo", Type.STRING));
 
         Struct subscriptionV100 = new Struct(subscriptionSchemaV100);
         subscriptionV100.set("topics", new Object[]{"topic"});
         subscriptionV100.set("user_data", ByteBuffer.wrap(new byte[0]));
         subscriptionV100.set("owned_partitions", new Object[]{new Struct(
-            ConsumerProtocolSubscriptionData.TopicPartition.SCHEMA_1)
+            ConsumerProtocolSubscription.TopicPartition.SCHEMA_1)
             .set("topic", tp2.topic())
             .set("partitions", new Object[]{tp2.partition()})});
         subscriptionV100.set("foo", "bar");
@@ -162,13 +162,13 @@ public class ConsumerProtocolTest {
 
         Schema assignmentSchemaV100 = new Schema(
             new Field("assigned_partitions", new ArrayOf(
-                ConsumerProtocolAssignmentData.TopicPartition.SCHEMA_0)),
+                ConsumerProtocolAssignment.TopicPartition.SCHEMA_0)),
             new Field("user_data", Type.BYTES),
             new Field("foo", Type.STRING));
 
         Struct assignmentV100 = new Struct(assignmentSchemaV100);
         assignmentV100.set("assigned_partitions",
-            new Object[]{new Struct(ConsumerProtocolAssignmentData.TopicPartition.SCHEMA_0)
+            new Object[]{new Struct(ConsumerProtocolAssignment.TopicPartition.SCHEMA_0)
                 .set("topic", tp1.topic())
                 .set("partitions", new Object[]{tp1.partition()})});
         assignmentV100.set("user_data", ByteBuffer.wrap(new byte[0]));
