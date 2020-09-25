@@ -18,13 +18,14 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
+import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Objects;
 
-class ValueAndTimestampDeserializer<V> implements Deserializer<ValueAndTimestamp<V>> {
+class ValueAndTimestampDeserializer<V> implements WrappingNullableDeserializer<ValueAndTimestamp<V>, Void, V> {
     private final static LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
 
     public final Deserializer<V> valueDeserializer;
@@ -81,4 +82,11 @@ class ValueAndTimestampDeserializer<V> implements Deserializer<ValueAndTimestamp
         return LONG_DESERIALIZER.deserialize(null, rawTimestamp(rawValueAndTimestamp));
     }
 
+    @SuppressWarnings("unchecked")
+    @Override
+    public void setIfUnset(final Deserializer<Void> defaultKeyDeserializer, final Deserializer<V> defaultValueDeserializer) {
+        if (this.valueDeserializer instanceof WrappingNullableDeserializer) {
+            ((WrappingNullableDeserializer<?, Void, V>) this.valueDeserializer).setIfUnset(defaultKeyDeserializer, defaultValueDeserializer);
+        }
+    }
 }

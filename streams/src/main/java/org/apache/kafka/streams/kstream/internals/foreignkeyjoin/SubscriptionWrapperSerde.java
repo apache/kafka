@@ -21,13 +21,14 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
+import org.apache.kafka.streams.kstream.internals.WrappingNullableSerde;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
 
 import java.nio.ByteBuffer;
 import java.util.Objects;
 import java.util.function.Supplier;
 
-public class SubscriptionWrapperSerde<K> implements Serde<SubscriptionWrapper<K>> {
+public class SubscriptionWrapperSerde<K> implements WrappingNullableSerde<SubscriptionWrapper<K>, K, Void> {
     private final SubscriptionWrapperSerializer<K> serializer;
     private final SubscriptionWrapperDeserializer<K> deserializer;
 

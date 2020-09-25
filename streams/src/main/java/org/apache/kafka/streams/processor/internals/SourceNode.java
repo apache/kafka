@@ -19,7 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
+import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
@@ -56,7 +56,6 @@ public class SourceNode<KIn, VIn, KOut, VOut> extends ProcessorNode<KIn, VIn, KO
         return valDeserializer.deserialize(topic, headers, data);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public void init(final InternalProcessorContext context) {
         // It is important to first create the sensor before calling init on the
@@ -73,22 +72,10 @@ public class SourceNode<KIn, VIn, KOut, VOut> extends ProcessorNode<KIn, VIn, KO
         super.init(context);
         this.context = context;
 
-        // if deserializers are null, get the default ones from the context
-        if (this.keyDeserializer == null) {
-            this.keyDeserializer = (Deserializer<KIn>) context.keySerde().deserializer();
-        }
-        if (this.valDeserializer == null) {
-            this.valDeserializer = (Deserializer<VIn>) context.valueSerde().deserializer();
-        }
-
-        // if deserializers are internal wrapping deserializers that may need to be given the default
-        // then pass it the default one from the context
-        if (valDeserializer instanceof WrappingNullableDeserializer) {
-            ((WrappingNullableDeserializer) valDeserializer).setIfUnset(
-                    context.keySerde().deserializer(),
-                    context.valueSerde().deserializer()
-            );
-        }
+        final Deserializer<?> contextKeyDeserializer = ProcessorContextUtils.getKeyDeserializer(context);
+        final Deserializer<?> contextValueDeserializer = ProcessorContextUtils.getValueDeserializer(context);
+        this.keyDeserializer = WrappingNullableUtils.prepareKeyDeserializer(this.keyDeserializer, contextKeyDeserializer, contextValueDeserializer);
+        this.valDeserializer = WrappingNullableUtils.prepareValueDeserializer(this.valDeserializer, contextKeyDeserializer, contextValueDeserializer);
     }
 
 

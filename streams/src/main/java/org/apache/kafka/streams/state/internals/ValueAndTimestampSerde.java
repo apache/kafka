@@ -19,12 +19,13 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.kstream.internals.WrappingNullableSerde;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.util.Map;
 import java.util.Objects;
 
-public class ValueAndTimestampSerde<V> implements Serde<ValueAndTimestamp<V>> {
+public class ValueAndTimestampSerde<V> implements WrappingNullableSerde<ValueAndTimestamp<V>, Void, V> {
     private final ValueAndTimestampSerializer<V> valueAndTimestampSerializer;
     private final ValueAndTimestampDeserializer<V> valueAndTimestampDeserializer;
 

@@ -18,13 +18,14 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Objects;
 
-public class ValueAndTimestampSerializer<V> implements Serializer<ValueAndTimestamp<V>> {
+public class ValueAndTimestampSerializer<V> implements WrappingNullableSerializer<ValueAndTimestamp<V>, Void, V> {
     public final Serializer<V> valueSerializer;
     private final Serializer<Long> timestampSerializer;
 
@@ -118,5 +119,12 @@ public class ValueAndTimestampSerializer<V> implements Serializer<ValueAndTimest
             }
         }
         return true;
+    }
+    @SuppressWarnings("unchecked")
+    @Override
+    public void setIfUnset(final Serializer<Void> defaultKeySerializer, final Serializer<V> defaultValueSerializer) {
+        if (this.valueSerializer instanceof WrappingNullableSerializer) {
+            ((WrappingNullableSerializer<?, Void, V>) this.valueSerializer).setIfUnset(defaultKeySerializer, defaultValueSerializer);
+        }
     }
 }

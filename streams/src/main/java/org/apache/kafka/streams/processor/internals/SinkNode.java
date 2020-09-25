@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
+import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.api.Record;
@@ -52,28 +52,14 @@ public class SinkNode<KIn, VIn, KOut, VOut> extends ProcessorNode<KIn, VIn, KOut
         throw new UnsupportedOperationException("sink node does not allow addChild");
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public void init(final InternalProcessorContext context) {
         super.init(context);
         this.context = context;
-
-        // if serializers are null, get the default ones from the context
-        if (keySerializer == null) {
-            keySerializer = (Serializer<KIn>) context.keySerde().serializer();
-        }
-        if (valSerializer == null) {
-            valSerializer = (Serializer<VIn>) context.valueSerde().serializer();
-        }
-
-        // if serializers are internal wrapping serializers that may need to be given the default serializer
-        // then pass it the default one from the context
-        if (valSerializer instanceof WrappingNullableSerializer) {
-            ((WrappingNullableSerializer) valSerializer).setIfUnset(
-                context.keySerde().serializer(),
-                context.valueSerde().serializer()
-            );
-        }
+        final Serializer<?> contextKeySerializer = ProcessorContextUtils.getKeySerializer(context);
+        final Serializer<?> contextValueSerializer = ProcessorContextUtils.getValueSerializer(context);
+        this.keySerializer = WrappingNullableUtils.prepareKeySerializer(this.keySerializer, contextKeySerializer, contextValueSerializer);
+        valSerializer = WrappingNullableUtils.prepareValueSerializer(valSerializer, contextKeySerializer, contextValueSerializer);
     }
 
     @Override
