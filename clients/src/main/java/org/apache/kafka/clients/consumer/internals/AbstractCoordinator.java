@@ -598,7 +598,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     }
                 }
             } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
-                log.debug("JoinGroup failed: Coordinator {} is loading the group.", coordinator());
+                log.info("JoinGroup failed: Coordinator {} is loading the group.", coordinator());
                 // backoff and retry
                 future.raise(error);
             } else if (error == Errors.UNKNOWN_MEMBER_ID) {
@@ -614,7 +614,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     || error == Errors.NOT_COORDINATOR) {
                 // re-discover the coordinator and retry with backoff
                 markCoordinatorUnknown();
-                log.debug("JoinGroup failed: {} Marking coordinator unknown. Sent generation was {}",
+                log.info("JoinGroup failed: {} Marking coordinator unknown. Sent generation was {}",
                           error.message(), sentGeneration);
                 future.raise(error);
             } else if (error == Errors.FENCED_INSTANCE_ID) {
@@ -629,7 +629,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     || error == Errors.GROUP_AUTHORIZATION_FAILED
                     || error == Errors.GROUP_MAX_SIZE_REACHED) {
                 // log the error and re-throw the exception
-                log.error("Attempt to join group failed due to fatal error: {}", error.message());
+                log.error("JoinGroup failed due to fatal error: {}", error.message());
                 if (error == Errors.GROUP_MAX_SIZE_REACHED) {
                     future.raise(new GroupMaxSizeReachedException("Consumer group " + rebalanceConfig.groupId +
                             " already has the configured maximum number of members."));
@@ -639,21 +639,22 @@ public abstract class AbstractCoordinator implements Closeable {
                     future.raise(error);
                 }
             } else if (error == Errors.UNSUPPORTED_VERSION) {
-                log.error("Attempt to join group failed due to unsupported version error. Please unset field group.instance.id and retry" +
-                        " to see if the problem resolves");
+                log.error("JoinGroup failed due to unsupported version error. Please unset field group.instance.id " +
+                          "and retry to see if the problem resolves");
                 future.raise(error);
             } else if (error == Errors.MEMBER_ID_REQUIRED) {
                 // Broker requires a concrete member id to be allowed to join the group. Update member id
                 // and send another join group request in next cycle.
                 String memberId = joinResponse.data().memberId();
-                log.debug("Attempt to join group returned {} error. Will set the member id as {} and then rejoin", error, memberId);
+                log.debug("JoinGroup failed due to non-fatal error: {} Will set the member id as {} and then rejoin. " +
+                              "Sent generation was  {}", error, memberId, sentGeneration);
                 synchronized (AbstractCoordinator.this) {
                     AbstractCoordinator.this.generation = new Generation(OffsetCommitRequest.DEFAULT_GENERATION_ID, memberId, null);
                 }
                 future.raise(error);
             } else {
                 // unexpected error, throw the exception
-                log.error("Attempt to join group failed due to unexpected error: {}", error.message());
+                log.error("JoinGroup failed due to unexpected error: {}", error.message());
                 future.raise(new KafkaException("Unexpected error in join group response: " + error.message()));
             }
         }
@@ -790,7 +791,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     future.raise(error);
                 } else if (error == Errors.COORDINATOR_NOT_AVAILABLE
                         || error == Errors.NOT_COORDINATOR) {
-                    log.debug("SyncGroup failed: {} Marking coordinator unknown. Sent generation was {}",
+                    log.info("SyncGroup failed: {} Marking coordinator unknown. Sent generation was {}",
                              error.message(), sentGeneration);
                     markCoordinatorUnknown();
                     future.raise(error);
