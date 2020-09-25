@@ -17,9 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import java.nio.ByteBuffer;
-import java.util.HashMap;
 import java.util.Map;
-import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.UpdateFeaturesRequestData.FeatureUpdateKey;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.message.UpdateFeaturesRequestData;
