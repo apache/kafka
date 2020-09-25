@@ -189,7 +189,7 @@ class CachedPartition(val topic: String,
   *
   * @param id           The unique fetch session ID.
   * @param privileged   True if this session is privileged.  Sessions crated by followers
-  *                     are privileged; sesssion created by consumers are not.
+  *                     are privileged; session created by consumers are not.
   * @param partitionMap The CachedPartitionMap.
   * @param creationMs   The time in milliseconds when this session was created.
   * @param lastUsedMs   The last used time in milliseconds.  This should only be updated by
@@ -632,6 +632,26 @@ class FetchSessionCache(private val maxEntries: Int,
     * 2. B is considered "stale" because it has been inactive for a long time, or
     * 3. A contains more partitions than B, and B is not recently created.
     *
+    *                                New entry
+    *                                    |
+    *                   +----------------+------------------+
+    *                   |                                   |
+    *                   | priv = true                       | priv = false
+    *                   |                                   |
+    *                   V                                   V
+    *              Not evictable                   Evictable by privileged
+    *                |      |                          |               |
+    *                |      |   <-  touched after ->   |               |
+    *                |      |     evictionMs (since    |               |
+    * evictionMs ms  |      |     session creation)    |               |  evictionMs ms
+    * have elapsed   |      V                          V               |  have elapsed
+    * since the last |   evictable by bigger      evictable by any     |  since the last
+    * touch          |   privileged sessions       bigger sessions     |  touch
+    *                |                                                 |
+    *                V                                                 V
+    *               Can be evicted in LRU order (oldest is removed first)
+    *
+    *
     * @param privileged True if the new entry we would like to add is privileged.
     * @param key        The EvictableKey for the new entry we would like to add.
     * @param now        The current time in milliseconds.
@@ -640,7 +660,6 @@ class FetchSessionCache(private val maxEntries: Int,
   def tryEvict(privileged: Boolean, key: EvictableKey, now: Long): Boolean = synchronized {
     // Try to evict an entry which is stale.
     // val lastUsedEntry = lastUsed.firstEntry
-    // val lastUsedSession = lastUsed.get(lastUsed.keySet().iterator().next())
     val lastUsedSession = sessions.get(sessions.keySet().iterator().next())
     if (lastUsedSession == null) {
       trace("There are no cache entries to evict.")
@@ -693,19 +712,15 @@ class FetchSessionCache(private val maxEntries: Int,
     * @return         The removed session, or None if there was no such session.
     */
   def remove(session: FetchSession): Option[FetchSession] = synchronized {
-    // ahu why is this the only session.synchronized block?
     // val evictableKey = session.synchronized {
     // lastUsed.remove(session.id)
     val evictableKey = session.evictableKey
     // }
-    // ahu optimize
     if (session.privileged) {
       privilegedSessions.remove(evictableKey)
     } else {
       unprivilegedSessions.remove(evictableKey)
     }
-    // unprivilegedSessions.remove(evictableKey)
-    // privilegedSessions.remove(evictableKey)
     val removeResult = Option(sessions.remove(session.id))
     if (removeResult.isDefined) {
       numPartitions = numPartitions - session.cachedSize
