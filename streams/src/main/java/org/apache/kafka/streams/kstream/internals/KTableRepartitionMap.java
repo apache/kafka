@@ -67,7 +67,7 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
      * @throws IllegalStateException since this method should never be called
      */
     @Override
-    public void enableSendingOldValues() {
+    public boolean enableSendingOldValues(final boolean forceMaterialization) {
         // this should never be called
         throw new IllegalStateException("KTableRepartitionMap should always require sending old values.");
     }
