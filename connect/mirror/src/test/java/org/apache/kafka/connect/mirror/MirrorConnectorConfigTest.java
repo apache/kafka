@@ -24,6 +24,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.HashSet;
 
 import static org.apache.kafka.connect.mirror.TestUtils.makeProps;
@@ -119,4 +120,41 @@ public class MirrorConnectorConfigTest {
             connectorConfigDef.names().contains(taskSpecificProperty)
         ));
     }
+
+    @Test
+    public void testSourceConsumerConfig() {
+        Map<String, String> connectorProps = makeProps(
+                MirrorConnectorConfig.CONSUMER_CLIENT_PREFIX + "max.poll.interval.ms", "120000"
+        );
+        MirrorConnectorConfig config = new MirrorConnectorConfig(connectorProps);
+        Map<String, Object> connectorConsumerProps = config.sourceConsumerConfig();
+        Map<String, Object> expectedConsumerProps = new HashMap<>();
+        expectedConsumerProps.put("enable.auto.commit", "false");
+        expectedConsumerProps.put("auto.offset.reset", "earliest");
+        expectedConsumerProps.put("max.poll.interval.ms", "120000");
+        assertEquals(expectedConsumerProps, connectorConsumerProps);
+
+        // checking auto.offset.reset override works
+        connectorProps = makeProps(
+                MirrorConnectorConfig.CONSUMER_CLIENT_PREFIX + "auto.offset.reset", "latest"
+        );
+        config = new MirrorConnectorConfig(connectorProps);
+        connectorConsumerProps = config.sourceConsumerConfig();
+        expectedConsumerProps.put("auto.offset.reset", "latest");
+        expectedConsumerProps.remove("max.poll.interval.ms");
+        assertEquals(expectedConsumerProps, connectorConsumerProps);
+    }
+
+    @Test
+    public void testSourceProducerConfig() {
+        Map<String, String> connectorProps = makeProps(
+                MirrorConnectorConfig.PRODUCER_CLIENT_PREFIX + "acks", "1"
+        );
+        MirrorConnectorConfig config = new MirrorConnectorConfig(connectorProps);
+        Map<String, Object> connectorProducerProps = config.sourceProducerConfig();
+        Map<String, Object> expectedProducerProps = new HashMap<>();
+        expectedProducerProps.put("acks", "1");
+        assertEquals(expectedProducerProps, connectorProducerProps);
+    }
+
 }
