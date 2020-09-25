@@ -24,24 +24,22 @@ import com.yammer.metrics.core.Timer
 import kafka.api.LeaderAndIsr
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server.{KafkaConfig, KafkaServer}
-import kafka.utils.TestUtils
+import kafka.utils.{LogCaptureAppender, TestUtils}
 import kafka.zk._
-import org.junit.{After, Before, Test}
-import org.junit.Assert.{assertEquals, assertTrue}
-import org.apache.kafka.common.{ElectionType, TopicPartition}
 import org.apache.kafka.common.errors.{ControllerMovedException, StaleBrokerEpochException}
-import org.apache.log4j.Level
-import kafka.utils.LogCaptureAppender
 import org.apache.kafka.common.metrics.KafkaMetric
 import org.apache.kafka.common.protocol.Errors
-import org.scalatest.Assertions.fail
-
-import scala.jdk.CollectionConverters._
-import scala.collection.mutable
-import scala.collection.Seq
-import scala.util.{Failure, Success, Try}
+import org.apache.kafka.common.{ElectionType, TopicPartition}
+import org.apache.log4j.Level
+import org.junit.Assert.{assertEquals, assertTrue}
+import org.junit.{After, Before, Test}
 import org.mockito.Mockito.{doAnswer, spy, verify}
 import org.mockito.invocation.InvocationOnMock
+import org.scalatest.Assertions.fail
+
+import scala.collection.{Map, Seq, mutable}
+import scala.jdk.CollectionConverters._
+import scala.util.{Failure, Success, Try}
 
 class ControllerIntegrationTest extends ZooKeeperTestHarness {
   var servers = Seq.empty[KafkaServer]
@@ -718,6 +716,40 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       latch.countDown()
     }).doCallRealMethod().when(spyThread).awaitShutdown()
     controller.shutdown() 
+  }
+
+  @Test
+  def testIdempotentAlterIsr(): Unit = {
+    servers = makeServers(2)
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
+    val otherBroker = servers.find(_.config.brokerId != controllerId).get
+    val tp = new TopicPartition("t", 0)
+    val assignment = Map(tp.partition -> Seq(otherBroker.config.brokerId, controllerId))
+    TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
+
+    val latch = new CountDownLatch(1)
+    val controller = getController().kafkaController
+
+    val leaderIsrAndControllerEpochMap = zkClient.getTopicPartitionStates(Seq(tp))
+    val newLeaderAndIsr = leaderIsrAndControllerEpochMap(tp).leaderAndIsr
+
+    val callback = (result: Either[Map[TopicPartition, Either[Errors, LeaderAndIsr]], Errors]) => {
+      result match {
+        case Left(partitionResults: Map[TopicPartition, Either[Errors, LeaderAndIsr]]) =>
+          partitionResults.get(tp) match {
+            case Some(Left(error: Errors)) => fail(s"Should not have seen error for $tp")
+            case Some(Right(leaderAndIsr: LeaderAndIsr)) => assertEquals("ISR should remain unchanged", leaderAndIsr, newLeaderAndIsr)
+            case None => fail(s"Should have seen $tp in result")
+          }
+        case Right(_: Errors) => fail("Should not have had top-level error here")
+      }
+      latch.countDown()
+    }
+
+    val brokerEpoch = controller.controllerContext.liveBrokerIdAndEpochs.get(otherBroker.config.brokerId).get
+    // When re-sending the current ISR, we should not get and error or any ISR changes
+    controller.eventManager.put(AlterIsrReceived(otherBroker.config.brokerId, brokerEpoch, Map(tp -> newLeaderAndIsr), callback))
+    latch.await()
   }
 
   private def testControllerMove(fun: () => Unit): Unit = {

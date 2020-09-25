@@ -86,35 +86,34 @@ final class StructRegistry {
     @SuppressWarnings("unchecked")
     private void addStructSpecs(Versions parentVersions, List<FieldSpec> fields) {
         for (FieldSpec field : fields) {
-            String elementName = null;
             String typeName = null;
             if (field.type().isStructArray()) {
                 FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
-                elementName = arrayType.elementName();
                 typeName = arrayType.elementName();
             } else if (field.type().isStruct()) {
-                elementName = field.name();
-                typeName = field.typeString();
+                FieldType.StructType structType = (FieldType.StructType) field.type();
+                typeName = structType.typeName();
             }
-            if (elementName != null) {
-                if (commonStructNames.contains(elementName)) {
+            if (typeName != null) {
+                if (commonStructNames.contains(typeName)) {
                     // If we're using a common structure, we can't specify its fields.
                     // The fields should be specified in the commonStructs area.
                     if (!field.fields().isEmpty()) {
                         throw new RuntimeException("Can't re-specify the common struct " +
-                                elementName + " as an inline struct.");
+                                typeName + " as an inline struct.");
                     }
-                } else if (structs.containsKey(elementName)) {
+                } else if (structs.containsKey(typeName)) {
                     // Inline structures should only appear once.
-                    throw new RuntimeException("Struct " + elementName +
+                    throw new RuntimeException("Struct " + typeName +
                         " was specified twice.");
                 } else {
                     // Synthesize a StructSpec object out of the fields.
                     StructSpec spec = new StructSpec(typeName,
-                            field.versions().toString(),
-                            field.fields());
-                    structs.put(elementName, new StructInfo(spec, parentVersions));
+                        field.versions().toString(),
+                        field.fields());
+                    structs.put(typeName, new StructInfo(spec, parentVersions));
                 }
+
                 addStructSpecs(parentVersions.intersect(field.versions()), field.fields());
             }
         }
@@ -130,7 +129,8 @@ final class StructRegistry {
             FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
             structFieldName = arrayType.elementName();
         } else if (field.type().isStruct()) {
-            structFieldName = field.name();
+            FieldType.StructType structType = (FieldType.StructType) field.type();
+            structFieldName = structType.typeName();
         } else {
             throw new RuntimeException("Field " + field.name() +
                     " cannot be treated as a structure.");

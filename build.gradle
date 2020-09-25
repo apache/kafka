@@ -241,7 +241,7 @@ subprojects {
     }
   }
 
-  def shouldUseJUnit5 = it.project.name == 'tools'
+  def shouldUseJUnit5 = ["tools", "raft"].contains(it.project.name)
   def testLoggingEvents = ["passed", "skipped", "failed"]
   def testShowStandardStreams = false
   def testExceptionFormat = 'full'
@@ -737,6 +737,7 @@ project(':core') {
 
   dependencies {
     compile project(':clients')
+    compile project(':raft')
     compile libs.jacksonDatabind
     compile libs.jacksonModuleScala
     compile libs.jacksonDataformatCsv
@@ -1136,6 +1137,80 @@ project(':clients') {
     include "**/org/apache/kafka/server/authorizer/*"
     include "**/org/apache/kafka/server/policy/*"
     include "**/org/apache/kafka/server/quota/*"
+  }
+}
+
+project(':raft') {
+  archivesBaseName = "kafka-raft"
+
+  dependencies {
+    compile project(':clients')
+    compile libs.slf4jApi
+    compile libs.jacksonDatabind
+
+    testCompile project(':clients')
+    testCompile project(':clients').sourceSets.test.output
+    testCompile libs.junitJupiter
+    testCompile libs.mockitoCore
+
+    testRuntime libs.slf4jlog4j
+  }
+
+  task createVersionFile(dependsOn: determineCommitId) {
+    ext.receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    outputs.file receiptFile
+    outputs.upToDateWhen { false }
+    doLast {
+      def data = [
+        commitId: commitId,
+        version: version,
+      ]
+
+      receiptFile.parentFile.mkdirs()
+      def content = data.entrySet().collect { "$it.key=$it.value" }.sort().join("\n")
+      receiptFile.setText(content, "ISO-8859-1")
+    }
+  }
+
+  task processMessages(type:JavaExec) {
+    main = "org.apache.kafka.message.MessageGenerator"
+    classpath = project(':generator').sourceSets.main.runtimeClasspath
+    args = [ "-p", "org.apache.kafka.raft.generated",
+             "-o", "src/generated/java/org/apache/kafka/raft/generated",
+             "-i", "src/main/resources/common/message",
+             "-m", "MessageDataGenerator", "JsonConverterGenerator"]
+    inputs.dir("src/main/resources/common/message")
+    outputs.dir("src/generated/java/org/apache/kafka/raft/generated")
+  }
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/generated/java", "src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/generated/java", "src/test/java"]
+      }
+    }
+  }
+  
+  compileJava.dependsOn 'processMessages'
+
+  jar {
+    dependsOn createVersionFile
+    from("$buildDir") {
+        include "kafka/$buildVersionFileName"
+    }
+  }
+
+  clean.doFirst {
+    delete "$buildDir/kafka/"
+  }
+
+  javadoc {
+    include "**/org/apache/kafka/raft/*"
   }
 }
 

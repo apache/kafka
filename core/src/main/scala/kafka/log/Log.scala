@@ -368,6 +368,20 @@ class Log(@volatile private var _dir: File,
     newHighWatermark
   }
 
+  def updateHighWatermarkOffsetMetadata(hw: LogOffsetMetadata): Long = {
+    val newHighWatermark = if (hw.messageOffset < logStartOffset) {
+      updateHighWatermarkMetadata(LogOffsetMetadata(logStartOffset))
+      logStartOffset
+    } else if (hw.messageOffset > logEndOffset) {
+      updateHighWatermarkMetadata(logEndOffsetMetadata)
+      logEndOffset
+    } else {
+      updateHighWatermarkMetadata(hw)
+      hw.messageOffset
+    }
+    newHighWatermark
+  }
+
   /**
    * Update the high watermark to a new value if and only if it is larger than the old value. It is
    * an error to update to a value which is larger than the log end offset.
@@ -1493,7 +1507,8 @@ class Log(@volatile private var _dir: File,
            isolation: FetchIsolation,
            minOneMessage: Boolean): FetchDataInfo = {
     maybeHandleIOException(s"Exception while reading from $topicPartition in dir ${dir.getParent}") {
-      trace(s"Reading $maxLength bytes from offset $startOffset of length $size bytes")
+      trace(s"Reading maximum $maxLength bytes at offset $startOffset from log with " +
+        s"total length $size bytes")
 
       val includeAbortedTxns = isolation == FetchTxnCommitted
 
@@ -2084,7 +2099,7 @@ class Log(@volatile private var _dir: File,
    * @param targetOffset The offset to truncate to, an upper bound on all offsets in the log after truncation is complete.
    * @return True iff targetOffset < logEndOffset
    */
-  private[log] def truncateTo(targetOffset: Long): Boolean = {
+  private[kafka] def truncateTo(targetOffset: Long): Boolean = {
     maybeHandleIOException(s"Error while truncating log to offset $targetOffset for $topicPartition in dir ${dir.getParent}") {
       if (targetOffset < 0)
         throw new IllegalArgumentException(s"Cannot truncate partition $topicPartition to a negative offset (%d).".format(targetOffset))

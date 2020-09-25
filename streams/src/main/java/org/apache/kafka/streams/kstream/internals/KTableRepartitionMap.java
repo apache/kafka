@@ -102,7 +102,6 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
     }
 
     private class KTableMapValueGetter implements KTableValueGetter<K, KeyValue<K1, V1>> {
-
         private final KTableValueGetter<K, V> parentGetter;
         private ProcessorContext context;
 
