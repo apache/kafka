@@ -43,7 +43,7 @@ import java.util.Map;
  */
 public class ApiVersionsResponse extends AbstractResponse {
 
-    public static final int UNKNOWN_FINALIZED_FEATURES_EPOCH = -1;
+    public static final long UNKNOWN_FINALIZED_FEATURES_EPOCH = -1;
 
     public static final ApiVersionsResponse DEFAULT_API_VERSIONS_RESPONSE =
         createApiVersionsResponse(
@@ -144,7 +144,7 @@ public class ApiVersionsResponse extends AbstractResponse {
         byte maxMagic,
         Features<SupportedVersionRange> latestSupportedFeatures,
         Features<FinalizedVersionRange> finalizedFeatures,
-        int finalizedFeaturesEpoch) {
+        long finalizedFeaturesEpoch) {
         if (maxMagic == RecordBatch.CURRENT_MAGIC_VALUE && throttleTimeMs == DEFAULT_THROTTLE_TIME) {
             return new ApiVersionsResponse(createApiVersionsResponseData(
                 DEFAULT_API_VERSIONS_RESPONSE.throttleTimeMs(),
@@ -174,7 +174,7 @@ public class ApiVersionsResponse extends AbstractResponse {
         final byte minMagic,
         final Features<SupportedVersionRange> latestSupportedFeatures,
         final Features<FinalizedVersionRange> finalizedFeatures,
-        final int finalizedFeaturesEpoch
+        final long finalizedFeaturesEpoch
     ) {
         ApiVersionsResponseKeyCollection apiKeys = new ApiVersionsResponseKeyCollection();
         for (ApiKeys apiKey : ApiKeys.enabledApis()) {
@@ -202,7 +202,7 @@ public class ApiVersionsResponse extends AbstractResponse {
         final ApiVersionsResponseKeyCollection apiKeys,
         final Features<SupportedVersionRange> latestSupportedFeatures,
         final Features<FinalizedVersionRange> finalizedFeatures,
-        final int finalizedFeaturesEpoch
+        final long finalizedFeaturesEpoch
     ) {
         ApiVersionsResponseData data = new ApiVersionsResponseData();
         data.setThrottleTimeMs(throttleTimeMs);

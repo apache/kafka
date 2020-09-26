@@ -485,7 +485,7 @@ public class KafkaAdminClientTest {
     private static FeatureMetadata defaultFeatureMetadata() {
         return new FeatureMetadata(
             Utils.mkMap(Utils.mkEntry("test_feature_1", new FinalizedVersionRange((short) 2, (short) 3))),
-            Optional.of(1),
+            Optional.of(1L),
             Utils.mkMap(Utils.mkEntry("test_feature_1", new SupportedVersionRange((short) 1, (short) 5))));
     }
 
@@ -4072,11 +4072,19 @@ public class KafkaAdminClientTest {
     @Test
     public void testUpdateFeaturesShouldFailRequestForInvalidFeatureName() {
         try (final AdminClientUnitTestEnv env = mockClientEnv()) {
-            assertThrows(
-                IllegalArgumentException.class,
-                () -> env.adminClient().updateFeatures(
-                    Utils.mkMap(Utils.mkEntry("", new FeatureUpdate((short) 2, false))),
-                    new UpdateFeaturesOptions()));
+            final UpdateFeaturesResult result = env.adminClient().updateFeatures(
+                Utils.mkMap(Utils.mkEntry("", new FeatureUpdate((short) 2, false))),
+                            new UpdateFeaturesOptions());
+
+            final Map<String, KafkaFuture<Void>> futures = result.values();
+            for (Map.Entry<String, KafkaFuture<Void>> entry : futures.entrySet()) {
+                final Throwable cause = assertThrows(ExecutionException.class, () -> entry.getValue().get());
+                assertEquals(KafkaException.class, cause.getCause().getClass());
+            }
+
+            final KafkaFuture<Void> future = result.all();
+            final Throwable cause = assertThrows(ExecutionException.class, () -> future.get());
+            assertEquals(KafkaException.class, cause.getCause().getClass());
         }
     }
 

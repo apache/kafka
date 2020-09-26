@@ -145,7 +145,6 @@ import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteReque
 import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteRequestTopic;
 import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection;
 import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
-import org.apache.kafka.common.message.UpdateFeaturesRequestData;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData.UpdatableFeatureResult;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
@@ -4359,8 +4358,8 @@ public class KafkaAdminClient extends AdminClient {
                     finalizedFeatures.put(key.name(), new FinalizedVersionRange(key.minVersionLevel(), key.maxVersionLevel()));
                 }
 
-                Optional<Integer> finalizedFeaturesEpoch;
-                if (response.data().finalizedFeaturesEpoch() >= 0) {
+                Optional<Long> finalizedFeaturesEpoch;
+                if (response.data().finalizedFeaturesEpoch() >= 0L) {
                     finalizedFeaturesEpoch = Optional.of(response.data().finalizedFeaturesEpoch());
                 } else {
                     finalizedFeaturesEpoch = Optional.empty();
@@ -4410,7 +4409,6 @@ public class KafkaAdminClient extends AdminClient {
         }
         Objects.requireNonNull(options, "UpdateFeaturesOptions can not be null");
 
-        final UpdateFeaturesRequestData request = UpdateFeaturesRequest.create(featureUpdates);
         final Map<String, KafkaFutureImpl<Void>> updateFutures = new HashMap<>();
         for (Map.Entry<String, FeatureUpdate> entry : featureUpdates.entrySet()) {
             updateFutures.put(entry.getKey(), new KafkaFutureImpl<>());
@@ -4421,7 +4419,7 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             UpdateFeaturesRequest.Builder createRequest(int timeoutMs) {
-                return new UpdateFeaturesRequest.Builder(request);
+                return new UpdateFeaturesRequest.Builder(UpdateFeaturesRequest.create(featureUpdates, timeoutMs));
             }
 
             @Override

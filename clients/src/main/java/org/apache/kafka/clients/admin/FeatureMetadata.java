@@ -31,12 +31,12 @@ public class FeatureMetadata {
 
     private final Map<String, FinalizedVersionRange> finalizedFeatures;
 
-    private final Optional<Integer> finalizedFeaturesEpoch;
+    private final Optional<Long> finalizedFeaturesEpoch;
 
     private final Map<String, SupportedVersionRange> supportedFeatures;
 
     public FeatureMetadata(final Map<String, FinalizedVersionRange> finalizedFeatures,
-                           final Optional<Integer> finalizedFeaturesEpoch,
+                           final Optional<Long> finalizedFeaturesEpoch,
                            final Map<String, SupportedVersionRange> supportedFeatures) {
         this.finalizedFeatures = new HashMap<>(finalizedFeatures);
         this.finalizedFeaturesEpoch = finalizedFeaturesEpoch;
@@ -56,7 +56,7 @@ public class FeatureMetadata {
      * The epoch for the finalized features.
      * If the returned value is empty, it means the finalized features are absent/unavailable.
      */
-    public Optional<Integer> finalizedFeaturesEpoch() {
+    public Optional<Long> finalizedFeaturesEpoch() {
         return finalizedFeaturesEpoch;
     }
 

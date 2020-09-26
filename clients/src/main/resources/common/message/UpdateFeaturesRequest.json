@@ -20,6 +20,8 @@
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
+    { "name": "timeoutMs", "type": "int32", "versions": "0+", "default": "60000",
+      "about": "How long to wait in milliseconds before timing out the request." },
     { "name": "FeatureUpdates", "type": "[]FeatureUpdateKey", "versions": "0+",
       "about": "The list of updates to finalized features.", "fields": [
       {"name": "Feature", "type": "string", "versions": "0+", "mapKey": true,

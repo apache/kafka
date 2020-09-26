@@ -108,7 +108,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
   }
 
   private def makeFeatureMetadata(finalized: Features[FinalizedVersionRange],
-                                  epoch: Integer,
+                                  epoch: Long,
                                   supported: Features[SupportedVersionRange]): FeatureMetadata = {
     new FeatureMetadata(
       finalized.features().asScala.map {

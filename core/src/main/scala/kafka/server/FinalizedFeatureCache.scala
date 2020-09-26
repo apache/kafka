@@ -28,9 +28,9 @@ class FeatureCacheUpdateException(message: String) extends RuntimeException(mess
 }
 
 // Helper class that represents finalized features along with an epoch value.
-case class FinalizedFeaturesAndEpoch(features: Features[FinalizedVersionRange], epoch: Int) {
+case class FinalizedFeaturesAndEpoch(features: Features[FinalizedVersionRange], epoch: Long) {
   override def toString(): String = {
-    "FinalizedFeaturesAndEpoch(features=%s, epoch=%s)".format(features, epoch)
+    "FinalizedFeaturesAndEpoch(features=%s, epoch=%d)".format(features, epoch)
   }
 }
 
@@ -68,8 +68,8 @@ class FinalizedFeatureCache(private val brokerFeatures: BrokerFeatures) extends 
    * @throws                   TimeoutException if the cache's epoch has not reached at least
    *                           minExpectedEpoch within timeoutMs.
    */
-  def waitUntilEpochOrThrow(minExpectedEpoch: Int, timeoutMs: Long): Unit = {
-    if(minExpectedEpoch < 0) {
+  def waitUntilEpochOrThrow(minExpectedEpoch: Long, timeoutMs: Long): Unit = {
+    if(minExpectedEpoch < 0L) {
       throw new IllegalArgumentException(
         s"Expected minExpectedEpoch >= 0, but $minExpectedEpoch was provided.")
     }
@@ -102,7 +102,7 @@ class FinalizedFeatureCache(private val brokerFeatures: BrokerFeatures) extends 
    *                         supported features. In such a case, the existing cache contents are
    *                         not modified.
    */
-  def updateOrThrow(latestFeatures: Features[FinalizedVersionRange], latestEpoch: Int): Unit = {
+  def updateOrThrow(latestFeatures: Features[FinalizedVersionRange], latestEpoch: Long): Unit = {
     val latest = FinalizedFeaturesAndEpoch(latestFeatures, latestEpoch)
     val oldFeatureAndEpoch = featuresAndEpoch.map(item => item.toString()).getOrElse("<empty>")
     if (featuresAndEpoch.isDefined && featuresAndEpoch.get.epoch > latest.epoch) {

@@ -92,7 +92,7 @@ public class UpdateFeaturesRequest extends AbstractRequest {
         return update.maxVersionLevel() < 1 && update.allowDowngrade();
     }
 
-    public static UpdateFeaturesRequestData create(Map<String, FeatureUpdate> featureUpdates) {
+    public static UpdateFeaturesRequestData create(Map<String, FeatureUpdate> featureUpdates, int timeoutMs) {
         final UpdateFeaturesRequestData.FeatureUpdateKeyCollection featureUpdatesRequestData
             = new UpdateFeaturesRequestData.FeatureUpdateKeyCollection();
         for (Map.Entry<String, FeatureUpdate> entry : featureUpdates.entrySet()) {
@@ -109,6 +109,8 @@ public class UpdateFeaturesRequest extends AbstractRequest {
             requestItem.setAllowDowngrade(update.allowDowngrade());
             featureUpdatesRequestData.add(requestItem);
         }
-        return new UpdateFeaturesRequestData().setFeatureUpdates(featureUpdatesRequestData);
+        return new UpdateFeaturesRequestData()
+            .setTimeoutMs(timeoutMs)
+            .setFeatureUpdates(featureUpdatesRequestData);
     }
 }
