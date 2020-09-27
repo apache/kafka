@@ -28,15 +28,14 @@ public class DescribeFeaturesOptions extends AbstractOptions<DescribeFeaturesOpt
 
     /**
      * - True means the {@link Admin#describeFeatures(DescribeFeaturesOptions)} request must be
-     *   processed only by the controller.
-     * - False means the {@link Admin#describeFeatures(DescribeFeaturesOptions)} request could be
-     *   processed by any random broker.
+     *   issued only to the controller.
+     * - False means the {@link Admin#describeFeatures(DescribeFeaturesOptions)} request can be
+     *   issued to any random broker.
      */
     private boolean sendRequestToController = false;
 
     /**
-     * Sets a flag indicating that the describe features request must be processed only
-     * by the controller.
+     * Sets a flag indicating that the describe features request must be issued only to the controller.
      */
     public DescribeFeaturesOptions sendRequestToController(boolean sendRequestToController) {
         this.sendRequestToController = sendRequestToController;

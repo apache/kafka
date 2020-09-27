@@ -89,7 +89,7 @@ public class UpdateFeaturesResponse extends AbstractResponse {
 
     public static UpdateFeaturesResponse createWithErrors(ApiError topLevelError, Map<String, ApiError> updateErrors, int throttleTimeMs) {
         final UpdatableFeatureResultCollection results = new UpdatableFeatureResultCollection();
-        for (Map.Entry<String, ApiError> updateError : updateErrors.entrySet()) {
+        for (final Map.Entry<String, ApiError> updateError : updateErrors.entrySet()) {
             final String feature = updateError.getKey();
             final ApiError error = updateError.getValue();
             final UpdatableFeatureResult result = new UpdatableFeatureResult();

@@ -4354,7 +4354,7 @@ public class KafkaAdminClient extends AdminClient {
 
             private FeatureMetadata createFeatureMetadata(final ApiVersionsResponse response) {
                 final Map<String, FinalizedVersionRange> finalizedFeatures = new HashMap<>();
-                for (FinalizedFeatureKey key : response.data().finalizedFeatures().valuesSet()) {
+                for (final FinalizedFeatureKey key : response.data().finalizedFeatures().valuesSet()) {
                     finalizedFeatures.put(key.name(), new FinalizedVersionRange(key.minVersionLevel(), key.maxVersionLevel()));
                 }
 
@@ -4366,7 +4366,7 @@ public class KafkaAdminClient extends AdminClient {
                 }
 
                 final Map<String, SupportedVersionRange> supportedFeatures = new HashMap<>();
-                for (SupportedFeatureKey key : response.data().supportedFeatures().valuesSet()) {
+                for (final SupportedFeatureKey key : response.data().supportedFeatures().valuesSet()) {
                     supportedFeatures.put(key.name(), new SupportedVersionRange(key.minVersion(), key.maxVersion()));
                 }
 
@@ -4404,13 +4404,12 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public UpdateFeaturesResult updateFeatures(
         final Map<String, FeatureUpdate> featureUpdates, final UpdateFeaturesOptions options) {
-        if (featureUpdates == null || featureUpdates.isEmpty()) {
+        if (featureUpdates.isEmpty()) {
             throw new IllegalArgumentException("Feature updates can not be null or empty.");
         }
-        Objects.requireNonNull(options, "UpdateFeaturesOptions can not be null");
 
         final Map<String, KafkaFutureImpl<Void>> updateFutures = new HashMap<>();
-        for (Map.Entry<String, FeatureUpdate> entry : featureUpdates.entrySet()) {
+        for (final Map.Entry<String, FeatureUpdate> entry : featureUpdates.entrySet()) {
             updateFutures.put(entry.getKey(), new KafkaFutureImpl<>());
         }
         final long now = time.milliseconds();
@@ -4430,7 +4429,7 @@ public class KafkaAdminClient extends AdminClient {
                 Errors topLevelError = Errors.forCode(response.data().errorCode());
                 switch (topLevelError) {
                     case NONE:
-                        for (UpdatableFeatureResult result : response.data().results()) {
+                        for (final UpdatableFeatureResult result : response.data().results()) {
                             final KafkaFutureImpl<Void> future = updateFutures.get(result.feature());
                             if (future == null) {
                                 log.warn("Server response mentioned unknown feature {}", result.feature());
@@ -4451,7 +4450,7 @@ public class KafkaAdminClient extends AdminClient {
                         handleNotControllerError(topLevelError);
                         break;
                     default:
-                        for (Map.Entry<String, KafkaFutureImpl<Void>> entry : updateFutures.entrySet()) {
+                        for (final Map.Entry<String, KafkaFutureImpl<Void>> entry : updateFutures.entrySet()) {
                             entry.getValue().completeExceptionally(topLevelError.exception());
                         }
                         break;

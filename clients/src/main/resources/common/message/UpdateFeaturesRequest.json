@@ -29,7 +29,7 @@
       {"name": "MaxVersionLevel", "type": "int16", "versions": "0+",
         "about": "The new maximum version level for the finalized feature. A value >= 1 is valid. A value < 1, is special, and can be used to request the deletion of the finalized feature."},
       {"name": "AllowDowngrade", "type": "bool", "versions": "0+",
-        "about": "When set to true, the finalized feature version level is allowed to be downgraded/deleted. The downgraded request will fail if the new maximum version level is a value that's not lower than the existing maximum finalized version level."}
+        "about": "When set to true, the finalized feature version level is allowed to be downgraded/deleted. The downgrade request will fail if the new maximum version level is a value that's not lower than the existing maximum finalized version level."}
     ]}
   ]
 }

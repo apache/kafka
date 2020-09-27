@@ -490,9 +490,9 @@ public class KafkaAdminClientTest {
     }
 
     private static Features<org.apache.kafka.common.feature.SupportedVersionRange> convertSupportedFeaturesMap(Map<String, SupportedVersionRange> features) {
-        Map<String, org.apache.kafka.common.feature.SupportedVersionRange> featuresMap = new HashMap<>();
-        for (Map.Entry<String, SupportedVersionRange> entry : features.entrySet()) {
-            SupportedVersionRange versionRange = entry.getValue();
+        final Map<String, org.apache.kafka.common.feature.SupportedVersionRange> featuresMap = new HashMap<>();
+        for (final Map.Entry<String, SupportedVersionRange> entry : features.entrySet()) {
+            final SupportedVersionRange versionRange = entry.getValue();
             featuresMap.put(
                 entry.getKey(),
                 new org.apache.kafka.common.feature.SupportedVersionRange(
@@ -503,9 +503,9 @@ public class KafkaAdminClientTest {
     }
 
     private static Features<org.apache.kafka.common.feature.FinalizedVersionRange> convertFinalizedFeaturesMap(Map<String, FinalizedVersionRange> features) {
-        Map<String, org.apache.kafka.common.feature.FinalizedVersionRange> featuresMap = new HashMap<>();
-        for (Map.Entry<String, FinalizedVersionRange> entry : features.entrySet()) {
-            FinalizedVersionRange versionRange = entry.getValue();
+        final Map<String, org.apache.kafka.common.feature.FinalizedVersionRange> featuresMap = new HashMap<>();
+        for (final Map.Entry<String, FinalizedVersionRange> entry : features.entrySet()) {
+            final FinalizedVersionRange versionRange = entry.getValue();
             featuresMap.put(
                 entry.getKey(),
                 new org.apache.kafka.common.feature.FinalizedVersionRange(
@@ -3962,7 +3962,7 @@ public class KafkaAdminClientTest {
             final Map<String, KafkaFuture<Void>> futures = env.adminClient().updateFeatures(
                 featureUpdates,
                 new UpdateFeaturesOptions().timeoutMs(10000)).values();
-            for (Map.Entry<String, KafkaFuture<Void>> entry : futures.entrySet()) {
+            for (final Map.Entry<String, KafkaFuture<Void>> entry : futures.entrySet()) {
                 final KafkaFuture<Void> future = entry.getValue();
                 final ApiError error = featureUpdateErrors.get(entry.getKey());
                 if (topLevelError.error() == Errors.NONE) {
@@ -4052,20 +4052,8 @@ public class KafkaAdminClientTest {
         try (final AdminClientUnitTestEnv env = mockClientEnv()) {
             assertThrows(
                 IllegalArgumentException.class,
-                () -> env.adminClient().updateFeatures(null, new UpdateFeaturesOptions()));
-            assertThrows(
-                IllegalArgumentException.class,
                 () -> env.adminClient().updateFeatures(
                     new HashMap<>(), new UpdateFeaturesOptions()));
-        }
-    }
-
-    @Test
-    public void testUpdateFeaturesShouldFailRequestForNullUpdateFeaturesOptions() {
-        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
-            assertThrows(
-                NullPointerException.class,
-                () -> env.adminClient().updateFeatures(makeTestFeatureUpdates(), null));
         }
     }
 

@@ -61,7 +61,7 @@ public class UpdateFeaturesRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(int throttleTimeMsIgnored, Throwable e) {
+    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         final ApiError apiError = ApiError.fromThrowable(e);
         final UpdatableFeatureResultCollection results = new UpdatableFeatureResultCollection();
         for (FeatureUpdateKey update : this.data.featureUpdates().valuesSet()) {
@@ -71,8 +71,10 @@ public class UpdateFeaturesRequest extends AbstractRequest {
                 .setErrorMessage(apiError.message());
             results.add(result);
         }
-        return new UpdateFeaturesResponse(new UpdateFeaturesResponseData().setResults(results));
-    }
+        final UpdateFeaturesResponseData responseData = new UpdateFeaturesResponseData()
+            .setThrottleTimeMs(throttleTimeMs)
+            .setResults(results);
+        return new UpdateFeaturesResponse(responseData);    }
 
     @Override
     protected Struct toStruct() {
