@@ -116,6 +116,12 @@
         Sliding windows are fixed-time and data-aligned windows that allow for flexible and efficient windowed aggregations.
     </p>
 
+    <p>
+        The end-to-end latency metrics introduced in 2.6 have been expanded to include store-level metrics. The new store-level
+        metrics are recorded at the TRACE level, a new metrics recording level. Enabling TRACE level metrics will automatically
+        turn on all higher levels, ie INFO and DEBUG. See <a href="https://cwiki.apache.org/confluence/x/gBkRCQ">KIP-613</a> for more information.
+    </p>
+
     <h3><a id="streams_api_changes_260" href="#streams_api_changes_260">Streams API changes in 2.6.0</a></h3>
     <p>
         We added a new processing mode that improves application scalability using exactly-once guarantees
