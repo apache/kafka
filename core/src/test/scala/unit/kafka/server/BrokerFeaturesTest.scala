@@ -18,7 +18,7 @@
 package kafka.server
 
 import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
-import org.junit.Assert.{assertEquals, assertThrows, assertFalse, assertTrue}
+import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.Test
 
 import scala.jdk.CollectionConverters._
@@ -34,8 +34,8 @@ class BrokerFeaturesTest {
   def testIncompatibilitiesDueToAbsentFeature(): Unit = {
     val brokerFeatures = BrokerFeatures.createDefault()
     val supportedFeatures = Features.supportedFeatures(Map[String, SupportedVersionRange](
-      "test_feature_1" -> new SupportedVersionRange(1, 4),
-      "test_feature_2" -> new SupportedVersionRange(1, 3)).asJava)
+      "test_feature_1" -> new SupportedVersionRange(1, 1, 4),
+      "test_feature_2" -> new SupportedVersionRange(1, 1, 3)).asJava)
     brokerFeatures.setSupportedFeatures(supportedFeatures)
 
     val compatibleFeatures = Map[String, FinalizedVersionRange](
@@ -55,8 +55,8 @@ class BrokerFeaturesTest {
   def testIncompatibilitiesDueToIncompatibleFeature(): Unit = {
     val brokerFeatures = BrokerFeatures.createDefault()
     val supportedFeatures = Features.supportedFeatures(Map[String, SupportedVersionRange](
-      "test_feature_1" -> new SupportedVersionRange(1, 4),
-      "test_feature_2" -> new SupportedVersionRange(1, 3)).asJava)
+      "test_feature_1" -> new SupportedVersionRange(1, 1, 4),
+      "test_feature_2" -> new SupportedVersionRange(1, 1, 3)).asJava)
     brokerFeatures.setSupportedFeatures(supportedFeatures)
 
     val compatibleFeatures = Map[String, FinalizedVersionRange](
@@ -73,43 +73,33 @@ class BrokerFeaturesTest {
   }
 
   @Test
-  def testIncompatibilitiesWithDefaultMinVersionLevel(): Unit = {
+  def testIncompatibilitiesWithFirstActiveVersion(): Unit = {
     val brokerFeatures = BrokerFeatures.createDefault()
     val supportedFeatures = Features.supportedFeatures(Map[String, SupportedVersionRange](
-      "test_feature_1" -> new SupportedVersionRange(1, 4),
-      "test_feature_2" -> new SupportedVersionRange(1, 3)).asJava)
+      "test_feature_1" -> new SupportedVersionRange(1, 2, 4),
+      "test_feature_2" -> new SupportedVersionRange(1, 3, 4)).asJava)
     brokerFeatures.setSupportedFeatures(supportedFeatures)
 
-    val defaultMinVersionLevels = Map[String, Short](
-      "test_feature_1" -> 2,
-      "test_feature_2" -> 2)
-    brokerFeatures.setDefaultMinVersionLevels(defaultMinVersionLevels)
-
     val compatibleFeatures = Map[String, FinalizedVersionRange](
-      "test_feature_1" -> new FinalizedVersionRange(2, 3))
+      "test_feature_1" -> new FinalizedVersionRange(1, 2))
     val inCompatibleFeatures = Map[String, FinalizedVersionRange](
-      "test_feature_2" -> new FinalizedVersionRange(1, 1))
+      "test_feature_2" -> new FinalizedVersionRange(1, 2))
     val features = compatibleFeatures++inCompatibleFeatures
     val finalizedFeatures = Features.finalizedFeatures(features.asJava)
 
     assertEquals(
       Features.finalizedFeatures(inCompatibleFeatures.asJava),
       brokerFeatures.incompatibleFeatures(finalizedFeatures))
-    assertFalse(BrokerFeatures.hasIncompatibleFeatures(supportedFeatures, finalizedFeatures))
+    assertTrue(BrokerFeatures.hasIncompatibleFeatures(supportedFeatures, finalizedFeatures))
   }
 
   @Test
   def testCompatibleFeatures(): Unit = {
     val brokerFeatures = BrokerFeatures.createDefault()
     val supportedFeatures = Features.supportedFeatures(Map[String, SupportedVersionRange](
-      "test_feature_1" -> new SupportedVersionRange(1, 4),
-      "test_feature_2" -> new SupportedVersionRange(1, 3)).asJava)
+      "test_feature_1" -> new SupportedVersionRange(1, 2, 4),
+      "test_feature_2" -> new SupportedVersionRange(1, 3, 3)).asJava)
     brokerFeatures.setSupportedFeatures(supportedFeatures)
-
-    val defaultMinVersionLevels = Map[String, Short](
-      "test_feature_1" -> 2,
-      "test_feature_2" -> 2)
-    brokerFeatures.setDefaultMinVersionLevels(defaultMinVersionLevels)
 
     val compatibleFeatures = Map[String, FinalizedVersionRange](
       "test_feature_1" -> new FinalizedVersionRange(2, 3),
@@ -119,74 +109,19 @@ class BrokerFeaturesTest {
     assertFalse(BrokerFeatures.hasIncompatibleFeatures(supportedFeatures, finalizedFeatures))
   }
 
-
-  @Test
-  def testFeatureVersionAssertions(): Unit = {
-    val brokerFeatures = BrokerFeatures.createDefault()
-    val supportedFeatures = Features.supportedFeatures(Map[String, SupportedVersionRange](
-      "test_feature_1" -> new SupportedVersionRange(1, 4),
-      "test_feature_2" -> new SupportedVersionRange(1, 3)).asJava)
-    brokerFeatures.setSupportedFeatures(supportedFeatures)
-
-    val defaultMinVersionLevelsWithNonExistingFeature = Map[String, Short](
-      "test_feature_1" -> 2,
-      "test_feature_2" -> 2,
-      "test_feature_non_existing" -> 5)
-    assertThrows(
-      classOf[IllegalArgumentException],
-      () => brokerFeatures.setDefaultMinVersionLevels(defaultMinVersionLevelsWithNonExistingFeature))
-
-    val defaultMinVersionLevelsWithInvalidSmallValue = Map[String, Short](
-      "test_feature_1" -> 2,
-      "test_feature_2" -> (supportedFeatures.get("test_feature_2").min() - 1).asInstanceOf[Short])
-    assertThrows(
-      classOf[IllegalArgumentException],
-      () => brokerFeatures.setDefaultMinVersionLevels(defaultMinVersionLevelsWithInvalidSmallValue))
-
-    val defaultMinVersionLevelsWithInvalidLargeValue = Map[String, Short](
-      "test_feature_1" -> 2,
-      "test_feature_2" -> (supportedFeatures.get("test_feature_2").max() + 1).asInstanceOf[Short])
-    assertThrows(
-      classOf[IllegalArgumentException],
-      () => brokerFeatures.setDefaultMinVersionLevels(defaultMinVersionLevelsWithInvalidLargeValue))
-  }
-
   @Test
   def testDefaultFinalizedFeatures(): Unit = {
     val brokerFeatures = BrokerFeatures.createDefault()
     val supportedFeatures = Features.supportedFeatures(Map[String, SupportedVersionRange](
-      "test_feature_1" -> new SupportedVersionRange(1, 4),
-      "test_feature_2" -> new SupportedVersionRange(1, 3),
-      "test_feature_3" -> new SupportedVersionRange(3, 7)).asJava)
+      "test_feature_1" -> new SupportedVersionRange(1, 2, 4),
+      "test_feature_2" -> new SupportedVersionRange(1, 3, 3),
+      "test_feature_3" -> new SupportedVersionRange(3, 5, 7)).asJava)
     brokerFeatures.setSupportedFeatures(supportedFeatures)
-
-    val defaultMinVersionLevels = Map[String, Short](
-      "test_feature_1" -> 2,
-      "test_feature_2" -> 3)
-    brokerFeatures.setDefaultMinVersionLevels(defaultMinVersionLevels)
 
     val expectedFeatures = Map[String, FinalizedVersionRange](
       "test_feature_1" -> new FinalizedVersionRange(2, 4),
       "test_feature_2" -> new FinalizedVersionRange(3, 3),
-      "test_feature_3" -> new FinalizedVersionRange(3, 7))
+      "test_feature_3" -> new FinalizedVersionRange(5, 7))
     assertEquals(Features.finalizedFeatures(expectedFeatures.asJava), brokerFeatures.defaultFinalizedFeatures)
-  }
-
-  @Test
-  def testDefaultMinVersionLevel(): Unit = {
-    val brokerFeatures = BrokerFeatures.createDefault()
-    val supportedFeatures = Features.supportedFeatures(Map[String, SupportedVersionRange](
-      "test_feature_1" -> new SupportedVersionRange(1, 4),
-      "test_feature_2" -> new SupportedVersionRange(1, 3)).asJava)
-    brokerFeatures.setSupportedFeatures(supportedFeatures)
-
-    val defaultMinVersionLevels = Map[String, Short]("test_feature_1" -> 2)
-    brokerFeatures.setDefaultMinVersionLevels(defaultMinVersionLevels)
-
-    assertTrue(brokerFeatures.defaultMinVersionLevel("test_feature_1").isDefined)
-    assertEquals(2, brokerFeatures.defaultMinVersionLevel("test_feature_1").get)
-    assertTrue(brokerFeatures.defaultMinVersionLevel("test_feature_2").isDefined)
-    assertEquals(1, brokerFeatures.defaultMinVersionLevel("test_feature_2").get)
-    assertTrue(brokerFeatures.defaultMinVersionLevel("test_nonexistent_feature").isEmpty)
   }
 }

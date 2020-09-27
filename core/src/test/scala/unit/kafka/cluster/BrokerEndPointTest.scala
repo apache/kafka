@@ -185,7 +185,7 @@ class BrokerEndPointTest {
       "endpoints":["CLIENT://host1:9092", "REPLICATION://host1:9093"],
       "listener_security_protocol_map":{"CLIENT":"SSL", "REPLICATION":"PLAINTEXT"},
       "rack":"dc1",
-      "features": {"feature1": {"min_version": 1, "max_version": 2}, "feature2": {"min_version": 2, "max_version": 4}}
+      "features": {"feature1": {"min_version": 1, "first_active_version": 1, "max_version": 2}, "feature2": {"min_version": 2, "first_active_version": 2, "max_version": 4}}
     }"""
     val broker = parseBrokerJson(1, json)
     assertEquals(1, broker.id)
@@ -195,8 +195,8 @@ class BrokerEndPointTest {
     assertEquals(Some("dc1"), broker.rack)
     assertEquals(Features.supportedFeatures(
       Map[String, SupportedVersionRange](
-        "feature1" -> new SupportedVersionRange(1, 2),
-        "feature2" -> new SupportedVersionRange(2, 4)).asJava),
+        "feature1" -> new SupportedVersionRange(1, 1, 2),
+        "feature2" -> new SupportedVersionRange(2, 2, 4)).asJava),
       broker.features)
   }
 

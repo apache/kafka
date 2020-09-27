@@ -233,7 +233,7 @@ object BrokerIdZNode {
     *   "timestamp":"2233345666",
     *   "endpoints":["CLIENT://host1:9092", "REPLICATION://host1:9093"],
     *   "rack":"dc1",
-    *   "features": {"feature": {"min_version": 1, "max_version": 5}}
+    *   "features": {"feature": {"min_version":1, "first_active_version":2, "max_version":3}}
     * }
     */
   def decode(id: Int, jsonBytes: Array[Byte]): BrokerInfo = {

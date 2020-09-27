@@ -495,8 +495,9 @@ public class KafkaAdminClientTest {
             final SupportedVersionRange versionRange = entry.getValue();
             featuresMap.put(
                 entry.getKey(),
-                new org.apache.kafka.common.feature.SupportedVersionRange(
-                    versionRange.minVersion(), versionRange.maxVersion()));
+                new org.apache.kafka.common.feature.SupportedVersionRange(versionRange.minVersion(),
+                                                                          versionRange.minVersion(),
+                                                                          versionRange.maxVersion()));
         }
 
         return Features.supportedFeatures(featuresMap);

@@ -1907,15 +1907,15 @@ class KafkaController(val config: KafkaConfig,
       throw new IllegalArgumentException(s"Provided feature update can not be meant to delete the feature: $update")
     }
 
-    val defaultMinVersionLevelOpt = brokerFeatures.defaultMinVersionLevel(update.feature)
-    if (defaultMinVersionLevelOpt.isEmpty) {
+    val supportedVersionRange = brokerFeatures.supportedFeatures.get(update.feature)
+    if (supportedVersionRange == null) {
       Right(new ApiError(Errors.INVALID_REQUEST,
                          "Could not apply finalized feature update because the provided feature" +
                          " is not supported."))
     } else {
       var newVersionRange: FinalizedVersionRange = null
       try {
-        newVersionRange = new FinalizedVersionRange(defaultMinVersionLevelOpt.get, update.maxVersionLevel)
+        newVersionRange = new FinalizedVersionRange(supportedVersionRange.firstActiveVersion, update.maxVersionLevel)
       } catch {
         case _: IllegalArgumentException => {
           // This exception means the provided maxVersionLevel is invalid. It is handled below
@@ -1926,7 +1926,7 @@ class KafkaController(val config: KafkaConfig,
         Right(new ApiError(Errors.INVALID_REQUEST,
           "Could not apply finalized feature update because the provided" +
           s" maxVersionLevel:${update.maxVersionLevel} is lower than the" +
-          s" default minVersionLevel:${defaultMinVersionLevelOpt.get}."))
+          s" first active version:${supportedVersionRange.firstActiveVersion}."))
       } else {
         val newFinalizedFeature =
           Features.finalizedFeatures(Utils.mkMap(Utils.mkEntry(update.feature, newVersionRange)))
@@ -1945,22 +1945,21 @@ class KafkaController(val config: KafkaConfig,
   }
 
   /**
-   * Validate and process a finalized feature update on an existing FinalizedVersionRange for the
-   * feature.
-   *
-   * If the processing succeeds, then, the return value contains:
+   * Validates a feature update on an existing FinalizedVersionRange.
+   * If the validation succeeds, then, the return value contains:
    * 1. the new FinalizedVersionRange for the feature, if the feature update was not meant to delete the feature.
    * 2. Option.empty, if the feature update was meant to delete the feature.
    *
-   * If the processing fails, then returned value contains a suitable ApiError.
+   * If the validation fails, then returned value contains a suitable ApiError.
    *
    * @param update                 the feature update to be processed.
    * @param existingVersionRange   the existing FinalizedVersionRange which can be empty when no
    *                               FinalizedVersionRange exists for the associated feature
    *
-   * @return                       the new FinalizedVersionRange or error, as described above.
+   * @return                       the new FinalizedVersionRange to be updated into ZK or error
+   *                               as described above.
    */
-  private def processFeatureUpdate(update: UpdateFeaturesRequestData.FeatureUpdateKey,
+  private def validateFeatureUpdate(update: UpdateFeaturesRequestData.FeatureUpdateKey,
                                    existingVersionRange: Option[FinalizedVersionRange]): Either[Option[FinalizedVersionRange], ApiError] = {
     def newVersionRangeOrError(update: UpdateFeaturesRequestData.FeatureUpdateKey): Either[Option[FinalizedVersionRange], ApiError] = {
       newFinalizedVersionRangeOrIncompatibilityError(update)
@@ -2054,7 +2053,7 @@ class KafkaController(val config: KafkaConfig,
     //    - The corresponding entry in errors map would be updated with the appropriate ApiError.
     //    - The entry in targetFeatures map is left untouched.
     updates.asScala.iterator.foreach { update =>
-      processFeatureUpdate(update, existingFeatures.get(update.feature())) match {
+      validateFeatureUpdate(update, existingFeatures.get(update.feature())) match {
         case Left(newVersionRangeOrNone) =>
           newVersionRangeOrNone
             .map(newVersionRange => targetFeatures += (update.feature() -> newVersionRange))

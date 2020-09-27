@@ -24,74 +24,78 @@ import org.apache.kafka.common.feature.Features._
 import scala.jdk.CollectionConverters._
 
 /**
- * A class that encapsulates the attributes explained below and also provides APIs to check for
- * incompatibilities between the features supported by the Broker and finalized features.
- * This class is immutable in production. It provides few APIs to mutate state only for the
- * purpose of testing.
+ * A class that encapsulates the latest features supported by the Broker and also provides APIs to
+ * check for incompatibilities between the features supported by the Broker and finalized features.
+ * The class also enables feature version level deprecation, as explained below. This class is
+ * immutable in production. It provides few APIs to mutate state only for the purpose of testing.
  *
- * Attributes:
+ * Feature version level deprecation:
+ * ==================================
  *
- * 1. The latest features supported by the Broker.
+ * Deprecation of certain version levels of a feature is a process to stop supporting the
+ * functionality offered by the feature at a those version levels, across the entire Kafka cluster.
+ * Feature version deprecation is a simple 2-step process explained below. In each step below, an
+ * example is provided to help understand the process better:
  *
- * 2. The optional default minimum version levels for specific finalized features.
- *    - If you would want to deprecate a version level for some feature, then in this map you
- *      need to supply the starting version value (greater than 1) that's just 1 beyond the highest
- *      deprecated version. Ex: if this map contains {"feature1" -> 5}, then it indicates that feature
- *      version levels: [1, 4] need to be deprecated. The value '5' is the default minimum version level.
- *    - If you do not want to deprecate a version level for a feature, you do not have to supply
- *      values in this map. The default minimum version level for absent features in this map
- *      is assumed to be 1.
+ * STEP 1:
+ * In the first step, a major Kafka release is made with a Broker code change (explained later
+ * below) that establishes the intent to deprecate certain versions of one or more features
+ * cluster-wide. When this new Kafka release is deployed to the cluster, the feature versioning
+ * system (via the controller) will automatically persist the new minVersionLevel for the feature in
+ * Zk to propagate the deprecation of certain versions. After this happens, any external client that
+ * queries the Broker to learn the feature versions will at some point start to see the new value
+ * for the finalized minVersionLevel for the feature. This makes the version deprecation permanent.
  *
- *    The primary use case to provide this map is feature version level deprecation.
- *    When features are finalized via the ApiKeys.UPDATE_FEATURES api, the controller takes the
- *    value provided in this map (if present) as the default minimum version level for the feature.
- *    This is how it works: in order to deprecate feature version levels, in this map the default
- *    minimum version level of a feature can be set to a new value that's higher than 1
- *    (let's call this latest_min_version_level). In doing so, the feature version levels
- *    in the closed range: [1, latest_min_version_level - 1] get deprecated by the controller logic
- *    that applies this map to persistent finalized feature state in ZK (this mutation happens
- *    during controller election and during finalized feature updates via the
- *    ApiKeys.UPDATE_FEATURES api). This will automatically mean external clients of Kafka
- *    would need to stop using the finalized min version levels that have been deprecated.
+ * Here is how the above code change needs to be done:
+ * In order to deprecate feature version levels, in the supportedFeatures map you need to supply a
+ * specific firstActiveVersion value that's higher than the minVersion for the feature. The
+ * value for firstActiveVersion should be 1 beyond the highest version that you intend to deprecate
+ * for that feature. When features are finalized via the ApiKeys.UPDATE_FEATURES api, the feature
+ * version levels in the closed range: [minVersion, firstActiveVersion - 1] are automatically
+ * deprecated in ZK by the controller logic.
+ * Example:
+ * - Let us assume the existing finalized feature in ZK:
+ *   {
+ *      "feature_1" -> FinalizedVersionRange(minVersionLevel=1, maxVersionLevel=5)
+ *   }
+ *   Now, supposing you would like to deprecate feature version levels: [1, 2].
+ *   Then, in the supportedFeatures map you should supply the following:
+ *   supportedFeatures = {
+ *     "feature1" -> SupportedVersionRange(minVersion=1, firstActiveVersion=3, maxVersion=5)
+ *   }
+ * - If you do NOT want to deprecate a version level for a feature, then in the supportedFeatures
+ *   map you should supply the firstActiveVersion to be the same as the minVersion supplied for that
+ *   feature.
+ *   Example:
+ *   supportedFeatures = {
+ *     "feature1" -> SupportedVersionRange(minVersion=1, firstActiveVersion=1, maxVersion=5)
+ *   }
+ *   This indicates no intent to deprecate any version levels for the feature.
  *
- *    NOTE: The difference between the values in this map and the minimum version value for a
- *    broker's supported feature is the following: Version levels below the values specified in this
- *    map are considered deprecated by the controller, whereas version levels below the minimum
- *    version value for a supported feature are considered unknown/unsupported.
+ * STEP 2:
+ * After the first step is over, you may (at some point) want to permanently remove the code/logic
+ * for the functionality offered by the deprecated feature. This is the second step. Here a
+ * subsequent major Kafka release is made with another Broker code change that removes the code for
+ * the functionality offered by the deprecated feature versions. This would completely drop support
+ * for the deprecated versions. Such a code change needs to be supplemented by supplying a
+ * suitable higher minVersion value for the feature in the supportedFeatures map.
+ * Example:
+ * - In the example above in step 1, we showed how to deprecate version levels [1, 2] for
+ *   "feature_1". Now let us assume the following finalized feature in ZK (after the deprecation
+ *   has been carried out):
+ *   {
+ *     "feature_1" -> FinalizedVersionRange(minVersionLevel=3, maxVersionLevel=5)
+ *   }
+ *   Now, supposing you would like to permanently remove support for feature versions: [1, 2].
+ *   Then, in the supportedFeatures map you should now supply the following:
+ *   supportedFeatures = {
+ *     "feature1" -> SupportedVersionRange(minVersion=3, firstActiveVersion=3, maxVersion=5)
+ *   }
  */
-class BrokerFeatures private (@volatile var supportedFeatures: Features[SupportedVersionRange],
-                              @volatile var defaultFeatureMinVersionLevels: Map[String, Short]) {
-  require(BrokerFeatures.areFeatureMinVersionLevelsCompatible(
-    supportedFeatures, defaultFeatureMinVersionLevels))
-
+class BrokerFeatures private (@volatile var supportedFeatures: Features[SupportedVersionRange]) {
   // For testing only.
   def setSupportedFeatures(newFeatures: Features[SupportedVersionRange]): Unit = {
-    require(
-      BrokerFeatures.areFeatureMinVersionLevelsCompatible(newFeatures, defaultFeatureMinVersionLevels))
     supportedFeatures = newFeatures
-  }
-
-  /**
-   * Returns the default minimum version level for a specific supported feature.
-   *
-   * @param feature   the name of the feature
-   *
-   * @return          the default minimum version level for the supported feature if its defined.
-   *                  otherwise, returns the minimum version of the supported feature (if the feature
-   *                  exists) or none.
-   */
-  def defaultMinVersionLevel(feature: String): Option[Short] = {
-    defaultFeatureMinVersionLevels.get(feature).map(Some(_)).getOrElse {
-      val versionRange = supportedFeatures.get(feature)
-      if (versionRange == null) Option.empty else Some(versionRange.min())
-    }
-  }
-
-  // For testing only.
-  def setDefaultMinVersionLevels(newMinVersionLevels: Map[String, Short]): Unit = {
-    require(
-      BrokerFeatures.areFeatureMinVersionLevelsCompatible(supportedFeatures, newMinVersionLevels))
-    defaultFeatureMinVersionLevels = newMinVersionLevels
   }
 
   /**
@@ -102,7 +106,7 @@ class BrokerFeatures private (@volatile var supportedFeatures: Features[Supporte
     Features.finalizedFeatures(
       supportedFeatures.features.asScala.map {
         case(name, versionRange) => (
-          name, new FinalizedVersionRange(defaultMinVersionLevel(name).get, versionRange.max))
+          name, new FinalizedVersionRange(versionRange.firstActiveVersion, versionRange.max))
       }.asJava)
   }
 
@@ -113,8 +117,8 @@ class BrokerFeatures private (@volatile var supportedFeatures: Features[Supporte
    * feature:
    *  1) Does not exist in the Broker (i.e. it is unknown to the Broker).
    *           [OR]
-   *  2) Exists but the FinalizedVersionRange does not match with either the SupportedVersionRange
-   *     of the supported feature, or the default minimum version level of the feature.
+   *  2) Exists but the FinalizedVersionRange does not match with the SupportedVersionRange
+   *     of the supported feature.
    *
    * @param finalized   The finalized features against which incompatibilities need to be checked for.
    *
@@ -122,8 +126,7 @@ class BrokerFeatures private (@volatile var supportedFeatures: Features[Supporte
    *                    is empty, it means there were no feature incompatibilities found.
    */
   def incompatibleFeatures(finalized: Features[FinalizedVersionRange]): Features[FinalizedVersionRange] = {
-    BrokerFeatures.incompatibleFeatures(
-      supportedFeatures, finalized, Some(defaultFeatureMinVersionLevels), logIncompatibilities = true)
+    BrokerFeatures.incompatibleFeatures(supportedFeatures, finalized, logIncompatibilities = true)
   }
 }
 
@@ -132,7 +135,7 @@ object BrokerFeatures extends Logging {
   def createDefault(): BrokerFeatures = {
     // The arguments are currently empty, but, in the future as we define features we should
     // populate the required values here.
-    new BrokerFeatures(emptySupportedFeatures, Map[String, Short]())
+    new BrokerFeatures(emptySupportedFeatures)
   }
 
   /**
@@ -147,20 +150,11 @@ object BrokerFeatures extends Logging {
    */
   def hasIncompatibleFeatures(supportedFeatures: Features[SupportedVersionRange],
                               finalizedFeatures: Features[FinalizedVersionRange]): Boolean = {
-    !incompatibleFeatures(supportedFeatures, finalizedFeatures, Option.empty, false).empty
-  }
-
-  private def isIncompatibleDefaultMinVersionLevel(feature: String,
-                                                   versionLevels: FinalizedVersionRange,
-                                                   defaultFeatureMinVersionLevels: Map[String, Short]): Boolean = {
-    defaultFeatureMinVersionLevels
-      .get(feature)
-      .exists(defaultMinVersionLevel => defaultMinVersionLevel > versionLevels.max())
+    !incompatibleFeatures(supportedFeatures, finalizedFeatures, logIncompatibilities = false).empty
   }
 
   private def incompatibleFeatures(supportedFeatures: Features[SupportedVersionRange],
                                    finalizedFeatures: Features[FinalizedVersionRange],
-                                   defaultFeatureMinVersionLevels: Option[Map[String, Short]],
                                    logIncompatibilities: Boolean): Features[FinalizedVersionRange] = {
     val incompatibleFeaturesInfo = finalizedFeatures.features.asScala.map {
       case (feature, versionLevels) =>
@@ -170,10 +164,6 @@ object BrokerFeatures extends Logging {
         } else if (versionLevels.isIncompatibleWith(supportedVersions)) {
           (feature, versionLevels, "{feature=%s, reason='%s is incompatible with %s'}".format(
             feature, versionLevels, supportedVersions))
-        } else if (defaultFeatureMinVersionLevels.isDefined &&
-                   isIncompatibleDefaultMinVersionLevel(feature, versionLevels, defaultFeatureMinVersionLevels.get)) {
-          (feature, versionLevels, "{feature=%s, reason='%s is incompatible with default min_version_level: %d'}".format(
-            feature, versionLevels, defaultFeatureMinVersionLevels.get(feature)))
         } else {
           (feature, versionLevels, null)
         }
@@ -185,26 +175,5 @@ object BrokerFeatures extends Logging {
     }
     Features.finalizedFeatures(
       incompatibleFeaturesInfo.map { case(feature, versionLevels, _) => (feature, versionLevels) }.toMap.asJava)
-  }
-
-  /**
-   * A check that ensures each feature defined with min version level is a supported feature, and
-   * the min version level value is valid (i.e. it is compatible with the supported version range).
-   *
-   * @param supportedFeatures         the supported features
-   * @param featureMinVersionLevels   the feature minimum version levels
-   *
-   * @return                          - true, if the above described check passes.
-   *                                  - false, otherwise.
-   */
-  private def areFeatureMinVersionLevelsCompatible(supportedFeatures: Features[SupportedVersionRange],
-                                                   featureMinVersionLevels: Map[String, Short]): Boolean = {
-    featureMinVersionLevels.forall {
-      case(featureName, minVersionLevel) =>
-        val supportedFeature = supportedFeatures.get(featureName)
-        (supportedFeature != null) &&
-        !new FinalizedVersionRange(minVersionLevel, supportedFeature.max())
-          .isIncompatibleWith(supportedFeature)
-    }
   }
 }

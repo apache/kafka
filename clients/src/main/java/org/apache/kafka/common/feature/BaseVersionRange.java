@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.feature;
 
+import static java.util.stream.Collectors.joining;
+
 import java.util.Map;
 import java.util.Objects;
 
@@ -85,12 +87,22 @@ class BaseVersionRange {
     }
 
     public String toString() {
-        return String.format("%s[%s:%d, %s:%d]",
-            this.getClass().getSimpleName(), this.minKeyLabel, min(), this.maxKeyLabel, max());
+        return String.format(
+            "%s[%s]",
+            this.getClass().getSimpleName(),
+            mapToString(toMap()));
     }
 
     public Map<String, Short> toMap() {
         return Utils.mkMap(Utils.mkEntry(minKeyLabel, min()), Utils.mkEntry(maxKeyLabel, max()));
+    }
+
+    private static String mapToString(final Map<String, Short> map) {
+        return map
+            .entrySet()
+            .stream()
+            .map(entry -> String.format("%s:%d", entry.getKey(), entry.getValue()))
+            .collect(joining(", "));
     }
 
     @Override
@@ -98,7 +110,12 @@ class BaseVersionRange {
         if (this == other) {
             return true;
         }
-        if (!(other instanceof BaseVersionRange)) {
+
+        if (other == null) {
+            return false;
+        }
+
+        if (getClass() != other.getClass()) {
             return false;
         }
 
@@ -117,8 +134,16 @@ class BaseVersionRange {
     public static short valueOrThrow(String key, Map<String, Short> versionRangeMap) {
         final Short value = versionRangeMap.get(key);
         if (value == null) {
-            throw new IllegalArgumentException(key + " absent in " + versionRangeMap);
+            throw new IllegalArgumentException(String.format("%s absent in [%s]", key, mapToString(versionRangeMap)));
         }
         return value;
+    }
+
+    protected String minKeyLabel() {
+        return minKeyLabel;
+    }
+
+    protected String maxKeyLabel() {
+        return maxKeyLabel;
     }
 }

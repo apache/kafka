@@ -40,7 +40,7 @@ public class FinalizedVersionRange extends BaseVersionRange {
 
     /**
      * Checks if the [min, max] version level range of this object does *NOT* fall within the
-     * [min, max] version range of the provided SupportedVersionRange parameter.
+     * [min, first_active_version, max] range of the provided SupportedVersionRange parameter.
      *
      * @param supportedVersionRange   the SupportedVersionRange to be checked
      *
@@ -48,6 +48,8 @@ public class FinalizedVersionRange extends BaseVersionRange {
      *                                - false otherwise
      */
     public boolean isIncompatibleWith(SupportedVersionRange supportedVersionRange) {
-        return min() < supportedVersionRange.min() || max() > supportedVersionRange.max();
+        return min() < supportedVersionRange.min() ||
+               max() > supportedVersionRange.max() ||
+               max() < supportedVersionRange.firstActiveVersion();
     }
 }
