@@ -152,10 +152,10 @@ object BrokerFeatures extends Logging {
 
   private def isIncompatibleDefaultMinVersionLevel(feature: String,
                                                    versionLevels: FinalizedVersionRange,
-                                                   defaultFeatureMinVersionLevels: Option[Map[String, Short]]): Boolean = {
-    defaultFeatureMinVersionLevels.exists(defaults =>
-      defaults.get(feature).exists(defaultMinVersionLevel =>
-        defaultMinVersionLevel > versionLevels.max()))
+                                                   defaultFeatureMinVersionLevels: Map[String, Short]): Boolean = {
+    defaultFeatureMinVersionLevels
+      .get(feature)
+      .exists(defaultMinVersionLevel => defaultMinVersionLevel > versionLevels.max())
   }
 
   private def incompatibleFeatures(supportedFeatures: Features[SupportedVersionRange],
@@ -170,22 +170,21 @@ object BrokerFeatures extends Logging {
         } else if (versionLevels.isIncompatibleWith(supportedVersions)) {
           (feature, versionLevels, "{feature=%s, reason='%s is incompatible with %s'}".format(
             feature, versionLevels, supportedVersions))
-        } else if (isIncompatibleDefaultMinVersionLevel(feature, versionLevels, defaultFeatureMinVersionLevels)) {
+        } else if (defaultFeatureMinVersionLevels.isDefined &&
+                   isIncompatibleDefaultMinVersionLevel(feature, versionLevels, defaultFeatureMinVersionLevels.get)) {
           (feature, versionLevels, "{feature=%s, reason='%s is incompatible with default min_version_level: %d'}".format(
             feature, versionLevels, defaultFeatureMinVersionLevels.get(feature)))
         } else {
           (feature, versionLevels, null)
-
         }
     }.filter{ case(_, _, errorReason) => errorReason != null}.toList
 
     if (logIncompatibilities && incompatibleFeaturesInfo.nonEmpty) {
-      warn(
-        "Feature incompatibilities seen: " + incompatibleFeaturesInfo.map {
-          case(_, _, errorReason) => errorReason }.mkString(", "))
+      warn("Feature incompatibilities seen: " +
+           incompatibleFeaturesInfo.map { case(_, _, errorReason) => errorReason }.mkString(", "))
     }
-    Features.finalizedFeatures(incompatibleFeaturesInfo.map {
-      case(feature, versionLevels, _) => (feature, versionLevels) }.toMap.asJava)
+    Features.finalizedFeatures(
+      incompatibleFeaturesInfo.map { case(feature, versionLevels, _) => (feature, versionLevels) }.toMap.asJava)
   }
 
   /**
@@ -198,16 +197,14 @@ object BrokerFeatures extends Logging {
    * @return                          - true, if the above described check passes.
    *                                  - false, otherwise.
    */
-  private def areFeatureMinVersionLevelsCompatible(
-    supportedFeatures: Features[SupportedVersionRange],
-    featureMinVersionLevels: Map[String, Short]
-  ): Boolean = {
+  private def areFeatureMinVersionLevelsCompatible(supportedFeatures: Features[SupportedVersionRange],
+                                                   featureMinVersionLevels: Map[String, Short]): Boolean = {
     featureMinVersionLevels.forall {
       case(featureName, minVersionLevel) =>
         val supportedFeature = supportedFeatures.get(featureName)
         (supportedFeature != null) &&
-          !new FinalizedVersionRange(minVersionLevel, supportedFeature.max())
-            .isIncompatibleWith(supportedFeature)
+        !new FinalizedVersionRange(minVersionLevel, supportedFeature.max())
+          .isIncompatibleWith(supportedFeature)
     }
   }
 }

@@ -525,7 +525,10 @@ public class KafkaAdminClientTest {
                 convertFinalizedFeaturesMap(defaultFeatureMetadata().finalizedFeatures()),
                 defaultFeatureMetadata().finalizedFeaturesEpoch().get()));
         }
-        return new ApiVersionsResponse(new ApiVersionsResponseData().setErrorCode(error.code()));
+        return new ApiVersionsResponse(
+            new ApiVersionsResponseData()
+                .setThrottleTimeMs(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.throttleTimeMs())
+                .setErrorCode(error.code()));
     }
 
     /**

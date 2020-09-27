@@ -1917,8 +1917,10 @@ class KafkaController(val config: KafkaConfig,
       try {
         newVersionRange = new FinalizedVersionRange(defaultMinVersionLevelOpt.get, update.maxVersionLevel)
       } catch {
-        // Ignoring because it means the provided maxVersionLevel is invalid.
-        case _: IllegalArgumentException => {}
+        case _: IllegalArgumentException => {
+          // This exception means the provided maxVersionLevel is invalid. It is handled below
+          // outside of this catch clause.
+        }
       }
       if (newVersionRange == null) {
         Right(new ApiError(Errors.INVALID_REQUEST,
@@ -2034,13 +2036,14 @@ class KafkaController(val config: KafkaConfig,
     val existingFeatures = featureCache.get
       .map(featuresAndEpoch => featuresAndEpoch.features.features().asScala)
       .getOrElse(Map[String, FinalizedVersionRange]())
-    // Map of feature to FinalizedVersionRange. This contains the target features to be eventually
-    // written to FeatureZNode.
+    // A map with key being feature name and value being FinalizedVersionRange.
+    // This contains the target features to be eventually written to FeatureZNode.
     val targetFeatures = scala.collection.mutable.Map[String, FinalizedVersionRange]() ++ existingFeatures
-    // Map of feature to error.
+    // A map with key being feature name and value being error encountered when the FeatureUpdate
+    // was applied.
     val errors = scala.collection.mutable.Map[String, ApiError]()
 
-    // Below we process each FeatureUpdate:
+    // Below we process each FeatureUpdate using the following logic:
     //  - If a FeatureUpdate is found to be valid, then:
     //    - The corresponding entry in errors map would be updated to contain ApiError(Errors.NONE).
     //    - If the FeatureUpdate is an add or update request, then the targetFeatures map is updated
@@ -2080,7 +2083,7 @@ class KafkaController(val config: KafkaConfig,
         errors.foreach { case (feature, apiError) =>
           if (apiError.error() == Errors.NONE) {
             errors(feature) = new ApiError(Errors.FEATURE_UPDATE_FAILED,
-              Errors.FEATURE_UPDATE_FAILED.message() + " Error: " + e)
+                                           Errors.FEATURE_UPDATE_FAILED.message() + " Error: " + e)
           }
         }
     } finally {
