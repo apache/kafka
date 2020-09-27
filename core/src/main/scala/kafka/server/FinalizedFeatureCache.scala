@@ -104,10 +104,10 @@ class FinalizedFeatureCache(private val brokerFeatures: BrokerFeatures) extends 
    */
   def updateOrThrow(latestFeatures: Features[FinalizedVersionRange], latestEpoch: Long): Unit = {
     val latest = FinalizedFeaturesAndEpoch(latestFeatures, latestEpoch)
-    val oldFeatureAndEpoch = featuresAndEpoch.map(item => item.toString()).getOrElse("<empty>")
+    val existing = featuresAndEpoch.map(item => item.toString()).getOrElse("<empty>")
     if (featuresAndEpoch.isDefined && featuresAndEpoch.get.epoch > latest.epoch) {
-      val errorMsg = ("FinalizedFeatureCache update failed due to invalid epoch in new finalized %s." +
-        " The existing cache contents are %s").format(latest, oldFeatureAndEpoch)
+      val errorMsg = ("FinalizedFeatureCache update failed due to invalid epoch in new %s." +
+        " The existing cache contents are %s.").format(latest, existing)
       throw new FeatureCacheUpdateException(errorMsg)
     } else {
       val incompatibleFeatures = brokerFeatures.incompatibleFeatures(latest.features)
@@ -117,8 +117,7 @@ class FinalizedFeatureCache(private val brokerFeatures: BrokerFeatures) extends 
           ).format(brokerFeatures.supportedFeatures, latest)
         throw new FeatureCacheUpdateException(errorMsg)
       } else {
-        val logMsg = "Updated cache from existing %s to latest %s".format(
-          oldFeatureAndEpoch, latest)
+        val logMsg = "Updated cache from existing %s to latest %s.".format(existing, latest)
         synchronized {
           featuresAndEpoch = Some(latest)
           notifyAll()
