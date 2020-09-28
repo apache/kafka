@@ -53,8 +53,8 @@ import java.util.function.Supplier;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
-@Warmup(iterations = 2)
-@Measurement(iterations = 3)
+@Warmup(iterations = 5)
+@Measurement(iterations = 5)
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 public class FetchSessionCacheBenchmark {
@@ -72,6 +72,9 @@ public class FetchSessionCacheBenchmark {
 
         @Param(value = {"false", "true"})
         private boolean newSession;
+
+        @Param(value = {"false", "true"})
+        private boolean fetchSessionAddedPartitions;
 
         @Param(value = {"false", "true"})
         private boolean benchPrivileged;
@@ -134,12 +137,21 @@ public class FetchSessionCacheBenchmark {
                             MemoryRecords.readableRecords(ByteBuffer.allocate(0))));
 
             reqData2 = new LinkedHashMap<>();
-            reqData2.put(new TopicPartition("foo", 2),
-                new FetchRequest.PartitionData(15, 0, 100, Optional.empty()));
+            reqData2.put(new TopicPartition("foo", 0),
+                    new FetchRequest.PartitionData(10, 0, 100, Optional.empty()));
+            reqData2.put(new TopicPartition("foo", 1),
+                    new FetchRequest.PartitionData(20, 0, 100, Optional.empty()));
+
+            // the fetch session cache has a different performance profile if the size TreeMap
+            // needs to be updated
+            if (fetchSessionAddedPartitions)
+                reqData2.put(new TopicPartition("foo", 2),
+                        new FetchRequest.PartitionData(15, 0, 100, Optional.empty()));
+
             respData2 = new LinkedHashMap<>();
-            respData2.put(new TopicPartition("foo", 2),
+            respData2.put(new TopicPartition("foo", 1),
                 new FetchResponse.PartitionData<>(
-                    Errors.NONE, 10, 10, 10, null,
+                    Errors.NONE, 20, 20, 0, null,
                     MemoryRecords.readableRecords(ByteBuffer.allocate(0))));
 
             int sessionCount = (int)Math.ceil(cacheUtilization / 100.0 * cacheSize);
