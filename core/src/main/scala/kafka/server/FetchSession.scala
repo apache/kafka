@@ -509,11 +509,11 @@ case class EvictableKey(privileged: Boolean, size: Int, id: Int) extends Compara
     if (privCompare != 0)
       return privCompare
 
-    val sizeCompare = size.compareTo(other.size)
+    val sizeCompare = Integer.compare(size, other.size)
     if (sizeCompare != 0)
       return sizeCompare
 
-    id.compareTo(other.id)
+    Integer.compare(id, other.id)
   }
 }
 
@@ -543,10 +543,10 @@ class FetchSessionCache(private val maxEntries: Int,
 
   // A map containing sessions which can be evicted by both privileged and
   // unprivileged sessions. (A map which contains all unprivileged sessions.)
-  private val unprivilegedSessions = new util.TreeMap[EvictableKey, FetchSession]
+  private val evictableByAll = new util.TreeMap[EvictableKey, FetchSession]
 
   // A map containing sessions which can be evicted by privileged sessions.
-  private val privilegedSessions = new util.TreeMap[EvictableKey, FetchSession]
+  private val evictableByPrivileged = new util.TreeMap[EvictableKey, FetchSession]
 
   // Set up metrics.
   removeMetric(FetchSession.NUM_INCREMENTAL_FETCH_SESSISONS)
@@ -690,9 +690,9 @@ class FetchSessionCache(private val maxEntries: Int,
       // If there are no stale entries, check the first evictable entry.
       // If it is less valuable than our proposed entry, evict it.
       if (privileged) {
-        evictEntry(key, unprivilegedSessions) || evictEntry(key, privilegedSessions)
+        evictEntry(key, evictableByPrivileged)
       } else {
-        evictEntry(key, unprivilegedSessions)
+        evictEntry(key, evictableByAll)
       }
     }
   }
@@ -716,11 +716,19 @@ class FetchSessionCache(private val maxEntries: Int,
     // lastUsed.remove(session.id)
     val evictableKey = session.evictableKey
     // }
-    if (session.privileged) {
-      privilegedSessions.remove(evictableKey)
-    } else {
-      unprivilegedSessions.remove(evictableKey)
-    }
+//    if (session.privileged) {
+//      evictableByPrivileged.remove(evictableKey)
+//    } else {
+//      evictableByAll.remove(evictableKey)
+//    }
+// try later
+//    if (!session.privileged) {
+//      evictableByAll.remove(evictableKey)
+//    }
+//    evictableByPrivileged.remove(evictableKey)
+    evictableByAll.remove(evictableKey)
+    evictableByPrivileged.remove(evictableKey)
+
     val removeResult = Option(sessions.remove(session.id))
     if (removeResult.isDefined) {
       numPartitions = numPartitions - session.cachedSize
@@ -742,23 +750,22 @@ class FetchSessionCache(private val maxEntries: Int,
       session.lastUsedMs = now
       sessions.put(session.id, session)
 
-      val oldEvictableKey = session.evictableKey
+      val oldSize = session.cachedSize
+      if (oldSize != -1) {
+        val oldEvictableKey = session.evictableKey
+        evictableByPrivileged.remove(oldEvictableKey)
+        evictableByAll.remove(oldEvictableKey)
+        numPartitions = numPartitions - oldSize
+      }
       session.cachedSize = session.size
       val newEvictableKey = session.evictableKey
-      if (oldEvictableKey != newEvictableKey) {
-        if (session.privileged) {
-          privilegedSessions.remove(oldEvictableKey)
-          privilegedSessions.put(newEvictableKey, session)
-        } else {
-          unprivilegedSessions.remove(oldEvictableKey)
-          unprivilegedSessions.put(newEvictableKey, session)
-        }
-
-        if (oldEvictableKey.size == -1)
-          numPartitions = numPartitions + newEvictableKey.size
-        else
-          numPartitions = numPartitions - oldEvictableKey.size + newEvictableKey.size
+      if ((!session.privileged) || (now - session.creationMs > evictionMs)) {
+        evictableByPrivileged.put(newEvictableKey, session)
       }
+      if (now - session.creationMs > evictionMs) {
+        evictableByAll.put(newEvictableKey, session)
+      }
+      numPartitions = numPartitions + session.cachedSize
     }
   }
 }

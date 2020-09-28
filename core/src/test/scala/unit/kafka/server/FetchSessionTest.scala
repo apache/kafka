@@ -67,7 +67,7 @@ class FetchSessionTest {
     val id1 = cache.maybeCreateSession(0, false, 10, () => dummyCreate(10))
     val id2 = cache.maybeCreateSession(10, false, 20, () => dummyCreate(20))
     val id3 = cache.maybeCreateSession(20, false, 30, () => dummyCreate(30))
-    //assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(30, false, 40, () => dummyCreate(40)))
+    assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(30, false, 40, () => dummyCreate(40)))
     assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(40, false, 5, () => dummyCreate(5)))
     assertCacheContains(cache, id1, id2, id3)
     cache.touch(cache.get(id1).get, 200)
