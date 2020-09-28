@@ -2066,7 +2066,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val loggerConfig = describeBrokerLoggers()
     val kafkaLogLevel = loggerConfig.get("kafka").value()
     val logCleanerLogLevelConfig = loggerConfig.get("kafka.cluster.Replica")
-    // we expect an undefined log level to be the same as its first ancestor logger
+    // we expect the log level to be inherited from the first ancestor with a level configured
     assertEquals(kafkaLogLevel, logCleanerLogLevelConfig.value())
     assertEquals("kafka.cluster.Replica", logCleanerLogLevelConfig.name())
     assertEquals(ConfigEntry.ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG, logCleanerLogLevelConfig.source())
