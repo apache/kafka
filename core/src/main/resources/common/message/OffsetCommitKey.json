@@ -14,13 +14,23 @@
 // limitations under the License.
 
 {
-  "name": "GroupMetadataRequest",
-  "validVersions": "2",
+  "name": "OffsetCommitKey",
+  "validVersions": "0-1",
   "fields": [
     {
       "name": "group",
-      "versions": "2+",
+      "versions": "0+",
       "type": "string"
+    },
+    {
+      "name": "topic",
+      "versions": "0+",
+      "type": "string"
+    },
+    {
+      "name": "partition",
+      "versions": "0+",
+      "type": "int32"
     }
   ],
   "type": "data"

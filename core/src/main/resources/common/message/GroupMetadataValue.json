@@ -14,7 +14,7 @@
 // limitations under the License.
 
 {
-  "name": "GroupMetadataResponse",
+  "name": "GroupMetadataValue",
   "validVersions": "0-3",
   "fields": [
     {

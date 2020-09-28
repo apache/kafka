@@ -14,22 +14,37 @@
 // limitations under the License.
 
 {
-  "name": "OffsetCommitRequest",
-  "validVersions": "0-1",
+  "name": "OffsetCommitValue",
+  "validVersions": "0-3",
   "fields": [
     {
-      "name": "group",
+      "name": "offset",
+      "versions": "0+",
+      "type": "int64"
+    },
+    {
+      "name": "metadata",
       "versions": "0+",
       "type": "string"
     },
     {
-      "name": "topic",
-      "versions": "0+",
-      "type": "string"
+      "name": "timestamp",
+      "versions": "0",
+      "type": "int64"
     },
     {
-      "name": "partition",
-      "versions": "0+",
+      "name": "commitTimestamp",
+      "versions": "1+",
+      "type": "int64"
+    },
+    {
+      "name": "expireTimestamp",
+      "versions": "1",
+      "type": "int64"
+    },
+    {
+      "name": "leaderEpoch",
+      "versions": "3+",
       "type": "int32"
     }
   ],
