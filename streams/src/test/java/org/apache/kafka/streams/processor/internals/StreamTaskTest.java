@@ -1132,6 +1132,20 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldNotShareHeadersBetweenPunctuateIterations() {
+        task = createStatelessTask(createConfig(false), StreamsConfig.METRICS_LATEST);
+        task.initializeMetadata();
+        task.initializeTopology();
+
+        task.punctuate(processorSystemTime, 1, PunctuationType.WALL_CLOCK_TIME, timestamp -> {
+            task.processorContext.recordContext().headers().add("dummy", (byte[]) null);
+        });
+        task.punctuate(processorSystemTime, 1, PunctuationType.WALL_CLOCK_TIME, timestamp -> {
+            assertFalse(task.processorContext.recordContext().headers().iterator().hasNext());
+        });
+    }
+
+    @Test
     public void shouldCheckpointOffsetsOnCommit() throws IOException {
         task = createStatefulTask(createConfig(false), true);
         task.initializeStateStores();
