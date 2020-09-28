@@ -1471,6 +1471,11 @@ public class DistributedHerderTest {
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
 
+        // one more tick, to make sure we don't keep trying to read to the config topic unnecessarily
+        expectRebalance(1, Collections.emptyList(), Collections.emptyList());
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
         PowerMock.replayAll();
 
         long before = time.milliseconds();
@@ -1487,6 +1492,10 @@ public class DistributedHerderTest {
         assertEquals(before + coordinatorDiscoveryTimeoutMs, time.milliseconds());
         time.sleep(2000L);
         assertStatistics("leaderUrl", false, 3, 1, 100, 2000L);
+
+        // tick once more to ensure that the successful read to the end of the config topic was 
+        // tracked and no further unnecessary attempts were made
+        herder.tick();
 
         PowerMock.verifyAll();
     }
