@@ -118,8 +118,8 @@ public class FetchSessionCacheBenchmark {
             msSinceEpoch = new AtomicLong(0);
             sessionFollower = new ArrayList<>();
             sessions = new ArrayList<>();
-            int EVICTION_MS = 500;
-            cache = new FetchSessionCache(cacheSize, EVICTION_MS);
+            int evictionMs = 500;
+            cache = new FetchSessionCache(cacheSize, evictionMs);
             fetchManager = new FetchManager(time, cache);
             reqData = new LinkedHashMap<>();
             reqData.put(new TopicPartition("foo", 0),
@@ -154,9 +154,10 @@ public class FetchSessionCacheBenchmark {
                     Errors.NONE, 20, 20, 0, null,
                     MemoryRecords.readableRecords(ByteBuffer.allocate(0))));
 
-            int sessionCount = (int)Math.ceil(cacheUtilization / 100.0 * cacheSize);
+            int sessionCount = (int) Math.ceil(cacheUtilization / 100.0 * cacheSize);
+            Random rand = new Random();
             for (int i = 0; i < sessionCount; i++) {
-                boolean isFollower = new Random().nextFloat() < percentPrivileged / 100.0;
+                boolean isFollower = rand.nextFloat() < percentPrivileged / 100.0;
                 FetchContext context = fetchManager.newContext(FetchMetadata.INITIAL, reqData,
                         new ArrayList<>(), isFollower);
                 FetchResponse<Records> resp = context.updateAndGenerateResponseData(respData);
@@ -168,7 +169,7 @@ public class FetchSessionCacheBenchmark {
                 sessionFollower.add(isFollower);
 
                 if (i == sessionCount - numEvictableEntries - 1) {
-                    msSinceEpoch.set(EVICTION_MS + 1);
+                    msSinceEpoch.set(evictionMs + 1);
                 }
             }
 
@@ -178,7 +179,7 @@ public class FetchSessionCacheBenchmark {
                 // randomly choose session of the right type to update
                 boolean fetchIsFollower;
                 do {
-                    int sessionToUpdate = new Random().nextInt(sessions.size());
+                    int sessionToUpdate = rand.nextInt(sessions.size());
                     fetchMetadata = new FetchMetadata(sessions.get(sessionToUpdate), 1);
                     fetchIsFollower = sessionFollower.get(sessionToUpdate);
                 } while (fetchIsFollower != benchPrivileged);
@@ -198,6 +199,6 @@ public class FetchSessionCacheBenchmark {
         // FetchResponse<Records> resp = context.updateAndGenerateResponseData(state.respData);
         FetchContext context = state.fetchManager.newContext(state.fetchMetadata, state.reqData2,
                 new ArrayList<>(), state.benchPrivileged);
-        FetchResponse<Records> resp = context.updateAndGenerateResponseData(state.respData2);
+        context.updateAndGenerateResponseData(state.respData2);
     }
 }
