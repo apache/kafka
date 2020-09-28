@@ -66,7 +66,6 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
  */
 public class StreamTask extends AbstractTask implements ProcessorNodePunctuator, Task {
 
-    private static final ConsumerRecord<Object, Object> DUMMY_RECORD = new ConsumerRecord<>(ProcessorContextImpl.NONEXIST_TOPIC, -1, -1L, null, null);
     // visible for testing
     static final byte LATEST_MAGIC_BYTE = 1;
 
@@ -743,7 +742,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             throw new IllegalStateException(String.format("%sCurrent node is not null", logPrefix));
         }
 
-        updateProcessorContext(new StampedRecord(DUMMY_RECORD, timestamp), node, time.milliseconds());
+        updateProcessorContext(new StampedRecord(new ConsumerRecord<>(ProcessorContextImpl.NONEXIST_TOPIC, -1, -1L, null, null),
+            timestamp), node, time.milliseconds());
 
         if (log.isTraceEnabled()) {
             log.trace("Punctuating processor {} with timestamp {} and punctuation type {}", node.name(), timestamp, type);
