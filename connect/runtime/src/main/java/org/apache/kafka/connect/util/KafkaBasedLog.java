@@ -45,6 +45,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 
 /**
@@ -70,7 +71,7 @@ import java.util.concurrent.Future;
  */
 public class KafkaBasedLog<K, V> {
     private static final Logger log = LoggerFactory.getLogger(KafkaBasedLog.class);
-    private static final long CREATE_TOPIC_TIMEOUT_MS = 30000;
+    private static final long CREATE_TOPIC_TIMEOUT_NS = TimeUnit.NANOSECONDS.convert(30, TimeUnit.SECONDS);
 
     private Time time;
     private final String topic;
@@ -133,11 +134,14 @@ public class KafkaBasedLog<K, V> {
         List<TopicPartition> partitions = new ArrayList<>();
 
         // We expect that the topics will have been created either manually by the user or automatically by the herder
-        List<PartitionInfo> partitionInfos = null;
-        long started = time.milliseconds();
-        while (partitionInfos == null && time.milliseconds() - started < CREATE_TOPIC_TIMEOUT_MS) {
+        List<PartitionInfo> partitionInfos = consumer.partitionsFor(topic);
+        long started = time.nanoseconds();
+        long maxSleepMs = 1_000;
+        long sleepMs = 10;
+        while (partitionInfos == null && time.nanoseconds() - started < CREATE_TOPIC_TIMEOUT_NS) {
+            Utils.sleep(sleepMs);
+            sleepMs = Math.min(2 * sleepMs, maxSleepMs);
             partitionInfos = consumer.partitionsFor(topic);
-            waitForTopicCreate(started, time);
         }
         if (partitionInfos == null)
             throw new ConnectException("Could not look up partition metadata for offset backing store topic in" +
@@ -161,18 +165,6 @@ public class KafkaBasedLog<K, V> {
         log.info("Finished reading KafkaBasedLog for topic " + topic);
 
         log.info("Started KafkaBasedLog for topic " + topic);
-    }
-
-    /**
-     * Sleep for some time so that topic used for this KafkaBasedLog gets created. Note that
-     * {@code System.currentTimeMillis()} is not monotonic, so check for that condition.
-     */
-    // Visible for Testing
-    static void waitForTopicCreate(long started, Time time) {
-        long timeToWait = Math.max(time.milliseconds() - started, 1);
-        timeToWait = Math.min(timeToWait, 1000);
-        log.debug("Going to wait for {} msecs", timeToWait);
-        Utils.sleep(timeToWait);
     }
 
     public void stop() {
