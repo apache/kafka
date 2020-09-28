@@ -716,18 +716,12 @@ class FetchSessionCache(private val maxEntries: Int,
     // lastUsed.remove(session.id)
     val evictableKey = session.evictableKey
     // }
-//    if (session.privileged) {
-//      evictableByPrivileged.remove(evictableKey)
-//    } else {
-//      evictableByAll.remove(evictableKey)
-//    }
-// try later
-//    if (!session.privileged) {
-//      evictableByAll.remove(evictableKey)
-//    }
-//    evictableByPrivileged.remove(evictableKey)
-    evictableByAll.remove(evictableKey)
+    if (!session.privileged) {
+      evictableByAll.remove(evictableKey)
+    }
     evictableByPrivileged.remove(evictableKey)
+//    evictableByAll.remove(evictableKey)
+//    evictableByPrivileged.remove(evictableKey)
 
     val removeResult = Option(sessions.remove(session.id))
     if (removeResult.isDefined) {
@@ -762,7 +756,7 @@ class FetchSessionCache(private val maxEntries: Int,
       if ((!session.privileged) || (now - session.creationMs > evictionMs)) {
         evictableByPrivileged.put(newEvictableKey, session)
       }
-      if (now - session.creationMs > evictionMs) {
+      if ((!session.privileged) && (now - session.creationMs > evictionMs)) {
         evictableByAll.put(newEvictableKey, session)
       }
       numPartitions = numPartitions + session.cachedSize
