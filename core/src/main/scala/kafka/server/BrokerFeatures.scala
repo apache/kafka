@@ -74,7 +74,7 @@ import scala.jdk.CollectionConverters._
  *
  * STEP 2:
  * After the first step is over, you may (at some point) want to permanently remove the code/logic
- * for the functionality offered by the deprecated feature. This is the second step. Here a
+ * for the functionality offered by the deprecated feature versions. This is the second step. Here a
  * subsequent major Kafka release is made with another Broker code change that removes the code for
  * the functionality offered by the deprecated feature versions. This would completely drop support
  * for the deprecated versions. Such a code change needs to be supplemented by supplying a
