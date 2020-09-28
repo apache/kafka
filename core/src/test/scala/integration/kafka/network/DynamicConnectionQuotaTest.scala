@@ -45,10 +45,12 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   val topic = "test"
   val listener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
   val localAddress = InetAddress.getByName("127.0.0.1")
+  val plaintextListenerDefaultQuota = 30
   var executor: ExecutorService = _
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.put(KafkaConfig.NumQuotaSamplesProp, "2".toString)
+    properties.put("listener.name.plaintext.max.connection.creation.rate", plaintextListenerDefaultQuota.toString)
   }
 
   @Before
@@ -186,14 +188,16 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     val connRateLimit = 9
 
     // before setting connection rate to 10, verify we can do at least double that by default (no limit)
-    verifyConnectionRate(2 * connRateLimit, Int.MaxValue, "PLAINTEXT")
+    verifyConnectionRate(2 * connRateLimit, plaintextListenerDefaultQuota, "PLAINTEXT")
     waitForConnectionCount(initialConnectionCount)
 
     // Reduce total broker connection rate limit to 9 at the cluster level and verify the limit is enforced
     props.clear()  // so that we do not pass security protocol map which cannot be set at the cluster level
     props.put(KafkaConfig.MaxConnectionCreationRateProp, connRateLimit.toString)
     reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.MaxConnectionCreationRateProp, connRateLimit.toString))
-    verifyConnectionRate(8, connRateLimit, "PLAINTEXT")
+    // verify EXTERNAL listener is capped by broker-wide quota (PLAINTEXT is not capped by broker-wide limit, since it
+    // has limited quota set and is a protected listener)
+    verifyConnectionRate(8, connRateLimit, "EXTERNAL")
     waitForConnectionCount(initialConnectionCount)
 
     // Set 4 conn/sec rate limit for each listener and verify it gets enforced
