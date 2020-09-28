@@ -137,7 +137,7 @@ public class KafkaBasedLog<K, V> {
         long started = time.milliseconds();
         while (partitionInfos == null && time.milliseconds() - started < CREATE_TOPIC_TIMEOUT_MS) {
             partitionInfos = consumer.partitionsFor(topic);
-            Utils.sleep(Math.min(time.milliseconds() - started, 1000));
+            waitForTopicCreate(started, time);
         }
         if (partitionInfos == null)
             throw new ConnectException("Could not look up partition metadata for offset backing store topic in" +
@@ -161,6 +161,18 @@ public class KafkaBasedLog<K, V> {
         log.info("Finished reading KafkaBasedLog for topic " + topic);
 
         log.info("Started KafkaBasedLog for topic " + topic);
+    }
+
+    /**
+     * Sleep for some time so that topic used for this KafkaBasedLog gets created. Note that
+     * {@code System.currentTimeMillis()} is not monotonic, so check for that condition.
+     */
+    // Visible for Testing
+    static void waitForTopicCreate(long started, Time time) {
+        long timeToWait = Math.max(time.milliseconds() - started, 1);
+        timeToWait = Math.min(timeToWait, 1000);
+        log.debug("Going to wait for {} msecs", timeToWait);
+        Utils.sleep(timeToWait);
     }
 
     public void stop() {

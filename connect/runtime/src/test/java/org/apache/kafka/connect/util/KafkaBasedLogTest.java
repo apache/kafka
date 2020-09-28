@@ -536,6 +536,22 @@ public class KafkaBasedLogTest {
         PowerMock.verifyAll();
     }
 
+    /**
+     * Check if the waitForTopicCreate method doesn't throw if time moves backward, and works
+     * correctly if it increases.
+     */
+    @Test
+    public void testWatiForTopicCreate() {
+        // Test with clock moving forward
+        Time time = new MockTime(2);
+        long started = time.milliseconds();
+
+        KafkaBasedLog.waitForTopicCreate(started, time);
+
+        // Test with time going backward
+        time = new MockTime(-2, started, 0);
+        KafkaBasedLog.waitForTopicCreate(started, time);
+    }
 
     private void expectStart() throws Exception {
         initializer.run();
