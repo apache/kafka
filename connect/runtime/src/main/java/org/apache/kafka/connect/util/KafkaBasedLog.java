@@ -31,7 +31,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -139,7 +138,7 @@ public class KafkaBasedLog<K, V> {
         long maxSleepMs = 1_000;
         long sleepMs = 10;
         while (partitionInfos == null && time.nanoseconds() - started < CREATE_TOPIC_TIMEOUT_NS) {
-            Utils.sleep(sleepMs);
+            time.sleep(sleepMs);
             sleepMs = Math.min(2 * sleepMs, maxSleepMs);
             partitionInfos = consumer.partitionsFor(topic);
         }
