@@ -39,6 +39,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
@@ -159,6 +160,7 @@ public class KafkaStreams implements AutoCloseable {
     GlobalStreamThread globalStreamThread;
     private KafkaStreams.StateListener stateListener;
     private StateRestoreListener globalStateRestoreListener;
+
 
     // container states
     /**
@@ -348,6 +350,9 @@ public class KafkaStreams implements AutoCloseable {
      *
      * @param eh the uncaught exception handler for all internal threads; {@code null} deletes the current handler
      * @throws IllegalStateException if this {@code KafkaStreams} instance is not in state {@link State#CREATED CREATED}.
+     *
+     * @Deprecated user {@link KafkaStreams#setUncaughtExceptionHandler(StreamsUncaughtExceptionHandler)} instead.
+     *
      */
     public void setUncaughtExceptionHandler(final Thread.UncaughtExceptionHandler eh) {
         synchronized (stateLock) {
@@ -362,6 +367,31 @@ public class KafkaStreams implements AutoCloseable {
             } else {
                 throw new IllegalStateException("Can only set UncaughtExceptionHandler in CREATED state. " +
                     "Current state is: " + state);
+            }
+        }
+    }
+
+    /**
+     * Set the handler invoked when a {@link StreamsConfig#NUM_STREAM_THREADS_CONFIG internal thread} abruptly
+     * terminates due to an uncaught exception.
+     *
+     * @param eh the uncaught exception handler of type {@link StreamsUncaughtExceptionHandler} for all internal threads; {@code null} deletes the current handler
+     * @throws IllegalStateException if this {@code KafkaStreams} instance is not in state {@link State#CREATED CREATED}.
+     */
+    public void setUncaughtExceptionHandler(final StreamsUncaughtExceptionHandler eh) {
+        synchronized (stateLock) {
+            if (state == State.CREATED) {
+                for (final StreamThread thread : threads) {
+                    if (eh != null)  {
+                        thread.setStreamsUncaughtExceptionHandler(eh, this);
+                    } else {
+                        final StreamsUncaughtExceptionHandler eh2 = exception -> StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse.SHUTDOWN_STREAM_THREAD;
+                        thread.setStreamsUncaughtExceptionHandler(eh2, this);
+                    }
+                }
+            } else {
+                throw new IllegalStateException("Can only set UncaughtExceptionHandler in CREATED state. " +
+                        "Current state is: " + state);
             }
         }
     }
@@ -931,22 +961,6 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         return close(timeoutMs);
-    }
-
-    /**
-     * Attempts to shutdown an application.
-     * If there is an alive StreamThread it will succeed, if there is not it will fail
-     *
-     * @return Will return true if shutdown is initiated false if it is not possible.
-     */
-    public boolean shutdownApplication() {
-        for (final StreamThread streamThread : threads) {
-            if (streamThread.isAlive()) {
-                streamThread.initiateShutdown();
-                return true;
-            }
-        }
-        return false;
     }
 
     private boolean close(final long timeoutMs) {

@@ -32,8 +32,10 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
+import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
@@ -66,6 +68,7 @@ import static org.apache.kafka.streams.processor.internals.ClientUtils.getRestor
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getSharedAdminClientId;
 
 public class StreamThread extends Thread {
+
 
     /**
      * Stream thread states are the possible states that a stream thread can be in.
@@ -252,6 +255,7 @@ public class StreamThread extends Thread {
     private final int maxPollTimeMs;
     private final String originalReset;
     private final TaskManager taskManager;
+    public KafkaStreams kafkaStreams;
     private final AtomicLong nextProbingRebalanceMs;
 
     private final StreamsMetricsImpl streamsMetrics;
@@ -274,6 +278,7 @@ public class StreamThread extends Thread {
     private volatile State state = State.CREATED;
     private volatile ThreadMetadata threadMetadata;
     private StreamThread.StateListener stateListener;
+    private StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler;
 
     private final ChangelogReader changelogReader;
     private final ConsumerRebalanceListener rebalanceListener;
@@ -476,6 +481,7 @@ public class StreamThread extends Thread {
         this.logPrefix = logContext.logPrefix();
         this.log = logContext.logger(StreamThread.class);
         this.rebalanceListener = new StreamsRebalanceListener(time, taskManager, this, this.log, assignmentErrorCode);
+        this.streamsUncaughtExceptionHandler = exception -> StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse.SHUTDOWN_STREAM_THREAD;
         this.taskManager = taskManager;
         this.restoreConsumer = restoreConsumer;
         this.mainConsumer = mainConsumer;
@@ -535,8 +541,7 @@ public class StreamThread extends Thread {
                 }
             }
 
-            log.error("Encountered the following exception during processing " +
-                "and the thread is going to shut down: ", e);
+            handleStreamsUncaughtException(e);
             throw e;
         } finally {
             completeShutdown(cleanRun);
@@ -555,10 +560,6 @@ public class StreamThread extends Thread {
         // if the thread is still in the middle of a rebalance, we should keep polling
         // until the rebalance is completed before we close and commit the tasks
         while (isRunning() || taskManager.isRebalanceInProgress()) {
-            if (shutdownTypeRequested.get() != AssignorError.NONE.code()) {
-                sendShutdownRequest(shutdownTypeRequested);
-                break;
-            }
             try {
                 runOnce();
                 if (nextProbingRebalanceMs.get() < time.milliseconds()) {
@@ -580,8 +581,38 @@ public class StreamThread extends Thread {
         }
     }
 
-    public void initiateShutdown() {
-        shutdownTypeRequested.set(AssignorError.SHUTDOWN_REQUESTED.code());
+    public void setStreamsUncaughtExceptionHandler(final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler, final KafkaStreams kafkaStreams) {
+        this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
+        this.kafkaStreams = kafkaStreams;
+    }
+
+    private void handleStreamsUncaughtException(final Exception e) {
+        final StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse action = this.streamsUncaughtExceptionHandler.handle(e);
+        if (kafkaStreams == null) {
+            log.error("Encountered the following exception during processing " +
+                    "and the thread is going to shut down: ", e);
+            return;
+        }
+        switch (action) {
+            case SHUTDOWN_STREAM_THREAD:
+                log.error("Encountered the following exception during processing " +
+                        "and the thread is going to shut down: ", e);
+                break;
+            case REPLACE_STREAM_THREAD:
+                log.error("Encountered the following exception during processing " +
+                        "and the the stream thread will be replaced: ", e);
+                break;
+            case SHUTDOWN_KAFKA_STREAMS_CLIENT:
+                log.error("Encountered the following exception during processing " +
+                        "and the client is going to shut down: ", e);
+                kafkaStreams.close(Duration.ZERO);
+                break;
+            case SHUTDOWN_KAFKA_STREAMS_APPLICATION:
+                log.error("Encountered the following exception during processing " +
+                        "and the application is going to shut down: ", e);
+                shutdownTypeRequested.set(AssignorError.SHUTDOWN_REQUESTED.code());
+                sendShutdownRequest(shutdownTypeRequested);
+        }
     }
 
     private void sendShutdownRequest(final AtomicInteger shutdownType) {

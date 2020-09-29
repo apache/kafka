@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.common.TopicPartition;
@@ -56,7 +57,7 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
             throw new MissingSourceTopicException("One or more source topics were missing during rebalance");
         } else if (assignmentErrorCode.get() == AssignorError.SHUTDOWN_REQUESTED.code()) {
             //throw new ShutdownRequestedException("onPartition assigned"); //TODO: receive request and call requestClose()
-            //requestClose();
+            streamThread.kafkaStreams.close(Duration.ZERO);
         }
 
         streamThread.setState(State.PARTITIONS_ASSIGNED);

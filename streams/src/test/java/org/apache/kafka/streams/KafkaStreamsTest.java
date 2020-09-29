@@ -617,7 +617,7 @@ public class KafkaStreamsTest {
         final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         streams.start();
         try {
-            streams.setUncaughtExceptionHandler(null);
+            streams.setUncaughtExceptionHandler((Thread.UncaughtExceptionHandler) null);
             fail("Should throw IllegalStateException");
         } catch (final IllegalStateException e) {
             // expected
