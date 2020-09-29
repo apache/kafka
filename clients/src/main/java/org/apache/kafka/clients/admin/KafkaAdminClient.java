@@ -1576,9 +1576,11 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             void handleFailure(Throwable throwable) {
                 // If there were any topics retries due to a quota exceeded exception, we propagate
-                // the initial error back to the caller.
-                completeQuotaExceededException(futures, quotaExceededExceptions,
-                    (int) (time.milliseconds() - now));
+                // the initial error back to the caller if the request timed out.
+                if (options.shouldRetryOnQuotaViolation() && throwable instanceof TimeoutException) {
+                    completeQuotaExceededException(futures, quotaExceededExceptions,
+                        (int) (time.milliseconds() - now));
+                }
                 // Fail all the other remaining futures
                 completeAllExceptionally(futures.values(), throwable);
             }
@@ -1674,9 +1676,11 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             void handleFailure(Throwable throwable) {
                 // If there were any topics retries due to a quota exceeded exception, we propagate
-                // the initial error back to the caller.
-                completeQuotaExceededException(futures, quotaExceededExceptions,
-                    (int) (time.milliseconds() - now));
+                // the initial error back to the caller if the request timed out.
+                if (options.shouldRetryOnQuotaViolation() && throwable instanceof TimeoutException) {
+                    completeQuotaExceededException(futures, quotaExceededExceptions,
+                        (int) (time.milliseconds() - now));
+                }
                 // Fail all the other remaining futures
                 completeAllExceptionally(futures.values(), throwable);
             }
@@ -2608,9 +2612,11 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             void handleFailure(Throwable throwable) {
                 // If there were any topics retries due to a quota exceeded exception, we propagate
-                // the initial error back to the caller.
-                completeQuotaExceededException(futures, quotaExceededExceptions,
-                    (int) (time.milliseconds() - now));
+                // the initial error back to the caller if the request timed out.
+                if (options.shouldRetryOnQuotaViolation() && throwable instanceof TimeoutException) {
+                    completeQuotaExceededException(futures, quotaExceededExceptions,
+                        (int) (time.milliseconds() - now));
+                }
                 // Fail all the other remaining futures
                 completeAllExceptionally(futures.values(), throwable);
             }
