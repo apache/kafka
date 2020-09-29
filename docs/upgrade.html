@@ -28,11 +28,10 @@
         Note that parameter <code>retry.backoff.ms</code> is not impacted by this change.
     </li>
     <li>Altering non-reconfigurable configs of existent listeners causes <code>InvalidRequestException</code>.
-        By contrast, the previous behavior would have caused the updated configuration to be persisted, but it wouldn't
-        take effect until the broker was restarted. The old behavior is not worth keeping since that behavior is unintended.
-        see <a href="https://github.com/apache/kafka/pull/9284">KAFKA-10479</a> for more discussion.
-        see <code>DynamicBrokerConfig.DynamicSecurityConfigs</code> and <code>SocketServer.ListenerReconfigurableConfigs</code>
-        for reconfigurable configs of existent listeners.
+        By contrast, the previous (unintended) behavior would have caused the updated configuration to be persisted, but it wouldn't
+        take effect until the broker was restarted. See <a href="https://github.com/apache/kafka/pull/9284">KAFKA-10479</a> for more discussion.
+        See <code>DynamicBrokerConfig.DynamicSecurityConfigs</code> and <code>SocketServer.ListenerReconfigurableConfigs</code>
+        for the supported reconfigurable configs of existent listeners.
     </li>
 </ul>
 
