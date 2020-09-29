@@ -30,9 +30,6 @@ import org.apache.kafka.common.requests.FetchMetadata.{FINAL_EPOCH, INITIAL_EPOC
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.utils.{ImplicitLinkedHashCollection, Time, Utils}
 
-import scala.math.Ordered.orderingToOrdered
-// import scala.collection.{mutable, _}
-
 object FetchSession {
   type REQ_MAP = util.Map[TopicPartition, FetchRequest.PartitionData]
   type RESP_MAP = util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
@@ -213,10 +210,6 @@ class FetchSession(val id: Int,
   def isEmpty: Boolean = synchronized {
     partitionMap.isEmpty
   }
-
-//  def lastUsedKey: LastUsedKey = synchronized {
-//    LastUsedKey(lastUsedMs, id)
-//  }
 
   def evictableKey: EvictableKey = synchronized {
     EvictableKey(privileged, cachedSize, id)
@@ -495,11 +488,6 @@ class IncrementalFetchContext(private val time: Time,
   }
 }
 
-//case class LastUsedKey(lastUsedMs: Long, id: Int) extends Comparable[LastUsedKey] {
-//  override def compareTo(other: LastUsedKey): Int =
-//    (lastUsedMs, id) compare (other.lastUsedMs, other.id)
-//}
-
 case class EvictableKey(privileged: Boolean, size: Int, id: Int) extends Comparable[EvictableKey] {
   override def compareTo(other: EvictableKey): Int = {
     // compareTo will be called often in maintaining the tree map.
@@ -534,15 +522,11 @@ class FetchSessionCache(private val maxEntries: Int,
                         private val evictionMs: Long) extends Logging with KafkaMetricsGroup {
   private var numPartitions: Long = 0
 
-  // A map of session ID to FetchSession.
-  // private val sessions = new mutable.HashMap[Int, FetchSession]
+  // A map of session ID to FetchSession ordered on session last use (oldest first)
   private val sessions = new util.LinkedHashMap[Int, FetchSession]
 
-  // Maps session ID to session, items ordered by time last used.
-  // private val lastUsed = new util.LinkedHashMap[Int, FetchSession]
-
   // A map containing sessions which can be evicted by both privileged and
-  // unprivileged sessions. (A map which contains all unprivileged sessions.)
+  // unprivileged sessions.
   private val evictableByAll = new util.TreeMap[EvictableKey, FetchSession]
 
   // A map containing sessions which can be evicted by privileged sessions.
@@ -659,13 +643,11 @@ class FetchSessionCache(private val maxEntries: Int,
     */
   def tryEvict(privileged: Boolean, key: EvictableKey, now: Long): Boolean = synchronized {
     // Try to evict an entry which is stale.
-    // val lastUsedEntry = lastUsed.firstEntry
     val lastUsedSession = sessions.get(sessions.keySet().iterator().next())
     if (lastUsedSession == null) {
       trace("There are no cache entries to evict.")
       false
     } else if (now - lastUsedSession.lastUsedMs > evictionMs) {
-      // val session = lastUsedEntry.getValue
       trace(s"Evicting stale FetchSession ${lastUsedSession.id}.")
       remove(lastUsedSession)
       evictionsMeter.mark()
@@ -712,16 +694,11 @@ class FetchSessionCache(private val maxEntries: Int,
     * @return         The removed session, or None if there was no such session.
     */
   def remove(session: FetchSession): Option[FetchSession] = synchronized {
-    // val evictableKey = session.synchronized {
-    // lastUsed.remove(session.id)
     val evictableKey = session.evictableKey
-    // }
     if (!session.privileged) {
       evictableByAll.remove(evictableKey)
     }
     evictableByPrivileged.remove(evictableKey)
-//    evictableByAll.remove(evictableKey)
-//    evictableByPrivileged.remove(evictableKey)
 
     val removeResult = Option(sessions.remove(session.id))
     if (removeResult.isDefined) {
@@ -738,8 +715,7 @@ class FetchSessionCache(private val maxEntries: Int,
     */
   def touch(session: FetchSession, now: Long): Unit = synchronized {
     session.synchronized {
-      // Update the lastUsed map.
-      // lastUsed.remove(session.lastUsedKey)
+      // Update session's position in linkedHashMap (ordered by time last used)
       sessions.remove(session.id)
       session.lastUsedMs = now
       sessions.put(session.id, session)
