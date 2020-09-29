@@ -104,6 +104,11 @@ public interface ReplicatedLog extends Closeable {
     void updateHighWatermark(LogOffsetMetadata offsetMetadata);
 
     /**
+     * Flush the current log to disk.
+     */
+    void flush();
+
+    /**
      * Return the topic partition associated with the log.
      */
     TopicPartition topicPartition();

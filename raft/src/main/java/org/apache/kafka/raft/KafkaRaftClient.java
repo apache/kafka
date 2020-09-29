@@ -300,6 +300,7 @@ public class KafkaRaftClient implements RaftClient {
             currentTimeMs, quorum.epoch(), leaderChangeMessage);
 
         appendAsLeader(state, records, currentTimeMs);
+        log.flush();
     }
 
     private boolean maybeTransitionToLeader(CandidateState state, long currentTimeMs) throws IOException {
@@ -985,6 +986,8 @@ public class KafkaRaftClient implements RaftClient {
                 Records records = (Records) partitionResponse.recordSet();
                 if (records.sizeInBytes() > 0) {
                     LogAppendInfo info = log.appendAsFollower(records);
+                    log.flush();
+
                     OffsetAndEpoch endOffset = endOffset();
                     kafkaRaftMetrics.updateFetchedRecords(info.lastOffset - info.firstOffset + 1);
                     kafkaRaftMetrics.updateLogEnd(endOffset);
@@ -1654,6 +1657,10 @@ public class KafkaRaftClient implements RaftClient {
             }
 
             numAppends++;
+        }
+
+        if (numAppends > 0) {
+            log.flush();
         }
     }
 
