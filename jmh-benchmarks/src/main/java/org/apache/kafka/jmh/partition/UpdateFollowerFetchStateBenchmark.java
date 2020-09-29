@@ -25,6 +25,7 @@ import kafka.log.CleanerConfig;
 import kafka.log.Defaults;
 import kafka.log.LogConfig;
 import kafka.log.LogManager;
+import kafka.server.AlterIsrManager;
 import kafka.server.BrokerState;
 import kafka.server.BrokerTopicStats;
 import kafka.server.LogDirFailureChannel;
@@ -115,10 +116,12 @@ public class UpdateFollowerFetchStateBenchmark {
             .setIsNew(true);
         PartitionStateStore partitionStateStore = Mockito.mock(PartitionStateStore.class);
         Mockito.when(partitionStateStore.fetchTopicConfig()).thenReturn(new Properties());
+
+        AlterIsrManager alterIsrManager = Mockito.mock(AlterIsrManager.class);
         partition = new Partition(topicPartition, 100,
                 ApiVersion$.MODULE$.latestVersion(), 0, Time.SYSTEM,
                 partitionStateStore, delayedOperations,
-                Mockito.mock(MetadataCache.class), logManager);
+                Mockito.mock(MetadataCache.class), logManager, alterIsrManager);
         partition.makeLeader(partitionState, offsetCheckpoints);
     }
 

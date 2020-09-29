@@ -24,6 +24,7 @@ import kafka.controller.ReplicaAssignment
 import kafka.log.LogConfig
 import kafka.server.{ConfigEntityName, ConfigType, DynamicConfig}
 import kafka.utils._
+import kafka.utils.Implicits._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
@@ -293,7 +294,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
                                         expectedReplicationFactor: Int,
                                         availableBrokerIds: Set[Int]): Unit = {
 
-    replicaAssignment.foreach { case (partitionId, replicas) =>
+    replicaAssignment.forKeyValue { (partitionId, replicas) =>
       if (replicas.isEmpty)
         throw new InvalidReplicaAssignmentException(
           s"Cannot have replication factor of 0 for partition id $partitionId.")

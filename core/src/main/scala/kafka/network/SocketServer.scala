@@ -19,6 +19,7 @@ package kafka.network
 
 import java.io.IOException
 import java.net._
+import java.nio.ByteBuffer
 import java.nio.channels._
 import java.nio.channels.{Selector => NSelector}
 import java.util
@@ -34,11 +35,13 @@ import kafka.network.SocketServer._
 import kafka.security.CredentialProvider
 import kafka.server.{BrokerReconfigurable, KafkaConfig}
 import kafka.utils._
+import kafka.utils.Implicits._
 import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.{Endpoint, KafkaException, MetricName, Reconfigurable}
 import org.apache.kafka.common.memory.{MemoryPool, SimpleMemoryPool}
 import org.apache.kafka.common.metrics._
-import org.apache.kafka.common.metrics.stats.{CumulativeSum, Meter, Rate}
+import org.apache.kafka.common.metrics.stats.{Avg, CumulativeSum, Meter, Rate}
 import org.apache.kafka.common.network.ClientInformation
 import org.apache.kafka.common.network.KafkaChannel.ChannelMuteEvent
 import org.apache.kafka.common.network.{ChannelBuilder, ChannelBuilders, KafkaChannel, ListenerName, ListenerReconfigurable, Selectable, Send, Selector => KSelector}
@@ -404,7 +407,7 @@ class SocketServer(val config: KafkaConfig,
   private def waitForAuthorizerFuture(acceptor: Acceptor,
                                       authorizerFutures: Map[Endpoint, CompletableFuture[Void]]): Unit = {
     //we can't rely on authorizerFutures.get() due to ephemeral ports. Get the future using listener name
-    authorizerFutures.foreach { case (endpoint, future) =>
+    authorizerFutures.forKeyValue { (endpoint, future) =>
       if (endpoint.listenerName == Optional.of(acceptor.endPoint.listenerName.value))
         future.join()
     }
@@ -938,12 +941,20 @@ private[kafka] class Processor(val id: Int,
     }
   }
 
+  protected def parseRequestHeader(buffer: ByteBuffer): RequestHeader = {
+    val header = RequestHeader.parse(buffer)
+    if (!header.apiKey.isEnabled) {
+      throw new InvalidRequestException("Received request for disabled api key " + header.apiKey)
+    }
+    header
+  }
+
   private def processCompletedReceives(): Unit = {
     selector.completedReceives.forEach { receive =>
       try {
         openOrClosingChannel(receive.source) match {
           case Some(channel) =>
-            val header = RequestHeader.parse(receive.payload)
+            val header = parseRequestHeader(receive.payload)
             if (header.apiKey == ApiKeys.SASL_HANDSHAKE && channel.maybeBeginServerReauthentication(receive,
               () => time.nanoseconds()))
               trace(s"Begin re-authentication: $channel")
@@ -1241,6 +1252,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
         maxConnectionsPerListener.put(listenerName, newListenerQuota)
         listenerCounts.put(listenerName, 0)
         config.addReconfigurable(newListenerQuota)
+        newListenerQuota.configure(config.valuesWithPrefixOverride(listenerName.configPrefix))
       }
       counts.notifyAll()
     }
@@ -1252,7 +1264,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
         listenerCounts.remove(listenerName)
         // once listener is removed from maxConnectionsPerListener, no metrics will be recorded into listener's sensor
         // so it is safe to remove sensor here
-        metrics.removeSensor(listenerQuota.connectionRateSensor.name)
+        listenerQuota.close()
         counts.notifyAll() // wake up any waiting acceptors to close cleanly
         config.removeReconfigurable(listenerQuota)
       }
@@ -1336,16 +1348,26 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
    * @return delay in milliseconds
    */
   private def recordConnectionAndGetThrottleTimeMs(listenerName: ListenerName, timeMs: Long): Long = {
-    val listenerThrottleTimeMs = maxConnectionsPerListener
+    def recordAndGetListenerThrottleTime(minThrottleTimeMs: Int): Int = {
+      maxConnectionsPerListener
       .get(listenerName)
-      .map(listenerQuota => recordAndGetThrottleTimeMs(listenerQuota.connectionRateSensor, timeMs))
+      .map { listenerQuota =>
+        val listenerThrottleTimeMs = recordAndGetThrottleTimeMs(listenerQuota.connectionRateSensor, timeMs)
+        val throttleTimeMs = math.max(minThrottleTimeMs, listenerThrottleTimeMs)
+        // record throttle time due to hitting connection rate quota
+        if (throttleTimeMs > 0) {
+          listenerQuota.connectionRateThrottleSensor.record(throttleTimeMs.toDouble, timeMs)
+        }
+        throttleTimeMs
+      }
       .getOrElse(0)
+    }
 
     if (protectedListener(listenerName)) {
-      listenerThrottleTimeMs
+      recordAndGetListenerThrottleTime(0)
     } else {
       val brokerThrottleTimeMs = recordAndGetThrottleTimeMs(brokerConnectionRateSensor, timeMs)
-      math.max(brokerThrottleTimeMs, listenerThrottleTimeMs)
+      recordAndGetListenerThrottleTime(brokerThrottleTimeMs)
     }
   }
 
@@ -1396,7 +1418,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
     val namePrefix = listenerOpt.map(_ => "").getOrElse("broker-")
     metrics.metricName(
       s"${namePrefix}connection-accept-rate",
-      "socket-server-metrics",
+      MetricsGroup,
       s"Tracking rate of accepting new connections (per second)",
       tags.asJava)
   }
@@ -1410,11 +1432,13 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
 
   def close(): Unit = {
     metrics.removeSensor("ConnectionAcceptRate")
+    maxConnectionsPerListener.values.foreach(_.close())
   }
 
-  class ListenerConnectionQuota(lock: Object, listener: ListenerName) extends ListenerReconfigurable {
+  class ListenerConnectionQuota(lock: Object, listener: ListenerName) extends ListenerReconfigurable with AutoCloseable {
     @volatile private var _maxConnections = Int.MaxValue
-    val connectionRateSensor = createConnectionRateQuotaSensor(Int.MaxValue, Some(listener.value))
+    private[network] val connectionRateSensor = createConnectionRateQuotaSensor(Int.MaxValue, Some(listener.value))
+    private[network] val connectionRateThrottleSensor = createConnectionRateThrottleSensor()
 
     def maxConnections: Int = _maxConnections
 
@@ -1447,12 +1471,32 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
       }
     }
 
+    def close(): Unit = {
+      metrics.removeSensor(connectionRateSensor.name)
+      metrics.removeSensor(connectionRateThrottleSensor.name)
+    }
+
     private def maxConnections(configs: util.Map[String, _]): Int = {
       Option(configs.get(KafkaConfig.MaxConnectionsProp)).map(_.toString.toInt).getOrElse(Int.MaxValue)
     }
 
     private def maxConnectionCreationRate(configs: util.Map[String, _]): Int = {
       Option(configs.get(KafkaConfig.MaxConnectionCreationRateProp)).map(_.toString.toInt).getOrElse(Int.MaxValue)
+    }
+
+    /**
+     * Creates sensor for tracking the average throttle time on this listener due to hitting connection rate quota.
+     * The average is out of all throttle times > 0, which is consistent with the bandwidth and request quota throttle
+     * time metrics.
+     */
+    private def createConnectionRateThrottleSensor(): Sensor = {
+      val sensor = metrics.sensor(s"ConnectionRateThrottleTime-${listener.value}")
+      val metricName = metrics.metricName("connection-accept-throttle-time",
+        MetricsGroup,
+        "Tracking average throttle-time, out of non-zero throttle times, per listener",
+        Map(ListenerMetricTag -> listener.value).asJava)
+      sensor.add(metricName, new Avg)
+      sensor
     }
   }
 }

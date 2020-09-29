@@ -1127,6 +1127,10 @@ public final class Utils {
         }
     }
 
+    public static <T> List<T> toList(Iterable<T> iterable) {
+        return toList(iterable.iterator());
+    }
+
     public static <T> List<T> toList(Iterator<T> iterator) {
         List<T> res = new ArrayList<>();
         while (iterator.hasNext())

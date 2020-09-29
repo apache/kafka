@@ -26,6 +26,7 @@ import kafka.log.{LogConfig, LogManager}
 import kafka.security.CredentialProvider
 import kafka.server.Constants._
 import kafka.server.QuotaFactory.QuotaManagers
+import kafka.utils.Implicits._
 import kafka.utils.Logging
 import org.apache.kafka.common.config.ConfigDef.Validator
 import org.apache.kafka.common.config.ConfigException
@@ -58,7 +59,7 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
     if (logs.nonEmpty) {
       /* combine the default properties with the overrides in zk to create the new LogConfig */
       val props = new Properties()
-      topicConfig.asScala.foreach { case (key, value) =>
+      topicConfig.asScala.forKeyValue { (key, value) =>
         if (!configNamesToExclude.contains(key)) props.put(key, value)
       }
       val logConfig = LogConfig.fromProps(logManager.currentDefaultConfig.originals, props)

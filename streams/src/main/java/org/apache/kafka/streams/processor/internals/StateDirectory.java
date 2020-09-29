@@ -280,9 +280,8 @@ public class StateDirectory {
     public synchronized void clean() {
         // remove task dirs
         try {
-            cleanRemovedTasks(0, true);
+            cleanRemovedTasksCalledByUser();
         } catch (final Exception e) {
-            // this is already logged within cleanRemovedTasks
             throw new StreamsException(e);
         }
         // remove global dir
@@ -290,10 +289,13 @@ public class StateDirectory {
             if (stateDir.exists()) {
                 Utils.delete(globalStateDir().getAbsoluteFile());
             }
-        } catch (final IOException e) {
-            log.error("{} Failed to delete global state directory of {} due to an unexpected exception",
-                appId, logPrefix(), e);
-            throw new StreamsException(e);
+        } catch (final IOException exception) {
+            log.error(
+                String.format("%s Failed to delete global state directory of %s due to an unexpected exception",
+                    logPrefix(), appId),
+                exception
+            );
+            throw new StreamsException(exception);
         }
     }
 
@@ -306,24 +308,17 @@ public class StateDirectory {
      */
     public synchronized void cleanRemovedTasks(final long cleanupDelayMs) {
         try {
-            cleanRemovedTasks(cleanupDelayMs, false);
+            cleanRemovedTasksCalledByCleanerThread(cleanupDelayMs);
         } catch (final Exception cannotHappen) {
             throw new IllegalStateException("Should have swallowed exception.", cannotHappen);
         }
     }
 
-    private synchronized void cleanRemovedTasks(final long cleanupDelayMs,
-                                                final boolean manualUserCall) throws Exception {
-        final File[] taskDirs = listAllTaskDirectories();
-        if (taskDirs == null || taskDirs.length == 0) {
-            return; // nothing to do
-        }
-
-        for (final File taskDir : taskDirs) {
+    private void cleanRemovedTasksCalledByCleanerThread(final long cleanupDelayMs) {
+        for (final File taskDir : listAllTaskDirectories()) {
             final String dirName = taskDir.getName();
             final TaskId id = TaskId.parse(dirName);
             if (!locks.containsKey(id)) {
-                Exception exception = null;
                 try {
                     if (lock(id)) {
                         final long now = time.milliseconds();
@@ -331,34 +326,65 @@ public class StateDirectory {
                         if (now > lastModifiedMs + cleanupDelayMs) {
                             log.info("{} Deleting obsolete state directory {} for task {} as {}ms has elapsed (cleanup delay is {}ms).",
                                 logPrefix(), dirName, id, now - lastModifiedMs, cleanupDelayMs);
-
-                            Utils.delete(taskDir, Collections.singletonList(new File(taskDir, LOCK_FILE_NAME)));
-                        } else if (manualUserCall) {
-                            log.info("{} Deleting state directory {} for task {} as user calling cleanup.",
-                                logPrefix(), dirName, id);
-
                             Utils.delete(taskDir, Collections.singletonList(new File(taskDir, LOCK_FILE_NAME)));
                         }
                     }
-                } catch (final OverlappingFileLockException | IOException e) {
-                    exception = e;
+                } catch (final OverlappingFileLockException | IOException exception) {
+                    log.warn(
+                        String.format("%s Swallowed the following exception during deletion of obsolete state directory %s for task %s:",
+                            logPrefix(), dirName, id),
+                        exception
+                    );
                 } finally {
                     try {
                         unlock(id);
-
-                        // for manual user call, stream threads are not running so it is safe to delete
-                        // the whole directory
-                        if (manualUserCall) {
-                            Utils.delete(taskDir);
-                        }
-                    } catch (final IOException e) {
-                        exception = e;
+                    } catch (final IOException exception) {
+                        log.warn(
+                            String.format("%s Swallowed the following exception during unlocking after deletion of obsolete " +
+                                "state directory %s for task %s:", logPrefix(), dirName, id),
+                            exception
+                        );
                     }
                 }
+            }
+        }
+    }
 
-                if (exception != null && manualUserCall) {
-                    log.error("{} Failed to release the state directory lock.", logPrefix());
+    private void cleanRemovedTasksCalledByUser() throws Exception {
+        for (final File taskDir : listAllTaskDirectories()) {
+            final String dirName = taskDir.getName();
+            final TaskId id = TaskId.parse(dirName);
+            if (!locks.containsKey(id)) {
+                try {
+                    if (lock(id)) {
+                        log.info("{} Deleting state directory {} for task {} as user calling cleanup.",
+                            logPrefix(), dirName, id);
+                        Utils.delete(taskDir, Collections.singletonList(new File(taskDir, LOCK_FILE_NAME)));
+                    } else {
+                        log.warn("{} Could not get lock for state directory {} for task {} as user calling cleanup.",
+                            logPrefix(), dirName, id);
+                    }
+                } catch (final OverlappingFileLockException | IOException exception) {
+                    log.error(
+                        String.format("%s Failed to delete state directory %s for task %s with exception:",
+                            logPrefix(), dirName, id),
+                        exception
+                    );
                     throw exception;
+                } finally {
+                    try {
+                        unlock(id);
+                        // for manual user call, stream threads are not running so it is safe to delete
+                        // the whole directory
+                        Utils.delete(taskDir);
+                    } catch (final IOException exception) {
+                        log.error(
+                            String.format("%s Failed to release lock on state directory %s for task %s with exception:",
+                                logPrefix(), dirName, id),
+                            exception
+                        );
+                        throw exception;
+                    }
                 }
             }
         }

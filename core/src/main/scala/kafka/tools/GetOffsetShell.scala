@@ -133,7 +133,7 @@ object GetOffsetShell {
         }
     }
 
-    partitionOffsets.toSeq.sortBy { case (tp, _) => tp.partition }.foreach { case (tp, offset) =>
+    partitionOffsets.toArray.sortBy { case (tp, _) => tp.partition }.foreach { case (tp, offset) =>
       println(s"$topic:${tp.partition}:${Option(offset).getOrElse("")}")
     }
 
