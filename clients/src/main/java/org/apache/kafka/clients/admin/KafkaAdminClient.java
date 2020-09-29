@@ -145,6 +145,7 @@ import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteReque
 import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteRequestTopic;
 import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection;
 import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
+import org.apache.kafka.common.message.UpdateFeaturesRequestData;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData.UpdatableFeatureResult;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
@@ -208,7 +209,6 @@ import org.apache.kafka.common.requests.ElectLeadersRequest;
 import org.apache.kafka.common.requests.ElectLeadersResponse;
 import org.apache.kafka.common.requests.ExpireDelegationTokenRequest;
 import org.apache.kafka.common.requests.ExpireDelegationTokenResponse;
-import org.apache.kafka.common.requests.FeatureUpdate;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
@@ -4402,8 +4402,8 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public UpdateFeaturesResult updateFeatures(
-        final Map<String, FeatureUpdate> featureUpdates, final UpdateFeaturesOptions options) {
+    public UpdateFeaturesResult updateFeatures(final Map<String, FeatureUpdate> featureUpdates,
+                                               final UpdateFeaturesOptions options) {
         if (featureUpdates.isEmpty()) {
             throw new IllegalArgumentException("Feature updates can not be null or empty.");
         }
@@ -4418,7 +4418,26 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             UpdateFeaturesRequest.Builder createRequest(int timeoutMs) {
-                return new UpdateFeaturesRequest.Builder(UpdateFeaturesRequest.create(featureUpdates, timeoutMs));
+                final UpdateFeaturesRequestData.FeatureUpdateKeyCollection featureUpdatesRequestData
+                    = new UpdateFeaturesRequestData.FeatureUpdateKeyCollection();
+                for (Map.Entry<String, FeatureUpdate> entry : featureUpdates.entrySet()) {
+                    final String feature = entry.getKey();
+                    final FeatureUpdate update = entry.getValue();
+                    if (feature.trim().isEmpty()) {
+                        throw new IllegalArgumentException("Provided feature can not be null or empty.");
+                    }
+
+                    final UpdateFeaturesRequestData.FeatureUpdateKey requestItem =
+                        new UpdateFeaturesRequestData.FeatureUpdateKey();
+                    requestItem.setFeature(feature);
+                    requestItem.setMaxVersionLevel(update.maxVersionLevel());
+                    requestItem.setAllowDowngrade(update.allowDowngrade());
+                    featureUpdatesRequestData.add(requestItem);
+                }
+                return new UpdateFeaturesRequest.Builder(
+                    new UpdateFeaturesRequestData()
+                        .setTimeoutMs(timeoutMs)
+                        .setFeatureUpdates(featureUpdatesRequestData));
             }
 
             @Override

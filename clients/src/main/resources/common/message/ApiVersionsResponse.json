@@ -55,7 +55,7 @@
           "about": "The maximum supported version for the feature." }
       ]
     },
-    {"name": "FinalizedFeaturesEpoch", "type": "int64", "versions": "3+",
+    { "name": "FinalizedFeaturesEpoch", "type": "int64", "versions": "3+",
       "tag": 1, "taggedVersions": "3+", "default": "-1", "ignorable": true,
       "about": "The monotonically increasing epoch for the finalized features information. Valid values are >= 0. A value of -1 is special and represents unknown epoch."},
     { "name":  "FinalizedFeatures", "type": "[]FinalizedFeatureKey",

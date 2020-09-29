@@ -234,7 +234,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
         /* initialize features */
         _featureChangeListener = new FinalizedFeatureChangeListener(featureCache, _zkClient)
-        if (config.isFeatureVersioningEnabled) {
+        if (config.isFeatureVersioningSupported) {
           _featureChangeListener.initOrThrow(config.zkConnectionTimeoutMs)
         }
 

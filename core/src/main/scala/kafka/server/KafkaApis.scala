@@ -114,7 +114,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 time: Time,
                 val tokenManager: DelegationTokenManager,
                 val brokerFeatures: BrokerFeatures,
-                val featureCache: FinalizedFeatureCache) extends ApiRequestHandler with Logging {
+                val finalizedFeatureCache: FinalizedFeatureCache) extends ApiRequestHandler with Logging {
 
   type FetchResponseStats = Map[TopicPartition, RecordConversionStats]
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
@@ -1735,19 +1735,18 @@ class KafkaApis(val requestChannel: RequestChannel,
         apiVersionRequest.getErrorResponse(requestThrottleMs, Errors.INVALID_REQUEST.exception)
       else {
         val supportedFeatures = brokerFeatures.supportedFeatures
-        val finalizedFeatures = featureCache.get
-        if (finalizedFeatures.isEmpty) {
-          ApiVersionsResponse.apiVersionsResponse(
-            requestThrottleMs,
-            config.interBrokerProtocolVersion.recordVersion.value,
-            supportedFeatures)
-        } else {
-          ApiVersionsResponse.apiVersionsResponse(
+        val finalizedFeaturesOpt = finalizedFeatureCache.get
+        finalizedFeaturesOpt match {
+          case Some(finalizedFeatures) => ApiVersionsResponse.apiVersionsResponse(
             requestThrottleMs,
             config.interBrokerProtocolVersion.recordVersion.value,
             supportedFeatures,
-            finalizedFeatures.get.features,
-            finalizedFeatures.get.epoch)
+            finalizedFeatures.features,
+            finalizedFeatures.epoch)
+          case None => ApiVersionsResponse.apiVersionsResponse(
+            requestThrottleMs,
+            config.interBrokerProtocolVersion.recordVersion.value,
+            supportedFeatures)
         }
       }
     }
@@ -3116,17 +3115,16 @@ class KafkaApis(val requestChannel: RequestChannel,
     def sendResponseCallback(errors: Either[ApiError, Map[String, ApiError]]): Unit = {
       def createResponse(throttleTimeMs: Int): UpdateFeaturesResponse = {
         errors match {
-          case Left(topLevelError) => {
-            val featureUpdateNoErrors = updateFeaturesRequest
-              .data().featureUpdates().asScala
-              .map(update => update.feature() -> ApiError.NONE)
-              .toMap.asJava
-            UpdateFeaturesResponse.createWithErrors(topLevelError, featureUpdateNoErrors, throttleTimeMs)
-          }
-          case Right(featureUpdateErrors) => UpdateFeaturesResponse.createWithErrors(
-            ApiError.NONE,
-            featureUpdateErrors.asJava,
-            throttleTimeMs)
+          case Left(topLevelError) =>
+            UpdateFeaturesResponse.createWithErrors(
+              topLevelError,
+              new util.HashMap[String, ApiError](),
+              throttleTimeMs)
+          case Right(featureUpdateErrors) =>
+            UpdateFeaturesResponse.createWithErrors(
+              ApiError.NONE,
+              featureUpdateErrors.asJava,
+              throttleTimeMs)
         }
       }
       sendResponseMaybeThrottle(request, requestThrottleMs => createResponse(requestThrottleMs))
@@ -3134,7 +3132,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     if (!authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME)) {
       sendResponseCallback(Left(new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED)))
-    } else if (!config.isFeatureVersioningEnabled) {
+    } else if (!config.isFeatureVersioningSupported) {
       sendResponseCallback(Left(new ApiError(Errors.INVALID_REQUEST, "Feature versioning system is disabled.")))
     } else {
       controller.updateFeatures(updateFeaturesRequest, sendResponseCallback)

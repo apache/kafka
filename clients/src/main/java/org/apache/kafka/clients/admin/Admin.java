@@ -40,7 +40,6 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.FeatureUpdateFailedException;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
-import org.apache.kafka.common.requests.FeatureUpdate;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
 
 /**

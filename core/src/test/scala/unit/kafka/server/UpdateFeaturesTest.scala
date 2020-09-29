@@ -24,17 +24,17 @@ import kafka.api.KAFKA_2_7_IV0
 import kafka.utils.TestUtils
 import kafka.zk.{FeatureZNode, FeatureZNodeStatus, ZkVersion}
 import kafka.utils.TestUtils.waitUntilTrue
-import org.apache.kafka.clients.admin.{Admin, DescribeFeaturesOptions, FeatureMetadata, UpdateFeaturesOptions, UpdateFeaturesResult}
+import org.apache.kafka.clients.admin.{Admin, DescribeFeaturesOptions, FeatureMetadata, FeatureUpdate, UpdateFeaturesOptions, UpdateFeaturesResult}
 import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.feature.FinalizedVersionRange
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
 import org.apache.kafka.common.message.UpdateFeaturesRequestData
 import org.apache.kafka.common.message.UpdateFeaturesRequestData.FeatureUpdateKeyCollection
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{FeatureUpdate, UpdateFeaturesRequest, UpdateFeaturesResponse}
+import org.apache.kafka.common.requests.{UpdateFeaturesRequest, UpdateFeaturesResponse}
 import org.apache.kafka.common.utils.Utils
 import org.junit.Test
-import org.junit.Assert.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertNull, assertTrue}
+import org.junit.Assert.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertTrue}
 import org.scalatest.Assertions.intercept
 
 import scala.jdk.CollectionConverters._
@@ -107,14 +107,12 @@ class UpdateFeaturesTest extends BaseRequestTest {
     new FeatureMetadata(
       finalized.features().asScala.map {
         case(name, versionRange) =>
-          (name, new org.apache.kafka.clients.admin.FinalizedVersionRange(versionRange.min(),
-                                                                          versionRange.max()))
+          (name, new org.apache.kafka.clients.admin.FinalizedVersionRange(versionRange.min(), versionRange.max()))
       }.asJava,
       Optional.of(epoch),
       supported.features().asScala.map {
         case(name, versionRange) =>
-          (name, new org.apache.kafka.clients.admin.SupportedVersionRange(versionRange.min(),
-                                                                          versionRange.max()))
+          (name, new org.apache.kafka.clients.admin.SupportedVersionRange(versionRange.min(), versionRange.max()))
       }.asJava)
   }
 
@@ -193,12 +191,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
 
     assertEquals(Errors.NOT_CONTROLLER, Errors.forCode(response.data.errorCode()))
     assertNotNull(response.data.errorMessage())
-
-    assertEquals(1, response.data.results.size)
-    val result = response.data.results.asScala.head
-    assertEquals("feature_1", result.feature)
-    assertEquals(Errors.NONE, Errors.forCode(result.errorCode))
-    assertNull(result.errorMessage)
+    assertEquals(0, response.data.results.size)
     checkFeatures(
       createAdminClient(),
       nodeBefore,

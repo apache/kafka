@@ -43,7 +43,7 @@ import java.util.Map;
  */
 public class ApiVersionsResponse extends AbstractResponse {
 
-    public static final long UNKNOWN_FINALIZED_FEATURES_EPOCH = -1;
+    public static final long UNKNOWN_FINALIZED_FEATURES_EPOCH = -1L;
 
     public static final ApiVersionsResponse DEFAULT_API_VERSIONS_RESPONSE =
         createApiVersionsResponse(

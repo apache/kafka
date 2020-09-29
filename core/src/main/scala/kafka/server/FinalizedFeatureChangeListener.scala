@@ -32,9 +32,11 @@ import scala.concurrent.TimeoutException
  * to the latest features read from ZK. The cache updates are serialized through a single
  * notification processor thread.
  *
- * @param zkClient     the Zookeeper client
+ * @param finalizedFeatureCache   the finalized feature cache
+ * @param zkClient                the Zookeeper client
  */
-class FinalizedFeatureChangeListener(private val featureCache: FinalizedFeatureCache, private val zkClient: KafkaZkClient) extends Logging {
+class FinalizedFeatureChangeListener(private val finalizedFeatureCache: FinalizedFeatureCache,
+                                     private val zkClient: KafkaZkClient) extends Logging {
 
   /**
    * Helper class used to update the FinalizedFeatureCache.
@@ -85,7 +87,7 @@ class FinalizedFeatureChangeListener(private val featureCache: FinalizedFeatureC
       //                                           a case.
       if (version == ZkVersion.UnknownVersion) {
         info(s"Feature ZK node at path: $featureZkNodePath does not exist")
-        featureCache.clear()
+        finalizedFeatureCache.clear()
       } else {
         var maybeFeatureZNode: Option[FeatureZNode] = Option.empty
         try {
@@ -93,17 +95,17 @@ class FinalizedFeatureChangeListener(private val featureCache: FinalizedFeatureC
         } catch {
           case e: IllegalArgumentException => {
             error(s"Unable to deserialize feature ZK node at path: $featureZkNodePath", e)
-            featureCache.clear()
+            finalizedFeatureCache.clear()
           }
         }
         maybeFeatureZNode.foreach(featureZNode => {
           featureZNode.status match {
             case FeatureZNodeStatus.Disabled => {
               info(s"Feature ZK node at path: $featureZkNodePath is in disabled status.")
-              featureCache.clear()
+              finalizedFeatureCache.clear()
             }
             case FeatureZNodeStatus.Enabled => {
-              featureCache.updateOrThrow(featureZNode.features, version)
+              finalizedFeatureCache.updateOrThrow(featureZNode.features, version)
             }
             case _ => throw new IllegalStateException(s"Unexpected FeatureZNodeStatus found in $featureZNode")
           }
