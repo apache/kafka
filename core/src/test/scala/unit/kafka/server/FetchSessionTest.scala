@@ -64,24 +64,97 @@ class FetchSessionTest {
   def testSessionCache(): Unit = {
     val cache = new FetchSessionCache(3, 100)
     assertEquals(0, cache.size)
+
+    // tests larger unpriv session can't evict smaller unpriv session if it hasn't been in the cache for evictionMs yet
     val id1 = cache.maybeCreateSession(0, false, 10, () => dummyCreate(10))
     val id2 = cache.maybeCreateSession(10, false, 20, () => dummyCreate(20))
     val id3 = cache.maybeCreateSession(20, false, 30, () => dummyCreate(30))
-    // tests that unpriv session A can't evict unpriv session B if B hasn't been alive for evictionMs yet
     assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(30, false, 40, () => dummyCreate(40)))
     assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(40, false, 5, () => dummyCreate(5)))
     assertCacheContains(cache, id1, id2, id3)
+
+    // tests larger unpriv session can evict smaller unpriv session if it is stale
     cache.touch(cache.get(id1).get, 200)
     val id4 = cache.maybeCreateSession(210, false, 11, () => dummyCreate(11))
     assertCacheContains(cache, id1, id3, id4)
+
+    // tests larger unpriv session evicts smallest unpriv session if it has been in the cache for at least evictionMs
     cache.touch(cache.get(id1).get, 400)
     cache.touch(cache.get(id3).get, 390)
     cache.touch(cache.get(id4).get, 400)
     val id5 = cache.maybeCreateSession(410, false, 50, () => dummyCreate(50))
     assertCacheContains(cache, id3, id4, id5)
+
+    // tests smaller unpriv session can't evict larger unpriv sessions if they are not stale
     assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(410, false, 5, () => dummyCreate(5)))
+
+    // tests smaller priv session can evict larger unpriv sessions even if they are not stale
     val id6 = cache.maybeCreateSession(410, true, 5, () => dummyCreate(5))
     assertCacheContains(cache, id3, id5, id6)
+  }
+
+  @Test
+  def testSessionCacheEvictionRules(): Unit = {
+    val cache = new FetchSessionCache(3, 100)
+
+    // tests larger unpriv session can evict smaller unpriv session if smaller session was touched > evictionMs after its creation
+    // and evicts based off of smallest size
+    val id1 = cache.maybeCreateSession(0, false, 20, () => dummyCreate(20))
+    val id2 = cache.maybeCreateSession(0, false, 10, () => dummyCreate(10))
+    val id3 = cache.maybeCreateSession(0, false, 30, () => dummyCreate(30))
+    cache.touch(cache.get(id1).get, 101)
+    cache.touch(cache.get(id2).get, 101)
+    cache.touch(cache.get(id3).get, 101)
+    val id4 = cache.maybeCreateSession(102, false, 31, () => dummyCreate(31))
+    assertCacheContains(cache, id1, id3, id4)
+
+    // tests smaller unpriv session can evict larger unpriv session if it is stale
+    // and does so based on LRU, not smallest size
+    cache.touch(cache.get(id1).get, 102)
+    cache.touch(cache.get(id3).get, 102)
+    val id5 = cache.maybeCreateSession(203, false, 9, () => dummyCreate(9))
+    assertCacheContains(cache, id1, id3, id5)
+
+    // replacing all sessions in cache with privileged sessions for next set of tests
+    // also tests that priv session looks at evicting stale unpriv sessions first (smallest to largest)
+    val id6 = cache.maybeCreateSession(204, true, 10, () => dummyCreate(10))
+    assertCacheContains(cache, id3, id5, id6)
+    val id7 = cache.maybeCreateSession(204, true, 20, () => dummyCreate(20))
+    assertCacheContains(cache, id5, id6, id7)
+    // ... before evicting unstale unpriv sessions (smallest to largest)
+    val id8 = cache.maybeCreateSession(204, true, 30, () => dummyCreate(30))
+    assertCacheContains(cache, id6, id7, id8)
+
+    // tests larger unpriv session can't evict smaller priv session even if it has been in cache for at least evictionMs (not stale)
+    assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(40, false, 40, () => dummyCreate(40)))
+
+    // tests smaller unpriv session can evict larger priv session if it is stale
+    // and does so based on LRU, not smallest size
+    cache.touch(cache.get(id6).get, 205)
+    cache.touch(cache.get(id8).get, 305)
+    val id9 = cache.maybeCreateSession(305, false, 5, () => dummyCreate(5))
+    assertCacheContains(cache, id6, id8, id9)
+
+    cache.touch(cache.get(id6).get, 305)
+    val id10 = cache.maybeCreateSession(305, true, 5, () => dummyCreate(5))
+    assertCacheContains(cache, id6, id8, id10)
+
+    // tests larger priv session can't evict smaller priv session if it hasn't been in the cache for evictionMs yet
+    assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(306, true, 6, () => dummyCreate(6)))
+
+    // tests larger priv session can evict smaller priv session if smaller session was touched > evictionMs after its creation
+    // and evicts based off of smallest size
+    cache.touch(cache.get(id6).get, 406)
+    cache.touch(cache.get(id8).get, 406)
+    cache.touch(cache.get(id10).get, 406)
+    val id11 = cache.maybeCreateSession(407, true, 40, () => dummyCreate(40))
+    assertCacheContains(cache, id6, id8, id11)
+
+    // tests larger priv session can evict smaller priv session if it is stale
+    // and based on LRU, not smallest size
+    cache.touch(cache.get(id6).get, 407)
+    val id12 = cache.maybeCreateSession(508, true, 50, () => dummyCreate(50))
+    assertCacheContains(cache, id6, id11, id12)
   }
 
   @Test

@@ -753,9 +753,13 @@ class FetchSessionCache(private val maxEntries: Int,
       }
       session.cachedSize = session.size
       val newEvictableKey = session.evictableKey
+      // second check prevents a privileged session from being evicted by a larger privileged session
+      // if it hasn't been in the cache for at least evictionMs
       if ((!session.privileged) || (now - session.creationMs > evictionMs)) {
         evictableByPrivileged.put(newEvictableKey, session)
       }
+      // prevents unprivileged session from being evicted by a larger unprivileged session
+      // if it hasn't been in the cache for at least evictionMs
       if ((!session.privileged) && (now - session.creationMs > evictionMs)) {
         evictableByAll.put(newEvictableKey, session)
       }
