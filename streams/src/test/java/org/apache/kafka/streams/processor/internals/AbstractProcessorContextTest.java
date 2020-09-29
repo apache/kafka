@@ -45,6 +45,8 @@ import static org.apache.kafka.test.StreamsTestUtils.getStreamsConfig;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.emptyIterable;
+import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.fail;
 
 public class AbstractProcessorContextTest {
@@ -82,14 +84,9 @@ public class AbstractProcessorContextTest {
     }
 
     @Test
-    public void shouldThrowIllegalStateExceptionOnTopicIfNoRecordContext() {
+    public void shouldReturnNullTopicIfNoRecordContext() {
         context.setRecordContext(null);
-        try {
-            context.topic();
-            fail("should throw illegal state exception when record context is null");
-        } catch (final IllegalStateException e) {
-            // pass
-        }
+        assertThat(context.topic(), is(nullValue()));
     }
 
     @Test
@@ -105,19 +102,14 @@ public class AbstractProcessorContextTest {
 
     @Test
     public void shouldReturnNullIfTopicEqualsNonExistTopic() {
-        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, AbstractProcessorContext.NONEXIST_TOPIC, null));
+        context.setRecordContext(null);
         assertThat(context.topic(), nullValue());
     }
 
     @Test
-    public void shouldThrowIllegalStateExceptionOnPartitionIfNoRecordContext() {
+    public void shouldReturnDummyPartitionIfNoRecordContext() {
         context.setRecordContext(null);
-        try {
-            context.partition();
-            fail("should throw illegal state exception when record context is null");
-        } catch (final IllegalStateException e) {
-            // pass
-        }
+        assertThat(context.partition(), is(-1));
     }
 
     @Test
@@ -141,14 +133,9 @@ public class AbstractProcessorContextTest {
     }
 
     @Test
-    public void shouldThrowIllegalStateExceptionOnTimestampIfNoRecordContext() {
+    public void shouldReturnDummyTimestampIfNoRecordContext() {
         context.setRecordContext(null);
-        try {
-            context.timestamp();
-            fail("should throw illegal state exception when record context is null");
-        } catch (final IllegalStateException e) {
-            // pass
-        }
+        assertThat(context.timestamp(), is(0L));
     }
 
     @Test
@@ -162,9 +149,9 @@ public class AbstractProcessorContextTest {
     }
 
     @Test
-    public void shouldReturnNullIfHeadersAreNotSet() {
-        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, AbstractProcessorContext.NONEXIST_TOPIC, null));
-        assertThat(context.headers(), nullValue());
+    public void shouldReturnEmptyHeadersIfHeadersAreNotSet() {
+        context.setRecordContext(null);
+        assertThat(context.headers(), is(emptyIterable()));
     }
 
     @Test

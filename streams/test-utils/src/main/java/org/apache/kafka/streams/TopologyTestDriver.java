@@ -444,13 +444,7 @@ public class TopologyTestDriver implements Closeable {
                 new LogAndContinueExceptionHandler()
             );
             globalStateTask.initialize();
-            globalProcessorContext.setRecordContext(new ProcessorRecordContext(
-                0L,
-                -1L,
-                -1,
-                ProcessorContextImpl.NONEXIST_TOPIC,
-                new RecordHeaders())
-            );
+            globalProcessorContext.setRecordContext(null);
         } else {
             globalStateManager = null;
             globalStateTask = null;
@@ -510,13 +504,7 @@ public class TopologyTestDriver implements Closeable {
             );
             task.initializeIfNeeded();
             task.completeRestoration();
-            task.processorContext().setRecordContext(new ProcessorRecordContext(
-                0L,
-                -1L,
-                -1,
-                ProcessorContextImpl.NONEXIST_TOPIC,
-                new RecordHeaders())
-            );
+            task.processorContext().setRecordContext(null);
         } else {
             task = null;
         }

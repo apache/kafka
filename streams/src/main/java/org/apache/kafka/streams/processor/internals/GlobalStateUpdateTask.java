@@ -114,7 +114,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
             );
             ((SourceNode<Object, Object, Object, Object>) sourceNodeAndDeserializer.sourceNode()).process(
                 toProcess,
-                Optional.ofNullable(processorContext.recordContext())
+                Optional.of(recordContext)
             );
         }
 

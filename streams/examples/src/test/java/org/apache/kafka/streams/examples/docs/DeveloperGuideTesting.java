@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.examples.docs;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
@@ -28,7 +29,6 @@ import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
-import org.apache.kafka.streams.processor.api.StreamsHeaders;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
@@ -181,7 +181,7 @@ public class DeveloperGuideTesting {
             final KeyValueIterator<String, Long> it = store.all();
             while (it.hasNext()) {
                 final KeyValue<String, Long> next = it.next();
-                context.forward(new Record<>(next.key, next.value, 0L, StreamsHeaders.emptyHeaders()));
+                context.forward(new Record<>(next.key, next.value, 0L, new RecordHeaders()));
             }
         }
     }

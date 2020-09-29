@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.To;
-import org.apache.kafka.streams.processor.api.StreamsHeaders;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
@@ -104,7 +104,7 @@ public class GlobalProcessorContextImplTest {
         expectLastCall();
 
         expect(recordContext.timestamp()).andStubReturn(0L);
-        expect(recordContext.headers()).andStubReturn(StreamsHeaders.emptyHeaders());
+        expect(recordContext.headers()).andStubReturn(new RecordHeaders());
         replay(child, recordContext);
         globalContext.forward((Object /*forcing a call to the K/V forward*/) null, null);
         verify(child, recordContext);

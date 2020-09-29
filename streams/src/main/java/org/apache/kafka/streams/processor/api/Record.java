@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.api;
 
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 
 public class Record<K, V> {
     private final K key;
@@ -28,14 +29,14 @@ public class Record<K, V> {
         this.key = key;
         this.value = value;
         this.timestamp = timestamp;
-        this.headers = StreamsHeaders.fromHeaders(headers);
+        this.headers = new RecordHeaders(headers);
     }
 
     public Record(final K key, final V value, final long timestamp) {
         this.key = key;
         this.value = value;
         this.timestamp = timestamp;
-        this.headers = StreamsHeaders.emptyHeaders();
+        this.headers = new RecordHeaders();
     }
 
     public K key() {

@@ -1234,10 +1234,10 @@ public class StreamTaskTest {
         task.completeRestoration();
 
         task.punctuate(processorSystemTime, 1, PunctuationType.WALL_CLOCK_TIME, timestamp -> {
-            task.processorContext().recordContext().headers().add("dummy", (byte[]) null);
+            task.processorContext().headers().add("dummy", (byte[]) null);
         });
         task.punctuate(processorSystemTime, 1, PunctuationType.WALL_CLOCK_TIME, timestamp -> {
-            assertFalse(task.processorContext().recordContext().headers().iterator().hasNext());
+            assertFalse(task.processorContext().headers().iterator().hasNext());
         });
     }
 

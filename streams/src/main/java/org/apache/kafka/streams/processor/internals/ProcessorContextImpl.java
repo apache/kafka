@@ -29,7 +29,6 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
-import org.apache.kafka.streams.processor.api.StreamsHeaders;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -49,9 +48,6 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     // the below are null for standby tasks
     private StreamTask streamTask;
     private RecordCollector collector;
-
-    private final ToInternal toInternal = new ToInternal();
-    private final static To SEND_TO_ALL = To.all();
 
     private final ProcessorStateManager stateManager;
 
@@ -189,11 +185,18 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                     recordContext.headers());
             }
 
-            final List<? extends ProcessorNode<?, ?, ?, ?>> children = currentNode().children();
-            for (final ProcessorNode<?, ?, ?, ?> child : children) {
-                if (childName == null || child.name().equals(childName)) {
+            if (childName == null) {
+                final List<? extends ProcessorNode<?, ?, ?, ?>> children = currentNode().children();
+                for (final ProcessorNode<?, ?, ?, ?> child : children) {
                     forwardInternal((ProcessorNode<K, V, ?, ?>) child, record);
                 }
+            } else {
+                final ProcessorNode<?, ?, ?, ?> child = currentNode().getChild(childName);
+                if (child == null) {
+                    throw new StreamsException("Unknown downstream node: " + childName
+                                                   + " either does not exist or is not connected to this processor.");
+                }
+                forwardInternal((ProcessorNode<K, V, ?, ?>) child, record);
             }
 
         } finally {
@@ -205,8 +208,13 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     @Override
     public <K, V> void forward(final K key,
                                final V value) {
-        throwUnsupportedOperationExceptionIfStandby("forward");
-        forward(key, value, SEND_TO_ALL);
+        final Record<K, V> toForward = new Record<>(
+            key,
+            value,
+            timestamp(),
+            headers()
+        );
+        forward(toForward);
     }
 
     @Override
@@ -214,11 +222,13 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     public <K, V> void forward(final K key,
                                final V value,
                                final int childIndex) {
-        throwUnsupportedOperationExceptionIfStandby("forward");
-        forward(
+        final Record<K, V> toForward = new Record<>(
             key,
             value,
-            To.child((currentNode().children()).get(childIndex).name()));
+            timestamp(),
+            headers()
+        );
+        forward(toForward, (currentNode().children()).get(childIndex).name());
     }
 
     @Override
@@ -226,48 +236,27 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     public <K, V> void forward(final K key,
                                final V value,
                                final String childName) {
-        throwUnsupportedOperationExceptionIfStandby("forward");
-        forward(key, value, To.child(childName));
+        final Record<K, V> toForward = new Record<>(
+            key,
+            value,
+            timestamp(),
+            headers()
+        );
+        forward(toForward, childName);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(final K key,
                                final V value,
                                final To to) {
-        throwUnsupportedOperationExceptionIfStandby("forward");
-        final ProcessorNode<?, ?, ?, ?> previousNode = currentNode();
-        final ProcessorRecordContext previousContext = recordContext;
-
-        try {
-            toInternal.update(to);
-            if (toInternal.hasTimestamp() && recordContext != null) {
-                recordContext = new ProcessorRecordContext(
-                    toInternal.timestamp(),
-                    recordContext.offset(),
-                    recordContext.partition(),
-                    recordContext.topic(),
-                    recordContext.headers());
-            }
-
-            final String sendTo = toInternal.child();
-            if (sendTo == null) {
-                final List<? extends ProcessorNode<?, ?, ?, ?>> children = currentNode().children();
-                for (final ProcessorNode<?, ?, ?, ?> child : children) {
-                    forward((ProcessorNode<K, V, ?, ?>) child, key, value);
-                }
-            } else {
-                final ProcessorNode<?, ?, ?, ?> child = currentNode().getChild(sendTo);
-                if (child == null) {
-                    throw new StreamsException("Unknown downstream node: " + sendTo
-                        + " either does not exist or is not connected to this processor.");
-                }
-                forward((ProcessorNode<K, V, ?, ?>) child, key, value);
-            }
-        } finally {
-            recordContext = previousContext;
-            setCurrentNode(previousNode);
-        }
+        final ToInternal toInternal = new ToInternal(to);
+        final Record<K, V> toForward = new Record<>(
+            key,
+            value,
+            toInternal.hasTimestamp() ? toInternal.timestamp() : timestamp(),
+            headers()
+        );
+        forward(toForward, toInternal.child());
     }
 
     private <K, V> void forwardInternal(final ProcessorNode<K, V, ?, ?> child,
@@ -280,19 +269,6 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
         if (child.isTerminalNode()) {
             streamTask.maybeRecordE2ELatency(record.timestamp(), currentSystemTimeMs(), child.name());
-        }
-    }
-
-    private <K, V> void forward(final ProcessorNode<K, V, ?, ?> child,
-                                final K key,
-                                final V value) {
-        setCurrentNode(child);
-        child.process(
-            new Record<>(key, value, timestamp(), recordContext == null ? StreamsHeaders.emptyHeaders() : headers()),
-            Optional.ofNullable(recordContext)
-        );
-        if (child.isTerminalNode()) {
-            streamTask.maybeRecordE2ELatency(timestamp(), currentSystemTimeMs(), child.name());
         }
     }
 
@@ -345,15 +321,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     @Override
     public long timestamp() {
         throwUnsupportedOperationExceptionIfStandby("timestamp");
-        if (recordContext == null) {
-            // we can't really tell if toInternal has a defined timestamp, but
-            // it might, so we fall back to it specifically when the record context
-            // is undefined. Note, this is the only piece of the record context that
-            // may be defined when the context as a whole is undefined.
-            return toInternal.timestamp();
-        } else {
-            return super.timestamp();
-        }
+        return super.timestamp();
     }
 
     @Override

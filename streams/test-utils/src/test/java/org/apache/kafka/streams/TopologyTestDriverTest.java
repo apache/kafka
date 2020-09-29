@@ -46,7 +46,6 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
-import org.apache.kafka.streams.processor.api.StreamsHeaders;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -1473,7 +1472,7 @@ public class TopologyTestDriverTest {
             try (final KeyValueIterator<String, Long> it = store.all()) {
                 while (it.hasNext()) {
                     final KeyValue<String, Long> next = it.next();
-                    context.forward(new Record<>(next.key, next.value, timestamp, StreamsHeaders.emptyHeaders()));
+                    context.forward(new Record<>(next.key, next.value, timestamp, new RecordHeaders()));
                 }
             }
         }
