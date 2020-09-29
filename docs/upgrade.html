@@ -27,6 +27,12 @@
         <code>default.api.timeout.ms</code>, and Kafka Streams' new <code>task.timeout.ms</code> parameters instead.
         Note that parameter <code>retry.backoff.ms</code> is not impacted by this change.
     </li>
+    <li>Altering non-reconfigurable configs of existent listeners causes <code>InvalidRequestException</code>.
+        By contrast, the previous (unintended) behavior would have caused the updated configuration to be persisted, but it wouldn't
+        take effect until the broker was restarted. See <a href="https://github.com/apache/kafka/pull/9284">KAFKA-10479</a> for more discussion.
+        See <code>DynamicBrokerConfig.DynamicSecurityConfigs</code> and <code>SocketServer.ListenerReconfigurableConfigs</code>
+        for the supported reconfigurable configs of existent listeners.
+    </li>
 </ul>
 
 <h5><a id="upgrade_260_notable" href="#upgrade_260_notable">Notable changes in 2.6.0</a></h5>
