@@ -983,7 +983,7 @@ class TransactionCoordinatorTest {
       .andReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
       .times(2)
 
-    val expectedTransition = TxnTransitMetadata(producerId, producerId, (producerEpoch + 1).toShort, RecordBatch.NO_PRODUCER_EPOCH,
+    val expectedTransition = TxnTransitMetadata(producerId, producerId, (producerEpoch + 1).toShort, producerEpoch,
       txnTimeoutMs, PrepareAbort, partitions.toSet, now, now + TransactionStateManager.DefaultAbortTimedOutTransactionsIntervalMs)
 
     EasyMock.expect(transactionManager.appendTransactionToLog(EasyMock.eq(transactionalId),
@@ -1066,7 +1066,7 @@ class TransactionCoordinatorTest {
       .once
 
     val bumpedEpoch = (producerEpoch + 1).toShort
-    val expectedTransition = TxnTransitMetadata(producerId, producerId, bumpedEpoch, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs,
+    val expectedTransition = TxnTransitMetadata(producerId, producerId, bumpedEpoch, producerEpoch, txnTimeoutMs,
       PrepareAbort, partitions.toSet, now, now + TransactionStateManager.DefaultAbortTimedOutTransactionsIntervalMs)
 
     EasyMock.expect(transactionManager.appendTransactionToLog(EasyMock.eq(transactionalId),

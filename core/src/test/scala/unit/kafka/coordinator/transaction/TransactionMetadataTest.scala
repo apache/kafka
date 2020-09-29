@@ -440,28 +440,6 @@ class TransactionMetadataTest {
   }
 
   @Test
-  def testPepareBumpProducerEpochBeforeAbort(): Unit = {
-    val producerEpoch = 735.toShort
-    val lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH
-
-    val txnMetadata = new TransactionMetadata(
-      transactionalId = transactionalId,
-      producerId = producerId,
-      lastProducerId = producerId,
-      producerEpoch = producerEpoch,
-      lastProducerEpoch = lastProducerEpoch,
-      txnTimeoutMs = 30000,
-      state = Ongoing,
-      topicPartitions = mutable.Set.empty,
-      txnLastUpdateTimestamp = time.milliseconds())
-
-    val result = txnMetadata.prepareBumpProducerEpochBeforeAbort()
-    assertEquals(producerEpoch+1, result.producerEpoch)
-    assertEquals(producerEpoch, result.lastProducerEpoch)
-    assertEquals(PrepareEpochBumpThenAbort, result.txnState)
-  }
-
-  @Test
   def testAttemptedEpochBumpWithFencedEpoch(): Unit = {
     val producerEpoch = 735.toShort
     val lastProducerEpoch = (producerEpoch - 1).toShort

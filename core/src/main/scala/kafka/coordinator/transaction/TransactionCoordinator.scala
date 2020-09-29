@@ -151,7 +151,7 @@ class TransactionCoordinator(brokerId: Int,
           responseCallback(initTransactionError(error))
 
         case Right((coordinatorEpoch, newMetadata)) =>
-          if (newMetadata.txnState == PrepareEpochFence || newMetadata.txnState == PrepareEpochBumpThenAbort) {
+          if (newMetadata.txnState == PrepareEpochFence) {
             // abort the ongoing transaction and then return CONCURRENT_TRANSACTIONS to let client wait and retry
             def sendRetriableErrorCallback(error: Errors): Unit = {
               if (error != Errors.NONE) {
@@ -245,7 +245,7 @@ class TransactionCoordinator(brokerId: Int,
           // then when the client retries, we will generate a new producerId.
           Right(coordinatorEpoch, txnMetadata.prepareFenceProducerEpoch())
 
-        case Dead | PrepareEpochFence | PrepareEpochBumpThenAbort =>
+        case Dead | PrepareEpochFence =>
           val errorMsg = s"Found transactionalId $transactionalId with state ${txnMetadata.state}. " +
             s"This is illegal as we should never have transitioned to this state."
           fatal(errorMsg)
@@ -368,7 +368,8 @@ class TransactionCoordinator(brokerId: Int,
                              producerEpoch: Short,
                              txnMarkerResult: TransactionResult,
                              isFromClient: Boolean,
-                             responseCallback: EndTxnCallback): Unit = {
+                             responseCallback: EndTxnCallback,
+                             timeoutAbort: Boolean = false): Unit = {
     var isEpochFence = false
     if (transactionalId == null || transactionalId.isEmpty)
       responseCallback(Errors.INVALID_REQUEST)
@@ -394,8 +395,7 @@ class TransactionCoordinator(brokerId: Int,
             } else if (producerEpoch < txnMetadata.producerEpoch) {
               Left(Errors.PRODUCER_FENCED)
             } else if (txnMetadata.pendingTransitionInProgress
-              && !txnMetadata.pendingState.contains(PrepareEpochFence)
-              && !txnMetadata.pendingState.contains(PrepareEpochBumpThenAbort))
+              && !txnMetadata.pendingState.contains(PrepareEpochFence))
               Left(Errors.CONCURRENT_TRANSACTIONS)
             else txnMetadata.state match {
               case Ongoing =>
@@ -404,16 +404,16 @@ class TransactionCoordinator(brokerId: Int,
                 else
                   PrepareAbort
 
-                if (nextState == PrepareAbort && (txnMetadata.pendingState.contains(PrepareEpochFence)
-                  || txnMetadata.pendingState.contains(PrepareEpochBumpThenAbort))) {
+                if (nextState == PrepareAbort && txnMetadata.pendingState.contains(PrepareEpochFence)) {
                   // We should clear the pending state to make way for the transition to PrepareAbort and also bump
                   // the epoch in the transaction metadata we are about to append.
-                  isEpochFence = txnMetadata.pendingState.get == PrepareEpochFence
+                  isEpochFence = true
                   txnMetadata.pendingState = None
                   txnMetadata.producerEpoch = producerEpoch
-                  if (isEpochFence) {
-                    txnMetadata.lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH
-                  }
+                  txnMetadata.lastProducerEpoch = if (timeoutAbort)
+                    (producerEpoch - 1).toShort
+                  else
+                    RecordBatch.NO_PRODUCER_EPOCH
                 }
 
                 Right(coordinatorEpoch, txnMetadata.prepareAbortOrCommit(nextState, time.milliseconds()))
@@ -439,7 +439,7 @@ class TransactionCoordinator(brokerId: Int,
                   logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
               case Empty =>
                 logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
-              case Dead | PrepareEpochFence | PrepareEpochBumpThenAbort =>
+              case Dead | PrepareEpochFence =>
                 val errorMsg = s"Found transactionalId $transactionalId with state ${txnMetadata.state}. " +
                   s"This is illegal as we should never have transitioned to this state."
                 fatal(errorMsg)
@@ -491,7 +491,7 @@ class TransactionCoordinator(brokerId: Int,
                             logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
                           else
                             Right(txnMetadata, txnMetadata.prepareComplete(time.milliseconds()))
-                        case Dead | PrepareEpochFence | PrepareEpochBumpThenAbort =>
+                        case Dead | PrepareEpochFence =>
                           val errorMsg = s"Found transactionalId $transactionalId with state ${txnMetadata.state}. " +
                             s"This is illegal as we should never have transitioned to this state."
                           fatal(errorMsg)
@@ -589,7 +589,7 @@ class TransactionCoordinator(brokerId: Int,
                 "pending state transition")
               None
             } else {
-              Some(txnMetadata.prepareBumpProducerEpochBeforeAbort())
+              Some(txnMetadata.prepareFenceProducerEpoch())
             }
           }
 
@@ -599,7 +599,8 @@ class TransactionCoordinator(brokerId: Int,
               txnTransitMetadata.producerEpoch,
               TransactionResult.ABORT,
               isFromClient = false,
-              onComplete(txnIdAndPidEpoch))
+              onComplete(txnIdAndPidEpoch),
+              timeoutAbort = true)
           }
       }
     }
