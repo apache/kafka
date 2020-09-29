@@ -103,6 +103,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.ConcurrentModificationException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -1992,6 +1993,24 @@ public class KafkaConsumerTest {
         assertEquals(memberId, groupMetadataAfterPoll.memberId());
         assertEquals(1, groupMetadataAfterPoll.generationId());
         assertEquals(groupInstanceId, groupMetadataAfterPoll.groupInstanceId());
+    }
+
+    @Test
+    public void testInvalidGroupMetadata() {
+        Properties props = new Properties();
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
+        KafkaConsumer<String, String> consumer = new KafkaConsumer<>(
+                props, new StringDeserializer(), new StringDeserializer());
+
+        // concurrent access is illegal
+        consumer.currentThread.set(123);
+        assertThrows(ConcurrentModificationException.class, consumer::groupMetadata);
+        consumer.currentThread.set(-1);
+
+        // accessing closed consumer is illegal
+        consumer.close(Duration.ofSeconds(5));
+        assertThrows(IllegalStateException.class, consumer::groupMetadata);
     }
 
     private KafkaConsumer<String, String> consumerWithPendingAuthenticationError() {
