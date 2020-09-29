@@ -1446,16 +1446,21 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     /**
-     * Fail futures in the given Map which were retried due to exceeding quota.
+     * Fail futures in the given Map which were retried due to exceeding quota. We propagate
+     * the initial error back to the caller if the request timed out.
      */
-    private static <K, V> void completeQuotaExceededException(
+    private static <K, V> void maybeCompleteQuotaExceededException(
+            boolean shouldRetryOnQuotaViolation,
+            Throwable throwable,
             Map<K, KafkaFutureImpl<V>> futures,
             Map<K, ThrottlingQuotaExceededException> quotaExceededExceptions,
             int throttleTimeDelta) {
-        quotaExceededExceptions.forEach((key, value) -> futures.get(key).completeExceptionally(
-            new ThrottlingQuotaExceededException(
-                Math.max(0, value.throttleTimeMs() - throttleTimeDelta),
-                value.getMessage())));
+        if (shouldRetryOnQuotaViolation && throwable instanceof TimeoutException) {
+            quotaExceededExceptions.forEach((key, value) -> futures.get(key).completeExceptionally(
+                new ThrottlingQuotaExceededException(
+                    Math.max(0, value.throttleTimeMs() - throttleTimeDelta),
+                    value.getMessage())));
+        }
     }
 
     @Override
@@ -1577,10 +1582,8 @@ public class KafkaAdminClient extends AdminClient {
             void handleFailure(Throwable throwable) {
                 // If there were any topics retries due to a quota exceeded exception, we propagate
                 // the initial error back to the caller if the request timed out.
-                if (options.shouldRetryOnQuotaViolation() && throwable instanceof TimeoutException) {
-                    completeQuotaExceededException(futures, quotaExceededExceptions,
-                        (int) (time.milliseconds() - now));
-                }
+                maybeCompleteQuotaExceededException(options.shouldRetryOnQuotaViolation(),
+                    throwable, futures, quotaExceededExceptions, (int) (time.milliseconds() - now));
                 // Fail all the other remaining futures
                 completeAllExceptionally(futures.values(), throwable);
             }
@@ -1677,10 +1680,8 @@ public class KafkaAdminClient extends AdminClient {
             void handleFailure(Throwable throwable) {
                 // If there were any topics retries due to a quota exceeded exception, we propagate
                 // the initial error back to the caller if the request timed out.
-                if (options.shouldRetryOnQuotaViolation() && throwable instanceof TimeoutException) {
-                    completeQuotaExceededException(futures, quotaExceededExceptions,
-                        (int) (time.milliseconds() - now));
-                }
+                maybeCompleteQuotaExceededException(options.shouldRetryOnQuotaViolation(),
+                    throwable, futures, quotaExceededExceptions, (int) (time.milliseconds() - now));
                 // Fail all the other remaining futures
                 completeAllExceptionally(futures.values(), throwable);
             }
@@ -2613,10 +2614,8 @@ public class KafkaAdminClient extends AdminClient {
             void handleFailure(Throwable throwable) {
                 // If there were any topics retries due to a quota exceeded exception, we propagate
                 // the initial error back to the caller if the request timed out.
-                if (options.shouldRetryOnQuotaViolation() && throwable instanceof TimeoutException) {
-                    completeQuotaExceededException(futures, quotaExceededExceptions,
-                        (int) (time.milliseconds() - now));
-                }
+                maybeCompleteQuotaExceededException(options.shouldRetryOnQuotaViolation(),
+                    throwable, futures, quotaExceededExceptions, (int) (time.milliseconds() - now));
                 // Fail all the other remaining futures
                 completeAllExceptionally(futures.values(), throwable);
             }
