@@ -349,7 +349,7 @@ public class JsonConverter implements Converter, HeaderConverter {
         } catch (SerializationException e) {
             throw new DataException(String.format("Error while serializing the value for a source record. Check the value.converter and value.converter.* " +
                     "settings in the connector configuration, or in the worker configuration if the connector is inheriting the connector configuration. " +
-                    "Underlying converter error: %s : ", e.getMessage()), e);
+                    "Underlying converter error: %s", e.getMessage()), e);
         }
     }
 
