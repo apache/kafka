@@ -139,7 +139,6 @@ public class KafkaProducerTest {
             Collections.emptySet());
     private final int defaultMetadataIdleMs = 5 * 60 * 1000;
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testOverwriteAcksAndRetriesForIdempotentProducers() {
         Properties props = new Properties();
