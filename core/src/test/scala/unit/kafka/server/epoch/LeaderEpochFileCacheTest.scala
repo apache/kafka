@@ -43,6 +43,23 @@ class LeaderEpochFileCacheTest {
   private val cache = new LeaderEpochFileCache(tp, () => logEndOffset, checkpoint)
 
   @Test
+  def testPreviousEpoch(): Unit = {
+    assertEquals(None, cache.previousEpoch)
+
+    cache.assign(epoch = 2, startOffset = 10)
+    assertEquals(None, cache.previousEpoch)
+
+    cache.assign(epoch = 4, startOffset = 15)
+    assertEquals(Some(2), cache.previousEpoch)
+
+    cache.assign(epoch = 10, startOffset = 20)
+    assertEquals(Some(4), cache.previousEpoch)
+
+    cache.truncateFromEnd(18)
+    assertEquals(Some(2), cache.previousEpoch)
+  }
+
+  @Test
   def shouldAddEpochAndMessageOffsetToCache() = {
     //When
     cache.assign(epoch = 2, startOffset = 10)

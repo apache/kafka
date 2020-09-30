@@ -44,7 +44,7 @@ public class KStreamPrint<K, V> implements ProcessorSupplier<K, V> {
         @Override
         public void close() {
             if (action instanceof PrintForeachAction) {
-                ((PrintForeachAction) action).close();
+                ((PrintForeachAction<K, V>) action).close();
             }
         }
     }

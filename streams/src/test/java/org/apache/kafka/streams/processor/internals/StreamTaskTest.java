@@ -1224,6 +1224,20 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldNotShareHeadersBetweenPunctuateIterations() {
+        task = createStatelessTask(createConfig(false, "100"), StreamsConfig.METRICS_LATEST);
+        task.initializeIfNeeded();
+        task.completeRestoration();
+
+        task.punctuate(processorSystemTime, 1, PunctuationType.WALL_CLOCK_TIME, timestamp -> {
+            task.processorContext().recordContext().headers().add("dummy", (byte[]) null);
+        });
+        task.punctuate(processorSystemTime, 1, PunctuationType.WALL_CLOCK_TIME, timestamp -> {
+            assertFalse(task.processorContext().recordContext().headers().iterator().hasNext());
+        });
+    }
+
+    @Test
     public void shouldWrapKafkaExceptionWithStreamsExceptionWhenProcess() {
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();
         EasyMock.expect(stateManager.changelogOffsets()).andReturn(Collections.emptyMap()).anyTimes();
@@ -1322,10 +1336,10 @@ public class StreamTaskTest {
         task.completeRestoration();
 
         task.prepareCommit();
-        task.postCommit(true);  // should checkpoint
+        task.postCommit(true);   // should checkpoint
 
         task.prepareCommit();
-        task.postCommit(false); // should not checkpoint
+        task.postCommit(false);   // should not checkpoint
 
         EasyMock.verify(stateManager, recordCollector);
     }
@@ -1565,7 +1579,7 @@ public class StreamTaskTest {
         task.postCommit(true);
         EasyMock.verify(stateManager);
     }
-
+    
     @Test
     public void shouldNotCheckpointForSuspendedRunningTaskWithSmallProgress() {
         EasyMock.expect(stateManager.changelogOffsets())
@@ -2251,8 +2265,7 @@ public class StreamTaskTest {
         );
     }
 
-    private ConsumerRecord<byte[], byte[]> getConsumerRecord(final Integer key,
-                                                             final long offset) {
+    private ConsumerRecord<byte[], byte[]> getConsumerRecord(final Integer key, final long offset) {
         return new ConsumerRecord<>(
             topic1,
             1,
