@@ -46,6 +46,7 @@ import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
@@ -2030,6 +2031,46 @@ public class StreamTaskTest {
         assertThat(task.state(), equalTo(RUNNING));
         assertThrows(RuntimeException.class, () -> task.suspend());
         assertThat(task.state(), equalTo(SUSPENDED));
+    }
+
+    @Test
+    public void shouldThrowTopologyExceptionIfTaskCreatedForUnknownTopic() {
+        final InternalProcessorContext context = new ProcessorContextImpl(
+                taskId,
+                createConfig(false, "100"),
+                stateManager,
+                streamsMetrics,
+                null
+        );
+        final StreamsMetricsImpl metrics = new StreamsMetricsImpl(this.metrics, "test", StreamsConfig.METRICS_LATEST, time);
+        EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet());
+        EasyMock.replay(stateManager);
+
+        // The processor topology is missing the topics
+        final ProcessorTopology topology = withSources(asList(), mkMap());
+
+        final TopologyException  exception = assertThrows(
+                TopologyException.class,
+                () -> new StreamTask(
+                        taskId,
+                        partitions,
+                        topology,
+                        consumer,
+                        createConfig(false, "100"),
+                        metrics,
+                        stateDirectory,
+                        cache,
+                        time,
+                        stateManager,
+                        recordCollector,
+                        context
+                )
+            );
+
+        assertThat(exception.getMessage(), equalTo("Invalid topology: " +
+                "Topic is unkown to the topology. This may happen if different KafkaStreams instances of the same " +
+                "application execute different Topologies. Note that Topologies are only identical if all operators " +
+                "are added in the same order."));
     }
 
     private List<MetricName> getTaskMetrics() {
