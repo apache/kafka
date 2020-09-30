@@ -28,7 +28,7 @@ import java.util.concurrent.locks.ReentrantLock
 import com.yammer.metrics.core.Gauge
 import kafka.api.{ApiVersion, KAFKA_0_10_1_IV0, KAFKA_2_1_IV0, KAFKA_2_1_IV1, KAFKA_2_3_IV0}
 import kafka.common.OffsetAndMetadata
-import kafka.internals.generated.{GroupMetadataValue, OffsetCommitKey, OffsetCommitValue}
+import kafka.internals.generated.{GroupMetadataKey => GenGroupMetadataKey, GroupMetadataValue, OffsetCommitKey, OffsetCommitValue}
 import kafka.log.AppendOrigin
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.{FetchLogEnd, ReplicaManager}
@@ -997,6 +997,9 @@ object GroupMetadataManager {
   val LoadTimeSensor: String = "GroupPartitionLoadTime"
 
   private val CURRENT_OFFSET_KEY_SCHEMA_VERSION = 1.toShort
+  /**
+   * the start version of generated.GroupMetadataKey is 2. see common/message/GroupMetadataKey.json
+   */
   private val CURRENT_GROUP_KEY_SCHEMA_VERSION = 2.toShort
   private val CURRENT_GROUP_METADATA_VALUE_SCHEMA_VERSION = 3.toShort
 
@@ -1025,7 +1028,7 @@ object GroupMetadataManager {
    */
   def groupMetadataKey(groupId: String): Array[Byte] = {
     serializeMessage(CURRENT_GROUP_KEY_SCHEMA_VERSION,
-      new OffsetCommitKey()
+      new GenGroupMetadataKey()
         .setGroup(groupId))
   }
 
@@ -1136,7 +1139,7 @@ object GroupMetadataManager {
       OffsetKey(version, GroupTopicPartition(key.group, new TopicPartition(key.topic, key.partition)))
     } else if (version == CURRENT_GROUP_KEY_SCHEMA_VERSION) {
       // version 2 refers to offset
-      val key = new OffsetCommitKey(new ByteBufferAccessor(buffer), version)
+      val key = new GenGroupMetadataKey(new ByteBufferAccessor(buffer), version)
       GroupMetadataKey(version, key.group)
     } else {
       throw new IllegalStateException(s"Unknown group metadata message version: $version")
