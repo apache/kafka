@@ -24,30 +24,44 @@ import java.util.Objects;
 public class SupportedVersionRange {
     private final short minVersion;
 
+    private final short firstActiveVersion;
+
     private final short maxVersion;
 
     /**
-     * Raises an exception unless the following condition is met:
-     * minVersion >= 1 and maxVersion >= 1 and maxVersion >= minVersion.
+     * Raises an exception unless the following conditions are met:
+     *  1 <= minVersion <= firstActiveVersion <= maxVersion
      *
-     * @param minVersion   The minimum version value.
-     * @param maxVersion   The maximum version value.
+     * @param minVersion           The minimum version value.
+     * @param firstActiveVersion   The first active version value.
+     * @param maxVersion           The maximum version value.
      *
      * @throws IllegalArgumentException   Raised when the condition described above is not met.
      */
-    public SupportedVersionRange(final short minVersion, final short maxVersion) {
-        if (minVersion < 1 || maxVersion < 1 || maxVersion < minVersion) {
+    public SupportedVersionRange(final short minVersion, final short firstActiveVersion, final short maxVersion) {
+        if (minVersion < 1 ||
+            maxVersion < 1 ||
+            firstActiveVersion < minVersion ||
+            firstActiveVersion > maxVersion) {
             throw new IllegalArgumentException(
                 String.format(
-                    "Expected minVersion >= 1, maxVersion >= 1 and maxVersion >= minVersion," +
-                    " but received minVersion: %d, maxVersion: %d", minVersion, maxVersion));
+                    "Expected 1 <= minVersion <= firstActiveVersion <= maxVersion" +
+                    " but received minVersion:%d, firstActiveVersion:%d, maxVersion:%d.",
+                    minVersion,
+                    firstActiveVersion,
+                    maxVersion));
         }
         this.minVersion = minVersion;
+        this.firstActiveVersion = firstActiveVersion;
         this.maxVersion = maxVersion;
     }
 
     public short minVersion() {
         return minVersion;
+    }
+
+    public short firstActiveVersion() {
+        return firstActiveVersion;
     }
 
     public short maxVersion() {
@@ -59,22 +73,29 @@ public class SupportedVersionRange {
         if (this == other) {
             return true;
         }
-        if (!(other instanceof SupportedVersionRange)) {
+
+        if (other == null || getClass() != other.getClass()) {
             return false;
         }
 
         final SupportedVersionRange that = (SupportedVersionRange) other;
-        return this.minVersion == that.minVersion && this.maxVersion == that.maxVersion;
+        return this.minVersion == that.minVersion &&
+            this.firstActiveVersion == that.firstActiveVersion &&
+            this.maxVersion == that.maxVersion;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(minVersion, maxVersion);
+        return Objects.hash(minVersion, firstActiveVersion, maxVersion);
     }
 
     @Override
     public String toString() {
-        return String.format("SupportedVersionRange{minVersion:%d, maxVersion:%d}", minVersion, maxVersion);
+        return String.format(
+            "SupportedVersionRange[min_version:%d, first_active_version:%d, max_version:%d]",
+            minVersion,
+            firstActiveVersion,
+            maxVersion);
     }
 }
 

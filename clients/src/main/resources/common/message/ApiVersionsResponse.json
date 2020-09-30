@@ -51,6 +51,8 @@
           "about": "The name of the feature." },
         { "name": "MinVersion", "type": "int16", "versions": "3+",
           "about": "The minimum supported version for the feature." },
+        { "name": "FirstActiveVersion", "type": "int16", "versions": "3+",
+          "about": "The first active version for the feature." },
         { "name": "MaxVersion", "type": "int16", "versions": "3+",
           "about": "The maximum supported version for the feature." }
       ]

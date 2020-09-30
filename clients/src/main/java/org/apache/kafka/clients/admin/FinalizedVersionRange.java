@@ -77,7 +77,7 @@ public class FinalizedVersionRange {
     @Override
     public String toString() {
         return String.format(
-            "FinalizedVersionRange{minVersionLevel:%d, maxVersionLevel:%d}",
+            "FinalizedVersionRange[min_version_level:%d, max_version_level:%d]",
             minVersionLevel,
             maxVersionLevel);
     }

@@ -40,19 +40,35 @@ public class SupportedVersionRange extends BaseVersionRange {
 
     private final short firstActiveVersionValue;
 
+    /**
+     * Raises an exception unless the following conditions are met:
+     *  1 <= minVersion <= firstActiveVersion <= maxVersion
+     *
+     * @param minVersion           The minimum version value.
+     * @param firstActiveVersion   The first active version.
+     * @param maxVersion           The maximum version value.
+     *
+     * @throws IllegalArgumentException   If the conditions mentioned above are not met.
+     */
     public SupportedVersionRange(short minVersion, short firstActiveVersion, short maxVersion) {
         super(MIN_VERSION_KEY_LABEL, minVersion, MAX_VERSION_KEY_LABEL, maxVersion);
-        if (firstActiveVersion < minVersion || firstActiveVersion > maxVersion) {
+        if (minVersion < 1 ||
+            maxVersion < 1 ||
+            firstActiveVersion < minVersion ||
+            firstActiveVersion > maxVersion) {
             throw new IllegalArgumentException(
                 String.format(
-                    "Expected firstActiveVersion >= minVersion and" +
-                    " firstActiveVersion <= maxVersion, but received" +
-                    " minVersion:%d, firstActiveVersion:%d, maxVersion:%d",
+                    "Expected 1 <= minVersion <= firstActiveVersion <= maxVersion," +
+                    " but received minVersion:%d, firstActiveVersion:%d, maxVersion:%d.",
                     minVersion,
                     firstActiveVersion,
                     maxVersion));
         }
         this.firstActiveVersionValue = firstActiveVersion;
+    }
+
+    public SupportedVersionRange(short minVersion, short maxVersion) {
+        this(minVersion, minVersion, maxVersion);
     }
 
     public short firstActiveVersion() {
@@ -71,11 +87,7 @@ public class SupportedVersionRange extends BaseVersionRange {
             return true;
         }
 
-        if (other == null) {
-            return false;
-        }
-
-        if (getClass() != other.getClass()) {
+        if (other == null || getClass() != other.getClass()) {
             return false;
         }
 

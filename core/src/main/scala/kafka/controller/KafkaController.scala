@@ -423,7 +423,7 @@ class KafkaController(val config: KafkaConfig,
               //
               //    In this case, we do not deprecate any version levels since
               //    supportedVersionRange.min() equals finalizedVersionRange.min().
-              (featureName, new FinalizedVersionRange(supportedVersionRange.min(),
+              (featureName, new FinalizedVersionRange(supportedVersionRange.firstActiveVersion(),
                                                       finalizedVersionRange.max()))
             } else {
               // This is a serious error. We should never be reaching here, since we already
@@ -435,9 +435,9 @@ class KafkaController(val config: KafkaConfig,
               // 2. The existing version levels are incompatible with the supported version range.
               //
               // Examples of invalid cases that can cause this exception to be triggered:
-              // 1. No intersection       : supportedVersionRange = [4, 7] and finalizedVersionRange = [2, 3].
-              // 2. No intersection       : supportedVersionRange = [2, 3] and finalizedVersionRange = [4, 7].
-              // 3. Incompatible versions : supportedVersionRange = [2, 3] and finalizedVersionRange = [1, 7].
+              // 1. No intersection       : supportedVersionRange = [minVersion=1, firstActiveVersion=2, maxVersion=3] and finalizedVersionRange = [minVersionLevel=4, maxVersionLevel=7].
+              // 2. No intersection       : supportedVersionRange = [minVersion=1, firstActiveVersion=4, maxVersion=7] and finalizedVersionRange = [minVersionLevel=2, maxVersionLevel=3].
+              // 3. Incompatible versions : supportedVersionRange = [minVersion=1, firstActiveVersion=2, maxVersion=3] and finalizedVersionRange = [minVersionLevel=1, maxVersionLevel=7].
               throw new IllegalStateException(
                 s"Can not update minimum version level in finalized feature: $featureName,"
                 + s" since the existing $finalizedVersionRange is not eligible for a change"

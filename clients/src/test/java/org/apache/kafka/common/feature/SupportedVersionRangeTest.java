@@ -187,9 +187,14 @@ public class SupportedVersionRangeTest {
 
     @Test
     public void testAttributes() {
-        SupportedVersionRange versionRange = new SupportedVersionRange((short) 1, (short) 2, (short) 3);
-        assertEquals(1, versionRange.min());
-        assertEquals(2, versionRange.firstActiveVersion());
-        assertEquals(3, versionRange.max());
+        SupportedVersionRange versionRange1 = new SupportedVersionRange((short) 1, (short) 2, (short) 3);
+        assertEquals(1, versionRange1.min());
+        assertEquals(2, versionRange1.firstActiveVersion());
+        assertEquals(3, versionRange1.max());
+
+        SupportedVersionRange versionRange2 = new SupportedVersionRange((short) 2, (short) 3);
+        assertEquals(2, versionRange2.min());
+        assertEquals(versionRange2.firstActiveVersion(), versionRange2.min());
+        assertEquals(3, versionRange2.max());
     }
 }

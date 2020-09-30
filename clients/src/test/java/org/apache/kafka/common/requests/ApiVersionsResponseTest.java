@@ -118,6 +118,7 @@ public class ApiVersionsResponseTest {
         SupportedFeatureKey sKey = response.data.supportedFeatures().find("feature");
         assertNotNull(sKey);
         assertEquals(1, sKey.minVersion());
+        assertEquals(2, sKey.firstActiveVersion());
         assertEquals(4, sKey.maxVersion());
 
         assertEquals(1, response.data.finalizedFeatures().size());

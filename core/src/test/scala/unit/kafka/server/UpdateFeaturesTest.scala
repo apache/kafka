@@ -112,7 +112,9 @@ class UpdateFeaturesTest extends BaseRequestTest {
       Optional.of(epoch),
       supported.features().asScala.map {
         case(name, versionRange) =>
-          (name, new org.apache.kafka.clients.admin.SupportedVersionRange(versionRange.min(), versionRange.max()))
+          (name, new org.apache.kafka.clients.admin.SupportedVersionRange(versionRange.min(),
+                                                                          versionRange.firstActiveVersion(),
+                                                                          versionRange.max()))
       }.asJava)
   }
 

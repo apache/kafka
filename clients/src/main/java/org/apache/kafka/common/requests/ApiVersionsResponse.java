@@ -220,9 +220,11 @@ public class ApiVersionsResponse extends AbstractResponse {
         SupportedFeatureKeyCollection converted = new SupportedFeatureKeyCollection();
         for (Map.Entry<String, SupportedVersionRange> feature : latestSupportedFeatures.features().entrySet()) {
             SupportedFeatureKey key = new SupportedFeatureKey();
+            SupportedVersionRange versionRange = feature.getValue();
             key.setName(feature.getKey());
-            key.setMinVersion(feature.getValue().min());
-            key.setMaxVersion(feature.getValue().max());
+            key.setMinVersion(versionRange.min());
+            key.setFirstActiveVersion(versionRange.firstActiveVersion());
+            key.setMaxVersion(versionRange.max());
             converted.add(key);
         }
 
@@ -234,9 +236,10 @@ public class ApiVersionsResponse extends AbstractResponse {
         FinalizedFeatureKeyCollection converted = new FinalizedFeatureKeyCollection();
         for (Map.Entry<String, FinalizedVersionRange> feature : finalizedFeatures.features().entrySet()) {
             FinalizedFeatureKey key = new FinalizedFeatureKey();
+            FinalizedVersionRange versionLevelRange = feature.getValue();
             key.setName(feature.getKey());
-            key.setMinVersionLevel(feature.getValue().min());
-            key.setMaxVersionLevel(feature.getValue().max());
+            key.setMinVersionLevel(versionLevelRange.min());
+            key.setMaxVersionLevel(versionLevelRange.max());
             converted.add(key);
         }
 
