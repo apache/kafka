@@ -444,7 +444,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     stateSnapshot = this.state;
                 }
 
-                if (generationSnapshot != Generation.NO_GENERATION && stateSnapshot == MemberState.STABLE) {
+                if (!generationSnapshot.equals(Generation.NO_GENERATION) && stateSnapshot == MemberState.STABLE) {
                     // Duplicate the buffer in case `onJoinComplete` does not complete and needs to be retried.
                     ByteBuffer memberAssignment = future.value().duplicate();
 
@@ -563,7 +563,7 @@ public abstract class AbstractCoordinator implements Closeable {
             Errors error = joinResponse.error();
             if (error == Errors.NONE) {
                 if (isProtocolTypeInconsistent(joinResponse.data().protocolType())) {
-                    log.error("JoinGroup failed due to inconsistent Protocol Type, received {} but expected {}",
+                    log.error("JoinGroup failed: Inconsistent Protocol Type, received {} but expected {}",
                         joinResponse.data().protocolType(), protocolType());
                     future.raise(Errors.INCONSISTENT_GROUP_PROTOCOL);
                 } else {
@@ -598,11 +598,12 @@ public abstract class AbstractCoordinator implements Closeable {
                     }
                 }
             } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
-                log.debug("Attempt to join group rejected since coordinator {} is loading the group.", coordinator());
+                log.info("JoinGroup failed: Coordinator {} is loading the group.", coordinator());
                 // backoff and retry
                 future.raise(error);
             } else if (error == Errors.UNKNOWN_MEMBER_ID) {
-                log.debug("Attempt to join group failed due to unknown member id with {}.", sentGeneration);
+                log.info("JoinGroup failed: {} Need to re-join the group. Sent generation was {}",
+                         error.message(), sentGeneration);
                 // only need to reset the member id if generation has not been changed,
                 // then retry immediately
                 if (generationUnchanged())
@@ -613,13 +614,14 @@ public abstract class AbstractCoordinator implements Closeable {
                     || error == Errors.NOT_COORDINATOR) {
                 // re-discover the coordinator and retry with backoff
                 markCoordinatorUnknown();
-                log.debug("Attempt to join group failed due to obsolete coordinator information: {}", error.message());
+                log.info("JoinGroup failed: {} Marking coordinator unknown. Sent generation was {}",
+                          error.message(), sentGeneration);
                 future.raise(error);
             } else if (error == Errors.FENCED_INSTANCE_ID) {
                 // for join-group request, even if the generation has changed we would not expect the instance id
                 // gets fenced, and hence we always treat this as a fatal error
-                log.error("Attempt to join group with generation {} failed because the group instance id {} has been fenced by another instance",
-                    rebalanceConfig.groupInstanceId, sentGeneration);
+                log.error("JoinGroup failed: The group instance id {} has been fenced by another instance. " +
+                              "Sent generation was {}", rebalanceConfig.groupInstanceId, sentGeneration);
                 future.raise(error);
             } else if (error == Errors.INCONSISTENT_GROUP_PROTOCOL
                     || error == Errors.INVALID_SESSION_TIMEOUT
@@ -627,7 +629,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     || error == Errors.GROUP_AUTHORIZATION_FAILED
                     || error == Errors.GROUP_MAX_SIZE_REACHED) {
                 // log the error and re-throw the exception
-                log.error("Attempt to join group failed due to fatal error: {}", error.message());
+                log.error("JoinGroup failed due to fatal error: {}", error.message());
                 if (error == Errors.GROUP_MAX_SIZE_REACHED) {
                     future.raise(new GroupMaxSizeReachedException("Consumer group " + rebalanceConfig.groupId +
                             " already has the configured maximum number of members."));
@@ -637,21 +639,22 @@ public abstract class AbstractCoordinator implements Closeable {
                     future.raise(error);
                 }
             } else if (error == Errors.UNSUPPORTED_VERSION) {
-                log.error("Attempt to join group failed due to unsupported version error. Please unset field group.instance.id and retry" +
-                        " to see if the problem resolves");
+                log.error("JoinGroup failed due to unsupported version error. Please unset field group.instance.id " +
+                          "and retry to see if the problem resolves");
                 future.raise(error);
             } else if (error == Errors.MEMBER_ID_REQUIRED) {
                 // Broker requires a concrete member id to be allowed to join the group. Update member id
                 // and send another join group request in next cycle.
                 String memberId = joinResponse.data().memberId();
-                log.debug("Attempt to join group returned {} error. Will set the member id as {} and then rejoin", error, memberId);
+                log.debug("JoinGroup failed due to non-fatal error: {} Will set the member id as {} and then rejoin. " +
+                              "Sent generation was  {}", error, memberId, sentGeneration);
                 synchronized (AbstractCoordinator.this) {
                     AbstractCoordinator.this.generation = new Generation(OffsetCommitRequest.DEFAULT_GENERATION_ID, memberId, null);
                 }
                 future.raise(error);
             } else {
                 // unexpected error, throw the exception
-                log.error("Attempt to join group failed due to unexpected error: {}", error.message());
+                log.error("JoinGroup failed due to unexpected error: {}", error.message());
                 future.raise(new KafkaException("Unexpected error in join group response: " + error.message()));
             }
         }
@@ -732,7 +735,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     sensors.syncSensor.record(response.requestLatencyMs());
 
                     synchronized (AbstractCoordinator.this) {
-                        if (generation != Generation.NO_GENERATION && state == MemberState.COMPLETING_REBALANCE) {
+                        if (!generation.equals(Generation.NO_GENERATION) && state == MemberState.COMPLETING_REBALANCE) {
                             // check protocol name only if the generation is not reset
                             final String protocolName = syncResponse.data.protocolName();
                             final boolean protocolNameInconsistent = protocolName != null &&
@@ -755,8 +758,8 @@ public abstract class AbstractCoordinator implements Closeable {
                                 future.complete(ByteBuffer.wrap(syncResponse.data.assignment()));
                             }
                         } else {
-                            log.info("Generation data was cleared by heartbeat thread as {} and state is now {} before " +
-                                "received SyncGroup response, marking this rebalance as failed and retry",
+                            log.info("Generation data was cleared by heartbeat thread to {} and state is now {} before " +
+                                "receiving SyncGroup response, marking this rebalance as failed and retry",
                                 generation, state);
                             // use ILLEGAL_GENERATION error code to let it retry immediately
                             future.raise(Errors.ILLEGAL_GENERATION);
@@ -769,24 +772,27 @@ public abstract class AbstractCoordinator implements Closeable {
                 if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                     future.raise(GroupAuthorizationException.forGroupId(rebalanceConfig.groupId));
                 } else if (error == Errors.REBALANCE_IN_PROGRESS) {
-                    log.debug("SyncGroup failed because the group began another rebalance");
+                    log.info("SyncGroup failed: The group began another rebalance. Need to re-join the group. " +
+                                 "Sent generation was {}", sentGeneration);
                     future.raise(error);
                 } else if (error == Errors.FENCED_INSTANCE_ID) {
                     // for sync-group request, even if the generation has changed we would not expect the instance id
                     // gets fenced, and hence we always treat this as a fatal error
-                    log.error("SyncGroup with {} failed because the group instance id {} has been fenced by another instance",
-                        sentGeneration, rebalanceConfig.groupInstanceId);
+                    log.error("SyncGroup failed: The group instance id {} has been fenced by another instance. " +
+                        "Sent generation was {}", rebalanceConfig.groupInstanceId, sentGeneration);
                     future.raise(error);
                 } else if (error == Errors.UNKNOWN_MEMBER_ID
                         || error == Errors.ILLEGAL_GENERATION) {
-                    log.info("SyncGroup with {} failed: {}, would request re-join", sentGeneration, error.message());
+                    log.info("SyncGroup failed: {} Need to re-join the group. Sent generation was {}",
+                            error.message(), sentGeneration);
                     if (generationUnchanged())
                         resetGenerationOnResponseError(ApiKeys.SYNC_GROUP, error);
 
                     future.raise(error);
                 } else if (error == Errors.COORDINATOR_NOT_AVAILABLE
                         || error == Errors.NOT_COORDINATOR) {
-                    log.debug("SyncGroup failed: {}, marking coordinator unknown", error.message());
+                    log.info("SyncGroup failed: {} Marking coordinator unknown. Sent generation was {}",
+                             error.message(), sentGeneration);
                     markCoordinatorUnknown();
                     future.raise(error);
                 } else {
@@ -1484,18 +1490,18 @@ public abstract class AbstractCoordinator implements Closeable {
      * @return true if the two ids are matching.
      */
     final boolean hasMatchingGenerationId(int generationId) {
-        return generation != Generation.NO_GENERATION && generation.generationId == generationId;
+        return !generation.equals(Generation.NO_GENERATION) && generation.generationId == generationId;
     }
 
     final boolean hasUnknownGeneration() {
-        return generation == Generation.NO_GENERATION;
+        return generation.equals(Generation.NO_GENERATION);
     }
 
     /**
      * @return true if the current generation's member ID is valid, false otherwise
      */
     final boolean hasValidMemberId() {
-        return generation != Generation.NO_GENERATION && generation.hasMemberId();
+        return !hasUnknownGeneration() && generation.hasMemberId();
     }
 
     final synchronized void setNewGeneration(final Generation generation) {

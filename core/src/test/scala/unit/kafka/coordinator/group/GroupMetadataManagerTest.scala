@@ -43,8 +43,9 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.OffsetFetchResponse
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.KafkaException
 import org.easymock.{Capture, EasyMock, IAnswer}
-import org.junit.Assert.{assertEquals, assertFalse, assertNull, assertTrue}
+import org.junit.Assert.{assertEquals, assertFalse, assertNull, assertTrue, assertThrows}
 import org.junit.{Before, Test}
 import org.scalatest.Assertions.fail
 
@@ -929,6 +930,44 @@ class GroupMetadataManagerTest {
     assertEquals(protocol, group.protocolName.orNull)
     assertEquals(None, group.getSubscribedTopics)
     assertTrue(group.has(memberId))
+  }
+
+  @Test
+  def testShouldThrowExceptionForUnsupportedGroupMetadataVersion(): Unit = {
+    val generation = 1
+    val protocol = "range"
+    val memberId = "memberId"
+    val unsupportedVersion = Short.MinValue
+
+    // put the unsupported version as the version value
+    val groupMetadataRecordValue = buildStableGroupRecordWithMember(generation, protocolType, protocol, memberId)
+      .value().putShort(unsupportedVersion)
+    // reset the position to the starting position 0 so that it can read the data in correct order
+    groupMetadataRecordValue.position(0)
+
+    val e = assertThrows(classOf[KafkaException],
+      () => GroupMetadataManager.readGroupMessageValue(groupId, groupMetadataRecordValue, time))
+    assertEquals(s"Unknown group metadata version ${unsupportedVersion}", e.getMessage)
+  }
+
+  @Test
+  def testCurrentStateTimestampForAllGroupMetadataVersions(): Unit = {
+    val generation = 1
+    val protocol = "range"
+    val memberId = "memberId"
+
+    for (apiVersion <- ApiVersion.allVersions) {
+      val groupMetadataRecord = buildStableGroupRecordWithMember(generation, protocolType, protocol, memberId, apiVersion = apiVersion)
+
+      val deserializedGroupMetadata = GroupMetadataManager.readGroupMessageValue(groupId, groupMetadataRecord.value(), time)
+      // GROUP_METADATA_VALUE_SCHEMA_V2 or higher should correctly set the currentStateTimestamp
+      if (apiVersion >= KAFKA_2_1_IV0)
+        assertEquals(s"the apiVersion $apiVersion doesn't set the currentStateTimestamp correctly.",
+          Some(time.milliseconds()), deserializedGroupMetadata.currentStateTimestamp)
+      else
+        assertTrue(s"the apiVersion $apiVersion should not set the currentStateTimestamp.",
+          deserializedGroupMetadata.currentStateTimestamp.isEmpty)
+    }
   }
 
   @Test

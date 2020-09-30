@@ -48,8 +48,12 @@ import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
+import org.apache.kafka.common.message.ListOffsetResponseData;
+import org.apache.kafka.common.message.ListOffsetResponseData.ListOffsetTopicResponse;
+import org.apache.kafka.common.message.ListOffsetResponseData.ListOffsetPartitionResponse;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.SyncGroupResponseData;
+import org.apache.kafka.common.message.ListOffsetRequestData.ListOffsetPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.Selectable;
@@ -118,6 +122,8 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
@@ -588,14 +594,22 @@ public class KafkaConsumerTest {
         consumer.seekToEnd(singleton(tp0));
         consumer.seekToBeginning(singleton(tp1));
 
-        client.prepareResponse(
-            body -> {
-                ListOffsetRequest request = (ListOffsetRequest) body;
-                Map<TopicPartition, ListOffsetRequest.PartitionData> timestamps = request.partitionTimestamps();
-                return timestamps.get(tp0).timestamp == ListOffsetRequest.LATEST_TIMESTAMP &&
-                        timestamps.get(tp1).timestamp == ListOffsetRequest.EARLIEST_TIMESTAMP;
-            }, listOffsetsResponse(Collections.singletonMap(tp0, 50L),
-                        Collections.singletonMap(tp1, Errors.NOT_LEADER_OR_FOLLOWER)));
+        client.prepareResponse(body -> {
+            ListOffsetRequest request = (ListOffsetRequest) body;
+            List<ListOffsetPartition> partitions = request.topics().stream().flatMap(t -> {
+                if (t.name().equals(topic))
+                    return Stream.of(t.partitions());
+                else
+                    return Stream.empty();
+            }).flatMap(List::stream).collect(Collectors.toList());
+            ListOffsetPartition expectedTp0 = new ListOffsetPartition()
+                    .setPartitionIndex(tp0.partition())
+                    .setTimestamp(ListOffsetRequest.LATEST_TIMESTAMP);
+            ListOffsetPartition expectedTp1 = new ListOffsetPartition()
+                    .setPartitionIndex(tp1.partition())
+                    .setTimestamp(ListOffsetRequest.EARLIEST_TIMESTAMP);
+            return partitions.contains(expectedTp0) && partitions.contains(expectedTp1);
+        }, listOffsetsResponse(Collections.singletonMap(tp0, 50L), Collections.singletonMap(tp1, Errors.NOT_LEADER_OR_FOLLOWER)));
         client.prepareResponse(
             body -> {
                 FetchRequest request = (FetchRequest) body;
@@ -1568,12 +1582,12 @@ public class KafkaConsumerTest {
     public void testMetricConfigRecordingLevel() {
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
-        try (KafkaConsumer consumer = new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
+        try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
             assertEquals(Sensor.RecordingLevel.INFO, consumer.metrics.config().recordLevel());
         }
 
         props.put(ConsumerConfig.METRICS_RECORDING_LEVEL_CONFIG, "DEBUG");
-        try (KafkaConsumer consumer = new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
+        try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
             assertEquals(Sensor.RecordingLevel.DEBUG, consumer.metrics.config().recordLevel());
         }
     }
@@ -2150,20 +2164,29 @@ public class KafkaConsumerTest {
 
     private ListOffsetResponse listOffsetsResponse(Map<TopicPartition, Long> partitionOffsets,
                                                    Map<TopicPartition, Errors> partitionErrors) {
-        Map<TopicPartition, ListOffsetResponse.PartitionData> partitionData = new HashMap<>();
+        Map<String, ListOffsetTopicResponse> responses = new HashMap<>();
         for (Map.Entry<TopicPartition, Long> partitionOffset : partitionOffsets.entrySet()) {
-            partitionData.put(partitionOffset.getKey(), new ListOffsetResponse.PartitionData(Errors.NONE,
-                    ListOffsetResponse.UNKNOWN_TIMESTAMP, partitionOffset.getValue(),
-                    Optional.empty()));
+            TopicPartition tp = partitionOffset.getKey();
+            ListOffsetTopicResponse topic = responses.computeIfAbsent(tp.topic(), k -> new ListOffsetTopicResponse().setName(tp.topic()));
+            topic.partitions().add(new ListOffsetPartitionResponse()
+                    .setPartitionIndex(tp.partition())
+                    .setErrorCode(Errors.NONE.code())
+                    .setTimestamp(ListOffsetResponse.UNKNOWN_TIMESTAMP)
+                    .setOffset(partitionOffset.getValue()));
         }
 
         for (Map.Entry<TopicPartition, Errors> partitionError : partitionErrors.entrySet()) {
-            partitionData.put(partitionError.getKey(), new ListOffsetResponse.PartitionData(
-                    partitionError.getValue(), ListOffsetResponse.UNKNOWN_TIMESTAMP,
-                    ListOffsetResponse.UNKNOWN_OFFSET, Optional.empty()));
+            TopicPartition tp = partitionError.getKey();
+            ListOffsetTopicResponse topic = responses.computeIfAbsent(tp.topic(), k -> new ListOffsetTopicResponse().setName(tp.topic()));
+            topic.partitions().add(new ListOffsetPartitionResponse()
+                    .setPartitionIndex(tp.partition())
+                    .setErrorCode(partitionError.getValue().code())
+                    .setTimestamp(ListOffsetResponse.UNKNOWN_TIMESTAMP)
+                    .setOffset(ListOffsetResponse.UNKNOWN_OFFSET));
         }
-
-        return new ListOffsetResponse(partitionData);
+        ListOffsetResponseData data = new ListOffsetResponseData()
+                .setTopics(new ArrayList<>(responses.values()));
+        return new ListOffsetResponse(data);
     }
 
     private FetchResponse<MemoryRecords> fetchResponse(Map<TopicPartition, FetchInfo> fetches) {
@@ -2189,7 +2212,7 @@ public class KafkaConsumerTest {
         return new FetchResponse<>(Errors.NONE, tpResponses, 0, INVALID_SESSION_ID);
     }
 
-    private FetchResponse fetchResponse(TopicPartition partition, long fetchOffset, int count) {
+    private FetchResponse<MemoryRecords> fetchResponse(TopicPartition partition, long fetchOffset, int count) {
         FetchInfo fetchInfo = new FetchInfo(fetchOffset, count);
         return fetchResponse(Collections.singletonMap(partition, fetchInfo));
     }
@@ -2450,7 +2473,7 @@ public class KafkaConsumerTest {
         assertEquals((1.0d + 0.0d + 0.5d) / 3, consumer.metrics().get(pollIdleRatio).metricValue());
     }
 
-    private static boolean consumerMetricPresent(KafkaConsumer consumer, String name) {
+    private static boolean consumerMetricPresent(KafkaConsumer<String, String> consumer, String name) {
         MetricName metricName = new MetricName(name, "consumer-metrics", "", Collections.emptyMap());
         return consumer.metrics.metrics().containsKey(metricName);
     }

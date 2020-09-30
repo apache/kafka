@@ -58,6 +58,7 @@ public class ProcessorNodeTest {
     @Test(expected = StreamsException.class)
     public void shouldThrowStreamsExceptionIfExceptionCaughtDuringClose() {
         final ProcessorNode node = new ProcessorNode("name", new ExceptionalProcessor(), Collections.emptySet());
+        node.init(null);
         node.close();
     }
 

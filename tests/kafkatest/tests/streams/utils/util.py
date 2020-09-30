@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import re
+
 
 def verify_running(processor, message):
     node = processor.node
@@ -34,3 +36,10 @@ def stop_processors(processors, stopped_message):
 
 def extract_generation_from_logs(processor):
     return list(processor.node.account.ssh_capture("grep \"Successfully joined group with generation\" %s| awk \'{for(i=1;i<=NF;i++) {if ($i == \"generation\") beginning=i+1; if($i== \"(org.apache.kafka.clients.consumer.internals.AbstractCoordinator)\") ending=i }; for (j=beginning;j<ending;j++) printf $j; printf \"\\n\"}\'" % processor.LOG_FILE, allow_fail=True))
+
+def extract_generation_id(generation):
+    # Generation string looks like
+    # "Generation{generationId=5,memberId='consumer-A-3-72d7be15-bcdd-4032-b247-784e648d4dd8',protocol='stream'} "
+    # Extracting generationId from it.
+    m = re.search(r'Generation{generationId=(\d+),.*', generation)
+    return int(m.group(1))
