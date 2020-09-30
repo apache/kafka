@@ -1073,6 +1073,9 @@ public class TransactionManager {
             if (error == null)
                 throw new IllegalArgumentException("Cannot transition to " + target + " with a null exception");
             lastError = error;
+            if (target == State.ABORTABLE_ERROR) {
+                abortableError = error;
+            }
         } else {
             if (target != State.ABORTING_TRANSACTION) {
                 abortableError = null;
@@ -1209,6 +1212,7 @@ public class TransactionManager {
             transitionTo(State.READY);
         }
         lastError = null;
+        abortableError = null;
         epochBumpRequired = false;
         transactionStarted = false;
         newPartitionsInTransaction.clear();
@@ -1358,6 +1362,7 @@ public class TransactionManager {
                 setProducerIdAndEpoch(producerIdAndEpoch);
                 transitionTo(State.READY);
                 lastError = null;
+                abortableError = null;
                 if (this.isEpochBump) {
                     resetSequenceNumbers();
                 }
