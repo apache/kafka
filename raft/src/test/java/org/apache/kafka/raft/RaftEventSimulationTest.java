@@ -100,7 +100,7 @@ public class RaftEventSimulationTest {
             scheduler.schedule(router::deliverAll, 0, 2, 1);
             scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
             scheduler.runUntil(cluster::hasConsistentLeader);
-            scheduler.runUntil(() -> cluster.anyReachedHighWatermark(10));
+            scheduler.runUntil(() -> cluster.allReachedHighWatermark(10));
         }
     }
 
