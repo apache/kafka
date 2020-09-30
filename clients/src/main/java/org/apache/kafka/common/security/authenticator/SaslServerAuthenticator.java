@@ -190,15 +190,14 @@ public class SaslServerAuthenticator implements Authenticator {
         if (mechanism.equals(SaslConfigs.GSSAPI_MECHANISM)) {
             saslServer = createSaslKerberosServer(callbackHandler, configs, subject);
         } else {
-            String failureErrorMessage = "Kafka Server failed to create a SaslServer to interact with a client during session authentication";
             try {
                 saslServer = Subject.doAs(subject, (PrivilegedExceptionAction<SaslServer>) () ->
                     Sasl.createSaslServer(saslMechanism, "kafka", serverAddress().getHostName(), configs, callbackHandler));
                 if (saslServer == null) {
-                    throw new SaslException(failureErrorMessage);
+                    throw new SaslException("Kafka Server failed to create a SaslServer to interact with a client during session authentication with server mechanism " + saslMechanism);
                 }
             } catch (PrivilegedActionException e) {
-                throw new SaslException(failureErrorMessage, e.getCause());
+                throw new SaslException("Kafka Server failed to create a SaslServer to interact with a client during session authentication with server mechanism " + saslMechanism, e.getCause());
             }
         }
     }
