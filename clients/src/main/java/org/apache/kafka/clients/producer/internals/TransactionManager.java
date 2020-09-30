@@ -1208,7 +1208,6 @@ public class TransactionManager {
     }
 
     private void resetTransactions() {
-        transactionStarted = false;
         newPartitionsInTransaction.clear();
         pendingPartitionsInTransaction.clear();
         partitionsInTransaction.clear();

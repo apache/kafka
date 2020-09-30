@@ -29,7 +29,7 @@ import kafka.utils.TestUtils
 import kafka.utils.TestUtils.consumeRecords
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, OffsetAndMetadata}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
-import org.apache.kafka.common.errors.{ProducerFencedException, TimeoutException}
+import org.apache.kafka.common.errors.{ProducerFencedException, TimeoutException, TransactionTimeOutException}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
@@ -539,7 +539,7 @@ class TransactionsTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testFencingOnTransactionExpiration(): Unit = {
+  def testTxnTimeOutAbortOnTransactionExpiration(): Unit = {
     val producer = createTransactionalProducer("expiringProducer", transactionTimeoutMs = 100)
 
     producer.initTransactions()
@@ -555,11 +555,11 @@ class TransactionsTest extends KafkaServerTestHarness {
     try {
       // Now that the transaction has expired, the second send should fail with a ProducerFencedException.
       producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "2", willBeCommitted = false)).get()
-      fail("should have raised a ProducerFencedException since the transaction has expired")
+      fail("should have raised a TransactionTimeOutException since the transaction has expired")
     } catch {
-      case _: ProducerFencedException =>
+      case _: TransactionTimeOutException =>
       case e: ExecutionException =>
-      assertTrue(e.getCause.isInstanceOf[ProducerFencedException])
+      assertTrue(e.getCause.isInstanceOf[TransactionTimeOutException])
     }
 
     // Verify that the first message was aborted and the second one was never written at all.
