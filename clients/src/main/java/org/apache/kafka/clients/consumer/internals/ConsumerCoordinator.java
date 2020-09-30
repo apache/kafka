@@ -91,7 +91,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private final ConsumerMetadata metadata;
     private final ConsumerCoordinatorMetrics sensors;
     private final SubscriptionState subscriptions;
-    private final OffsetCommitCallback defaultOffsetCommitCallback;
+    private final OffsetCommitCallback failedOffsetCommitCallback;
     private final boolean autoCommitEnabled;
     private final int autoCommitIntervalMs;
     private final ConsumerInterceptors<?, ?> interceptors;
@@ -160,7 +160,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.metadata = metadata;
         this.metadataSnapshot = new MetadataSnapshot(subscriptions, metadata.fetch(), metadata.updateVersion());
         this.subscriptions = subscriptions;
-        this.defaultOffsetCommitCallback = new DefaultOffsetCommitCallback();
+        this.failedOffsetCommitCallback = (offsets, exception) -> {
+            if (exception != null) log.error("Offset commit with offsets {} failed", offsets, exception);
+        };
         this.autoCommitEnabled = autoCommitEnabled;
         this.autoCommitIntervalMs = autoCommitIntervalMs;
         this.assignors = assignors;
@@ -941,8 +943,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 @Override
                 public void onFailure(RuntimeException e) {
                     pendingAsyncCommits.decrementAndGet();
-                    completedOffsetCommits.add(new OffsetCommitCompletion(callback, offsets,
-                            new RetriableCommitFailedException(e)));
+                    completedOffsetCommits.add(new OffsetCommitCompletion(callback == null ? failedOffsetCommitCallback : callback,
+                        offsets, new RetriableCommitFailedException(e)));
                 }
             });
         }
@@ -955,13 +957,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     private void doCommitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, final OffsetCommitCallback callback) {
         RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
-        final OffsetCommitCallback cb = callback == null ? defaultOffsetCommitCallback : callback;
         future.addListener(new RequestFutureListener<Void>() {
             @Override
             public void onSuccess(Void value) {
                 if (interceptors != null)
                     interceptors.onCommit(offsets);
-                completedOffsetCommits.add(new OffsetCommitCompletion(cb, offsets, null));
+                if (callback != null) completedOffsetCommits.add(new OffsetCommitCompletion(callback, offsets, null));
             }
 
             @Override
@@ -971,7 +972,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 if (e instanceof RetriableException) {
                     commitException = new RetriableCommitFailedException(e);
                 }
-                completedOffsetCommits.add(new OffsetCommitCompletion(cb, offsets, commitException));
+                completedOffsetCommits.add(new OffsetCommitCompletion(callback == null ? failedOffsetCommitCallback : callback,
+                    offsets, commitException));
                 if (commitException instanceof FencedInstanceIdException) {
                     asyncCommitFenced.set(true);
                 }
@@ -1068,14 +1070,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 // consistent with async auto-commit failures, we do not propagate the exception
                 log.warn("Synchronous auto-commit of offsets {} failed: {}", allConsumedOffsets, e.getMessage());
             }
-        }
-    }
-
-    private class DefaultOffsetCommitCallback implements OffsetCommitCallback {
-        @Override
-        public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
-            if (exception != null)
-                log.error("Offset commit with offsets {} failed", offsets, exception);
         }
     }
 
@@ -1459,8 +1453,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         public void invoke() {
-            if (callback != null)
-                callback.onComplete(offsets, exception);
+            callback.onComplete(offsets, exception);
         }
     }
 

@@ -514,6 +514,27 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
   @Test
+  def testFailedAsyncCommit(): Unit = {
+    val props = new Properties
+    props.put(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, "1000")
+    val consumer = createConsumer(configOverrides = props)
+    consumer.assign(List(tp).asJava)
+
+    // kill all brokers to fail the commit
+    servers.foreach(server => killBroker(server.config.brokerId))
+
+    var expectedException: Exception = null
+    consumer.commitAsync(Map(tp -> new OffsetAndMetadata(0)).asJava,
+      (_: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception) => {
+      expectedException = exception
+    })
+    TestUtils.waitUntilTrue(() => {
+      consumer.poll(java.time.Duration.ofSeconds(2))
+      expectedException != null
+    }, "can't see the failure")
+  }
+
+  @Test
   def testExpandingTopicSubscriptions(): Unit = {
     val otherTopic = "other"
     val initialAssignment = Set(new TopicPartition(topic, 0), new TopicPartition(topic, 1))
