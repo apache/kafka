@@ -161,7 +161,6 @@ public class KafkaStreams implements AutoCloseable {
     private KafkaStreams.StateListener stateListener;
     private StateRestoreListener globalStateRestoreListener;
 
-
     // container states
     /**
      * Kafka Streams states are the possible state that a Kafka Streams instance can be in.
@@ -379,14 +378,16 @@ public class KafkaStreams implements AutoCloseable {
      * @throws IllegalStateException if this {@code KafkaStreams} instance is not in state {@link State#CREATED CREATED}.
      */
     public void setUncaughtExceptionHandler(final StreamsUncaughtExceptionHandler eh) {
+        final StreamsUncaughtExceptionHandler handler = exception -> handleStreamsUncaughtException(exception, eh);
         synchronized (stateLock) {
             if (state == State.CREATED) {
                 for (final StreamThread thread : threads) {
                     if (eh != null)  {
-                        thread.setStreamsUncaughtExceptionHandler(eh, this);
+                        thread.setStreamsUncaughtExceptionHandler(handler);
                     } else {
-                        final StreamsUncaughtExceptionHandler eh2 = exception -> StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse.SHUTDOWN_STREAM_THREAD;
-                        thread.setStreamsUncaughtExceptionHandler(eh2, this);
+                        final StreamsUncaughtExceptionHandler defaultHandler = exception ->
+                                StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse.SHUTDOWN_STREAM_THREAD;
+                        thread.setStreamsUncaughtExceptionHandler(defaultHandler);
                     }
                 }
             } else {
@@ -394,6 +395,36 @@ public class KafkaStreams implements AutoCloseable {
                         "Current state is: " + state);
             }
         }
+    }
+
+    private StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse handleStreamsUncaughtException(final Exception e,
+                                                                                                                   final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
+        final StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse action = streamsUncaughtExceptionHandler.handle(e);
+        switch (action) {
+            case SHUTDOWN_STREAM_THREAD:
+                log.error("Encountered the following exception during processing " +
+                        "and the thread is going to shut down: ", e);
+                break;
+            case REPLACE_STREAM_THREAD:
+                log.error("Encountered the following exception during processing " +
+                        "and the the stream thread will be replaced: ", e); //TODO: add then remove, wait until 663 is merged
+                break;
+            case SHUTDOWN_KAFKA_STREAMS_CLIENT:
+                log.error("Encountered the following exception during processing " +
+                        "and the client is going to shut down: ", e);
+                for (final StreamThread streamThread: threads) {
+                    streamThread.shutdown();
+                }
+                setState(State.ERROR); //Maybe need
+                break;
+            case SHUTDOWN_KAFKA_STREAMS_APPLICATION:
+                for (final StreamThread streamThread: threads) {
+                    streamThread.requestThreadSendShutdown();
+                }
+                log.error("Encountered the following exception during processing " +
+                        "and the application is going to shut down: ", e);
+        }
+        return action;
     }
 
     /**

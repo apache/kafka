@@ -32,7 +32,6 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
-import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
@@ -57,6 +56,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
@@ -68,7 +68,6 @@ import static org.apache.kafka.streams.processor.internals.ClientUtils.getRestor
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getSharedAdminClientId;
 
 public class StreamThread extends Thread {
-
 
     /**
      * Stream thread states are the possible states that a stream thread can be in.
@@ -255,7 +254,6 @@ public class StreamThread extends Thread {
     private final int maxPollTimeMs;
     private final String originalReset;
     private final TaskManager taskManager;
-    public KafkaStreams kafkaStreams;
     private final AtomicLong nextProbingRebalanceMs;
 
     private final StreamsMetricsImpl streamsMetrics;
@@ -289,6 +287,7 @@ public class StreamThread extends Thread {
 
     private final AtomicInteger assignmentErrorCode;
     private final AtomicInteger shutdownTypeRequested = new AtomicInteger(AssignorError.NONE.code());
+    private final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
 
     public static StreamThread create(final InternalTopologyBuilder builder,
                                       final StreamsConfig config,
@@ -540,8 +539,9 @@ public class StreamThread extends Thread {
                     throw e;
                 }
             }
-
-            handleStreamsUncaughtException(e);
+            if (streamsUncaughtExceptionHandler != null) {
+                streamsUncaughtExceptionHandler.handle(e);
+            }
             throw e;
         } finally {
             completeShutdown(cleanRun);
@@ -561,6 +561,9 @@ public class StreamThread extends Thread {
         // until the rebalance is completed before we close and commit the tasks
         while (isRunning() || taskManager.isRebalanceInProgress()) {
             try {
+                if (shutdownRequested.get()) {
+                    sendShutdownRequest(shutdownTypeRequested);
+                }
                 runOnce();
                 if (nextProbingRebalanceMs.get() < time.milliseconds()) {
                     log.info("Triggering the followup rebalance scheduled for {} ms.", nextProbingRebalanceMs.get());
@@ -581,38 +584,12 @@ public class StreamThread extends Thread {
         }
     }
 
-    public void setStreamsUncaughtExceptionHandler(final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler, final KafkaStreams kafkaStreams) {
+    public void setStreamsUncaughtExceptionHandler(final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
-        this.kafkaStreams = kafkaStreams;
     }
 
-    private void handleStreamsUncaughtException(final Exception e) {
-        final StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse action = this.streamsUncaughtExceptionHandler.handle(e);
-        if (kafkaStreams == null) {
-            log.error("Encountered the following exception during processing " +
-                    "and the thread is going to shut down: ", e);
-            return;
-        }
-        switch (action) {
-            case SHUTDOWN_STREAM_THREAD:
-                log.error("Encountered the following exception during processing " +
-                        "and the thread is going to shut down: ", e);
-                break;
-            case REPLACE_STREAM_THREAD:
-                log.error("Encountered the following exception during processing " +
-                        "and the the stream thread will be replaced: ", e);
-                break;
-            case SHUTDOWN_KAFKA_STREAMS_CLIENT:
-                log.error("Encountered the following exception during processing " +
-                        "and the client is going to shut down: ", e);
-                kafkaStreams.close(Duration.ZERO);
-                break;
-            case SHUTDOWN_KAFKA_STREAMS_APPLICATION:
-                log.error("Encountered the following exception during processing " +
-                        "and the application is going to shut down: ", e);
-                shutdownTypeRequested.set(AssignorError.SHUTDOWN_REQUESTED.code());
-                sendShutdownRequest(shutdownTypeRequested);
-        }
+    public void requestThreadSendShutdown() {
+        shutdownRequested.set(true);
     }
 
     private void sendShutdownRequest(final AtomicInteger shutdownType) {
