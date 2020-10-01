@@ -32,6 +32,7 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
+import org.apache.kafka.connect.data.TimestampMicros;
 import org.apache.kafka.connect.errors.DataException;
 import org.junit.Before;
 import org.junit.Test;
@@ -45,6 +46,8 @@ import java.math.BigInteger;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.ByteBuffer;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collections;
@@ -425,6 +428,46 @@ public class JsonConverterTest {
         assertEquals(new java.util.Date(42), schemaAndValue.value());
     }
 
+    @Test
+    public void timestampMicrosToConnect() {
+        Schema schema = TimestampMicros.SCHEMA;
+        Instant reference = Instant.EPOCH
+                .plus(2000000000, ChronoUnit.MICROS)
+                .plus(2000000000, ChronoUnit.MICROS);
+        String msg = "{ \"schema\": { \"type\": \"int64\", \"name\": \"org.apache.kafka.connect.data.TimestampMicros\", \"version\": 1 }, \"payload\": 4000000000 }";
+        SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
+        Instant converted = (Instant) schemaAndValue.value();
+        assertEquals(schema, schemaAndValue.schema());
+        assertEquals(reference, converted);
+    }
+
+    @Test
+    public void timestampMicrosToConnectOptional() {
+        Schema schema = TimestampMicros.builder().optional().schema();
+        String msg = "{ \"schema\": { \"type\": \"int64\", \"name\": \"org.apache.kafka.connect.data.TimestampMicros\", \"version\": 1, \"optional\": true }, \"payload\": null }";
+        SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
+        assertEquals(schema, schemaAndValue.schema());
+        assertNull(schemaAndValue.value());
+    }
+
+    @Test
+    public void timestampMicrosToConnectWithDefaultValue() {
+        Schema schema = TimestampMicros.builder().defaultValue(Instant.EPOCH.plus(42, ChronoUnit.MICROS)).schema();
+        String msg = "{ \"schema\": { \"type\": \"int64\", \"name\": \"org.apache.kafka.connect.data.TimestampMicros\", \"version\": 1, \"default\": 42 }, \"payload\": null }";
+        SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
+        assertEquals(schema, schemaAndValue.schema());
+        assertEquals(Instant.EPOCH.plus(42, ChronoUnit.MICROS), schemaAndValue.value());
+    }
+
+    @Test
+    public void timestampMicrosToConnectOptionalWithDefaultValue() {
+        Schema schema = TimestampMicros.builder().optional().defaultValue(Instant.EPOCH.plus(42, ChronoUnit.MICROS)).schema();
+        String msg = "{ \"schema\": { \"type\": \"int64\", \"name\": \"org.apache.kafka.connect.data.TimestampMicros\", \"version\": 1,  \"optional\": true, \"default\": 42 }, \"payload\": null }";
+        SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
+        assertEquals(schema, schemaAndValue.schema());
+        assertEquals(Instant.EPOCH.plus(42, ChronoUnit.MICROS), schemaAndValue.value());
+    }
+
     // Schema metadata
 
     @Test
@@ -715,6 +758,21 @@ public class JsonConverterTest {
         assertEquals(4000000000L, payload.longValue());
     }
 
+
+    @Test
+    public void timestampMicrosToJson() {
+        Instant instant = Instant.EPOCH
+                .plus(2000000000, ChronoUnit.MICROS)
+                .plus(2000000000, ChronoUnit.MICROS);
+
+        JsonNode converted = parse(converter.fromConnectData(TOPIC, TimestampMicros.SCHEMA, instant));
+        validateEnvelope(converted);
+        assertEquals(parse("{ \"type\": \"int64\", \"optional\": false, \"name\": \"org.apache.kafka.connect.data.TimestampMicros\", \"version\": 1 }"),
+                converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        JsonNode payload = converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME);
+        assertTrue(payload.isLong());
+        assertEquals(4000000000L, payload.longValue());
+    }
 
     @Test
     public void nullSchemaAndPrimitiveToJson() {
