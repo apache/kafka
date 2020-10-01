@@ -49,6 +49,10 @@ public final class ProcessorAdapter<KIn, VIn, KOut, VOut> implements Processor<K
     @SuppressWarnings("unchecked")
     @Override
     public void init(final ProcessorContext<KOut, VOut> context) {
+        // It only makes sense to use this adapter internally to Streams, in which case
+        // all contexts are implementations of InternalProcessorContext.
+        // This would fail if someone were to use this adapter in a unit test where
+        // the context only implements api.ProcessorContext.
         this.context = (InternalProcessorContext) context;
         delegate.init((org.apache.kafka.streams.processor.ProcessorContext) context);
     }
