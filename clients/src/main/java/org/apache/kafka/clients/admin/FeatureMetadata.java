@@ -35,7 +35,7 @@ public class FeatureMetadata {
 
     private final Map<String, SupportedVersionRange> supportedFeatures;
 
-    public FeatureMetadata(final Map<String, FinalizedVersionRange> finalizedFeatures,
+    FeatureMetadata(final Map<String, FinalizedVersionRange> finalizedFeatures,
                            final Optional<Long> finalizedFeaturesEpoch,
                            final Map<String, SupportedVersionRange> supportedFeatures) {
         this.finalizedFeatures = new HashMap<>(finalizedFeatures);

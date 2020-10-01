@@ -141,6 +141,11 @@ class KafkaController(val config: KafkaConfig,
   newGauge("TopicsIneligibleToDeleteCount", () => ineligibleTopicsToDeleteCount)
   newGauge("ReplicasIneligibleToDeleteCount", () => ineligibleReplicasToDeleteCount)
 
+  class IncompatibleFeatureException(message: String, t: Throwable) extends RuntimeException(message, t) {
+    def this(message: String) = this(message, null)
+    def this(t: Throwable) = this("", t)
+  }
+
   /**
    * Returns true if this broker is the current controller.
    */
@@ -392,60 +397,34 @@ class KafkaController(val config: KafkaConfig,
       featureCache.waitUntilEpochOrThrow(newVersion, config.zkConnectionTimeoutMs)
     } else {
       val existingFeatureZNode = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
-      var newFeatures: Features[FinalizedVersionRange] = Features.emptyFinalizedFeatures()
-      if (existingFeatureZNode.status.equals(FeatureZNodeStatus.Enabled)) {
-        newFeatures = Features.finalizedFeatures(existingFeatureZNode.features.features().asScala.map {
-          case (featureName, finalizedVersionRange) =>
-            val supportedVersionRange = supportedFeatures.get(featureName)
-            if (supportedVersionRange == null) {
-              warn(s"Existing finalized feature: $featureName with $finalizedVersionRange" +
-                   s" is absent in supported $supportedFeatures")
-              (featureName, finalizedVersionRange)
-            } else if (supportedVersionRange.max() >= finalizedVersionRange.max() &&
-                       supportedVersionRange.firstActiveVersion() <= finalizedVersionRange.max()) {
-              // Using the change below, we deprecate all version levels in the range:
-              // [finalizedVersionRange.min(), supportedVersionRange.firstActiveVersion() - 1].
-              //
-              // NOTE: if finalizedVersionRange.min() equals supportedVersionRange.firstActiveVersion(),
-              // then we do not deprecate any version levels (since there is none to be deprecated).
-              //
-              // Examples:
-              //
-              // 1. supportedVersionRange = [minVersion=1, firstActiveVersion=4, maxVersion=7]
-              //       and
-              //    finalizedVersionRange = [minVersionLevel=1, maxVersionLevel=5].
-              //
-              //    In this case, we deprecate all version levels in the range: [1, 3].
-              //
-              // 2. supportedVersionRange = [minVersion=1, firstActiveVersion=4, maxVersion=7]
-              //       and
-              //    finalizedVersionRange = [minVersionLevel=4, maxVersionLevel=5].
-              //
-              //    In this case, we do not deprecate any version levels since
-              //    supportedVersionRange.min() equals finalizedVersionRange.min().
-              (featureName, new FinalizedVersionRange(supportedVersionRange.firstActiveVersion(),
-                                                      finalizedVersionRange.max()))
-            } else {
-              // This is a serious error. We should never be reaching here, since we already
-              // verify once during KafkaServer startup that existing finalized feature versions in
-              // the FeatureZNode contained no incompatibilities. If we are here, it means that one
-              // of the following is true:
-              // 1. The existing version levels fall completely outside the range of the supported
-              //    version range (i.e. no intersection), or
-              // 2. The existing version levels are incompatible with the supported version range.
-              //
-              // Examples of invalid cases that can cause this exception to be triggered:
-              // 1. No intersection       : supportedVersionRange = [minVersion=1, firstActiveVersion=2, maxVersion=3] and finalizedVersionRange = [minVersionLevel=4, maxVersionLevel=7].
-              // 2. No intersection       : supportedVersionRange = [minVersion=1, firstActiveVersion=4, maxVersion=7] and finalizedVersionRange = [minVersionLevel=2, maxVersionLevel=3].
-              // 3. Incompatible versions : supportedVersionRange = [minVersion=1, firstActiveVersion=2, maxVersion=3] and finalizedVersionRange = [minVersionLevel=1, maxVersionLevel=7].
-              throw new IllegalStateException(
-                s"Can not update minimum version level in finalized feature: $featureName,"
-                + s" since the existing $finalizedVersionRange is not eligible for a change"
-                + s" based on the default $supportedVersionRange. This should never happen"
-                + s" since feature version incompatibilities are already checked during"
-                + s" Kafka server startup.")
-            }
-        }.asJava)
+      val newFeatures: Features[FinalizedVersionRange] = existingFeatureZNode.status match {
+        case FeatureZNodeStatus.Disabled => Features.emptyFinalizedFeatures()
+        case FeatureZNodeStatus.Enabled =>
+          Features.finalizedFeatures(existingFeatureZNode.features.features().asScala.map {
+            case (featureName, finalizedVersionRange) =>
+              val supportedVersionRange = supportedFeatures.get(featureName)
+              if (finalizedVersionRange.isIncompatibleWith(supportedVersionRange)) {
+                // This is a serious error. We should never be reaching here.
+                throw new IncompatibleFeatureException(
+                  s"Can not update minimum version level in finalized feature: $featureName,"
+                    + s" since the existing $finalizedVersionRange is incompatible with"
+                    + s" the $supportedVersionRange. This should never happen since feature version"
+                    + s" incompatibilities are already checked during Kafka server startup.")
+              } else {
+                // If supportedVersionRange.firstActiveVersion() > finalizedVersionRange.min(), then
+                // we go ahead and deprecate all version levels in the range:
+                // [finalizedVersionRange.min(), supportedVersionRange.firstActiveVersion() - 1].
+                //
+                // Example:
+                // supportedVersionRange = [minVersion=1, firstActiveVersion=4, maxVersion=7]
+                //    and
+                // finalizedVersionRange = [minVersionLevel=1, maxVersionLevel=5].
+                //
+                // In this case, we deprecate all version levels in the range: [1, 3].
+                val newMinVersionLevel = supportedVersionRange.firstActiveVersion().max(finalizedVersionRange.min())
+                (featureName, new FinalizedVersionRange(newMinVersionLevel, finalizedVersionRange.max()))
+              }
+          }.asJava)
       }
       val newFeatureZNode = new FeatureZNode(FeatureZNodeStatus.Enabled, newFeatures)
       if (!newFeatureZNode.equals(existingFeatureZNode)) {
@@ -1563,11 +1542,14 @@ class KafkaController(val config: KafkaConfig,
           debug(s"Broker $activeControllerId was elected as controller instead of broker ${config.brokerId}", e)
         else
           warn("A controller has been elected but just resigned, this will result in another round of election", e)
-
       case t: Throwable =>
         error(s"Error while electing or becoming controller on broker ${config.brokerId}. " +
           s"Trigger controller movement immediately", t)
         triggerControllerMove()
+        if (t.isInstanceOf[IncompatibleFeatureException]) {
+          fatal("Feature version incompatibility found. The controller will eventually exit.")
+          Exit.exit(1)
+        }
     }
   }
 
@@ -2090,7 +2072,7 @@ class KafkaController(val config: KafkaConfig,
       if (!existingFeatures.equals(targetFeatures)) {
         val newNode = new FeatureZNode(FeatureZNodeStatus.Enabled, Features.finalizedFeatures(targetFeatures.asJava))
         val newVersion = zkClient.updateFeatureZNode(newNode)
-        featureCache.waitUntilEpochOrThrow(newVersion, request.data().timeoutMs().min(config.zkConnectionTimeoutMs))
+        featureCache.waitUntilEpochOrThrow(newVersion, request.data().timeoutMs())
       }
     } catch {
       // For all features that correspond to valid FeatureUpdate (i.e. error is Errors.NONE),

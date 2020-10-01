@@ -35,7 +35,7 @@ public class FinalizedVersionRange {
      *
      * @throws IllegalArgumentException   Raised when the condition described above is not met.
      */
-    public FinalizedVersionRange(final short minVersionLevel, final short maxVersionLevel) {
+    FinalizedVersionRange(final short minVersionLevel, final short maxVersionLevel) {
         if (minVersionLevel < 1 || maxVersionLevel < 1 || maxVersionLevel < minVersionLevel) {
             throw new IllegalArgumentException(
                 String.format(

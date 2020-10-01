@@ -24,7 +24,7 @@ import kafka.api.KAFKA_2_7_IV0
 import kafka.utils.TestUtils
 import kafka.zk.{FeatureZNode, FeatureZNodeStatus, ZkVersion}
 import kafka.utils.TestUtils.waitUntilTrue
-import org.apache.kafka.clients.admin.{Admin, DescribeFeaturesOptions, FeatureMetadata, FeatureUpdate, UpdateFeaturesOptions, UpdateFeaturesResult}
+import org.apache.kafka.clients.admin.{Admin, DescribeFeaturesOptions, FeatureUpdate, UpdateFeaturesOptions, UpdateFeaturesResult}
 import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.feature.FinalizedVersionRange
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
@@ -101,28 +101,31 @@ class UpdateFeaturesTest extends BaseRequestTest {
     FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
   }
 
-  private def makeFeatureMetadata(finalized: Features[FinalizedVersionRange],
-                                  epoch: Long,
-                                  supported: Features[SupportedVersionRange]): FeatureMetadata = {
-    new FeatureMetadata(
-      finalized.features().asScala.map {
-        case(name, versionRange) =>
-          (name, new org.apache.kafka.clients.admin.FinalizedVersionRange(versionRange.min(), versionRange.max()))
-      }.asJava,
-      Optional.of(epoch),
-      supported.features().asScala.map {
-        case(name, versionRange) =>
-          (name, new org.apache.kafka.clients.admin.SupportedVersionRange(versionRange.min(),
-                                                                          versionRange.firstActiveVersion(),
-                                                                          versionRange.max()))
-      }.asJava)
+  private def finalizedFeatures(features: java.util.Map[String, org.apache.kafka.clients.admin.FinalizedVersionRange]): Features[FinalizedVersionRange] = {
+    Features.finalizedFeatures(features.asScala.map {
+      case(name, versionRange) =>
+        (name, new FinalizedVersionRange(versionRange.minVersionLevel(), versionRange.maxVersionLevel()))
+    }.asJava)
   }
 
-  private def checkFeatures(client: Admin, expectedNode: FeatureZNode, expectedMetadata: FeatureMetadata): Unit = {
+  private def supportedFeatures(features: java.util.Map[String, org.apache.kafka.clients.admin.SupportedVersionRange]): Features[SupportedVersionRange] = {
+    Features.supportedFeatures(features.asScala.map {
+      case(name, versionRange) =>
+        (name, new SupportedVersionRange(versionRange.minVersion(), versionRange.firstActiveVersion(), versionRange.maxVersion()))
+    }.asJava)
+  }
+
+  private def checkFeatures(client: Admin,
+                            expectedNode: FeatureZNode,
+                            expectedFinalizedFeatures: Features[FinalizedVersionRange],
+                            expectedFinalizedFeaturesEpoch: Long,
+                            expectedSupportedFeatures: Features[SupportedVersionRange]): Unit = {
     assertEquals(expectedNode, getFeatureZNode())
     val featureMetadata = client.describeFeatures(
-      new DescribeFeaturesOptions().sendRequestToController(true)).featureMetadata().get()
-    assertEquals(expectedMetadata, featureMetadata)
+      new DescribeFeaturesOptions().sendRequestToController(true)).featureMetadata.get
+    assertEquals(expectedFinalizedFeatures, finalizedFeatures(featureMetadata.finalizedFeatures))
+    assertEquals(expectedSupportedFeatures, supportedFeatures(featureMetadata.supportedFeatures))
+    assertEquals(Optional.of(expectedFinalizedFeaturesEpoch), featureMetadata.finalizedFeaturesEpoch)
   }
 
   private def checkException[ExceptionType <: Throwable](result: UpdateFeaturesResult,
@@ -166,7 +169,9 @@ class UpdateFeaturesTest extends BaseRequestTest {
     checkFeatures(
       adminClient,
       nodeBefore,
-      makeFeatureMetadata(defaultFinalizedFeatures(), versionBefore, defaultSupportedFeatures()))
+      defaultFinalizedFeatures(),
+      versionBefore,
+      defaultSupportedFeatures())
   }
 
   /**
@@ -197,7 +202,9 @@ class UpdateFeaturesTest extends BaseRequestTest {
     checkFeatures(
       createAdminClient(),
       nodeBefore,
-      makeFeatureMetadata(defaultFinalizedFeatures(), versionBefore, defaultSupportedFeatures()))
+      defaultFinalizedFeatures(),
+      versionBefore,
+      defaultSupportedFeatures())
   }
 
   /**
@@ -265,7 +272,9 @@ class UpdateFeaturesTest extends BaseRequestTest {
     checkFeatures(
       adminClient,
       nodeBefore,
-      makeFeatureMetadata(defaultFinalizedFeatures(), versionBefore, defaultSupportedFeatures()))
+      defaultFinalizedFeatures(),
+      versionBefore,
+      defaultSupportedFeatures())
   }
 
   /**
@@ -321,7 +330,9 @@ class UpdateFeaturesTest extends BaseRequestTest {
     checkFeatures(
       adminClient,
       nodeBefore,
-      makeFeatureMetadata(initialFinalizedFeatures, versionBefore, supportedFeatures))
+      initialFinalizedFeatures,
+      versionBefore,
+      supportedFeatures)
   }
 
   /**
@@ -401,7 +412,9 @@ class UpdateFeaturesTest extends BaseRequestTest {
     checkFeatures(
       adminClient,
       nodeBefore,
-      makeFeatureMetadata(initialFinalizedFeatures, versionBefore, supportedFeatures))
+      initialFinalizedFeatures,
+      versionBefore,
+      supportedFeatures)
   }
 
   /**
@@ -455,8 +468,6 @@ class UpdateFeaturesTest extends BaseRequestTest {
     val update1 = new FeatureUpdate(targetFinalizedFeatures.get("feature_1").max(), false)
     val update2 = new FeatureUpdate(targetFinalizedFeatures.get("feature_2").max(), false)
 
-    val expected = makeFeatureMetadata(targetFinalizedFeatures, versionBefore + 1, supportedFeatures)
-
     val adminClient = createAdminClient()
     adminClient.updateFeatures(
       Utils.mkMap(Utils.mkEntry("feature_1", update1), Utils.mkEntry("feature_2", update2)),
@@ -466,7 +477,9 @@ class UpdateFeaturesTest extends BaseRequestTest {
     checkFeatures(
       adminClient,
       new FeatureZNode(FeatureZNodeStatus.Enabled, targetFinalizedFeatures),
-      expected)
+      targetFinalizedFeatures,
+      versionBefore + 1,
+      supportedFeatures)
   }
 
   /**
@@ -498,8 +511,6 @@ class UpdateFeaturesTest extends BaseRequestTest {
     val update1 = new FeatureUpdate(targetFinalizedFeatures.get("feature_1").max(), false)
     val update2 = new FeatureUpdate(targetFinalizedFeatures.get("feature_2").max(), true)
 
-    val expected = makeFeatureMetadata(targetFinalizedFeatures, versionBefore + 1, supportedFeatures)
-
     val adminClient = createAdminClient()
     adminClient.updateFeatures(
       Utils.mkMap(Utils.mkEntry("feature_1", update1), Utils.mkEntry("feature_2", update2)),
@@ -509,7 +520,9 @@ class UpdateFeaturesTest extends BaseRequestTest {
     checkFeatures(
       adminClient,
       new FeatureZNode(FeatureZNodeStatus.Enabled, targetFinalizedFeatures),
-      expected)
+      targetFinalizedFeatures,
+      versionBefore + 1,
+      supportedFeatures)
   }
 
   /**
@@ -560,7 +573,9 @@ class UpdateFeaturesTest extends BaseRequestTest {
     checkFeatures(
       adminClient,
       FeatureZNode(FeatureZNodeStatus.Enabled, expectedFeatures),
-      makeFeatureMetadata(expectedFeatures, versionBefore + 1, supportedFeatures))
+      expectedFeatures,
+      versionBefore + 1,
+      supportedFeatures)
   }
 
   /**
@@ -625,6 +640,8 @@ class UpdateFeaturesTest extends BaseRequestTest {
     checkFeatures(
       adminClient,
       FeatureZNode(FeatureZNodeStatus.Enabled, expectedFeatures),
-      makeFeatureMetadata(expectedFeatures, versionBefore + 1, supportedFeatures))
+      expectedFeatures,
+      versionBefore + 1,
+      supportedFeatures)
   }
 }
