@@ -563,6 +563,7 @@ public class StreamThread extends Thread {
             try {
                 if (shutdownRequested.get()) {
                     sendShutdownRequest(shutdownTypeRequested);
+                    return;
                 }
                 runOnce();
                 if (nextProbingRebalanceMs.get() < time.milliseconds()) {
@@ -584,18 +585,25 @@ public class StreamThread extends Thread {
         }
     }
 
+    /**
+     * Sets the streams uncaught exception handler.
+     *
+     * @param streamsUncaughtExceptionHandler the user handler wrapped in shell to execute the action
+     */
     public void setStreamsUncaughtExceptionHandler(final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
     }
 
-    public void requestThreadSendShutdown() {
+    /**
+     * Marks thread to send shutdown signal and stop processing
+     */
+    public void requestThreadSendShutdownAndStop() {
         shutdownRequested.set(true);
     }
 
     private void sendShutdownRequest(final AtomicInteger shutdownType) {
         log.warn("Detected that shutdown was requested. " +
                 "The all clients in this app will now begin to shutdown");
-        //set error code
         assignmentErrorCode.set(shutdownType.get());
         mainConsumer.unsubscribe();
         subscribeConsumer();

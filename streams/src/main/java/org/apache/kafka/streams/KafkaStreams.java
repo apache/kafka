@@ -415,11 +415,10 @@ public class KafkaStreams implements AutoCloseable {
                 for (final StreamThread streamThread: threads) {
                     streamThread.shutdown();
                 }
-                setState(State.ERROR); //Maybe need
                 break;
             case SHUTDOWN_KAFKA_STREAMS_APPLICATION:
                 for (final StreamThread streamThread: threads) {
-                    streamThread.requestThreadSendShutdown();
+                    streamThread.requestThreadSendShutdownAndStop();
                 }
                 log.error("Encountered the following exception during processing " +
                         "and the application is going to shut down: ", e);
@@ -499,6 +498,8 @@ public class KafkaStreams implements AutoCloseable {
             }
 
             if (setState(State.ERROR)) {
+                metrics.close();
+                stateDirCleaner.shutdownNow();
                 log.error("All stream threads have died. The instance will be in error state and should be closed.");
             }
         }
