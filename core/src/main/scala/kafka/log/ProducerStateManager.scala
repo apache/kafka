@@ -20,6 +20,7 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.file.{Files, StandardOpenOption}
+import java.util.concurrent.ConcurrentSkipListMap
 
 import kafka.log.Log.offsetFromFile
 import kafka.server.LogOffsetMetadata
@@ -171,7 +172,7 @@ private[log] class ProducerStateEntry(val producerId: Long,
  *                      in the current entry so that the space overhead is constant.
  * @param origin Indicates the origin of the append which implies the extent of validation. For example, offset
  *               commits, which originate from the group coordinator, do not have sequence numbers and therefore
- *               only producer epoch validation is done. Appends which come through replciation are not validated
+ *               only producer epoch validation is done. Appends which come through replication are not validated
  *               (we assume the validation has already been done) and appends from clients require full validation.
  */
 private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
@@ -442,23 +443,13 @@ object ProducerStateManager {
   private def isSnapshotFile(file: File): Boolean = file.getName.endsWith(Log.ProducerSnapshotFileSuffix)
 
   // visible for testing
-  private[log] def listSnapshotFiles(dir: File): Seq[File] = {
+  private[log] def listSnapshotFiles(dir: File): Seq[SnapshotFile] = {
     if (dir.exists && dir.isDirectory) {
       Option(dir.listFiles).map { files =>
-        files.filter(f => f.isFile && isSnapshotFile(f)).toSeq
+        files.filter(f => f.isFile && isSnapshotFile(f)).map(SnapshotFile(_)).toSeq
       }.getOrElse(Seq.empty)
     } else Seq.empty
   }
-
-  // visible for testing
-  private[log] def deleteSnapshotsBefore(dir: File, offset: Long): Unit = deleteSnapshotFiles(dir, _ < offset)
-
-  private def deleteSnapshotFiles(dir: File, predicate: Long => Boolean = _ => true): Unit = {
-    listSnapshotFiles(dir).filter(file => predicate(offsetFromFile(file))).foreach { file =>
-      Files.deleteIfExists(file.toPath)
-    }
-  }
-
 }
 
 /**
@@ -479,12 +470,16 @@ object ProducerStateManager {
  */
 @nonthreadsafe
 class ProducerStateManager(val topicPartition: TopicPartition,
-                           @volatile var logDir: File,
+                           @volatile var _logDir: File,
                            val maxProducerIdExpirationMs: Int = 60 * 60 * 1000) extends Logging {
   import ProducerStateManager._
   import java.util
 
   this.logIdent = s"[ProducerStateManager partition=$topicPartition] "
+
+  @volatile private var snapshots: ConcurrentSkipListMap[java.lang.Long, SnapshotFile] = locally {
+    loadSnapshots()
+  }
 
   private val producers = mutable.Map.empty[Long, ProducerStateEntry]
   private var lastMapOffset = 0L
@@ -495,6 +490,53 @@ class ProducerStateManager(val topicPartition: TopicPartition,
 
   // completed transactions whose markers are at offsets above the high watermark
   private val unreplicatedTxns = new util.TreeMap[Long, TxnMetadata]
+
+  /**
+   * Load producer state snapshots by scanning the _logDir.
+   */
+  private def loadSnapshots(): ConcurrentSkipListMap[java.lang.Long, SnapshotFile] = {
+    val tm = new ConcurrentSkipListMap[java.lang.Long, SnapshotFile]()
+    for (f <- ProducerStateManager.listSnapshotFiles(_logDir)) {
+      tm.put(f.offset, f)
+    }
+    tm
+  }
+
+  /**
+   * Scans the log directory, gathering all producer state snapshot files. Snapshot files which do not have an offset
+   * corresponding to one of the provided offsets in segmentBaseOffsets will be removed, except in the case that there
+   * is a snapshot file at a higher offset than any offset in segmentBaseOffsets.
+   *
+   * The goal here is to remove any snapshot files which do not have an associated segment file, but not to remove
+   */
+  private[log] def removeStraySnapshots(segmentBaseOffsets: Set[Long]): Unit = {
+    var latestStraySnapshot: Option[SnapshotFile] = None
+    val ss = loadSnapshots()
+    for (snapshot <- ss.values().asScala) {
+      val key = snapshot.offset
+      latestStraySnapshot match {
+        case Some(prev) =>
+          if (!segmentBaseOffsets.contains(key)) {
+            // this snapshot is now the largest stray snapshot.
+            prev.deleteIfExists()
+            ss.remove(prev.offset)
+            latestStraySnapshot = Some(snapshot)
+          }
+        case None =>
+          if (!segmentBaseOffsets.contains(key)) {
+            latestStraySnapshot = Some(snapshot)
+          }
+      }
+    }
+    this.snapshots = ss
+    for (strayOffset <- latestStraySnapshot.map(_.offset); latestOffset <- latestSnapshotOffset) {
+      // if the latestStraySnapshot is not equal to the latest offset, we know it's lower than all other
+      // offsets, so we can delete it.
+      if (strayOffset != latestOffset) {
+        Option(this.snapshots.remove(strayOffset)).foreach(_.deleteIfExists())
+      }
+    }
+  }
 
   /**
    * An unstable offset is one which is either undecided (i.e. its ultimate outcome is not yet known),
@@ -546,15 +588,15 @@ class ProducerStateManager(val topicPartition: TopicPartition,
         case Some(file) =>
           try {
             info(s"Loading producer state from snapshot file '$file'")
-            val loadedProducers = readSnapshot(file).filter { producerEntry => !isProducerExpired(currentTime, producerEntry) }
+            val loadedProducers = readSnapshot(file.file).filter { producerEntry => !isProducerExpired(currentTime, producerEntry) }
             loadedProducers.foreach(loadProducerEntry)
-            lastSnapOffset = offsetFromFile(file)
+            lastSnapOffset = file.offset
             lastMapOffset = lastSnapOffset
             return
           } catch {
             case e: CorruptSnapshotException =>
               warn(s"Failed to load producer snapshot from '$file': ${e.getMessage}")
-              Files.deleteIfExists(file.toPath)
+              Option(snapshots.remove(file.offset)).foreach(_.deleteIfExists())
           }
         case None =>
           lastSnapOffset = logStartOffset
@@ -593,9 +635,11 @@ class ProducerStateManager(val topicPartition: TopicPartition,
    */
   def truncateAndReload(logStartOffset: Long, logEndOffset: Long, currentTimeMs: Long): Unit = {
     // remove all out of range snapshots
-    deleteSnapshotFiles(logDir, { snapOffset =>
-      snapOffset > logEndOffset || snapOffset <= logStartOffset
-    })
+    snapshots.values().asScala.foreach { snapshot =>
+      if (snapshot.offset > logEndOffset || snapshot.offset <= logStartOffset) {
+        Option(snapshots.remove(snapshot.offset)).foreach(_.deleteIfExists())
+      }
+    }
 
     if (logEndOffset != mapEndOffset) {
       producers.clear()
@@ -653,9 +697,10 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   def takeSnapshot(): Unit = {
     // If not a new offset, then it is not worth taking another snapshot
     if (lastMapOffset > lastSnapOffset) {
-      val snapshotFile = Log.producerSnapshotFile(logDir, lastMapOffset)
+      val snapshotFile = SnapshotFile(Log.producerSnapshotFile(_logDir, lastMapOffset))
       info(s"Writing producer snapshot at offset $lastMapOffset")
-      writeSnapshot(snapshotFile, producers)
+      writeSnapshot(snapshotFile.file, producers)
+      snapshots.put(snapshotFile.offset, snapshotFile)
 
       // Update the last snap offset according to the serialized map
       lastSnapOffset = lastMapOffset
@@ -663,14 +708,22 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   }
 
   /**
+   * Update the parentDir for this ProducerStateManager and all of the snapshot files which it manages.
+   */
+  def updateParentDir(parentDir: File): Unit ={
+    _logDir = parentDir
+    snapshots.forEach((_, s) => s.updateParentDir(parentDir))
+  }
+
+  /**
    * Get the last offset (exclusive) of the latest snapshot file.
    */
-  def latestSnapshotOffset: Option[Long] = latestSnapshotFile.map(file => offsetFromFile(file))
+  def latestSnapshotOffset: Option[Long] = latestSnapshotFile.map(_.offset)
 
   /**
    * Get the last offset (exclusive) of the oldest snapshot file.
    */
-  def oldestSnapshotOffset: Option[Long] = oldestSnapshotFile.map(file => offsetFromFile(file))
+  def oldestSnapshotOffset: Option[Long] = oldestSnapshotFile.map(_.offset)
 
   /**
    * When we remove the head of the log due to retention, we need to remove snapshots older than
@@ -703,7 +756,9 @@ class ProducerStateManager(val topicPartition: TopicPartition,
     producers.clear()
     ongoingTxns.clear()
     unreplicatedTxns.clear()
-    deleteSnapshotFiles(logDir)
+    snapshots.values().asScala.foreach { snapshot =>
+      Option(snapshots.remove(snapshot.offset)).foreach(_.deleteIfExists())
+    }
     lastSnapOffset = 0L
     lastMapOffset = 0L
   }
@@ -733,24 +788,47 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   }
 
   @threadsafe
-  def deleteSnapshotsBefore(offset: Long): Unit = ProducerStateManager.deleteSnapshotsBefore(logDir, offset)
-
-  private def oldestSnapshotFile: Option[File] = {
-    val files = listSnapshotFiles
-    if (files.nonEmpty)
-      Some(files.minBy(offsetFromFile))
-    else
-      None
+  def deleteSnapshotsBefore(offset: Long): Unit = {
+    snapshots.subMap(0, offset).values().asScala.foreach { snapshot =>
+      Option(snapshots.remove(snapshot.offset)).foreach(_.deleteIfExists())
+    }
   }
 
-  private def latestSnapshotFile: Option[File] = {
-    val files = listSnapshotFiles
-    if (files.nonEmpty)
-      Some(files.maxBy(offsetFromFile))
-    else
-      None
+  private def oldestSnapshotFile: Option[SnapshotFile] = {
+    Option(snapshots.firstEntry()).map(_.getValue)
   }
 
-  private def listSnapshotFiles: Seq[File] = ProducerStateManager.listSnapshotFiles(logDir)
+  private def latestSnapshotFile: Option[SnapshotFile] = {
+    Option(snapshots.lastEntry()).map(_.getValue)
+  }
 
+  /**
+   * Removes the producer state snapshot file metadata corresponding to the provided offset if it exists from this
+   * ProducerStateManager, and deletes the backing snapshot file.
+   */
+  private[log] def removeAndDeleteSnapshot(snapshotOffset: Long): Unit = {
+    Option(snapshots.remove(snapshotOffset)).foreach(_.deleteIfExists())
+  }
+}
+
+case class SnapshotFile private[log] (private var _file: File,
+                                      offset: Long) {
+  def deleteIfExists(): Boolean = {
+    Files.deleteIfExists(file.toPath)
+  }
+
+  def updateParentDir(parentDir: File): Unit = {
+    _file = new File(parentDir, _file.getName)
+  }
+
+  def file: File = {
+    _file
+  }
+}
+
+object SnapshotFile {
+  def apply(file: File): SnapshotFile = {
+    val offset = offsetFromFile(file)
+    SnapshotFile(file, offset)
+  }
 }
