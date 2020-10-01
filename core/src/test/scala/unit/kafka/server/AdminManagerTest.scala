@@ -30,6 +30,8 @@ import org.junit.{After, Test}
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNotEquals
+import java.util.Properties
 
 class AdminManagerTest {
 
@@ -84,8 +86,8 @@ class AdminManagerTest {
 
   @Test
   def testDescribeConfigsWithDocumentation(): Unit = {
-    EasyMock.expect(zkClient.getEntityConfigs(ConfigType.Topic, topic)).andReturn(new java.util.Properties)
-    EasyMock.expect(zkClient.getEntityConfigs(ConfigType.Broker, brokerId.toString)).andReturn(TestUtils.createBrokerConfig(brokerId,"zk"))
+    EasyMock.expect(zkClient.getEntityConfigs(ConfigType.Topic, topic)).andReturn(new Properties)
+    EasyMock.expect(zkClient.getEntityConfigs(ConfigType.Broker, brokerId.toString)).andReturn(new Properties)
     EasyMock.expect(metadataCache.contains(topic)).andReturn(true)
     EasyMock.replay(zkClient, metadataCache)
 
@@ -104,7 +106,10 @@ class AdminManagerTest {
     results.foreach(r => {
       assertEquals(Errors.NONE.code, r.errorCode)
       assertFalse("Should return configs", r.configs.isEmpty)
-      r.configs.forEach(c => assertNotNull(s"Config ${c.name} should have documentation", c.documentation))
+      r.configs.forEach(c => {
+        assertNotNull(s"Config ${c.name} should have non null documentation", c.documentation)
+        assertNotEquals(s"Config ${c.name} should have non blank documentation", "", c.documentation.trim)
+      })
     })
   }
 }
