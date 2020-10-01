@@ -209,6 +209,22 @@ public class JsonConverterTest {
         assertEquals(SchemaAndValue.NULL, converted);
     }
 
+    /**
+     * When schemas are disabled, fields are mapped to Connect maps.
+     */
+    @Test
+    public void schemalessWithEmptyFieldValueToConnect() {
+        // This characterizes the messages with empty data when Json schemas is disabled
+        Map<String, Boolean> props = Collections.singletonMap("schemas.enable", false);
+        converter.configure(props, true);
+        String input = "{ \"a\": \"\", \"b\": null}";
+        SchemaAndValue converted = converter.toConnectData(TOPIC, input.getBytes());
+        Map<String, String> expected = new HashMap<>();
+        expected.put("a", "");
+        expected.put("b", null);
+        assertEquals(new SchemaAndValue(null, expected), converted);
+    }
+
     @Test
     public void nullSchemaPrimitiveToConnect() {
         SchemaAndValue converted = converter.toConnectData(TOPIC, "{ \"schema\": null, \"payload\": null }".getBytes());
