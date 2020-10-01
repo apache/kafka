@@ -302,11 +302,11 @@ public class RocksDBStoreTest {
         props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
         final Object param = new Object();
         props.put("abc.def", param);
-        InternalMockProcessorContext context = new InternalMockProcessorContext(
-                dir,
-                Serdes.String(),
-                Serdes.String(),
-                new StreamsConfig(props)
+        final InternalMockProcessorContext context = new InternalMockProcessorContext(
+            dir,
+            Serdes.String(),
+            Serdes.String(),
+            new StreamsConfig(props)
         );
 
         rocksDBStore.init(context, rocksDBStore);
