@@ -161,49 +161,6 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     }
 
     @Override
-    public <K, V> void forward(final Record<K, V> record) {
-        forward(record, null);
-    }
-
-    @SuppressWarnings("unchecked")
-    @Override
-    public <K, V> void forward(final Record<K, V> record, final String childName) {
-        throwUnsupportedOperationExceptionIfStandby("forward");
-
-        final ProcessorNode<?, ?, ?, ?> previousNode = currentNode();
-        final ProcessorRecordContext previousContext = recordContext;
-
-        try {
-            if (recordContext != null && record.timestamp() != recordContext.timestamp()) {
-                recordContext = new ProcessorRecordContext(
-                    record.timestamp(),
-                    recordContext.offset(),
-                    recordContext.partition(),
-                    recordContext.topic(),
-                    recordContext.headers());
-            }
-
-            if (childName == null) {
-                final List<? extends ProcessorNode<?, ?, ?, ?>> children = currentNode().children();
-                for (final ProcessorNode<?, ?, ?, ?> child : children) {
-                    forwardInternal((ProcessorNode<K, V, ?, ?>) child, record);
-                }
-            } else {
-                final ProcessorNode<?, ?, ?, ?> child = currentNode().getChild(childName);
-                if (child == null) {
-                    throw new StreamsException("Unknown downstream node: " + childName
-                                                   + " either does not exist or is not connected to this processor.");
-                }
-                forwardInternal((ProcessorNode<K, V, ?, ?>) child, record);
-            }
-
-        } finally {
-            recordContext = previousContext;
-            setCurrentNode(previousNode);
-        }
-    }
-
-    @Override
     public <K, V> void forward(final K key,
                                final V value) {
         final Record<K, V> toForward = new Record<>(
@@ -255,6 +212,58 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
             headers()
         );
         forward(toForward, toInternal.child());
+    }
+
+    @Override
+    public <K, V> void forward(final Record<K, V> record) {
+        forward(record, null);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <K, V> void forward(final Record<K, V> record, final String childName) {
+        throwUnsupportedOperationExceptionIfStandby("forward");
+
+        final ProcessorNode<?, ?, ?, ?> previousNode = currentNode();
+        final ProcessorRecordContext previousContext = recordContext;
+
+        try {
+            // we don't want to set the recordContext if it's null, since that means that
+            // the context itself is undefined. this isn't perfect, since downstream
+            // old API processors wouldn't see the timestamps or headers of upstream
+            // new API processors. But then again, from the perspective of those old-API
+            // processors, even consulting the timestamp or headers when the record context
+            // is undefined is itself not well defined. Plus, I don't think we need to worry
+            // too much about heterogeneous applications, in which the upstream processor is
+            // implementing the new API and the downstream one is implementing the old API.
+            // So, this seems like a fine compromise for now.
+            if (recordContext != null && (record.timestamp() != timestamp() || record.headers() != headers())) {
+                recordContext = new ProcessorRecordContext(
+                    record.timestamp(),
+                    recordContext.offset(),
+                    recordContext.partition(),
+                    recordContext.topic(),
+                    record.headers());
+            }
+
+            if (childName == null) {
+                final List<? extends ProcessorNode<?, ?, ?, ?>> children = currentNode().children();
+                for (final ProcessorNode<?, ?, ?, ?> child : children) {
+                    forwardInternal((ProcessorNode<K, V, ?, ?>) child, record);
+                }
+            } else {
+                final ProcessorNode<?, ?, ?, ?> child = currentNode().getChild(childName);
+                if (child == null) {
+                    throw new StreamsException("Unknown downstream node: " + childName
+                                                   + " either does not exist or is not connected to this processor.");
+                }
+                forwardInternal((ProcessorNode<K, V, ?, ?>) child, record);
+            }
+
+        } finally {
+            recordContext = previousContext;
+            setCurrentNode(previousNode);
+        }
     }
 
     private <K, V> void forwardInternal(final ProcessorNode<K, V, ?, ?> child,

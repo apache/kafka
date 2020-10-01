@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.MockTime;
@@ -206,7 +205,7 @@ public class ProcessorNodeTest {
         node.init(context);
         final StreamsException se = assertThrows(
             StreamsException.class,
-            () -> node.process(new Record<>("aKey", "aValue", 0, new RecordHeaders()))
+            () -> node.process(new Record<>("aKey", "aValue", 0))
         );
         assertThat(se.getCause(), instanceOf(ClassCastException.class));
         assertThat(se.getMessage(), containsString("default Serdes"));

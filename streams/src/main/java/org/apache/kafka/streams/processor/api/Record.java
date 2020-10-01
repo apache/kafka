@@ -74,10 +74,7 @@ public class Record<K, V> {
      * @throws IllegalArgumentException if the timestamp is negative.
      */
     public Record(final K key, final V value, final long timestamp) {
-        this.key = key;
-        this.value = value;
-        this.timestamp = timestamp;
-        headers = new RecordHeaders();
+        this(key, value, timestamp, null);
     }
 
     /**

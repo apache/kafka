@@ -832,7 +832,10 @@ public class ProcessorTopologyTest {
 
         @Override
         public void process(final Record<String, String> record) {
-            context.forward(record.withHeaders(record.headers().add(HEADER)));
+            // making a copy of headers for safety.
+            final Record<String, String> toForward = record.withHeaders(record.headers());
+            toForward.headers().add(HEADER);
+            context.forward(toForward);
         }
     }
 

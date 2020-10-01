@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
@@ -85,13 +84,6 @@ public class SinkNode<KIn, VIn, KOut, VOut> extends ProcessorNode<KIn, VIn, KOut
         final VIn value = record.value();
 
         final long timestamp = record.timestamp();
-        if (timestamp < 0) {
-            throw new StreamsException(
-                "Invalid (negative) timestamp of "
-                    + timestamp
-                    + " for output record <" + key + ":" + value + ">."
-            );
-        }
 
         final ProcessorRecordContext contextForExtraction =
             new ProcessorRecordContext(

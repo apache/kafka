@@ -1471,7 +1471,7 @@ public class TopologyTestDriverTest {
             try (final KeyValueIterator<String, Long> it = store.all()) {
                 while (it.hasNext()) {
                     final KeyValue<String, Long> next = it.next();
-                    context.forward(new Record<>(next.key, next.value, timestamp, new RecordHeaders()));
+                    context.forward(new Record<>(next.key, next.value, timestamp));
                 }
             }
         }
