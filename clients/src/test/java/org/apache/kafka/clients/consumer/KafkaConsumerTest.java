@@ -2535,4 +2535,31 @@ public class KafkaConsumerTest {
 
         assertEquals(countingRebalanceListener.revokedCount, 1);
     }
+
+    @Test
+    public void deserializerShouldSeeGeneratedClientId() {
+        Properties props = new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, DeserializerForClientId.class.getName());
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, DeserializerForClientId.class.getName());
+
+        KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props);
+        assertEquals(2, DeserializerForClientId.CLIENT_IDS.size());
+        assertEquals(DeserializerForClientId.CLIENT_IDS.get(0), consumer.getClientId());
+        assertEquals(DeserializerForClientId.CLIENT_IDS.get(1), consumer.getClientId());
+        consumer.close();
+    }
+
+    public static class DeserializerForClientId implements Deserializer<byte[]> {
+        static final List<String> CLIENT_IDS = new ArrayList<>();
+        @Override
+        public void configure(Map<String, ?> configs, boolean isKey) {
+            CLIENT_IDS.add(configs.get(ConsumerConfig.CLIENT_ID_CONFIG).toString());
+        }
+
+        @Override
+        public byte[] deserialize(String topic, byte[] data) {
+            return data;
+        }
+    }
 }

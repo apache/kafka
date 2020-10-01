@@ -214,7 +214,11 @@ public class SaslClientAuthenticator implements Authenticator {
                 String[] mechs = {mechanism};
                 log.debug("Creating SaslClient: client={};service={};serviceHostname={};mechs={}",
                     clientPrincipalName, servicePrincipal, host, Arrays.toString(mechs));
-                return Sasl.createSaslClient(mechs, clientPrincipalName, servicePrincipal, host, configs, callbackHandler);
+                SaslClient retvalSaslClient = Sasl.createSaslClient(mechs, clientPrincipalName, servicePrincipal, host, configs, callbackHandler);
+                if (retvalSaslClient == null) {
+                    throw new SaslAuthenticationException("Failed to create SaslClient with mechanism " + mechanism);
+                }
+                return retvalSaslClient;
             });
         } catch (PrivilegedActionException e) {
             throw new SaslAuthenticationException("Failed to create SaslClient with mechanism " + mechanism, e.getCause());
