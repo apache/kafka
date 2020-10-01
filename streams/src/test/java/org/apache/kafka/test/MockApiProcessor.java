@@ -22,7 +22,6 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.time.Duration;
@@ -30,7 +29,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
@@ -74,7 +72,7 @@ public class MockApiProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VI
     }
 
     @Override
-    public void process(final Record<KIn, VIn> record, final Optional<RecordMetadata> recordMetadata) {
+    public void process(final Record<KIn, VIn> record) {
         final KIn key = record.key();
         final VIn value = record.value();
         final KeyValueTimestamp<KIn, VIn> keyValueTimestamp = new KeyValueTimestamp<>(key, value, record.timestamp());

@@ -72,7 +72,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -266,14 +265,14 @@ public class TopologyTestDriverTest {
         }
 
         @Override
-        public void process(final Record<Object, Object> record, final Optional<RecordMetadata> recordMetadata) {
+        public void process(final Record<Object, Object> record) {
             processedRecords.add(new TTDTestRecord(
                 record.key(),
                 record.value(),
                 record.headers(),
                 record.timestamp(),
-                recordMetadata.map(RecordMetadata::offset).orElse(-1L),
-                recordMetadata.map(RecordMetadata::topic).orElse(null)
+                context.recordMetadata().map(RecordMetadata::offset).orElse(-1L),
+                context.recordMetadata().map(RecordMetadata::topic).orElse(null)
             ));
             context.forward(record);
         }
@@ -408,7 +407,7 @@ public class TopologyTestDriverTest {
                     }
 
                     @Override
-                    public void process(final Record<Object, Object> record, final Optional<RecordMetadata> recordMetadata) {
+                    public void process(final Record<Object, Object> record) {
                         store.put(record.key(), record.value());
                     }
                 }
@@ -1461,7 +1460,7 @@ public class TopologyTestDriverTest {
         }
 
         @Override
-        public void process(final Record<String, Long> record, final Optional<RecordMetadata> recordMetadata) {
+        public void process(final Record<String, Long> record) {
             final Long oldValue = store.get(record.key());
             if (oldValue == null || record.value() > oldValue) {
                 store.put(record.key(), record.value());
@@ -1514,7 +1513,7 @@ public class TopologyTestDriverTest {
                         }
 
                         @Override
-                        public void process(final Record<String, Long> record, final Optional<RecordMetadata> recordMetadata) {
+                        public void process(final Record<String, Long> record) {
                             store.put(record.key(), record.value());
                         }
                     };
@@ -1703,7 +1702,7 @@ public class TopologyTestDriverTest {
                 }
 
                 @Override
-                public void process(final Record<String, String> record, final Optional<RecordMetadata> recordMetadata) {
+                public void process(final Record<String, String> record) {
                     final String value = record.value();
                     if (!value.startsWith("recurse-")) {
                         context.forward(record.withValue("recurse-" + value), "recursiveSink");
@@ -1761,7 +1760,7 @@ public class TopologyTestDriverTest {
                 }
 
                 @Override
-                public void process(final Record<String, String> record, final Optional<RecordMetadata> recordMetadata) {
+                public void process(final Record<String, String> record) {
                     stateStore.put(record.key(), record.value());
                 }
             }
@@ -1777,7 +1776,7 @@ public class TopologyTestDriverTest {
                 }
 
                 @Override
-                public void process(final Record<String, String> record, final Optional<RecordMetadata> recordMetadata) {
+                public void process(final Record<String, String> record) {
                     final String value = record.value();
                     if (!value.startsWith("recurse-")) {
                         context.forward(record.withValue("recurse-" + value), "recursiveSink");

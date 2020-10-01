@@ -39,7 +39,6 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -55,7 +54,6 @@ import java.io.File;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.function.Supplier;
@@ -777,7 +775,7 @@ public class ProcessorTopologyTest {
         }
 
         @Override
-        public void process(final Record<String, String> record, final Optional<RecordMetadata> recordMetadata) {
+        public void process(final Record<String, String> record) {
             context.forward(record);
         }
     }
@@ -794,7 +792,7 @@ public class ProcessorTopologyTest {
         }
 
         @Override
-        public void process(final Record<String, String> record, final Optional<RecordMetadata> recordMetadata) {
+        public void process(final Record<String, String> record) {
             context.forward(record.withTimestamp(record.timestamp() + 10));
         }
     }
@@ -816,7 +814,7 @@ public class ProcessorTopologyTest {
         }
 
         @Override
-        public void process(final Record<String, String> record, final Optional<RecordMetadata> recordMetadata) {
+        public void process(final Record<String, String> record) {
             context.forward(record);
             context.forward(record.withTimestamp(record.timestamp() + 5), firstChild);
             context.forward(record, secondChild);
@@ -833,7 +831,7 @@ public class ProcessorTopologyTest {
         }
 
         @Override
-        public void process(final Record<String, String> record, final Optional<RecordMetadata> recordMetadata) {
+        public void process(final Record<String, String> record) {
             context.forward(record.withHeaders(record.headers().add(HEADER)));
         }
     }
@@ -851,7 +849,7 @@ public class ProcessorTopologyTest {
         }
 
         @Override
-        public void process(final Record<String, String> record, final Optional<RecordMetadata> recordMetadata) {
+        public void process(final Record<String, String> record) {
             context.forward(record.withValue(record.value().split("@")[0]));
         }
     }
@@ -936,7 +934,7 @@ public class ProcessorTopologyTest {
         }
 
         @Override
-        public void process(final Record<String, String> record, final Optional<RecordMetadata> recordMetadata) {
+        public void process(final Record<String, String> record) {
             store.put(record.key(), record.value());
         }
     }

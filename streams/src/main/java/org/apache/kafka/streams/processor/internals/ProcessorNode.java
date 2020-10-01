@@ -20,11 +20,10 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.Punctuator;
+import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
@@ -32,7 +31,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
@@ -176,11 +174,11 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
     }
 
 
-    public void process(final Record<KIn, VIn> record, final Optional<RecordMetadata> recordMetadata) {
+    public void process(final Record<KIn, VIn> record) {
         throwIfClosed();
 
         try {
-            maybeMeasureLatency(() -> processor.process(record, recordMetadata), time, processSensor);
+            maybeMeasureLatency(() -> processor.process(record), time, processSensor);
         } catch (final ClassCastException e) {
             final String keyClass = record.key() == null ? "unknown because key is null" : record.key().getClass().getName();
             final String valueClass = record.value() == null ? "unknown because value is null" : record.value().getClass().getName();

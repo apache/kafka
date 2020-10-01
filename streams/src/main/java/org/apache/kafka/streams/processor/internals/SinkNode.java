@@ -22,9 +22,6 @@ import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.processor.api.RecordMetadata;
-
-import java.util.Optional;
 
 public class SinkNode<KIn, VIn, KOut, VOut> extends ProcessorNode<KIn, VIn, KOut, VOut> {
 
@@ -81,7 +78,7 @@ public class SinkNode<KIn, VIn, KOut, VOut> extends ProcessorNode<KIn, VIn, KOut
     }
 
     @Override
-    public void process(final Record<KIn, VIn> record, final Optional<RecordMetadata> recordMetadata) {
+    public void process(final Record<KIn, VIn> record) {
         final RecordCollector collector = ((RecordCollector.Supplier) context).recordCollector();
 
         final KIn key = record.key();
@@ -96,22 +93,13 @@ public class SinkNode<KIn, VIn, KOut, VOut> extends ProcessorNode<KIn, VIn, KOut
             );
         }
 
-        // Prefer the record metadata if defined,
-        // and fall back to the context (which is undefined and dummy values,
-        // but extractors may still depend on the current behavior.
-        final Optional<ProcessorRecordContext> maybeContext =
-            recordMetadata.map(
-                m -> new ProcessorRecordContext(timestamp, m.offset(), m.partition(), m.topic(), record.headers())
-            );
         final ProcessorRecordContext contextForExtraction =
-            maybeContext.orElseGet(
-                () -> new ProcessorRecordContext(
-                    timestamp,
-                    context.offset(),
-                    context.partition(),
-                    context.topic(),
-                    record.headers()
-                )
+            new ProcessorRecordContext(
+                timestamp,
+                context.offset(),
+                context.partition(),
+                context.topic(),
+                record.headers()
             );
 
         final String topic = topicExtractor.extract(key, value, contextForExtraction);

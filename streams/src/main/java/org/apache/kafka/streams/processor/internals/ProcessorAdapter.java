@@ -20,9 +20,6 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.processor.api.RecordMetadata;
-
-import java.util.Optional;
 
 public final class ProcessorAdapter<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn, KOut, VOut> {
     private final org.apache.kafka.streams.processor.Processor<KIn, VIn> delegate;
@@ -57,7 +54,7 @@ public final class ProcessorAdapter<KIn, VIn, KOut, VOut> implements Processor<K
     }
 
     @Override
-    public void process(final Record<KIn, VIn> record, final Optional<RecordMetadata> recordMetadata) {
+    public void process(final Record<KIn, VIn> record) {
         final ProcessorRecordContext processorRecordContext = context.recordContext();
         try {
             context.setRecordContext(new ProcessorRecordContext(

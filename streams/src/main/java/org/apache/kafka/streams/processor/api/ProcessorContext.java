@@ -53,6 +53,16 @@ public interface ProcessorContext<KForward, VForward> {
     TaskId taskId();
 
     /**
+     * The metadata of the record, if it is defined. Note that as long as the processor is
+     * receiving a record downstream of a Source (i.e., the current record is coming from an
+     * input topic), the metadata is defined. On the other hand, if a parent processor has
+     * registered a punctuator and called {@link ProcessorContext#forward(Record)} from that
+     * punctuator, then there is no record from an input topic, and therefore the metadata
+     * would be undefined.
+     */
+    Optional<RecordMetadata> recordMetadata();
+
+    /**
      * Returns the default key serde.
      *
      * @return the key serializer

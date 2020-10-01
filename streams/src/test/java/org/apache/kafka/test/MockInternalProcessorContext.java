@@ -23,6 +23,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
@@ -35,6 +36,7 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 import java.io.File;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
@@ -81,6 +83,11 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     @Override
     public ProcessorRecordContext recordContext() {
         return new ProcessorRecordContext(timestamp(), offset(), partition(), topic(), headers());
+    }
+
+    @Override
+    public Optional<RecordMetadata> recordMetadata() {
+        return Optional.of(recordContext());
     }
 
     @Override

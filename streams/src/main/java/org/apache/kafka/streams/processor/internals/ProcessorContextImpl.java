@@ -28,7 +28,6 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -38,7 +37,6 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 import static org.apache.kafka.streams.processor.internals.AbstractReadOnlyDecorator.getReadOnlyStore;
@@ -263,9 +261,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                                         final Record<K, V> record) {
         setCurrentNode(child);
 
-        final Optional<RecordMetadata> recordMetadata = Optional.ofNullable(recordContext);
-
-        child.process(record, recordMetadata);
+        child.process(record);
 
         if (child.isTerminalNode()) {
             streamTask.maybeRecordE2ELatency(record.timestamp(), currentSystemTimeMs(), child.name());

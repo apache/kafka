@@ -55,7 +55,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
 
@@ -300,7 +299,7 @@ public class InternalMockProcessorContext
         try {
             for (final ProcessorNode<?, ?, ?, ?> childNode : thisNode.children()) {
                 currentNode = childNode;
-                ((ProcessorNode<K, V, ?, ?>) childNode).process(record, Optional.ofNullable(recordContext));
+                ((ProcessorNode<K, V, ?, ?>) childNode).process(record);
             }
         } finally {
             currentNode = thisNode;
@@ -337,7 +336,7 @@ public class InternalMockProcessorContext
                 if (toInternal.child() == null || toInternal.child().equals(childNode.name())) {
                     currentNode = childNode;
                     final Record<Object, Object> record = new Record<>(key, value, toInternal.timestamp(), headers());
-                    ((ProcessorNode<Object, Object, ?, ?>) childNode).process(record, Optional.ofNullable(recordContext));
+                    ((ProcessorNode<Object, Object, ?, ?>) childNode).process(record);
                     toInternal.update(to); // need to reset because MockProcessorContext is shared over multiple
                                            // Processors and toInternal might have been modified
                 }

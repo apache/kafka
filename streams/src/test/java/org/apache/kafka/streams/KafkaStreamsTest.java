@@ -41,7 +41,6 @@ import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
@@ -78,7 +77,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.Executors;
@@ -869,7 +867,7 @@ public class KafkaStreamsTest {
                     }
 
                     @Override
-                    public void process(final Record<String, String> record, final Optional<RecordMetadata> recordMetadata) {
+                    public void process(final Record<String, String> record) {
                         if (record.value().length() % 2 == 0) {
                             context.forward(record.withValue(record.key() + record.value()));
                         }
@@ -970,7 +968,7 @@ public class KafkaStreamsTest {
                 }
 
                 @Override
-                public void process(final Record<String, String> record, final Optional<RecordMetadata> recordMetadata) {
+                public void process(final Record<String, String> record) {
                     final KeyValueStore<String, Long> kvStore = context.getStateStore(storeName);
                     kvStore.put(record.key(), 5L);
 

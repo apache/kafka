@@ -100,7 +100,7 @@ public class GlobalProcessorContextImplTest {
 
     @Test
     public void shouldForwardToSingleChild() {
-        child.process(anyObject(), anyObject());
+        child.process(anyObject());
         expectLastCall();
 
         expect(recordContext.timestamp()).andStubReturn(0L);

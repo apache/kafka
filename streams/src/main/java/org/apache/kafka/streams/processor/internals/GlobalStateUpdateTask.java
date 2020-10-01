@@ -28,7 +28,6 @@ import org.slf4j.Logger;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor;
@@ -112,10 +111,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
                 processorContext.timestamp(),
                 processorContext.headers()
             );
-            ((SourceNode<Object, Object, Object, Object>) sourceNodeAndDeserializer.sourceNode()).process(
-                toProcess,
-                Optional.of(recordContext)
-            );
+            ((SourceNode<Object, Object, Object, Object>) sourceNodeAndDeserializer.sourceNode()).process(toProcess);
         }
 
         offsets.put(new TopicPartition(record.topic(), record.partition()), record.offset() + 1);
