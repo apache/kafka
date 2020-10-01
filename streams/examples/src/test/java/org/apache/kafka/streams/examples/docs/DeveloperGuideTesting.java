@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.examples.docs;
 
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
@@ -179,7 +178,7 @@ public class DeveloperGuideTesting {
             final KeyValueIterator<String, Long> it = store.all();
             while (it.hasNext()) {
                 final KeyValue<String, Long> next = it.next();
-                context.forward(new Record<>(next.key, next.value, timestamp, new RecordHeaders()));
+                context.forward(new Record<>(next.key, next.value, timestamp));
             }
         }
     }
