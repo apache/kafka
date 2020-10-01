@@ -29,6 +29,9 @@ import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.text.StringCharacterIterator;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
@@ -76,7 +79,9 @@ public class Values {
     private static final String NULL_VALUE = "null";
     static final String ISO_8601_DATE_FORMAT_PATTERN = "yyyy-MM-dd";
     static final String ISO_8601_TIME_FORMAT_PATTERN = "HH:mm:ss.SSS'Z'";
+    static final String ISO_8601_TIME_MICROS_FORMAT_PATTERN = "HH:mm:ss.SSSSSS'Z'";
     static final String ISO_8601_TIMESTAMP_FORMAT_PATTERN = ISO_8601_DATE_FORMAT_PATTERN + "'T'" + ISO_8601_TIME_FORMAT_PATTERN;
+    static final String ISO_8601_TIMESTAMP_MICROS_FORMAT_PATTERN = ISO_8601_DATE_FORMAT_PATTERN + "'T'" + ISO_8601_TIME_MICROS_FORMAT_PATTERN;
     private static final Set<String> TEMPORAL_LOGICAL_TYPE_NAMES =
             Collections.unmodifiableSet(
                     new HashSet<>(
@@ -97,6 +102,7 @@ public class Values {
     private static final int ISO_8601_DATE_LENGTH = ISO_8601_DATE_FORMAT_PATTERN.length();
     private static final int ISO_8601_TIME_LENGTH = ISO_8601_TIME_FORMAT_PATTERN.length() - 2; // subtract single quotes
     private static final int ISO_8601_TIMESTAMP_LENGTH = ISO_8601_TIMESTAMP_FORMAT_PATTERN.length() - 4; // subtract single quotes
+    private static final int ISO_8601_TIMESTAMP_MICROS_LENGTH = ISO_8601_TIMESTAMP_MICROS_FORMAT_PATTERN.length() - 4; // subtract single quotes
 
     private static final Pattern TWO_BACKSLASHES = Pattern.compile("\\\\");
 
@@ -293,6 +299,19 @@ public class Values {
     }
 
     /**
+     * Convert the specified value to an {@link TimestampMicros#SCHEMA timestamp} value.
+     * Not supplying a schema may limit the ability to convert to the desired type.
+     *
+     * @param schema the schema for the value; may be null
+     * @param value  the value to be converted; may be null
+     * @return the representation as a timestamp with microseconds precision, or null if the supplied value was null
+     * @throws DataException if the value cannot be converted to a timestamp value
+     */
+    public static java.time.Instant convertToTimestampMicros(Schema schema, Object value) {
+        return (java.time.Instant) convertTo(TimestampMicros.SCHEMA, schema, value);
+    }
+
+    /**
      * Convert the specified value to an {@link Decimal decimal} value.
      * Not supplying a schema may limit the ability to convert to the desired type.
      *
@@ -485,6 +504,9 @@ public class Values {
                             return value;
                         }
                     }
+                    if (value instanceof java.time.Instant) {
+                        return java.util.Date.from((Instant) value);
+                    }
                     long numeric = asLong(value, fromSchema, null);
                     return Date.toLogical(toSchema, (int) numeric);
                 }
@@ -512,6 +534,13 @@ public class Values {
                             // There is no fromSchema, so no conversion is needed
                             return value;
                         }
+                    }
+                    if (value instanceof java.time.Instant) {
+                        long epochMilis = ChronoUnit.MILLIS.between(
+                                Instant.EPOCH,
+                                ((Instant) value).atZone(ZoneOffset.UTC).withYear(1970).withMonth(1).withDayOfMonth(1)
+                        );
+                        return Time.toLogical(toSchema, (int) epochMilis);
                     }
                     long numeric = asLong(value, fromSchema, null);
                     return Time.toLogical(toSchema, (int) numeric);
@@ -547,8 +576,18 @@ public class Values {
                             return value;
                         }
                     }
+                    if (value instanceof java.time.Instant) {
+                        return java.util.Date.from((Instant) value);
+                    }
                     long numeric = asLong(value, fromSchema, null);
                     return Timestamp.toLogical(toSchema, numeric);
+                }
+                if (TimestampMicros.LOGICAL_NAME.equals(toSchema.name())) {
+                    if (value instanceof Instant) {
+                        return value;
+                    }
+                    long numeric = asLong(value, fromSchema, null);
+                    return TimestampMicros.toLogical(toSchema, numeric);
                 }
                 if (value instanceof Long) {
                     return value;
@@ -624,6 +663,11 @@ public class Values {
                 }
                 if (Timestamp.LOGICAL_NAME.equals(schemaName)) {
                     return Timestamp.fromLogical(fromSchema, (java.util.Date) value);
+                }
+            }
+            if (value instanceof Instant) {
+                if (TimestampMicros.LOGICAL_NAME.equals(schemaName)) {
+                    return TimestampMicros.fromLogical(fromSchema, (java.time.Instant) value);
                 }
             }
             throw new DataException("Unable to convert " + value + " (" + value.getClass() + ") to " + fromSchema, error);
@@ -979,6 +1023,8 @@ public class Values {
             } catch (ParseException e) {
               // not a valid date
             }
+        } else if (tokenLength == ISO_8601_TIMESTAMP_MICROS_LENGTH) {
+            return new SchemaAndValue(TimestampMicros.SCHEMA, Instant.parse(token));
         } else if (tokenLength == ISO_8601_DATE_LENGTH) {
             try {
                 return new SchemaAndValue(Date.SCHEMA, new SimpleDateFormat(ISO_8601_DATE_FORMAT_PATTERN).parse(token));

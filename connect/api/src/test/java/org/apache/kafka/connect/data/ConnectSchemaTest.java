@@ -23,6 +23,7 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -104,6 +105,7 @@ public class ConnectSchemaTest {
         ConnectSchema.validateValue(Date.SCHEMA, new java.util.Date(0));
         ConnectSchema.validateValue(Time.SCHEMA, new java.util.Date(0));
         ConnectSchema.validateValue(Timestamp.SCHEMA, new java.util.Date(0));
+        ConnectSchema.validateValue(TimestampMicros.SCHEMA, Instant.EPOCH);
     }
 
     // To avoid requiring excessive numbers of tests, these checks for invalid types use a similar type where possible
@@ -231,6 +233,11 @@ public class ConnectSchemaTest {
     @Test(expected = DataException.class)
     public void testValidateValueMismatchTimestamp() {
         ConnectSchema.validateValue(Timestamp.SCHEMA, 1000L);
+    }
+
+    @Test(expected = DataException.class)
+    public void testValidateValueMismatchTimestampMicros() {
+        ConnectSchema.validateValue(TimestampMicros.SCHEMA, 1000L);
     }
 
     @Test

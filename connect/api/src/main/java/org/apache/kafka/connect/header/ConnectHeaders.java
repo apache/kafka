@@ -25,6 +25,7 @@ import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
+import org.apache.kafka.connect.data.TimestampMicros;
 import org.apache.kafka.connect.errors.DataException;
 
 import java.math.BigDecimal;
@@ -219,6 +220,15 @@ public class ConnectHeaders implements Headers {
             Timestamp.fromLogical(Timestamp.SCHEMA, value);
         }
         return addWithoutValidating(key, value, Timestamp.SCHEMA);
+    }
+
+    @Override
+    public Headers addTimestampMicros(String key, java.time.Instant value) {
+        if (value != null) {
+            // Check that this is a timestamp with microseconds precision...
+            TimestampMicros.fromLogical(TimestampMicros.SCHEMA, value);
+        }
+        return addWithoutValidating(key, value, TimestampMicros.SCHEMA);
     }
 
     @Override
@@ -443,6 +453,8 @@ public class ConnectHeaders implements Headers {
                         if (value instanceof Long)
                             return;
                         if (value instanceof java.util.Date && Timestamp.LOGICAL_NAME.equals(schema.name()))
+                            return;
+                        if (value instanceof java.time.Instant && TimestampMicros.LOGICAL_NAME.equals(schema.name()))
                             return;
                         break;
                     case FLOAT32:
