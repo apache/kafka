@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
@@ -45,6 +46,18 @@ class ChangeLoggingWindowBytesStore
 
     @Override
     public void init(final ProcessorContext context,
+                     final StateStore root) {
+        if (!(context instanceof InternalProcessorContext)) {
+            throw new IllegalArgumentException(
+                "Change logging requires internal features of KafkaStreams and must be disabled for unit tests."
+            );
+        }
+        this.context = (InternalProcessorContext) context;
+        super.init(context, root);
+    }
+
+    @Override
+    public void init(final StateStoreContext context,
                      final StateStore root) {
         if (!(context instanceof InternalProcessorContext)) {
             throw new IllegalArgumentException(

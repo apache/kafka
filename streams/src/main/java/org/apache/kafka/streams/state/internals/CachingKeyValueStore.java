@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -57,20 +58,40 @@ public class CachingKeyValueStore
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
-        initInternal(context);
+        if (!(context instanceof InternalProcessorContext)) {
+            throw new IllegalArgumentException(
+                "Caching requires internal features of KafkaStreams and must be disabled for unit tests."
+            );
+        }
+        initInternal((InternalProcessorContext) context);
         super.init(context, root);
         // save the stream thread as we only ever want to trigger a flush
         // when the stream thread is the current thread.
         streamThread = Thread.currentThread();
     }
 
-    private void initInternal(final ProcessorContext context) {
-        this.context = (InternalProcessorContext) context;
+    @Override
+    public void init(final StateStoreContext context,
+                     final StateStore root) {
+        if (!(context instanceof InternalProcessorContext)) {
+            throw new IllegalArgumentException(
+                "Caching requires internal features of KafkaStreams and must be disabled for unit tests."
+            );
+        }
+        initInternal((InternalProcessorContext) context);
+        super.init(context, root);
+        // save the stream thread as we only ever want to trigger a flush
+        // when the stream thread is the current thread.
+        streamThread = Thread.currentThread();
+    }
+
+    private void initInternal(final InternalProcessorContext context) {
+        this.context = context;
 
         this.cacheName = ThreadCache.nameSpaceFromTaskIdAndStore(context.taskId().toString(), name());
         this.context.registerCacheFlushListener(cacheName, entries -> {
             for (final ThreadCache.DirtyEntry entry : entries) {
-                putAndMaybeForward(entry, (InternalProcessorContext) context);
+                putAndMaybeForward(entry, context);
             }
         });
     }

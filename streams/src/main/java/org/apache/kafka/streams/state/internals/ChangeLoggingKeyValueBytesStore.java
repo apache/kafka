@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -40,6 +41,31 @@ public class ChangeLoggingKeyValueBytesStore
     public void init(final ProcessorContext context,
                      final StateStore root) {
         super.init(context, root);
+        if (!(context instanceof InternalProcessorContext)) {
+            throw new IllegalArgumentException(
+                "Change logging requires internal features of KafkaStreams and must be disabled for unit tests."
+            );
+        }
+        this.context = (InternalProcessorContext) context;
+
+        // if the inner store is an LRU cache, add the eviction listener to log removed record
+        if (wrapped() instanceof MemoryLRUCache) {
+            ((MemoryLRUCache) wrapped()).setWhenEldestRemoved((key, value) -> {
+                // pass null to indicate removal
+                log(key, null);
+            });
+        }
+    }
+
+    @Override
+    public void init(final StateStoreContext context,
+                     final StateStore root) {
+        super.init(context, root);
+        if (!(context instanceof InternalProcessorContext)) {
+            throw new IllegalArgumentException(
+                "Change logging requires internal features of KafkaStreams and must be disabled for unit tests."
+            );
+        }
         this.context = (InternalProcessorContext) context;
 
         // if the inner store is an LRU cache, add the eviction listener to log removed record
