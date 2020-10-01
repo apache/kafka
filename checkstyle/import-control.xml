@@ -307,6 +307,7 @@
   <subpackage name="test">
     <allow pkg="org.apache.kafka" />
     <allow pkg="org.bouncycastle" />
+    <allow pkg="org.rocksdb" />
   </subpackage>
 
   <subpackage name="raft">
