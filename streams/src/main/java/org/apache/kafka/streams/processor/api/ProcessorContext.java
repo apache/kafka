@@ -104,7 +104,7 @@ public interface ProcessorContext<KForward, VForward> {
     /**
      * Schedules a periodic operation for processors. A processor may call this method during
      * {@link Processor#init(ProcessorContext) initialization} or
-     * {@link Processor#process(Record, Optional)}  processing} to
+     * {@link Processor#process(Record)}  processing} to
      * schedule a periodic callback &mdash; called a punctuation &mdash; to {@link Punctuator#punctuate(long)}.
      * The type parameter controls what notion of time is used for punctuation:
      * <ul>
