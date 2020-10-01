@@ -425,7 +425,6 @@ public class Sender implements Runnable {
                 if (exception == null) {
                     exception = new TransactionAbortedException();
                 }
-                // Since the transaction is aborted / being aborted, abort all the undrained batches.
                 accumulator.abortUndrainedBatches(exception);
             }
         }
