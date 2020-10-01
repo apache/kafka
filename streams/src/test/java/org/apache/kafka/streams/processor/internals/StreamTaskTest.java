@@ -2050,22 +2050,22 @@ public class StreamTaskTest {
         final ProcessorTopology topology = withSources(asList(), mkMap());
 
         final TopologyException  exception = assertThrows(
-                TopologyException.class,
-                () -> new StreamTask(
-                        taskId,
-                        partitions,
-                        topology,
-                        consumer,
-                        createConfig(false, "100"),
-                        metrics,
-                        stateDirectory,
-                        cache,
-                        time,
-                        stateManager,
-                        recordCollector,
-                        context
-                )
-            );
+            TopologyException.class,
+            () -> new StreamTask(
+                taskId,
+                partitions,
+                topology,
+                consumer,
+                createConfig(false, "100"),
+                metrics,
+                stateDirectory,
+                cache,
+                time,
+                stateManager,
+                recordCollector,
+                context
+            )
+        );
 
         assertThat(exception.getMessage(), equalTo("Invalid topology: " +
                 "Topic is unkown to the topology. This may happen if different KafkaStreams instances of the same " +

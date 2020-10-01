@@ -208,6 +208,9 @@
     <suppress checks="MethodLength"
               files="KStreamSlidingWindowAggregateTest.java"/>
 
+    <suppress checks="ClassFanOutComplexity"
+              files="StreamTaskTest.java"/>
+
     <!-- Streams test-utils -->
     <suppress checks="ClassFanOutComplexity"
               files="TopologyTestDriver.java"/>
