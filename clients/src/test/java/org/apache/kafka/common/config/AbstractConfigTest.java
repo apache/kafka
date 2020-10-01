@@ -335,6 +335,15 @@ public class AbstractConfigTest {
     }
 
     @Test
+    public void testOriginalWithOverrides() {
+        Properties props = new Properties();
+        props.put("config.providers", "file");
+        TestIndirectConfigResolution config = new TestIndirectConfigResolution(props);
+        assertEquals(config.originals().get("config.providers"), "file");
+        assertEquals(config.originals(Collections.singletonMap("config.providers", "file2")).get("config.providers"), "file2");
+    }
+
+    @Test
     public void testOriginalsWithConfigProvidersProps() {
         Properties props = new Properties();
 

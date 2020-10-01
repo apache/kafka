@@ -1276,4 +1276,31 @@ public class KafkaProducerTest {
                 new LogContext(), new ClusterResourceListeners(), Time.SYSTEM);
     }
 
+    @Test
+    public void serializerShouldSeeGeneratedClientId() {
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, SerializerForClientId.class.getName());
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, SerializerForClientId.class.getName());
+
+        KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(props);
+        assertEquals(2, SerializerForClientId.CLIENT_IDS.size());
+        assertEquals(SerializerForClientId.CLIENT_IDS.get(0), producer.getClientId());
+        assertEquals(SerializerForClientId.CLIENT_IDS.get(1), producer.getClientId());
+        producer.close();
+    }
+
+    public static class SerializerForClientId implements Serializer<byte[]> {
+        static final List<String> CLIENT_IDS = new ArrayList<>();
+        @Override
+        public void configure(Map<String, ?> configs, boolean isKey) {
+            CLIENT_IDS.add(configs.get(ProducerConfig.CLIENT_ID_CONFIG).toString());
+        }
+
+        @Override
+        public byte[] serialize(String topic, byte[] data) {
+            return data;
+        }
+    }
+
 }
