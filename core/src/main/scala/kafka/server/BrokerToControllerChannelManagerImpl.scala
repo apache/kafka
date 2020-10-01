@@ -33,6 +33,17 @@ import org.apache.kafka.common.security.JaasContext
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
+
+trait BrokerToControllerChannelManager {
+  def sendRequest(request: AbstractRequest.Builder[_ <: AbstractRequest],
+                  callback: RequestCompletionHandler): Unit
+
+  def start(): Unit
+
+  def shutdown(): Unit
+}
+
+
 /**
  * This class manages the connection between a broker and the controller. It runs a single
  * {@link BrokerToControllerRequestThread} which uses the broker's metadata cache as its own metadata to find
@@ -40,21 +51,21 @@ import scala.jdk.CollectionConverters._
  * The maximum number of in-flight requests are set to one to ensure orderly response from the controller, therefore
  * care must be taken to not block on outstanding requests for too long.
  */
-class BrokerToControllerChannelManager(metadataCache: kafka.server.MetadataCache,
-                                       time: Time,
-                                       metrics: Metrics,
-                                       config: KafkaConfig,
-                                       threadNamePrefix: Option[String] = None) extends Logging {
+class BrokerToControllerChannelManagerImpl(metadataCache: kafka.server.MetadataCache,
+                                           time: Time,
+                                           metrics: Metrics,
+                                           config: KafkaConfig,
+                                           threadNamePrefix: Option[String] = None) extends BrokerToControllerChannelManager with Logging {
   private val requestQueue = new LinkedBlockingDeque[BrokerToControllerQueueItem]
   private val logContext = new LogContext(s"[broker-${config.brokerId}-to-controller] ")
   private val manualMetadataUpdater = new ManualMetadataUpdater()
   private val requestThread = newRequestThread
 
-  def start(): Unit = {
+  override def start(): Unit = {
     requestThread.start()
   }
 
-  def shutdown(): Unit = {
+  override def shutdown(): Unit = {
     requestThread.shutdown()
     requestThread.awaitShutdown()
   }
@@ -113,9 +124,10 @@ class BrokerToControllerChannelManager(metadataCache: kafka.server.MetadataCache
       brokerToControllerListenerName, time, threadName)
   }
 
-  private[server] def sendRequest(request: AbstractRequest.Builder[_ <: AbstractRequest],
-                                  callback: RequestCompletionHandler): Unit = {
+  override def sendRequest(request: AbstractRequest.Builder[_ <: AbstractRequest],
+                           callback: RequestCompletionHandler): Unit = {
     requestQueue.put(BrokerToControllerQueueItem(request, callback))
+    requestThread.wakeup()
   }
 }
 

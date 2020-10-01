@@ -64,7 +64,7 @@ object RequestChannel extends Logging {
 
     private val metricsMap = mutable.Map[String, RequestMetrics]()
 
-    (ApiKeys.values.toSeq.map(_.name) ++
+    (ApiKeys.enabledApis.asScala.toSeq.map(_.name) ++
         Seq(RequestMetrics.consumerFetchMetricName, RequestMetrics.followFetchMetricName)).foreach { name =>
       metricsMap.put(name, new RequestMetrics(name))
     }
