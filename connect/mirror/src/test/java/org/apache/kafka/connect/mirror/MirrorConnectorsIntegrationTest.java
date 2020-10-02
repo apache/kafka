@@ -130,7 +130,7 @@ public class MirrorConnectorsIntegrationTest {
         primary.assertions().assertAtLeastNumWorkersAreUp(3,
                 "Workers of primary-connect-cluster did not start in time.");
         backup.start();
-        primary.assertions().assertAtLeastNumWorkersAreUp(3,
+        backup.assertions().assertAtLeastNumWorkersAreUp(3,
                 "Workers of backup-connect-cluster did not start in time.");
 
         // create these topics before starting the connectors so we don't need to wait for discovery
