@@ -1742,7 +1742,7 @@ class LogCleanerTest {
   private def tombstoneRecord(key: Int): MemoryRecords = record(key, null)
 
   private def recoverAndCheck(config: LogConfig, expectedKeys: Iterable[Long]): Log = {
-    LogTest.recoverAndCheck(dir, config, expectedKeys, new BrokerTopicStats(), time, time.scheduler)
+    LogTest.recoverAndCheck(dir, config, expectedKeys, new BrokerTopicStats(), time, time.scheduler, hadCleanShutdown = false)
   }
 }
 
