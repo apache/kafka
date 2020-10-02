@@ -334,6 +334,11 @@ public final class Utils {
      */
     public static void sleep(long ms) {
         try {
+            if (ms <= 0) {
+                // No need to sleep
+                log.debug("Skipping sleep as asked to sleep for {} msec", ms);
+                return;
+            }
             Thread.sleep(ms);
         } catch (InterruptedException e) {
             // this is okay, we just wake up early
