@@ -741,7 +741,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
 
   private def testControllerFeatureZNodeSetup(initialZNode: FeatureZNode,
                                               interBrokerProtocolVersion: ApiVersion): Unit = {
-    zkClient.updateFeatureZNode(initialZNode)
+    zkClient.createFeatureZNode(initialZNode)
     val (_, versionBefore) = zkClient.getDataAndVersion(FeatureZNode.path)
     servers = makeServers(1, interBrokerProtocolVersion = Some(interBrokerProtocolVersion))
     TestUtils.waitUntilControllerElected(zkClient)
