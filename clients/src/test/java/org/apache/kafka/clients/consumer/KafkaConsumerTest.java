@@ -1862,7 +1862,6 @@ public class KafkaConsumerTest {
         TestUtils.waitForCondition(() -> {
             consumer.poll(Duration.ofMillis(100L));
             return consumer.assignment().equals(Utils.mkSet(tp0, t2p0));
-
         }, "Does not complete rebalance in time");
 
         assertEquals(Utils.mkSet(topic, topic2), consumer.subscription());
@@ -1933,14 +1932,13 @@ public class KafkaConsumerTest {
         fetches1.put(tp0, new FetchInfo(3, 1));
         client.respondFrom(fetchResponse(fetches1), node);
 
-        // now complete teh rebalance
+        // now complete the rebalance
         client.respondFrom(syncGroupResponse(Arrays.asList(tp0, t3p0), Errors.NONE), coordinator);
 
         AtomicInteger count = new AtomicInteger(0);
         TestUtils.waitForCondition(() -> {
             ConsumerRecords<String, String> recs = consumer.poll(Duration.ofMillis(100L));
-            System.out.println("count " + count.addAndGet(recs.count()));
-            return consumer.assignment().equals(Utils.mkSet(tp0, t3p0)) && count.get() == 1;
+            return consumer.assignment().equals(Utils.mkSet(tp0, t3p0)) && count.addAndGet(recs.count()) == 1;
 
         }, "Does not complete rebalance in time");
 
@@ -1958,8 +1956,7 @@ public class KafkaConsumerTest {
         count.set(0);
         TestUtils.waitForCondition(() -> {
             ConsumerRecords<String, String> recs = consumer.poll(Duration.ofMillis(100L));
-            System.out.println("count2 " + count.addAndGet(recs.count()));
-            return count.get() == 101;
+            return count.addAndGet(recs.count()) == 101;
 
         }, "Does not complete rebalance in time");
 
