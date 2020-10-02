@@ -136,7 +136,7 @@ public class KafkaBasedLog<K, V> {
         List<PartitionInfo> partitionInfos = consumer.partitionsFor(topic);
         long started = time.nanoseconds();
         long maxSleepMs = 1_000;
-        long sleepMs = 10;
+        long sleepMs = 100;
         while (partitionInfos == null && time.nanoseconds() - started < CREATE_TOPIC_TIMEOUT_NS) {
             time.sleep(sleepMs);
             sleepMs = Math.min(2 * sleepMs, maxSleepMs);
