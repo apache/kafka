@@ -204,7 +204,7 @@ public class ApiVersionsResponse extends AbstractResponse {
         final Features<FinalizedVersionRange> finalizedFeatures,
         final long finalizedFeaturesEpoch
     ) {
-        ApiVersionsResponseData data = new ApiVersionsResponseData();
+        final ApiVersionsResponseData data = new ApiVersionsResponseData();
         data.setThrottleTimeMs(throttleTimeMs);
         data.setErrorCode(error.code());
         data.setApiKeys(apiKeys);
@@ -219,8 +219,8 @@ public class ApiVersionsResponse extends AbstractResponse {
         Features<SupportedVersionRange> latestSupportedFeatures) {
         SupportedFeatureKeyCollection converted = new SupportedFeatureKeyCollection();
         for (Map.Entry<String, SupportedVersionRange> feature : latestSupportedFeatures.features().entrySet()) {
-            SupportedFeatureKey key = new SupportedFeatureKey();
-            SupportedVersionRange versionRange = feature.getValue();
+            final SupportedFeatureKey key = new SupportedFeatureKey();
+            final SupportedVersionRange versionRange = feature.getValue();
             key.setName(feature.getKey());
             key.setMinVersion(versionRange.min());
             key.setMaxVersion(versionRange.max());
@@ -234,8 +234,8 @@ public class ApiVersionsResponse extends AbstractResponse {
         Features<FinalizedVersionRange> finalizedFeatures) {
         FinalizedFeatureKeyCollection converted = new FinalizedFeatureKeyCollection();
         for (Map.Entry<String, FinalizedVersionRange> feature : finalizedFeatures.features().entrySet()) {
-            FinalizedFeatureKey key = new FinalizedFeatureKey();
-            FinalizedVersionRange versionLevelRange = feature.getValue();
+            final FinalizedFeatureKey key = new FinalizedFeatureKey();
+            final FinalizedVersionRange versionLevelRange = feature.getValue();
             key.setName(feature.getKey());
             key.setMinVersionLevel(versionLevelRange.min());
             key.setMaxVersionLevel(versionLevelRange.max());

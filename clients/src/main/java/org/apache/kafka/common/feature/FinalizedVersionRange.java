@@ -48,7 +48,6 @@ public class FinalizedVersionRange extends BaseVersionRange {
      *                                - false otherwise
      */
     public boolean isIncompatibleWith(SupportedVersionRange supportedVersionRange) {
-        return min() < supportedVersionRange.min() ||
-               max() > supportedVersionRange.max();
+        return min() < supportedVersionRange.min() || max() > supportedVersionRange.max();
     }
 }

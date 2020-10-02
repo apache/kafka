@@ -4349,7 +4349,7 @@ public class KafkaAdminClient extends AdminClient {
         final NodeProvider provider =
             options.sendRequestToController() ? new ControllerNodeProvider() : new LeastLoadedNodeProvider();
 
-        Call call = new Call(
+        final Call call = new Call(
             "describeFeatures", calcDeadlineMs(now, options.timeoutMs()), provider) {
 
             private FeatureMetadata createFeatureMetadata(final ApiVersionsResponse response) {
@@ -4412,6 +4412,7 @@ public class KafkaAdminClient extends AdminClient {
         for (final Map.Entry<String, FeatureUpdate> entry : featureUpdates.entrySet()) {
             updateFutures.put(entry.getKey(), new KafkaFutureImpl<>());
         }
+
         final long now = time.milliseconds();
         final Call call = new Call("updateFeatures", calcDeadlineMs(now, options.timeoutMs()),
             new ControllerNodeProvider()) {
