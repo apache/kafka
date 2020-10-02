@@ -708,6 +708,7 @@ public class JsonConverter implements Converter, HeaderConverter {
         } else {
             switch (jsonValue.getNodeType()) {
                 case NULL:
+                case MISSING:
                     // Special case. With no schema
                     return null;
                 case BOOLEAN:
@@ -730,7 +731,6 @@ public class JsonConverter implements Converter, HeaderConverter {
                     break;
 
                 case BINARY:
-                case MISSING:
                 case POJO:
                 default:
                     schemaType = null;
