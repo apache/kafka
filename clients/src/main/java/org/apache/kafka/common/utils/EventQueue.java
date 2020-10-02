@@ -17,21 +17,24 @@
 
 package org.apache.kafka.common.utils;
 
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 public interface EventQueue extends AutoCloseable {
-    interface Event<T> {
-        T run() throws Exception;
+    interface Event {
+        void run() throws Exception;
+        void handleException(Throwable e);
     }
 
-    class VoidEvent implements Event<Void> {
+    class VoidEvent implements Event {
         public final static VoidEvent INSTANCE = new VoidEvent();
 
         @Override
-        public Void run() {
-            return null;
+        public void run() throws Exception {
+        }
+
+        @Override
+        public void handleException(Throwable e) {
         }
     }
 
@@ -39,24 +42,18 @@ public interface EventQueue extends AutoCloseable {
      * Add an element to the front of the queue.
      *
      * @param event             The mandatory event to prepend.
-     *
-     * @return                  A future which is completed with an exception or
-     *                          with the result of Event#run.
      */
-    default <T> CompletableFuture<T> prepend(Event<T> event) {
-        return enqueue(EventInsertionType.PREPEND, null, null, event);
+    default void prepend(Event event) {
+        enqueue(EventInsertionType.PREPEND, null, null, event);
     }
 
     /**
      * Add an element to the end of the queue.
      *
      * @param event             The event to append.
-     *
-     * @return                  A future which is completed with an exception or
-     *                          with the result of Event#run.
      */
-    default <T> CompletableFuture<T> append(Event<T> event) {
-        return enqueue(EventInsertionType.APPEND, null, null, event);
+    default void append(Event event) {
+        enqueue(EventInsertionType.APPEND, null, null, event);
     }
 
     /**
@@ -67,14 +64,9 @@ public interface EventQueue extends AutoCloseable {
      *                          @{org.apache.kafka.common.errors.TimeoutException},
      *                          and the event is cancelled.
      * @param event             The event to append.
-     *
-     * @return                  A future which is completed with an exception or
-     *                          with the result of Event#run.  If there was a
-     *                          timeout, the event will not be run.
      */
-    default <T> CompletableFuture<T> appendWithDeadline(long deadlineNs, Event<T> event) {
-
-        return enqueue(EventInsertionType.APPEND, null, __ -> deadlineNs, event);
+    default void appendWithDeadline(long deadlineNs, Event event) {
+        enqueue(EventInsertionType.APPEND, null, __ -> deadlineNs, event);
     }
 
     /**
@@ -88,15 +80,11 @@ public interface EventQueue extends AutoCloseable {
      *                              event has no tag, or if there is none such), and
      *                              produces the deadline to use for this event.
      * @param event                 The event to schedule.
-     *
-     * @return                      A future which is completed with an exception or
-     *                              with the result of Event#run.  If there was a
-     *                              timeout, the event will not be run.
      */
-    default <T> CompletableFuture<T> scheduleDeferred(String tag,
-                                                      Function<Long, Long> deadlineNsCalculator,
-                                                      Event<T> event) {
-        return enqueue(EventInsertionType.DEFERRED, tag, deadlineNsCalculator, event);
+    default void scheduleDeferred(String tag,
+                                  Function<Long, Long> deadlineNsCalculator,
+                                  Event event) {
+        enqueue(EventInsertionType.DEFERRED, tag, deadlineNsCalculator, event);
     }
 
     enum EventInsertionType {
@@ -123,15 +111,11 @@ public interface EventQueue extends AutoCloseable {
      *                              deadline to use for this event (or null to use
      *                              none.)
      * @param event                 The event to enqueue.
-     *
-     * @return                      A future which is completed with an exception or
-     *                              with the result of Event#run.  If there was a
-     *                              timeout or the event was cancelled, it will not run.
      */
-    <T> CompletableFuture<T> enqueue(EventInsertionType insertionType,
-                                     String tag,
-                                     Function<Long, Long> deadlineNsCalculator,
-                                     Event<T> event);
+    void enqueue(EventInsertionType insertionType,
+                 String tag,
+                 Function<Long, Long> deadlineNsCalculator,
+                 Event event);
 
     /**
      * Asynchronously shut down the event queue with no unnecessary delay.
@@ -148,7 +132,7 @@ public interface EventQueue extends AutoCloseable {
      *                     been processed.
      * @see #beginShutdown(Event, TimeUnit, long)
      */
-    default void beginShutdown(Event<?> cleanupEvent) {
+    default void beginShutdown(Event cleanupEvent) {
         beginShutdown(cleanupEvent, TimeUnit.SECONDS, 0);
     }
 
@@ -166,7 +150,7 @@ public interface EventQueue extends AutoCloseable {
      *                      events will get a
      *                      @{org.apache.kafka.common.errors.TimeoutException}.
      */
-    void beginShutdown(Event<?> cleanupEvent, TimeUnit timeUnit, long timeSpan);
+    void beginShutdown(Event cleanupEvent, TimeUnit timeUnit, long timeSpan);
 
     /**
      * Synchronously close the event queue and wait for any threads to be joined.
