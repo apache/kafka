@@ -17,7 +17,7 @@ import java.util
 
 import kafka.log.LogConfig
 import kafka.server.{Defaults, KafkaConfig}
-import kafka.utils.{CoreUtils, JaasTestUtils, TestUtils}
+import kafka.utils.{CoreUtils, JaasTestUtils, LogCaptureAppender, TestUtils}
 import kafka.utils.TestUtils._
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.acl._
@@ -27,6 +27,7 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{ClusterAuthorizationException, InvalidRequestException, TopicAuthorizationException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.log4j.Level
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{After, Assert, Before, Test}
 
@@ -139,6 +140,23 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
 
     waitForDescribeAcls(client, filterB, Set())
     waitForDescribeAcls(client, filterC, Set())
+  }
+
+  @Test
+  def testAllConfigsAreKnown(): Unit = {
+    val appender = LogCaptureAppender.createAndRegister()
+    val oldLevel = LogCaptureAppender.setClassLoggerLevel(classOf[AdminClientConfig], Level.WARN)
+    try {
+      client = Admin.create(createConfig)
+      client.listTopics().names().get();
+    } finally {
+      assertEquals("All the configs should be known",
+        List.empty,
+        appender.getMessages.map(_.getRenderedMessage).filter(msg =>
+          msg.contains("supplied but isn't a known config")).toList)
+      LogCaptureAppender.setClassLoggerLevel(classOf[AdminClientConfig], oldLevel)
+      LogCaptureAppender.unregister(appender);
+    }
   }
 
   @Test

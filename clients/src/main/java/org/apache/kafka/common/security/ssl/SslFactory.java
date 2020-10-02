@@ -21,6 +21,7 @@ import org.apache.kafka.common.Reconfigurable;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
+import org.apache.kafka.common.internals.ConfigUsageRecording;
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.security.auth.SslEngineFactory;
 import org.apache.kafka.common.utils.Utils;
@@ -86,7 +87,7 @@ public class SslFactory implements Reconfigurable, Closeable {
         }
         this.endpointIdentification = (String) configs.get(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
 
-        Map<String, Object> nextConfigs = new HashMap<>(configs);
+        Map<String, Object> nextConfigs = ConfigUsageRecording.copyOf(configs);
         if (clientAuthConfigOverride != null) {
             nextConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, clientAuthConfigOverride);
         }

@@ -20,6 +20,7 @@ import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.internals.ConfigUsageRecording;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder;
@@ -167,7 +168,7 @@ public class ChannelBuilders {
             parsedConfigs = config.valuesWithPrefixOverride(listenerName.configPrefix());
 
         // include any custom configs from original configs
-        Map<String, Object> configs = new HashMap<>(parsedConfigs);
+        Map<String, Object> configs = ConfigUsageRecording.copyOf(parsedConfigs);
         config.originals().entrySet().stream()
             .filter(e -> !parsedConfigs.containsKey(e.getKey())) // exclude already parsed configs
             // exclude already parsed listener prefix configs
