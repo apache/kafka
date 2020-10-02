@@ -30,7 +30,7 @@
       "about": "The state to which the broker should transition." },
     { "name": "BrokerEpoch", "type": "int64", "versions": "0+", "default": "-1",
       "about": "The broker's assigned epoch, or -1 if none was assigned." },
-    { "name": "LeaseEndTimeMs", "type": "int64", "versions": "0+",
-      "about": "The time in milliseconds at which the lease should end. This is based on the start time that was passed, not the controller's local clock." }
+    { "name": "LeaseDurationMs", "type": "int64", "versions": "0+",
+      "about": "If BrokerEpoch is not -1, the number of milliseconds that we want the lease to last" }
   ]
 }
