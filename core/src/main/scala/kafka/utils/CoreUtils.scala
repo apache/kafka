@@ -250,14 +250,20 @@ object CoreUtils {
   }
 
   def listenerListToEndPoints(listeners: String, securityProtocolMap: Map[ListenerName, SecurityProtocol]): Seq[EndPoint] = {
+    listenerListToEndPoints(listeners, securityProtocolMap, true)
+  }
+
+  def listenerListToEndPoints(listeners: String, securityProtocolMap: Map[ListenerName, SecurityProtocol], requireDistinctPorts: Boolean): Seq[EndPoint] = {
     def validate(endPoints: Seq[EndPoint]): Unit = {
       // filter port 0 for unit tests
       val portsExcludingZero = endPoints.map(_.port).filter(_ != 0)
-      val distinctPorts = portsExcludingZero.distinct
       val distinctListenerNames = endPoints.map(_.listenerName).distinct
 
-      require(distinctPorts.size == portsExcludingZero.size, s"Each listener must have a different port, listeners: $listeners")
       require(distinctListenerNames.size == endPoints.size, s"Each listener must have a different name, listeners: $listeners")
+      if (requireDistinctPorts) {
+        val distinctPorts = portsExcludingZero.distinct
+        require(distinctPorts.size == portsExcludingZero.size, s"Each listener must have a different port, listeners: $listeners")
+      }
     }
 
     val endPoints = try {
