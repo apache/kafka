@@ -700,7 +700,6 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     controller.eventManager.thread = spyThread
     val processedEvent = new MockEvent(ControllerState.TopicChange) {
       override def process(): Unit = latch.await()
-
       override def preempt(): Unit = {}
     }
     val tp0 = new TopicPartition("t", 0)
@@ -719,7 +718,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       case Failure(e) =>
         assertEquals(classOf[ControllerMovedException], e.getClass)
     })
-    val event3 = ApiPartitionReassignment(Map(tp0 -> None, tp1 -> None), {
+    val event3  = ApiPartitionReassignment(Map(tp0 -> None, tp1 -> None), {
       case Left(_) => fail("api partition reassignment should error")
       case Right(e) => assertEquals(Errors.NOT_CONTROLLER, e.error())
     })
