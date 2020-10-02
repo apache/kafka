@@ -19,34 +19,33 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
 
 import java.io.File;
 import java.time.Duration;
 import java.util.Map;
-import java.util.Objects;
 
-/**
- * {@code ProcessorContext} implementation that will throw on any forward call.
- */
-public final class ForwardingDisabledProcessorContext implements ProcessorContext {
-    private final ProcessorContext delegate;
+public final class StoreToProcessorContextAdapter implements ProcessorContext {
+    private final StateStoreContext delegate;
 
-    private static final String EXPLANATION = "ProcessorContext#forward() is not supported from this context, "
-        + "as the framework must ensure the key is not changed (#forward allows changing the key on "
-        + "messages which are sent). Try another function, which doesn't allow the key to be changed "
-        + "(for example - #tranformValues).";
+    public static ProcessorContext adapt(final StateStoreContext delegate) {
+        if (delegate instanceof ProcessorContext) {
+            return (ProcessorContext) delegate;
+        } else {
+            return new StoreToProcessorContextAdapter(delegate);
+        }
+    }
 
-    public ForwardingDisabledProcessorContext(final ProcessorContext delegate) {
-        this.delegate = Objects.requireNonNull(delegate, "delegate");
+    private StoreToProcessorContextAdapter(final StateStoreContext delegate) {
+        this.delegate = delegate;
     }
 
     @Override
@@ -80,81 +79,76 @@ public final class ForwardingDisabledProcessorContext implements ProcessorContex
     }
 
     @Override
-    public void register(final StateStore store,
-                         final StateRestoreCallback stateRestoreCallback) {
+    public void register(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
         delegate.register(store, stateRestoreCallback);
     }
 
     @Override
     public <S extends StateStore> S getStateStore(final String name) {
-        return delegate.getStateStore(name);
+        throw new UnsupportedOperationException("StateStores can't access getStateStore.");
     }
 
-    @Override
     @Deprecated
-    public Cancellable schedule(final long intervalMs,
-                                final PunctuationType type,
-                                final Punctuator callback) {
-        return delegate.schedule(intervalMs, type, callback);
+    @Override
+    public Cancellable schedule(final long intervalMs, final PunctuationType type, final Punctuator callback) {
+        throw new UnsupportedOperationException("StateStores can't access schedule.");
     }
 
     @Override
-    public Cancellable schedule(final Duration interval,
-                                final PunctuationType type,
-                                final Punctuator callback) throws IllegalArgumentException {
-        return delegate.schedule(interval, type, callback);
+    public Cancellable schedule(final Duration interval, final PunctuationType type, final Punctuator callback) {
+        throw new UnsupportedOperationException("StateStores can't access schedule.");
     }
 
     @Override
     public <K, V> void forward(final K key, final V value) {
-        throw new StreamsException(EXPLANATION);
+        throw new UnsupportedOperationException("StateStores can't access forward.");
     }
 
     @Override
     public <K, V> void forward(final K key, final V value, final To to) {
-        throw new StreamsException(EXPLANATION);
+        throw new UnsupportedOperationException("StateStores can't access forward.");
     }
 
-    @Override
     @Deprecated
+    @Override
     public <K, V> void forward(final K key, final V value, final int childIndex) {
-        throw new StreamsException(EXPLANATION);
+        throw new UnsupportedOperationException("StateStores can't access forward.");
     }
 
-    @Override
     @Deprecated
+    @Override
     public <K, V> void forward(final K key, final V value, final String childName) {
-        throw new StreamsException(EXPLANATION);
+        throw new UnsupportedOperationException("StateStores can't access forward.");
     }
 
     @Override
     public void commit() {
-        delegate.commit();
+        throw new UnsupportedOperationException("StateStores can't access commit.");
     }
 
     @Override
     public String topic() {
-        return delegate.topic();
+        throw new UnsupportedOperationException("StateStores can't access topic.");
     }
 
     @Override
     public int partition() {
-        return delegate.partition();
+        throw new UnsupportedOperationException("StateStores can't access partition.");
     }
 
     @Override
     public long offset() {
-        return delegate.offset();
+        throw new UnsupportedOperationException("StateStores can't access offset.");
     }
 
     @Override
     public Headers headers() {
-        return delegate.headers();
+        throw new UnsupportedOperationException("StateStores can't access headers.");
     }
 
     @Override
     public long timestamp() {
-        return delegate.timestamp();
+        throw new UnsupportedOperationException("StateStores can't access timestamp.");
     }
 
     @Override

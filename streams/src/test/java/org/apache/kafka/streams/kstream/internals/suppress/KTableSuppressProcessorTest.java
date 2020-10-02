@@ -31,6 +31,7 @@ import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueBuffer;
 import org.apache.kafka.test.MockInternalProcessorContext;
@@ -85,7 +86,7 @@ public class KTableSuppressProcessorTest {
             final MockInternalProcessorContext context = new MockInternalProcessorContext();
             context.setCurrentNode(new ProcessorNode("testNode"));
 
-            buffer.init(context, buffer);
+            buffer.init((StateStoreContext) context, buffer);
             processor.init(context);
 
             this.processor = processor;
