@@ -70,7 +70,8 @@ import java.util.concurrent.TimeUnit;
  */
 public class KafkaBasedLog<K, V> {
     private static final Logger log = LoggerFactory.getLogger(KafkaBasedLog.class);
-    private static final long CREATE_TOPIC_TIMEOUT_NS = TimeUnit.NANOSECONDS.convert(30, TimeUnit.SECONDS);
+    private static final long CREATE_TOPIC_TIMEOUT_NS = TimeUnit.SECONDS.toNanos(30);
+    private static final long MAX_SLEEP_MS = TimeUnit.SECONDS.toMillis(1);
 
     private Time time;
     private final String topic;
@@ -135,11 +136,10 @@ public class KafkaBasedLog<K, V> {
         // We expect that the topics will have been created either manually by the user or automatically by the herder
         List<PartitionInfo> partitionInfos = consumer.partitionsFor(topic);
         long started = time.nanoseconds();
-        long maxSleepMs = 1_000;
         long sleepMs = 100;
         while (partitionInfos == null && time.nanoseconds() - started < CREATE_TOPIC_TIMEOUT_NS) {
             time.sleep(sleepMs);
-            sleepMs = Math.min(2 * sleepMs, maxSleepMs);
+            sleepMs = Math.min(2 * sleepMs, MAX_SLEEP_MS);
             partitionInfos = consumer.partitionsFor(topic);
         }
         if (partitionInfos == null)
