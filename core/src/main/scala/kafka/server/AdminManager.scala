@@ -715,7 +715,7 @@ class AdminManager(val config: KafkaConfig,
     val source = if (allSynonyms.isEmpty) ConfigSource.DEFAULT_CONFIG else allSynonyms.head.source
     val synonyms = if (!includeSynonyms) List.empty else allSynonyms
     val dataType = configResponseType(configEntryType)
-    val configDocumentation = if (includeDocumentation) brokerDocumentation(name) else null
+    val configDocumentation = if (includeDocumentation) logConfig.documentationOf(name) else null
     new DescribeConfigsResponse.ConfigEntry(name, valueAsString, source, isSensitive, false, synonyms.asJava, dataType, configDocumentation)
   }
 
