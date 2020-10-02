@@ -17,6 +17,7 @@
 package org.apache.kafka.common.message;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import org.apache.kafka.common.UUID;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
@@ -28,7 +29,6 @@ import org.junit.Test;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.UUID;
 import java.util.function.Consumer;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -70,7 +70,7 @@ public class SimpleExampleMessageTest {
     @Test
     public void shouldDefaultField() {
         final SimpleExampleMessageData out = new SimpleExampleMessageData();
-        assertEquals(UUID.fromString("00000000-0000-0000-0000-000000000000"), out.processId());
+        assertEquals(UUID.fromString("AAAAAAAAAAAAAAAAAAAAAA"), out.processId());
         assertEquals(ByteUtils.EMPTY_BUF, out.zeroCopyByteBuffer());
         assertEquals(ByteUtils.EMPTY_BUF, out.nullableZeroCopyByteBuffer());
     }
@@ -259,13 +259,13 @@ public class SimpleExampleMessageTest {
     public void testTaggedUuid() {
         testRoundTrip(new SimpleExampleMessageData(),
             message -> assertEquals(
-                UUID.fromString("212d5494-4a8b-4fdf-94b3-88b470beb367"),
+                UUID.fromString("212d54944a8b4fdf94b388b470beb367"),
                 message.taggedUuid()));
 
         testRoundTrip(new SimpleExampleMessageData().
-                setTaggedUuid(UUID.fromString("01234567-89ab-cdef-0123-456789abcdef")),
+                setTaggedUuid(UUID.fromString("0123456789abcdef0123456789abcdef")),
             message -> assertEquals(
-                UUID.fromString("01234567-89ab-cdef-0123-456789abcdef"),
+                UUID.fromString("0123456789abcdef0123456789abcdef"),
                 message.taggedUuid()));
     }
 

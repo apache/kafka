@@ -17,8 +17,9 @@
 
 package org.apache.kafka.common.protocol;
 
+import org.apache.kafka.common.UUID;
+
 import java.nio.ByteBuffer;
-import java.util.UUID;
 
 public interface Writable {
     void writeByte(byte val);
