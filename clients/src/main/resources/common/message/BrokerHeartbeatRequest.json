@@ -26,8 +26,6 @@
       "about": "The broker ID." },
     { "name": "BrokerEpoch", "type": "int64", "versions": "0+", "default": "-1",
       "about": "The broker epoch, or -1 if one has not yet been assigned." },
-    { "name": "LeaseStartTimeMs", "type": "int64", "versions": "0+",
-      "about": "The time which the broker wants the lease to start at in milliseconds." },
     { "name": "CurrentMetadataOffset", "type": "int64", "versions": "0+",
       "about": "The highest metadata offset which the broker has reached." },
     { "name": "Listeners", "type": "[]Listener",
@@ -41,6 +39,18 @@
         { "name": "SecurityProtocol", "type": "int16", "versions": "0+",
           "about": "The security protocol." }
       ]
-    }
+    },
+    { "name": "Features", "type": "[]Feature", "nullableVersions": "0+",
+      "about": "The features on this broker", "versions": "0+", "fields": [
+        { "name": "Name", "type": "string", "versions": "0+", "mapKey": true,
+          "about": "The feature name." },
+		{ "name": "MinSupportedVersion", "type": "int16", "versions": "0+",
+          "about": "The minimum supported feature level." },
+        { "name": "MaxSupportedVersion", "type": "int16", "versions": "0+",
+          "about": "The maximum supported feature level." }
+      ]
+    },
+    { "name": "Rack", "type": "string", "versions": "0+", "nullableVersions": "0+",
+      "about": "The rack which this broker is in." }
   ]
 }
