@@ -1047,16 +1047,10 @@ class AdminManager(val config: KafkaConfig,
     if (supportedConfigs != null) {
       val sanitizedUser = sanitized(user)
       val sanitizedClientId = sanitized(clientId)
-      // val compatibilityJson = props.getProperty("supported.configs") 
-      // This could be a json where each entry is a set of registered configs for the entity
-      // There can be multiple entries since there can be more than one client associated 
-      // with a user/client-id entity
-      // 
-      // This can give the user an idea of how many clients support a certain dynamic config
-      //
-      // Currently not all entries are kept, only the latest 
-      // registration (user will only see compatibility of the last client that registered under the entity)
 
+      // Config registrations should be kept in an internal topic instead of this dynamic config 
+      // 1. Keeping it here will not keep track of all client registrations under this user/client-id, just one of the latest (won't always be the latest because of concurrent updates)
+      // 2. Dynamic config requires manual metadata cleanup. It would be better to just set a retention time on an internal topic.
       props.setProperty("supported.configs", s"${supportedConfigs.mkString(",")}")
 
       info(s"Updating supported.configs for <${user.get}, ${clientId.get}> ${props.getProperty("supported.configs")}")
