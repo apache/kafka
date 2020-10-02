@@ -767,7 +767,7 @@ public class ProcessorContextImplTest {
         assertTrue(store.persistent());
         assertTrue(store.isOpen());
 
-        checkThrowsUnsupportedOperation(() -> store.init(null, null), "init()");
+        checkThrowsUnsupportedOperation(() -> store.init((ProcessorContext) null, null), "init()");
         checkThrowsUnsupportedOperation(store::close, "close()");
     }
 

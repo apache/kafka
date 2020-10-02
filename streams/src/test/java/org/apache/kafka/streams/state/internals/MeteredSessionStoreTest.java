@@ -35,6 +35,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
@@ -158,7 +159,7 @@ public class MeteredSessionStoreTest {
 
     private void init() {
         replay(innerStore, context);
-        store.init(context, store);
+        store.init((StateStoreContext) context, store);
     }
 
     @Test
@@ -195,7 +196,7 @@ public class MeteredSessionStoreTest {
             valueSerde,
             new MockTime()
         );
-        store.init(context, store);
+        store.init((StateStoreContext) context, store);
 
         store.fetchSession(KEY, START_TIMESTAMP, END_TIMESTAMP);
         store.put(WINDOWED_KEY, VALUE);

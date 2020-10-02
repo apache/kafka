@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -100,7 +101,7 @@ public class GlobalStateStoreProviderTest {
         expect(mockContext.recordCollector()).andStubReturn(null);
         replay(mockContext);
         for (final StateStore store : stores.values()) {
-            store.init(mockContext, null);
+            store.init((StateStoreContext) mockContext, null);
         }
     }
 
