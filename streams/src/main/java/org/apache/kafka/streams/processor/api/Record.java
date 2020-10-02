@@ -42,13 +42,17 @@ public class Record<K, V> {
     /**
      * The full constructor, specifying all the attributes of the record.
      *
+     * Note: this constructor makes a copy of the headers argument.
+     * See {@link ProcessorContext#forward(Record)} for
+     * considerations around mutability of keys, values, and headers.
+     *
      * @param key The key of the record. May be null.
      * @param value The value of the record. May be null.
      * @param timestamp The timestamp of the record. May not be negative.
      * @param headers The headers of the record. May be null, which will cause subsequent calls
      *                to {@link this#headers()} to return a non-null, empty, {@link Headers} collection.
-     *
      * @throws IllegalArgumentException if the timestamp is negative.
+     * @see ProcessorContext#forward(Record)
      */
     public Record(final K key, final V value, final long timestamp, final Headers headers) {
         this.key = key;
@@ -147,6 +151,10 @@ public class Record<K, V> {
      * A convenient way to produce a new record if you only need to change the headers.
      *
      * Copies the attributes of this record with the headers replaced.
+     * Also makes a copy of the provided headers.
+     *
+     * See {@link ProcessorContext#forward(Record)} for
+     * considerations around mutability of keys, values, and headers.
      *
      * @param headers The headers of the result record.
      * @return A new Record instance with all the same attributes (except that the headers are replaced).

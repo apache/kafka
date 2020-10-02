@@ -53,12 +53,23 @@ public interface ProcessorContext<KForward, VForward> {
     TaskId taskId();
 
     /**
-     * The metadata of the record, if it is defined. Note that as long as the processor is
-     * receiving a record downstream of a Source (i.e., the current record is coming from an
-     * input topic), the metadata is defined. On the other hand, if a parent processor has
-     * registered a punctuator and called {@link ProcessorContext#forward(Record)} from that
-     * punctuator, then there is no record from an input topic, and therefore the metadata
-     * would be undefined.
+     * The metadata of the source record, if is one. Processors may be invoked to
+     * process a source record from an input topic, to run a scheduled punctuation
+     * (see {@link ProcessorContext#schedule(Duration, PunctuationType, Punctuator)} ),
+     * or because a parent processor called {@link ProcessorContext#forward(Record)}.
+     * <p>
+     * In the case of a punctuation, there is no source record, so this metadata would be
+     * undefined. Note that when a punctuator invokes {@link ProcessorContext#forward(Record)},
+     * downstream processors will receive the forwarded record as a regular
+     * {@link Processor#process(Record)} invocation. In other words, it wouldn't be apparent to
+     * downstream processors whether or not the record being processed came from an input topic
+     * or punctuation and therefore whether or not this metadata is defined. This is why
+     * the return type of this method is {@link Optional}.
+     * <p>
+     * If there is any possibility of punctuators upstream, any access
+     * to this field should consider the case of
+     * "<code>recordMetadata().isPresent() == false</code>".
+     * Of course, it would be safest to always guard this condition.
      */
     Optional<RecordMetadata> recordMetadata();
 
@@ -139,16 +150,69 @@ public interface ProcessorContext<KForward, VForward> {
 
     /**
      * Forwards a record to all child processors.
+     * <p>
+     * Note that the forwarded {@link Record} is shared between the parent and child
+     * processors. And of course, the parent may forward the same object to multiple children,
+     * and the child may forward it to grandchildren, etc. Therefore, you should be mindful
+     * of mutability.
+     * <p>
+     * The {@link Record} class itself is immutable (all the setter-style methods return an
+     * independent copy of the instance). However, the key, value, and headers referenced by
+     * the Record may themselves be mutable.
+     * <p>
+     * Some programs may opt to make use of this mutability for high performance, in which case
+     * the input record may be mutated and then forwarded by each {@link Processor}. However,
+     * most applications should instead favor safety.
+     * <p>
+     * Forwarding records safely simply means to make a copy of the record before you mutate it.
+     * This is trivial when using the {@link Record#withKey(Object)}, {@link Record#withValue(Object)},
+     * and {@link Record#withTimestamp(long)} methods, as each of these methods make a copy of the
+     * record as a matter of course. But a little extra care must be taken with headers, since
+     * the {@link org.apache.kafka.common.header.Header} class is mutable. The easiest way to
+     * safely handle headers is to use the {@link Record} constructors to make a copy before
+     * modifying headers.
+     * <p>
+     * In other words, this would be considered unsafe:
+     * <code>
+     *     process(Record inputRecord) {
+     *         inputRecord.headers().add(...);
+     *         context.forward(inputRecord);
+     *     }
+     * </code>
+     * This is unsafe because the parent, and potentially siblings, grandparents, etc.,
+     * all will see this modification to their shared Headers reference. This is a violation
+     * of causality and could lead to undefined behavior.
+     * <p>
+     * A safe usage would look like this:
+     * <code>
+     *     process(Record inputRecord) {
+     *         // makes a copy of the headers
+     *         Record toForward = inputRecord.withHeaders(inputRecord.headers());
+     *         // Other options to create a safe copy are:
+     *         // * use any copy-on-write method, which makes a copy of all fields:
+     *         //   toForward = inputRecord.withValue();
+     *         // * explicitly copy all fields:
+     *         //   toForward = new Record(inputRecord.key(), inputRecord.value(), inputRecord.timestamp(), inputRecord.headers());
+     *         // * create a fresh, empty Headers:
+     *         //   toForward = new Record(inputRecord.key(), inputRecord.value(), inputRecord.timestamp());
+     *         // * etc.
      *
+     *         // now, we are modifying our own independent copy of the headers.
+     *         toForward.headers().add(...);
+     *         context.forward(toForward);
+     *     }
+     * </code>
      * @param record The record to forward to all children
      */
     <K extends KForward, V extends VForward> void forward(Record<K, V> record);
 
     /**
      * Forwards a record to the specified child processor.
+     * See {@link ProcessorContext#forward(Record)} for considerations.
      *
      * @param record The record to forward
      * @param childName The name of the child processor to receive the record
+     * @see ProcessorContext#forward(Record)
      */
     <K extends KForward, V extends VForward> void forward(Record<K, V> record, final String childName);
 
