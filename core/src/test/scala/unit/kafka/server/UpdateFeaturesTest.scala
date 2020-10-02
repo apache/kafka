@@ -50,7 +50,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
   }
 
   private def defaultSupportedFeatures(): Features[SupportedVersionRange] = {
-    Features.supportedFeatures(Utils.mkMap(Utils.mkEntry("feature_1", new SupportedVersionRange(1, 1, 3))))
+    Features.supportedFeatures(Utils.mkMap(Utils.mkEntry("feature_1", new SupportedVersionRange(1, 3))))
   }
 
   private def defaultFinalizedFeatures(): Features[FinalizedVersionRange] = {
@@ -111,7 +111,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
   private def supportedFeatures(features: java.util.Map[String, org.apache.kafka.clients.admin.SupportedVersionRange]): Features[SupportedVersionRange] = {
     Features.supportedFeatures(features.asScala.map {
       case(name, versionRange) =>
-        (name, new SupportedVersionRange(versionRange.minVersion(), versionRange.firstActiveVersion(), versionRange.maxVersion()))
+        (name, new SupportedVersionRange(versionRange.minVersion(), versionRange.maxVersion()))
     }.asJava)
   }
 
@@ -302,72 +302,6 @@ class UpdateFeaturesTest extends BaseRequestTest {
       ".*Can not upgrade a finalized feature.*to the same value.*".r)
   }
 
-  private def testShouldFailRequestWhenNewMaxVersionLevelIsBelowFirstActiveVersion(
-    featureName: String,
-    supportedVersionRange: SupportedVersionRange,
-    initialFinalizedVersionRange: Option[FinalizedVersionRange],
-    allowDowngrade: Boolean
-  ): Unit = {
-    TestUtils.waitUntilControllerElected(zkClient)
-
-    val supportedFeatures = Features.supportedFeatures(Utils.mkMap(Utils.mkEntry(featureName, supportedVersionRange)))
-    updateSupportedFeaturesInAllBrokers(supportedFeatures)
-    val initialFinalizedFeatures = initialFinalizedVersionRange.map(
-      versionRange => Features.finalizedFeatures(Utils.mkMap(Utils.mkEntry(featureName, versionRange)))
-    ).getOrElse(Features.emptyFinalizedFeatures())
-    val versionBefore = updateFeatureZNode(initialFinalizedFeatures)
-
-    val newMaxVersionLevel = (supportedVersionRange.firstActiveVersion() - 1).asInstanceOf[Short]
-    val update = new FeatureUpdate(newMaxVersionLevel, allowDowngrade)
-    val adminClient = createAdminClient()
-    val nodeBefore = getFeatureZNode()
-
-    val result = adminClient.updateFeatures(Utils.mkMap(Utils.mkEntry(featureName, update)), new UpdateFeaturesOptions())
-
-    checkException[InvalidRequestException](
-      result,
-      Map(featureName -> s".*maxVersionLevel:$newMaxVersionLevel.*".r))
-    checkFeatures(
-      adminClient,
-      nodeBefore,
-      initialFinalizedFeatures,
-      versionBefore,
-      supportedFeatures)
-  }
-
-  /**
-   * Tests that an UpdateFeatures request fails in the Controller, when, for an existing finalized
-   * feature, a version level DOWNGRADE is attempted to a value thats below the first active version
-   * for the feature.
-   */
-  @Test
-  def testShouldFailRequestWhenDowngradingBelowFirstActiveVersionOfAnExistingFinalizedFeature(): Unit = {
-    testShouldFailRequestWhenNewMaxVersionLevelIsBelowFirstActiveVersion(
-      "feature_1", new SupportedVersionRange(1, 2, 3), Some(new FinalizedVersionRange(2, 3)), true)
-  }
-
-  /**
-   * Tests that an UpdateFeatures request fails in the Controller, when, for a non-existing finalized
-   * feature, a version level UPGRADE is attempted to a value thats below the first active version
-   * for the feature.
-   */
-  @Test
-  def testShouldFailRequestWhenUpgradingBelowFirstActiveVersionOfANonExistingFinalizedFeature(): Unit = {
-    testShouldFailRequestWhenNewMaxVersionLevelIsBelowFirstActiveVersion(
-      "feature_1", new SupportedVersionRange(1, 2, 3), Option.empty, false)
-  }
-
-  /**
-   * Tests that an UpdateFeatures request fails in the Controller, when for a non-existing finalized
-   * feature, a version level DOWNGRADE is attempted to a value thats below the first active version
-   * level for the feature.
-   */
-  @Test
-  def testShouldFailRequestWhenDowngradingBelowFirstActiveVersionOfANonExistingFinalizedFeature(): Unit = {
-    testShouldFailRequestWhenNewMaxVersionLevelIsBelowFirstActiveVersion(
-      "feature_1", new SupportedVersionRange(1, 2, 3), Option.empty, true)
-  }
-
   private def testShouldFailRequestDuringBrokerMaxVersionLevelIncompatibility(
     featureName: String,
     supportedVersionRange: SupportedVersionRange,
@@ -392,7 +326,6 @@ class UpdateFeaturesTest extends BaseRequestTest {
         Utils.mkEntry("feature_1",
           new SupportedVersionRange(
             supportedVersionRange.min(),
-            supportedVersionRange.firstActiveVersion(),
             unsupportedMaxVersion))))
     updateSupportedFeatures(supportedFeaturesWithVersionIncompatibility, brokersWithVersionIncompatibility)
 
@@ -456,8 +389,8 @@ class UpdateFeaturesTest extends BaseRequestTest {
     val supportedFeatures =
       Features.supportedFeatures(
         Utils.mkMap(
-          Utils.mkEntry("feature_1", new SupportedVersionRange(1, 1, 3)),
-          Utils.mkEntry("feature_2", new SupportedVersionRange(2, 2, 5))))
+          Utils.mkEntry("feature_1", new SupportedVersionRange(1, 3)),
+          Utils.mkEntry("feature_2", new SupportedVersionRange(2, 5))))
     updateSupportedFeaturesInAllBrokers(supportedFeatures)
     val versionBefore = updateFeatureZNode(Features.emptyFinalizedFeatures())
 
@@ -492,8 +425,8 @@ class UpdateFeaturesTest extends BaseRequestTest {
 
     val supportedFeatures = Features.supportedFeatures(
       Utils.mkMap(
-        Utils.mkEntry("feature_1", new SupportedVersionRange(1, 1, 3)),
-        Utils.mkEntry("feature_2", new SupportedVersionRange(2, 2, 5))))
+        Utils.mkEntry("feature_1", new SupportedVersionRange(1, 3)),
+        Utils.mkEntry("feature_2", new SupportedVersionRange(2, 5))))
     updateSupportedFeaturesInAllBrokers(supportedFeatures)
     val initialFinalizedFeatures = Features.finalizedFeatures(
       Utils.mkMap(
@@ -536,8 +469,8 @@ class UpdateFeaturesTest extends BaseRequestTest {
 
     val supportedFeatures = Features.supportedFeatures(
       Utils.mkMap(
-        Utils.mkEntry("feature_1", new SupportedVersionRange(1, 1, 3)),
-        Utils.mkEntry("feature_2", new SupportedVersionRange(2, 2, 5))))
+        Utils.mkEntry("feature_1", new SupportedVersionRange(1, 3)),
+        Utils.mkEntry("feature_2", new SupportedVersionRange(2, 5))))
     updateSupportedFeaturesInAllBrokers(supportedFeatures)
     val initialFinalizedFeatures = Features.finalizedFeatures(
       Utils.mkMap(
@@ -597,13 +530,13 @@ class UpdateFeaturesTest extends BaseRequestTest {
 
     val supportedFeatures = Features.supportedFeatures(
       Utils.mkMap(
-        Utils.mkEntry("feature_1", new SupportedVersionRange(1, 2, 3)),
-        Utils.mkEntry("feature_2", new SupportedVersionRange(2, 2, 5))))
+        Utils.mkEntry("feature_1", new SupportedVersionRange(1, 3)),
+        Utils.mkEntry("feature_2", new SupportedVersionRange(2, 5))))
     updateSupportedFeatures(supportedFeatures, versionCompatibleBrokers)
 
     val supportedFeaturesWithVersionIncompatibility = Features.supportedFeatures(
       Utils.mkMap(
-        Utils.mkEntry("feature_1", new SupportedVersionRange(1, 2, 2)),
+        Utils.mkEntry("feature_1", new SupportedVersionRange(1, 2)),
         Utils.mkEntry("feature_2", supportedFeatures.get("feature_2"))))
     updateSupportedFeatures(supportedFeaturesWithVersionIncompatibility, brokersWithVersionIncompatibility)
 

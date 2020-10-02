@@ -34,8 +34,8 @@ class BrokerFeaturesTest {
   def testIncompatibilitiesDueToAbsentFeature(): Unit = {
     val brokerFeatures = BrokerFeatures.createDefault()
     val supportedFeatures = Features.supportedFeatures(Map[String, SupportedVersionRange](
-      "test_feature_1" -> new SupportedVersionRange(1, 1, 4),
-      "test_feature_2" -> new SupportedVersionRange(1, 1, 3)).asJava)
+      "test_feature_1" -> new SupportedVersionRange(1, 4),
+      "test_feature_2" -> new SupportedVersionRange(1, 3)).asJava)
     brokerFeatures.setSupportedFeatures(supportedFeatures)
 
     val compatibleFeatures = Map[String, FinalizedVersionRange](
@@ -55,8 +55,8 @@ class BrokerFeaturesTest {
   def testIncompatibilitiesDueToIncompatibleFeature(): Unit = {
     val brokerFeatures = BrokerFeatures.createDefault()
     val supportedFeatures = Features.supportedFeatures(Map[String, SupportedVersionRange](
-      "test_feature_1" -> new SupportedVersionRange(1, 1, 4),
-      "test_feature_2" -> new SupportedVersionRange(1, 1, 3)).asJava)
+      "test_feature_1" -> new SupportedVersionRange(1, 4),
+      "test_feature_2" -> new SupportedVersionRange(1, 3)).asJava)
     brokerFeatures.setSupportedFeatures(supportedFeatures)
 
     val compatibleFeatures = Map[String, FinalizedVersionRange](
@@ -73,32 +73,11 @@ class BrokerFeaturesTest {
   }
 
   @Test
-  def testIncompatibilitiesWithFirstActiveVersion(): Unit = {
-    val brokerFeatures = BrokerFeatures.createDefault()
-    val supportedFeatures = Features.supportedFeatures(Map[String, SupportedVersionRange](
-      "test_feature_1" -> new SupportedVersionRange(1, 2, 4),
-      "test_feature_2" -> new SupportedVersionRange(1, 3, 4)).asJava)
-    brokerFeatures.setSupportedFeatures(supportedFeatures)
-
-    val compatibleFeatures = Map[String, FinalizedVersionRange](
-      "test_feature_1" -> new FinalizedVersionRange(1, 2))
-    val inCompatibleFeatures = Map[String, FinalizedVersionRange](
-      "test_feature_2" -> new FinalizedVersionRange(1, 2))
-    val features = compatibleFeatures++inCompatibleFeatures
-    val finalizedFeatures = Features.finalizedFeatures(features.asJava)
-
-    assertEquals(
-      Features.finalizedFeatures(inCompatibleFeatures.asJava),
-      brokerFeatures.incompatibleFeatures(finalizedFeatures))
-    assertTrue(BrokerFeatures.hasIncompatibleFeatures(supportedFeatures, finalizedFeatures))
-  }
-
-  @Test
   def testCompatibleFeatures(): Unit = {
     val brokerFeatures = BrokerFeatures.createDefault()
     val supportedFeatures = Features.supportedFeatures(Map[String, SupportedVersionRange](
-      "test_feature_1" -> new SupportedVersionRange(1, 2, 4),
-      "test_feature_2" -> new SupportedVersionRange(1, 3, 3)).asJava)
+      "test_feature_1" -> new SupportedVersionRange(1, 4),
+      "test_feature_2" -> new SupportedVersionRange(1, 3)).asJava)
     brokerFeatures.setSupportedFeatures(supportedFeatures)
 
     val compatibleFeatures = Map[String, FinalizedVersionRange](
@@ -113,15 +92,15 @@ class BrokerFeaturesTest {
   def testDefaultFinalizedFeatures(): Unit = {
     val brokerFeatures = BrokerFeatures.createDefault()
     val supportedFeatures = Features.supportedFeatures(Map[String, SupportedVersionRange](
-      "test_feature_1" -> new SupportedVersionRange(1, 2, 4),
-      "test_feature_2" -> new SupportedVersionRange(1, 3, 3),
-      "test_feature_3" -> new SupportedVersionRange(3, 5, 7)).asJava)
+      "test_feature_1" -> new SupportedVersionRange(1, 4),
+      "test_feature_2" -> new SupportedVersionRange(1, 3),
+      "test_feature_3" -> new SupportedVersionRange(3, 7)).asJava)
     brokerFeatures.setSupportedFeatures(supportedFeatures)
 
     val expectedFeatures = Map[String, FinalizedVersionRange](
-      "test_feature_1" -> new FinalizedVersionRange(2, 4),
-      "test_feature_2" -> new FinalizedVersionRange(3, 3),
-      "test_feature_3" -> new FinalizedVersionRange(5, 7))
+      "test_feature_1" -> new FinalizedVersionRange(1, 4),
+      "test_feature_2" -> new FinalizedVersionRange(1, 3),
+      "test_feature_3" -> new FinalizedVersionRange(3, 7))
     assertEquals(Features.finalizedFeatures(expectedFeatures.asJava), brokerFeatures.defaultFinalizedFeatures)
   }
 }

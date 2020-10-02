@@ -33,8 +33,8 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
 
   private def createBrokerFeatures(): BrokerFeatures = {
     val supportedFeaturesMap = Map[String, SupportedVersionRange](
-      "feature_1" -> new SupportedVersionRange(1, 2, 4),
-      "feature_2" -> new SupportedVersionRange(1, 2, 3))
+      "feature_1" -> new SupportedVersionRange(1, 4),
+      "feature_2" -> new SupportedVersionRange(1, 3))
     val brokerFeatures = BrokerFeatures.createDefault()
     brokerFeatures.setSupportedFeatures(Features.supportedFeatures(supportedFeaturesMap.asJava))
     brokerFeatures

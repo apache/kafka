@@ -38,52 +38,35 @@ public class SupportedVersionRangeTest {
         // min and max can't be < 1.
         assertThrows(
             IllegalArgumentException.class,
-            () -> new SupportedVersionRange((short) 0, (short) 1, (short) 0));
+            () -> new SupportedVersionRange((short) 0, (short) 0));
         // min can't be < 1.
         assertThrows(
             IllegalArgumentException.class,
-            () -> new SupportedVersionRange((short) 0, (short) 1, (short) 1));
+            () -> new SupportedVersionRange((short) 0, (short) 1));
         // max can't be < 1.
         assertThrows(
             IllegalArgumentException.class,
-            () -> new SupportedVersionRange((short) 1, (short) 1, (short) 0));
-        // firstActiveVersion can't be < 1.
-        assertThrows(
-            IllegalArgumentException.class,
-            () -> new SupportedVersionRange((short) 1, (short) 0, (short) 1));
+            () -> new SupportedVersionRange((short) 1, (short) 0));
         // min can't be > max.
         assertThrows(
             IllegalArgumentException.class,
-            () -> new SupportedVersionRange((short) 2, (short) 1, (short) 1));
-        // firstActiveVersion can't be < min.
-        assertThrows(
-            IllegalArgumentException.class,
-            () -> new SupportedVersionRange((short) 2, (short) 1, (short) 2));
-        // firstActiveVersion can't be > max.
-        assertThrows(
-            IllegalArgumentException.class,
-            () -> new SupportedVersionRange((short) 1, (short) 3, (short) 2));
+            () -> new SupportedVersionRange((short) 2, (short) 1));
     }
 
     @Test
     public void testFromToMap() {
-        SupportedVersionRange versionRange = new SupportedVersionRange((short) 1, (short) 2, (short) 3);
+        SupportedVersionRange versionRange = new SupportedVersionRange((short) 1, (short) 2);
         assertEquals(1, versionRange.min());
-        assertEquals(2, versionRange.firstActiveVersion());
-        assertEquals(3, versionRange.max());
+        assertEquals(2, versionRange.max());
 
         Map<String, Short> versionRangeMap = versionRange.toMap();
         assertEquals(
-            mkMap(mkEntry("min_version", versionRange.min()),
-                  mkEntry("first_active_version", versionRange.firstActiveVersion()),
-                  mkEntry("max_version", versionRange.max())),
+            mkMap(mkEntry("min_version", versionRange.min()), mkEntry("max_version", versionRange.max())),
             versionRangeMap);
 
         SupportedVersionRange newVersionRange = SupportedVersionRange.fromMap(versionRangeMap);
         assertEquals(1, newVersionRange.min());
-        assertEquals(2, newVersionRange.firstActiveVersion());
-        assertEquals(3, newVersionRange.max());
-
+        assertEquals(2, newVersionRange.max());
         assertEquals(versionRange, newVersionRange);
     }
 
@@ -91,110 +74,69 @@ public class SupportedVersionRangeTest {
     public void testFromMapFailure() {
         // min_version can't be < 1.
         Map<String, Short> invalidWithBadMinVersion =
-            mkMap(mkEntry("min_version", (short) 0),
-                  mkEntry("first_active_version", (short) 1),
-                  mkEntry("max_version", (short) 1));
+            mkMap(mkEntry("min_version", (short) 0), mkEntry("max_version", (short) 1));
         assertThrows(
             IllegalArgumentException.class,
             () -> SupportedVersionRange.fromMap(invalidWithBadMinVersion));
 
         // max_version can't be < 1.
         Map<String, Short> invalidWithBadMaxVersion =
-            mkMap(mkEntry("min_version", (short) 1),
-                  mkEntry("first_active_version", (short) 1),
-                  mkEntry("max_version", (short) 0));
+            mkMap(mkEntry("min_version", (short) 1), mkEntry("max_version", (short) 0));
         assertThrows(
             IllegalArgumentException.class,
             () -> SupportedVersionRange.fromMap(invalidWithBadMaxVersion));
 
         // min_version and max_version can't be < 1.
         Map<String, Short> invalidWithBadMinMaxVersion =
-            mkMap(mkEntry("min_version", (short) 0),
-                  mkEntry("first_active_version", (short) 1),
-                  mkEntry("max_version", (short) 0));
+            mkMap(mkEntry("min_version", (short) 0), mkEntry("max_version", (short) 0));
         assertThrows(
             IllegalArgumentException.class,
             () -> SupportedVersionRange.fromMap(invalidWithBadMinMaxVersion));
 
         // min_version can't be > max_version.
         Map<String, Short> invalidWithLowerMaxVersion =
-            mkMap(mkEntry("min_version", (short) 2),
-                  mkEntry("first_active_version", (short) 1),
-                  mkEntry("max_version", (short) 1));
+            mkMap(mkEntry("min_version", (short) 2), mkEntry("max_version", (short) 1));
         assertThrows(
             IllegalArgumentException.class,
             () -> SupportedVersionRange.fromMap(invalidWithLowerMaxVersion));
 
-        // first_active_version can't be < min_version
-        Map<String, Short> invalidWithLowerFirstActiveVersion =
-            mkMap(mkEntry("min_version", (short) 2),
-                  mkEntry("first_active_version", (short) 1),
-                  mkEntry("max_version", (short) 3));
-        assertThrows(
-            IllegalArgumentException.class,
-            () -> SupportedVersionRange.fromMap(invalidWithLowerFirstActiveVersion));
-
-        // first_active_version can't be > max_version
-        Map<String, Short> invalidWithHigherFirstActiveVersion =
-            mkMap(mkEntry("min_version", (short) 1),
-                  mkEntry("first_active_version", (short) 3),
-                  mkEntry("max_version", (short) 2));
-        assertThrows(
-            IllegalArgumentException.class,
-            () -> SupportedVersionRange.fromMap(invalidWithHigherFirstActiveVersion));
-
         // min_version key missing.
         Map<String, Short> invalidWithMinKeyMissing =
-            mkMap(mkEntry("first_active_version", (short) 1),
-                  mkEntry("max_version", (short) 1));
+            mkMap(mkEntry("max_version", (short) 1));
         assertThrows(
             IllegalArgumentException.class,
             () -> SupportedVersionRange.fromMap(invalidWithMinKeyMissing));
 
         // max_version key missing.
         Map<String, Short> invalidWithMaxKeyMissing =
-            mkMap(mkEntry("min_version", (short) 1),
-                  mkEntry("first_active_version", (short) 1));
+            mkMap(mkEntry("min_version", (short) 1));
         assertThrows(
             IllegalArgumentException.class,
             () -> SupportedVersionRange.fromMap(invalidWithMaxKeyMissing));
-
-        // first_active_version key missing.
-        Map<String, Short> invalidWithFirstActiveVersionKeyMissing =
-            mkMap(mkEntry("min_version", (short) 1),
-                  mkEntry("max_version", (short) 1));
-        assertThrows(
-            IllegalArgumentException.class,
-            () -> SupportedVersionRange.fromMap(invalidWithFirstActiveVersionKeyMissing));
     }
 
     @Test
     public void testToString() {
         assertEquals(
-            "SupportedVersionRange[min_version:1, first_active_version:2, max_version:3]",
-            new SupportedVersionRange((short) 1, (short) 2, (short) 3).toString());
+            "SupportedVersionRange[min_version:1, max_version:1]",
+            new SupportedVersionRange((short) 1, (short) 1).toString());
+        assertEquals(
+            "SupportedVersionRange[min_version:1, max_version:2]",
+            new SupportedVersionRange((short) 1, (short) 2).toString());
     }
 
     @Test
     public void testEquals() {
-        SupportedVersionRange tested = new SupportedVersionRange((short) 1, (short) 2, (short) 4);
+        SupportedVersionRange tested = new SupportedVersionRange((short) 1, (short) 1);
         assertTrue(tested.equals(tested));
-        assertFalse(tested.equals(new SupportedVersionRange(tested.firstActiveVersion(), tested.firstActiveVersion(), tested.max())));
-        assertFalse(tested.equals(new SupportedVersionRange(tested.min(), (short) (tested.firstActiveVersion() + 1), tested.max())));
-        assertFalse(tested.equals(new SupportedVersionRange(tested.min(), tested.firstActiveVersion(), (short) (tested.max() + 1))));
+        assertFalse(tested.equals(new SupportedVersionRange((short) 1, (short) 2)));
         assertFalse(tested.equals(null));
     }
 
     @Test
-    public void testAttributes() {
-        SupportedVersionRange versionRange1 = new SupportedVersionRange((short) 1, (short) 2, (short) 3);
-        assertEquals(1, versionRange1.min());
-        assertEquals(2, versionRange1.firstActiveVersion());
-        assertEquals(3, versionRange1.max());
-
-        SupportedVersionRange versionRange2 = new SupportedVersionRange((short) 2, (short) 3);
-        assertEquals(2, versionRange2.min());
-        assertEquals(versionRange2.firstActiveVersion(), versionRange2.min());
-        assertEquals(3, versionRange2.max());
+    public void testMinMax() {
+        SupportedVersionRange versionRange = new SupportedVersionRange((short) 1, (short) 2);
+        assertEquals(1, versionRange.min());
+        assertEquals(2, versionRange.max());
     }
 }

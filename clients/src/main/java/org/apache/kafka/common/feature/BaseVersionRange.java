@@ -134,12 +134,4 @@ class BaseVersionRange {
         }
         return value;
     }
-
-    protected String minKeyLabel() {
-        return minKeyLabel;
-    }
-
-    protected String maxKeyLabel() {
-        return maxKeyLabel;
-    }
 }

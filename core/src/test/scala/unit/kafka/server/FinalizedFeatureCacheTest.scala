@@ -33,7 +33,7 @@ class FinalizedFeatureCacheTest {
   @Test
   def testUpdateOrThrowFailedDueToInvalidEpoch(): Unit = {
     val supportedFeatures = Map[String, SupportedVersionRange](
-      "feature_1" -> new SupportedVersionRange(1, 2, 4))
+      "feature_1" -> new SupportedVersionRange(1, 4))
     val brokerFeatures = BrokerFeatures.createDefault()
     brokerFeatures.setSupportedFeatures(Features.supportedFeatures(supportedFeatures.asJava))
 
@@ -59,8 +59,8 @@ class FinalizedFeatureCacheTest {
 
   @Test
   def testUpdateOrThrowFailedDueToInvalidFeatures(): Unit = {
-    val supportedFeatures = Map[String, SupportedVersionRange](
-      "feature_1" -> new SupportedVersionRange(1, 1, 1))
+    val supportedFeatures =
+      Map[String, SupportedVersionRange]("feature_1" -> new SupportedVersionRange(1, 1))
     val brokerFeatures = BrokerFeatures.createDefault()
     brokerFeatures.setSupportedFeatures(Features.supportedFeatures(supportedFeatures.asJava))
 
@@ -79,8 +79,8 @@ class FinalizedFeatureCacheTest {
 
   @Test
   def testUpdateOrThrowSuccess(): Unit = {
-    val supportedFeatures = Map[String, SupportedVersionRange](
-      "feature_1" -> new SupportedVersionRange(1, 2, 4))
+    val supportedFeatures =
+      Map[String, SupportedVersionRange]("feature_1" -> new SupportedVersionRange(1, 4))
     val brokerFeatures = BrokerFeatures.createDefault()
     brokerFeatures.setSupportedFeatures(Features.supportedFeatures(supportedFeatures.asJava))
 
@@ -97,8 +97,8 @@ class FinalizedFeatureCacheTest {
 
   @Test
   def testClear(): Unit = {
-    val supportedFeatures = Map[String, SupportedVersionRange](
-      "feature_1" -> new SupportedVersionRange(1, 2, 4))
+    val supportedFeatures =
+      Map[String, SupportedVersionRange]("feature_1" -> new SupportedVersionRange(1, 4))
     val brokerFeatures = BrokerFeatures.createDefault()
     brokerFeatures.setSupportedFeatures(Features.supportedFeatures(supportedFeatures.asJava))
 

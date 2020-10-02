@@ -24,16 +24,12 @@ import com.yammer.metrics.core.Timer
 import kafka.api.{ApiVersion, KAFKA_2_6_IV0, KAFKA_2_7_IV0, LeaderAndIsr}
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server.{KafkaConfig, KafkaServer}
-import kafka.utils.TestUtils.waitUntilTrue
 import kafka.utils.{LogCaptureAppender, TestUtils}
-import kafka.zk._
-import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, DescribeFeaturesOptions, FeatureUpdate, UpdateFeaturesOptions}
+import kafka.zk.{FeatureZNodeStatus, _}
 import org.apache.kafka.common.errors.{ControllerMovedException, StaleBrokerEpochException}
-import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
+import org.apache.kafka.common.feature.Features
 import org.apache.kafka.common.metrics.KafkaMetric
-import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.{ElectionType, TopicPartition}
 import org.apache.log4j.Level
 import org.junit.Assert.{assertEquals, assertTrue}
@@ -601,131 +597,23 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testControllerFeatureZNodeSetupWhenFeatureVersioningIsEnabled(): Unit = {
-    testControllerFeatureZNodeSetup(KAFKA_2_7_IV0)
+  def testControllerFeatureZNodeSetupWhenFeatureVersioningIsEnabledWithDisabledExistingNode(): Unit = {
+    testControllerFeatureZNodeSetup(new FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures()), KAFKA_2_7_IV0)
   }
 
   @Test
-  def testControllerFeatureZNodeSetupWhenFeatureVersioningIsDisabled(): Unit = {
-    testControllerFeatureZNodeSetup(KAFKA_2_6_IV0)
-  }
-
-  private def createAdminClient(): Admin = {
-    val props = new Properties
-    props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG,
-              TestUtils.bootstrapServers(servers,
-                                         ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)))
-    Admin.create(props)
-  }
-
-  private def updateSupportedFeatures(features: Features[SupportedVersionRange]): Unit = {
-    servers.foreach(s => {
-      s.brokerFeatures.setSupportedFeatures(features)
-      s.zkClient.updateBrokerInfo(s.createBrokerInfo)
-    })
-
-    // Wait until updates to supported features in all BrokerZNode propagate to the controller.
-    waitUntilTrue(
-      () => servers.exists(s => {
-        if (s.kafkaController.isActive) {
-          s.kafkaController.controllerContext.liveOrShuttingDownBrokers
-            .forall(b => {
-              b.features.equals(features)
-            })
-        } else {
-          false
-        }
-      }),
-      "Controller did not get broker supported features updates for too long")
-  }
-
-  private def finalizedFeaturesEpoch(client: Admin): Long = {
-    client
-      .describeFeatures(new DescribeFeaturesOptions().sendRequestToController(true))
-      .featureMetadata()
-      .get()
-      .finalizedFeaturesEpoch()
-      .get()
+  def testControllerFeatureZNodeSetupWhenFeatureVersioningIsEnabledWithEnabledExistingNode(): Unit = {
+    testControllerFeatureZNodeSetup(new FeatureZNode(FeatureZNodeStatus.Enabled, Features.emptyFinalizedFeatures()), KAFKA_2_7_IV0)
   }
 
   @Test
-  def testFeatureVersionDeprecation(): Unit = {
-    servers = makeServers(3, interBrokerProtocolVersion = Some(KAFKA_2_7_IV0))
-    assertTrue(servers.forall(s => s.config.isFeatureVersioningSupported))
-    TestUtils.waitUntilControllerElected(zkClient)
+  def testControllerFeatureZNodeSetupWhenFeatureVersioningIsDisabledWithDisabledExistingNode(): Unit = {
+    testControllerFeatureZNodeSetup(new FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures()), KAFKA_2_6_IV0)
+  }
 
-    val (mayBeFeatureZNodeBytes, version) = zkClient.getDataAndVersion(FeatureZNode.path)
-    assertEquals(0, version)
-    val featureZNode = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
-    assertEquals(FeatureZNodeStatus.Enabled, featureZNode.status)
-    assertTrue(featureZNode.features.empty)
-
-    var client: Admin = null
-    try {
-      // 1. Setup supported features ahead of finalizing them.
-      val supportedFeatures = Features.supportedFeatures(
-        new java.util.HashMap[String, SupportedVersionRange] {
-          put("deprecation_target", new SupportedVersionRange(1, 5))
-          put("not_deprecation_target", new SupportedVersionRange(1, 6))
-        })
-      updateSupportedFeatures(supportedFeatures)
-
-      // 2. Finalize the supported features at the max level.
-      client = createAdminClient()
-      client.updateFeatures(
-        new java.util.HashMap[String, FeatureUpdate] {
-          put("deprecation_target", new FeatureUpdate(5, false))
-          put("not_deprecation_target", new FeatureUpdate(6, false))
-        },
-        new UpdateFeaturesOptions()
-      ).all().get()
-      val epochBeforeControllerFailover = finalizedFeaturesEpoch(client)
-
-      // 3. Setup supported features once again, this time deprecating feature versions [1, 2]
-      //    for the feature "deprecation_target".
-      val supportedFeaturesWithDeprecatedVersions = Features.supportedFeatures(
-        new java.util.HashMap[String, SupportedVersionRange] {
-          put("deprecation_target", new SupportedVersionRange(1, 3, 5))
-          put("not_deprecation_target", new SupportedVersionRange(1, 6))
-        })
-      updateSupportedFeatures(supportedFeaturesWithDeprecatedVersions)
-
-      // 4. Trigger controller failover
-      val controller = getController().kafkaController
-      zkClient.deleteController(controller.controllerContext.epochZkVersion)
-
-      // 5. Expect the controller to update the finalized features
-      val epochAfterControllerFailover = epochBeforeControllerFailover + 1
-      TestUtils.waitUntilTrue(
-        () => {
-          getController().kafkaController.isActive &&
-          finalizedFeaturesEpoch(client) == epochAfterControllerFailover
-        },
-        "Finalized features are not updated for too long after controller failover")
-
-      // 6. Expect the finalized feature: "deprecation_target" to be updated to [3, 5] (due to
-      //    deprecation of versions [1, 2])
-      val featureMetadata = client
-        .describeFeatures(new DescribeFeaturesOptions().sendRequestToController(true))
-        .featureMetadata()
-        .get()
-      assertTrue(featureMetadata.finalizedFeaturesEpoch().isPresent)
-      assertEquals(epochAfterControllerFailover, featureMetadata.finalizedFeaturesEpoch().get())
-
-      assertEquals(2, featureMetadata.finalizedFeatures().size())
-      assertTrue(featureMetadata.finalizedFeatures().containsKey("deprecation_target"))
-      val deprecationTargetVersionRange = featureMetadata.finalizedFeatures().get("deprecation_target")
-      assertEquals(3, deprecationTargetVersionRange.minVersionLevel())
-      assertEquals(5, deprecationTargetVersionRange.maxVersionLevel())
-
-      assertTrue(featureMetadata.finalizedFeatures().containsKey("not_deprecation_target"))
-      val notDeprecationTargetVersionRange = featureMetadata.finalizedFeatures().get("not_deprecation_target")
-      assertEquals(1, notDeprecationTargetVersionRange.minVersionLevel())
-      assertEquals(6, notDeprecationTargetVersionRange.maxVersionLevel())
-    } finally {
-      if (client != null)
-        client.close()
-    }
+  @Test
+  def testControllerFeatureZNodeSetupWhenFeatureVersioningIsDisabledWithEnabledExistingNode(): Unit = {
+    testControllerFeatureZNodeSetup(new FeatureZNode(FeatureZNodeStatus.Enabled, Features.emptyFinalizedFeatures()), KAFKA_2_6_IV0)
   }
 
   @Test
@@ -852,19 +740,32 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     controller.shutdown()
   }
 
-  private def testControllerFeatureZNodeSetup(interBrokerProtocolVersion: ApiVersion): Unit = {
+  private def testControllerFeatureZNodeSetup(initialZNode: FeatureZNode,
+                                              interBrokerProtocolVersion: ApiVersion): Unit = {
+    zkClient.updateFeatureZNode(initialZNode)
+    val (_, versionBefore) = zkClient.getDataAndVersion(FeatureZNode.path)
     servers = makeServers(1, interBrokerProtocolVersion = Some(interBrokerProtocolVersion))
     TestUtils.waitUntilControllerElected(zkClient)
 
-    val (mayBeFeatureZNodeBytes, version) = zkClient.getDataAndVersion(FeatureZNode.path)
-    assertEquals(0, version)
-    val featureZNode = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
+    val (mayBeFeatureZNodeBytes, versionAfter) = zkClient.getDataAndVersion(FeatureZNode.path)
+    val newZNode = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
     if (interBrokerProtocolVersion >= KAFKA_2_7_IV0) {
-      assertEquals(FeatureZNodeStatus.Enabled, featureZNode.status)
+      if (initialZNode.status == FeatureZNodeStatus.Enabled) {
+        assertEquals(versionBefore, versionAfter)
+        assertEquals(initialZNode, newZNode)
+      } else if (initialZNode.status == FeatureZNodeStatus.Disabled) {
+        assertEquals(versionBefore + 1, versionAfter)
+        assertEquals(new FeatureZNode(FeatureZNodeStatus.Enabled, Features.emptyFinalizedFeatures()), newZNode)
+      }
     } else {
-      assertEquals(FeatureZNodeStatus.Disabled, featureZNode.status)
+      if (initialZNode.status == FeatureZNodeStatus.Enabled) {
+        assertEquals(versionBefore + 1, versionAfter)
+        assertEquals(new FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures()), newZNode)
+      } else if (initialZNode.status == FeatureZNodeStatus.Disabled) {
+        assertEquals(versionBefore, versionAfter)
+        assertEquals(initialZNode, newZNode)
+      }
     }
-    assertTrue(featureZNode.features.empty)
   }
 
   @Test

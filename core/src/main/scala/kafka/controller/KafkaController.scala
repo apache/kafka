@@ -141,11 +141,6 @@ class KafkaController(val config: KafkaConfig,
   newGauge("TopicsIneligibleToDeleteCount", () => ineligibleTopicsToDeleteCount)
   newGauge("ReplicasIneligibleToDeleteCount", () => ineligibleReplicasToDeleteCount)
 
-  class IncompatibleFeatureException(message: String, t: Throwable) extends RuntimeException(message, t) {
-    def this(message: String) = this(message, null)
-    def this(t: Throwable) = this("", t)
-  }
-
   /**
    * Returns true if this broker is the current controller.
    */
@@ -306,9 +301,9 @@ class KafkaController(val config: KafkaConfig,
    *
    * 1. Supported feature:
    * A supported feature is represented by a name (string) and a range of versions (defined by a
-   * SupportedVersionRange). It refers to a feature that a particular broker advertises
-   * support for. Each broker advertises the version ranges of its own supported features in its
-   * own BrokerIdZNode. The contents of the advertisement are specific to the particular broker and
+   * SupportedVersionRange). It refers to a feature that a particular broker advertises support for.
+   * Each broker advertises the version ranges of its own supported features in its own
+   * BrokerIdZNode. The contents of the advertisement are specific to the particular broker and
    * do not represent any guarantee of a cluster-wide availability of the feature for any particular
    * range of versions.
    *
@@ -337,14 +332,14 @@ class KafkaController(val config: KafkaConfig,
    *    supported features as its finalized features.
    *
    * 2. Broker binary upgraded, but IBP config set to lower than KAFKA_2_7_IV0:
-   *    Imagine there is an existing Kafka cluster with IBP config less than KAFKA_2_7_IV0, and the
-   *    broker binary has been upgraded to a newer version that supports the feature versioning
-   *    system (KIP-584). This means the user is upgrading from an earlier version of the broker
-   *    binary. In this case, we want to start with no finalized features and allow the user to
-   *    finalize them whenever they are ready i.e. in the future whenever the user sets IBP config
-   *    to be greater than or equal to KAFKA_2_7_IV0, then the user could start finalizing the
-   *    features. This process ensures we do not enable all the possible features immediately after
-   *    an upgrade, which could be harmful to Kafka.
+   *    Imagine there was an existing Kafka cluster with IBP config less than KAFKA_2_7_IV0, and the
+   *    broker binary has now been upgraded to a newer version that supports the feature versioning
+   *    system (KIP-584). But the IBP config is still set to lower than KAFKA_2_7_IV0, and may be
+   *    set to a higher value later. In this case, we want to start with no finalized features and
+   *    allow the user to finalize them whenever they are ready i.e. in the future whenever the
+   *    user sets IBP config to be greater than or equal to KAFKA_2_7_IV0, then the user could start
+   *    finalizing the features. This process ensures we do not enable all the possible features
+   *    immediately after an upgrade, which could be harmful to Kafka.
    *    This is how we handle such a case:
    *      - Before the IBP config upgrade (i.e. IBP config set to less than KAFKA_2_7_IV0), the
    *        controller will start up and check if the FeatureZNode is absent.
@@ -359,24 +354,14 @@ class KafkaController(val config: KafkaConfig,
    *           Instead it will just switch the FeatureZNode status to enabled status. This lets the
    *           user finalize the features later.
    *         - Otherwise, if a node already exists in enabled status then the controller will leave
-   *           the node untouched.
+   *           the node umodified.
    *
    * 3. Broker binary upgraded, with existing cluster IBP config >= KAFKA_2_7_IV0:
-   *    Imagine an existing Kafka cluster with IBP config >= KAFKA_2_7_IV0, and the broker binary
-   *    has just been upgraded to a newer version (that supports IBP config KAFKA_2_7_IV0 and higher).
-   *    The controller will start up and find that a FeatureZNode is already present with enabled
-   *    status and existing finalized features. In such a case, the controller needs to scan the
-   *    existing finalized features and mutate them for the purpose of version level deprecation
-   *    (if needed).
-   *    This is how we handle this case: If an existing finalized feature is defined in the list of
-   *    supported features (maintained in the BrokerFeatures object), then, the existing
-   *    minimum version level is updated to the first active version for that feature. The goal of
-   *    this mutation is to permanently deprecate one or more feature version levels. The range of
-   *    feature version levels deprecated are from the closed range:
-   *    [existing_min_version_level, first_active_version - 1].
-   *    NOTE: Deprecating a feature version level is a two-step process and involves incompatible
-   *    changes. Please read the documentation for the kafka.server.BrokerFeatures class to learn
-   *    about the deprecation process.
+   *    Imagine there was an existing Kafka cluster with IBP config >= KAFKA_2_7_IV0, and the broker
+   *    binary has just been upgraded to a newer version (that supports IBP config KAFKA_2_7_IV0 and
+   *    higher). The controller will start up and find that a FeatureZNode is already present with
+   *    enabled status and existing finalized features. In such a case, the controller leaves the node
+   *    unmodified.
    *
    * 4. Broker downgrade:
    *    Imagine that a Kafka cluster exists already and the IBP config is greater than or equal to
@@ -386,49 +371,16 @@ class KafkaController(val config: KafkaConfig,
    *    will switch the FeatureZNode status to disabled with empty features.
    */
   private def enableFeatureVersioning(): Unit = {
-    val supportedFeatures = brokerFeatures.supportedFeatures
     val (mayBeFeatureZNodeBytes, version) = zkClient.getDataAndVersion(FeatureZNode.path)
     if (version == ZkVersion.UnknownVersion) {
-      val finalizedFeatures = supportedFeatures.features.asScala.map {
-        case(name, versionRange) => (name, new FinalizedVersionRange(versionRange.firstActiveVersion, versionRange.max))
-      }.asJava
       val newVersion = createFeatureZNode(new FeatureZNode(FeatureZNodeStatus.Enabled,
-                                                           Features.finalizedFeatures(finalizedFeatures)))
+                                          brokerFeatures.defaultFinalizedFeatures))
       featureCache.waitUntilEpochOrThrow(newVersion, config.zkConnectionTimeoutMs)
     } else {
       val existingFeatureZNode = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
-      val newFeatures: Features[FinalizedVersionRange] = existingFeatureZNode.status match {
-        case FeatureZNodeStatus.Disabled => Features.emptyFinalizedFeatures()
-        case FeatureZNodeStatus.Enabled =>
-          Features.finalizedFeatures(existingFeatureZNode.features.features().asScala.map {
-            case (featureName, finalizedVersionRange) =>
-              val supportedVersionRange = supportedFeatures.get(featureName)
-              if (finalizedVersionRange.isIncompatibleWith(supportedVersionRange)) {
-                // This is a serious error. We should never be reaching here.
-                throw new IncompatibleFeatureException(
-                  s"Can not update minimum version level in finalized feature: $featureName,"
-                    + s" since the existing $finalizedVersionRange is incompatible with"
-                    + s" the $supportedVersionRange. This should never happen since feature version"
-                    + s" incompatibilities are already checked during Kafka server startup.")
-              } else {
-                // If supportedVersionRange.firstActiveVersion() > finalizedVersionRange.min(), then
-                // we go ahead and deprecate all version levels in the range:
-                // [finalizedVersionRange.min(), supportedVersionRange.firstActiveVersion() - 1].
-                //
-                // Example:
-                // supportedVersionRange = [minVersion=1, firstActiveVersion=4, maxVersion=7]
-                //    and
-                // finalizedVersionRange = [minVersionLevel=1, maxVersionLevel=5].
-                //
-                // In this case, we deprecate all version levels in the range: [1, 3].
-                val newMinVersionLevel = supportedVersionRange.firstActiveVersion().max(finalizedVersionRange.min())
-                (featureName, new FinalizedVersionRange(newMinVersionLevel, finalizedVersionRange.max()))
-              }
-          }.asJava)
-      }
-      val newFeatureZNode = new FeatureZNode(FeatureZNodeStatus.Enabled, newFeatures)
-      if (!newFeatureZNode.equals(existingFeatureZNode)) {
-        val newVersion = updateFeatureZNode(newFeatureZNode)
+      if (!existingFeatureZNode.status.equals(FeatureZNodeStatus.Enabled)) {
+        val newVersion = updateFeatureZNode(new FeatureZNode(FeatureZNodeStatus.Enabled,
+                                            existingFeatureZNode.features))
         featureCache.waitUntilEpochOrThrow(newVersion, config.zkConnectionTimeoutMs)
       }
     }
@@ -1546,10 +1498,6 @@ class KafkaController(val config: KafkaConfig,
         error(s"Error while electing or becoming controller on broker ${config.brokerId}. " +
           s"Trigger controller movement immediately", t)
         triggerControllerMove()
-        if (t.isInstanceOf[IncompatibleFeatureException]) {
-          fatal("Feature version incompatibility found. The controller will eventually exit.")
-          Exit.exit(1)
-        }
     }
   }
 
@@ -1914,7 +1862,7 @@ class KafkaController(val config: KafkaConfig,
     } else {
       var newVersionRange: FinalizedVersionRange = null
       try {
-        newVersionRange = new FinalizedVersionRange(supportedVersionRange.firstActiveVersion, update.maxVersionLevel)
+        newVersionRange = new FinalizedVersionRange(supportedVersionRange.min, update.maxVersionLevel)
       } catch {
         case _: IllegalArgumentException => {
           // This exception means the provided maxVersionLevel is invalid. It is handled below
@@ -1925,7 +1873,7 @@ class KafkaController(val config: KafkaConfig,
         Right(new ApiError(Errors.INVALID_REQUEST,
           "Could not apply finalized feature update because the provided" +
           s" maxVersionLevel:${update.maxVersionLevel} is lower than the" +
-          s" first active version:${supportedVersionRange.firstActiveVersion}."))
+          s" supported minVersion:${supportedVersionRange.min}."))
       } else {
         val newFinalizedFeature =
           Features.finalizedFeatures(Utils.mkMap(Utils.mkEntry(update.feature, newVersionRange)))

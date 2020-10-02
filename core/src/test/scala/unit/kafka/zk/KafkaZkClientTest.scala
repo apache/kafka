@@ -773,12 +773,12 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
       rack = None,
       features = Features.supportedFeatures(
         Map[String, SupportedVersionRange](
-          "feature1" -> new SupportedVersionRange(1, 1, 2)).asJava))
+          "feature1" -> new SupportedVersionRange(1, 2)).asJava))
     val differentBrokerInfoWithSameId = createBrokerInfo(
       1, "test.host2", 9995, SecurityProtocol.SSL,
       features = Features.supportedFeatures(
         Map[String, SupportedVersionRange](
-          "feature2" -> new SupportedVersionRange(4, 4, 7)).asJava))
+          "feature2" -> new SupportedVersionRange(4, 7)).asJava))
 
     zkClient.registerBroker(brokerInfo)
     assertEquals(Some(brokerInfo.broker), zkClient.getBroker(1))
@@ -832,12 +832,12 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
       0, "test.host0", 9998, SecurityProtocol.PLAINTEXT,
       features = Features.supportedFeatures(
         Map[String, SupportedVersionRange](
-          "feature1" -> new SupportedVersionRange(1, 1, 2)).asJava))
+          "feature1" -> new SupportedVersionRange(1, 2)).asJava))
     val brokerInfo1 = createBrokerInfo(
       1, "test.host1", 9999, SecurityProtocol.SSL,
       features = Features.supportedFeatures(
         Map[String, SupportedVersionRange](
-          "feature2" -> new SupportedVersionRange(3, 3, 6)).asJava))
+          "feature2" -> new SupportedVersionRange(3, 6)).asJava))
 
     zkClient.registerBroker(brokerInfo1)
     otherZkClient.registerBroker(brokerInfo0)

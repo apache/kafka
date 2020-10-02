@@ -223,7 +223,6 @@ public class ApiVersionsResponse extends AbstractResponse {
             SupportedVersionRange versionRange = feature.getValue();
             key.setName(feature.getKey());
             key.setMinVersion(versionRange.min());
-            key.setFirstActiveVersion(versionRange.firstActiveVersion());
             key.setMaxVersion(versionRange.max());
             converted.add(key);
         }

@@ -4367,11 +4367,7 @@ public class KafkaAdminClient extends AdminClient {
 
                 final Map<String, SupportedVersionRange> supportedFeatures = new HashMap<>();
                 for (final SupportedFeatureKey key : response.data().supportedFeatures().valuesSet()) {
-                    supportedFeatures.put(
-                        key.name(),
-                        new SupportedVersionRange(key.minVersion(),
-                                                  key.firstActiveVersion(),
-                                                  key.maxVersion()));
+                    supportedFeatures.put(key.name(), new SupportedVersionRange(key.minVersion(), key.maxVersion()));
                 }
 
                 return new FeatureMetadata(finalizedFeatures, finalizedFeaturesEpoch, supportedFeatures);

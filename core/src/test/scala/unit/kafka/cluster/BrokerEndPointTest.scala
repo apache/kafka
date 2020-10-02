@@ -195,8 +195,8 @@ class BrokerEndPointTest {
     assertEquals(Some("dc1"), broker.rack)
     assertEquals(Features.supportedFeatures(
       Map[String, SupportedVersionRange](
-        "feature1" -> new SupportedVersionRange(1, 1, 2),
-        "feature2" -> new SupportedVersionRange(2, 2, 4)).asJava),
+        "feature1" -> new SupportedVersionRange(1, 2),
+        "feature2" -> new SupportedVersionRange(2, 4)).asJava),
       broker.features)
   }
 
