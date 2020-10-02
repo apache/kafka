@@ -109,6 +109,11 @@ public interface ReplicatedLog extends Closeable {
     void flush();
 
     /**
+     * Get the last offset which has been flushed to disk.
+     */
+    long lastFlushedOffset();
+
+    /**
      * Return the topic partition associated with the log.
      */
     TopicPartition topicPartition();

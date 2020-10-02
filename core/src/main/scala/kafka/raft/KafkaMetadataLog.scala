@@ -130,6 +130,10 @@ class KafkaMetadataLog(
     log.flush()
   }
 
+  override def lastFlushedOffset(): Long = {
+    log.recoveryPoint
+  }
+
   /**
    * Return the topic partition associated with the log.
    */

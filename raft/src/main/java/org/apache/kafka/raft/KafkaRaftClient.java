@@ -193,8 +193,9 @@ public class KafkaRaftClient implements RaftClient {
     ) {
         highWatermarkOpt.ifPresent(highWatermark -> {
             long newHighWatermark = Math.min(endOffset().offset, highWatermark);
-            state.updateHighWatermark(OptionalLong.of(newHighWatermark));
-            updateHighWatermark(state, currentTimeMs);
+            if (state.updateHighWatermark(OptionalLong.of(newHighWatermark))) {
+                updateHighWatermark(state, currentTimeMs);
+            }
         });
     }
 
@@ -203,23 +204,13 @@ public class KafkaRaftClient implements RaftClient {
         long currentTimeMs
     ) {
         final LogOffsetMetadata endOffsetMetadata = log.endOffset();
+
         if (state.updateLocalState(currentTimeMs, endOffsetMetadata)) {
             updateHighWatermark(state, currentTimeMs);
         }
 
-        LogOffset endOffset = new LogOffset(endOffset().offset, Isolation.UNCOMMITTED);
+        LogOffset endOffset = new LogOffset(endOffsetMetadata.offset, Isolation.UNCOMMITTED);
         fetchPurgatory.maybeComplete(endOffset, currentTimeMs);
-    }
-
-    private void updateReplicaEndOffsetAndTimestamp(
-        LeaderState state,
-        int replicaId,
-        LogOffsetMetadata endOffsetMetadata,
-        long currentTimeMs
-    ) {
-        if (state.updateReplicaState(replicaId, currentTimeMs, endOffsetMetadata)) {
-            updateHighWatermark(state, currentTimeMs);
-        }
     }
 
     private void updateHighWatermark(
@@ -899,7 +890,11 @@ public class KafkaRaftClient implements RaftClient {
             return buildFetchResponse(Errors.NONE, MemoryRecords.EMPTY, divergingEpoch, state.highWatermark());
         } else {
             LogFetchInfo info = log.read(fetchOffset, Isolation.UNCOMMITTED);
-            updateReplicaEndOffsetAndTimestamp(state, replicaId, info.startOffsetMetadata, currentTimeMs);
+
+            if (state.updateReplicaState(replicaId, currentTimeMs, info.startOffsetMetadata)) {
+                updateHighWatermark(state, currentTimeMs);
+            }
+
             return buildFetchResponse(Errors.NONE, info.records, Optional.empty(), state.highWatermark());
         }
     }
@@ -1590,7 +1585,6 @@ public class KafkaRaftClient implements RaftClient {
         } else {
             long currentTimeMs = time.milliseconds();
             long pollTimeoutMs = pollCurrentState(currentTimeMs);
-
             kafkaRaftMetrics.updatePollStart(currentTimeMs);
             List<RaftMessage> inboundMessages = channel.receive(pollTimeoutMs);
 
@@ -1629,6 +1623,8 @@ public class KafkaRaftClient implements RaftClient {
                 int epoch = quorum.epoch();
                 LogAppendInfo info = appendAsLeader(leaderState, unwrittenAppend.records, currentTimeMs);
                 OffsetAndEpoch offsetAndEpoch = new OffsetAndEpoch(info.lastOffset, epoch);
+                long numRecords = info.lastOffset - info.firstOffset + 1;
+                logger.debug("Completed write of {} records at {}", numRecords, offsetAndEpoch);
 
                 if (unwrittenAppend.ackMode == AckMode.LEADER) {
                     unwrittenAppend.complete(offsetAndEpoch);
@@ -1644,13 +1640,11 @@ public class KafkaRaftClient implements RaftClient {
                             unwrittenAppend.fail(exception);
                         } else {
                             long elapsedTime = Math.max(0, completionTimeMs - currentTimeMs);
-                            long numCommittedRecords = info.lastOffset - info.firstOffset + 1;
-                            double elapsedTimePerRecord = (double) elapsedTime / numCommittedRecords;
+                            double elapsedTimePerRecord = (double) elapsedTime / numRecords;
                             kafkaRaftMetrics.updateCommitLatency(elapsedTimePerRecord, currentTimeMs);
                             unwrittenAppend.complete(offsetAndEpoch);
 
-                            logger.debug("Completed committing append with {} records at {}",
-                                numCommittedRecords, offsetAndEpoch);
+                            logger.debug("Completed commit of {} records at {}", numRecords, offsetAndEpoch);
                         }
                     });
                 }

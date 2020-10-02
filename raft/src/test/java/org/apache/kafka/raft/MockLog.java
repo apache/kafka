@@ -246,6 +246,7 @@ public class MockLog implements ReplicatedLog {
         lastFlushedOffset = endOffset().offset;
     }
 
+    @Override
     public long lastFlushedOffset() {
         return lastFlushedOffset;
     }
