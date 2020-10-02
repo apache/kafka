@@ -16,9 +16,9 @@
 {
   "type": "data",
   "name": "OffsetCommitKey",
-  "validVersions": "0-2",
+  "validVersions": "0-1",
   "fields": [
-    { "name": "group", "type": "string", "versions": "0-2" },
+    { "name": "group", "type": "string", "versions": "0-1" },
     { "name": "topic", "type": "string", "versions": "0-1" },
     { "name": "partition", "type": "int32", "versions": "0-1" }
   ]

@@ -996,13 +996,6 @@ object GroupMetadataManager {
   val MetricsGroup: String = "group-coordinator-metrics"
   val LoadTimeSensor: String = "GroupPartitionLoadTime"
 
-  private val CURRENT_OFFSET_KEY_SCHEMA_VERSION = 1.toShort
-  /**
-   * the start version of generated.GroupMetadataKey is 2. see common/message/GroupMetadataKey.json
-   */
-  private val CURRENT_GROUP_KEY_SCHEMA_VERSION = 2.toShort
-  private val CURRENT_GROUP_METADATA_VALUE_SCHEMA_VERSION = 3.toShort
-
   private def serializeMessage(version: Short, message: Message): Array[Byte] = MessageUtil.serializeMessage(version, message).array
 
   /**
@@ -1012,13 +1005,12 @@ object GroupMetadataManager {
    * @param topicPartition the TopicPartition to generate the key
    * @return key for offset commit message
    */
-  def offsetCommitKey(groupId: String, topicPartition: TopicPartition): Array[Byte] = {
-    serializeMessage(CURRENT_OFFSET_KEY_SCHEMA_VERSION,
+  def offsetCommitKey(groupId: String, topicPartition: TopicPartition): Array[Byte] =
+    serializeMessage(OffsetCommitKey.HIGHEST_SUPPORTED_VERSION,
       new OffsetCommitKey()
         .setGroup(groupId)
-        .setTopic(topicPartition.topic())
-        .setPartition(topicPartition.partition()))
-  }
+        .setTopic(topicPartition.topic)
+        .setPartition(topicPartition.partition))
 
   /**
    * Generates the key for group metadata message for given group
@@ -1026,11 +1018,10 @@ object GroupMetadataManager {
    * @param groupId the ID of the group to generate the key
    * @return key bytes for group metadata message
    */
-  def groupMetadataKey(groupId: String): Array[Byte] = {
-    serializeMessage(CURRENT_GROUP_KEY_SCHEMA_VERSION,
+  def groupMetadataKey(groupId: String): Array[Byte] =
+    serializeMessage(GenGroupMetadataKey.HIGHEST_SUPPORTED_VERSION,
       new GenGroupMetadataKey()
         .setGroup(groupId))
-  }
 
   /**
    * Generates the payload for offset commit message from given offset and metadata
@@ -1133,17 +1124,15 @@ object GroupMetadataManager {
   def readMessageKey(buffer: ByteBuffer): BaseKey = {
     val version = buffer.getShort
 
-    if (version <= CURRENT_OFFSET_KEY_SCHEMA_VERSION) {
+    if (version >= OffsetCommitKey.LOWEST_SUPPORTED_VERSION && version <= OffsetCommitKey.HIGHEST_SUPPORTED_VERSION) {
       // version 0 and 1 refer to offset
       val key = new OffsetCommitKey(new ByteBufferAccessor(buffer), version)
       OffsetKey(version, GroupTopicPartition(key.group, new TopicPartition(key.topic, key.partition)))
-    } else if (version == CURRENT_GROUP_KEY_SCHEMA_VERSION) {
+    } else if (version >= GenGroupMetadataKey.LOWEST_SUPPORTED_VERSION && version <= GenGroupMetadataKey.HIGHEST_SUPPORTED_VERSION) {
       // version 2 refers to offset
       val key = new GenGroupMetadataKey(new ByteBufferAccessor(buffer), version)
       GroupMetadataKey(version, key.group)
-    } else {
-      throw new IllegalStateException(s"Unknown group metadata message version: $version")
-    }
+    } else throw new IllegalStateException(s"Unknown group metadata message version: $version")
   }
 
   /**
@@ -1153,26 +1142,30 @@ object GroupMetadataManager {
    * @return an offset-metadata object from the message
    */
   def readOffsetMessageValue(buffer: ByteBuffer): OffsetAndMetadata = {
-    if (buffer == null) { // tombstone
-      null
-    } else {
+    // tombstone
+    if (buffer == null) null
+    else {
       val version = buffer.getShort
       val value = new OffsetCommitValue(new ByteBufferAccessor(buffer), version)
-      if (version == 0) {
+      if (version == 0)
         OffsetAndMetadata(value.offset, value.metadata, value.commitTimestamp)
-      } else if (version == 1) {
-        if (value.expireTimestamp() == OffsetCommitRequest.DEFAULT_TIMESTAMP)
-          OffsetAndMetadata(value.offset, value.metadata, value.commitTimestamp)
-        else
-          OffsetAndMetadata(value.offset, value.metadata, value.commitTimestamp, value.expireTimestamp)
-      } else if (version == 2) {
+      else if (version == 1)
+        OffsetAndMetadata(
+          offset = value.offset,
+          leaderEpoch = Optional.empty(),
+          metadata = value.metadata,
+          commitTimestamp = value.commitTimestamp,
+          expireTimestamp = if (value.expireTimestamp == OffsetCommitRequest.DEFAULT_TIMESTAMP) None else Some(value.expireTimestamp))
+      else if (version == 2)
         OffsetAndMetadata(value.offset, value.metadata, value.commitTimestamp)
-      } else if (version == 3) {
-        val leaderEpochOpt: Optional[Integer] = if (value.leaderEpoch() < 0) Optional.empty() else Optional.of(value.leaderEpoch())
-        OffsetAndMetadata(value.offset, leaderEpochOpt, value.metadata, value.commitTimestamp)
-      } else {
-        throw new IllegalStateException(s"Unknown offset message version: $version")
-      }
+      else if (version == 3)
+        OffsetAndMetadata(
+          offset = value.offset,
+          leaderEpoch = if (value.leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH) Optional.empty() else Optional.of(value.leaderEpoch),
+          metadata = value.metadata,
+          commitTimestamp = value.commitTimestamp,
+          expireTimestamp = None)
+      else throw new IllegalStateException(s"Unknown offset message version: $version")
     }
   }
 
@@ -1185,46 +1178,36 @@ object GroupMetadataManager {
    * @return a group metadata object from the message
    */
   def readGroupMessageValue(groupId: String, buffer: ByteBuffer, time: Time): GroupMetadata = {
-    if (buffer == null) { // tombstone
-      null
-    } else {
+    // tombstone
+    if (buffer == null) null
+    else {
       val version = buffer.getShort
-      if (version >= 0 && version <= CURRENT_GROUP_METADATA_VALUE_SCHEMA_VERSION) {
+      if (version >= GroupMetadataValue.LOWEST_SUPPORTED_VERSION && version <= GroupMetadataValue.HIGHEST_SUPPORTED_VERSION) {
         val value = new GroupMetadataValue(new ByteBufferAccessor(buffer), version)
-        val generationId = value.generation
-        val protocolType = value.protocolType
-        val protocol = value.protocol
-        val leaderId = value.leader
-        val memberMetadataArray = value.members.asScala
-        val initialState = if (memberMetadataArray.isEmpty) Empty else Stable
-        val currentStateTimestamp: Option[Long] =
-          if (version >= 2) {
-            val timestamp = value.currentStateTimestamp
-            if (timestamp == -1) None else Some(timestamp)
-          } else None
-
-        val members = memberMetadataArray.map { memberMetadataObj =>
-          val memberId = memberMetadataObj.memberId
-          val groupInstanceId =
-            if (version >= 3)
-              Some(memberMetadataObj.groupInstanceId)
-            else
-              None
-          val clientId = memberMetadataObj.clientId
-          val clientHost = memberMetadataObj.clientHost
-          val sessionTimeout = memberMetadataObj.sessionTimeout
-          val rebalanceTimeout = if (version == 0) sessionTimeout else memberMetadataObj.rebalanceTimeout
-          val subscription = memberMetadataObj.subscription
-
-          val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeout, sessionTimeout,
-            protocolType, List((protocol, subscription)))
-          member.assignment = memberMetadataObj.assignment
-          member
+        val members = value.members.asScala.map { memberMetadataObj =>
+          new MemberMetadata(
+            memberId = memberMetadataObj.memberId,
+            groupId = groupId,
+            groupInstanceId = Option(memberMetadataObj.groupInstanceId),
+            clientId = memberMetadataObj.clientId,
+            clientHost = memberMetadataObj.clientHost,
+            rebalanceTimeoutMs = if (version == 0) memberMetadataObj.sessionTimeout else memberMetadataObj.rebalanceTimeout,
+            sessionTimeoutMs = memberMetadataObj.sessionTimeout,
+            protocolType = value.protocolType,
+            supportedProtocols = List((value.protocol, memberMetadataObj.subscription)),
+            assignment = memberMetadataObj.assignment)
         }
-        GroupMetadata.loadGroup(groupId, initialState, generationId, protocolType, protocol, leaderId, currentStateTimestamp, members, time)
-      } else {
-        throw new IllegalStateException(s"Unknown group metadata message version: $version")
-      }
+        GroupMetadata.loadGroup(
+          groupId = groupId,
+          initialState = if (members.isEmpty) Empty else Stable,
+          generationId = value.generation,
+          protocolType = value.protocolType,
+          protocolName = value.protocol,
+          leaderId = value.leader,
+          currentStateTimestamp = if (value.currentStateTimestamp == -1) None else Some(value.currentStateTimestamp),
+          members = members,
+          time = time)
+      } else throw new IllegalStateException(s"Unknown group metadata message version: $version")
     }
   }
 
@@ -1323,9 +1306,9 @@ object GroupMetadataManager {
             .getOrElse("")
 
           if (userData.isEmpty)
-            s"${member.memberId}=${partitionAssignment.partitions()}"
+            s"${member.memberId}=${partitionAssignment.partitions}"
           else
-            s"${member.memberId}=${partitionAssignment.partitions()}:$userData"
+            s"${member.memberId}=${partitionAssignment.partitions}:$userData"
         } else {
           s"${member.memberId}=${hex(member.assignment)}"
         }
