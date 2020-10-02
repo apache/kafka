@@ -24,7 +24,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
@@ -41,7 +41,7 @@ public final class KafkaEventQueue implements EventQueue {
         /**
          * The caller-supplied event.
          */
-        private final Event<T> event;
+        private final Event event;
 
         /**
          * How this event was inserted.
@@ -49,19 +49,14 @@ public final class KafkaEventQueue implements EventQueue {
         private final EventInsertionType insertionType;
 
         /**
-         * The CompletableFuture that the caller can listen on.
-         */
-        private final CompletableFuture<T> future = new CompletableFuture<>();
-
-        /**
          * The previous pointer of our circular doubly-linked list.
          */
-        private EventContext<?> prev = this;
+        private EventContext prev = this;
 
         /**
          * The next pointer in our circular doubly-linked list.
          */
-        private EventContext<?> next = this;
+        private EventContext next = this;
 
         /**
          * If this event is in the delay map, this is the key it is there under.
@@ -74,7 +69,7 @@ public final class KafkaEventQueue implements EventQueue {
          */
         private String tag;
 
-        EventContext(Event<T> event, EventInsertionType insertionType, String tag) {
+        EventContext(Event event, EventInsertionType insertionType, String tag) {
             this.event = event;
             this.insertionType = insertionType;
             this.tag = tag;
@@ -124,11 +119,11 @@ public final class KafkaEventQueue implements EventQueue {
          */
         void run() throws InterruptedException {
             try {
-                future.complete(event.run());
+                event.run();
             } catch (InterruptedException e) {
                 throw e;
             } catch (Exception e) {
-                future.completeExceptionally(e);
+                event.handleException(e);
             }
         }
 
@@ -143,7 +138,7 @@ public final class KafkaEventQueue implements EventQueue {
          * Complete the event associated with this EventContext with a cancellation exception.
          */
         void cancel() {
-            future.cancel(false);
+            event.handleException(new CancellationException());
         }
 
         /**
@@ -151,7 +146,7 @@ public final class KafkaEventQueue implements EventQueue {
          * exception.
          */
         void completeWithException(Throwable t) {
-            future.completeExceptionally(t);
+            event.handleException(t);
         }
     }
 
@@ -159,17 +154,17 @@ public final class KafkaEventQueue implements EventQueue {
         /**
          * Event contexts indexed by tag.  Events without a tag are not included here.
          */
-        private final Map<String, EventContext<?>> tagToEventContext = new HashMap<>();
+        private final Map<String, EventContext> tagToEventContext = new HashMap<>();
 
         /**
          * The head of the event queue.
          */
-        private final EventContext<Void> head = new EventContext<>(null, null, null);
+        private final EventContext head = new EventContext(null, null, null);
 
         /**
          * An ordered map of times in monotonic nanoseconds to events to time out.
          */
-        private final TreeMap<Long, EventContext<?>> delayMap = new TreeMap<>();
+        private final TreeMap<Long, EventContext> delayMap = new TreeMap<>();
 
         /**
          * A condition variable for waking up the event handler thread.
@@ -186,7 +181,7 @@ public final class KafkaEventQueue implements EventQueue {
             }
         }
 
-        private void remove(EventContext<?> eventContext) {
+        private void remove(EventContext eventContext) {
             eventContext.remove();
             if (eventContext.deadlineNs != null) {
                 delayMap.remove(eventContext.deadlineNs);
@@ -199,8 +194,8 @@ public final class KafkaEventQueue implements EventQueue {
         }
 
         private void handleEvents() throws InterruptedException {
-            EventContext<?> toTimeout = null;
-            EventContext<?> toRun = null;
+            EventContext toTimeout = null;
+            EventContext toRun = null;
             while (true) {
                 if (toTimeout != null) {
                     toTimeout.completeWithTimeout();
@@ -212,13 +207,13 @@ public final class KafkaEventQueue implements EventQueue {
                 lock.lock();
                 try {
                     long awaitNs = Long.MAX_VALUE;
-                    Map.Entry<Long, EventContext<?>> entry = delayMap.firstEntry();
+                    Map.Entry<Long, EventContext> entry = delayMap.firstEntry();
                     if (entry != null) {
                         // Search for timed-out events or deferred events that are ready
                         // to run.
                         long now = time.nanoseconds();
                         long timeoutNs = entry.getKey();
-                        EventContext<?> eventContext = entry.getValue();
+                        EventContext eventContext = entry.getValue();
                         if (timeoutNs <= now) {
                             if (eventContext.insertionType == EventInsertionType.DEFERRED) {
                                 // The deferred event is ready to run.  Prepend it to the
@@ -267,13 +262,13 @@ public final class KafkaEventQueue implements EventQueue {
             }
         }
 
-        private void enqueue(EventContext<?> eventContext,
+        private void enqueue(EventContext eventContext,
                              Function<Long, Long> deadlineNsCalculator) {
             lock.lock();
             try {
                 Long existingDeadlineNs = null;
                 if (eventContext.tag != null) {
-                    EventContext<?> toRemove =
+                    EventContext toRemove =
                         tagToEventContext.put(eventContext.tag, eventContext);
                     if (toRemove != null) {
                         existingDeadlineNs = toRemove.deadlineNs;
@@ -341,7 +336,7 @@ public final class KafkaEventQueue implements EventQueue {
      */
     private long closingTimeNs;
 
-    private Event<?> cleanupEvent;
+    private Event cleanupEvent;
 
     public KafkaEventQueue(Time time,
                            LogContext logContext,
@@ -366,27 +361,26 @@ public final class KafkaEventQueue implements EventQueue {
     }
 
     @Override
-    public <T> CompletableFuture<T> enqueue(EventInsertionType insertionType,
-                                            String tag,
-                                            Function<Long, Long> deadlineNsCalculator,
-                                            Event<T> event) {
+    public void enqueue(EventInsertionType insertionType,
+                        String tag,
+                        Function<Long, Long> deadlineNsCalculator,
+                        Event event) {
         lock.lock();
         try {
-            EventContext<T> eventContext = new EventContext<>(event, insertionType, tag);
+            EventContext eventContext = new EventContext<>(event, insertionType, tag);
             if (closingTimeNs != Long.MAX_VALUE) {
                 eventContext.completeWithException(closedExceptionSupplier.get());
-                return eventContext.future;
+            } else {
+                eventHandler.enqueue(eventContext,
+                    deadlineNsCalculator == null ? __ -> null : deadlineNsCalculator);
             }
-            eventHandler.enqueue(eventContext,
-                deadlineNsCalculator == null ? __ -> null : deadlineNsCalculator);
-            return eventContext.future;
         } finally {
             lock.unlock();
         }
     }
 
     @Override
-    public void beginShutdown(Event<?> newCleanupEvent, TimeUnit timeUnit, long timeSpan) {
+    public void beginShutdown(Event newCleanupEvent, TimeUnit timeUnit, long timeSpan) {
         if (timeSpan < 0) {
             throw new IllegalArgumentException("beginShutdown must be called with a " +
                 "non-negative timeout.");
