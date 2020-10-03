@@ -716,7 +716,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 config.ignore(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG);
                 this.valueDeserializer = valueDeserializer;
             }
-            OffsetResetStrategy offsetResetStrategy = OffsetResetStrategy.valueOf(config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG).toUpperCase(Locale.ROOT));
+            OffsetResetStrategy offsetResetStrategy = OffsetResetStrategy.forName(config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG));
             this.subscriptions = new SubscriptionState(logContext, offsetResetStrategy);
             ClusterResourceListeners clusterResourceListeners = configureClusterResourceListeners(keyDeserializer,
                     valueDeserializer, metrics.reporters(), interceptorList);

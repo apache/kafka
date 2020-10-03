@@ -432,7 +432,7 @@ public class ConsumerConfig extends AbstractConfig {
                                 .define(AUTO_OFFSET_RESET_CONFIG,
                                         Type.STRING,
                                         "latest",
-                                        in("latest", "earliest", "none"),
+                                        ConfigDef.CaseInsensitiveValidString.in("latest", "earliest", "none"),
                                         Importance.MEDIUM,
                                         AUTO_OFFSET_RESET_DOC)
                                 .define(CHECK_CRCS_CONFIG,

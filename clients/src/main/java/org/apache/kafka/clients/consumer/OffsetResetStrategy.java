@@ -17,5 +17,15 @@
 package org.apache.kafka.clients.consumer;
 
 public enum OffsetResetStrategy {
-    LATEST, EARLIEST, NONE
+    LATEST, EARLIEST, NONE;
+
+    public static OffsetResetStrategy forName(final String name) {
+        for (final OffsetResetStrategy value : values()) {
+            if (value.name().equalsIgnoreCase(name)) {
+                return value;
+            }
+        }
+
+        throw new IllegalArgumentException("Unknown offset reset strategy: " + name);
+    }
 }
