@@ -378,9 +378,18 @@ class KafkaController(val config: KafkaConfig,
       featureCache.waitUntilEpochOrThrow(newVersion, config.zkConnectionTimeoutMs)
     } else {
       val existingFeatureZNode = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
-      if (!existingFeatureZNode.status.equals(FeatureZNodeStatus.Enabled)) {
-        val newVersion = updateFeatureZNode(new FeatureZNode(FeatureZNodeStatus.Enabled,
-                                            existingFeatureZNode.features))
+      val newFeatures = existingFeatureZNode.status match {
+        case FeatureZNodeStatus.Enabled => existingFeatureZNode.features
+        case FeatureZNodeStatus.Disabled =>
+          if (!existingFeatureZNode.features.empty()) {
+            warn(s"FeatureZNode at path: ${FeatureZNode.path} with disabled status" +
+              " contains non-empty features.")
+          }
+          Features.emptyFinalizedFeatures
+      }
+      val newFeatureZNode = new FeatureZNode(FeatureZNodeStatus.Enabled, newFeatures)
+      if (!newFeatureZNode.equals(existingFeatureZNode)) {
+        val newVersion = updateFeatureZNode(newFeatureZNode)
         featureCache.waitUntilEpochOrThrow(newVersion, config.zkConnectionTimeoutMs)
       }
     }
@@ -408,7 +417,12 @@ class KafkaController(val config: KafkaConfig,
       createFeatureZNode(newNode)
     } else {
       val existingFeatureZNode = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
-      if (!existingFeatureZNode.status.equals(FeatureZNodeStatus.Disabled)) {
+      if (existingFeatureZNode.status == FeatureZNodeStatus.Disabled &&
+          !existingFeatureZNode.features.empty()) {
+        warn(s"FeatureZNode at path: ${FeatureZNode.path} with disabled status" +
+             " contains non-empty features.")
+      }
+      if (!newNode.equals(existingFeatureZNode)) {
         updateFeatureZNode(newNode)
       }
     }
@@ -878,7 +892,12 @@ class KafkaController(val config: KafkaConfig,
   private def initializeControllerContext(): Unit = {
     // update controller cache with delete topic information
     val curBrokerAndEpochs = zkClient.getAllBrokerAndEpochsInCluster
-    controllerContext.setLiveBrokers(curBrokerAndEpochs)
+    val (compatibleBrokerAndEpochs, incompatibleBrokerAndEpochs) = partitionOnFeatureCompatibility(curBrokerAndEpochs)
+    if (!incompatibleBrokerAndEpochs.isEmpty) {
+      warn("Ignoring registration of new brokers due to incompatibilities with finalized features: " +
+        incompatibleBrokerAndEpochs.map { case (broker, _) => broker.id }.toSeq.sorted.mkString(","))
+    }
+    controllerContext.setLiveBrokers(compatibleBrokerAndEpochs)
     info(s"Initialized broker epochs cache: ${controllerContext.liveBrokerIdAndEpochs}")
     controllerContext.setAllTopics(zkClient.getAllTopicsInCluster(true))
     registerPartitionModificationsHandlers(controllerContext.allTopics.toSeq)
@@ -1554,9 +1573,10 @@ class KafkaController(val config: KafkaConfig,
     if (newBrokerIds.nonEmpty) {
       val (newCompatibleBrokerAndEpochs, newIncompatibleBrokerAndEpochs) =
         partitionOnFeatureCompatibility(newBrokerAndEpochs)
-      if (!newIncompatibleBrokerAndEpochs.isEmpty)
+      if (!newIncompatibleBrokerAndEpochs.isEmpty) {
         warn("Ignoring registration of new brokers due to incompatibilities with finalized features: " +
           newIncompatibleBrokerAndEpochs.map { case (broker, _) => broker.id }.toSeq.sorted.mkString(","))
+      }
       controllerContext.addLiveBrokers(newCompatibleBrokerAndEpochs)
       onBrokerStartup(newBrokerIdsSorted)
     }
@@ -1565,9 +1585,10 @@ class KafkaController(val config: KafkaConfig,
       onBrokerFailure(bouncedBrokerIdsSorted)
       val (bouncedCompatibleBrokerAndEpochs, bouncedIncompatibleBrokerAndEpochs) =
         partitionOnFeatureCompatibility(bouncedBrokerAndEpochs)
-      if (!bouncedIncompatibleBrokerAndEpochs.isEmpty)
+      if (!bouncedIncompatibleBrokerAndEpochs.isEmpty) {
         warn("Ignoring registration of bounced brokers due to incompatibilities with finalized features: " +
           bouncedIncompatibleBrokerAndEpochs.map { case (broker, _) => broker.id }.toSeq.sorted.mkString(","))
+      }
       controllerContext.addLiveBrokers(bouncedCompatibleBrokerAndEpochs)
       onBrokerStartup(bouncedBrokerIdsSorted)
     }
@@ -2019,7 +2040,7 @@ class KafkaController(val config: KafkaConfig,
     try {
       if (!existingFeatures.equals(targetFeatures)) {
         val newNode = new FeatureZNode(FeatureZNodeStatus.Enabled, Features.finalizedFeatures(targetFeatures.asJava))
-        val newVersion = zkClient.updateFeatureZNode(newNode)
+        val newVersion = updateFeatureZNode(newNode)
         featureCache.waitUntilEpochOrThrow(newVersion, request.data().timeoutMs())
       }
     } catch {

@@ -596,24 +596,35 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     testControllerMove(() => zkClient.createPartitionReassignment(reassignment))
   }
 
+
   @Test
-  def testControllerFeatureZNodeSetupWhenFeatureVersioningIsEnabledWithDisabledExistingNode(): Unit = {
-    testControllerFeatureZNodeSetup(new FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures()), KAFKA_2_7_IV0)
+  def testControllerFeatureZNodeSetupWhenFeatureVersioningIsEnabledWithNonExistingFeatureZNode(): Unit = {
+    testControllerFeatureZNodeSetup(Option.empty, KAFKA_2_7_IV0)
   }
 
   @Test
-  def testControllerFeatureZNodeSetupWhenFeatureVersioningIsEnabledWithEnabledExistingNode(): Unit = {
-    testControllerFeatureZNodeSetup(new FeatureZNode(FeatureZNodeStatus.Enabled, Features.emptyFinalizedFeatures()), KAFKA_2_7_IV0)
+  def testControllerFeatureZNodeSetupWhenFeatureVersioningIsEnabledWithDisabledExistingFeatureZNode(): Unit = {
+    testControllerFeatureZNodeSetup(Some(new FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures())), KAFKA_2_7_IV0)
   }
 
   @Test
-  def testControllerFeatureZNodeSetupWhenFeatureVersioningIsDisabledWithDisabledExistingNode(): Unit = {
-    testControllerFeatureZNodeSetup(new FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures()), KAFKA_2_6_IV0)
+  def testControllerFeatureZNodeSetupWhenFeatureVersioningIsEnabledWithEnabledExistingFeatureZNode(): Unit = {
+    testControllerFeatureZNodeSetup(Some(new FeatureZNode(FeatureZNodeStatus.Enabled, Features.emptyFinalizedFeatures())), KAFKA_2_7_IV0)
   }
 
   @Test
-  def testControllerFeatureZNodeSetupWhenFeatureVersioningIsDisabledWithEnabledExistingNode(): Unit = {
-    testControllerFeatureZNodeSetup(new FeatureZNode(FeatureZNodeStatus.Enabled, Features.emptyFinalizedFeatures()), KAFKA_2_6_IV0)
+  def testControllerFeatureZNodeSetupWhenFeatureVersioningIsDisabledWithNonExistingFeatureZNode(): Unit = {
+    testControllerFeatureZNodeSetup(Option.empty, KAFKA_2_6_IV0)
+  }
+
+  @Test
+  def testControllerFeatureZNodeSetupWhenFeatureVersioningIsDisabledWithDisabledExistingFeatureZNode(): Unit = {
+    testControllerFeatureZNodeSetup(Some(new FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures())), KAFKA_2_6_IV0)
+  }
+
+  @Test
+  def testControllerFeatureZNodeSetupWhenFeatureVersioningIsDisabledWithEnabledExistingFeatureZNode(): Unit = {
+    testControllerFeatureZNodeSetup(Some(new FeatureZNode(FeatureZNodeStatus.Enabled, Features.emptyFinalizedFeatures())), KAFKA_2_6_IV0)
   }
 
   @Test
@@ -739,30 +750,53 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     controller.shutdown()
   }
 
-  private def testControllerFeatureZNodeSetup(initialZNode: FeatureZNode,
+  private def testControllerFeatureZNodeSetup(initialZNode: Option[FeatureZNode],
                                               interBrokerProtocolVersion: ApiVersion): Unit = {
-    zkClient.createFeatureZNode(initialZNode)
-    val (_, versionBefore) = zkClient.getDataAndVersion(FeatureZNode.path)
+    val versionBeforeOpt = initialZNode match {
+      case Some(node) =>
+        zkClient.createFeatureZNode(node)
+        Some(zkClient.getDataAndVersion(FeatureZNode.path)._2)
+      case None =>
+        Option.empty
+    }
     servers = makeServers(1, interBrokerProtocolVersion = Some(interBrokerProtocolVersion))
     TestUtils.waitUntilControllerElected(zkClient)
 
     val (mayBeFeatureZNodeBytes, versionAfter) = zkClient.getDataAndVersion(FeatureZNode.path)
     val newZNode = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
     if (interBrokerProtocolVersion >= KAFKA_2_7_IV0) {
-      if (initialZNode.status == FeatureZNodeStatus.Enabled) {
-        assertEquals(versionBefore, versionAfter)
-        assertEquals(initialZNode, newZNode)
-      } else if (initialZNode.status == FeatureZNodeStatus.Disabled) {
-        assertEquals(versionBefore + 1, versionAfter)
-        assertEquals(new FeatureZNode(FeatureZNodeStatus.Enabled, Features.emptyFinalizedFeatures()), newZNode)
+      val emptyZNode = new FeatureZNode(FeatureZNodeStatus.Enabled, Features.emptyFinalizedFeatures)
+      initialZNode match {
+        case Some(node) => {
+          node.status match {
+            case FeatureZNodeStatus.Enabled =>
+              assertEquals(versionBeforeOpt.get, versionAfter)
+              assertEquals(node, newZNode)
+            case FeatureZNodeStatus.Disabled =>
+              assertEquals(versionBeforeOpt.get + 1, versionAfter)
+              assertEquals(emptyZNode, newZNode)
+          }
+        }
+        case None =>
+          assertEquals(0, versionAfter)
+          assertEquals(new FeatureZNode(FeatureZNodeStatus.Enabled, Features.emptyFinalizedFeatures), newZNode)
       }
     } else {
-      if (initialZNode.status == FeatureZNodeStatus.Enabled) {
-        assertEquals(versionBefore + 1, versionAfter)
-        assertEquals(new FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures()), newZNode)
-      } else if (initialZNode.status == FeatureZNodeStatus.Disabled) {
-        assertEquals(versionBefore, versionAfter)
-        assertEquals(initialZNode, newZNode)
+      val emptyZNode = new FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures)
+      initialZNode match {
+        case Some(node) => {
+          node.status match {
+            case FeatureZNodeStatus.Enabled =>
+              assertEquals(versionBeforeOpt.get + 1, versionAfter)
+              assertEquals(emptyZNode, newZNode)
+            case FeatureZNodeStatus.Disabled =>
+              assertEquals(versionBeforeOpt.get, versionAfter)
+              assertEquals(emptyZNode, newZNode)
+          }
+        }
+        case None =>
+          assertEquals(0, versionAfter)
+          assertEquals(new FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures), newZNode)
       }
     }
   }
