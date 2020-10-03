@@ -1016,8 +1016,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     @Override
     public void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
-                                            final TimeoutException timeoutException) throws StreamsException {
-        maybeInitTaskTimeoutOrThrow(currentWallClockMs, timeoutException, log);
+                                            final Exception cause) {
+        maybeInitTaskTimeoutOrThrow(currentWallClockMs, cause, log);
     }
 
     @Override

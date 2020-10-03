@@ -725,7 +725,7 @@ public class StreamThread extends Thread {
             // transit to restore active is idempotent so we can call it multiple times
             changelogReader.enforceRestoreActive();
 
-            if (taskManager.tryToCompleteRestoration()) {
+            if (taskManager.tryToCompleteRestoration(now)) {
                 changelogReader.transitToUpdateStandby();
 
                 setState(State.RUNNING);
@@ -741,7 +741,7 @@ public class StreamThread extends Thread {
         }
         // we can always let changelog reader try restoring in order to initialize the changelogs;
         // if there's no active restoring or standby updating it would not try to fetch any data
-        changelogReader.restore();
+        changelogReader.restore(taskManager.tasks());
         log.debug("Idempotent restore call done. Thread state has not changed.");
     }
 

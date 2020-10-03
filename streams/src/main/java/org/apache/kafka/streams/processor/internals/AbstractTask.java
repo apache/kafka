@@ -147,9 +147,12 @@ public abstract class AbstractTask implements Task {
         topology.updateSourceTopics(nodeToSourceTopics);
     }
 
+    /**
+     * @throws TimeoutException if {@code currentWallClockMs > task-timeout-deadline}
+     */
     void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
-                                     final TimeoutException timeoutException,
-                                     final Logger log) throws StreamsException {
+                                     final Exception cause,
+                                     final Logger log) {
         if (deadlineMs == NO_DEADLINE) {
             deadlineMs = currentWallClockMs + taskTimeoutMs;
         } else if (currentWallClockMs > deadlineMs) {
@@ -160,18 +163,20 @@ public abstract class AbstractTask implements Task {
                 StreamsConfig.TASK_TIMEOUT_MS_CONFIG
             );
 
-            if (timeoutException != null) {
-                throw new TimeoutException(errorMessage, timeoutException);
+            if (cause != null) {
+                throw new TimeoutException(errorMessage, cause);
             } else {
                 throw new TimeoutException(errorMessage);
             }
         }
 
-        if (timeoutException != null) {
+        if (cause != null) {
             log.debug(
-                "Timeout exception. Remaining time to deadline {}; retrying.",
-                deadlineMs - currentWallClockMs,
-                timeoutException
+                String.format(
+                    "Task did not make progress. Remaining time to deadline %d; retrying.",
+                    deadlineMs - currentWallClockMs
+                ),
+                cause
             );
         } else {
             log.debug(
