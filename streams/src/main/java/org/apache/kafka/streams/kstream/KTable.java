@@ -713,6 +713,31 @@ public interface KTable<K, V> {
                                  final Named named);
 
     /**
+     * Convert this changelog stream to a {@link KStream} using the given {@link KeyValueWithPreviousMapper} to
+     * compute the new value of the output record.
+     *
+     * If there is no previous value the {@link KeyValueWithPreviousMapper} receives a null value as previous value.
+     *
+     * @param mapper   a {@link KeyValueWithPreviousMapper} that computes the new record value. Cannot be {@code null}.
+     *
+     * @return a {@link KStream} that contains the values computed comparing the new and old value of the records as this {@code KTable}
+     */
+    <VR> KStream<K, VR> toStream(final KeyValueWithPreviousMapper<? super K, ? super V, ? extends VR> mapper);
+
+    /**
+     * Convert this changelog stream to a {@link KStream} using the given {@link KeyValueWithPreviousMapper} to
+     * compute the new value of the output record.
+     *
+     * If there is no previous value the {@link KeyValueWithPreviousMapper} receives a null value as previous value.
+     *
+     * @param mapper   a {@link KeyValueWithPreviousMapper} that computes the new record value. Cannot be {@code null}.
+     * @param named  a {@link Named} config used to name the processor in the topology
+     *
+     * @return a {@link KStream} that contains the values computed comparing the new and old value of the records as this {@code KTable}
+     */
+    <VR> KStream<K, VR> toStream(final KeyValueWithPreviousMapper<? super K, ? super V, ? extends VR> mapper, final Named named);
+
+    /**
      * Suppress some updates from this changelog stream, determined by the supplied {@link Suppressed} configuration.
      *
      * This controls what updates downstream table and stream operations will receive.

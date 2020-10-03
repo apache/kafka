@@ -32,6 +32,7 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.KeyValueWithPreviousMapper;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.ValueJoiner;
@@ -103,6 +104,8 @@ public class KTableImplTest {
         final KTable<String, String> table4 = builder.table(topic2, consumed);
         table4.toStream().process(supplier);
 
+        table2.toStream((key, oldValue, newValue) -> newValue - (oldValue != null ? oldValue : 0)).process(supplier);
+
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer());
@@ -114,7 +117,7 @@ public class KTableImplTest {
             inputTopic.pipeInput("A", "06", 8L);
         }
 
-        final List<MockProcessor<String, Object>> processors = supplier.capturedProcessors(4);
+        final List<MockProcessor<String, Object>> processors = supplier.capturedProcessors(5);
         assertEquals(asList(
             new KeyValueTimestamp<>("A", "01", 5),
             new KeyValueTimestamp<>("B", "02", 100),
@@ -147,6 +150,14 @@ public class KTableImplTest {
             new KeyValueTimestamp<>("A", "05", 10),
             new KeyValueTimestamp<>("A", "06", 8)),
             processors.get(3).processed());
+        assertEquals(asList(
+            new KeyValueTimestamp<>("A", 1, 5),
+            new KeyValueTimestamp<>("B", 2, 100),
+            new KeyValueTimestamp<>("C", 3, 0),
+            new KeyValueTimestamp<>("D", 4, 0),
+            new KeyValueTimestamp<>("A", 4, 10),
+            new KeyValueTimestamp<>("A", 1, 8)),
+            processors.get(4).processed());
     }
 
     @Test
@@ -171,6 +182,8 @@ public class KTableImplTest {
         final KTable<String, String> table4 = builder.table(topic2, consumed);
         table4.toStream().process(supplier);
 
+        table2.toStream((key, oldValue, newValue) -> newValue - (oldValue != null ? oldValue : 0)).process(supplier);
+
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer());
@@ -182,7 +195,7 @@ public class KTableImplTest {
             inputTopic.pipeInput("A", "06", 8L);
         }
 
-        final List<MockProcessor<String, Object>> processors = supplier.capturedProcessors(4);
+        final List<MockProcessor<String, Object>> processors = supplier.capturedProcessors(5);
         assertEquals(asList(
             new KeyValueTimestamp<>("A", "01", 5),
             new KeyValueTimestamp<>("B", "02", 100),
@@ -212,6 +225,14 @@ public class KTableImplTest {
             new KeyValueTimestamp<>("A", "05", 10),
             new KeyValueTimestamp<>("A", "06", 8)),
             processors.get(3).processed());
+        assertEquals(asList(
+            new KeyValueTimestamp<>("A", 1, 5),
+            new KeyValueTimestamp<>("B", 2, 100),
+            new KeyValueTimestamp<>("C", 3, 0),
+            new KeyValueTimestamp<>("D", 4, 0),
+            new KeyValueTimestamp<>("A", 4, 10),
+            new KeyValueTimestamp<>("A", 1, 8)),
+            processors.get(4).processed());
     }
 
     @Test
@@ -223,6 +244,7 @@ public class KTableImplTest {
         final KeyValueMapper<String, String, String> selector = (key, value) -> key;
         final ValueMapper<String, String> mapper = value -> value;
         final ValueJoiner<String, String, String> joiner = (value1, value2) -> value1;
+        final KeyValueWithPreviousMapper<String, String, String> mapperWithPrevious = (key, value1, value2) -> value2;
         final ValueTransformerWithKeySupplier<String, String, String> valueTransformerWithKeySupplier =
             () -> new ValueTransformerWithKey<String, String, String>() {
                 @Override
@@ -284,6 +306,11 @@ public class KTableImplTest {
         assertEquals(
             ((AbstractStream) table1.toStream(selector)).valueSerde(),
             consumedInternal.valueSerde());
+
+        assertEquals(
+            ((AbstractStream) table1.toStream(mapperWithPrevious)).keySerde(),
+            consumedInternal.keySerde());
+        assertNull(((AbstractStream) table1.toStream(mapperWithPrevious)).valueSerde());
 
         assertEquals(
             ((AbstractStream) table1.transformValues(valueTransformerWithKeySupplier)).keySerde(),
@@ -472,6 +499,11 @@ public class KTableImplTest {
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullSelectorOnToStream() {
         table.toStream((KeyValueMapper) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullSelectorOnToDiffStream() {
+        table.toStream((KeyValueWithPreviousMapper) null);
     }
 
     @Test(expected = NullPointerException.class)
