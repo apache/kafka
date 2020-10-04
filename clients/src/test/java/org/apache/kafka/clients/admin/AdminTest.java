@@ -1,6 +1,21 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.clients.admin.internals.ConsumerGroupOperationContext;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -8,7 +23,6 @@ import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidTopicException;
-import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
@@ -17,20 +31,24 @@ import org.jetbrains.annotations.NotNull;
 import org.junit.Test;
 import org.junit.jupiter.api.function.Executable;
 
-import java.util.Collection;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 
-import static java.util.Collections.*;
-import static org.apache.kafka.common.config.ConfigResource.Type.*;
-import static org.apache.kafka.common.utils.Utils.*;
-import static org.junit.jupiter.api.Assertions.*;
+import static java.util.Collections.emptyList;
+import static java.util.Collections.emptyMap;
+import static java.util.Collections.singleton;
+import static java.util.Collections.singletonList;
+import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SuppressWarnings({"ConstantConditions", "DanglingJavadoc"})
 public class AdminTest {
-    private static final Admin admin = Admin.create(mkMap(mkEntry("bootstrap.servers", "127.0.0.1:0")));
+    private static final Admin ADMIN = Admin.create(mkMap(mkEntry("bootstrap.servers", "127.0.0.1:0")));
 
     private static void assertNpe(final @NotNull Executable exe) {
         assertThrows(NullPointerException.class, exe);
@@ -53,23 +71,23 @@ public class AdminTest {
 
     @Test
     public void testCloseNullability() {
-        assertNpe(() -> admin.close(null));
+        assertNpe(() -> ADMIN.close(null));
     }
 
     @Test
     public void testCreateTopicsNullability() {
-        assertNpe(() -> admin.createTopics(null));
-        assertNpe(() -> admin.createTopics(singletonList(null)));
-        assertNpe(() -> admin.createTopics(singletonList(new NewTopic("valid.topic.name", 1, (short) 1)), null));
+        assertNpe(() -> ADMIN.createTopics(null));
+        assertNpe(() -> ADMIN.createTopics(singletonList(null)));
+        assertNpe(() -> ADMIN.createTopics(singletonList(new NewTopic("valid.topic.name", 1, (short) 1)), null));
     }
 
     @Test
     public void testDeleteTopicsNullability() {
-        assertNpe(() -> admin.deleteTopics(null));
-        assertNpe(() -> admin.deleteTopics(singletonList("valid.topic.name"), null));
+        assertNpe(() -> ADMIN.deleteTopics(null));
+        assertNpe(() -> ADMIN.deleteTopics(singletonList("valid.topic.name"), null));
 
         try {
-            admin.deleteTopics(singletonList(null)).all().get();
+            ADMIN.deleteTopics(singletonList(null)).all().get();
         } catch (Exception e) {
             assertTrue(e.getCause() instanceof InvalidTopicException);
             assertTrue(e.getCause().getMessage().contains("'null'"));
@@ -78,16 +96,16 @@ public class AdminTest {
 
     @Test
     public void testListTopicsNullability() {
-        assertNpe(() -> admin.listTopics(null));
+        assertNpe(() -> ADMIN.listTopics(null));
     }
 
     @Test
     public void testDescribeTopicsNullability() {
-        assertNpe(() -> admin.describeTopics(null));
-        assertNpe(() -> admin.describeTopics(emptyList(), null));
+        assertNpe(() -> ADMIN.describeTopics(null));
+        assertNpe(() -> ADMIN.describeTopics(emptyList(), null));
 
         try {
-            admin.describeTopics(singletonList(null)).all().get();
+            ADMIN.describeTopics(singletonList(null)).all().get();
         } catch (Exception e) {
             assertTrue(e.getCause() instanceof InvalidTopicException);
             assertTrue(e.getCause().getMessage().contains("'null'"));
@@ -96,40 +114,40 @@ public class AdminTest {
 
     @Test
     public void testDescribeClusterNullability() {
-        assertNpe(() -> admin.describeCluster(null));
+        assertNpe(() -> ADMIN.describeCluster(null));
     }
 
     @Test
     public void testDescribeAclsNullability() {
-        assertNpe(() -> admin.describeAcls(null));
-        assertNpe(() -> admin.describeAcls(null, null));
+        assertNpe(() -> ADMIN.describeAcls(null));
+        assertNpe(() -> ADMIN.describeAcls(null, null));
     }
 
     @Test
     public void testCreateAclsNullability() {
-        assertNpe(() -> admin.createAcls(null));
-        assertNpe(() -> admin.createAcls(singletonList(null)));
-        assertNpe(() -> admin.createAcls(emptyList(), null));
+        assertNpe(() -> ADMIN.createAcls(null));
+        assertNpe(() -> ADMIN.createAcls(singletonList(null)));
+        assertNpe(() -> ADMIN.createAcls(emptyList(), null));
     }
 
     @Test
     public void testDeleteAclsNullability() {
-        assertNpe(() -> admin.deleteAcls(null));
-        assertNpe(() -> admin.deleteAcls(singletonList(null)));
-        assertNpe(() -> admin.deleteAcls(emptyList(), null));
+        assertNpe(() -> ADMIN.deleteAcls(null));
+        assertNpe(() -> ADMIN.deleteAcls(singletonList(null)));
+        assertNpe(() -> ADMIN.deleteAcls(emptyList(), null));
     }
 
     @Test
     public void testDescribeConfigsNullability() {
-        assertNpe(() -> admin.describeConfigs(null));
-        assertNpe(() -> admin.describeConfigs(singletonList(null)));
-        assertNpe(() -> admin.describeConfigs(singletonList(new ConfigResource(BROKER, "42")), null));
+        assertNpe(() -> ADMIN.describeConfigs(null));
+        assertNpe(() -> ADMIN.describeConfigs(singletonList(null)));
+        assertNpe(() -> ADMIN.describeConfigs(singletonList(new ConfigResource(BROKER, "42")), null));
     }
 
     @Test
     public void testIncrementalAlterConfigsNullability() {
-        assertNpe(() -> admin.incrementalAlterConfigs(null));
-        assertNpe(() -> admin.incrementalAlterConfigs(mkMap(mkEntry(null, null))));
+        assertNpe(() -> ADMIN.incrementalAlterConfigs(null));
+        assertNpe(() -> ADMIN.incrementalAlterConfigs(mkMap(mkEntry(null, null))));
 
         /**
          * The following calls are going to lead to an NPE but we cannot test it
@@ -143,7 +161,7 @@ public class AdminTest {
         //assertNpe(() -> admin.incrementalAlterConfigs(mkMap(mkEntry(new ConfigResource(BROKER, "42"), null))));
         //assertNpe(() -> admin.incrementalAlterConfigs(mkMap(mkEntry(new ConfigResource(BROKER, "42"), singletonList(null)))));
 
-        assertNpe(() -> admin.incrementalAlterConfigs(
+        assertNpe(() -> ADMIN.incrementalAlterConfigs(
             mkMap(
                 mkEntry(
                     new ConfigResource(BROKER, "42"),
@@ -161,9 +179,9 @@ public class AdminTest {
 
     @Test
     public void testAlterReplicaLogDirsNullability() {
-        assertNpe(() -> admin.alterReplicaLogDirs(null));
-        assertNpe(() -> admin.alterReplicaLogDirs(mkMap(mkEntry(null, null))));
-        assertNpe(() -> admin.alterReplicaLogDirs(
+        assertNpe(() -> ADMIN.alterReplicaLogDirs(null));
+        assertNpe(() -> ADMIN.alterReplicaLogDirs(mkMap(mkEntry(null, null))));
+        assertNpe(() -> ADMIN.alterReplicaLogDirs(
             mkMap(
                 mkEntry(
                     new TopicPartitionReplica("topic", 1, 1),
@@ -184,24 +202,24 @@ public class AdminTest {
 
     @Test
     public void testDescribeLogDirsNullability() {
-        assertNpe(() -> admin.describeLogDirs(null));
-        assertNpe(() -> admin.describeLogDirs(singletonList(null)));
-        assertNpe(() -> admin.describeLogDirs(singletonList(42), null));
+        assertNpe(() -> ADMIN.describeLogDirs(null));
+        assertNpe(() -> ADMIN.describeLogDirs(singletonList(null)));
+        assertNpe(() -> ADMIN.describeLogDirs(singletonList(42), null));
     }
 
     @Test
     public void testDescribeReplicaLogDirsNullability() {
-        assertNpe(() -> admin.describeReplicaLogDirs(null));
-        assertNpe(() -> admin.describeReplicaLogDirs(singletonList(null)));
-        assertNpe(() -> admin.describeReplicaLogDirs(singletonList(new TopicPartitionReplica("topic", 1, 1)), null));
+        assertNpe(() -> ADMIN.describeReplicaLogDirs(null));
+        assertNpe(() -> ADMIN.describeReplicaLogDirs(singletonList(null)));
+        assertNpe(() -> ADMIN.describeReplicaLogDirs(singletonList(new TopicPartitionReplica("topic", 1, 1)), null));
     }
 
     @Test
     public void testCreatePartitionsNullability() {
-        assertNpe(() -> admin.createPartitions(null));
-        assertNpe(() -> admin.createPartitions(mkMap(mkEntry(null, null))));
-        assertNpe(() -> admin.createPartitions(mkMap(mkEntry("topic", null))));
-        assertNpe(() -> admin.createPartitions(mkMap(mkEntry("topic", NewPartitions.increaseTo(42))), null));
+        assertNpe(() -> ADMIN.createPartitions(null));
+        assertNpe(() -> ADMIN.createPartitions(mkMap(mkEntry(null, null))));
+        assertNpe(() -> ADMIN.createPartitions(mkMap(mkEntry("topic", null))));
+        assertNpe(() -> ADMIN.createPartitions(mkMap(mkEntry("topic", NewPartitions.increaseTo(42))), null));
 
         /**
          * Does not lead to an NPE but makes no sense either.
@@ -211,10 +229,10 @@ public class AdminTest {
 
     @Test
     public void testDeleteRecordsNullability() {
-        assertNpe(() -> admin.deleteRecords(null));
-        assertNpe(() -> admin.deleteRecords(mkMap(mkEntry(null, null))));
-        assertNpe(() -> admin.deleteRecords(mkMap(mkEntry(null, RecordsToDelete.beforeOffset(42)))));
-        assertNpe(() -> admin.deleteRecords(mkMap(mkEntry(new TopicPartition("topic", 42), RecordsToDelete.beforeOffset(42))), null));
+        assertNpe(() -> ADMIN.deleteRecords(null));
+        assertNpe(() -> ADMIN.deleteRecords(mkMap(mkEntry(null, null))));
+        assertNpe(() -> ADMIN.deleteRecords(mkMap(mkEntry(null, RecordsToDelete.beforeOffset(42)))));
+        assertNpe(() -> ADMIN.deleteRecords(mkMap(mkEntry(new TopicPartition("topic", 42), RecordsToDelete.beforeOffset(42))), null));
 
         /**
          * Only leads to exceptions if executed.
@@ -224,7 +242,7 @@ public class AdminTest {
 
     @Test
     public void testCreateDelegationTokenNullability() {
-        assertNpe(() -> admin.createDelegationToken(null));
+        assertNpe(() -> ADMIN.createDelegationToken(null));
     }
 
     @Test
@@ -234,7 +252,7 @@ public class AdminTest {
          */
         //assertNpe(() -> admin.renewDelegationToken(null));
 
-        assertNpe(() -> admin.renewDelegationToken(new byte[0], null));
+        assertNpe(() -> ADMIN.renewDelegationToken(new byte[0], null));
     }
 
     @Test
@@ -244,21 +262,21 @@ public class AdminTest {
          */
         //assertNpe(() -> admin.expireDelegationToken(null));
 
-        assertNpe(() -> admin.expireDelegationToken(new byte[0], null));
+        assertNpe(() -> ADMIN.expireDelegationToken(new byte[0], null));
     }
 
     @Test
     public void testDescribeDelegationTokenNullability() {
-        assertNpe(() -> admin.describeDelegationToken(null));
+        assertNpe(() -> ADMIN.describeDelegationToken(null));
     }
 
     @Test
     public void testDescribeConsumerGroupsNullability() {
-        assertNpe(() -> admin.describeConsumerGroups(null));
-        assertNpe(() -> admin.describeConsumerGroups(singletonList("group"), null));
+        assertNpe(() -> ADMIN.describeConsumerGroups(null));
+        assertNpe(() -> ADMIN.describeConsumerGroups(singletonList("group"), null));
 
         try {
-            admin.describeConsumerGroups(singletonList(null)).all().get();
+            ADMIN.describeConsumerGroups(singletonList(null)).all().get();
         } catch (Exception e) {
             assertTrue(e.getCause() instanceof InvalidGroupIdException);
             assertTrue(e.getCause().getMessage().contains("'null'"));
@@ -267,12 +285,12 @@ public class AdminTest {
 
     @Test
     public void testListConsumerGroupsNullability() {
-        assertNpe(() -> admin.listConsumerGroups(null));
+        assertNpe(() -> ADMIN.listConsumerGroups(null));
     }
 
     @Test
     public void testListConsumerGroupOffsetsNullability() {
-        assertNpe(() -> admin.listConsumerGroupOffsets("group", null));
+        assertNpe(() -> ADMIN.listConsumerGroupOffsets("group", null));
 
         /**
          * Does not lead to an NPE but is assigned to
@@ -284,11 +302,11 @@ public class AdminTest {
 
     @Test
     public void testDeleteConsumerGroupsNullability() {
-        assertNpe(() -> admin.deleteConsumerGroups(null));
-        assertNpe(() -> admin.deleteConsumerGroups(singletonList("group"), null));
+        assertNpe(() -> ADMIN.deleteConsumerGroups(null));
+        assertNpe(() -> ADMIN.deleteConsumerGroups(singletonList("group"), null));
 
         try {
-            admin.deleteConsumerGroups(singletonList(null)).all().get();
+            ADMIN.deleteConsumerGroups(singletonList(null)).all().get();
         } catch (Exception e) {
             assertTrue(e.getCause() instanceof InvalidGroupIdException);
             assertTrue(e.getCause().getMessage().contains("'null'"));
@@ -298,7 +316,7 @@ public class AdminTest {
     @Test
     public void testDeleteConsumerGroupOffsetsNullability() {
         try {
-            admin.deleteConsumerGroupOffsets(null, null).all().get();
+            ADMIN.deleteConsumerGroupOffsets(null, null).all().get();
         } catch (Exception e) {
             assertTrue(e.getCause() instanceof InvalidGroupIdException);
             assertTrue(e.getCause().getMessage().contains("'null'"));
@@ -310,7 +328,7 @@ public class AdminTest {
          * which method is called a different exception will be thrown. This
          * call leads to an NPE because contains is called unconditionally.
          */
-        assertNpe(() -> admin.deleteConsumerGroupOffsets("group", null).partitionResult(new TopicPartition("topic", 1)));
+        assertNpe(() -> ADMIN.deleteConsumerGroupOffsets("group", null).partitionResult(new TopicPartition("topic", 1)));
 
         /**
          * Does not lead to an NPE but will lead to other exceptions, we cannot
@@ -319,7 +337,7 @@ public class AdminTest {
          */
         //assertNpe(() -> admin.deleteConsumerGroupOffsets("group", singleton(null)));
 
-        assertNpe(() -> admin.deleteConsumerGroupOffsets("group", singleton(new TopicPartition("topic", 1)), null));
+        assertNpe(() -> ADMIN.deleteConsumerGroupOffsets("group", singleton(new TopicPartition("topic", 1)), null));
     }
 
     @Test
@@ -327,20 +345,20 @@ public class AdminTest {
         //
         //assertNpe(() -> admin.electLeaders(null, null));
 
-        assertNpe(() -> admin.electLeaders(ElectionType.PREFERRED, singleton(new TopicPartition("topic", 1)), null));
+        assertNpe(() -> ADMIN.electLeaders(ElectionType.PREFERRED, singleton(new TopicPartition("topic", 1)), null));
     }
 
     @Test
     public void testAlterPartitionReassignmentsNullability() {
-        assertNpe(() -> admin.alterPartitionReassignments(null));
-        assertNpe(() -> admin.alterPartitionReassignments(mkMap(mkEntry(null, null))));
+        assertNpe(() -> ADMIN.alterPartitionReassignments(null));
+        assertNpe(() -> ADMIN.alterPartitionReassignments(mkMap(mkEntry(null, null))));
 
         /**
          * Only leads to exceptions if executed.
          */
         //assertNpe(() -> admin.alterPartitionReassignments(mkMap(mkEntry(new TopicPartition("topic", 1), null))));
 
-        assertNpe(() -> admin.alterPartitionReassignments(
+        assertNpe(() -> ADMIN.alterPartitionReassignments(
             mkMap(mkEntry(new TopicPartition("topic", 1), Optional.empty())),
             null
         ));
@@ -349,25 +367,25 @@ public class AdminTest {
     @SuppressWarnings("OptionalAssignedToNull")
     @Test
     public void testListPartitionReassignmentsNullability() {
-        assertNpe(() -> admin.listPartitionReassignments((Set<TopicPartition>) null));
-        assertNpe(() -> admin.listPartitionReassignments(singleton(null)));
-        assertNpe(() -> admin.listPartitionReassignments(singleton(new TopicPartition("topic", 1)), null));
-        assertNpe(() -> admin.listPartitionReassignments((ListPartitionReassignmentsOptions) null));
-        assertNpe(() -> admin.listPartitionReassignments((Optional<Set<TopicPartition>>) null, null));
-        assertNpe(() -> admin.listPartitionReassignments((Optional<Set<TopicPartition>>) null, new ListPartitionReassignmentsOptions()));
-        assertNpe(() -> admin.listPartitionReassignments(Optional.empty(), null));
-        assertNpe(() -> admin.listPartitionReassignments(Optional.of(singleton(null)), null));
-        assertNpe(() -> admin.listPartitionReassignments(Optional.of(singleton(null)), new ListPartitionReassignmentsOptions()));
-        assertNpe(() -> admin.listPartitionReassignments(Optional.of(singleton(new TopicPartition("topic", 1))), null));
+        assertNpe(() -> ADMIN.listPartitionReassignments((Set<TopicPartition>) null));
+        assertNpe(() -> ADMIN.listPartitionReassignments(singleton(null)));
+        assertNpe(() -> ADMIN.listPartitionReassignments(singleton(new TopicPartition("topic", 1)), null));
+        assertNpe(() -> ADMIN.listPartitionReassignments((ListPartitionReassignmentsOptions) null));
+        assertNpe(() -> ADMIN.listPartitionReassignments((Optional<Set<TopicPartition>>) null, null));
+        assertNpe(() -> ADMIN.listPartitionReassignments((Optional<Set<TopicPartition>>) null, new ListPartitionReassignmentsOptions()));
+        assertNpe(() -> ADMIN.listPartitionReassignments(Optional.empty(), null));
+        assertNpe(() -> ADMIN.listPartitionReassignments(Optional.of(singleton(null)), null));
+        assertNpe(() -> ADMIN.listPartitionReassignments(Optional.of(singleton(null)), new ListPartitionReassignmentsOptions()));
+        assertNpe(() -> ADMIN.listPartitionReassignments(Optional.of(singleton(new TopicPartition("topic", 1))), null));
     }
 
     @Test
     public void testRemoveMembersFromConsumerGroupNullability() {
-        assertNpe(() -> admin.removeMembersFromConsumerGroup(null, null));
-        assertNpe(() -> admin.removeMembersFromConsumerGroup("group", null));
+        assertNpe(() -> ADMIN.removeMembersFromConsumerGroup(null, null));
+        assertNpe(() -> ADMIN.removeMembersFromConsumerGroup("group", null));
 
         try {
-            admin.removeMembersFromConsumerGroup(null, new RemoveMembersFromConsumerGroupOptions()).all().get();
+            ADMIN.removeMembersFromConsumerGroup(null, new RemoveMembersFromConsumerGroupOptions()).all().get();
         } catch (Exception e) {
             assertTrue(e instanceof KafkaException);
             assertTrue(e.getMessage().endsWith(" null"));
@@ -380,20 +398,20 @@ public class AdminTest {
          * groupId and offsets only lead to exceptions if executed.
          */
 
-        assertNpe(() -> admin.alterConsumerGroupOffsets("group", emptyMap(), null));
+        assertNpe(() -> ADMIN.alterConsumerGroupOffsets("group", emptyMap(), null));
     }
 
     @Test
     public void testListOffsetsNullability() {
-        assertNpe(() -> admin.listOffsets(null));
-        assertNpe(() -> admin.listOffsets(mkMap(mkEntry(null, null))));
+        assertNpe(() -> ADMIN.listOffsets(null));
+        assertNpe(() -> ADMIN.listOffsets(mkMap(mkEntry(null, null))));
 
         /**
          * Only leads to exceptions if executed.
          */
         //assertNpe(() -> admin.listOffsets(mkMap(mkEntry(new TopicPartition("topic", 1), null))));
 
-        assertNpe(() -> admin.listOffsets(mkMap(mkEntry(new TopicPartition("topic", 1), OffsetSpec.earliest())), null));
+        assertNpe(() -> ADMIN.listOffsets(mkMap(mkEntry(new TopicPartition("topic", 1), OffsetSpec.earliest())), null));
     }
 
     @Test
@@ -403,14 +421,14 @@ public class AdminTest {
          */
         //assertNpe(() -> admin.describeClientQuotas(null));
 
-        assertNpe(() -> admin.describeClientQuotas(ClientQuotaFilter.all(), null));
+        assertNpe(() -> ADMIN.describeClientQuotas(ClientQuotaFilter.all(), null));
     }
 
     @Test
     public void testAlterClientQuotasNullability() {
-        assertNpe(() -> admin.alterClientQuotas(null));
-        assertNpe(() -> admin.alterClientQuotas(singletonList(null)));
-        assertNpe(() -> admin.alterClientQuotas(singletonList(new ClientQuotaAlteration(new ClientQuotaEntity(emptyMap()), emptyList())), null));
+        assertNpe(() -> ADMIN.alterClientQuotas(null));
+        assertNpe(() -> ADMIN.alterClientQuotas(singletonList(null)));
+        assertNpe(() -> ADMIN.alterClientQuotas(singletonList(new ClientQuotaAlteration(new ClientQuotaEntity(emptyMap()), emptyList())), null));
     }
 
     @Test
@@ -421,13 +439,13 @@ public class AdminTest {
         //assertNpe(() -> admin.describeUserScramCredentials(null));
         //assertNpe(() -> admin.describeUserScramCredentials(singletonList(null)));
 
-        assertNpe(() -> admin.describeUserScramCredentials(emptyList(), null));
+        assertNpe(() -> ADMIN.describeUserScramCredentials(emptyList(), null));
     }
 
     @Test
     public void testAlterUserScramCredentialsNullability() {
-        assertNpe(() -> admin.alterUserScramCredentials(null));
-        assertNpe(() -> admin.alterUserScramCredentials(singletonList(null)));
-        assertNpe(() -> admin.alterUserScramCredentials(singletonList(new UserScramCredentialDeletion("user", ScramMechanism.SCRAM_SHA_256)), null));
+        assertNpe(() -> ADMIN.alterUserScramCredentials(null));
+        assertNpe(() -> ADMIN.alterUserScramCredentials(singletonList(null)));
+        assertNpe(() -> ADMIN.alterUserScramCredentials(singletonList(new UserScramCredentialDeletion("user", ScramMechanism.SCRAM_SHA_256)), null));
     }
 }
