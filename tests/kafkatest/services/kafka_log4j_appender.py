@@ -52,7 +52,7 @@ class KafkaLog4jAppender(KafkaPathResolverMixin, BackgroundThreadService):
         cmd += self.path.script("kafka-run-class.sh", node)
         cmd += " "
         cmd += self.java_class_name()
-        cmd += " --topic %s --broker-list %s" % (self.topic, self.kafka.bootstrap_servers(self.security_protocol))
+        cmd += " --topic %s --bootstrap-server %s" % (self.topic, self.kafka.bootstrap_servers(self.security_protocol))
 
         if self.max_messages > 0:
             cmd += " --max-messages %s" % str(self.max_messages)

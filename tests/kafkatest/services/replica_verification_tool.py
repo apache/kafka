@@ -73,7 +73,7 @@ class ReplicaVerificationTool(KafkaPathResolverMixin, BackgroundThreadService):
     def start_cmd(self, node):
         cmd = self.path.script("kafka-run-class.sh", node)
         cmd += " %s" % self.java_class_name()
-        cmd += " --broker-list %s --topic-white-list %s --time -2 --report-interval-ms %s" % (self.kafka.bootstrap_servers(self.security_protocol), self.topic, self.report_interval_ms)
+        cmd += " --bootstrap-server %s --topic-white-list %s --time -2 --report-interval-ms %s" % (self.kafka.bootstrap_servers(self.security_protocol), self.topic, self.report_interval_ms)
 
         cmd += " 2>> /mnt/replica_verification_tool.log | tee -a /mnt/replica_verification_tool.log &"
         return cmd

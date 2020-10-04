@@ -116,7 +116,7 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
         cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % TransactionalMessageCopier.LOG4J_CONFIG
         cmd += self.path.script("kafka-run-class.sh", node) + " org.apache.kafka.tools." + "TransactionalMessageCopier"
-        cmd += " --broker-list %s" % self.kafka.bootstrap_servers(self.security_config.security_protocol)
+        cmd += " --bootstrap-server %s" % self.kafka.bootstrap_servers(self.security_config.security_protocol)
         cmd += " --transactional-id %s" % self.transactional_id
         cmd += " --consumer-group %s" % self.consumer_group
         cmd += " --input-topic %s" % self.input_topic

@@ -312,7 +312,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         if self.enable_autocommit:
             cmd += " --enable-autocommit "
 
-        cmd += " --reset-policy %s --group-id %s --topic %s --broker-list %s --session-timeout %s" % \
+        cmd += " --reset-policy %s --group-id %s --topic %s --bootstrap-server %s --session-timeout %s" % \
                (self.reset_policy, self.group_id, self.topic,
                 self.kafka.bootstrap_servers(self.security_config.security_protocol),
                 self.session_timeout_sec*1000)

@@ -19,6 +19,7 @@ package org.apache.kafka.tools;
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
+import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Exit;
@@ -52,104 +53,187 @@ public class VerifiableLog4jAppender {
     // Hook to trigger logging thread to stop logging messages
     private volatile boolean stopLogging = false;
 
-    /** Get the command-line argument parser. */
-    private static ArgumentParser argParser() {
-        ArgumentParser parser = ArgumentParsers
-            .newArgumentParser("verifiable-log4j-appender")
-            .defaultHelp(true)
-            .description("This tool produces increasing integers to the specified topic using KafkaLog4jAppender.");
+    public static class VerifiableLog4jAppenderOptions {
+        private ArgumentParser parser;
+        public final String topic;
+        public final String brokerList;
+        public final Integer maxMessages;
+        public final String acks;
+        public final String securityProtocol;
+        public final String sslTruststoreLocation;
+        public final String sslTruststorePassword;
+        public final String saslKerberosServiceName;
+        public final String clientJaasConfPath;
+        public final String kerb5ConfPath;
+        public final String configFile;
 
-        parser.addArgument("--topic")
-            .action(store())
-            .required(true)
-            .type(String.class)
-            .metavar("TOPIC")
-            .help("Produce messages to this topic.");
+        private VerifiableLog4jAppenderOptions(ArgumentParser parser,
+                                               String topic, String brokerList, Integer maxMessages,
+                                               String acks, String securityProtocol,
+                                               String sslTruststoreLocation, String sslTruststorePassword,
+                                               String saslKerberosServiceName, String clientJaasConfPath,
+                                               String kerb5ConfPath, String configFile) {
+            this.parser = parser;
+            this.topic = topic;
+            this.brokerList = brokerList;
+            this.maxMessages = maxMessages;
+            this.acks = acks;
+            this.securityProtocol = securityProtocol;
+            this.sslTruststoreLocation = sslTruststoreLocation;
+            this.sslTruststorePassword = sslTruststorePassword;
+            this.saslKerberosServiceName = saslKerberosServiceName;
+            this.clientJaasConfPath = clientJaasConfPath;
+            this.kerb5ConfPath = kerb5ConfPath;
+            this.configFile = configFile;
+        }
 
-        parser.addArgument("--broker-list")
-            .action(store())
-            .required(true)
-            .type(String.class)
-            .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
-            .dest("brokerList")
-            .help("Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
+        void handleError(Exception e) {
+            parser.handleError(new ArgumentParserException(e, parser));
+            Exit.exit(1);
+        }
 
-        parser.addArgument("--max-messages")
-            .action(store())
-            .required(false)
-            .setDefault(-1)
-            .type(Integer.class)
-            .metavar("MAX-MESSAGES")
-            .dest("maxMessages")
-            .help("Produce this many messages. If -1, produce messages until the process is killed externally.");
+        public static VerifiableLog4jAppenderOptions parse(String[] args) {
+            ArgumentParser parser = argParser();
+            try {
+                Namespace parsedArgs = argParser().parseArgs(args);
+                return new VerifiableLog4jAppenderOptions(
+                    parser,
+                    parsedArgs.getString("topic"),
+                    parsedArgs.get("bootstrapServer") != null ? parsedArgs.getString("bootstrapServer") : parsedArgs.getString("brokerList"),
+                    parsedArgs.getInt("maxMessages"),
+                    parsedArgs.getString("acks"),
+                    parsedArgs.getString("securityProtocol"),
+                    parsedArgs.getString("sslTruststoreLocation"),
+                    parsedArgs.getString("sslTruststorePassword"),
+                    parsedArgs.getString("saslKerberosServiceName"),
+                    parsedArgs.getString("clientJaasConfPath"),
+                    parsedArgs.getString("kerb5ConfPath"),
+                    parsedArgs.getString("appenderConfig")
+                );
+            } catch (ArgumentParserException ape) {
+                if (args.length == 0) {
+                    parser.printHelp();
+                    Exit.exit(0);
+                } else {
+                    parser.handleError(ape);
+                    Exit.exit(1);
+                }
+                throw new IllegalStateException();
+            }
+        }
 
-        parser.addArgument("--acks")
-            .action(store())
-            .required(false)
-            .setDefault("-1")
-            .type(String.class)
-            .choices("0", "1", "-1")
-            .metavar("ACKS")
-            .help("Acks required on each produced message. See Kafka docs on request.required.acks for details.");
+        /** Get the command-line argument parser. */
+        private static ArgumentParser argParser() {
+            ArgumentParser parser = ArgumentParsers
+                .newArgumentParser("verifiable-log4j-appender")
+                .defaultHelp(true)
+                .description("This tool produces increasing integers to the specified topic using KafkaLog4jAppender.");
 
-        parser.addArgument("--security-protocol")
-            .action(store())
-            .required(false)
-            .setDefault("PLAINTEXT")
-            .type(String.class)
-            .choices("PLAINTEXT", "SSL", "SASL_PLAINTEXT", "SASL_SSL")
-            .metavar("SECURITY-PROTOCOL")
-            .dest("securityProtocol")
-            .help("Security protocol to be used while communicating with Kafka brokers.");
+            parser.addArgument("--topic")
+                .action(store())
+                .required(true)
+                .type(String.class)
+                .metavar("TOPIC")
+                .help("Produce messages to this topic.");
 
-        parser.addArgument("--ssl-truststore-location")
-            .action(store())
-            .required(false)
-            .type(String.class)
-            .metavar("SSL-TRUSTSTORE-LOCATION")
-            .dest("sslTruststoreLocation")
-            .help("Location of SSL truststore to use.");
+            MutuallyExclusiveGroup connectionGroup = parser.addMutuallyExclusiveGroup("Connection Group")
+                .description("Group of arguments for connection to brokers")
+                .required(true);
 
-        parser.addArgument("--ssl-truststore-password")
-            .action(store())
-            .required(false)
-            .type(String.class)
-            .metavar("SSL-TRUSTSTORE-PASSWORD")
-            .dest("sslTruststorePassword")
-            .help("Password for SSL truststore to use.");
+            connectionGroup.addArgument("--bootstrap-server")
+                .action(store())
+                .required(false)
+                .type(String.class)
+                .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
+                .dest("bootstrapServer")
+                .help("REQUIRED unless --broker-list(deprecated) is specified. The server(s) to connect to. Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
 
-        parser.addArgument("--appender.config")
-            .action(store())
-            .required(false)
-            .type(String.class)
-            .metavar("CONFIG_FILE")
-            .help("Log4jAppender config properties file.");
+            connectionGroup.addArgument("--broker-list")
+                .action(store())
+                .required(false)
+                .type(String.class)
+                .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
+                .dest("brokerList")
+                .help("DEPRECATED, use --bootstrap-server instead; Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
 
-        parser.addArgument("--sasl-kerberos-service-name")
-            .action(store())
-            .required(false)
-            .type(String.class)
-            .metavar("SASL-KERBEROS-SERVICE-NAME")
-            .dest("saslKerberosServiceName")
-            .help("Name of sasl kerberos service.");
+            parser.addArgument("--max-messages")
+                .action(store())
+                .required(false)
+                .setDefault(-1)
+                .type(Integer.class)
+                .metavar("MAX-MESSAGES")
+                .dest("maxMessages")
+                .help("Produce this many messages. If -1, produce messages until the process is killed externally.");
 
-        parser.addArgument("--client-jaas-conf-path")
-            .action(store())
-            .required(false)
-            .type(String.class)
-            .metavar("CLIENT-JAAS-CONF-PATH")
-            .dest("clientJaasConfPath")
-            .help("Path of JAAS config file of Kafka client.");
+            parser.addArgument("--acks")
+                .action(store())
+                .required(false)
+                .setDefault("-1")
+                .type(String.class)
+                .choices("0", "1", "-1")
+                .metavar("ACKS")
+                .help("Acks required on each produced message. See Kafka docs on request.required.acks for details.");
 
-        parser.addArgument("--kerb5-conf-path")
-            .action(store())
-            .required(false)
-            .type(String.class)
-            .metavar("KERB5-CONF-PATH")
-            .dest("kerb5ConfPath")
-            .help("Path of Kerb5 config file.");
+            parser.addArgument("--security-protocol")
+                .action(store())
+                .required(false)
+                .setDefault("PLAINTEXT")
+                .type(String.class)
+                .choices("PLAINTEXT", "SSL", "SASL_PLAINTEXT", "SASL_SSL")
+                .metavar("SECURITY-PROTOCOL")
+                .dest("securityProtocol")
+                .help("Security protocol to be used while communicating with Kafka brokers.");
 
-        return parser;
+            parser.addArgument("--ssl-truststore-location")
+                .action(store())
+                .required(false)
+                .type(String.class)
+                .metavar("SSL-TRUSTSTORE-LOCATION")
+                .dest("sslTruststoreLocation")
+                .help("Location of SSL truststore to use.");
+
+            parser.addArgument("--ssl-truststore-password")
+                .action(store())
+                .required(false)
+                .type(String.class)
+                .metavar("SSL-TRUSTSTORE-PASSWORD")
+                .dest("sslTruststorePassword")
+                .help("Password for SSL truststore to use.");
+
+            parser.addArgument("--appender.config")
+                .action(store())
+                .required(false)
+                .type(String.class)
+                .metavar("CONFIG_FILE")
+                .dest("appenderConfig")
+                .help("Log4jAppender config properties file.");
+
+            parser.addArgument("--sasl-kerberos-service-name")
+                .action(store())
+                .required(false)
+                .type(String.class)
+                .metavar("SASL-KERBEROS-SERVICE-NAME")
+                .dest("saslKerberosServiceName")
+                .help("Name of sasl kerberos service.");
+
+            parser.addArgument("--client-jaas-conf-path")
+                .action(store())
+                .required(false)
+                .type(String.class)
+                .metavar("CLIENT-JAAS-CONF-PATH")
+                .dest("clientJaasConfPath")
+                .help("Path of JAAS config file of Kafka client.");
+
+            parser.addArgument("--kerb5-conf-path")
+                .action(store())
+                .required(false)
+                .type(String.class)
+                .metavar("KERB5-CONF-PATH")
+                .dest("kerb5ConfPath")
+                .help("Path of Kerb5 config file.");
+
+            return parser;
+        }
     }
 
     /**
@@ -171,61 +255,49 @@ public class VerifiableLog4jAppender {
 
     /** Construct a VerifiableLog4jAppender object from command-line arguments. */
     public static VerifiableLog4jAppender createFromArgs(String[] args) {
-        ArgumentParser parser = argParser();
+        VerifiableLog4jAppenderOptions opts = VerifiableLog4jAppenderOptions.parse(args);
         VerifiableLog4jAppender producer = null;
 
-        try {
-            Namespace res = parser.parseArgs(args);
+        int maxMessages = opts.maxMessages;
+        String topic = opts.topic;
+        String configFile = opts.configFile;
 
-            int maxMessages = res.getInt("maxMessages");
-            String topic = res.getString("topic");
-            String configFile = res.getString("appender.config");
+        Properties props = new Properties();
+        props.setProperty("log4j.rootLogger", "INFO, KAFKA");
+        props.setProperty("log4j.appender.KAFKA", "org.apache.kafka.log4jappender.KafkaLog4jAppender");
+        props.setProperty("log4j.appender.KAFKA.layout", "org.apache.log4j.PatternLayout");
+        props.setProperty("log4j.appender.KAFKA.layout.ConversionPattern", "%-5p: %c - %m%n");
+        props.setProperty("log4j.appender.KAFKA.BrokerList", opts.brokerList);
+        props.setProperty("log4j.appender.KAFKA.Topic", topic);
+        props.setProperty("log4j.appender.KAFKA.RequiredNumAcks", opts.acks);
+        props.setProperty("log4j.appender.KAFKA.SyncSend", "true");
+        final String securityProtocol = opts.securityProtocol;
+        if (securityProtocol != null && !securityProtocol.equals(SecurityProtocol.PLAINTEXT.toString())) {
+            props.setProperty("log4j.appender.KAFKA.SecurityProtocol", securityProtocol);
+        }
+        if (securityProtocol != null && securityProtocol.contains("SSL")) {
+            props.setProperty("log4j.appender.KAFKA.SslTruststoreLocation", opts.sslTruststoreLocation);
+            props.setProperty("log4j.appender.KAFKA.SslTruststorePassword", opts.sslTruststorePassword);
+        }
+        if (securityProtocol != null && securityProtocol.contains("SASL")) {
+            props.setProperty("log4j.appender.KAFKA.SaslKerberosServiceName", opts.saslKerberosServiceName);
+            props.setProperty("log4j.appender.KAFKA.clientJaasConfPath", opts.clientJaasConfPath);
+            props.setProperty("log4j.appender.KAFKA.kerb5ConfPath", opts.kerb5ConfPath);
+        }
+        props.setProperty("log4j.logger.kafka.log4j", "INFO, KAFKA");
+        // Changing log level from INFO to WARN as a temporary workaround for KAFKA-6415. This is to
+        // avoid deadlock in system tests when producer network thread appends to log while updating metadata.
+        props.setProperty("log4j.logger.org.apache.kafka.clients.Metadata", "WARN, KAFKA");
 
-            Properties props = new Properties();
-            props.setProperty("log4j.rootLogger", "INFO, KAFKA");
-            props.setProperty("log4j.appender.KAFKA", "org.apache.kafka.log4jappender.KafkaLog4jAppender");
-            props.setProperty("log4j.appender.KAFKA.layout", "org.apache.log4j.PatternLayout");
-            props.setProperty("log4j.appender.KAFKA.layout.ConversionPattern", "%-5p: %c - %m%n");
-            props.setProperty("log4j.appender.KAFKA.BrokerList", res.getString("brokerList"));
-            props.setProperty("log4j.appender.KAFKA.Topic", topic);
-            props.setProperty("log4j.appender.KAFKA.RequiredNumAcks", res.getString("acks"));
-            props.setProperty("log4j.appender.KAFKA.SyncSend", "true");
-            final String securityProtocol = res.getString("securityProtocol");
-            if (securityProtocol != null && !securityProtocol.equals(SecurityProtocol.PLAINTEXT.toString())) {
-                props.setProperty("log4j.appender.KAFKA.SecurityProtocol", securityProtocol);
-            }
-            if (securityProtocol != null && securityProtocol.contains("SSL")) {
-                props.setProperty("log4j.appender.KAFKA.SslTruststoreLocation", res.getString("sslTruststoreLocation"));
-                props.setProperty("log4j.appender.KAFKA.SslTruststorePassword", res.getString("sslTruststorePassword"));
-            }
-            if (securityProtocol != null && securityProtocol.contains("SASL")) {
-                props.setProperty("log4j.appender.KAFKA.SaslKerberosServiceName", res.getString("saslKerberosServiceName"));
-                props.setProperty("log4j.appender.KAFKA.clientJaasConfPath", res.getString("clientJaasConfPath"));
-                props.setProperty("log4j.appender.KAFKA.kerb5ConfPath", res.getString("kerb5ConfPath"));
-            }
-            props.setProperty("log4j.logger.kafka.log4j", "INFO, KAFKA");
-            // Changing log level from INFO to WARN as a temporary workaround for KAFKA-6415. This is to
-            // avoid deadlock in system tests when producer network thread appends to log while updating metadata.
-            props.setProperty("log4j.logger.org.apache.kafka.clients.Metadata", "WARN, KAFKA");
-
-            if (configFile != null) {
-                try {
-                    props.putAll(loadProps(configFile));
-                } catch (IOException e) {
-                    throw new ArgumentParserException(e.getMessage(), parser);
-                }
-            }
-
-            producer = new VerifiableLog4jAppender(props, maxMessages);
-        } catch (ArgumentParserException e) {
-            if (args.length == 0) {
-                parser.printHelp();
-                Exit.exit(0);
-            } else {
-                parser.handleError(e);
-                Exit.exit(1);
+        if (configFile != null) {
+            try {
+                props.putAll(loadProps(configFile));
+            } catch (IOException e) {
+                opts.handleError(e);
             }
         }
+
+        producer = new VerifiableLog4jAppender(props, maxMessages);
 
         return producer;
     }
@@ -237,12 +309,11 @@ public class VerifiableLog4jAppender {
     }
 
     public static void main(String[] args) throws IOException {
-
         final VerifiableLog4jAppender appender = createFromArgs(args);
         boolean infinite = appender.maxMessages < 0;
 
         // Trigger main thread to stop producing messages when shutting down
-        Exit.addShutdownHook("verifiable-log4j-appender-shutdown-hook", () -> appender.stopLogging = true);
+        Exit.addShutdownHook("verifiable-log4j-shutdown-hook", () -> appender.stopLogging = true);
 
         long maxMessages = infinite ? Long.MAX_VALUE : appender.maxMessages;
         for (long i = 0; i < maxMessages; i++) {

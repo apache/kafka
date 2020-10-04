@@ -20,6 +20,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.ArgumentParserException;
+import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -61,23 +63,84 @@ public class TransactionalMessageCopier {
 
     private static final DateFormat FORMAT = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss:SSS");
 
-    /** Get the command-line argument parser. */
-    private static ArgumentParser argParser() {
-        ArgumentParser parser = ArgumentParsers
+    public static class TransactionalMessageCopierOptions {
+        public final String inputTopic;
+        public final Integer inputPartition;
+        public final String outputTopic;
+        public final String brokerList;
+        public final Long maxMessages;
+        public final String consumerGroup;
+        public final Integer messagesPerTransaction;
+        public final Integer transactionTimeout;
+        public final String transactionalId;
+        public final Boolean enableRandomAborts;
+        public final Boolean groupMode;
+        public final Boolean useGroupMetadata;
+
+        private TransactionalMessageCopierOptions(String inputTopic, Integer inputPartition, String outputTopic,
+                                                  String brokerList, Long maxMessages, String consumerGroup,
+                                                  Integer messagesPerTransaction, Integer transactionTimeout, String transactionalId,
+                                                  Boolean enableRandomAborts, Boolean groupMode, Boolean useGroupMetadata) {
+            this.inputTopic = inputTopic;
+            this.inputPartition = inputPartition;
+            this.outputTopic = outputTopic;
+            this.brokerList = brokerList;
+            this.maxMessages = maxMessages;
+            this.consumerGroup = consumerGroup;
+            this.messagesPerTransaction = messagesPerTransaction;
+            this.transactionTimeout = transactionTimeout;
+            this.transactionalId = transactionalId;
+            this.enableRandomAborts = enableRandomAborts;
+            this.groupMode = groupMode;
+            this.useGroupMetadata = useGroupMetadata;
+        }
+
+        public static TransactionalMessageCopierOptions parse(String[] args) {
+            try {
+                Namespace parsedArgs = argParser().parseArgs(args);
+                return new TransactionalMessageCopierOptions(
+                    parsedArgs.getString("inputTopic"), parsedArgs.getInt("inputPartition"),
+                    parsedArgs.getString("outputTopic"),
+                    parsedArgs.get("bootstrapServer") != null ? parsedArgs.getString("bootstrapServer") : parsedArgs.getString("brokerList"),
+                    parsedArgs.getLong("maxMessages") == -1 ? Long.MAX_VALUE : parsedArgs.getLong("maxMessages"),
+                    parsedArgs.getString("consumerGroup"), parsedArgs.getInt("messagesPerTransaction"),
+                    parsedArgs.getInt("transactionTimeout"), parsedArgs.getString("transactionalId"),
+                    parsedArgs.getBoolean("enableRandomAborts"), parsedArgs.getBoolean("groupMode"),
+                    parsedArgs.getBoolean("useGroupMetadata")
+                );
+            } catch (ArgumentParserException ape) {
+                Exit.exit(1, ape.getMessage());
+                throw new IllegalStateException();
+            }
+        }
+
+        /** Get the command-line argument parser. */
+        private static ArgumentParser argParser() {
+            ArgumentParser parser = ArgumentParsers
                 .newArgumentParser("transactional-message-copier")
                 .defaultHelp(true)
                 .description("This tool copies messages transactionally from an input partition to an output topic, " +
-                        "committing the consumed offsets along with the output messages");
+                    "committing the consumed offsets along with the output messages");
 
-        parser.addArgument("--input-topic")
+            MutuallyExclusiveGroup connectionGroup = parser.addMutuallyExclusiveGroup("Connection Group")
+                .description("Group of arguments for connection to brokers")
+                .required(true);
+            connectionGroup.addArgument("--bootstrap-server")
                 .action(store())
-                .required(true)
+                .required(false)
                 .type(String.class)
-                .metavar("INPUT-TOPIC")
-                .dest("inputTopic")
-                .help("Consume messages from this topic");
+                .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
+                .dest("bootstrapServer")
+                .help("REQUIRED unless --broker-list(deprecated) is specified. The server(s) to connect to. Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
+            connectionGroup.addArgument("--broker-list")
+                .action(store())
+                .required(false)
+                .type(String.class)
+                .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
+                .dest("brokerList")
+                .help("DEPRECATED, use --bootstrap-server instead; Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
 
-        parser.addArgument("--input-partition")
+            parser.addArgument("--input-partition")
                 .action(store())
                 .required(true)
                 .type(Integer.class)
@@ -85,7 +148,7 @@ public class TransactionalMessageCopier {
                 .dest("inputPartition")
                 .help("Consume messages from this partition of the input topic.");
 
-        parser.addArgument("--output-topic")
+            parser.addArgument("--output-topic")
                 .action(store())
                 .required(true)
                 .type(String.class)
@@ -93,25 +156,17 @@ public class TransactionalMessageCopier {
                 .dest("outputTopic")
                 .help("Produce messages to this topic");
 
-        parser.addArgument("--broker-list")
-                .action(store())
-                .required(true)
-                .type(String.class)
-                .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
-                .dest("brokerList")
-                .help("Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
-
-        parser.addArgument("--max-messages")
+            parser.addArgument("--max-messages")
                 .action(store())
                 .required(false)
-                .setDefault(-1)
-                .type(Integer.class)
+                .setDefault(-1L)
+                .type(Long.class)
                 .metavar("MAX-MESSAGES")
                 .dest("maxMessages")
-                .help("Process these many messages upto the end offset at the time this program was launched. If set to -1 " +
-                        "we will just read to the end offset of the input partition (as of the time the program was launched).");
+                .help("Process these many messages up to the end offset at the time this program was launched. If set to -1 " +
+                    "we will just read to the end offset of the input partition (as of the time the program was launched).");
 
-        parser.addArgument("--consumer-group")
+            parser.addArgument("--consumer-group")
                 .action(store())
                 .required(false)
                 .setDefault(-1)
@@ -120,7 +175,7 @@ public class TransactionalMessageCopier {
                 .dest("consumerGroup")
                 .help("The consumer group id to use for storing the consumer offsets.");
 
-        parser.addArgument("--transaction-size")
+            parser.addArgument("--transaction-size")
                 .action(store())
                 .required(false)
                 .setDefault(200)
@@ -129,7 +184,7 @@ public class TransactionalMessageCopier {
                 .dest("messagesPerTransaction")
                 .help("The number of messages to put in each transaction. Default is 200.");
 
-        parser.addArgument("--transaction-timeout")
+            parser.addArgument("--transaction-timeout")
                 .action(store())
                 .required(false)
                 .setDefault(60000)
@@ -138,7 +193,7 @@ public class TransactionalMessageCopier {
                 .dest("transactionTimeout")
                 .help("The transaction timeout in milliseconds. Default is 60000(1 minute).");
 
-        parser.addArgument("--transactional-id")
+            parser.addArgument("--transactional-id")
                 .action(store())
                 .required(true)
                 .type(String.class)
@@ -146,35 +201,36 @@ public class TransactionalMessageCopier {
                 .dest("transactionalId")
                 .help("The transactionalId to assign to the producer");
 
-        parser.addArgument("--enable-random-aborts")
+            parser.addArgument("--enable-random-aborts")
                 .action(storeTrue())
                 .type(Boolean.class)
                 .metavar("ENABLE-RANDOM-ABORTS")
                 .dest("enableRandomAborts")
                 .help("Whether or not to enable random transaction aborts (for system testing)");
 
-        parser.addArgument("--group-mode")
+            parser.addArgument("--group-mode")
                 .action(storeTrue())
                 .type(Boolean.class)
                 .metavar("GROUP-MODE")
                 .dest("groupMode")
                 .help("Whether to let consumer subscribe to the input topic or do manual assign. If we do" +
-                          " subscription based consumption, the input partition shall be ignored");
+                    " subscription based consumption, the input partition shall be ignored");
 
-        parser.addArgument("--use-group-metadata")
+            parser.addArgument("--use-group-metadata")
                 .action(storeTrue())
                 .type(Boolean.class)
                 .metavar("USE-GROUP-METADATA")
                 .dest("useGroupMetadata")
                 .help("Whether to use the new transactional commit API with group metadata");
 
-        return parser;
+            return parser;
+        }
     }
 
-    private static KafkaProducer<String, String> createProducer(Namespace parsedArgs) {
+    private static KafkaProducer<String, String> createProducer(TransactionalMessageCopierOptions options) {
         Properties props = new Properties();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, parsedArgs.getString("brokerList"));
-        props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, parsedArgs.getString("transactionalId"));
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, options.brokerList);
+        props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, options.transactionalId);
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
                 "org.apache.kafka.common.serialization.StringSerializer");
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
@@ -184,15 +240,15 @@ public class TransactionalMessageCopier {
         // the case with multiple inflights.
         props.put(ProducerConfig.BATCH_SIZE_CONFIG, "512");
         props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "5");
-        props.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, parsedArgs.getInt("transactionTimeout"));
+        props.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, options.transactionTimeout);
 
         return new KafkaProducer<>(props);
     }
 
-    private static KafkaConsumer<String, String> createConsumer(Namespace parsedArgs) {
-        String consumerGroup = parsedArgs.getString("consumerGroup");
-        String brokerList = parsedArgs.getString("brokerList");
-        Integer numMessagesPerTransaction = parsedArgs.getInt("messagesPerTransaction");
+    private static KafkaConsumer<String, String> createConsumer(TransactionalMessageCopierOptions options) {
+        String consumerGroup = options.consumerGroup;
+        String brokerList = options.brokerList;
+        Integer numMessagesPerTransaction = options.messagesPerTransaction;
 
         Properties props = new Properties();
 
@@ -278,20 +334,19 @@ public class TransactionalMessageCopier {
     }
 
     public static void main(String[] args) {
-        Namespace parsedArgs = argParser().parseArgsOrFail(args);
-        final String transactionalId = parsedArgs.getString("transactionalId");
-        final String outputTopic = parsedArgs.getString("outputTopic");
+        TransactionalMessageCopierOptions options = TransactionalMessageCopierOptions.parse(args);
+        final String transactionalId = options.transactionalId;
+        final String outputTopic = options.outputTopic;
 
-        String consumerGroup = parsedArgs.getString("consumerGroup");
+        String consumerGroup = options.consumerGroup;
 
-        final KafkaProducer<String, String> producer = createProducer(parsedArgs);
-        final KafkaConsumer<String, String> consumer = createConsumer(parsedArgs);
+        final KafkaProducer<String, String> producer = createProducer(options);
+        final KafkaConsumer<String, String> consumer = createConsumer(options);
 
-        final AtomicLong remainingMessages = new AtomicLong(
-            parsedArgs.getInt("maxMessages") == -1 ? Long.MAX_VALUE : parsedArgs.getInt("maxMessages"));
+        final AtomicLong remainingMessages = new AtomicLong(options.maxMessages);
 
-        boolean groupMode = parsedArgs.getBoolean("groupMode");
-        String topicName = parsedArgs.getString("inputTopic");
+        boolean groupMode = options.groupMode;
+        String topicName = options.inputTopic;
         final AtomicLong numMessagesProcessedSinceLastRebalance = new AtomicLong(0);
         final AtomicLong totalMessageProcessed = new AtomicLong(0);
         if (groupMode) {
@@ -311,12 +366,12 @@ public class TransactionalMessageCopier {
                 }
             });
         } else {
-            TopicPartition inputPartition = new TopicPartition(topicName, parsedArgs.getInt("inputPartition"));
+            TopicPartition inputPartition = new TopicPartition(topicName, options.inputPartition);
             consumer.assign(singleton(inputPartition));
             remainingMessages.set(Math.min(messagesRemaining(consumer, inputPartition), remainingMessages.get()));
         }
 
-        final boolean enableRandomAborts = parsedArgs.getBoolean("enableRandomAborts");
+        final boolean enableRandomAborts = options.enableRandomAborts;
 
         producer.initTransactions();
 
@@ -333,7 +388,7 @@ public class TransactionalMessageCopier {
                 numMessagesProcessedSinceLastRebalance.get(), remainingMessages.get(), transactionalId));
         });
 
-        final boolean useGroupMetadata = parsedArgs.getBoolean("useGroupMetadata");
+        final boolean useGroupMetadata = options.useGroupMetadata;
         try {
             Random random = new Random();
             while (remainingMessages.get() > 0) {

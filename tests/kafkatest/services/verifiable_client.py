@@ -72,7 +72,7 @@ VerifiableConsumer
 Command line arguments:
  * `--group-id <group-id>`
  * `--topic <topic>`
- * `--broker-list <brokers>`
+ * `--bootstrap-server <brokers>`
  * `--session-timeout <n>`
  * `--enable-autocommit`
  * `--max-messages <n>`
@@ -97,7 +97,7 @@ VerifiableProducer
 
 Command line arguments:
  * `--topic <topic>`
- * `--broker-list <brokers>`
+ * `--bootstrap-server <brokers>`
  * `--max-messages <n>`
  * `--throughput <msgs/s>`
  * `--producer.config <config-file>` - producer config properties (typically empty)
