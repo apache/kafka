@@ -290,8 +290,13 @@ public class KafkaRaftClient implements RaftClient {
         MemoryRecords records = MemoryRecords.withLeaderChangeMessage(
             currentTimeMs, quorum.epoch(), leaderChangeMessage);
 
-        appendAsLeader(state, records, currentTimeMs);
+        appendAsLeader(records);
+        flushLeaderLog(state, currentTimeMs);
+    }
+
+    private void flushLeaderLog(LeaderState state, long currentTimeMs) {
         log.flush();
+        updateLeaderEndOffsetAndTimestamp(state, currentTimeMs);
     }
 
     private boolean maybeTransitionToLeader(CandidateState state, long currentTimeMs) throws IOException {
@@ -1001,13 +1006,10 @@ public class KafkaRaftClient implements RaftClient {
     }
 
     private LogAppendInfo appendAsLeader(
-        LeaderState state,
-        Records records,
-        long currentTimeMs
+        Records records
     ) {
         LogAppendInfo info = log.appendAsLeader(records, quorum.epoch());
         OffsetAndEpoch endOffset = endOffset();
-        updateLeaderEndOffsetAndTimestamp(state, currentTimeMs);
         kafkaRaftMetrics.updateAppendRecords(info.lastOffset - info.firstOffset + 1);
         kafkaRaftMetrics.updateLogEnd(endOffset);
         logger.trace("Leader appended records at base offset {}, new end offset is {}", info.firstOffset, endOffset);
@@ -1437,8 +1439,7 @@ public class KafkaRaftClient implements RaftClient {
 
     private long pollLeader(long currentTimeMs) {
         LeaderState state = quorum.leaderStateOrThrow();
-
-        pollPendingAppends(currentTimeMs);
+        pollPendingAppends(state, currentTimeMs);
 
         return maybeSendRequests(
             currentTimeMs,
@@ -1605,7 +1606,7 @@ public class KafkaRaftClient implements RaftClient {
         unwrittenAppends.clear();
     }
 
-    private void pollPendingAppends(long currentTimeMs) {
+    private void pollPendingAppends(LeaderState state, long currentTimeMs) {
         int numAppends = 0;
         int maxNumAppends = unwrittenAppends.size();
 
@@ -1619,9 +1620,8 @@ public class KafkaRaftClient implements RaftClient {
                 unwrittenAppend.fail(new TimeoutException("Request timeout " + unwrittenAppend.requestTimeoutMs
                     + " expired before the records could be appended to the log"));
             } else {
-                LeaderState leaderState = quorum.leaderStateOrThrow();
                 int epoch = quorum.epoch();
-                LogAppendInfo info = appendAsLeader(leaderState, unwrittenAppend.records, currentTimeMs);
+                LogAppendInfo info = appendAsLeader(unwrittenAppend.records);
                 OffsetAndEpoch offsetAndEpoch = new OffsetAndEpoch(info.lastOffset, epoch);
                 long numRecords = info.lastOffset - info.firstOffset + 1;
                 logger.debug("Completed write of {} records at {}", numRecords, offsetAndEpoch);
@@ -1654,7 +1654,7 @@ public class KafkaRaftClient implements RaftClient {
         }
 
         if (numAppends > 0) {
-            log.flush();
+            flushLeaderLog(state, currentTimeMs);
         }
     }
 
