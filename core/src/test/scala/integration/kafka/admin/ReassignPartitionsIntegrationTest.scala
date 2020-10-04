@@ -32,7 +32,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
 import org.junit.rules.Timeout
-import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
+import org.junit.Assert.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.{After, Rule, Test}
 
 import scala.collection.Map
@@ -99,6 +99,66 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
     assertFalse(runVerifyAssignment(zkClient, assignment, false).movesOngoing)
 
     // Wait for the assignment to complete
+    waitForVerifyAssignment(zkClient, assignment, false,
+      VerifyAssignmentResult(finalAssignment))
+
+    assertEquals(unthrottledBrokerConfigs,
+      describeBrokerLevelThrottles(unthrottledBrokerConfigs.keySet.toSeq))
+  }
+
+  @Test
+  def testReassignmentFailOnInconsistentReplicationFactorBetweenPartitions(): Unit = {
+    cluster = new ReassignPartitionsTestCluster(zkConnect)
+    cluster.setup()
+    val assignment = """{"version":1,"partitions":""" +
+      """[{"topic":"foo","partition":0,"replicas":[0,1],"log_dirs":["any","any"]},""" +
+      """{"topic":"foo","partition":1,"replicas":[0,1,3],"log_dirs":["any","any","any"]},""" +
+      """{"topic":"bar","partition":0,"replicas":[3,2,1,0],"log_dirs":["any","any","any","any"]},""" +
+      """{"topic":"baz","partition":2,"replicas":[3,2,1,0],"log_dirs":["any","any","any","any"]}""" +
+      """]}"""
+
+    // Check that the assignment has not yet been started yet
+    val initialAssignment = Map(
+      new TopicPartition("foo", 0) ->
+        PartitionReassignmentState(Seq(0, 1, 2), Seq(0, 1), true),
+      new TopicPartition("foo", 1) ->
+        PartitionReassignmentState(Seq(1, 2, 3), Seq(0, 1, 3), true),
+      new TopicPartition("bar", 0) ->
+        PartitionReassignmentState(Seq(3, 2, 1), Seq(3, 2, 1, 0), true),
+      new TopicPartition("baz", 2) ->
+        PartitionReassignmentState(Seq(0, 2, 1), Seq(3, 2, 1, 0), true)
+    )
+    waitForVerifyAssignment(cluster.adminClient, assignment, false,
+      VerifyAssignmentResult(initialAssignment))
+    waitForVerifyAssignment(zkClient, assignment, false,
+      VerifyAssignmentResult(initialAssignment))
+
+    // Execute the assignment
+    val exception = assertThrows(classOf[TerseReassignmentFailureException],
+      () => runExecuteAssignment(cluster.adminClient, false, assignment, -1L, -1L))
+    assertTrue(exception.getMessage.contains(
+      "foo-0: Inconsistent replication factor between partitions. Partitions [0, 1] will have replication factors [2, 3] respectively."))
+    assertTrue(exception.getMessage.contains(
+      "foo-1: Inconsistent replication factor between partitions. Partitions [0, 1] will have replication factors [2, 3] respectively."))
+    assertTrue(exception.getMessage.contains(
+      "baz-2: Inconsistent replication factor between partitions. Partitions [0, 1, 2] will have replication factors [3, 3, 4] respectively."))
+    assertEquals(unthrottledBrokerConfigs,
+      describeBrokerLevelThrottles(unthrottledBrokerConfigs.keySet.toSeq))
+    val finalAssignment = Map(
+      new TopicPartition("foo", 0) ->
+        PartitionReassignmentState(Seq(0, 1, 2), Seq(0, 1), true),
+      new TopicPartition("foo", 1) ->
+        PartitionReassignmentState(Seq(1, 2, 3), Seq(0, 1, 3), true),
+      new TopicPartition("bar", 0) ->
+        PartitionReassignmentState(Seq(3, 2, 1, 0), Seq(3, 2, 1, 0), true),
+      new TopicPartition("baz", 2) ->
+        PartitionReassignmentState(Seq(0, 2, 1), Seq(3, 2, 1, 0), true)
+    )
+
+    // When using --zookeeper, we aren't able to see the new-style assignment
+    assertFalse(runVerifyAssignment(zkClient, assignment, false).movesOngoing)
+
+    // Check that the assigment has changed only for topics with the same replication factor for all partitions
     waitForVerifyAssignment(zkClient, assignment, false,
       VerifyAssignmentResult(finalAssignment))
 
