@@ -388,7 +388,7 @@ subprojects {
       exceptionFormat = testExceptionFormat
     }
     logTestStdout.rehydrate(delegate, owner, this)()
-    
+
     // The suites are for running sets of tests in IDEs.
     // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
     exclude '**/*Suite.class'
@@ -1029,6 +1029,7 @@ project(':clients') {
     compile libs.snappy
     compile libs.slf4jApi
 
+    compileOnly libs.jetBrainsAnnotations
     compileOnly libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
     compileOnly libs.jacksonJDK8Datatypes
 
@@ -1038,6 +1039,8 @@ project(':clients') {
     testCompile libs.junitJupiterApi
     testCompile libs.junitVintageEngine
     testCompile libs.mockitoCore
+
+    testCompileOnly libs.jetBrainsAnnotations
 
     testRuntime libs.slf4jlog4j
     testRuntime libs.jacksonDatabind
@@ -1195,7 +1198,7 @@ project(':raft') {
       }
     }
   }
-  
+
   compileJava.dependsOn 'processMessages'
 
   jar {
@@ -1279,6 +1282,8 @@ project(':streams') {
     compile libs.slf4jApi
     compile libs.rocksDBJni
 
+    compileOnly libs.jetBrainsAnnotations
+
     // testCompileOnly prevents streams from exporting a dependency on test-utils, which would cause a dependency cycle
     testCompileOnly project(':streams:test-utils')
     testCompile project(':clients').sourceSets.test.output
@@ -1292,6 +1297,8 @@ project(':streams') {
     testCompile libs.powermockEasymock
     testCompile libs.bcpkix
     testCompile libs.hamcrest
+
+    testCompileOnly libs.jetBrainsAnnotations
 
     testRuntimeOnly project(':streams:test-utils')
     testRuntime libs.slf4jlog4j

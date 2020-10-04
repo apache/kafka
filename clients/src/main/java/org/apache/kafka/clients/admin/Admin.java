@@ -19,6 +19,7 @@ package org.apache.kafka.clients.admin;
 
 import java.time.Duration;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -40,6 +41,9 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.Unmodifiable;
 
 /**
  * The administrative client for Kafka, which supports managing and inspecting topics, brokers, configurations and ACLs.
@@ -60,7 +64,7 @@ public interface Admin extends AutoCloseable {
      * @param props The configuration.
      * @return The new KafkaAdminClient.
      */
-    static Admin create(Properties props) {
+    static @NotNull Admin create(final @NotNull Properties props) {
         return KafkaAdminClient.createInternal(new AdminClientConfig(props, true), null);
     }
 
@@ -70,18 +74,20 @@ public interface Admin extends AutoCloseable {
      * @param conf The configuration.
      * @return The new KafkaAdminClient.
      */
-    static Admin create(Map<String, Object> conf) {
+    static @NotNull Admin create(final @NotNull Map<@NotNull String, @Nullable Object> conf) {
         return KafkaAdminClient.createInternal(new AdminClientConfig(conf, true), null);
     }
 
     /**
-     * Close the Admin and release all associated resources.
-     * <p>
-     * See {@link #close(long, TimeUnit)}
+     * Close the Admin and release all associated resources with an effectively
+     * infinite grace period, use {@link #close(Duration)} to control the grace
+     * period.
+     *
+     * @see #close(Duration)
      */
     @Override
     default void close() {
-        close(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
+        close(Duration.ofMillis(Long.MAX_VALUE));
     }
 
     /**
@@ -111,7 +117,7 @@ public interface Admin extends AutoCloseable {
      *
      * @param timeout The time to use for the wait time.
      */
-    void close(Duration timeout);
+    void close(@NotNull Duration timeout);
 
     /**
      * Create a batch of new topics with the default options.
@@ -124,7 +130,7 @@ public interface Admin extends AutoCloseable {
      * @param newTopics The new topics to create.
      * @return The CreateTopicsResult.
      */
-    default CreateTopicsResult createTopics(Collection<NewTopic> newTopics) {
+    default @NotNull CreateTopicsResult createTopics(final @NotNull Collection<@NotNull NewTopic> newTopics) {
         return createTopics(newTopics, new CreateTopicsOptions());
     }
 
@@ -145,7 +151,10 @@ public interface Admin extends AutoCloseable {
      * @param options   The options to use when creating the new topics.
      * @return The CreateTopicsResult.
      */
-    CreateTopicsResult createTopics(Collection<NewTopic> newTopics, CreateTopicsOptions options);
+    @NotNull CreateTopicsResult createTopics(
+        @NotNull Collection<@NotNull NewTopic> newTopics,
+        @NotNull CreateTopicsOptions options
+    );
 
     /**
      * This is a convenience method for {@link #deleteTopics(Collection, DeleteTopicsOptions)}
@@ -156,7 +165,7 @@ public interface Admin extends AutoCloseable {
      * @param topics The topic names to delete.
      * @return The DeleteTopicsResult.
      */
-    default DeleteTopicsResult deleteTopics(Collection<String> topics) {
+    default @NotNull DeleteTopicsResult deleteTopics(final @NotNull Collection<@NotNull String> topics) {
         return deleteTopics(topics, new DeleteTopicsOptions());
     }
 
@@ -180,7 +189,10 @@ public interface Admin extends AutoCloseable {
      * @param options The options to use when deleting the topics.
      * @return The DeleteTopicsResult.
      */
-    DeleteTopicsResult deleteTopics(Collection<String> topics, DeleteTopicsOptions options);
+    @NotNull DeleteTopicsResult deleteTopics(
+        @NotNull Collection<@NotNull String> topics,
+        @NotNull DeleteTopicsOptions options
+    );
 
     /**
      * List the topics available in the cluster with the default options.
@@ -190,7 +202,7 @@ public interface Admin extends AutoCloseable {
      *
      * @return The ListTopicsResult.
      */
-    default ListTopicsResult listTopics() {
+    default @NotNull ListTopicsResult listTopics() {
         return listTopics(new ListTopicsOptions());
     }
 
@@ -200,7 +212,7 @@ public interface Admin extends AutoCloseable {
      * @param options The options to use when listing the topics.
      * @return The ListTopicsResult.
      */
-    ListTopicsResult listTopics(ListTopicsOptions options);
+    @NotNull ListTopicsResult listTopics(@NotNull ListTopicsOptions options);
 
     /**
      * Describe some topics in the cluster, with the default options.
@@ -211,7 +223,7 @@ public interface Admin extends AutoCloseable {
      * @param topicNames The names of the topics to describe.
      * @return The DescribeTopicsResult.
      */
-    default DescribeTopicsResult describeTopics(Collection<String> topicNames) {
+    default @NotNull DescribeTopicsResult describeTopics(final @NotNull Collection<@NotNull String> topicNames) {
         return describeTopics(topicNames, new DescribeTopicsOptions());
     }
 
@@ -222,7 +234,10 @@ public interface Admin extends AutoCloseable {
      * @param options    The options to use when describing the topic.
      * @return The DescribeTopicsResult.
      */
-    DescribeTopicsResult describeTopics(Collection<String> topicNames, DescribeTopicsOptions options);
+    @NotNull DescribeTopicsResult describeTopics(
+        @NotNull Collection<@NotNull String> topicNames,
+        @NotNull DescribeTopicsOptions options
+    );
 
     /**
      * Get information about the nodes in the cluster, using the default options.
@@ -232,7 +247,7 @@ public interface Admin extends AutoCloseable {
      *
      * @return The DescribeClusterResult.
      */
-    default DescribeClusterResult describeCluster() {
+    default @NotNull DescribeClusterResult describeCluster() {
         return describeCluster(new DescribeClusterOptions());
     }
 
@@ -242,7 +257,7 @@ public interface Admin extends AutoCloseable {
      * @param options The options to use when getting information about the cluster.
      * @return The DescribeClusterResult.
      */
-    DescribeClusterResult describeCluster(DescribeClusterOptions options);
+    @NotNull DescribeClusterResult describeCluster(@NotNull DescribeClusterOptions options);
 
     /**
      * This is a convenience method for {@link #describeAcls(AclBindingFilter, DescribeAclsOptions)} with
@@ -253,7 +268,7 @@ public interface Admin extends AutoCloseable {
      * @param filter The filter to use.
      * @return The DeleteAclsResult.
      */
-    default DescribeAclsResult describeAcls(AclBindingFilter filter) {
+    default @NotNull DescribeAclsResult describeAcls(final @NotNull AclBindingFilter filter) {
         return describeAcls(filter, new DescribeAclsOptions());
     }
 
@@ -269,7 +284,10 @@ public interface Admin extends AutoCloseable {
      * @param options The options to use when listing the ACLs.
      * @return The DeleteAclsResult.
      */
-    DescribeAclsResult describeAcls(AclBindingFilter filter, DescribeAclsOptions options);
+    @NotNull DescribeAclsResult describeAcls(
+        @NotNull AclBindingFilter filter,
+        @NotNull DescribeAclsOptions options
+    );
 
     /**
      * This is a convenience method for {@link #createAcls(Collection, CreateAclsOptions)} with
@@ -280,7 +298,7 @@ public interface Admin extends AutoCloseable {
      * @param acls The ACLs to create
      * @return The CreateAclsResult.
      */
-    default CreateAclsResult createAcls(Collection<AclBinding> acls) {
+    default @NotNull CreateAclsResult createAcls(final @NotNull Collection<@NotNull AclBinding> acls) {
         return createAcls(acls, new CreateAclsOptions());
     }
 
@@ -298,7 +316,10 @@ public interface Admin extends AutoCloseable {
      * @param options The options to use when creating the ACLs.
      * @return The CreateAclsResult.
      */
-    CreateAclsResult createAcls(Collection<AclBinding> acls, CreateAclsOptions options);
+    @NotNull CreateAclsResult createAcls(
+        @NotNull Collection<@NotNull AclBinding> acls,
+        @NotNull CreateAclsOptions options
+    );
 
     /**
      * This is a convenience method for {@link #deleteAcls(Collection, DeleteAclsOptions)} with default options.
@@ -309,7 +330,7 @@ public interface Admin extends AutoCloseable {
      * @param filters The filters to use.
      * @return The DeleteAclsResult.
      */
-    default DeleteAclsResult deleteAcls(Collection<AclBindingFilter> filters) {
+    default @NotNull DeleteAclsResult deleteAcls(final @NotNull Collection<@NotNull AclBindingFilter> filters) {
         return deleteAcls(filters, new DeleteAclsOptions());
     }
 
@@ -324,8 +345,10 @@ public interface Admin extends AutoCloseable {
      * @param options The options to use when deleting the ACLs.
      * @return The DeleteAclsResult.
      */
-    DeleteAclsResult deleteAcls(Collection<AclBindingFilter> filters, DeleteAclsOptions options);
-
+    @NotNull DeleteAclsResult deleteAcls(
+        @NotNull Collection<@NotNull AclBindingFilter> filters,
+        @NotNull DeleteAclsOptions options
+    );
 
     /**
      * Get the configuration for the specified resources with the default options.
@@ -338,7 +361,7 @@ public interface Admin extends AutoCloseable {
      * @param resources The resources (topic and broker resource types are currently supported)
      * @return The DescribeConfigsResult
      */
-    default DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources) {
+    default @NotNull DescribeConfigsResult describeConfigs(final @NotNull Collection<@NotNull ConfigResource> resources) {
         return describeConfigs(resources, new DescribeConfigsOptions());
     }
 
@@ -359,7 +382,10 @@ public interface Admin extends AutoCloseable {
      * @param options   The options to use when describing configs
      * @return The DescribeConfigsResult
      */
-    DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options);
+    @NotNull DescribeConfigsResult describeConfigs(
+        @NotNull Collection<@NotNull ConfigResource> resources,
+        @NotNull DescribeConfigsOptions options
+    );
 
     /**
      * Update the configuration for the specified resources with the default options.
@@ -407,7 +433,9 @@ public interface Admin extends AutoCloseable {
      * @param configs The resources with their configs
      * @return The AlterConfigsResult
      */
-    default AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs) {
+    default @NotNull AlterConfigsResult incrementalAlterConfigs(
+        final @NotNull Map<@NotNull ConfigResource, @NotNull Collection<@NotNull AlterConfigOp>> configs
+    ) {
         return incrementalAlterConfigs(configs, new AlterConfigsOptions());
     }
 
@@ -436,8 +464,10 @@ public interface Admin extends AutoCloseable {
      * @param options The options to use when altering configs
      * @return The AlterConfigsResult
      */
-    AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource,
-        Collection<AlterConfigOp>> configs, AlterConfigsOptions options);
+    @NotNull AlterConfigsResult incrementalAlterConfigs(
+        @NotNull Map<@NotNull ConfigResource, @NotNull Collection<@NotNull AlterConfigOp>> configs,
+        @NotNull AlterConfigsOptions options
+    );
 
     /**
      * Change the log directory for the specified replicas. If the replica does not exist on the broker, the result
@@ -456,7 +486,9 @@ public interface Admin extends AutoCloseable {
      * @return                      The AlterReplicaLogDirsResult
      * @throws InterruptedException Interrupted while joining I/O thread
      */
-    default AlterReplicaLogDirsResult alterReplicaLogDirs(Map<TopicPartitionReplica, String> replicaAssignment) {
+    default @NotNull AlterReplicaLogDirsResult alterReplicaLogDirs(
+        final @NotNull Map<@NotNull TopicPartitionReplica, @NotNull String> replicaAssignment
+    ) {
         return alterReplicaLogDirs(replicaAssignment, new AlterReplicaLogDirsOptions());
     }
 
@@ -475,8 +507,10 @@ public interface Admin extends AutoCloseable {
      * @return                      The AlterReplicaLogDirsResult
      * @throws InterruptedException Interrupted while joining I/O thread
      */
-    AlterReplicaLogDirsResult alterReplicaLogDirs(Map<TopicPartitionReplica, String> replicaAssignment,
-                                                  AlterReplicaLogDirsOptions options);
+    @NotNull AlterReplicaLogDirsResult alterReplicaLogDirs(
+        @NotNull Map<@NotNull TopicPartitionReplica, @NotNull String> replicaAssignment,
+        @NotNull AlterReplicaLogDirsOptions options
+    );
 
     /**
      * Query the information of all log directories on the given set of brokers
@@ -489,7 +523,7 @@ public interface Admin extends AutoCloseable {
      * @param brokers A list of brokers
      * @return The DescribeLogDirsResult
      */
-    default DescribeLogDirsResult describeLogDirs(Collection<Integer> brokers) {
+    default @NotNull DescribeLogDirsResult describeLogDirs(final @NotNull Collection<@NotNull Integer> brokers) {
         return describeLogDirs(brokers, new DescribeLogDirsOptions());
     }
 
@@ -502,7 +536,10 @@ public interface Admin extends AutoCloseable {
      * @param options The options to use when querying log dir info
      * @return The DescribeLogDirsResult
      */
-    DescribeLogDirsResult describeLogDirs(Collection<Integer> brokers, DescribeLogDirsOptions options);
+    @NotNull DescribeLogDirsResult describeLogDirs(
+        @NotNull Collection<@NotNull Integer> brokers,
+        @NotNull DescribeLogDirsOptions options
+    );
 
     /**
      * Query the replica log directory information for the specified replicas.
@@ -515,7 +552,7 @@ public interface Admin extends AutoCloseable {
      * @param replicas The replicas to query
      * @return The DescribeReplicaLogDirsResult
      */
-    default DescribeReplicaLogDirsResult describeReplicaLogDirs(Collection<TopicPartitionReplica> replicas) {
+    default @NotNull DescribeReplicaLogDirsResult describeReplicaLogDirs(final @NotNull Collection<@NotNull TopicPartitionReplica> replicas) {
         return describeReplicaLogDirs(replicas, new DescribeReplicaLogDirsOptions());
     }
 
@@ -528,7 +565,10 @@ public interface Admin extends AutoCloseable {
      * @param options  The options to use when querying replica log dir info
      * @return The DescribeReplicaLogDirsResult
      */
-    DescribeReplicaLogDirsResult describeReplicaLogDirs(Collection<TopicPartitionReplica> replicas, DescribeReplicaLogDirsOptions options);
+    @NotNull DescribeReplicaLogDirsResult describeReplicaLogDirs(
+        @NotNull Collection<@NotNull TopicPartitionReplica> replicas,
+        @NotNull DescribeReplicaLogDirsOptions options
+    );
 
     /**
      * Increase the number of partitions of the topics given as the keys of {@code newPartitions}
@@ -542,7 +582,7 @@ public interface Admin extends AutoCloseable {
      *                      for the created partitions.
      * @return The CreatePartitionsResult.
      */
-    default CreatePartitionsResult createPartitions(Map<String, NewPartitions> newPartitions) {
+    default @NotNull CreatePartitionsResult createPartitions(final @NotNull Map<@NotNull String, @NotNull NewPartitions> newPartitions) {
         return createPartitions(newPartitions, new CreatePartitionsOptions());
     }
 
@@ -583,8 +623,10 @@ public interface Admin extends AutoCloseable {
      * @param options       The options to use when creating the new partitions.
      * @return The CreatePartitionsResult.
      */
-    CreatePartitionsResult createPartitions(Map<String, NewPartitions> newPartitions,
-                                            CreatePartitionsOptions options);
+    @NotNull CreatePartitionsResult createPartitions(
+        @NotNull Map<@NotNull String, @NotNull NewPartitions> newPartitions,
+        @NotNull CreatePartitionsOptions options
+    );
 
     /**
      * Delete records whose offset is smaller than the given offset of the corresponding partition.
@@ -597,7 +639,9 @@ public interface Admin extends AutoCloseable {
      * @param recordsToDelete The topic partitions and related offsets from which records deletion starts.
      * @return The DeleteRecordsResult.
      */
-    default DeleteRecordsResult deleteRecords(Map<TopicPartition, RecordsToDelete> recordsToDelete) {
+    default @NotNull DeleteRecordsResult deleteRecords(
+        final @NotNull Map<@NotNull TopicPartition, @NotNull RecordsToDelete> recordsToDelete
+    ) {
         return deleteRecords(recordsToDelete, new DeleteRecordsOptions());
     }
 
@@ -610,8 +654,10 @@ public interface Admin extends AutoCloseable {
      * @param options         The options to use when deleting records.
      * @return The DeleteRecordsResult.
      */
-    DeleteRecordsResult deleteRecords(Map<TopicPartition, RecordsToDelete> recordsToDelete,
-                                      DeleteRecordsOptions options);
+    @NotNull DeleteRecordsResult deleteRecords(
+        @NotNull Map<@NotNull TopicPartition, @NotNull RecordsToDelete> recordsToDelete,
+        @NotNull DeleteRecordsOptions options
+    );
 
     /**
      * Create a Delegation Token.
@@ -621,10 +667,9 @@ public interface Admin extends AutoCloseable {
      *
      * @return The CreateDelegationTokenResult.
      */
-    default CreateDelegationTokenResult createDelegationToken() {
+    default @NotNull CreateDelegationTokenResult createDelegationToken() {
         return createDelegationToken(new CreateDelegationTokenOptions());
     }
-
 
     /**
      * Create a Delegation Token.
@@ -647,8 +692,7 @@ public interface Admin extends AutoCloseable {
      * @param options The options to use when creating delegation token.
      * @return The DeleteRecordsResult.
      */
-    CreateDelegationTokenResult createDelegationToken(CreateDelegationTokenOptions options);
-
+    @NotNull CreateDelegationTokenResult createDelegationToken(@NotNull CreateDelegationTokenOptions options);
 
     /**
      * Renew a Delegation Token.
@@ -659,7 +703,7 @@ public interface Admin extends AutoCloseable {
      * @param hmac HMAC of the Delegation token
      * @return The RenewDelegationTokenResult.
      */
-    default RenewDelegationTokenResult renewDelegationToken(byte[] hmac) {
+    default @NotNull RenewDelegationTokenResult renewDelegationToken(final @NotNull byte[] hmac) {
         return renewDelegationToken(hmac, new RenewDelegationTokenOptions());
     }
 
@@ -689,7 +733,10 @@ public interface Admin extends AutoCloseable {
      * @param options The options to use when renewing delegation token.
      * @return The RenewDelegationTokenResult.
      */
-    RenewDelegationTokenResult renewDelegationToken(byte[] hmac, RenewDelegationTokenOptions options);
+    @NotNull RenewDelegationTokenResult renewDelegationToken(
+        @NotNull byte[] hmac,
+        @NotNull RenewDelegationTokenOptions options
+    );
 
     /**
      * Expire a Delegation Token.
@@ -700,7 +747,7 @@ public interface Admin extends AutoCloseable {
      * @param hmac HMAC of the Delegation token
      * @return The ExpireDelegationTokenResult.
      */
-    default ExpireDelegationTokenResult expireDelegationToken(byte[] hmac) {
+    default @NotNull ExpireDelegationTokenResult expireDelegationToken(final @NotNull byte[] hmac) {
         return expireDelegationToken(hmac, new ExpireDelegationTokenOptions());
     }
 
@@ -730,7 +777,7 @@ public interface Admin extends AutoCloseable {
      * @param options The options to use when expiring delegation token.
      * @return The ExpireDelegationTokenResult.
      */
-    ExpireDelegationTokenResult expireDelegationToken(byte[] hmac, ExpireDelegationTokenOptions options);
+    @NotNull ExpireDelegationTokenResult expireDelegationToken(@NotNull byte[] hmac, @NotNull ExpireDelegationTokenOptions options);
 
     /**
      * Describe the Delegation Tokens.
@@ -740,7 +787,7 @@ public interface Admin extends AutoCloseable {
      *
      * @return The DescribeDelegationTokenResult.
      */
-    default DescribeDelegationTokenResult describeDelegationToken() {
+    default @NotNull DescribeDelegationTokenResult describeDelegationToken() {
         return describeDelegationToken(new DescribeDelegationTokenOptions());
     }
 
@@ -763,7 +810,7 @@ public interface Admin extends AutoCloseable {
      * @param options The options to use when describing delegation tokens.
      * @return The DescribeDelegationTokenResult.
      */
-    DescribeDelegationTokenResult describeDelegationToken(DescribeDelegationTokenOptions options);
+    @NotNull DescribeDelegationTokenResult describeDelegationToken(@NotNull DescribeDelegationTokenOptions options);
 
     /**
      * Describe some group IDs in the cluster.
@@ -772,8 +819,10 @@ public interface Admin extends AutoCloseable {
      * @param options  The options to use when describing the groups.
      * @return The DescribeConsumerGroupResult.
      */
-    DescribeConsumerGroupsResult describeConsumerGroups(Collection<String> groupIds,
-                                                        DescribeConsumerGroupsOptions options);
+    @NotNull DescribeConsumerGroupsResult describeConsumerGroups(
+        @NotNull Collection<@NotNull String> groupIds,
+        @NotNull DescribeConsumerGroupsOptions options
+    );
 
     /**
      * Describe some group IDs in the cluster, with the default options.
@@ -784,7 +833,9 @@ public interface Admin extends AutoCloseable {
      * @param groupIds The IDs of the groups to describe.
      * @return The DescribeConsumerGroupResult.
      */
-    default DescribeConsumerGroupsResult describeConsumerGroups(Collection<String> groupIds) {
+    default @NotNull DescribeConsumerGroupsResult describeConsumerGroups(
+        final @NotNull Collection<@NotNull String> groupIds
+    ) {
         return describeConsumerGroups(groupIds, new DescribeConsumerGroupsOptions());
     }
 
@@ -794,7 +845,7 @@ public interface Admin extends AutoCloseable {
      * @param options The options to use when listing the consumer groups.
      * @return The ListGroupsResult.
      */
-    ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options);
+    @NotNull ListConsumerGroupsResult listConsumerGroups(@NotNull ListConsumerGroupsOptions options);
 
     /**
      * List the consumer groups available in the cluster with the default options.
@@ -804,7 +855,7 @@ public interface Admin extends AutoCloseable {
      *
      * @return The ListGroupsResult.
      */
-    default ListConsumerGroupsResult listConsumerGroups() {
+    default @NotNull ListConsumerGroupsResult listConsumerGroups() {
         return listConsumerGroups(new ListConsumerGroupsOptions());
     }
 
@@ -814,7 +865,10 @@ public interface Admin extends AutoCloseable {
      * @param options The options to use when listing the consumer group offsets.
      * @return The ListGroupOffsetsResult
      */
-    ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId, ListConsumerGroupOffsetsOptions options);
+    @NotNull ListConsumerGroupOffsetsResult listConsumerGroupOffsets(
+        @NotNull String groupId,
+        @NotNull ListConsumerGroupOffsetsOptions options
+    );
 
     /**
      * List the consumer group offsets available in the cluster with the default options.
@@ -823,7 +877,7 @@ public interface Admin extends AutoCloseable {
      *
      * @return The ListGroupOffsetsResult.
      */
-    default ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId) {
+    default @NotNull ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final @NotNull String groupId) {
         return listConsumerGroupOffsets(groupId, new ListConsumerGroupOffsetsOptions());
     }
 
@@ -833,14 +887,19 @@ public interface Admin extends AutoCloseable {
      * @param options The options to use when deleting a consumer group.
      * @return The DeletConsumerGroupResult.
      */
-    DeleteConsumerGroupsResult deleteConsumerGroups(Collection<String> groupIds, DeleteConsumerGroupsOptions options);
+    @NotNull DeleteConsumerGroupsResult deleteConsumerGroups(
+        @NotNull Collection<@NotNull String> groupIds,
+        @NotNull DeleteConsumerGroupsOptions options
+    );
 
     /**
      * Delete consumer groups from the cluster with the default options.
      *
      * @return The DeleteConsumerGroupResult.
      */
-    default DeleteConsumerGroupsResult deleteConsumerGroups(Collection<String> groupIds) {
+    default @NotNull DeleteConsumerGroupsResult deleteConsumerGroups(
+        final @NotNull Collection<@NotNull String> groupIds
+    ) {
         return deleteConsumerGroups(groupIds, new DeleteConsumerGroupsOptions());
     }
 
@@ -852,9 +911,11 @@ public interface Admin extends AutoCloseable {
      * @param options The options to use when deleting offsets in a consumer group.
      * @return The DeleteConsumerGroupOffsetsResult.
      */
-    DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsets(String groupId,
-        Set<TopicPartition> partitions,
-        DeleteConsumerGroupOffsetsOptions options);
+    @NotNull DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsets(
+        @NotNull String groupId,
+        @NotNull Set<@NotNull TopicPartition> partitions,
+        @NotNull DeleteConsumerGroupOffsetsOptions options
+    );
 
     /**
      * Delete committed offsets for a set of partitions in a consumer group with the default
@@ -863,7 +924,10 @@ public interface Admin extends AutoCloseable {
      *
      * @return The DeleteConsumerGroupOffsetsResult.
      */
-    default DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsets(String groupId, Set<TopicPartition> partitions) {
+    default @NotNull DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsets(
+        final @NotNull String groupId,
+        final @NotNull Set<@NotNull TopicPartition> partitions
+    ) {
         return deleteConsumerGroupOffsets(groupId, partitions, new DeleteConsumerGroupOffsetsOptions());
     }
 
@@ -917,7 +981,10 @@ public interface Admin extends AutoCloseable {
      * @param partitions   The topics and partitions for which to conduct elections.
      * @return The ElectLeadersResult.
      */
-    default ElectLeadersResult electLeaders(ElectionType electionType, Set<TopicPartition> partitions) {
+    default @NotNull ElectLeadersResult electLeaders(
+        final @NotNull ElectionType electionType,
+        final @NotNull Set<@NotNull TopicPartition> partitions
+    ) {
         return electLeaders(electionType, partitions, new ElectLeadersOptions());
     }
 
@@ -957,10 +1024,11 @@ public interface Admin extends AutoCloseable {
      * @param options      The options to use when electing the leaders.
      * @return The ElectLeadersResult.
      */
-    ElectLeadersResult electLeaders(
-        ElectionType electionType,
-        Set<TopicPartition> partitions,
-        ElectLeadersOptions options);
+    @NotNull ElectLeadersResult electLeaders(
+        @NotNull ElectionType electionType,
+        @NotNull Set<@NotNull TopicPartition> partitions,
+        @NotNull ElectLeadersOptions options
+    );
 
 
     /**
@@ -970,8 +1038,9 @@ public interface Admin extends AutoCloseable {
      * This is a convenience method for {@link #alterPartitionReassignments(Map, AlterPartitionReassignmentsOptions)}
      * with default options.  See the overload for more details.
      */
-    default AlterPartitionReassignmentsResult alterPartitionReassignments(
-        Map<TopicPartition, Optional<NewPartitionReassignment>> reassignments) {
+    default @NotNull AlterPartitionReassignmentsResult alterPartitionReassignments(
+        final @NotNull Map<@NotNull TopicPartition, @NotNull Optional<@NotNull NewPartitionReassignment>> reassignments
+    ) {
         return alterPartitionReassignments(reassignments, new AlterPartitionReassignmentsOptions());
     }
 
@@ -998,9 +1067,10 @@ public interface Admin extends AutoCloseable {
      * @param options         The options to use.
      * @return                The result.
      */
-    AlterPartitionReassignmentsResult alterPartitionReassignments(
-        Map<TopicPartition, Optional<NewPartitionReassignment>> reassignments,
-        AlterPartitionReassignmentsOptions options);
+    @NotNull AlterPartitionReassignmentsResult alterPartitionReassignments(
+        @NotNull Map<@NotNull TopicPartition, @NotNull Optional<@NotNull NewPartitionReassignment>> reassignments,
+        @NotNull AlterPartitionReassignmentsOptions options
+    );
 
 
     /**
@@ -1009,7 +1079,7 @@ public interface Admin extends AutoCloseable {
      * This is a convenience method for {@link #listPartitionReassignments(ListPartitionReassignmentsOptions)}
      * with default options. See the overload for more details.
      */
-    default ListPartitionReassignmentsResult listPartitionReassignments() {
+    default @NotNull ListPartitionReassignmentsResult listPartitionReassignments() {
         return listPartitionReassignments(new ListPartitionReassignmentsOptions());
     }
 
@@ -1019,7 +1089,9 @@ public interface Admin extends AutoCloseable {
      * This is a convenience method for {@link #listPartitionReassignments(Set, ListPartitionReassignmentsOptions)}
      * with default options. See the overload for more details.
      */
-    default ListPartitionReassignmentsResult listPartitionReassignments(Set<TopicPartition> partitions) {
+    default @NotNull ListPartitionReassignmentsResult listPartitionReassignments(
+        final @NotNull Set<@NotNull TopicPartition> partitions
+    ) {
         return listPartitionReassignments(partitions, new ListPartitionReassignmentsOptions());
     }
 
@@ -1041,9 +1113,10 @@ public interface Admin extends AutoCloseable {
      * @param options         The options to use.
      * @return                The result.
      */
-    default ListPartitionReassignmentsResult listPartitionReassignments(
-        Set<TopicPartition> partitions,
-        ListPartitionReassignmentsOptions options) {
+    default @NotNull ListPartitionReassignmentsResult listPartitionReassignments(
+        final @NotNull Set<@NotNull TopicPartition> partitions,
+        final @NotNull ListPartitionReassignmentsOptions options
+    ) {
         return listPartitionReassignments(Optional.of(partitions), options);
     }
 
@@ -1064,7 +1137,9 @@ public interface Admin extends AutoCloseable {
      * @param options         The options to use.
      * @return                The result.
      */
-    default ListPartitionReassignmentsResult listPartitionReassignments(ListPartitionReassignmentsOptions options) {
+    default @NotNull ListPartitionReassignmentsResult listPartitionReassignments(
+        final @NotNull ListPartitionReassignmentsOptions options
+    ) {
         return listPartitionReassignments(Optional.empty(), options);
     }
 
@@ -1073,8 +1148,10 @@ public interface Admin extends AutoCloseable {
      * @param options         The options to use.
      * @return                The result.
      */
-    ListPartitionReassignmentsResult listPartitionReassignments(Optional<Set<TopicPartition>> partitions,
-                                                                ListPartitionReassignmentsOptions options);
+    @NotNull ListPartitionReassignmentsResult listPartitionReassignments(
+        @NotNull Optional<@NotNull Set<@NotNull TopicPartition>> partitions,
+        @NotNull ListPartitionReassignmentsOptions options
+    );
 
     /**
      * Remove members from the consumer group by given member identities.
@@ -1085,7 +1162,10 @@ public interface Admin extends AutoCloseable {
      * @param options The options to carry removing members' information.
      * @return The MembershipChangeResult.
      */
-    RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroup(String groupId, RemoveMembersFromConsumerGroupOptions options);
+    @NotNull RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroup(
+        @NotNull String groupId,
+        @NotNull RemoveMembersFromConsumerGroupOptions options
+    );
 
     /**
      * <p>Alters offsets for the specified group. In order to succeed, the group must be empty.
@@ -1097,7 +1177,10 @@ public interface Admin extends AutoCloseable {
      * @param offsets A map of offsets by partition with associated metadata.
      * @return The AlterOffsetsResult.
      */
-    default AlterConsumerGroupOffsetsResult alterConsumerGroupOffsets(String groupId, Map<TopicPartition, OffsetAndMetadata> offsets) {
+    default @NotNull AlterConsumerGroupOffsetsResult alterConsumerGroupOffsets(
+        final @NotNull String groupId,
+        final @NotNull Map<@NotNull TopicPartition, @NotNull OffsetAndMetadata> offsets
+    ) {
         return alterConsumerGroupOffsets(groupId, offsets, new AlterConsumerGroupOffsetsOptions());
     }
 
@@ -1111,7 +1194,11 @@ public interface Admin extends AutoCloseable {
      * @param options The options to use when altering the offsets.
      * @return The AlterOffsetsResult.
      */
-    AlterConsumerGroupOffsetsResult alterConsumerGroupOffsets(String groupId, Map<TopicPartition, OffsetAndMetadata> offsets, AlterConsumerGroupOffsetsOptions options);
+    @NotNull AlterConsumerGroupOffsetsResult alterConsumerGroupOffsets(
+        final @NotNull String groupId,
+        final @NotNull Map<@NotNull TopicPartition, @NotNull OffsetAndMetadata> offsets,
+        final @NotNull AlterConsumerGroupOffsetsOptions options
+    );
 
     /**
      * <p>List offset for the specified partitions and OffsetSpec. This operation enables to find
@@ -1122,7 +1209,9 @@ public interface Admin extends AutoCloseable {
      * @param topicPartitionOffsets The mapping from partition to the OffsetSpec to look up.
      * @return The ListOffsetsResult.
      */
-    default ListOffsetsResult listOffsets(Map<TopicPartition, OffsetSpec> topicPartitionOffsets) {
+    default @NotNull ListOffsetsResult listOffsets(
+        final @NotNull Map<@NotNull TopicPartition, @NotNull OffsetSpec> topicPartitionOffsets
+    ) {
         return listOffsets(topicPartitionOffsets, new ListOffsetsOptions());
     }
 
@@ -1134,7 +1223,10 @@ public interface Admin extends AutoCloseable {
      * @param options The options to use when retrieving the offsets
      * @return The ListOffsetsResult.
      */
-    ListOffsetsResult listOffsets(Map<TopicPartition, OffsetSpec> topicPartitionOffsets, ListOffsetsOptions options);
+    @NotNull ListOffsetsResult listOffsets(
+        @NotNull Map<@NotNull TopicPartition, @NotNull OffsetSpec> topicPartitionOffsets,
+        @NotNull ListOffsetsOptions options
+    );
 
     /**
      * Describes all entities matching the provided filter that have at least one client quota configuration
@@ -1148,7 +1240,7 @@ public interface Admin extends AutoCloseable {
      * @param filter the filter to apply to match entities
      * @return the DescribeClientQuotasResult containing the result
      */
-    default DescribeClientQuotasResult describeClientQuotas(ClientQuotaFilter filter) {
+    default @NotNull DescribeClientQuotasResult describeClientQuotas(final @NotNull ClientQuotaFilter filter) {
         return describeClientQuotas(filter, new DescribeClientQuotasOptions());
     }
 
@@ -1173,7 +1265,10 @@ public interface Admin extends AutoCloseable {
      * @param options the options to use
      * @return the DescribeClientQuotasResult containing the result
      */
-    DescribeClientQuotasResult describeClientQuotas(ClientQuotaFilter filter, DescribeClientQuotasOptions options);
+    @NotNull DescribeClientQuotasResult describeClientQuotas(
+        @NotNull ClientQuotaFilter filter,
+        @NotNull DescribeClientQuotasOptions options
+    );
 
     /**
      * Alters client quota configurations with the specified alterations.
@@ -1186,7 +1281,9 @@ public interface Admin extends AutoCloseable {
      * @param entries the alterations to perform
      * @return the AlterClientQuotasResult containing the result
      */
-    default AlterClientQuotasResult alterClientQuotas(Collection<ClientQuotaAlteration> entries) {
+    default @NotNull AlterClientQuotasResult alterClientQuotas(
+        final @NotNull Collection<@NotNull ClientQuotaAlteration> entries
+    ) {
         return alterClientQuotas(entries, new AlterClientQuotasOptions());
     }
 
@@ -1213,7 +1310,10 @@ public interface Admin extends AutoCloseable {
      * @param entries the alterations to perform
      * @return the AlterClientQuotasResult containing the result
      */
-    AlterClientQuotasResult alterClientQuotas(Collection<ClientQuotaAlteration> entries, AlterClientQuotasOptions options);
+    @NotNull AlterClientQuotasResult alterClientQuotas(
+        @NotNull Collection<@NotNull ClientQuotaAlteration> entries,
+        @NotNull AlterClientQuotasOptions options
+    );
 
     /**
      * Describe all SASL/SCRAM credentials.
@@ -1222,8 +1322,8 @@ public interface Admin extends AutoCloseable {
      *
      * @return The DescribeUserScramCredentialsResult.
      */
-    default DescribeUserScramCredentialsResult describeUserScramCredentials() {
-        return describeUserScramCredentials(null, new DescribeUserScramCredentialsOptions());
+    default @NotNull DescribeUserScramCredentialsResult describeUserScramCredentials() {
+        return describeUserScramCredentials(Collections.emptyList());
     }
 
     /**
@@ -1231,11 +1331,12 @@ public interface Admin extends AutoCloseable {
      *
      * <p>This is a convenience method for {@link #describeUserScramCredentials(List, DescribeUserScramCredentialsOptions)}
      *
-     * @param users the users for which credentials are to be described; all users' credentials are described if null
-     *              or empty.
+     * @param users the users for which credentials are to be described; all users' credentials are described if empty.
      * @return The DescribeUserScramCredentialsResult.
      */
-    default DescribeUserScramCredentialsResult describeUserScramCredentials(List<String> users) {
+    default @NotNull DescribeUserScramCredentialsResult describeUserScramCredentials(
+        final @NotNull List<@NotNull String> users
+    ) {
         return describeUserScramCredentials(users, new DescribeUserScramCredentialsOptions());
     }
 
@@ -1257,12 +1358,14 @@ public interface Admin extends AutoCloseable {
      * <p>
      * This operation is supported by brokers with version 2.7.0 or higher.
      *
-     * @param users the users for which credentials are to be described; all users' credentials are described if null
-     *              or empty.
+     * @param users the users for which credentials are to be described; all users' credentials are described if empty.
      * @param options The options to use when describing the credentials
      * @return The DescribeUserScramCredentialsResult.
      */
-    DescribeUserScramCredentialsResult describeUserScramCredentials(List<String> users, DescribeUserScramCredentialsOptions options);
+    @NotNull DescribeUserScramCredentialsResult describeUserScramCredentials(
+        @NotNull List<@NotNull String> users,
+        @NotNull DescribeUserScramCredentialsOptions options
+    );
 
     /**
      * Alter SASL/SCRAM credentials for the given users.
@@ -1272,7 +1375,9 @@ public interface Admin extends AutoCloseable {
      * @param alterations the alterations to be applied
      * @return The AlterUserScramCredentialsResult.
      */
-    default AlterUserScramCredentialsResult alterUserScramCredentials(List<UserScramCredentialAlteration> alterations) {
+    default @NotNull AlterUserScramCredentialsResult alterUserScramCredentials(
+        final @NotNull List<@NotNull UserScramCredentialAlteration> alterations
+    ) {
         return alterUserScramCredentials(alterations, new AlterUserScramCredentialsOptions());
     }
 
@@ -1303,11 +1408,13 @@ public interface Admin extends AutoCloseable {
      * @param options The options to use when altering the credentials
      * @return The AlterUserScramCredentialsResult.
      */
-    AlterUserScramCredentialsResult alterUserScramCredentials(List<UserScramCredentialAlteration> alterations,
-                                                              AlterUserScramCredentialsOptions options);
+    @NotNull AlterUserScramCredentialsResult alterUserScramCredentials(
+        @NotNull List<@NotNull UserScramCredentialAlteration> alterations,
+        @NotNull AlterUserScramCredentialsOptions options
+    );
 
     /**
      * Get the metrics kept by the adminClient
      */
-    Map<MetricName, ? extends Metric> metrics();
+    @NotNull @Unmodifiable Map<@NotNull MetricName, ? extends @NotNull Metric> metrics();
 }

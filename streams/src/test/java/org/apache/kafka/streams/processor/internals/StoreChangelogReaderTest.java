@@ -42,6 +42,7 @@ import org.easymock.EasyMockRule;
 import org.easymock.EasyMockSupport;
 import org.easymock.Mock;
 import org.easymock.MockType;
+import org.jetbrains.annotations.NotNull;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -486,8 +487,10 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         final MockAdminClient adminClient = new MockAdminClient() {
             @Override
-            public ListOffsetsResult listOffsets(final Map<TopicPartition, OffsetSpec> topicPartitionOffsets,
-                                                 final ListOffsetsOptions options) {
+            public @NotNull ListOffsetsResult listOffsets(
+                final @NotNull Map<TopicPartition, OffsetSpec> topicPartitionOffsets,
+                final @NotNull ListOffsetsOptions options
+            ) {
                 if (functionCalled.get()) {
                     return super.listOffsets(topicPartitionOffsets, options);
                 } else {
@@ -529,8 +532,10 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         final MockAdminClient adminClient = new MockAdminClient() {
             @Override
-            public ListOffsetsResult listOffsets(final Map<TopicPartition, OffsetSpec> topicPartitionOffsets,
-                                                 final ListOffsetsOptions options) {
+            public @NotNull ListOffsetsResult listOffsets(
+                final @NotNull Map<TopicPartition, OffsetSpec> topicPartitionOffsets,
+                final @NotNull ListOffsetsOptions options
+            ) {
                 throw kaboom;
             }
         };
