@@ -388,7 +388,7 @@ subprojects {
       exceptionFormat = testExceptionFormat
     }
     logTestStdout.rehydrate(delegate, owner, this)()
-    
+
     // The suites are for running sets of tests in IDEs.
     // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
     exclude '**/*Suite.class'
@@ -738,6 +738,7 @@ project(':core') {
   dependencies {
     compile project(':clients')
     compile project(':raft')
+    compile 'com.github.jgonian:commons-ip-math:1.32'
     compile libs.jacksonDatabind
     compile libs.jacksonModuleScala
     compile libs.jacksonDataformatCsv
