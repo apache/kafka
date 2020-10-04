@@ -1629,7 +1629,7 @@ class KafkaController(val config: KafkaConfig,
             s"Inconsistent replication factor between partitions. Partitions [${partitions.mkString(", ")}]" +
               s" will have replication factors [${replicationFactors.mkString(", ")}] respectively.")
           newAssignmentsForTopic.map { case (tp, _) => (tp, error) }
-        } else Map.empty
+        } else Map.empty[TopicPartition, ApiError]
     }
   }
 
