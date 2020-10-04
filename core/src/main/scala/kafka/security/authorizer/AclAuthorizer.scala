@@ -20,7 +20,7 @@ import java.{lang, util}
 import java.util.concurrent.{CompletableFuture, CompletionStage}
 
 import com.typesafe.scalalogging.Logger
-import com.github.jgonian.ipmath.{Ipv4, Ipv4Range}
+import com.github.jgonian.ipmath.{Ipv4, Ipv4Range, Ipv6, Ipv6Range}
 import kafka.api.KAFKA_2_0_IV1
 import kafka.security.authorizer.AclAuthorizer.{AclSeqs, ResourceOrdering, VersionedAcls}
 import kafka.security.authorizer.AclEntry.ResourceSeparator
@@ -415,6 +415,14 @@ class AclAuthorizer extends Authorizer with Logging {
   private def aclHostMatch(acl: AclEntry, host: String): Boolean = {
     if (acl.host == host || acl.host == AclEntry.WildcardHost) return true
 
+    if (!acl.host.contains(":")) {
+      aclIPv4HostMatch(acl, host)
+    } else {
+      aclIPv6HostMatch(acl, host)
+    }
+  }
+
+  private def aclIPv4HostMatch(acl: AclEntry, host: String): Boolean = {
     try {
       val ipv4Range = Ipv4Range.parse(acl.host())
       val parsedHost = Ipv4.of(host)
@@ -428,6 +436,22 @@ class AclAuthorizer extends Authorizer with Logging {
     }
     false
   }
+
+  private def aclIPv6HostMatch(acl: AclEntry, host: String): Boolean = {
+    try {
+      val ipv6Range = Ipv6Range.parse(acl.host())
+      val parsedHost = Ipv6.of(host)
+
+      if (ipv6Range.contains(parsedHost)) {
+        return true
+      }
+
+    } catch {
+      case e: IllegalArgumentException => return false
+    }
+    false
+  }
+
   private def loadCache(): Unit = {
     lock synchronized  {
       ZkAclStore.stores.foreach(store => {

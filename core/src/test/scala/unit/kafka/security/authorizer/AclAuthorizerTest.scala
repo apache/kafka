@@ -20,8 +20,8 @@ import java.io.File
 import java.net.InetAddress
 import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.Files
-import java.util.{Collections, UUID}
 import java.util.concurrent.{Executors, Semaphore, TimeUnit}
+import java.util.{Collections, UUID}
 
 import kafka.Kafka
 import kafka.api.{ApiVersion, KAFKA_2_0_IV0, KAFKA_2_0_IV1}
@@ -30,28 +30,27 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import kafka.zk.{ZkAclStore, ZooKeeperTestHarness}
 import kafka.zookeeper.{GetChildrenRequest, GetDataRequest, ZooKeeperClient}
-import org.apache.kafka.common.acl._
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
+import org.apache.kafka.common.acl._
 import org.apache.kafka.common.errors.{ApiException, UnsupportedVersionException}
-import org.apache.kafka.common.network.ClientInformation
-import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
-import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType}
+import org.apache.kafka.common.resource.PatternType.{LITERAL, MATCH, PREFIXED}
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourcePattern.WILDCARD_RESOURCE
 import org.apache.kafka.common.resource.ResourceType._
-import org.apache.kafka.common.resource.PatternType.{LITERAL, MATCH, PREFIXED}
+import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.apache.kafka.server.authorizer._
 import org.apache.kafka.common.utils.{Time, SecurityUtils => JSecurityUtils}
+import org.apache.kafka.server.authorizer._
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import org.scalatest.Assertions.intercept
 
-import scala.jdk.CollectionConverters._
 import scala.collection.mutable
+import scala.jdk.CollectionConverters._
 
 class AclAuthorizerTest extends ZooKeeperTestHarness {
 
@@ -378,6 +377,50 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     val host1 = InetAddress.getByName("10.0.0.11")
     val host2 = InetAddress.getByName("10.0.0.12")
     val host3 = InetAddress.getByName("10.0.0.5")
+
+    val acl = new AccessControlEntry(user1.toString, range, READ, ALLOW)
+
+    changeAclAndVerify(Set.empty, Set(acl), Set.empty)
+
+    val host1Context = newRequestContext(user1, host1)
+    assertTrue("User1 should have READ access from host1", authorize(aclAuthorizer, host1Context, READ, resource))
+
+    val host2Context = newRequestContext(user1, host2)
+    assertTrue("User1 should have READ access from host2", authorize(aclAuthorizer, host2Context, READ, resource))
+
+    val host3Context = newRequestContext(user1, host3)
+    assertFalse("User1 should not have READ access from host3", authorize(aclAuthorizer, host3Context, READ, resource))
+  }
+
+  @Test
+  def testIPv6SubnetCIDRNotationACL(): Unit = {
+    val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
+    val cidrBlock = "fd0f:e1a0:99d6:3e44::/64"
+    val host1 = InetAddress.getByName("fd0f:e1a0:99d6:3e44:0:0:0:0")
+    val host2 = InetAddress.getByName("fd0f:e1a0:99d6:3e44:ffff:ffff:ffff:ffff")
+    val host3 = InetAddress.getByName("fd0f:e1a0:99d6:3e45:0:0:0:0")
+
+    val acl = new AccessControlEntry(user1.toString, cidrBlock, READ, ALLOW)
+
+    changeAclAndVerify(Set.empty, Set(acl), Set.empty)
+
+    val host1Context = newRequestContext(user1, host1)
+    assertTrue("User1 should have READ access from host1", authorize(aclAuthorizer, host1Context, READ, resource))
+
+    val host2Context = newRequestContext(user1, host2)
+    assertTrue("User1 should have READ access from host2", authorize(aclAuthorizer, host2Context, READ, resource))
+
+    val host3Context = newRequestContext(user1, host3)
+    assertFalse("User1 should not have READ access from host3", authorize(aclAuthorizer, host3Context, READ, resource))
+  }
+
+  @Test
+  def testIPv6RangeNotationACL(): Unit = {
+    val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
+    val range = "fd0f:e1a0:99d6:3e44:0:0:0:0-fd0f:e1a0:99d6:3e44:ffff:ffff:ffff:ffff"
+    val host1 = InetAddress.getByName("fd0f:e1a0:99d6:3e44:0:0:0:0")
+    val host2 = InetAddress.getByName("fd0f:e1a0:99d6:3e44:ffff:ffff:ffff:ffff")
+    val host3 = InetAddress.getByName("fd0f:e1a0:99d6:3e45:0:0:0:0")
 
     val acl = new AccessControlEntry(user1.toString, range, READ, ALLOW)
 
