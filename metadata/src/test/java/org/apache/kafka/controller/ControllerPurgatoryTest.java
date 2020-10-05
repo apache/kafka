@@ -37,7 +37,7 @@ public class ControllerPurgatoryTest {
         private final CompletableFuture<Void> future = new CompletableFuture<>();
 
         @Override
-        public void complete(Exception exception) {
+        public void complete(Throwable exception) {
             if (exception != null) {
                 future.completeExceptionally(exception);
             } else {
