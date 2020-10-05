@@ -23,7 +23,7 @@ import java.util.function.Function;
 public interface EventQueue extends AutoCloseable {
     interface Event {
         void run() throws Exception;
-        void handleException(Throwable e);
+        default void handleException(Throwable e) {}
     }
 
     class VoidEvent implements Event {
@@ -31,10 +31,6 @@ public interface EventQueue extends AutoCloseable {
 
         @Override
         public void run() throws Exception {
-        }
-
-        @Override
-        public void handleException(Throwable e) {
         }
     }
 
