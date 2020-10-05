@@ -91,7 +91,7 @@ public class SubscriptionInfo {
                             final UUID processId,
                             final String userEndPoint,
                             final Map<TaskId, Long> taskOffsetSums,
-                            final AtomicInteger shutdownRequested) {
+                            final AtomicInteger subscriptionFlag) {
         validateVersions(version, latestSupportedVersion);
         final SubscriptionInfoData data = new SubscriptionInfoData();
         data.setVersion(version);
@@ -108,7 +108,7 @@ public class SubscriptionInfo {
         }
 
         if (version >= 8) {
-            data.setShutdownRequested((short) shutdownRequested.get());
+            data.setShutdownRequested((short) subscriptionFlag.get());
         }
 
         this.data = data;

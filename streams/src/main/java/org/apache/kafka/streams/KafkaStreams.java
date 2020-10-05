@@ -352,7 +352,7 @@ public class KafkaStreams implements AutoCloseable {
      * @param eh the uncaught exception handler for all internal threads; {@code null} deletes the current handler
      * @throws IllegalStateException if this {@code KafkaStreams} instance is not in state {@link State#CREATED CREATED}.
      *
-     * @Deprecated user {@link KafkaStreams#setUncaughtExceptionHandler(StreamsUncaughtExceptionHandler)} instead.
+     * @Deprecated Since 2.7.0. Use {@link KafkaStreams#setUncaughtExceptionHandler(StreamsUncaughtExceptionHandler)} instead.
      *
      */
     public void setUncaughtExceptionHandler(final Thread.UncaughtExceptionHandler eh) {
@@ -373,22 +373,28 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     /**
-     * Set the handler invoked when a {@link StreamsConfig#NUM_STREAM_THREADS_CONFIG internal thread} abruptly
-     * terminates due to an uncaught exception.
+     * Set the handler invoked when a {@link StreamsConfig#NUM_STREAM_THREADS_CONFIG internal thread}
+     * throws an unexpected exception.
+     * These might be exceptions indicating rare bugs in Kafka Streams, or they
+     * might be exceptions thrown by your code, for example a NullPointerException thrown from your processor
+     * logic.
+     * <p>
+     * Note, this handler must be threadsafe, since it will be shared among all threads, and invoked from any
+     * thread that encounters such an exception.
      *
-     * @param eh the uncaught exception handler of type {@link StreamsUncaughtExceptionHandler} for all internal threads; {@code null} deletes the current handler
+     * @param streamsUncaughtExceptionHandler the uncaught exception handler of type {@link StreamsUncaughtExceptionHandler} for all internal threads; {@code null} deletes the current handler
      * @throws IllegalStateException if this {@code KafkaStreams} instance is not in state {@link State#CREATED CREATED}.
      */
-    public void setUncaughtExceptionHandler(final StreamsUncaughtExceptionHandler eh) {
-        final StreamsUncaughtExceptionHandler handler = exception -> handleStreamsUncaughtException(exception, eh);
+    public void setUncaughtExceptionHandler(final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
+        final StreamsUncaughtExceptionHandler handler = exception -> handleStreamsUncaughtException(exception, streamsUncaughtExceptionHandler);
         synchronized (stateLock) {
             if (state == State.CREATED) {
                 for (final StreamThread thread : threads) {
-                    if (eh != null)  {
+                    if (streamsUncaughtExceptionHandler != null)  {
                         thread.setStreamsUncaughtExceptionHandler(handler);
                     } else {
                         final StreamsUncaughtExceptionHandler defaultHandler = exception ->
-                                StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse.SHUTDOWN_STREAM_THREAD;
+                               StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse.SHUTDOWN_STREAM_THREAD;
                         thread.setStreamsUncaughtExceptionHandler(defaultHandler);
                     }
                 }
@@ -407,10 +413,11 @@ public class KafkaStreams implements AutoCloseable {
                 log.error("Encountered the following exception during processing " +
                         "and the thread is going to shut down: ", e);
                 break;
-            case REPLACE_STREAM_THREAD:
-                log.error("Encountered the following exception during processing " +
-                        "and the the stream thread will be replaced: ", e); //TODO: add then remove, wait until 663 is merged
-                break;
+//            case REPLACE_STREAM_THREAD:
+//                log.error("Encountered the following exception during processing " +
+//                        "and the the stream thread will be replaced: ", e);
+//            this.addStreamsThread();
+//                break;
             case SHUTDOWN_KAFKA_STREAMS_CLIENT:
                 log.error("Encountered the following exception during processing " +
                         "and the client is going to shut down: ", e);

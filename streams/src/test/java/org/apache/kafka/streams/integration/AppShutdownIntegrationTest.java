@@ -54,6 +54,7 @@ import java.util.concurrent.TimeUnit;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
+import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse.SHUTDOWN_KAFKA_STREAMS_APPLICATION;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateBeforeTest;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.purgeLocalStreamsState;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
@@ -187,8 +188,8 @@ public class AppShutdownIntegrationTest {
             final CountDownLatch latch = new CountDownLatch(1);
             kafkaStreams.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
             kafkaStreams1.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
-            kafkaStreams.setUncaughtExceptionHandler(exception -> StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse.SHUTDOWN_KAFKA_STREAMS_APPLICATION);
-            kafkaStreams1.setUncaughtExceptionHandler(exception -> StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse.SHUTDOWN_KAFKA_STREAMS_APPLICATION);
+            kafkaStreams.setUncaughtExceptionHandler(exception -> SHUTDOWN_KAFKA_STREAMS_APPLICATION);
+            kafkaStreams1.setUncaughtExceptionHandler(exception -> SHUTDOWN_KAFKA_STREAMS_APPLICATION);
 
             kafkaStreams.start();
             kafkaStreams1.start();
@@ -235,8 +236,8 @@ public class AppShutdownIntegrationTest {
             final CountDownLatch latch = new CountDownLatch(1);
             kafkaStreams.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
             kafkaStreams1.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
-            kafkaStreams.setUncaughtExceptionHandler(exception -> StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse.SHUTDOWN_KAFKA_STREAMS_APPLICATION);
-            kafkaStreams1.setUncaughtExceptionHandler(exception -> StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse.SHUTDOWN_KAFKA_STREAMS_APPLICATION);
+            kafkaStreams.setUncaughtExceptionHandler(exception -> SHUTDOWN_KAFKA_STREAMS_APPLICATION);
+            kafkaStreams1.setUncaughtExceptionHandler(exception -> SHUTDOWN_KAFKA_STREAMS_APPLICATION);
 
             kafkaStreams.start();
             kafkaStreams1.start();

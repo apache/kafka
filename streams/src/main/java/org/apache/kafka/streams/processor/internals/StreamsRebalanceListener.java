@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Time;
@@ -25,7 +26,6 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.slf4j.Logger;
 
 import java.util.Collection;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class StreamsRebalanceListener implements ConsumerRebalanceListener {
 
@@ -56,7 +56,7 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
             throw new MissingSourceTopicException("One or more source topics were missing during rebalance");
         } else if (assignmentErrorCode.get() == AssignorError.SHUTDOWN_REQUESTED.code()) {
             log.error("An application is requesting Shutdown");
-            streamThread.shutdown(); //TODO: 663 should set client to error if all streams are dead
+            streamThread.shutdown();
         }
 
         streamThread.setState(State.PARTITIONS_ASSIGNED);

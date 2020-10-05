@@ -34,6 +34,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -619,6 +620,18 @@ public class KafkaStreamsTest {
         streams.start();
         try {
             streams.setUncaughtExceptionHandler((Thread.UncaughtExceptionHandler) null);
+            fail("Should throw IllegalStateException");
+        } catch (final IllegalStateException e) {
+            // expected
+        }
+    }
+
+    @Test
+    public void shouldThrowExceptionSettingStreamsUncaughtExceptionHandlerNotInCreateState() {
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
+        streams.start();
+        try {
+            streams.setUncaughtExceptionHandler((StreamsUncaughtExceptionHandler) null);
             fail("Should throw IllegalStateException");
         } catch (final IllegalStateException e) {
             // expected
