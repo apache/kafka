@@ -21,7 +21,7 @@ public interface StreamsUncaughtExceptionHandler {
      * Inspect a record and the exception received.
      * @param exception the actual exception
      */
-    StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse handle(final Exception exception);
+    StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse handle(final Throwable exception);
 
     /**
      * Enumeration that describes the response from the exception handler.
