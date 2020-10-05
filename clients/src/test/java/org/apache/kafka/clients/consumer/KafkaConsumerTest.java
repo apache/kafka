@@ -103,6 +103,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.ConcurrentModificationException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -2000,6 +2001,35 @@ public class KafkaConsumerTest {
         assertEquals(memberId, groupMetadataAfterPoll.memberId());
         assertEquals(1, groupMetadataAfterPoll.generationId());
         assertEquals(groupInstanceId, groupMetadataAfterPoll.groupInstanceId());
+    }
+
+    @Test
+    public void testInvalidGroupMetadata() throws InterruptedException {
+        Time time = new MockTime();
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+        initMetadata(client, Collections.singletonMap(topic, 1));
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata,
+                new RoundRobinAssignor(), true, groupInstanceId);
+        consumer.subscribe(singletonList(topic));
+        // concurrent access is illegal
+        client.enableBlockingUntilWakeup(1);
+        ExecutorService service = Executors.newSingleThreadExecutor();
+        service.execute(() -> consumer.poll(Duration.ofSeconds(5)));
+        try {
+            TimeUnit.SECONDS.sleep(1);
+            assertThrows(ConcurrentModificationException.class, consumer::groupMetadata);
+            client.wakeup();
+            consumer.wakeup();
+        } finally {
+            service.shutdown();
+            assertTrue(service.awaitTermination(10, TimeUnit.SECONDS));
+        }
+
+        // accessing closed consumer is illegal
+        consumer.close(Duration.ofSeconds(5));
+        assertThrows(IllegalStateException.class, consumer::groupMetadata);
     }
 
     private KafkaConsumer<String, String> consumerWithPendingAuthenticationError() {
