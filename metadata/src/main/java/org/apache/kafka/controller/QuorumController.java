@@ -18,19 +18,24 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.utils.EventQueue;
 import org.apache.kafka.common.utils.KafkaEventQueue;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.timeline.SnapshotRegistry;
+import org.slf4j.Logger;
 
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 public final class QuorumController implements Controller {
+    private final Logger log;
     private final int nodeId;
     private final KafkaEventQueue queue;
     private final Time time;
@@ -75,7 +80,7 @@ public final class QuorumController implements Controller {
             KafkaEventQueue queue = null;
             try {
                 queue = new KafkaEventQueue(time, logContext, threadNamePrefix);
-                return new QuorumController(nodeId, queue, time);
+                return new QuorumController(logContext, nodeId, queue, time);
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
                 throw e;
@@ -83,9 +88,82 @@ public final class QuorumController implements Controller {
         }
     }
 
-    private QuorumController(int nodeId,
+    interface ControllerEventHandler<T> {
+        /**
+         * Process the event, modifying any in-memory data structures that need to be
+         * modified.
+         */
+        ControllerResult<T> process();
+    }
+
+    /**
+     * The base class for controller events.
+     */
+    class ControllerEvent<T> implements EventQueue.Event, DeferredEvent {
+        private final String name;
+        private final CompletableFuture<T> future;
+        private final ControllerEventHandler<T> handler;
+        private final long targetEpoch;
+        private long startProcessingTimeNs;
+        private ControllerResult<T> result;
+
+        ControllerEvent(String name, ControllerEventHandler<T> handler) {
+            this.name = name;
+            this.future = new CompletableFuture<T>();
+            this.handler = handler;
+            this.targetEpoch = -1; // TODO: load current epoch
+            this.startProcessingTimeNs = -1;
+            this.result = null;
+        }
+
+        CompletableFuture<T> future() {
+            return future;
+        }
+
+        @Override
+        public void run() throws Exception {
+//            if (curEpoch != targetEpoch) {
+//                throw new NotControllerException("The controller has changed."); 
+//            }
+            startProcessingTimeNs = time.nanoseconds();
+            result = handler.process();
+            if (result.offsetToWaitFor() < 0) {
+                complete(null);
+            } else {
+//                offset = logManager.scheduleWrite(curEpoch, result.records());
+                purgatory.add(result.offsetToWaitFor(), this);
+            }
+        }
+
+        @Override
+        public void handleException(Throwable exception) {
+            complete(exception);
+        }
+
+        @Override
+        public void complete(Throwable exception) {
+            long endProcessingTime = time.nanoseconds();
+            long deltaNs = endProcessingTime - startProcessingTimeNs;
+            if (exception != null) {
+                log.info("{}: failed with {} in ns", name,
+                        exception.getClass().getSimpleName(), deltaNs);
+                if (exception instanceof ApiException) {
+                    future.completeExceptionally(exception);
+                } else {
+                    future.completeExceptionally(new UnknownServerException(exception));
+                }
+            } else {
+                log.info("Processed {} in {} ns", name, deltaNs);
+                future.complete(result.response());
+            }
+        }
+    }
+
+    private QuorumController(LogContext logContext,
+                             int nodeId,
                              KafkaEventQueue queue,
                              Time time) {
+        this.log = logContext.logger(QuorumController.class);
         this.nodeId = nodeId;
         this.queue = queue;
         this.time = time;

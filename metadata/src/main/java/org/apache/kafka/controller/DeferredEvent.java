@@ -27,5 +27,5 @@ interface DeferredEvent {
      * @param exception         null if the event should be completed successfully; the
      *                          error otherwise.
      */
-    void complete(Exception exception);
+    void complete(Throwable exception);
 }
