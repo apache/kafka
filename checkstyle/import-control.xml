@@ -197,6 +197,7 @@
     <allow pkg="org.apache.kafka.common.requests" />
     <allow pkg="org.apache.kafka.controller" />
     <allow pkg="org.apache.kafka.metadata" />
+    <allow pkg="org.apache.kafka.timeline" />
     <allow pkg="org.apache.kafka.test" />
   </subpackage>
 
