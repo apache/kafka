@@ -477,7 +477,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
 
   this.logIdent = s"[ProducerStateManager partition=$topicPartition] "
 
-  @volatile private var snapshots: ConcurrentSkipListMap[java.lang.Long, SnapshotFile] = locally {
+  private var snapshots: ConcurrentSkipListMap[java.lang.Long, SnapshotFile] = locally {
     loadSnapshots()
   }
 
