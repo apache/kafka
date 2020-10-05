@@ -52,6 +52,7 @@ public class SubscriptionInfo {
     private Set<TaskId> prevTasksCache = null;
     private Set<TaskId> standbyTasksCache = null;
     private Map<TaskId, Long> taskOffsetSumsCache = null;
+    private byte uniqueField;
 
     static {
         // Just statically check to make sure that the generated code always stays in sync with the overall protocol
@@ -81,11 +82,14 @@ public class SubscriptionInfo {
                             final int latestSupportedVersion,
                             final UUID processId,
                             final String userEndPoint,
-                            final Map<TaskId, Long> taskOffsetSums) {
+                            final Map<TaskId, Long> taskOffsetSums,
+                            final byte[] uniqueField) {
         validateVersions(version, latestSupportedVersion);
         final SubscriptionInfoData data = new SubscriptionInfoData();
         data.setVersion(version);
         data.setProcessId(processId);
+
+        data.setUniqueField(uniqueField);
 
         if (version >= 2) {
             data.setUserEndPoint(userEndPoint == null

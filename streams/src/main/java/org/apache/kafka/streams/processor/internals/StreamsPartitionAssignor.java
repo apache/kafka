@@ -28,6 +28,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -183,6 +184,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     private Supplier<TaskAssignor> taskAssignorSupplier;
 
+    private byte[] uniqueField;
+
     /**
      * We need to have the PartitionAssignor and its StreamThread to be mutually accessible since the former needs
      * later's cached metadata while sending subscriptions, and the latter needs former's returned assignment when
@@ -212,6 +215,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         rebalanceProtocol = assignorConfiguration.rebalanceProtocol();
         taskAssignorSupplier = assignorConfiguration::taskAssignor;
         assignmentListener = assignorConfiguration.assignmentListener();
+        uniqueField = Bytes.EMPTY;
     }
 
     @Override
@@ -234,15 +238,19 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         // Adds the following information to subscription
         // 1. Client UUID (a unique id assigned to an instance of KafkaStreams)
         // 2. Map from task id to its overall lag
+        // 3. Unique Field to ensure a rebalance when a thread rejoins
 
         handleRebalanceStart(topics);
+
+        uniqueField[0]++;
 
         return new SubscriptionInfo(
             usedSubscriptionMetadataVersion,
             LATEST_SUPPORTED_VERSION,
             taskManager.processId(),
             userEndPoint,
-            taskManager.getTaskOffsetSums())
+            taskManager.getTaskOffsetSums(),
+            uniqueField)
                 .encode();
     }
 

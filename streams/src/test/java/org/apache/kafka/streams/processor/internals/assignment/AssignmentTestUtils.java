@@ -23,6 +23,7 @@ import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.easymock.EasyMock;
@@ -128,7 +129,7 @@ public final class AssignmentTestUtils {
                                            final Set<TaskId> prevTasks,
                                            final Set<TaskId> standbyTasks) {
         return new SubscriptionInfo(
-            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks));
+            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks), Bytes.EMPTY);
     }
 
     public static SubscriptionInfo getInfo(final UUID processId,
@@ -136,7 +137,7 @@ public final class AssignmentTestUtils {
                                            final Set<TaskId> standbyTasks,
                                            final String userEndPoint) {
         return new SubscriptionInfo(
-            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, userEndPoint, getTaskOffsetSums(prevTasks, standbyTasks));
+            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, userEndPoint, getTaskOffsetSums(prevTasks, standbyTasks), Bytes.EMPTY);
     }
 
     // Stub offset sums for when we only care about the prev/standby task sets, not the actual offsets

@@ -25,6 +25,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaClientSupplier;
@@ -158,7 +159,8 @@ public class StreamsUpgradeTest {
                     LATEST_SUPPORTED_VERSION + 1,
                     taskManager.processId(),
                     userEndPoint(),
-                    taskManager.getTaskOffsetSums()
+                    taskManager.getTaskOffsetSums(),
+                    Bytes.EMPTY
                 ).encode();
             } else {
                 return new FutureSubscriptionInfo(
@@ -257,7 +259,8 @@ public class StreamsUpgradeTest {
                                 LATEST_SUPPORTED_VERSION,
                                 info.processId(),
                                 info.userEndPoint(),
-                                taskManager().getTaskOffsetSums())
+                                taskManager().getTaskOffsetSums(),
+                                Bytes.EMPTY)
                                 .encode(),
                             subscription.ownedPartitions()
                         ));
