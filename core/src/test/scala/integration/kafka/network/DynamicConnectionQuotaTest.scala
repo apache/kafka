@@ -23,12 +23,13 @@ import java.net.{InetAddress, Socket}
 import java.util.concurrent._
 import java.util.{Collections, Properties}
 
-import kafka.server.{BaseRequestTest, ConfigEntityName, DynamicConfig, KafkaConfig}
-import kafka.utils.{CoreUtils, TestUtils}
+import kafka.server.{BaseRequestTest, DynamicConfig, KafkaConfig}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.message.ProduceRequestData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -259,13 +260,19 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   }
 
   private def updateIpConnectionRate(ip: Option[String], updatedRate: Int): Unit = {
-    adminZkClient.changeIpConfig(ip.getOrElse(ConfigEntityName.Default),
-      CoreUtils.propsWith(DynamicConfig.Ip.IpConnectionRateOverrideProp, updatedRate.toString))
+    val initialConnectionCount = connectionCount
+    val adminClient = createAdminClient()
+    val entity = new ClientQuotaEntity(Map(ClientQuotaEntity.IP -> ip.getOrElse(null)).asJava)
+    val request = Map(entity -> Map(DynamicConfig.Ip.IpConnectionRateOverrideProp -> Some(updatedRate.toDouble)))
+    TestUtils.alterClientQuotas(adminClient, request).all.get()
     // use a random throwaway address if ip isn't specified to get the default value
     TestUtils.waitUntilTrue(() => servers.head.socketServer.connectionQuotas.
       connectionRateForIp(InetAddress.getByName(ip.getOrElse("255.255.3.4"))) == updatedRate,
       s"Timed out waiting for connection rate update to propagate"
     )
+    adminClient.close()
+    TestUtils.waitUntilTrue(() => initialConnectionCount == connectionCount,
+      s"Admin client connection not closed (initial = $initialConnectionCount, current = $connectionCount)")
   }
 
   private def waitForListener(listenerName: String): Unit = {
