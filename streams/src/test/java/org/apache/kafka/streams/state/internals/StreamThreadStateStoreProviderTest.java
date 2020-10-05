@@ -51,8 +51,8 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockClientSupplier;
-import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
@@ -92,7 +92,7 @@ public class StreamThreadStateStoreProviderTest {
     public void before() {
         final TopologyWrapper topology = new TopologyWrapper();
         topology.addSource("the-source", topicName);
-        topology.addProcessor("the-processor", new MockProcessorSupplier<>(), "the-source");
+        topology.addProcessor("the-processor", new MockApiProcessorSupplier<>(), "the-source");
         topology.addStateStore(
             Stores.keyValueStoreBuilder(
                 Stores.inMemoryKeyValueStore("kv-store"),

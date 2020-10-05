@@ -86,6 +86,7 @@ object Defaults {
   val MaxConnectionsPerIp: Int = Int.MaxValue
   val MaxConnectionsPerIpOverrides: String = ""
   val MaxConnections: Int = Int.MaxValue
+  val MaxConnectionCreationRate: Int = Int.MaxValue
   val ConnectionsMaxIdleMs = 10 * 60 * 1000L
   val RequestTimeoutMs = 30000
   val ConnectionSetupTimeoutMs = CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MS
@@ -270,7 +271,8 @@ object KafkaConfig {
   private val LogConfigPrefix = "log."
 
   def main(args: Array[String]): Unit = {
-    System.out.println(configDef.toHtml(DynamicBrokerConfig.dynamicConfigUpdateModes))
+    System.out.println(configDef.toHtml(4, (config: String) => "brokerconfigs_" + config,
+      DynamicBrokerConfig.dynamicConfigUpdateModes))
   }
 
   /** ********* Zookeeper Configuration ***********/
@@ -367,6 +369,7 @@ object KafkaConfig {
   val MaxConnectionsPerIpProp = "max.connections.per.ip"
   val MaxConnectionsPerIpOverridesProp = "max.connections.per.ip.overrides"
   val MaxConnectionsProp = "max.connections"
+  val MaxConnectionCreationRateProp = "max.connection.creation.rate"
   val ConnectionsMaxIdleMsProp = "connections.max.idle.ms"
   val FailedAuthenticationDelayMsProp = "connection.failed.authentication.delay.ms"
   /***************** rack configuration *************/
@@ -639,12 +642,13 @@ object KafkaConfig {
   "Use <code>listeners</code> instead. \n" +
   "hostname of broker. If this is set, it will only bind to this address. If this is not set, it will bind to all interfaces"
   val ListenersDoc = "Listener List - Comma-separated list of URIs we will listen on and the listener names." +
-  s" If the listener name is not a security protocol, $ListenerSecurityProtocolMapProp must also be set.\n" +
-  " Specify hostname as 0.0.0.0 to bind to all interfaces.\n" +
-  " Leave hostname empty to bind to default interface.\n" +
-  " Examples of legal listener lists:\n" +
-  " PLAINTEXT://myhost:9092,SSL://:9091\n" +
-  " CLIENT://0.0.0.0:9092,REPLICATION://localhost:9093\n"
+    s" If the listener name is not a security protocol, <code>$ListenerSecurityProtocolMapProp<code> must also be set.\n" +
+    " Listener names and port numbers must be unique.\n" +
+    " Specify hostname as 0.0.0.0 to bind to all interfaces.\n" +
+    " Leave hostname empty to bind to default interface.\n" +
+    " Examples of legal listener lists:\n" +
+    " PLAINTEXT://myhost:9092,SSL://:9091\n" +
+    " CLIENT://0.0.0.0:9092,REPLICATION://localhost:9093\n"
   val AdvertisedHostNameDoc = "DEPRECATED: only used when <code>advertised.listeners</code> or <code>listeners</code> are not set. " +
   "Use <code>advertised.listeners</code> instead. \n" +
   "Hostname to publish to ZooKeeper for clients to use. In IaaS environments, this may " +
@@ -656,10 +660,13 @@ object KafkaConfig {
   "The port to publish to ZooKeeper for clients to use. In IaaS environments, this may " +
   "need to be different from the port to which the broker binds. If this is not set, " +
   "it will publish the same port that the broker binds to."
-  val AdvertisedListenersDoc = "Listeners to publish to ZooKeeper for clients to use, if different than the <code>listeners</code> config property." +
-  " In IaaS environments, this may need to be different from the interface to which the broker binds." +
-  " If this is not set, the value for <code>listeners</code> will be used." +
-  " Unlike <code>listeners</code> it is not valid to advertise the 0.0.0.0 meta-address."
+  val AdvertisedListenersDoc = s"Listeners to publish to ZooKeeper for clients to use, if different than the <code>$ListenersProp</code> config property." +
+    " In IaaS environments, this may need to be different from the interface to which the broker binds." +
+    s" If this is not set, the value for <code>$ListenersProp</code> will be used." +
+    s" Unlike <code>$ListenersProp</code>, it is not valid to advertise the 0.0.0.0 meta-address.\n" +
+    s" Also unlike <code>$ListenersProp</code>, there can be duplicated ports in this property," +
+    " so that one listener can be configured to advertise another listener's address." +
+    " This can be useful in some cases where external load balancers are used."
   val ListenerSecurityProtocolMapDoc = "Map between listener names and security protocols. This must be defined for " +
     "the same security protocol to be usable in more than one port or IP. For example, internal and " +
     "external traffic can be separated even if SSL is required for both. Concretely, the user could define listeners " +
@@ -699,6 +706,11 @@ object KafkaConfig {
     "should be configured based on broker capacity while listener limits should be configured based on application requirements. " +
     "New connections are blocked if either the listener or broker limit is reached. Connections on the inter-broker listener are " +
     "permitted even if broker-wide limit is reached. The least recently used connection on another listener will be closed in this case."
+  val MaxConnectionCreationRateDoc = "The maximum connection creation rate we allow in the broker at any time. Listener-level limits " +
+    s"may also be configured by prefixing the config name with the listener prefix, for example, <code>listener.name.internal.$MaxConnectionCreationRateProp</code>." +
+    "Broker-wide connection rate limit should be configured based on broker capacity while listener limits should be configured based on " +
+    "application requirements. New connections will be throttled if either the listener or the broker limit is reached, with the exception " +
+    "of inter-broker listener. Connections on the inter-broker listener will be throttled only when the listener-level rate limit is reached."
   val ConnectionsMaxIdleMsDoc = "Idle connections timeout: the server socket processor threads close the connections that idle more than this"
   val FailedAuthenticationDelayMsDoc = "Connection close delay on failed authentication: this is the time (in milliseconds) by which connection close will be delayed on authentication failure. " +
     s"This must be configured to be less than $ConnectionsMaxIdleMsProp to prevent connection timeout."
@@ -1026,6 +1038,7 @@ object KafkaConfig {
       .define(MaxConnectionsPerIpProp, INT, Defaults.MaxConnectionsPerIp, atLeast(0), MEDIUM, MaxConnectionsPerIpDoc)
       .define(MaxConnectionsPerIpOverridesProp, STRING, Defaults.MaxConnectionsPerIpOverrides, MEDIUM, MaxConnectionsPerIpOverridesDoc)
       .define(MaxConnectionsProp, INT, Defaults.MaxConnections, atLeast(0), MEDIUM, MaxConnectionsDoc)
+      .define(MaxConnectionCreationRateProp, INT, Defaults.MaxConnectionCreationRate, atLeast(0), MEDIUM, MaxConnectionCreationRateDoc)
       .define(ConnectionsMaxIdleMsProp, LONG, Defaults.ConnectionsMaxIdleMs, MEDIUM, ConnectionsMaxIdleMsDoc)
       .define(FailedAuthenticationDelayMsProp, INT, Defaults.FailedAuthenticationDelayMs, atLeast(0), LOW, FailedAuthenticationDelayMsDoc)
 
@@ -1450,6 +1463,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   val maxConnectionsPerIpOverrides: Map[String, Int] =
     getMap(KafkaConfig.MaxConnectionsPerIpOverridesProp, getString(KafkaConfig.MaxConnectionsPerIpOverridesProp)).map { case (k, v) => (k, v.toInt)}
   def maxConnections = getInt(KafkaConfig.MaxConnectionsProp)
+  def maxConnectionCreationRate = getInt(KafkaConfig.MaxConnectionCreationRateProp)
   val connectionsMaxIdleMs = getLong(KafkaConfig.ConnectionsMaxIdleMsProp)
   val failedAuthenticationDelayMs = getInt(KafkaConfig.FailedAuthenticationDelayMsProp)
 
@@ -1677,9 +1691,9 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   def advertisedListeners: Seq[EndPoint] = {
     val advertisedListenersProp = getString(KafkaConfig.AdvertisedListenersProp)
     if (advertisedListenersProp != null)
-      CoreUtils.listenerListToEndPoints(advertisedListenersProp, listenerSecurityProtocolMap)
+      CoreUtils.listenerListToEndPoints(advertisedListenersProp, listenerSecurityProtocolMap, requireDistinctPorts=false)
     else if (getString(KafkaConfig.AdvertisedHostNameProp) != null || getInt(KafkaConfig.AdvertisedPortProp) != null)
-      CoreUtils.listenerListToEndPoints("PLAINTEXT://" + advertisedHostName + ":" + advertisedPort, listenerSecurityProtocolMap)
+      CoreUtils.listenerListToEndPoints("PLAINTEXT://" + advertisedHostName + ":" + advertisedPort, listenerSecurityProtocolMap, requireDistinctPorts=false)
     else
       listeners
   }

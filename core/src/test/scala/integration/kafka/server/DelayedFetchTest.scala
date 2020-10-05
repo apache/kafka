@@ -64,7 +64,9 @@ class DelayedFetchTest extends EasyMockSupport {
 
     EasyMock.expect(replicaManager.getPartitionOrException(topicPartition))
         .andReturn(partition)
-    EasyMock.expect(partition.fetchOffsetSnapshot(currentLeaderEpoch, fetchOnlyFromLeader = true))
+    EasyMock.expect(partition.fetchOffsetSnapshot(
+        currentLeaderEpoch,
+        fetchOnlyFromLeader = true))
         .andThrow(new FencedLeaderEpochException("Requested epoch has been fenced"))
     EasyMock.expect(replicaManager.isAddingReplica(EasyMock.anyObject(), EasyMock.anyInt())).andReturn(false)
 
@@ -151,6 +153,7 @@ class DelayedFetchTest extends EasyMockSupport {
     LogReadResult(
       exception = Some(error.exception),
       info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
+      divergingEpoch = None,
       highWatermark = -1L,
       leaderLogStartOffset = -1L,
       leaderLogEndOffset = -1L,

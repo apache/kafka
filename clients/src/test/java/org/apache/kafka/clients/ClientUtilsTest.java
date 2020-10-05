@@ -102,20 +102,20 @@ public class ClientUtilsTest {
 
     @Test
     public void testResolveDnsLookup() throws UnknownHostException {
-        // Note that kafka.apache.org resolves to 2 IP addresses
+        // Note that kafka.apache.org resolves to at least 2 IP addresses
         assertEquals(1, ClientUtils.resolve("kafka.apache.org", ClientDnsLookup.DEFAULT).size());
     }
 
     @Test
     public void testResolveDnsLookupAllIps() throws UnknownHostException {
-        // Note that kafka.apache.org resolves to 2 IP addresses
-        assertEquals(2, ClientUtils.resolve("kafka.apache.org", ClientDnsLookup.USE_ALL_DNS_IPS).size());
+        // Note that kafka.apache.org resolves to at least 2 IP addresses
+        assertTrue(ClientUtils.resolve("kafka.apache.org", ClientDnsLookup.USE_ALL_DNS_IPS).size() > 1);
     }
 
     @Test
     public void testResolveDnsLookupResolveCanonicalBootstrapServers() throws UnknownHostException {
-        // Note that kafka.apache.org resolves to 2 IP addresses
-        assertEquals(2, ClientUtils.resolve("kafka.apache.org", ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY).size());
+        // Note that kafka.apache.org resolves to at least 2 IP addresses
+        assertTrue(ClientUtils.resolve("kafka.apache.org", ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY).size() > 1);
     }
 
     private List<InetSocketAddress> checkWithoutLookup(String... url) {

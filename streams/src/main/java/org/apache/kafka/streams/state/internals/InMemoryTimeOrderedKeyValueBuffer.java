@@ -236,7 +236,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         memBufferSize = 0;
         minTimestamp = Long.MAX_VALUE;
         updateBufferMetrics();
-        streamsMetrics.removeAllStoreLevelSensors(threadId, taskId, storeName);
+        streamsMetrics.removeAllStoreLevelSensorsAndMetrics(taskId, storeName);
     }
 
     @Override

@@ -17,6 +17,7 @@ import java.util.Properties
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeUnit
 
+import kafka.server.ClientQuotaManager.DefaultTags
 import kafka.utils.TestUtils
 import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.message.CreatePartitionsRequestData
@@ -24,6 +25,7 @@ import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartiti
 import org.apache.kafka.common.message.CreateTopicsRequestData
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.DeleteTopicsRequestData
+import org.apache.kafka.common.metrics.KafkaMetric
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.quota.ClientQuotaAlteration
@@ -41,6 +43,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
 
@@ -80,6 +83,8 @@ object ControllerMutationQuotaTest {
   val TopicsWith30Partitions = Map(Topic1 -> 30, Topic2 -> 30)
   val TopicsWith31Partitions = Map(Topic1 -> 31, Topic2 -> 31)
 
+  val ControllerQuotaSamples = 10
+  val ControllerQuotaWindowSizeSeconds = 1
   val ControllerMutationRate = 2.0
 }
 
@@ -95,8 +100,8 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     properties.put(KafkaConfig.PrincipalBuilderClassProp,
       classOf[ControllerMutationQuotaTest.TestPrincipalBuilder].getName)
     // Specify number of samples and window size.
-    properties.put(KafkaConfig.NumControllerQuotaSamplesProp, "10")
-    properties.put(KafkaConfig.ControllerQuotaWindowSizeSecondsProp, "1")
+    properties.put(KafkaConfig.NumControllerQuotaSamplesProp, ControllerQuotaSamples.toString)
+    properties.put(KafkaConfig.ControllerQuotaWindowSizeSecondsProp, ControllerQuotaWindowSizeSeconds.toString)
   }
 
   @Before
@@ -122,6 +127,28 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     defineUserQuota(principal.getName, None)
     // Back to the default
     waitUserQuota(principal.getName, Long.MaxValue)
+  }
+
+  @Test
+  def testQuotaMetric(): Unit = {
+    asPrincipal(ThrottledPrincipal) {
+      // Metric is lazily created
+      assertTrue(quotaMetric(principal.getName).isEmpty)
+
+      // Create a topic to create the metrics
+      val (_, errors) = createTopics(Map("topic" -> 1), StrictDeleteTopicsRequestVersion)
+      assertEquals(Set(Errors.NONE), errors.values.toSet)
+
+      // Metric must be there with the correct config
+      verifyQuotaMetric(principal.getName, ControllerMutationRate)
+
+      // Update quota
+      defineUserQuota(ThrottledPrincipal.getName, Some(ControllerMutationRate * 2))
+      waitUserQuota(ThrottledPrincipal.getName, ControllerMutationRate * 2)
+
+      // Metric must be there with the updated config
+      verifyQuotaMetric(principal.getName, ControllerMutationRate * 2)
+    }
   }
 
   @Test
@@ -342,6 +369,29 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
       actualQuota = quotaManager.quota(user, "").bound()
       expectedQuota == actualQuota
     }, s"Quota of $user is not $expectedQuota but $actualQuota")
+  }
+
+  private def quotaMetric(user: String): Option[KafkaMetric] = {
+    val metrics = servers.head.metrics
+    val metricName = metrics.metricName(
+      "tokens",
+      QuotaType.ControllerMutation.toString,
+      "Tracking remaining tokens in the token bucket per user/client-id",
+      Map(DefaultTags.User -> user, DefaultTags.ClientId -> "").asJava)
+    Option(servers.head.metrics.metric(metricName))
+  }
+
+  private def verifyQuotaMetric(user: String, expectedQuota: Double): Unit = {
+    quotaMetric(user) match {
+      case Some(metric) =>
+        val config = metric.config()
+        assertEquals(expectedQuota, config.quota().bound(), 0.1)
+        assertEquals(ControllerQuotaSamples, config.samples())
+        assertEquals(ControllerQuotaWindowSizeSeconds * 1000, config.timeWindowMs())
+
+      case None =>
+        fail(s"Quota metric of $user is not defined")
+    }
   }
 
   private def alterClientQuotas(request: Map[ClientQuotaEntity, Map[String, Option[Double]]]): Map[ClientQuotaEntity, KafkaFutureImpl[Void]] = {

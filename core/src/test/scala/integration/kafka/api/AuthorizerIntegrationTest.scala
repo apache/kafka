@@ -42,6 +42,7 @@ import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{Alter
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
+import org.apache.kafka.common.message.ListOffsetRequestData.{ListOffsetPartition, ListOffsetTopic}
 import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
 import org.apache.kafka.common.message.{AlterPartitionReassignmentsRequestData, AlterReplicaLogDirsRequestData, ControlledShutdownRequestData, CreateAclsRequestData, CreatePartitionsRequestData, CreateTopicsRequestData, DeleteAclsRequestData, DeleteGroupsRequestData, DeleteRecordsRequestData, DeleteTopicsRequestData, DescribeConfigsRequestData, DescribeGroupsRequestData, DescribeLogDirsRequestData, FindCoordinatorRequestData, HeartbeatRequestData, IncrementalAlterConfigsRequestData, JoinGroupRequestData, ListPartitionReassignmentsRequestData, OffsetCommitRequestData, SyncGroupRequestData}
@@ -155,7 +156,14 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.METADATA -> ((resp: requests.MetadataResponse) => resp.errors.asScala.find(_._1 == topic).getOrElse(("test", Errors.NONE))._2),
     ApiKeys.PRODUCE -> ((resp: requests.ProduceResponse) => resp.responses.asScala.find(_._1 == tp).get._2.error),
     ApiKeys.FETCH -> ((resp: requests.FetchResponse[Records]) => resp.responseData.asScala.find(_._1 == tp).get._2.error),
-    ApiKeys.LIST_OFFSETS -> ((resp: requests.ListOffsetResponse) => resp.responseData.asScala.find(_._1 == tp).get._2.error),
+    ApiKeys.LIST_OFFSETS -> ((resp: requests.ListOffsetResponse) => {
+      Errors.forCode(
+        resp.data
+          .topics.asScala.find(_.name == topic).get
+          .partitions.asScala.find(_.partitionIndex == part).get
+          .errorCode
+      )
+    }),
     ApiKeys.OFFSET_COMMIT -> ((resp: requests.OffsetCommitResponse) => Errors.forCode(
       resp.data().topics().get(0).partitions().get(0).errorCode())),
     ApiKeys.OFFSET_FETCH -> ((resp: requests.OffsetFetchResponse) => resp.error),
@@ -164,8 +172,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.JOIN_GROUP -> ((resp: JoinGroupResponse) => resp.error),
     ApiKeys.SYNC_GROUP -> ((resp: SyncGroupResponse) => Errors.forCode(resp.data.errorCode())),
     ApiKeys.DESCRIBE_GROUPS -> ((resp: DescribeGroupsResponse) => {
-      val errorCode = resp.data().groups().asScala.find(g => group.equals(g.groupId())).head.errorCode()
-      Errors.forCode(errorCode)
+      Errors.forCode(resp.data.groups.asScala.find(g => group == g.groupId).head.errorCode)
     }),
     ApiKeys.HEARTBEAT -> ((resp: HeartbeatResponse) => resp.error),
     ApiKeys.LEAVE_GROUP -> ((resp: LeaveGroupResponse) => resp.error),
@@ -212,9 +219,9 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.OFFSET_DELETE -> ((resp: OffsetDeleteResponse) => {
       Errors.forCode(
         resp.data
-          .topics().asScala.find(_.name() == topic).get
-          .partitions().asScala.find(_.partitionIndex() == part).get
-          .errorCode()
+          .topics.asScala.find(_.name == topic).get
+          .partitions.asScala.find(_.partitionIndex == part).get
+          .errorCode
       )
     })
   )
@@ -304,7 +311,13 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def createListOffsetsRequest = {
     requests.ListOffsetRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED).setTargetTimes(
-      Map(tp -> new ListOffsetRequest.PartitionData(0L, Optional.of[Integer](27))).asJava).
+      List(new ListOffsetTopic()
+        .setName(tp.topic)
+        .setPartitions(List(new ListOffsetPartition()
+          .setPartitionIndex(tp.partition)
+          .setTimestamp(0L)
+          .setCurrentLeaderEpoch(27)).asJava)).asJava
+      ).
       build()
   }
 

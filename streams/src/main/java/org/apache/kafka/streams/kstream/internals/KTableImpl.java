@@ -182,7 +182,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final KTableProcessorSupplier<K, V, V> processorSupplier =
             new KTableFilter<>(this, predicate, filterNot, queryableStoreName);
 
-        final ProcessorParameters<K, V> processorParameters = unsafeCastProcessorParametersToCompletelyDifferentType(
+        final ProcessorParameters<K, V, ?, ?> processorParameters = unsafeCastProcessorParametersToCompletelyDifferentType(
             new ProcessorParameters<>(processorSupplier, name)
         );
 
@@ -296,7 +296,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         // leaving in calls to ITB until building topology with graph
 
-        final ProcessorParameters<K, VR> processorParameters = unsafeCastProcessorParametersToCompletelyDifferentType(
+        final ProcessorParameters<K, VR, ?, ?> processorParameters = unsafeCastProcessorParametersToCompletelyDifferentType(
             new ProcessorParameters<>(processorSupplier, name)
         );
         final StreamsGraphNode tableNode = new TableProcessorNode<>(
@@ -450,7 +450,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             transformerSupplier,
             queryableStoreName);
 
-        final ProcessorParameters<K, VR> processorParameters = unsafeCastProcessorParametersToCompletelyDifferentType(
+        final ProcessorParameters<K, VR, ?, ?> processorParameters = unsafeCastProcessorParametersToCompletelyDifferentType(
             new ProcessorParameters<>(processorSupplier, name)
         );
 
@@ -485,7 +485,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, TOSTREAM_NAME);
         final ProcessorSupplier<K, Change<V>> kStreamMapValues = new KStreamMapValues<>((key, change) -> change.newValue);
-        final ProcessorParameters<K, V> processorParameters = unsafeCastProcessorParametersToCompletelyDifferentType(
+        final ProcessorParameters<K, V, ?, ?> processorParameters = unsafeCastProcessorParametersToCompletelyDifferentType(
             new ProcessorParameters<>(kStreamMapValues, name)
         );
 
@@ -701,10 +701,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final Set<String> allSourceNodes = ensureCopartitionWith(Collections.singleton((AbstractStream<K, VO>) other));
 
         if (leftOuter) {
-            enableSendingOldValues();
+            enableSendingOldValues(true);
         }
         if (rightOuter) {
-            ((KTableImpl<?, ?, ?>) other).enableSendingOldValues();
+            ((KTableImpl<?, ?, ?>) other).enableSendingOldValues(true);
         }
 
         final KTableKTableAbstractJoin<K, VR, V, VO> joinThis;
@@ -724,8 +724,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final String joinThisName = renamed.suffixWithOrElseGet("-join-this", builder, JOINTHIS_NAME);
         final String joinOtherName = renamed.suffixWithOrElseGet("-join-other", builder, JOINOTHER_NAME);
 
-        final ProcessorParameters<K, Change<V>> joinThisProcessorParameters = new ProcessorParameters<>(joinThis, joinThisName);
-        final ProcessorParameters<K, Change<VO>> joinOtherProcessorParameters = new ProcessorParameters<>(joinOther, joinOtherName);
+        final ProcessorParameters<K, Change<V>, ?, ?> joinThisProcessorParameters = new ProcessorParameters<>(joinThis, joinThisName);
+        final ProcessorParameters<K, Change<VO>, ?, ?> joinOtherProcessorParameters = new ProcessorParameters<>(joinOther, joinOtherName);
 
         final Serde<K> keySerde;
         final Serde<VR> valueSerde;
@@ -800,14 +800,14 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final String selectName = new NamedInternal(groupedInternal.name()).orElseGenerateWithPrefix(builder, SELECT_NAME);
 
         final KTableProcessorSupplier<K, V, KeyValue<K1, V1>> selectSupplier = new KTableRepartitionMap<>(this, selector);
-        final ProcessorParameters<K, Change<V>> processorParameters = new ProcessorParameters<>(selectSupplier, selectName);
+        final ProcessorParameters<K, Change<V>, ?, ?> processorParameters = new ProcessorParameters<>(selectSupplier, selectName);
 
         // select the aggregate key and values (old and new), it would require parent to send old values
         final ProcessorGraphNode<K, Change<V>> groupByMapNode = new ProcessorGraphNode<>(selectName, processorParameters);
 
         builder.addGraphNode(this.streamsGraphNode, groupByMapNode);
 
-        this.enableSendingOldValues();
+        this.enableSendingOldValues(true);
         return new KGroupedTableImpl<>(
             builder,
             selectName,
@@ -832,18 +832,25 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     }
 
     @SuppressWarnings("unchecked")
-    public void enableSendingOldValues() {
+    public boolean enableSendingOldValues(final boolean forceMaterialization) {
         if (!sendOldValues) {
             if (processorSupplier instanceof KTableSource) {
                 final KTableSource<K, ?> source = (KTableSource<K, V>) processorSupplier;
+                if (!forceMaterialization && !source.materialized()) {
+                    return false;
+                }
                 source.enableSendingOldValues();
             } else if (processorSupplier instanceof KStreamAggProcessorSupplier) {
                 ((KStreamAggProcessorSupplier<?, K, S, V>) processorSupplier).enableSendingOldValues();
             } else {
-                ((KTableProcessorSupplier<K, S, V>) processorSupplier).enableSendingOldValues();
+                final KTableProcessorSupplier<K, S, V> tableProcessorSupplier = (KTableProcessorSupplier<K, S, V>) processorSupplier;
+                if (!tableProcessorSupplier.enableSendingOldValues(forceMaterialization)) {
+                    return false;
+                }
             }
             sendOldValues = true;
         }
+        return true;
     }
 
     boolean sendingOldValueEnabled() {
@@ -851,12 +858,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     }
 
     /**
-     * We conflate V with Change<V> in many places. It might be nice to fix that eventually.
+     * We conflate V with Change<V> in many places. This will get fixed in the implementation of KIP-478.
      * For now, I'm just explicitly lying about the parameterized type.
      */
     @SuppressWarnings("unchecked")
-    private <VR> ProcessorParameters<K, VR> unsafeCastProcessorParametersToCompletelyDifferentType(final ProcessorParameters<K, Change<V>> kObjectProcessorParameters) {
-        return (ProcessorParameters<K, VR>) kObjectProcessorParameters;
+    private <VR> ProcessorParameters<K, VR, ?, ?> unsafeCastProcessorParametersToCompletelyDifferentType(final ProcessorParameters<K, Change<V>, ?, ?> kObjectProcessorParameters) {
+        return (ProcessorParameters<K, VR, ?, ?>) kObjectProcessorParameters;
     }
 
     @Override
@@ -967,11 +974,11 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         //Old values are a useful optimization. The old values from the foreignKeyTable table are compared to the new values,
         //such that identical values do not cause a prefixScan. PrefixScan and propagation can be expensive and should
         //not be done needlessly.
-        ((KTableImpl<?, ?, ?>) foreignKeyTable).enableSendingOldValues();
+        ((KTableImpl<?, ?, ?>) foreignKeyTable).enableSendingOldValues(true);
 
         //Old values must be sent such that the ForeignJoinSubscriptionSendProcessorSupplier can propagate deletions to the correct node.
         //This occurs whenever the extracted foreignKey changes values.
-        enableSendingOldValues();
+        enableSendingOldValues(true);
 
         final NamedInternal renamed = new NamedInternal(joinName);
 

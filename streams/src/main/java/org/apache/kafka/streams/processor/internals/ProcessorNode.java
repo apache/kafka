@@ -20,8 +20,10 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.Punctuator;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
@@ -53,8 +55,22 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
     private Sensor destroySensor;
     private Sensor createSensor;
 
+    private boolean closed = true;
+
     public ProcessorNode(final String name) {
-        this(name, null, null);
+        this(name, (Processor<KIn, VIn, KOut, VOut>) null, null);
+    }
+
+    public ProcessorNode(final String name,
+                         final Processor<KIn, VIn, KOut, VOut> processor,
+                         final Set<String> stateStores) {
+
+        this.name = name;
+        this.processor = processor;
+        this.children = new ArrayList<>();
+        this.childByName = new HashMap<>();
+        this.stateStores = stateStores;
+        this.time = new SystemTime();
     }
 
     public ProcessorNode(final String name,
@@ -81,7 +97,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
         return children;
     }
 
-    ProcessorNode getChild(final String childName) {
+    ProcessorNode<KOut, VOut, ?, ?> getChild(final String childName) {
         return childByName.get(childName);
     }
 
@@ -90,14 +106,18 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
         childByName.put(child.name, child);
     }
 
+    @SuppressWarnings("unchecked")
     public void init(final InternalProcessorContext context) {
+        if (!closed)
+            throw new IllegalStateException("The processor is not closed");
+
         try {
             internalProcessorContext = context;
             initSensors();
             maybeMeasureLatency(
                 () -> {
                     if (processor != null) {
-                        processor.init(ProcessorContextAdapter.shim(context));
+                        processor.init((ProcessorContext<KOut, VOut>) context);
                     }
                 },
                 time,
@@ -106,6 +126,10 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
         } catch (final Exception e) {
             throw new StreamsException(String.format("failed to initialize processor %s", name), e);
         }
+
+        // revived tasks could re-initialize the topology,
+        // in which case we should reset the flag
+        closed = false;
     }
 
     private void initSensors() {
@@ -119,6 +143,8 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
     }
 
     public void close() {
+        throwIfClosed();
+
         try {
             maybeMeasureLatency(
                 () -> {
@@ -137,15 +163,25 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
         } catch (final Exception e) {
             throw new StreamsException(String.format("failed to close processor %s", name), e);
         }
+
+        closed = true;
+    }
+
+    protected void throwIfClosed() {
+        if (closed) {
+            throw new IllegalStateException("The processor is already closed");
+        }
     }
 
 
-    public void process(final KIn key, final VIn value) {
+    public void process(final Record<KIn, VIn> record) {
+        throwIfClosed();
+
         try {
-            maybeMeasureLatency(() -> processor.process(key, value), time, processSensor);
+            maybeMeasureLatency(() -> processor.process(record), time, processSensor);
         } catch (final ClassCastException e) {
-            final String keyClass = key == null ? "unknown because key is null" : key.getClass().getName();
-            final String valueClass = value == null ? "unknown because value is null" : value.getClass().getName();
+            final String keyClass = record.key() == null ? "unknown because key is null" : record.key().getClass().getName();
+            final String valueClass = record.value() == null ? "unknown because value is null" : record.value().getClass().getName();
             throw new StreamsException(String.format("ClassCastException invoking Processor. Do the Processor's "
                     + "input types match the deserialized types? Check the Serde setup and change the default Serdes in "
                     + "StreamConfig or provide correct Serdes via method parameters. Make sure the Processor can accept "

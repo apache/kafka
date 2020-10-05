@@ -18,6 +18,8 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.state.WindowStore;
@@ -47,7 +49,6 @@ public class ChangeLoggingWindowBytesStoreTest {
     private ProcessorContextImpl context;
     private ChangeLoggingWindowBytesStore store;
 
-
     @Before
     public void setUp() {
         store = new ChangeLoggingWindowBytesStore(inner, false);
@@ -56,11 +57,11 @@ public class ChangeLoggingWindowBytesStoreTest {
     private void init() {
         EasyMock.expect(context.taskId()).andReturn(taskId);
         EasyMock.expect(context.recordCollector()).andReturn(collector);
-        inner.init(context, store);
+        inner.init((ProcessorContext) context, store);
         EasyMock.expectLastCall();
         EasyMock.replay(inner, context);
 
-        store.init(context, store);
+        store.init((StateStoreContext) context, store);
     }
 
     @Test
@@ -96,6 +97,18 @@ public class ChangeLoggingWindowBytesStoreTest {
     }
 
     @Test
+    public void shouldDelegateToUnderlyingStoreWhenBackwardFetching() {
+        EasyMock
+            .expect(inner.backwardFetch(bytesKey, 0, 10))
+            .andReturn(KeyValueIterators.emptyWindowStoreIterator());
+
+        init();
+
+        store.backwardFetch(bytesKey, ofEpochMilli(0), ofEpochMilli(10));
+        EasyMock.verify(inner);
+    }
+
+    @Test
     public void shouldDelegateToUnderlyingStoreWhenFetchingRange() {
         EasyMock
             .expect(inner.fetch(bytesKey, bytesKey, 0, 1))
@@ -104,6 +117,18 @@ public class ChangeLoggingWindowBytesStoreTest {
         init();
 
         store.fetch(bytesKey, bytesKey, ofEpochMilli(0), ofEpochMilli(1));
+        EasyMock.verify(inner);
+    }
+
+    @Test
+    public void shouldDelegateToUnderlyingStoreWhenBackwardFetchingRange() {
+        EasyMock
+            .expect(inner.backwardFetch(bytesKey, bytesKey, 0, 1))
+            .andReturn(KeyValueIterators.emptyIterator());
+
+        init();
+
+        store.backwardFetch(bytesKey, bytesKey, ofEpochMilli(0), ofEpochMilli(1));
         EasyMock.verify(inner);
     }
 

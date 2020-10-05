@@ -23,7 +23,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 import kafka.network.RequestChannel
 import kafka.network.RequestChannel._
 import kafka.server.ClientQuotaManager._
-import kafka.utils.{Logging, ShutdownableThread}
+import kafka.utils.{Logging, QuotaUtils, ShutdownableThread}
 import org.apache.kafka.common.{Cluster, MetricName}
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.Metrics
@@ -372,10 +372,10 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    * This calculates the amount of time needed to bring the metric within quota
    * assuming that no new metrics are recorded.
    *
-   * See {ClientQuotaManager.throttleTime} for the details.
+   * See {QuotaUtils.throttleTime} for the details.
    */
   protected def throttleTime(e: QuotaViolationException, timeMs: Long): Long = {
-    ClientQuotaManager.throttleTime(e, timeMs)
+    QuotaUtils.throttleTime(e, timeMs)
   }
 
   /**
@@ -409,7 +409,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
 
   protected def registerQuotaMetrics(metricTags: Map[String, String])(sensor: Sensor): Unit = {
     sensor.add(
-      clientRateMetricName(metricTags),
+      clientQuotaMetricName(metricTags),
       new Rate,
       getQuotaMetricConfig(metricTags)
     )
@@ -522,7 +522,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       val clientId = quotaEntity.clientId
       val metricTags = Map(DefaultTags.User -> user, DefaultTags.ClientId -> clientId)
 
-      val quotaMetricName = clientRateMetricName(metricTags)
+      val quotaMetricName = clientQuotaMetricName(metricTags)
       // Change the underlying metric config if the sensor has been created
       val metric = allMetrics.get(quotaMetricName)
       if (metric != null) {
@@ -532,7 +532,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
         }
       }
     } else {
-      val quotaMetricName = clientRateMetricName(Map.empty)
+      val quotaMetricName = clientQuotaMetricName(Map.empty)
       allMetrics.forEach { (metricName, metric) =>
         if (metricName.name == quotaMetricName.name && metricName.group == quotaMetricName.group) {
           val metricTags = metricName.tags
@@ -547,7 +547,11 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     }
   }
 
-  protected def clientRateMetricName(quotaMetricTags: Map[String, String]): MetricName = {
+  /**
+   * Returns the MetricName of the metric used for the quota. The name is used to create the
+   * metric but also to find the metric when the quota is changed.
+   */
+  protected def clientQuotaMetricName(quotaMetricTags: Map[String, String]): MetricName = {
     metrics.metricName("byte-rate", quotaType.toString,
       "Tracking byte-rate per user/client-id",
       quotaMetricTags.asJava)

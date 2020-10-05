@@ -28,6 +28,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
@@ -295,7 +296,7 @@ public class ProcessorStateManagerTest {
         expect(store.name()).andStubReturn(persistentStoreName);
 
         context.uninitialize();
-        store.init(context, store);
+        store.init((StateStoreContext) context, store);
         replay(storeMetadata, context, store);
 
         stateMgr.registerStateStores(singletonList(store), context);
@@ -325,7 +326,7 @@ public class ProcessorStateManagerTest {
         expect(store.name()).andStubReturn(persistentStoreName);
 
         context.uninitialize();
-        store.init(context, store);
+        store.init((StateStoreContext) context, store);
         replay(storeMetadata, context, store);
 
         stateMgr.registerStateStores(singletonList(store), context);

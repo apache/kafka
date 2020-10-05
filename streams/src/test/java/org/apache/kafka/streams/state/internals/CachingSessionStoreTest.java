@@ -29,6 +29,7 @@ import org.apache.kafka.streams.kstream.SessionWindowedDeserializer;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
@@ -90,7 +91,7 @@ public class CachingSessionStoreTest {
         cache = new ThreadCache(new LogContext("testCache "), MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
         final InternalMockProcessorContext context = new InternalMockProcessorContext(TestUtils.tempDirectory(), null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 0, 0, TOPIC, null));
-        cachingStore.init(context, cachingStore);
+        cachingStore.init((StateStoreContext) context, cachingStore);
     }
 
     @After
@@ -186,7 +187,7 @@ public class CachingSessionStoreTest {
         cache = EasyMock.niceMock(ThreadCache.class);
         context = new InternalMockProcessorContext(TestUtils.tempDirectory(), null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, null));
-        cachingStore.init(context, cachingStore);
+        cachingStore.init((StateStoreContext) context, cachingStore);
     }
 
     @Test
@@ -532,7 +533,8 @@ public class CachingSessionStoreTest {
             assertThat(
                 messages,
                 hasItem("Returning empty iterator for fetch with invalid key range: from > to." +
-                    " This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
+                    " This may be due to range arguments set in the wrong order, " +
+                    "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
                     " Note that the built-in numerical serdes do not follow this for negative numbers")
             );
         }

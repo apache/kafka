@@ -69,9 +69,7 @@ class ZookeeperTlsEncryptOnlyTest(ProduceConsumeValidateTest):
         self.zk.start()
         self.kafka.security_protocol = self.kafka.interbroker_security_protocol = "PLAINTEXT"
 
-        # Cannot use --zookeeper because kafka-topics.sh is unable to connect to a TLS-enabled ZooKeeper quorum,
-        # so indicate that topics should be created via the Admin client
-        self.kafka.start(use_zk_to_create_topic=False)
+        self.kafka.start()
 
         self.perform_produce_consume_validation()
 

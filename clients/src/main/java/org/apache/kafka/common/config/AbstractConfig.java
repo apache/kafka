@@ -228,6 +228,13 @@ public class AbstractConfig {
         return copy;
     }
 
+    public Map<String, Object> originals(Map<String, Object> configOverrides) {
+        Map<String, Object> copy = new RecordingMap<>();
+        copy.putAll(originals);
+        copy.putAll(configOverrides);
+        return copy;
+    }
+
     /**
      * Get all the original settings, ensuring that all values are of type String.
      * @return the original settings

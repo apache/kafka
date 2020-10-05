@@ -30,6 +30,7 @@ import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.TestInputTopic;
+import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
@@ -60,7 +61,7 @@ public class KStreamTransformTest {
                     context.schedule(
                         Duration.ofMillis(1),
                         PunctuationType.WALL_CLOCK_TIME,
-                        timestamp -> context.forward(-1, (int) timestamp)
+                        timestamp -> context.forward(-1, (int) timestamp, To.all().withTimestamp(timestamp))
                     );
                 }
 
@@ -106,9 +107,9 @@ public class KStreamTransformTest {
                 new KeyValueTimestamp<>(-1, 3, 3)
             };
 
-            assertEquals(expected.length, processor.theCapturedProcessor().processed.size());
+            assertEquals(expected.length, processor.theCapturedProcessor().processed().size());
             for (int i = 0; i < expected.length; i++) {
-                assertEquals(expected[i], processor.theCapturedProcessor().processed.get(i));
+                assertEquals(expected[i], processor.theCapturedProcessor().processed().get(i));
             }
         }
     }
@@ -126,7 +127,7 @@ public class KStreamTransformTest {
                     context.schedule(
                         Duration.ofMillis(1),
                         PunctuationType.WALL_CLOCK_TIME,
-                        timestamp -> context.forward(-1, (int) timestamp));
+                        timestamp -> context.forward(-1, (int) timestamp, To.all().withTimestamp(timestamp)));
                 }
 
                 @Override
@@ -158,7 +159,7 @@ public class KStreamTransformTest {
             driver.advanceWallClockTime(Duration.ofMillis(1));
         }
 
-        assertEquals(6, processor.theCapturedProcessor().processed.size());
+        assertEquals(6, processor.theCapturedProcessor().processed().size());
 
         final KeyValueTimestamp[] expected = {new KeyValueTimestamp<>(2, 10, 0),
             new KeyValueTimestamp<>(20, 110, 0),
@@ -168,7 +169,7 @@ public class KStreamTransformTest {
             new KeyValueTimestamp<>(-1, 3, 3)};
 
         for (int i = 0; i < expected.length; i++) {
-            assertEquals(expected[i], processor.theCapturedProcessor().processed.get(i));
+            assertEquals(expected[i], processor.theCapturedProcessor().processed().get(i));
         }
     }
 

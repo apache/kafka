@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.metrics;
 
+import java.util.function.Supplier;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.CompoundStat.NamedMeasurable;
 import org.apache.kafka.common.metrics.stats.TokenBucket;
@@ -53,17 +54,25 @@ public final class Sensor {
     private final Object metricLock;
 
     private static class StatAndConfig {
-        public final Stat stat;
-        public final MetricConfig config;
+        private final Stat stat;
+        private final Supplier<MetricConfig> configSupplier;
 
-        StatAndConfig(Stat stat, MetricConfig config) {
+        StatAndConfig(Stat stat, Supplier<MetricConfig> configSupplier) {
             this.stat = stat;
-            this.config = config;
+            this.configSupplier = configSupplier;
+        }
+
+        public Stat stat() {
+            return stat;
+        }
+
+        public MetricConfig config() {
+            return configSupplier.get();
         }
     }
 
     public enum RecordingLevel {
-        INFO(0, "INFO"), DEBUG(1, "DEBUG");
+        INFO(0, "INFO"), DEBUG(1, "DEBUG"), TRACE(2, "TRACE");
 
         private static final RecordingLevel[] ID_TO_TYPE;
         private static final int MIN_RECORDING_LEVEL_KEY = 0;
@@ -106,7 +115,15 @@ public final class Sensor {
         }
 
         public boolean shouldRecord(final int configId) {
-            return configId == DEBUG.id || configId == this.id;
+            if (configId == INFO.id) {
+                return this.id == INFO.id;
+            } else if (configId == DEBUG.id) {
+                return this.id == INFO.id || this.id == DEBUG.id;
+            } else if (configId == TRACE.id) {
+                return true;
+            } else {
+                throw new IllegalStateException("Did not recognize recording level " + configId);
+            }
         }
     }
 
@@ -211,7 +228,7 @@ public final class Sensor {
             synchronized (metricLock()) {
                 // increment all the stats
                 for (StatAndConfig statAndConfig : this.stats) {
-                    statAndConfig.stat.record(statAndConfig.config, value, timeMs);
+                    statAndConfig.stat.record(statAndConfig.config(), value, timeMs);
                 }
             }
             if (checkQuotas)
@@ -270,7 +287,7 @@ public final class Sensor {
             return false;
 
         final MetricConfig statConfig = config == null ? this.config : config;
-        stats.add(new StatAndConfig(Objects.requireNonNull(stat), statConfig));
+        stats.add(new StatAndConfig(Objects.requireNonNull(stat), () -> statConfig));
         Object lock = metricLock();
         for (NamedMeasurable m : stat.stats()) {
             final KafkaMetric metric = new KafkaMetric(lock, m.name(), m.stat(), statConfig, time);
@@ -316,7 +333,7 @@ public final class Sensor {
             );
             registry.registerMetric(metric);
             metrics.put(metric.metricName(), metric);
-            stats.add(new StatAndConfig(Objects.requireNonNull(stat), statConfig));
+            stats.add(new StatAndConfig(Objects.requireNonNull(stat), metric::config));
             return true;
         }
     }
