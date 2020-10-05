@@ -69,6 +69,8 @@ object Defaults {
   val BackgroundThreads = 10
   val QueuedMaxRequests = 500
   val QueuedMaxRequestBytes = -1
+  val RegistrationHeartbeatIntervalMs = 2000
+  val RegistrationLeaseTimeoutMs = 18000
 
   /************* Authorizer Configuration ***********/
   val AuthorizerClassName = ""
@@ -356,6 +358,9 @@ object KafkaConfig {
   val ConnectionSetupTimeoutMaxMsProp = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG
   val ProcessRolesProp = "process.roles"
   val ControllerConnectProp = "controller.connect"
+  val RegistrationHeartbeatIntervalMsProp = "registration.heartbeat.interval.ms"
+  val RegistrationLeaseTimeoutMsProp = "registration.lease.timeout.ms"
+  val MetadataLogDirProp = "metadata.log.dir"
 
   /************* Authorizer Configuration ***********/
   val AuthorizerClassNameProp = "authorizer.class.name"
@@ -643,6 +648,9 @@ object KafkaConfig {
   val ConnectionSetupTimeoutMaxMsDoc = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC
   val ProcessRolesDoc = "The roles that this process plays: 'broker', 'controller', or 'broker,controller' if it is both"
   val ControllerConnectDoc = "A comma-separated list of controller URIs that KIP-500 brokers should connect to on startup. Required for brokers running in KIP-500 mode."
+  val RegistrationHeartbeatIntervalMsDoc = "The length of time in milliseconds between broker heartbeats. Used when running in KIP-500 mode."
+  val RegistrationLeaseTimeoutMsDoc = "The length of time in milliseconds that a broker lease lasts if no heartbeats are made. Used when running in KIP-500 mode."
+  val MetadataLogDirDoc = "The directory in which the metadata log is kept. If not set, we default to the first directory given by log.dirs"
 
   /************* Authorizer Configuration ***********/
   val AuthorizerClassNameDoc = s"The fully qualified name of a class that implements s${classOf[Authorizer].getName}" +
@@ -1041,6 +1049,9 @@ object KafkaConfig {
       .define(ConnectionSetupTimeoutMaxMsProp, LONG, Defaults.ConnectionSetupTimeoutMaxMs, MEDIUM, ConnectionSetupTimeoutMaxMsDoc)
       .define(ProcessRolesProp, STRING, null, HIGH, ProcessRolesDoc)
       .define(ControllerConnectProp, LIST, null, HIGH, ControllerConnectDoc)
+      .define(RegistrationHeartbeatIntervalMsProp, INT, Defaults.RegistrationHeartbeatIntervalMs, MEDIUM, RegistrationHeartbeatIntervalMsDoc)
+      .define(RegistrationLeaseTimeoutMsProp, INT, Defaults.RegistrationLeaseTimeoutMs, MEDIUM, RegistrationLeaseTimeoutMsDoc)
+      .define(MetadataLogDirProp, null, HIGH, MetadataLogDirDoc)
 
       /************* Authorizer Configuration ***********/
       .define(AuthorizerClassNameProp, STRING, Defaults.AuthorizerClassName, LOW, AuthorizerClassNameDoc)
@@ -1463,6 +1474,14 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   val connectionSetupTimeoutMaxMs = getLong(KafkaConfig.ConnectionSetupTimeoutMaxMsProp)
   val processRoles = getList(KafkaConfig.ProcessRolesProp)
   val controllerConnect = getList(KafkaConfig.ControllerConnectProp)
+  val registrationHeartbeatIntervalMs = getInt(KafkaConfig.RegistrationHeartbeatIntervalMsProp)
+  val registrationLeaseTimeoutMs = getInt(KafkaConfig.RegistrationLeaseTimeoutMsProp)
+  def metadataLogDir: String = {
+    Option(getString(KafkaConfig.MetadataLogDirProp)) match {
+      case Some(dir) => dir
+      case None => logDirs.head
+    }
+  }
 
   def getNumReplicaAlterLogDirsThreads: Int = {
     val numThreads: Integer = Option(getInt(KafkaConfig.NumReplicaAlterLogDirsThreadsProp)).getOrElse(logDirs.size)
