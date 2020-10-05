@@ -314,8 +314,8 @@ public final class LocalLogManager implements MetaLogManager {
         private List<ApiMessageAndVersion> incomingWrites = null;
         private ScribeState state = ScribeState.FOLLOWER;
         private LeaderInfo leaderInfo = new LeaderInfo(-1, -1);
-        private long index = 0;
-        private long nextWriteIndex = 0;
+        private long nextReadOffset = 0;
+        private long nextWriteOffset = 0;
         private long fileOffset = 0;
         private final ByteBuffer frameBuffer = ByteBuffer.allocate(FRAME_LENGTH);
         private ByteBuffer dataBuffer = EMPTY;
@@ -356,8 +356,7 @@ public final class LocalLogManager implements MetaLogManager {
                                     state = ScribeState.LEADER;
                                     incomingWrites = null;
                                     leaderInfo = claim;
-                                    index = 0;
-                                    nextWriteIndex = 0;
+                                    nextWriteOffset = nextReadOffset;
                                     shouldClaimEpoch = leaderInfo.epoch;
                                     claimedCond.signalAll();
                                 } else {
@@ -423,8 +422,9 @@ public final class LocalLogManager implements MetaLogManager {
                         case BECOMING_LEADER:
                             // Read until we get EOF or a partial read.
                             int result;
+                            List<ApiMessage> messages = new ArrayList<>();
                             do {
-                                result = readNextMessage();
+                                result = readNextMessage(messages);
                                 if (log.isTraceEnabled()) {
                                     if (result < 0) {
                                         log.trace("ScribeThread read partial message.");
@@ -436,6 +436,9 @@ public final class LocalLogManager implements MetaLogManager {
                                     }
                                 }
                             } while (result > 0);
+                            if (!messages.isEmpty()) {
+                                listener.handleCommits(nextReadOffset - 1, messages);
+                            }
                             if (curState == ScribeState.BECOMING_LEADER && result == 0) {
                                 // If the result is 0, that means did not read a partial
                                 // record at the end.  So we should be ready to write our
@@ -448,12 +451,14 @@ public final class LocalLogManager implements MetaLogManager {
                         case LEADER:
                             // Write out the messages that we were given earlier.
                             if (toWrite != null) {
+                                List<ApiMessage> written = new ArrayList<>();
                                 for (ApiMessageAndVersion message : toWrite) {
                                     writeMessage(message);
-                                    listener.handleCommit(leaderInfo.epoch, index,
-                                        message.message());
-                                    index++;
+                                    written.add(message.message());
+                                    nextWriteOffset++;
+                                    nextReadOffset++;
                                 }
+                                listener.handleCommits(nextReadOffset - 1, written);
                             }
                             break;
                     }
@@ -504,7 +509,7 @@ public final class LocalLogManager implements MetaLogManager {
          *          0 if we hit EOF.
          *          A positive size of what we read, if we read a message.
          */
-        private int readNextMessage() throws IOException {
+        private int readNextMessage(List<ApiMessage> messages) throws IOException {
             frameBuffer.clear();
             int frameLength = readData(frameBuffer, fileOffset);
             if (frameLength <= 0) {
@@ -521,8 +526,8 @@ public final class LocalLogManager implements MetaLogManager {
                 leaderInfo = LeaderInfo.read(dataBuffer);
             } else {
                 ApiMessage message = MetadataParser.read(dataBuffer);
-                listener.handleCommit(leaderInfo.epoch, index, message);
-                index++;
+                messages.add(message);
+                nextReadOffset++;
             }
             fileOffset += FRAME_LENGTH + dataLength;
             return FRAME_LENGTH + dataLength;
@@ -643,7 +648,7 @@ public final class LocalLogManager implements MetaLogManager {
             }
         }
 
-        long scheduleWrite(long epoch, ApiMessageAndVersion message) {
+        long scheduleWrite(long epoch, List<ApiMessageAndVersion> messages) {
             lock.lock();
             try {
                 if (shuttingDown || leaderInfo.epoch != epoch) {
@@ -652,11 +657,13 @@ public final class LocalLogManager implements MetaLogManager {
                 if (incomingWrites == null) {
                     incomingWrites = new ArrayList<>();
                 }
-                incomingWrites.add(message);
-                long curWriteIndex = nextWriteIndex;
-                nextWriteIndex++;
+                for (ApiMessageAndVersion message : messages) {
+                    incomingWrites.add(message);
+                }
+                long curWriteOffset = nextWriteOffset;
+                nextWriteOffset++;
                 wakeCond.signal();
-                return curWriteIndex;
+                return curWriteOffset;
             } finally {
                 lock.unlock();
             }
@@ -783,8 +790,8 @@ public final class LocalLogManager implements MetaLogManager {
     }
 
     @Override
-    public long scheduleWrite(long epoch, ApiMessageAndVersion message) {
-        return scribeThread.scheduleWrite(epoch, message);
+    public long scheduleWrite(long epoch, List<ApiMessageAndVersion> messages) {
+        return scribeThread.scheduleWrite(epoch, messages);
     }
 
     @Override
@@ -795,6 +802,14 @@ public final class LocalLogManager implements MetaLogManager {
     @Override
     public void beginShutdown() {
         leadershipClaimerThread.beginShutdown();
+    }
+
+    int nodeId() {
+        return nodeId;
+    }
+
+    MetaLogManager.Listener listener() {
+        return scribeThread.listener;
     }
 
     @Override
