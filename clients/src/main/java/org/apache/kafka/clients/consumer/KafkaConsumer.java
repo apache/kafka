@@ -2227,10 +2227,17 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Return the current group metadata associated with this consumer.
      *
      * @return consumer group metadata
+     * @throws org.apache.kafka.common.errors.InvalidGroupIdException if consumer does not have a group
      */
     @Override
     public ConsumerGroupMetadata groupMetadata() {
-        return coordinator.groupMetadata();
+        acquireAndEnsureOpen();
+        try {
+            maybeThrowInvalidGroupIdException();
+            return coordinator.groupMetadata();
+        } finally {
+            release();
+        }
     }
 
     /**
