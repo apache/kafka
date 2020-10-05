@@ -23,7 +23,10 @@ import org.junit.Test;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
+import java.text.CharacterIterator;
 import java.text.SimpleDateFormat;
+import java.text.StringCharacterIterator;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -73,6 +76,15 @@ public class ValuesTest {
         STRING_LIST.add("bar");
         INT_LIST.add(1234567890);
         INT_LIST.add(-987654321);
+    }
+
+    @Test(timeout = 5000)
+    public void shouldNotEncounterInfiniteLoop() {
+        byte[] bytes = new byte[] { -17, -65,  -65 };
+        String str = new String(bytes, StandardCharsets.UTF_8);
+        SchemaAndValue schemaAndValue = Values.parseString(str);
+        assertEquals(Type.STRING, schemaAndValue.schema().type());
+        assertEquals(str, schemaAndValue.value());
     }
 
     @Test
