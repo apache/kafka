@@ -596,7 +596,6 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     testControllerMove(() => zkClient.createPartitionReassignment(reassignment))
   }
 
-
   @Test
   def testControllerFeatureZNodeSetupWhenFeatureVersioningIsEnabledWithNonExistingFeatureZNode(): Unit = {
     testControllerFeatureZNodeSetup(Option.empty, KAFKA_2_7_IV0)
@@ -761,6 +760,20 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     }
     servers = makeServers(1, interBrokerProtocolVersion = Some(interBrokerProtocolVersion))
     TestUtils.waitUntilControllerElected(zkClient)
+    // Below we wait on a dummy event to finish processing in the controller event thread.
+    // We schedule this dummy event only after the controller is elected, which is a sign that the
+    // controller has already started processing the Startup event. Waiting on the dummy event is
+    // used to make sure that the event thread has completed processing Startup event, that triggers
+    // the setup of FeatureZNode.
+    val controller = getController().kafkaController
+    val latch = new CountDownLatch(1)
+    controller.eventManager.put(new MockEvent(ControllerState.TopicChange) {
+      override def process(): Unit = {
+        latch.countDown()
+      }
+      override def preempt(): Unit = {}
+    })
+    latch.await()
 
     val (mayBeFeatureZNodeBytes, versionAfter) = zkClient.getDataAndVersion(FeatureZNode.path)
     val newZNode = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)

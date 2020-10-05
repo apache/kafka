@@ -383,7 +383,7 @@ class KafkaController(val config: KafkaConfig,
         case FeatureZNodeStatus.Disabled =>
           if (!existingFeatureZNode.features.empty()) {
             warn(s"FeatureZNode at path: ${FeatureZNode.path} with disabled status" +
-              " contains non-empty features.")
+                 s" contains non-empty features: ${existingFeatureZNode.features}")
           }
           Features.emptyFinalizedFeatures
       }
@@ -420,7 +420,7 @@ class KafkaController(val config: KafkaConfig,
       if (existingFeatureZNode.status == FeatureZNodeStatus.Disabled &&
           !existingFeatureZNode.features.empty()) {
         warn(s"FeatureZNode at path: ${FeatureZNode.path} with disabled status" +
-             " contains non-empty features.")
+             s" contains non-empty features: ${existingFeatureZNode.features}")
       }
       if (!newNode.equals(existingFeatureZNode)) {
         updateFeatureZNode(newNode)

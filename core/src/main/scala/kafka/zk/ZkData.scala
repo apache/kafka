@@ -799,6 +799,7 @@ object DelegationTokenInfoZNode {
  *             is less than KAFKA_2_7_IV0.
  */
 object FeatureZNodeStatus extends Enumeration {
+  type FeatureZNodeStatus = Value
   val Disabled, Enabled = Value
 
   def withNameOpt(value: Int): Option[Value] = {
@@ -812,7 +813,7 @@ object FeatureZNodeStatus extends Enumeration {
  * @param status     the status of the ZK node
  * @param features   the cluster-wide finalized features
  */
-case class FeatureZNode(status: FeatureZNodeStatus.Value, features: Features[FinalizedVersionRange]) {
+case class FeatureZNode(status: FeatureZNodeStatus.FeatureZNodeStatus, features: Features[FinalizedVersionRange]) {
 }
 
 object FeatureZNode {

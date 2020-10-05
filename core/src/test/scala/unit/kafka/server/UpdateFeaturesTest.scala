@@ -148,6 +148,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
    * Tests whether an invalid feature update does not get processed on the server as expected,
    * and raises the ExceptionType on the client side as expected.
    *
+   * @param feature               the feature to be updated
    * @param invalidUpdate         the invalid feature update to be sent in the
    *                              updateFeatures request to the server
    * @param exceptionMsgPattern   a pattern for the expected exception message
@@ -222,7 +223,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
 
   /**
    * Tests that an UpdateFeatures request fails in the Controller, when, for a feature the downgrade
-   * is attempted to a max version level thats higher than the existing max version level.
+   * is attempted to a max version level higher than the existing max version level.
    */
   @Test
   def testShouldFailRequestWhenDowngradeToHigherVersionLevelIsAttempted(): Unit = {
@@ -285,13 +286,13 @@ class UpdateFeaturesTest extends BaseRequestTest {
   def testShouldFailRequestDuringDeletionOfNonExistingFeature(): Unit = {
     testWithInvalidFeatureUpdate[InvalidRequestException](
       "feature_non_existing",
-      new FeatureUpdate(0, true),
-      ".*Can not delete non-existing finalized feature.*".r)
+      new FeatureUpdate(3, true),
+      ".*Could not apply finalized feature update because the provided feature is not supported.*".r)
   }
 
   /**
    * Tests that an UpdateFeatures request fails in the Controller, when, a feature version level
-   * upgrade is attempted to a version level thats the same as the existing max version level.
+   * upgrade is attempted to a version level same as the existing max version level.
    */
   @Test
   def testShouldFailRequestWhenUpgradingToSameVersionLevel(): Unit = {
