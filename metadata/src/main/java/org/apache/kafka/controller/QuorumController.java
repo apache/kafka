@@ -20,13 +20,76 @@ package org.apache.kafka.controller;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.utils.KafkaEventQueue;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.timeline.SnapshotRegistry;
 
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 public final class QuorumController implements Controller {
-    QuorumController() {
+    private final int nodeId;
+    private final KafkaEventQueue queue;
+    private final Time time;
+    private final SnapshotRegistry snapshotRegistry;
+
+    /**
+     * A builder class which creates the QuorumController.
+     */
+    static public class Builder {
+        private final int nodeId;
+        private Time time = Time.SYSTEM;
+        private String threadNamePrefix = null;
+        private LogContext logContext = null;
+
+        public Builder(int nodeId) {
+            this.nodeId = nodeId;
+        }
+
+        public Builder setTime(Time time) {
+            this.time = time;
+            return this;
+        }
+
+        public Builder setThreadNamePrefix(String threadNamePrefix) {
+            this.threadNamePrefix = threadNamePrefix;
+            return this;
+        }
+
+        public Builder setLogContext(LogContext logContext) {
+            this.logContext = logContext;
+            return this;
+        }
+
+        public QuorumController build() {
+            if (threadNamePrefix == null) {
+                threadNamePrefix = String.format("Node%d_", nodeId);
+            }
+            if (logContext == null) {
+                logContext = new LogContext(threadNamePrefix);
+            }
+            KafkaEventQueue queue = null;
+            try {
+                queue = new KafkaEventQueue(time, logContext, threadNamePrefix);
+                return new QuorumController(nodeId, queue, time);
+            } catch (Exception e) {
+                Utils.closeQuietly(queue, "event queue");
+                throw e;
+            }
+        }
+    }
+
+    private QuorumController(int nodeId,
+                             KafkaEventQueue queue,
+                             Time time) {
+        this.nodeId = nodeId;
+        this.queue = queue;
+        this.time = time;
+        this.snapshotRegistry = new SnapshotRegistry(-1);
+        snapshotRegistry.createSnapshot(-1);
     }
 
     @Override
