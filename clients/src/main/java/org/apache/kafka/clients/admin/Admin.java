@@ -1323,7 +1323,7 @@ public interface Admin extends AutoCloseable {
      * @return The DescribeUserScramCredentialsResult.
      */
     default @NotNull DescribeUserScramCredentialsResult describeUserScramCredentials() {
-        return describeUserScramCredentials(Collections.emptyList());
+        return describeUserScramCredentials(null);
     }
 
     /**
@@ -1331,11 +1331,12 @@ public interface Admin extends AutoCloseable {
      *
      * <p>This is a convenience method for {@link #describeUserScramCredentials(List, DescribeUserScramCredentialsOptions)}
      *
-     * @param users the users for which credentials are to be described; all users' credentials are described if empty.
+     * @param users the users for which credentials are to be described; all users' credentials are described if null
+     *              or empty.
      * @return The DescribeUserScramCredentialsResult.
      */
     default @NotNull DescribeUserScramCredentialsResult describeUserScramCredentials(
-        final @NotNull List<@NotNull String> users
+        final @Nullable List<@NotNull String> users
     ) {
         return describeUserScramCredentials(users, new DescribeUserScramCredentialsOptions());
     }
@@ -1358,12 +1359,13 @@ public interface Admin extends AutoCloseable {
      * <p>
      * This operation is supported by brokers with version 2.7.0 or higher.
      *
-     * @param users the users for which credentials are to be described; all users' credentials are described if empty.
+     * @param users the users for which credentials are to be described; all users' credentials are described if null
+     *              or empty.
      * @param options The options to use when describing the credentials
      * @return The DescribeUserScramCredentialsResult.
      */
     @NotNull DescribeUserScramCredentialsResult describeUserScramCredentials(
-        @NotNull List<@NotNull String> users,
+        @Nullable List<@NotNull String> users,
         @NotNull DescribeUserScramCredentialsOptions options
     );
 

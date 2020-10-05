@@ -236,6 +236,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.annotations.Unmodifiable;
 import org.slf4j.Logger;
@@ -4228,7 +4229,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public @NotNull DescribeUserScramCredentialsResult describeUserScramCredentials(
-        final @NotNull List<@NotNull String> users,
+        final @Nullable List<@NotNull String> users,
         final @NotNull DescribeUserScramCredentialsOptions options
     ) {
         final KafkaFutureImpl<DescribeUserScramCredentialsResponseData> dataFuture = new KafkaFutureImpl<>();
@@ -4238,7 +4239,7 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             public DescribeUserScramCredentialsRequest.Builder createRequest(int timeoutMs) {
                 return new DescribeUserScramCredentialsRequest.Builder(
-                        new DescribeUserScramCredentialsRequestData().setUsers(users.stream().map(user ->
+                        new DescribeUserScramCredentialsRequestData().setUsers(users == null ? Collections.emptyList() : users.stream().map(user ->
                                 new DescribeUserScramCredentialsRequestData.UserName().setName(user)).collect(Collectors.toList())));
             }
 

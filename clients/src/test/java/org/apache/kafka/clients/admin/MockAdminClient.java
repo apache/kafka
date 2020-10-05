@@ -42,6 +42,7 @@ import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.Unmodifiable;
 
 import java.time.Duration;
@@ -906,7 +907,7 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     public @NotNull DescribeUserScramCredentialsResult describeUserScramCredentials(
-        final @NotNull List<@NotNull String> users,
+        final @Nullable List<@NotNull String> users,
         final @NotNull DescribeUserScramCredentialsOptions options
     ) {
         throw new UnsupportedOperationException("Not implemented yet");
