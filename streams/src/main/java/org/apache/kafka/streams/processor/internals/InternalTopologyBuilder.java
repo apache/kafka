@@ -646,7 +646,7 @@ public class InternalTopologyBuilder {
         }
     }
 
-    public synchronized void validateCopartition() {
+    public void validateCopartition() {
         // allCopartitionedSourceTopics take the list of co-partitioned nodes and
         // replaces each processor name with the corresponding source topic name
         final List<Set<String>> allCopartitionedSourceTopics =
