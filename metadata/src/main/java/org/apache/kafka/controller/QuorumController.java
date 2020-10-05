@@ -35,6 +35,7 @@ public final class QuorumController implements Controller {
     private final KafkaEventQueue queue;
     private final Time time;
     private final SnapshotRegistry snapshotRegistry;
+    private final ControllerPurgatory purgatory;
 
     /**
      * A builder class which creates the QuorumController.
@@ -90,6 +91,7 @@ public final class QuorumController implements Controller {
         this.time = time;
         this.snapshotRegistry = new SnapshotRegistry(-1);
         snapshotRegistry.createSnapshot(-1);
+        this.purgatory = new ControllerPurgatory();
     }
 
     @Override
