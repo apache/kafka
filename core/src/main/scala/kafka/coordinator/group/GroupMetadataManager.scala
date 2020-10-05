@@ -1032,31 +1032,20 @@ object GroupMetadataManager {
    */
   def offsetCommitValue(offsetAndMetadata: OffsetAndMetadata,
                         apiVersion: ApiVersion): Array[Byte] = {
-    // generate commit value according to schema version
-    val (version, value) =
-      if (apiVersion < KAFKA_2_1_IV0 || offsetAndMetadata.expireTimestamp.nonEmpty) {
-        val version = 1.toShort
-        (version, new OffsetCommitValue()
-          .setOffset(offsetAndMetadata.offset)
-          .setMetadata(offsetAndMetadata.metadata)
-          .setCommitTimestamp(offsetAndMetadata.commitTimestamp)
-          // version 1 has a non empty expireTimestamp field
-          .setExpireTimestamp(offsetAndMetadata.expireTimestamp.getOrElse(OffsetCommitRequest.DEFAULT_TIMESTAMP)))
-      } else if (apiVersion < KAFKA_2_1_IV1) {
-        val version = 2.toShort
-        (version, new OffsetCommitValue()
-          .setOffset(offsetAndMetadata.offset)
-          .setMetadata(offsetAndMetadata.metadata)
-          .setCommitTimestamp(offsetAndMetadata.commitTimestamp))
-      } else {
-        val version = 3.toShort
-        (version, new OffsetCommitValue()
-          .setOffset(offsetAndMetadata.offset)
-          .setMetadata(offsetAndMetadata.metadata)
-          .setCommitTimestamp(offsetAndMetadata.commitTimestamp)
-          .setLeaderEpoch(offsetAndMetadata.leaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH)))
-      }
-    serializeMessage(version, value)
+    val version =
+      if (apiVersion < KAFKA_2_1_IV0 || offsetAndMetadata.expireTimestamp.nonEmpty) 1.toShort
+      else if (apiVersion < KAFKA_2_1_IV1) 2.toShort
+      else 3.toShort
+    serializeMessage(version, new OffsetCommitValue()
+      .setOffset(offsetAndMetadata.offset)
+      .setMetadata(offsetAndMetadata.metadata)
+      .setCommitTimestamp(offsetAndMetadata.commitTimestamp)
+      // leaderEpoch is ignorable so auto-generated protocol would then use it only for the supported versions.
+      .setLeaderEpoch(offsetAndMetadata.leaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
+      // version 1 has a non empty expireTimestamp field
+      // expireTimestamp is ignorable so auto-generated protocol would then use it only for the supported versions.
+      .setExpireTimestamp(offsetAndMetadata.expireTimestamp.getOrElse(OffsetCommitRequest.DEFAULT_TIMESTAMP))
+    )
   }
 
   /**
@@ -1072,47 +1061,31 @@ object GroupMetadataManager {
                          assignment: Map[String, Array[Byte]],
                          apiVersion: ApiVersion): Array[Byte] = {
 
-    val value = new GroupMetadataValue()
     val version =
       if (apiVersion < KAFKA_0_10_1_IV0) 0.toShort
       else if (apiVersion < KAFKA_2_1_IV0) 1.toShort
       else if (apiVersion < KAFKA_2_3_IV0) 2.toShort
       else 3.toShort
 
-    value.setProtocolType(groupMetadata.protocolType.getOrElse(""))
+    serializeMessage(version, new GroupMetadataValue()
+      .setProtocolType(groupMetadata.protocolType.getOrElse(""))
       .setGeneration(groupMetadata.generationId)
       .setProtocol(groupMetadata.protocolName.orNull)
       .setLeader(groupMetadata.leaderOrNull)
-
-    if (version >= 2) value.setCurrentStateTimestamp(groupMetadata.currentStateTimestampOrDefault)
-
-    val memberArray = groupMetadata.allMemberMetadata.map { memberMetadata =>
-      val member = new GroupMetadataValue.MemberMetadata()
-        .setMemberId(memberMetadata.memberId)
-        .setClientId(memberMetadata.clientId)
-        .setClientHost(memberMetadata.clientHost)
-        .setSessionTimeout(memberMetadata.sessionTimeoutMs)
-
-      if (version > 0) member.setRebalanceTimeout(memberMetadata.rebalanceTimeoutMs)
-
-      if (version >= 3) member.setGroupInstanceId(memberMetadata.groupInstanceId.orNull)
-
-      // The group is non-empty, so the current protocol must be defined
-      val protocol = groupMetadata.protocolName.orNull
-      if (protocol == null)
-        throw new IllegalStateException("Attempted to write non-empty group metadata with no defined protocol")
-
-      member.setSubscription(memberMetadata.metadata(protocol))
-
-      val memberAssignment = assignment(memberMetadata.memberId)
-      assert(memberAssignment != null)
-      member.setAssignment(memberAssignment)
-      member
-    }
-
-    value.setMembers(memberArray.asJava)
-
-    serializeMessage(version, value)
+      .setCurrentStateTimestamp(groupMetadata.currentStateTimestampOrDefault)
+      .setMembers(groupMetadata.allMemberMetadata.map(memberMetadata =>
+        new GroupMetadataValue.MemberMetadata()
+          .setMemberId(memberMetadata.memberId)
+          .setClientId(memberMetadata.clientId)
+          .setClientHost(memberMetadata.clientHost)
+          .setSessionTimeout(memberMetadata.sessionTimeoutMs)
+          .setRebalanceTimeout(memberMetadata.rebalanceTimeoutMs)
+          .setGroupInstanceId(memberMetadata.groupInstanceId.orNull)
+          .setSubscription(groupMetadata.protocolName.map(memberMetadata.metadata)
+            .getOrElse(throw new IllegalStateException("The group is non-empty so the current protocol must be defined")))
+          .setAssignment(assignment.getOrElse(memberMetadata.memberId,
+            throw new IllegalStateException(s"member: ${memberMetadata.memberId} has no assignment")))
+      ).asJava))
   }
 
   /**
@@ -1123,7 +1096,6 @@ object GroupMetadataManager {
    */
   def readMessageKey(buffer: ByteBuffer): BaseKey = {
     val version = buffer.getShort
-
     if (version >= OffsetCommitKey.LOWEST_SUPPORTED_VERSION && version <= OffsetCommitKey.HIGHEST_SUPPORTED_VERSION) {
       // version 0 and 1 refer to offset
       val key = new OffsetCommitKey(new ByteBufferAccessor(buffer), version)
@@ -1146,26 +1118,15 @@ object GroupMetadataManager {
     if (buffer == null) null
     else {
       val version = buffer.getShort
-      val value = new OffsetCommitValue(new ByteBufferAccessor(buffer), version)
-      if (version == 0)
-        OffsetAndMetadata(value.offset, value.metadata, value.commitTimestamp)
-      else if (version == 1)
-        OffsetAndMetadata(
-          offset = value.offset,
-          leaderEpoch = Optional.empty(),
-          metadata = value.metadata,
-          commitTimestamp = value.commitTimestamp,
-          expireTimestamp = if (value.expireTimestamp == OffsetCommitRequest.DEFAULT_TIMESTAMP) None else Some(value.expireTimestamp))
-      else if (version == 2)
-        OffsetAndMetadata(value.offset, value.metadata, value.commitTimestamp)
-      else if (version == 3)
+      if (version >= OffsetCommitValue.LOWEST_SUPPORTED_VERSION && version <= OffsetCommitValue.HIGHEST_SUPPORTED_VERSION) {
+        val value = new OffsetCommitValue(new ByteBufferAccessor(buffer), version)
         OffsetAndMetadata(
           offset = value.offset,
           leaderEpoch = if (value.leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH) Optional.empty() else Optional.of(value.leaderEpoch),
           metadata = value.metadata,
           commitTimestamp = value.commitTimestamp,
-          expireTimestamp = None)
-      else throw new IllegalStateException(s"Unknown offset message version: $version")
+          expireTimestamp = if (value.expireTimestamp == OffsetCommitRequest.DEFAULT_TIMESTAMP) None else Some(value.expireTimestamp))
+      } else throw new IllegalStateException(s"Unknown offset message version: $version")
     }
   }
 

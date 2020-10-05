@@ -19,9 +19,9 @@
   "validVersions": "0-3",
   "fields": [
     { "name": "offset", "type": "int64", "versions": "0+" },
-    { "name": "leaderEpoch", "type": "int32", "versions": "3+" },
+    { "name": "leaderEpoch", "type": "int32", "versions": "3+", "default": -1, "ignorable": true},
     { "name": "metadata", "type": "string", "versions": "0+" },
     { "name": "commitTimestamp", "type": "int64", "versions": "0+" },
-    { "name": "expireTimestamp", "type": "int64", "versions": "1" }
+    { "name": "expireTimestamp", "type": "int64", "versions": "1", "default": -1, "ignorable": true}
   ]
 }

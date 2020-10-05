@@ -22,7 +22,7 @@
     { "name": "generation", "versions": "0+", "type": "int32" },
     { "name": "protocol", "versions": "0+", "type": "string", "nullableVersions": "0+" },
     { "name": "leader", "versions": "0+", "type": "string", "nullableVersions": "0+" },
-    { "name": "currentStateTimestamp", "versions": "2+", "type": "int64", "default": -1 },
+    { "name": "currentStateTimestamp", "versions": "2+", "type": "int64", "default": -1, "ignorable": true},
     { "name": "members", "versions": "0+", "type": "[]MemberMetadata" }
   ],
   "commonStructs": [
@@ -31,10 +31,10 @@
       "versions": "0-3",
       "fields": [
         { "name": "memberId", "versions": "0+", "type": "string" },
-        { "name": "groupInstanceId", "versions": "3+", "type": "string", "default": "null", "nullableVersions": "3+" },
+        { "name": "groupInstanceId", "versions": "3+", "type": "string", "default": "null", "nullableVersions": "3+", "ignorable": true},
         { "name": "clientId", "versions": "0+", "type": "string" },
         { "name": "clientHost", "versions": "0+", "type": "string" },
-        { "name": "rebalanceTimeout", "versions": "1+", "type": "int32" },
+        { "name": "rebalanceTimeout", "versions": "1+", "type": "int32", "ignorable": true},
         { "name": "sessionTimeout", "versions": "0+", "type": "int32" },
         { "name": "subscription", "versions": "0+", "type": "bytes" },
         { "name": "assignment", "versions": "0+", "type": "bytes" }
