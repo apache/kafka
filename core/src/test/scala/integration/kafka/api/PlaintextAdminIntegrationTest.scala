@@ -1968,10 +1968,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   def testInvalidAlterPartitionReassignments(): Unit = {
     client = Admin.create(createConfig)
     val topic = "alter-reassignments-topic-1"
-    val tp1 = new TopicPartition(topic, 0)
-    val tp2 = new TopicPartition(topic, 1)
-    val tp3 = new TopicPartition(topic, 2)
-    createTopic(topic, numPartitions = 4)
+    val tp0 = new TopicPartition(topic, 0)
+    val tp1 = new TopicPartition(topic, 1)
+    val tp2 = new TopicPartition(topic, 2)
+    createTopic(topic, numPartitions = 3)
 
 
     val validAssignment = Optional.of(new NewPartitionReassignment(
@@ -1981,9 +1981,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val nonExistentTp1 = new TopicPartition("topicA", 0)
     val nonExistentTp2 = new TopicPartition(topic, 4)
     val nonExistentPartitionsResult = client.alterPartitionReassignments(Map(
+      tp0 -> validAssignment,
       tp1 -> validAssignment,
       tp2 -> validAssignment,
-      tp3 -> validAssignment,
       nonExistentTp1 -> validAssignment,
       nonExistentTp2 -> validAssignment
     ).asJava).values()
@@ -1994,13 +1994,28 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val negativeIdReplica = Optional.of(new NewPartitionReassignment(Seq(-3, -2, -1).map(_.asInstanceOf[Integer]).asJava))
     val duplicateReplica = Optional.of(new NewPartitionReassignment(Seq(0, 1, 1).map(_.asInstanceOf[Integer]).asJava))
     val invalidReplicaResult = client.alterPartitionReassignments(Map(
-      tp1 -> extraNonExistentReplica,
-      tp2 -> negativeIdReplica,
-      tp3 -> duplicateReplica
+      tp0 -> extraNonExistentReplica,
+      tp1 -> negativeIdReplica,
+      tp2 -> duplicateReplica
     ).asJava).values()
+    assertFutureExceptionTypeEquals(invalidReplicaResult.get(tp0), classOf[InvalidReplicaAssignmentException])
     assertFutureExceptionTypeEquals(invalidReplicaResult.get(tp1), classOf[InvalidReplicaAssignmentException])
     assertFutureExceptionTypeEquals(invalidReplicaResult.get(tp2), classOf[InvalidReplicaAssignmentException])
-    assertFutureExceptionTypeEquals(invalidReplicaResult.get(tp3), classOf[InvalidReplicaAssignmentException])
+
+    val assignmentWithInconsistentReplicationFactor = Optional.of(new NewPartitionReassignment(
+      (0 until brokerCount - 1).map(_.asInstanceOf[Integer]).asJava
+    ))
+    val invalidReplicationFactorResult = client.alterPartitionReassignments(Map(
+      tp0 -> validAssignment,
+      tp1 -> validAssignment,
+      tp2 -> assignmentWithInconsistentReplicationFactor
+    ).asJava).values()
+    val expectedErrorMessage = Some(
+      "Inconsistent replication factor between partitions. Partitions [0, 1, 2] will have replication factors [3, 3, 2] respectively."
+    )
+    assertFutureExceptionTypeEquals(invalidReplicationFactorResult.get(tp0), classOf[InvalidReplicaAssignmentException], expectedErrorMessage)
+    assertFutureExceptionTypeEquals(invalidReplicationFactorResult.get(tp1), classOf[InvalidReplicaAssignmentException], expectedErrorMessage)
+    assertFutureExceptionTypeEquals(invalidReplicationFactorResult.get(tp2), classOf[InvalidReplicaAssignmentException], expectedErrorMessage)
   }
 
   @Test
