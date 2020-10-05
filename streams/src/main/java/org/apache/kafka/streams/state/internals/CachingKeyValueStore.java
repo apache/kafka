@@ -35,6 +35,7 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 import static org.apache.kafka.streams.state.internals.ExceptionUtils.executeAll;
 import static org.apache.kafka.streams.state.internals.ExceptionUtils.throwSuppressed;
 
@@ -55,6 +56,7 @@ public class CachingKeyValueStore
         super(underlying);
     }
 
+    @Deprecated
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
@@ -63,7 +65,7 @@ public class CachingKeyValueStore
                 "Caching requires internal features of KafkaStreams and must be disabled for unit tests."
             );
         }
-        initInternal((InternalProcessorContext) context);
+        initInternal(asInternalProcessorContext(context));
         super.init(context, root);
         // save the stream thread as we only ever want to trigger a flush
         // when the stream thread is the current thread.
@@ -73,12 +75,7 @@ public class CachingKeyValueStore
     @Override
     public void init(final StateStoreContext context,
                      final StateStore root) {
-        if (!(context instanceof InternalProcessorContext)) {
-            throw new IllegalArgumentException(
-                "Caching requires internal features of KafkaStreams and must be disabled for unit tests."
-            );
-        }
-        initInternal((InternalProcessorContext) context);
+        initInternal(asInternalProcessorContext(context));
         super.init(context, root);
         // save the stream thread as we only ever want to trigger a flush
         // when the stream thread is the current thread.

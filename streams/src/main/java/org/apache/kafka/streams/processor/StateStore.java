@@ -65,7 +65,11 @@ public interface StateStore {
      *
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
+     * @deprecated Since 2.7.0. Callers should invoke {@link this#init(StateStoreContext, StateStore)} instead.
+     *             Implementers may choose to implement this method for backward compatibility or to throw an
+     *             informative exception instead.
      */
+    @Deprecated
     void init(org.apache.kafka.streams.processor.ProcessorContext context, StateStore root);
 
     /**

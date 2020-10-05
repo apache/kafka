@@ -38,6 +38,7 @@ import java.util.LinkedList;
 import java.util.NoSuchElementException;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 import static org.apache.kafka.streams.state.internals.ExceptionUtils.executeAll;
 import static org.apache.kafka.streams.state.internals.ExceptionUtils.throwSuppressed;
 
@@ -70,23 +71,13 @@ class CachingWindowStore
 
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
-        if (!(context instanceof InternalProcessorContext)) {
-            throw new IllegalArgumentException(
-                "Caching requires internal features of KafkaStreams and must be disabled for unit tests."
-            );
-        }
-        initInternal((InternalProcessorContext) context);
+        initInternal(asInternalProcessorContext(context));
         super.init(context, root);
     }
 
     @Override
     public void init(final StateStoreContext context, final StateStore root) {
-        if (!(context instanceof InternalProcessorContext)) {
-            throw new IllegalArgumentException(
-                "Caching requires internal features of KafkaStreams and must be disabled for unit tests."
-            );
-        }
-        initInternal((InternalProcessorContext) context);
+        initInternal(asInternalProcessorContext(context));
         super.init(context, root);
     }
 
