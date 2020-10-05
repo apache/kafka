@@ -342,9 +342,6 @@ public class AdminTest {
 
     @Test
     public void testElectLeadersNullability() {
-        //
-        //assertNpe(() -> admin.electLeaders(null, null));
-
         assertNpe(() -> ADMIN.electLeaders(ElectionType.PREFERRED, singleton(new TopicPartition("topic", 1)), null));
     }
 

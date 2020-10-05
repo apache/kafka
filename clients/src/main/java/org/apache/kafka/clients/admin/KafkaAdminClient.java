@@ -2162,7 +2162,10 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     @Deprecated
-    public AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, final AlterConfigsOptions options) {
+    public @NotNull AlterConfigsResult alterConfigs(
+        final @NotNull Map<@NotNull ConfigResource, @NotNull Config> configs,
+        final @NotNull AlterConfigsOptions options
+    ) {
         final Map<ConfigResource, KafkaFutureImpl<Void>> allFutures = new HashMap<>();
         // We must make a separate AlterConfigs request for every BROKER resource we want to alter
         // and send the request to that specific broker. Other resources are grouped together into
@@ -3547,7 +3550,7 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public @NotNull ElectLeadersResult electLeaders(
         final @NotNull ElectionType electionType,
-        final @NotNull Set<@NotNull TopicPartition> topicPartitions,
+        final @Nullable Set<@NotNull TopicPartition> topicPartitions,
         final @NotNull ElectLeadersOptions options
     ) {
         final KafkaFutureImpl<Map<TopicPartition, Optional<Throwable>>> electionFuture = new KafkaFutureImpl<>();

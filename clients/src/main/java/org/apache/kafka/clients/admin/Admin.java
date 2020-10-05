@@ -19,6 +19,7 @@ package org.apache.kafka.clients.admin;
 
 import java.time.Duration;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -73,7 +74,7 @@ public interface Admin extends AutoCloseable {
      * @param conf The configuration.
      * @return The new KafkaAdminClient.
      */
-    static @NotNull Admin create(final @NotNull Map<@NotNull String, @Nullable Object> conf) {
+    static @NotNull Admin create(final @NotNull Map<@NotNull String, @NotNull Object> conf) {
         return KafkaAdminClient.createInternal(new AdminClientConfig(conf, true), null);
     }
 
@@ -102,7 +103,7 @@ public interface Admin extends AutoCloseable {
      * @deprecated Since 2.2. Use {@link #close(Duration)} or {@link #close()}.
      */
     @Deprecated
-    default void close(long duration, TimeUnit unit) {
+    default void close(final long duration, final @NotNull TimeUnit unit) {
         close(Duration.ofMillis(unit.toMillis(duration)));
     }
 
@@ -400,7 +401,9 @@ public interface Admin extends AutoCloseable {
      * @deprecated Since 2.3. Use {@link #incrementalAlterConfigs(Map)}.
      */
     @Deprecated
-    default AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs) {
+    default @NotNull AlterConfigsResult alterConfigs(
+        final @NotNull Map<@NotNull ConfigResource, @NotNull Config> configs
+    ) {
         return alterConfigs(configs, new AlterConfigsOptions());
     }
 
@@ -419,7 +422,10 @@ public interface Admin extends AutoCloseable {
      * @deprecated Since 2.3. Use {@link #incrementalAlterConfigs(Map, AlterConfigsOptions)}.
      */
     @Deprecated
-    AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options);
+    @NotNull AlterConfigsResult alterConfigs(
+        @NotNull Map<@NotNull ConfigResource, @NotNull Config> configs,
+        @NotNull AlterConfigsOptions options
+    );
 
     /**
      * Incrementally updates the configuration for the specified resources with default options.
@@ -943,7 +949,9 @@ public interface Admin extends AutoCloseable {
      * @deprecated Since 2.4.0. Use {@link #electLeaders(ElectionType, Set)}.
      */
     @Deprecated
-    default ElectPreferredLeadersResult electPreferredLeaders(Collection<TopicPartition> partitions) {
+    default @NotNull ElectPreferredLeadersResult electPreferredLeaders(
+        final @Nullable Collection<@NotNull TopicPartition> partitions
+    ) {
         return electPreferredLeaders(partitions, new ElectPreferredLeadersOptions());
     }
 
@@ -961,8 +969,10 @@ public interface Admin extends AutoCloseable {
      * @deprecated Since 2.4.0. Use {@link #electLeaders(ElectionType, Set, ElectLeadersOptions)}.
      */
     @Deprecated
-    default ElectPreferredLeadersResult electPreferredLeaders(Collection<TopicPartition> partitions,
-                                                              ElectPreferredLeadersOptions options) {
+    default @NotNull ElectPreferredLeadersResult electPreferredLeaders(
+        final @Nullable Collection<@NotNull TopicPartition> partitions,
+        final @NotNull ElectPreferredLeadersOptions options
+    ) {
         final ElectLeadersOptions newOptions = new ElectLeadersOptions();
         newOptions.timeoutMs(options.timeoutMs());
         final Set<TopicPartition> topicPartitions = partitions == null ? null : new HashSet<>(partitions);
@@ -982,7 +992,7 @@ public interface Admin extends AutoCloseable {
      */
     default @NotNull ElectLeadersResult electLeaders(
         final @NotNull ElectionType electionType,
-        final @NotNull Set<@NotNull TopicPartition> partitions
+        final @Nullable Set<@NotNull TopicPartition> partitions
     ) {
         return electLeaders(electionType, partitions, new ElectLeadersOptions());
     }
@@ -1025,10 +1035,9 @@ public interface Admin extends AutoCloseable {
      */
     @NotNull ElectLeadersResult electLeaders(
         @NotNull ElectionType electionType,
-        @NotNull Set<@NotNull TopicPartition> partitions,
+        @Nullable Set<@NotNull TopicPartition> partitions,
         @NotNull ElectLeadersOptions options
     );
-
 
     /**
      * Change the reassignments for one or more partitions.
@@ -1070,7 +1079,6 @@ public interface Admin extends AutoCloseable {
         @NotNull Map<@NotNull TopicPartition, @NotNull Optional<@NotNull NewPartitionReassignment>> reassignments,
         @NotNull AlterPartitionReassignmentsOptions options
     );
-
 
     /**
      * List all of the current partition reassignments
@@ -1322,7 +1330,7 @@ public interface Admin extends AutoCloseable {
      * @return The DescribeUserScramCredentialsResult.
      */
     default @NotNull DescribeUserScramCredentialsResult describeUserScramCredentials() {
-        return describeUserScramCredentials(null);
+        return describeUserScramCredentials(null, new DescribeUserScramCredentialsOptions());
     }
 
     /**

@@ -506,14 +506,17 @@ public class MockAdminClient extends AdminClient {
 
     @Deprecated
     @Override
-    synchronized public ElectPreferredLeadersResult electPreferredLeaders(Collection<TopicPartition> partitions, ElectPreferredLeadersOptions options) {
+    synchronized public @NotNull ElectPreferredLeadersResult electPreferredLeaders(
+        final @Nullable Collection<@NotNull TopicPartition> partitions,
+        final @NotNull ElectPreferredLeadersOptions options
+    ) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
     synchronized public @NotNull ElectLeadersResult electLeaders(
         final @NotNull ElectionType electionType,
-        final @NotNull Set<@NotNull TopicPartition> partitions,
+        final @Nullable Set<@NotNull TopicPartition> partitions,
         final @NotNull ElectLeadersOptions options
     ) {
         throw new UnsupportedOperationException("Not implemented yet");
@@ -616,7 +619,10 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     @Deprecated
-    synchronized public AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options) {
+    synchronized public @NotNull AlterConfigsResult alterConfigs(
+        final @NotNull Map<@NotNull ConfigResource, @NotNull Config> configs,
+        final @NotNull AlterConfigsOptions options
+    ) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
