@@ -20,6 +20,8 @@ package org.apache.kafka.controller;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.ApiMessageAndVersion;
 
+import java.util.List;
+
 /**
  * The MetaLogManager handles storing metadata and electing leaders.
  */
@@ -29,13 +31,12 @@ public interface MetaLogManager extends AutoCloseable {
      */
     interface Listener {
         /**
-         * Called when the MetaLogManager commits a message.
+         * Called when the MetaLogManager commits some messages.
          *
-         * @param epoch         The controller epoch of the message.
-         * @param index         The index of the message within the controller epoch.
-         * @param message       The message.
+         * @param lastOffset    The last offset found in all the given messages.
+         * @param messages      The messages.
          */
-        void handleCommit(long epoch, long index, ApiMessage message);
+        void handleCommits(long lastOffset, List<ApiMessage> messages);
 
         /**
          * Called when the MetaLogManager has claimed the leadership.
@@ -56,6 +57,12 @@ public interface MetaLogManager extends AutoCloseable {
          * listener that it is safe to shut down as well.
          */
         void beginShutdown();
+
+        /**
+         * If this listener is currently active, return the controller epoch it is active
+         * for.  Otherwise, return -1.
+         */
+        long currentClaim();
     }
 
     /**
@@ -68,11 +75,11 @@ public interface MetaLogManager extends AutoCloseable {
      * monitoring the committed indexes.
      *
      * @param epoch         The controller epoch.
-     * @param message       The message to write and the version to use.
+     * @param batch         The batch of messages to write.
      *
      * @return              The index of the message.
      */
-    long scheduleWrite(long epoch, ApiMessageAndVersion message);
+    long scheduleWrite(long epoch, List<ApiMessageAndVersion> batch);
 
     /**
      * Renounce the leadership.

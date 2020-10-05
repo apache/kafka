@@ -20,7 +20,6 @@ package org.apache.kafka.controller;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.controller.LocalLogManager.LeaderInfo;
-import org.apache.kafka.controller.MockMetaLogManagerListener.CommitHandler;
 import org.apache.kafka.test.TestUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +29,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 
 public class LocalLogManagerTestEnv implements AutoCloseable {
     private static final Logger log =
@@ -47,36 +47,28 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
     private final File dir;
 
     /**
-     * A list of listeners-- one for each log manager.
-     */
-    private final List<MockMetaLogManagerListener> listeners;
-
-    /**
      * A list of log managers.
      */
     private final List<LocalLogManager> logManagers;
 
-    public LocalLogManagerTestEnv(int numManagers) throws Exception {
-        this((__, ___, ____, _____) -> { }, numManagers);
+    public static LocalLogManagerTestEnv createWithMockListeners(int numManagers) throws Exception {
+        return new LocalLogManagerTestEnv(numManagers,
+            __ -> new MockMetaLogManagerListener());
     }
 
-    public LocalLogManagerTestEnv(CommitHandler commitHandler,
-                                  int numManagers) throws Exception {
+    private LocalLogManagerTestEnv(int numManagers,
+            Function<Integer, LocalLogManager.Listener> listenerProvider) throws Exception {
         dir = TestUtils.tempDirectory();
-        this.listeners = new ArrayList<>(numManagers);
-        for (int i = 0; i < numManagers; i++) {
-            this.listeners.add(new MockMetaLogManagerListener(firstError, commitHandler, i));
-        }
         List<LocalLogManager> newLogManagers = new ArrayList<>(numManagers);
         try {
-            for (int i = 0; i < numManagers; i++) {
-                String prefix = String.format("Manager%d", i);
+            for (int nodeId = 0; nodeId < numManagers; nodeId++) {
+                String prefix = String.format("Manager%d", nodeId);
                 newLogManagers.add(new LocalLogManager(
                     new LogContext(prefix + ": "),
-                    i,
+                    nodeId,
                     dir.getAbsolutePath(),
                     prefix,
-                    this.listeners.get(i),
+                    listenerProvider.apply(nodeId),
                     50));
             }
         } catch (Throwable t) {
@@ -100,14 +92,14 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
         AtomicReference<LeaderInfo> value = new AtomicReference<>(null);
         TestUtils.retryOnExceptionWithTimeout(3, 20000, () -> {
             LeaderInfo leaderInfo = null;
-            for (MockMetaLogManagerListener listener : listeners) {
-                long curEpoch = listener.curEpoch();
+            for (LocalLogManager logManager : logManagers) {
+                long curEpoch = logManager.listener().currentClaim();
                 if (curEpoch != -1) {
                     if (leaderInfo != null) {
                         throw new RuntimeException("node " + leaderInfo.nodeId() +
-                            " thinks it's the leader, but so does " + listener.nodeId());
+                            " thinks it's the leader, but so does " + logManager.nodeId());
                     }
-                    leaderInfo = new LeaderInfo(listener.nodeId(), curEpoch);
+                    leaderInfo = new LeaderInfo(logManager.nodeId(), curEpoch);
                 }
             }
             if (leaderInfo == null) {

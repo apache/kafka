@@ -19,82 +19,53 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.common.protocol.ApiMessage;
 
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.ArrayList;
+import java.util.List;
 
 public class MockMetaLogManagerListener implements MetaLogManager.Listener {
-    private final AtomicReference<String> firstError;
-    private final CommitHandler commitHandler;
-    private final int nodeId;
-    private boolean shutdown = false;
-    private long curEpoch = -1;
+    public static final String COMMITS = "COMMITS";
+    public static final String CLAIM = "CLAIM";
+    public static final String RENOUNCE = "RENOUNCE";
+    public static final String SHUTDOWN = "SHUTDOWN";
 
-    interface CommitHandler {
-        void handle(int nodeId, long epoch, long index, ApiMessage message) throws Exception;
-    }
+    private final List<String> serializedEvents = new ArrayList<>();
+    private long currentClaim = -1;
 
-    MockMetaLogManagerListener(AtomicReference<String> firstError,
-                               CommitHandler commitHandler,
-                               int nodeId) {
-        this.firstError = firstError;
-        this.commitHandler = commitHandler;
-        this.nodeId = nodeId;
+    @Override
+    public void handleCommits(long lastOffset, List<ApiMessage> messages) {
+        StringBuilder bld = new StringBuilder();
+        bld.append(COMMITS).append(" ").append(lastOffset).append(" ");
+        for (ApiMessage message : messages) {
+            bld.append(message.toString());
+        }
+        serializedEvents.add(bld.toString());
     }
 
     @Override
-    public void handleCommit(long epoch, long index, ApiMessage message) {
-        try {
-            commitHandler.handle(nodeId, epoch, index, message);
-        } catch (Exception e) {
-            firstError.compareAndSet(null, "error handling commit(epoch=" + epoch +
-                ", index=" + index + ", message=" + message + "): " +
-                e.getClass().getSimpleName() + ": " + e.getMessage());
-        }
+    public void handleClaim(long epoch) {
+        StringBuilder bld = new StringBuilder();
+        bld.append(CLAIM).append(" ").append(epoch);
+        serializedEvents.add(bld.toString());
+        currentClaim = epoch;
     }
 
     @Override
-    public synchronized void handleClaim(long epoch) {
-        if (epoch < 0) {
-            firstError.compareAndSet(null, nodeId + " invalid negative epoch in claim(" +
-                epoch + ")");
-            return;
-        }
-        if (shutdown) {
-            firstError.compareAndSet(null, nodeId + " invoked claim(" + epoch + ") after " +
-                "shutdown.");
-            return;
-        }
-        if (curEpoch != -1L) {
-            firstError.compareAndSet(null, nodeId + " invoked claim(" + epoch + ") before " +
-                "renouncing epoch " + curEpoch);
-            return;
-        }
-        curEpoch = epoch;
+    public void handleRenounce(long epoch) {
+        StringBuilder bld = new StringBuilder();
+        bld.append(RENOUNCE).append(" ").append(epoch);
+        serializedEvents.add(bld.toString());
+        currentClaim = -1;
     }
 
     @Override
-    public synchronized void handleRenounce(long epoch) {
-        if (curEpoch != epoch) {
-            firstError.compareAndSet(null, nodeId + " invoked renounce(" + epoch + ") " +
-                "but the current epoch is " + curEpoch);
-            return;
-        }
-        curEpoch = -1;
+    public void beginShutdown() {
+        StringBuilder bld = new StringBuilder();
+        bld.append(SHUTDOWN);
+        serializedEvents.add(bld.toString());
     }
 
     @Override
-    public synchronized void beginShutdown() {
-        this.shutdown = true;
-    }
-
-    public int nodeId() {
-        return nodeId;
-    }
-
-    public synchronized boolean isShutdown() {
-        return shutdown;
-    }
-
-    public synchronized long curEpoch() {
-        return curEpoch;
+    public long currentClaim() {
+        return currentClaim;
     }
 }
