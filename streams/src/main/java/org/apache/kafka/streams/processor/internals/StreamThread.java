@@ -56,7 +56,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
@@ -286,8 +285,6 @@ public class StreamThread extends Thread {
     private final InternalTopologyBuilder builder;
 
     private final AtomicInteger assignmentErrorCode;
-    private final AtomicInteger shutdownTypeRequested = new AtomicInteger(AssignorError.NONE.code());
-    private final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
 
     public static StreamThread create(final InternalTopologyBuilder builder,
                                       final StreamsConfig config,
@@ -301,7 +298,8 @@ public class StreamThread extends Thread {
                                       final long cacheSizeBytes,
                                       final StateDirectory stateDirectory,
                                       final StateRestoreListener userStateRestoreListener,
-                                      final int threadIdx) {
+                                      final int threadIdx,
+                                      final AtomicInteger assignmentErrorCode) {
         final String threadId = clientId + "-StreamThread-" + threadIdx;
 
         final String logPrefix = String.format("stream-thread [%s] ", threadId);
@@ -364,7 +362,7 @@ public class StreamThread extends Thread {
         consumerConfigs.put(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR, taskManager);
         consumerConfigs.put(StreamsConfig.InternalConfig.STREAMS_METADATA_STATE_FOR_PARTITION_ASSIGNOR, streamsMetadataState);
         consumerConfigs.put(StreamsConfig.InternalConfig.STREAMS_ADMIN_CLIENT, adminClient);
-        final AtomicInteger assignmentErrorCode = new AtomicInteger();
+
         consumerConfigs.put(StreamsConfig.InternalConfig.ASSIGNMENT_ERROR_CODE, assignmentErrorCode);
         final AtomicLong nextScheduledRebalanceMs = new AtomicLong(Long.MAX_VALUE);
         consumerConfigs.put(StreamsConfig.InternalConfig.NEXT_SCHEDULED_REBALANCE_MS, nextScheduledRebalanceMs);
@@ -392,9 +390,8 @@ public class StreamThread extends Thread {
             builder,
             threadId,
             logContext,
-            assignmentErrorCode,
-            nextScheduledRebalanceMs
-        );
+            nextScheduledRebalanceMs,
+            assignmentErrorCode);
 
         taskManager.setPartitionResetter(partitions -> streamThread.resetOffsets(partitions, null));
 
@@ -443,8 +440,8 @@ public class StreamThread extends Thread {
                         final InternalTopologyBuilder builder,
                         final String threadId,
                         final LogContext logContext,
-                        final AtomicInteger assignmentErrorCode,
-                        final AtomicLong nextProbingRebalanceMs) {
+                        final AtomicLong nextProbingRebalanceMs,
+                        final AtomicInteger assignmentErrorCode) {
         super(threadId);
         this.stateLock = new Object();
 
@@ -475,11 +472,12 @@ public class StreamThread extends Thread {
             ThreadMetrics.commitOverTasksSensor(threadId, streamsMetrics);
         }
 
+        this.assignmentErrorCode = assignmentErrorCode;
         this.time = time;
         this.builder = builder;
         this.logPrefix = logContext.logPrefix();
         this.log = logContext.logger(StreamThread.class);
-        this.rebalanceListener = new StreamsRebalanceListener(time, taskManager, this, this.log, assignmentErrorCode);
+        this.rebalanceListener = new StreamsRebalanceListener(time, taskManager, this, this.log, this.assignmentErrorCode);
         this.streamsUncaughtExceptionHandler = exception -> StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse.SHUTDOWN_STREAM_THREAD;
         this.taskManager = taskManager;
         this.restoreConsumer = restoreConsumer;
@@ -487,7 +485,6 @@ public class StreamThread extends Thread {
         this.changelogReader = changelogReader;
         this.originalReset = originalReset;
         this.nextProbingRebalanceMs = nextProbingRebalanceMs;
-        this.assignmentErrorCode = assignmentErrorCode;
 
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
         final int dummyThreadIdx = 1;
@@ -561,10 +558,6 @@ public class StreamThread extends Thread {
         // until the rebalance is completed before we close and commit the tasks
         while (isRunning() || taskManager.isRebalanceInProgress()) {
             try {
-                if (shutdownRequested.get()) {
-                    sendShutdownRequest(shutdownTypeRequested);
-                    return;
-                }
                 runOnce();
                 if (nextProbingRebalanceMs.get() < time.milliseconds()) {
                     log.info("Triggering the followup rebalance scheduled for {} ms.", nextProbingRebalanceMs.get());
@@ -594,17 +587,18 @@ public class StreamThread extends Thread {
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
     }
 
-    /**
-     * Marks thread to send shutdown signal and stop processing
-     */
-    public void requestThreadSendShutdownAndStop() {
-        shutdownRequested.set(true);
-    }
+//    /**
+//     * Marks thread to send shutdown signal and stop processing
+//     */
+//    public void requestThreadSendShutdownAndStop() {
+//        shutdownTypeRequested.set(2);
+//    }
 
-    private void sendShutdownRequest(final AtomicInteger shutdownType) {
+    public void sendShutdownRequest(final AssignorError assignorError) {
         log.warn("Detected that shutdown was requested. " +
                 "The all clients in this app will now begin to shutdown");
-        assignmentErrorCode.set(shutdownType.get());
+        assignmentErrorCode.set(assignorError.code());
+        log.error("WHAT set to "+ assignmentErrorCode.get());
         mainConsumer.unsubscribe();
         subscribeConsumer();
     }
@@ -974,6 +968,8 @@ public class StreamThread extends Thread {
             completeShutdown(true);
         }
     }
+
+
 
     private void completeShutdown(final boolean cleanRun) {
         // set the state to pending shutdown first as it may be called due to error;

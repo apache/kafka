@@ -61,6 +61,7 @@ import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidator;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.QueryableStoreType;
@@ -89,6 +90,7 @@ import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
@@ -418,7 +420,7 @@ public class KafkaStreams implements AutoCloseable {
                 break;
             case SHUTDOWN_KAFKA_STREAMS_APPLICATION:
                 for (final StreamThread streamThread: threads) {
-                    streamThread.requestThreadSendShutdownAndStop();
+                    streamThread.sendShutdownRequest(AssignorError.SHUTDOWN_REQUESTED);
                 }
                 log.error("Encountered the following exception during processing " +
                         "and the application is going to shut down: ", e);
@@ -844,7 +846,8 @@ public class KafkaStreams implements AutoCloseable {
                 cacheSizePerThread,
                 stateDirectory,
                 delegatingStateRestoreListener,
-                i + 1);
+                i + 1,
+                    new AtomicInteger());
             threadState.put(threads[i].getId(), threads[i].state());
             storeProviders.add(new StreamThreadStateStoreProvider(threads[i]));
         }

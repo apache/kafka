@@ -237,13 +237,15 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         handleRebalanceStart(topics);
 
+        log.error("WHAT recived" + assignmentErrorCode.get());
+
         return new SubscriptionInfo(
             usedSubscriptionMetadataVersion,
             LATEST_SUPPORTED_VERSION,
             taskManager.processId(),
             userEndPoint,
             taskManager.getTaskOffsetSums(),
-            assignmentErrorCode)
+            new AtomicInteger(assignmentErrorCode.get()))
                 .encode();
     }
 
