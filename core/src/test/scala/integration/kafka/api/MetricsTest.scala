@@ -114,7 +114,6 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
   // Create a producer that fails authentication to verify authentication failure metrics
   private def generateAuthenticationFailure(tp: TopicPartition): Unit = {
     val saslProps = new Properties()
-     // Temporary limit to reduce blocking before KIP-152 client-side changes are merged
     saslProps.put(SaslConfigs.SASL_MECHANISM, kafkaClientSaslMechanism)
     saslProps.put(SaslConfigs.SASL_JAAS_CONFIG, TestJaasConfig.jaasConfigProperty(kafkaClientSaslMechanism, "badUser", "badPass"))
     // Use acks=0 to verify error metric when connection is closed without a response
