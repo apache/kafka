@@ -536,12 +536,10 @@ public class StreamThread extends Thread {
                     throw e;
                 }
             }
-            if (streamsUncaughtExceptionHandler != null) {
-                streamsUncaughtExceptionHandler.handle(e);
-            }
             throw e;
         } finally {
             completeShutdown(cleanRun);
+
         }
     }
 
@@ -574,6 +572,15 @@ public class StreamThread extends Thread {
                 }
             } catch (final TaskMigratedException e) {
                 handleTaskMigrated(e);
+            } catch (final Exception e) {
+                if (streamsUncaughtExceptionHandler != null) {
+                    final StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse action = streamsUncaughtExceptionHandler.handle(e);
+                    if (action != StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse.SHUTDOWN_KAFKA_STREAMS_APPLICATION) {
+                        throw e;
+                    }
+                } else {
+                    throw e;
+                }
             }
         }
     }
@@ -587,18 +594,11 @@ public class StreamThread extends Thread {
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
     }
 
-//    /**
-//     * Marks thread to send shutdown signal and stop processing
-//     */
-//    public void requestThreadSendShutdownAndStop() {
-//        shutdownTypeRequested.set(2);
-//    }
-
     public void sendShutdownRequest(final AssignorError assignorError) {
         log.warn("Detected that shutdown was requested. " +
                 "The all clients in this app will now begin to shutdown");
         assignmentErrorCode.set(assignorError.code());
-        log.error("WHAT set to "+ assignmentErrorCode.get());
+        log.error("WHAT set to " + assignmentErrorCode.get());
         mainConsumer.unsubscribe();
         subscribeConsumer();
     }

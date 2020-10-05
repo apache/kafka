@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.integration;
 
-import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
@@ -76,11 +75,12 @@ public class AppShutdownIntegrationTest {
     Properties properties;
     List<String> processorValueCollector;
     String idempotentTopic = "idempotentTopic";
+    String appId = "";
 
     @Before
-    public void setup(){
+    public void setup() {
         final String testId = safeUniqueTestName(getClass(), testName);
-        final String appId = "appId_" + testId;
+        appId = "appId_" + testId;
         inputTopic = "input" + testId;
         cleanStateBeforeTest(CLUSTER, idempotentTopic, inputTopic);
 
@@ -91,7 +91,7 @@ public class AppShutdownIntegrationTest {
 
         processorValueCollector = new ArrayList<>();
 
-        KStream<String, String> stream = builder.stream(inputTopic);
+        final KStream<String, String> stream = builder.stream(inputTopic);
         stream.process(() -> new ShutdownProcessor(processorValueCollector), Named.as("process"));
 
         properties  = mkObjectProperties(
@@ -136,8 +136,8 @@ public class AppShutdownIntegrationTest {
 
             assertThat(processorValueCollector.size(), equalTo(1));
             assertThat(kafkaStreams.state(), equalTo(KafkaStreams.State.RUNNING));
-            ArrayList<String> threadstates = new ArrayList<>();
-            for (ThreadMetadata threadMetadata: kafkaStreams.localThreadsMetadata()){
+            final ArrayList<String> threadstates = new ArrayList<>();
+            for (final ThreadMetadata threadMetadata: kafkaStreams.localThreadsMetadata()) {
                 threadstates.add(threadMetadata.threadState());
             }
             assertThat("a thread should be dead", threadstates.contains(StreamThread.State.DEAD.toString()));
@@ -180,7 +180,55 @@ public class AppShutdownIntegrationTest {
 
         builder.stream(idempotentTopic).filter((k, v) -> true);
 
-        Topology topology = builder.build();
+        final Topology topology = builder.build();
+
+        try (final KafkaStreams kafkaStreams = new KafkaStreams(topology, properties)) {
+            final KafkaStreams kafkaStreams1 = new KafkaStreams(topology, properties);
+            final CountDownLatch latch = new CountDownLatch(1);
+            kafkaStreams.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
+            kafkaStreams1.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
+            kafkaStreams.setUncaughtExceptionHandler(exception -> StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse.SHUTDOWN_KAFKA_STREAMS_APPLICATION);
+            kafkaStreams1.setUncaughtExceptionHandler(exception -> StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse.SHUTDOWN_KAFKA_STREAMS_APPLICATION);
+
+            kafkaStreams.start();
+            kafkaStreams1.start();
+
+            produceMessages(0L, idempotentTopic, "B");
+            produceMessages(0L, inputTopic, "A");
+            latch.await(30, TimeUnit.SECONDS);
+
+            assertThat(processorValueCollector.size(), equalTo(1));
+            assertThat(kafkaStreams.state(), equalTo(KafkaStreams.State.ERROR));
+            assertThat(kafkaStreams1.state(), equalTo(KafkaStreams.State.ERROR));
+        }
+    }
+
+    @Test
+    public void shouldShutdownSingleThreadApplication() throws Exception {
+        //
+        //
+        // Also note that this is an integration test because so many components have to come together to
+        // ensure these configurations wind up where they belong, and any number of future code changes
+        // could break this change.
+
+        final Properties properties  = mkObjectProperties(
+                mkMap(
+                        mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
+                        mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
+                        mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
+                        mkEntry(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, "5"),
+                        mkEntry(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, "6"),
+                        mkEntry(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, "7"),
+                        mkEntry(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, "480000"),
+                        mkEntry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1),
+                        mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
+                        mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class)
+                )
+        );
+
+        builder.stream(idempotentTopic).filter((k, v) -> true);
+
+        final Topology topology = builder.build();
 
         try (final KafkaStreams kafkaStreams = new KafkaStreams(topology, properties)) {
             final KafkaStreams kafkaStreams1 = new KafkaStreams(topology, properties);
