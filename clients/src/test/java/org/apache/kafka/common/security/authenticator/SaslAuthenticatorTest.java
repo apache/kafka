@@ -1236,9 +1236,18 @@ public class SaslAuthenticatorTest {
         saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "INVALID");
 
         server = createEchoServer(securityProtocol);
-        createAndCheckClientConnectionFailure(securityProtocol, node);
-        server.verifyAuthenticationMetrics(0, 1);
-        server.verifyReauthenticationMetrics(0, 0);
+        try {
+            createAndCheckClientConnectionFailure(securityProtocol, node);
+            fail("Did not generate exception prior to creating channel");
+        } catch (IOException expected) {
+            server.verifyAuthenticationMetrics(0, 0);
+            server.verifyReauthenticationMetrics(0, 0);
+            Throwable underlyingCause = expected.getCause().getCause().getCause();
+            assertEquals(SaslAuthenticationException.class, underlyingCause.getClass());
+            assertEquals("Failed to create SaslClient with mechanism INVALID", underlyingCause.getMessage());
+        } finally {
+            closeClientConnectionIfNecessary();
+        }
     }
 
     /**
