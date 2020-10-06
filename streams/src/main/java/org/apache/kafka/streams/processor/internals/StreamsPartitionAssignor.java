@@ -28,7 +28,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -215,7 +214,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         rebalanceProtocol = assignorConfiguration.rebalanceProtocol();
         taskAssignorSupplier = assignorConfiguration::taskAssignor;
         assignmentListener = assignorConfiguration.assignmentListener();
-        uniqueField = Bytes.EMPTY;
+        uniqueField = usedSubscriptionMetadataVersion >= 8 ? new byte[1] : new byte[0];
+
     }
 
     @Override
@@ -241,8 +241,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         // 3. Unique Field to ensure a rebalance when a thread rejoins
 
         handleRebalanceStart(topics);
-
-        uniqueField[0]++;
+        if (usedSubscriptionMetadataVersion >= 8) {
+            uniqueField[0]++;
+        }
 
         return new SubscriptionInfo(
             usedSubscriptionMetadataVersion,
@@ -1435,6 +1436,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 encodedNextScheduledRebalanceMs = Long.MAX_VALUE;
                 break;
             case 7:
+            case 8:
                 validateActiveTaskEncoding(partitions, info, logPrefix);
 
                 activeTasks = getActiveTasks(partitions, info);

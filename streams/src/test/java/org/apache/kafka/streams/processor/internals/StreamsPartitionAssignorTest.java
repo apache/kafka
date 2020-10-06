@@ -189,6 +189,8 @@ public class StreamsPartitionAssignorTest {
     private final AtomicLong nextScheduledRebalanceMs = new AtomicLong(Long.MAX_VALUE);
     private final MockTime time = new MockTime();
 
+    private final byte[] uniqueField = {1};
+
     private Map<String, Object> configProps() {
         final Map<String, Object> configurationMap = new HashMap<>();
         configurationMap.put(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID);
@@ -483,8 +485,7 @@ public class StreamsPartitionAssignorTest {
 
         Collections.sort(subscription.topics());
         assertEquals(asList("topic1", "topic2"), subscription.topics());
-
-        final SubscriptionInfo info = getInfo(UUID_1, prevTasks, standbyTasks);
+        final SubscriptionInfo info = getInfo(UUID_1, prevTasks, standbyTasks, uniqueField);
         assertEquals(info, SubscriptionInfo.decode(subscription.userData()));
     }
 
@@ -510,7 +511,7 @@ public class StreamsPartitionAssignorTest {
         Collections.sort(subscription.topics());
         assertEquals(asList("topic1", "topic2"), subscription.topics());
 
-        final SubscriptionInfo info = getInfo(UUID_1, prevTasks, standbyTasks);
+        final SubscriptionInfo info = getInfo(UUID_1, prevTasks, standbyTasks, uniqueField);
         assertEquals(info, SubscriptionInfo.decode(subscription.userData()));
     }
 

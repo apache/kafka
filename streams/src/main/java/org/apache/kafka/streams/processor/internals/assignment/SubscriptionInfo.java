@@ -52,7 +52,6 @@ public class SubscriptionInfo {
     private Set<TaskId> prevTasksCache = null;
     private Set<TaskId> standbyTasksCache = null;
     private Map<TaskId, Long> taskOffsetSumsCache = null;
-    private byte uniqueField;
 
     static {
         // Just statically check to make sure that the generated code always stays in sync with the overall protocol
