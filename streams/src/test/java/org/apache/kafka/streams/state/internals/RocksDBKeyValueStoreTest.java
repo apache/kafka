@@ -21,13 +21,9 @@ import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.junit.Test;
-import org.rocksdb.Options;
-
-import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -47,20 +43,6 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
         final KeyValueStore<K, V> store = storeBuilder.build();
         store.init(context, store);
         return store;
-    }
-
-    public static class TheRocksDbConfigSetter implements RocksDBConfigSetter {
-        static boolean called = false;
-
-        @Override
-        public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
-            called = true;
-        }
-    }
-
-    @Test
-    public void shouldUseCustomRocksDbConfigSetter() {
-        assertTrue(TheRocksDbConfigSetter.called);
     }
 
     @Test
