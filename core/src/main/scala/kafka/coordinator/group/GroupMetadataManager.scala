@@ -28,7 +28,7 @@ import java.util.concurrent.locks.ReentrantLock
 import com.yammer.metrics.core.Gauge
 import kafka.api.{ApiVersion, KAFKA_0_10_1_IV0, KAFKA_2_1_IV0, KAFKA_2_1_IV1, KAFKA_2_3_IV0}
 import kafka.common.OffsetAndMetadata
-import kafka.internals.generated.{GroupMetadataKey => GenGroupMetadataKey, GroupMetadataValue, OffsetCommitKey, OffsetCommitValue}
+import kafka.internals.generated.{GroupMetadataKey => GroupMetadataKeyData, GroupMetadataValue, OffsetCommitKey, OffsetCommitValue}
 import kafka.log.AppendOrigin
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.{FetchLogEnd, ReplicaManager}
@@ -996,7 +996,16 @@ object GroupMetadataManager {
   val MetricsGroup: String = "group-coordinator-metrics"
   val LoadTimeSensor: String = "GroupPartitionLoadTime"
 
-  private def serializeMessage(version: Short, message: Message): Array[Byte] = MessageUtil.serializeMessage(version, message).array
+  private def serializeMessage(version: Short, message: Message): Array[Byte] = {
+    val buffer = MessageUtil.serializeMessage(version, message)
+    // take the inner array directly if it is full with data
+    if (buffer.hasArray &&
+      buffer.arrayOffset() == 0 &&
+      buffer.position() == 0 &&
+      buffer.limit() == buffer.array().length)
+      buffer.array()
+    else Utils.toArray(buffer)
+  }
 
   /**
    * Generates the key for offset commit message for given (group, topic, partition)
@@ -1005,12 +1014,13 @@ object GroupMetadataManager {
    * @param topicPartition the TopicPartition to generate the key
    * @return key for offset commit message
    */
-  def offsetCommitKey(groupId: String, topicPartition: TopicPartition): Array[Byte] =
+  def offsetCommitKey(groupId: String, topicPartition: TopicPartition): Array[Byte] = {
     serializeMessage(OffsetCommitKey.HIGHEST_SUPPORTED_VERSION,
       new OffsetCommitKey()
         .setGroup(groupId)
         .setTopic(topicPartition.topic)
         .setPartition(topicPartition.partition))
+  }
 
   /**
    * Generates the key for group metadata message for given group
@@ -1018,10 +1028,11 @@ object GroupMetadataManager {
    * @param groupId the ID of the group to generate the key
    * @return key bytes for group metadata message
    */
-  def groupMetadataKey(groupId: String): Array[Byte] =
-    serializeMessage(GenGroupMetadataKey.HIGHEST_SUPPORTED_VERSION,
-      new GenGroupMetadataKey()
+  def groupMetadataKey(groupId: String): Array[Byte] = {
+    serializeMessage(GroupMetadataKeyData.HIGHEST_SUPPORTED_VERSION,
+      new GroupMetadataKeyData()
         .setGroup(groupId))
+  }
 
   /**
    * Generates the payload for offset commit message from given offset and metadata
@@ -1071,7 +1082,7 @@ object GroupMetadataManager {
       .setProtocol(groupMetadata.protocolName.orNull)
       .setLeader(groupMetadata.leaderOrNull)
       .setCurrentStateTimestamp(groupMetadata.currentStateTimestampOrDefault)
-      .setMembers(groupMetadata.allMemberMetadata.map(memberMetadata =>
+      .setMembers(groupMetadata.allMemberMetadata.map { memberMetadata =>
         new GroupMetadataValue.MemberMetadata()
           .setMemberId(memberMetadata.memberId)
           .setClientId(memberMetadata.clientId)
@@ -1079,11 +1090,12 @@ object GroupMetadataManager {
           .setSessionTimeout(memberMetadata.sessionTimeoutMs)
           .setRebalanceTimeout(memberMetadata.rebalanceTimeoutMs)
           .setGroupInstanceId(memberMetadata.groupInstanceId.orNull)
+          // The group is non-empty, so the current protocol must be defined
           .setSubscription(groupMetadata.protocolName.map(memberMetadata.metadata)
-            .getOrElse(throw new IllegalStateException("The group is non-empty so the current protocol must be defined")))
+            .getOrElse(throw new IllegalStateException(s"Attempted to write member ${memberMetadata.memberId} of group ${groupMetadata.groupId} with no defined protocol")))
           .setAssignment(assignment.getOrElse(memberMetadata.memberId,
-            throw new IllegalStateException(s"member: ${memberMetadata.memberId} has no assignment")))
-      ).asJava))
+            throw new IllegalStateException(s"Attempted to write member ${memberMetadata.memberId} of group ${groupMetadata.groupId} with no assignment.")))
+      }.asJava))
   }
 
   /**
@@ -1098,9 +1110,9 @@ object GroupMetadataManager {
       // version 0 and 1 refer to offset
       val key = new OffsetCommitKey(new ByteBufferAccessor(buffer), version)
       OffsetKey(version, GroupTopicPartition(key.group, new TopicPartition(key.topic, key.partition)))
-    } else if (version >= GenGroupMetadataKey.LOWEST_SUPPORTED_VERSION && version <= GenGroupMetadataKey.HIGHEST_SUPPORTED_VERSION) {
+    } else if (version >= GroupMetadataKeyData.LOWEST_SUPPORTED_VERSION && version <= GroupMetadataKeyData.HIGHEST_SUPPORTED_VERSION) {
       // version 2 refers to offset
-      val key = new GenGroupMetadataKey(new ByteBufferAccessor(buffer), version)
+      val key = new GroupMetadataKeyData(new ByteBufferAccessor(buffer), version)
       GroupMetadataKey(version, key.group)
     } else throw new IllegalStateException(s"Unknown group metadata message version: $version")
   }
@@ -1143,18 +1155,18 @@ object GroupMetadataManager {
       val version = buffer.getShort
       if (version >= GroupMetadataValue.LOWEST_SUPPORTED_VERSION && version <= GroupMetadataValue.HIGHEST_SUPPORTED_VERSION) {
         val value = new GroupMetadataValue(new ByteBufferAccessor(buffer), version)
-        val members = value.members.asScala.map { memberMetadataObj =>
+        val members = value.members.asScala.map { memberMetadata =>
           new MemberMetadata(
-            memberId = memberMetadataObj.memberId,
+            memberId = memberMetadata.memberId,
             groupId = groupId,
-            groupInstanceId = Option(memberMetadataObj.groupInstanceId),
-            clientId = memberMetadataObj.clientId,
-            clientHost = memberMetadataObj.clientHost,
-            rebalanceTimeoutMs = if (version == 0) memberMetadataObj.sessionTimeout else memberMetadataObj.rebalanceTimeout,
-            sessionTimeoutMs = memberMetadataObj.sessionTimeout,
+            groupInstanceId = Option(memberMetadata.groupInstanceId),
+            clientId = memberMetadata.clientId,
+            clientHost = memberMetadata.clientHost,
+            rebalanceTimeoutMs = if (version == 0) memberMetadata.sessionTimeout else memberMetadata.rebalanceTimeout,
+            sessionTimeoutMs = memberMetadata.sessionTimeout,
             protocolType = value.protocolType,
-            supportedProtocols = List((value.protocol, memberMetadataObj.subscription)),
-            assignment = memberMetadataObj.assignment)
+            supportedProtocols = List((value.protocol, memberMetadata.subscription)),
+            assignment = memberMetadata.assignment)
         }
         GroupMetadata.loadGroup(
           groupId = groupId,
