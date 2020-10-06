@@ -617,8 +617,8 @@ public class StreamThread extends Thread {
         restoreThread.addClosedTasks(taskManager.drainRemovedTasks());
 
         // try to initialize created tasks that are either newly assigned, recycled, or revived from corrupted tasks
-        final List<AbstractTask> initializedTasks;
-        if (!(initializedTasks = taskManager.tryInitializeNewTasks()).isEmpty()) {
+        final List<AbstractTask> initializedTasks = taskManager.tryInitializeNewTasks();
+        if (!initializedTasks.isEmpty()) {
             if (log.isDebugEnabled()) {
                 log.debug("Initializing newly created tasks {} under state {}",
                         initializedTasks.stream().map(AbstractTask::id).collect(Collectors.toList()), state);
