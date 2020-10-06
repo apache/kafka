@@ -135,11 +135,15 @@ public class QuorumState {
                 randomElectionTimeoutMs()
             );
         } else if (election.isLeader(localId)) {
-            initialState = new LeaderState(
-                localId,
+            // If we were previously a leader, then we will start out as unattached
+            // in the same epoch. This protects the invariant that each record
+            // is uniquely identified by offset and epoch, which might otherwise
+            // be violated if unflushed data is lost after restarting.
+            initialState = new UnattachedState(
+                time,
                 election.epoch,
-                logEndOffsetAndEpoch.offset,
-                voters
+                voters,
+                randomElectionTimeoutMs()
             );
         } else if (election.isCandidate(localId)) {
             initialState = new CandidateState(
