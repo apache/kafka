@@ -109,6 +109,9 @@
         <allow pkg="org.apache.kafka.common.requests" />
         <allow pkg="org.apache.kafka.clients" />
       </subpackage>
+      <subpackage name="ssl">
+        <allow pkg="javax.crypto" />
+      </subpackage>
       <subpackage name="scram">
         <allow pkg="javax.crypto" />
       </subpackage>
