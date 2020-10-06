@@ -627,7 +627,7 @@ public class StreamThread extends Thread {
             restoreThread.addInitializedTasks(initializedTasks);
         }
 
-        // try complete restoration if there are any restoring tasks
+        // try to complete restoration for any tasks that have finished restoring
         if (taskManager.tryToCompleteRestoration(restoreThread.completedChangelogs())) {
             log.debug("Completed restoring all tasks now");
         }
