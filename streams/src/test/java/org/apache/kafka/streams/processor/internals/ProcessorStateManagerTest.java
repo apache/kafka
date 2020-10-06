@@ -776,7 +776,9 @@ public class ProcessorStateManagerTest {
             for (final LogCaptureAppender.Event event : appender.getEvents()) {
                 if ("WARN".equals(event.getLevel())
                     && event.getMessage().startsWith("process-state-manager-test Failed to write offset checkpoint file to [")
-                    && event.getMessage().endsWith(".checkpoint]")
+                    && event.getMessage().endsWith(".checkpoint]." +
+                        " This may occur if OS cleaned the state.dir in case when it located in /tmp directory." +
+                        " You can change location for state.dir to resolve problem")
                     && event.getThrowableInfo().get().startsWith("java.io.FileNotFoundException: ")) {
 
                     foundExpectedLogMessage = true;
