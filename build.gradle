@@ -738,7 +738,7 @@ project(':core') {
   dependencies {
     compile project(':clients')
     compile project(':raft')
-    compile 'com.github.jgonian:commons-ip-math:1.32'
+    compile group: 'net.ripe.ipresource', name: 'ipresource', version: '1.47'
     compile libs.jacksonDatabind
     compile libs.jacksonModuleScala
     compile libs.jacksonDataformatCsv
@@ -1196,7 +1196,7 @@ project(':raft') {
       }
     }
   }
-  
+
   compileJava.dependsOn 'processMessages'
 
   jar {
