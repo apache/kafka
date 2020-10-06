@@ -28,6 +28,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -129,7 +130,7 @@ public class MeteredTimestampedWindowStoreTest {
             keySerde,
             valueSerde
         );
-        store.init(context, store);
+        store.init((StateStoreContext) context, store);
 
         store.fetch(KEY, TIMESTAMP);
         store.put(KEY, VALUE_AND_TIMESTAMP, TIMESTAMP);
@@ -143,7 +144,7 @@ public class MeteredTimestampedWindowStoreTest {
         EasyMock.expectLastCall();
         EasyMock.replay(innerStoreMock);
 
-        store.init(context, store);
+        store.init((StateStoreContext) context, store);
         store.close();
         EasyMock.verify(innerStoreMock);
     }
@@ -153,7 +154,7 @@ public class MeteredTimestampedWindowStoreTest {
         EasyMock.expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), 0)).andReturn(null);
         EasyMock.replay(innerStoreMock);
 
-        store.init(context, store);
+        store.init((StateStoreContext) context, store);
         assertNull(store.fetch("a", 0));
     }
 
@@ -170,7 +171,7 @@ public class MeteredTimestampedWindowStoreTest {
             null,
             null
         );
-        store.init(context, innerStoreMock);
+        store.init((StateStoreContext) context, innerStoreMock);
 
         try {
             store.put("key", ValueAndTimestamp.make(42L, 60000));
@@ -195,7 +196,7 @@ public class MeteredTimestampedWindowStoreTest {
             Serdes.String(),
             new ValueAndTimestampSerde<>(Serdes.Long())
         );
-        store.init(context, innerStoreMock);
+        store.init((StateStoreContext) context, innerStoreMock);
 
         try {
             store.put("key", ValueAndTimestamp.make(42L, 60000));

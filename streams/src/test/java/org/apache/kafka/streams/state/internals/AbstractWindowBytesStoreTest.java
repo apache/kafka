@@ -30,6 +30,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
@@ -111,7 +112,7 @@ public abstract class AbstractWindowBytesStoreTest {
                 new MockStreamsMetrics(new Metrics())));
         context.setTime(1L);
 
-        windowStore.init(context, windowStore);
+        windowStore.init((StateStoreContext) context, windowStore);
     }
 
     @After
@@ -713,7 +714,7 @@ public abstract class AbstractWindowBytesStoreTest {
     @SuppressWarnings("deprecation")
     public void testPutSameKeyTimestamp() {
         windowStore = buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, true, Serdes.Integer(), Serdes.String());
-        windowStore.init(context, windowStore);
+        windowStore.init((StateStoreContext) context, windowStore);
 
         final long startTime = SEGMENT_INTERVAL - 4L;
 
@@ -797,7 +798,7 @@ public abstract class AbstractWindowBytesStoreTest {
             Serdes.String(),
             Serdes.String());
 
-        windowStore.init(context, windowStore);
+        windowStore.init((StateStoreContext) context, windowStore);
 
         windowStore.put("a", "0001", 0);
         windowStore.put("aa", "0002", 0);
@@ -882,7 +883,7 @@ public abstract class AbstractWindowBytesStoreTest {
             true,
             Serdes.Bytes(),
             Serdes.String());
-        windowStore.init(context, windowStore);
+        windowStore.init((StateStoreContext) context, windowStore);
 
         final Bytes key1 = Bytes.wrap(new byte[] {0});
         final Bytes key2 = Bytes.wrap(new byte[] {0, 0});
@@ -970,7 +971,7 @@ public abstract class AbstractWindowBytesStoreTest {
         final Time time = new SystemTime();
         context.setSystemTimeMs(time.milliseconds());
         context.setTime(1L);
-        windowStore.init(context, windowStore);
+        windowStore.init((StateStoreContext) context, windowStore);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
             // Advance stream time by inserting record with large enough timestamp that records with timestamp 0 are expired
@@ -1111,7 +1112,7 @@ public abstract class AbstractWindowBytesStoreTest {
     @SuppressWarnings("deprecation")
     public void testFetchDuplicates() {
         windowStore = buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, true, Serdes.Integer(), Serdes.String());
-        windowStore.init(context, windowStore);
+        windowStore.init((StateStoreContext) context, windowStore);
 
         long currentTime = 0;
         setCurrentTime(currentTime);
