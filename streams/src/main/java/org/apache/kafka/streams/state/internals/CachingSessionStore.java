@@ -420,22 +420,35 @@ class CachingSessionStore
         }
 
         private void getNextSegmentIterator() {
-            ++currentSegmentId;
-            lastSegmentId = cacheFunction.segmentId(maxObservedTimestamp);
-
-            if (currentSegmentId > lastSegmentId) {
-                current = null;
-                return;
-            }
-
-            setCacheKeyRange(currentSegmentBeginTime(), currentSegmentLastTime());
-
-            current.close();
             if (forward) {
+                ++currentSegmentId;
+                lastSegmentId = cacheFunction.segmentId(maxObservedTimestamp);
+
+                if (currentSegmentId > lastSegmentId) {
+                    current = null;
+                    return;
+                }
+
+                setCacheKeyRange(currentSegmentBeginTime(), currentSegmentLastTime());
+
+                current.close();
+
                 current = context.cache().range(cacheName, cacheKeyFrom, cacheKeyTo);
             } else {
+                --currentSegmentId;
+
+                if (currentSegmentId < lastSegmentId) {
+                    current = null;
+                    return;
+                }
+
+                setCacheKeyRange(currentSegmentBeginTime(), currentSegmentLastTime());
+
+                current.close();
+
                 current = context.cache().reverseRange(cacheName, cacheKeyFrom, cacheKeyTo);
             }
+
         }
 
         private void setCacheKeyRange(final long lowerRangeEndTime, final long upperRangeEndTime) {
@@ -443,7 +456,7 @@ class CachingSessionStore
                 throw new IllegalStateException("Error iterating over segments: segment interval has changed");
             }
 
-            if (keyFrom == keyTo) {
+            if (keyFrom.equals(keyTo)) {
                 cacheKeyFrom = cacheFunction.cacheKey(segmentLowerRangeFixedSize(keyFrom, lowerRangeEndTime));
                 cacheKeyTo = cacheFunction.cacheKey(segmentUpperRangeFixedSize(keyTo, upperRangeEndTime));
             } else {

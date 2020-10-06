@@ -405,7 +405,7 @@ public abstract class AbstractSessionBytesStoreTest {
     @Test
     public void shouldBackwardFetchExactKeys() {
         sessionStore = buildSessionStore(0x7a00000000000000L, Serdes.String(), Serdes.Long());
-        sessionStore.init(context, sessionStore);
+        sessionStore.init((StateStoreContext) context, sessionStore);
 
         sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
         sessionStore.put(new Windowed<>("aa", new SessionWindow(0, 10)), 2L);
@@ -473,7 +473,7 @@ public abstract class AbstractSessionBytesStoreTest {
         final SessionStore<Bytes, String> sessionStore =
             buildSessionStore(RETENTION_PERIOD, Serdes.Bytes(), Serdes.String());
 
-        sessionStore.init(context, sessionStore);
+        sessionStore.init((StateStoreContext) context, sessionStore);
 
         final Bytes key1 = Bytes.wrap(new byte[] {0});
         final Bytes key2 = Bytes.wrap(new byte[] {0, 0});

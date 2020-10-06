@@ -250,7 +250,8 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         return registerNewIterator(
             key,
             key,
-            Long.MAX_VALUE, endTimeMap.entrySet().iterator(),
+            Long.MAX_VALUE,
+            endTimeMap.entrySet().iterator(),
             true);
     }
 
@@ -484,13 +485,16 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
                     recordIterator = entries.iterator();
                 } else {
                     final Set<Entry<Long, byte[]>> entries;
-                    if (forward) entries = nextKeyEntry.getValue()
-                        .headMap(latestSessionStartTime, true)
-                        .descendingMap()
-                        .entrySet();
-                    else entries = nextKeyEntry.getValue()
-                        .headMap(latestSessionStartTime, true)
-                        .entrySet();
+                    if (forward) {
+                        entries = nextKeyEntry.getValue()
+                            .headMap(latestSessionStartTime, true)
+                            .descendingMap()
+                            .entrySet();
+                    } else {
+                        entries = nextKeyEntry.getValue()
+                            .headMap(latestSessionStartTime, true)
+                            .entrySet();
+                    }
                     recordIterator = entries.iterator();
                 }
 
