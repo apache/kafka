@@ -62,10 +62,6 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
     @Override
     public void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache) {
-        if (stateManager.taskType() != TaskType.STANDBY) {
-            throw new IllegalStateException("Tried to transition processor context to active but the state manager's " +
-                    "type was " + stateManager.taskType());
-        }
         this.streamTask = streamTask;
         this.collector = recordCollector;
         this.cache = newCache;
@@ -74,10 +70,6 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
     @Override
     public void transitionToStandby(final ThreadCache newCache) {
-        if (stateManager.taskType() != TaskType.ACTIVE) {
-            throw new IllegalStateException("Tried to transition processor context to standby but the state manager's " +
-                    "type was " + stateManager.taskType());
-        }
         this.streamTask = null;
         this.collector = null;
         this.cache = newCache;

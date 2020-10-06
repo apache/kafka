@@ -58,6 +58,7 @@ public class StateRestoreThread extends Thread {
     private final LinkedBlockingDeque<TaskItem> taskItemQueue;
     private final AtomicReference<Set<TopicPartition>> completedChangelogs;
     private final LinkedBlockingDeque<TaskCorruptedException> corruptedExceptions;
+    private final AtomicReference<RuntimeException> fatalException;
 
     public boolean isRunning() {
         return isRunning.get();
@@ -86,6 +87,7 @@ public class StateRestoreThread extends Thread {
         this.time = time;
         this.log = logContext.logger(getClass());
         this.taskItemQueue = new LinkedBlockingDeque<>();
+        this.fatalException = new AtomicReference<>();
         this.corruptedExceptions = new LinkedBlockingDeque<>();
         this.completedChangelogs = new AtomicReference<>(Collections.emptySet());
 
@@ -136,11 +138,18 @@ public class StateRestoreThread extends Thread {
             while (isRunning()) {
                 runOnce();
             }
-        } catch (final Exception e) {
+        } catch (final RuntimeException e) {
             log.error("Encountered the following exception while restoring states " +
                     "and the thread is going to shut down: ", e);
-            throw e;
+
+            // we would not throw the exception from the restore thread
+            // but would need the main thread to get and throw it
+            fatalException.set(e);
         } finally {
+            // if the thread is exiting due to exception,
+            // we would still set its running flag
+            isRunning.set(false);
+
             try {
                 changelogReader.clear();
             } catch (final Throwable e) {
@@ -218,23 +227,40 @@ public class StateRestoreThread extends Thread {
         completedChangelogs.set(changelogReader.completedChangelogs());
     }
 
-    public TaskCorruptedException nextCorruptedException() {
-        final List<TaskCorruptedException> exceptions = new ArrayList<>();
-        corruptedExceptions.drainTo(exceptions);
+    /**
+     * Get the next exception from the restore thread if there's any.
+     * If there's a fatal exception, return that;
+     * Otherwise return the non-fatal task corrupted exception
+     *
+     * Possible returned exception:
+     *
+     * * StreamsException (streams fatal)
+     * * RuntimeException (non-streams fatal)
+     * * TaskCorruptedException (streams non-fatal)
+     */
+    public RuntimeException pollNextExceptionIfAny() {
+        final RuntimeException fatal = fatalException.get();
 
-        if (exceptions.isEmpty()) {
-            return null;
-        } else if (exceptions.size() == 1) {
-            return exceptions.get(0);
+        if (fatal != null) {
+            return fatal;
         } else {
-            // if there are more exceptions accumulated, try to consolidate them as a single exception
-            // for the main thread to re-throw and handle
-            final Map<TaskId, Collection<TopicPartition>> taskWithChangelogs = new HashMap<>();
-            for (final TaskCorruptedException exception : exceptions) {
-                taskWithChangelogs.putAll(exception.corruptedTaskWithChangelogs());
-            }
+            final List<TaskCorruptedException> exceptions = new ArrayList<>();
+            corruptedExceptions.drainTo(exceptions);
 
-            return new TaskCorruptedException(taskWithChangelogs);
+            if (exceptions.isEmpty()) {
+                return null;
+            } else if (exceptions.size() == 1) {
+                return exceptions.get(0);
+            } else {
+                // if there are more exceptions accumulated, try to consolidate them as a single exception
+                // for the main thread to re-throw and handle
+                final Map<TaskId, Collection<TopicPartition>> taskWithChangelogs = new HashMap<>();
+                for (final TaskCorruptedException exception : exceptions) {
+                    taskWithChangelogs.putAll(exception.corruptedTaskWithChangelogs());
+                }
+
+                return new TaskCorruptedException(taskWithChangelogs);
+            }
         }
     }
 
@@ -274,5 +300,17 @@ public class StateRestoreThread extends Thread {
     // testing functions below
     ChangelogReader changelogReader() {
         return changelogReader;
+    }
+
+    void setFatalException(RuntimeException e) {
+        fatalException.set(e);
+    }
+
+    void addTaskCorruptedException(TaskCorruptedException e) {
+        corruptedExceptions.add(e);
+    }
+
+    void setIsRunning(final boolean flag) {
+        isRunning.set(flag);
     }
 }

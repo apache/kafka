@@ -315,6 +315,9 @@ public class StoreChangelogReader implements ChangelogReader {
     /**
      * Since it is shared for multiple tasks and hence multiple state managers, the registration would take its
      * corresponding state manager as well for restoring.
+     *
+     * @throws IllegalArgumentException from {@code removeChangelogsFromRestoreConsumer}
+     * @throws IllegalStateException from {@code removeChangelogsFromRestoreConsumer}
      */
     @Override
     public void register(final TopicPartition partition, final ProcessorStateManager stateManager) {
@@ -867,6 +870,10 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     @Override
+    /*
+     * @throws IllegalArgumentException from {@code removeChangelogsFromRestoreConsumer}
+     * @throws IllegalStateException from {@code removeChangelogsFromRestoreConsumer}
+     */
     public void unregister(final Collection<TopicPartition> revokedChangelogs) {
         // Only changelogs that are initialized have been added to the restore consumer's assignment
         final List<TopicPartition> revokedInitializedChangelogs = new ArrayList<>();

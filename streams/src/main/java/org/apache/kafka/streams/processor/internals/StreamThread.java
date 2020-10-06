@@ -637,7 +637,7 @@ public class StreamThread extends Thread {
 
         // check if restore thread has encountered TaskCorrupted exception; if yes
         // rethrow it to trigger the handling logic
-        final TaskCorruptedException e = restoreThread.nextCorruptedException();
+        final RuntimeException e = restoreThread.pollNextExceptionIfAny();
         if (e != null) {
             throw e;
         }

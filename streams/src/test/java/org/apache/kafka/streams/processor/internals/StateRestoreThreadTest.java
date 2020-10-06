@@ -17,8 +17,11 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.test.StateMachineTask;
 import org.apache.kafka.test.TestUtils;
@@ -28,8 +31,11 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import java.util.Collections;
+import java.util.concurrent.atomic.AtomicBoolean;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(EasyMockRunner.class)
@@ -99,5 +105,114 @@ public class StateRestoreThreadTest {
 
         TestUtils.waitForCondition(() -> !((MockChangelogReader) restoreThread.changelogReader()).isPartitionRegistered(tp),
                 "Should unregistered the changelog within timeout");
+    }
+
+    @Test
+    public void shouldReportTaskCorruptedException() throws InterruptedException {
+        final TaskCorruptedException exception = new TaskCorruptedException(Collections.singletonMap(taskId, Collections.singleton(tp)));
+        final ChangelogReader reader = new MockChangelogReader() {
+            @Override
+            public int restore() {
+                throw exception;
+            }
+        };
+        final StateRestoreThread restoreThread = new StateRestoreThread(time, clientId, reader);
+        final StateMachineTask task = new StateMachineTask(taskId, Collections.emptySet(), true, stateManager);
+        task.setChangelogOffsets(Collections.singletonMap(tp, 0L));
+
+        restoreThread.addInitializedTasks(Collections.singletonList(task));
+
+        restoreThread.start();
+
+        TestUtils.waitForCondition(() -> restoreThread.pollNextExceptionIfAny() == exception,
+                "Should reported the exception within timeout");
+
+        assertTrue(restoreThread.isAlive());
+        assertTrue(restoreThread.isRunning());
+
+        restoreThread.shutdown(1000);
+    }
+
+    @Test
+    public void shouldReportFatalStreamsException() throws InterruptedException {
+        final StreamsException exception = new StreamsException("kaboom!");
+        final ChangelogReader reader = new MockChangelogReader() {
+            @Override
+            public int restore() {
+                throw exception;
+            }
+        };
+        final StateRestoreThread restoreThread = new StateRestoreThread(time, clientId, reader);
+        final StateMachineTask task = new StateMachineTask(taskId, Collections.emptySet(), true, stateManager);
+        task.setChangelogOffsets(Collections.singletonMap(tp, 0L));
+
+        restoreThread.addInitializedTasks(Collections.singletonList(task));
+
+        restoreThread.start();
+
+        TestUtils.waitForCondition(() -> restoreThread.pollNextExceptionIfAny() == exception,
+                "Should reported the exception within timeout");
+
+        assertFalse(restoreThread.isAlive());
+        assertFalse(restoreThread.isRunning());
+
+        restoreThread.shutdown(1000);
+    }
+
+    @Test
+    public void shouldPreferFatalRuntimeException() {
+        final RuntimeException fatal = new IllegalStateException("kaboom!");
+        final TaskCorruptedException corrupted = new TaskCorruptedException(Collections.emptyMap());
+
+        restoreThread.setFatalException(fatal);
+        restoreThread.addTaskCorruptedException(corrupted);
+
+        assertEquals(fatal, restoreThread.pollNextExceptionIfAny());
+    }
+
+    @Test
+    public void shouldMergeTaskCorruptedException() {
+        final TaskCorruptedException e1 = new TaskCorruptedException(
+            Collections.singletonMap(taskId, Collections.singleton(tp)));
+        final TaskCorruptedException e2 = new TaskCorruptedException(
+            Collections.singletonMap(new TaskId(0, 1), Collections.singleton(new TopicPartition(topic, 1))));
+        final TaskCorruptedException e3 = new TaskCorruptedException(
+                Collections.singletonMap(new TaskId(0, 2), Collections.singleton(new TopicPartition(topic, 2))));
+
+        restoreThread.addTaskCorruptedException(e1);
+        restoreThread.addTaskCorruptedException(e2);
+        restoreThread.addTaskCorruptedException(e3);
+
+        RuntimeException e = restoreThread.pollNextExceptionIfAny();
+
+        assertTrue(e instanceof TaskCorruptedException);
+        assertEquals(3, ((TaskCorruptedException) e).corruptedTaskWithChangelogs().size());
+    }
+
+    @Test
+    public void shouldIgnoreExceptionWhenInterruptedWhileShutdown() {
+        final StreamsException exception = new StreamsException("kaboom!", new InterruptException("interrupted"));
+        final AtomicBoolean throwException = new AtomicBoolean(false);
+        final ChangelogReader reader = new MockChangelogReader() {
+            @Override
+            public int restore() {
+                if (throwException.get())
+                    throw exception;
+                else
+                    return super.restore();
+            }
+        };
+        final StateRestoreThread restoreThread = new StateRestoreThread(time, clientId, reader);
+        final StateMachineTask task = new StateMachineTask(taskId, Collections.emptySet(), true, stateManager);
+        task.setChangelogOffsets(Collections.singletonMap(tp, 0L));
+
+        restoreThread.addInitializedTasks(Collections.singletonList(task));
+
+        restoreThread.start();
+
+        restoreThread.setIsRunning(false);
+        throwException.set(true);
+
+        assertNull(restoreThread.pollNextExceptionIfAny());
     }
 }
