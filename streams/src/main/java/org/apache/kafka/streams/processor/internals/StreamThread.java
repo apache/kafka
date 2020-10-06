@@ -636,7 +636,7 @@ public class StreamThread extends Thread {
             // it is possible that we have no assigned tasks in which case we would still transit state
             setState(State.RUNNING);
 
-            log.debug("All tasks are now running and transited State to {}", State.RUNNING);
+            log.info("All tasks are now running");
         }
 
         // check if restore thread has encountered TaskCorrupted exception; if yes
