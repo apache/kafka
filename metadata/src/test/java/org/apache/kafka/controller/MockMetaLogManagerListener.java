@@ -23,21 +23,24 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class MockMetaLogManagerListener implements MetaLogManager.Listener {
-    public static final String COMMITS = "COMMITS";
+    public static final String COMMIT = "COMMIT";
+    public static final String LAST_COMMITTED_OFFSET = "LAST_COMMITTED_OFFSET";
     public static final String CLAIM = "CLAIM";
     public static final String RENOUNCE = "RENOUNCE";
     public static final String SHUTDOWN = "SHUTDOWN";
 
     private final List<String> serializedEvents = new ArrayList<>();
-    private long currentClaim = -1;
+    private long currentClaimEpoch = -1;
 
     @Override
-    public void handleCommits(long lastOffset, List<ApiMessage> messages) {
-        StringBuilder bld = new StringBuilder();
-        bld.append(COMMITS).append(" ").append(lastOffset).append(" ");
+    public synchronized void handleCommits(long lastCommittedOffset, List<ApiMessage> messages) {
         for (ApiMessage message : messages) {
-            bld.append(message.toString());
+            StringBuilder bld = new StringBuilder();
+            bld.append(COMMIT).append(" ").append(message.toString());
+            serializedEvents.add(bld.toString());
         }
+        StringBuilder bld = new StringBuilder();
+        bld.append(LAST_COMMITTED_OFFSET).append(" ").append(lastCommittedOffset);
         serializedEvents.add(bld.toString());
     }
 
@@ -45,27 +48,37 @@ public class MockMetaLogManagerListener implements MetaLogManager.Listener {
     public void handleClaim(long epoch) {
         StringBuilder bld = new StringBuilder();
         bld.append(CLAIM).append(" ").append(epoch);
-        serializedEvents.add(bld.toString());
-        currentClaim = epoch;
+        synchronized (this) {
+            serializedEvents.add(bld.toString());
+            currentClaimEpoch = epoch;
+        }
     }
 
     @Override
     public void handleRenounce(long epoch) {
         StringBuilder bld = new StringBuilder();
         bld.append(RENOUNCE).append(" ").append(epoch);
-        serializedEvents.add(bld.toString());
-        currentClaim = -1;
+        synchronized (this) {
+            serializedEvents.add(bld.toString());
+            currentClaimEpoch = -1;
+        }
     }
 
     @Override
     public void beginShutdown() {
         StringBuilder bld = new StringBuilder();
         bld.append(SHUTDOWN);
-        serializedEvents.add(bld.toString());
+        synchronized (this) {
+            serializedEvents.add(bld.toString());
+        }
     }
 
     @Override
-    public long currentClaim() {
-        return currentClaim;
+    public synchronized long currentClaimEpoch() {
+        return currentClaimEpoch;
+    }
+
+    public synchronized List<String> serializedEvents() {
+        return new ArrayList<>(serializedEvents);
     }
 }

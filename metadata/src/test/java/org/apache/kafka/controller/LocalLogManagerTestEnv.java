@@ -93,7 +93,7 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
         TestUtils.retryOnExceptionWithTimeout(3, 20000, () -> {
             LeaderInfo leaderInfo = null;
             for (LocalLogManager logManager : logManagers) {
-                long curEpoch = logManager.listener().currentClaim();
+                long curEpoch = logManager.listener().currentClaimEpoch();
                 if (curEpoch != -1) {
                     if (leaderInfo != null) {
                         throw new RuntimeException("node " + leaderInfo.nodeId() +
