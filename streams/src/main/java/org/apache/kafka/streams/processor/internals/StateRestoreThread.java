@@ -108,7 +108,7 @@ public class StateRestoreThread extends Thread {
 
     public synchronized void addInitializedTasks(final List<AbstractTask> tasks) {
         if (!tasks.isEmpty()) {
-            for (final AbstractTask task: tasks) {
+            for (final AbstractTask task : tasks) {
                 taskItemQueue.add(new TaskItem(task, ItemType.CREATE, task.changelogPartitions()));
             }
             notifyAll();
