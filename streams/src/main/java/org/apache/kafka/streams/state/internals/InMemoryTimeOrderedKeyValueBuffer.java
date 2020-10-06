@@ -29,7 +29,9 @@ import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.FullChangeSerde;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
@@ -193,6 +195,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         this.valueSerde = this.valueSerde == null ? FullChangeSerde.wrap(valueSerde) : this.valueSerde;
     }
 
+    @Deprecated
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
         taskId = context.taskId().toString();
@@ -220,6 +223,39 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         updateBufferMetrics();
         open = true;
         partition = context.taskId().partition;
+    }
+
+    @Override
+    public void init(final StateStoreContext context, final StateStore root) {
+        this.context = ProcessorContextUtils.asInternalProcessorContext(context);
+        init(root);
+    }
+
+    private void init(final StateStore root) {
+        taskId = this.context.taskId().toString();
+        streamsMetrics = this.context.metrics();
+
+        threadId = Thread.currentThread().getName();
+        bufferSizeSensor = StateStoreMetrics.suppressionBufferSizeSensor(
+            threadId,
+            taskId,
+            METRIC_SCOPE,
+            storeName,
+            streamsMetrics
+        );
+        bufferCountSensor = StateStoreMetrics.suppressionBufferCountSensor(
+            threadId,
+            taskId,
+            METRIC_SCOPE,
+            storeName,
+            streamsMetrics
+        );
+
+        this.context.register(root, (RecordBatchingStateRestoreCallback) this::restoreBatch);
+        changelogTopic = ProcessorStateManager.storeChangelogTopic(this.context.applicationId(), storeName);
+        updateBufferMetrics();
+        open = true;
+        partition = this.context.taskId().partition;
     }
 
     @Override

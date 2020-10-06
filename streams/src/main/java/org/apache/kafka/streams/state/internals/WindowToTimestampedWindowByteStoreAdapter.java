@@ -161,6 +161,7 @@ class WindowToTimestampedWindowByteStoreAdapter implements WindowStore<Bytes, by
         return store.name();
     }
 
+    @Deprecated
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {

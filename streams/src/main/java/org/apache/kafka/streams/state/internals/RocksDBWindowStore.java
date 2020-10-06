@@ -44,6 +44,7 @@ public class RocksDBWindowStore
         this.windowSize = windowSize;
     }
 
+    @Deprecated
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
         this.context = context instanceof InternalProcessorContext ? (InternalProcessorContext) context : null;

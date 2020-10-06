@@ -70,6 +70,7 @@ public class MeteredSessionStore<K, V>
         this.time = time;
     }
 
+    @Deprecated
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {

@@ -49,6 +49,7 @@ class MeteredTimestampedWindowStore<K, V>
         super(inner, windowSizeMs, metricScope, time, keySerde, valueSerde);
     }
 
+    @Deprecated
     @SuppressWarnings("unchecked")
     @Override
     void initStoreSerde(final ProcessorContext context) {

@@ -48,7 +48,6 @@ class KeyValueSegment extends RocksDBStore implements Comparable<KeyValueSegment
     public void openDB(final ProcessorContext context) {
         super.openDB(context);
         // skip the registering step
-        internalProcessorContext = context;
     }
 
     @Override

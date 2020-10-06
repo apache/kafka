@@ -71,6 +71,7 @@ public class MeteredWindowStore<K, V>
         this.valueSerde = valueSerde;
     }
 
+    @Deprecated
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
@@ -110,6 +111,7 @@ public class MeteredWindowStore<K, V>
         e2eLatencySensor = StateStoreMetrics.e2ELatencySensor(taskId, metricsScope, name(), streamsMetrics);
     }
 
+    @Deprecated
     @SuppressWarnings("unchecked")
     void initStoreSerde(final ProcessorContext context) {
         final String storeName = name();
@@ -298,6 +300,8 @@ public class MeteredWindowStore<K, V>
     }
 
     private void maybeRecordE2ELatency() {
+        // Context is null if the provided context isn't an implementation of InternalProcessorContext.
+        // In that case, we _can't_ get the current timestamp, so we don't record anything.
         if (e2eLatencySensor.shouldRecord() && context != null) {
             final long currentTime = time.milliseconds();
             final long e2eLatency =  currentTime - context.timestamp();

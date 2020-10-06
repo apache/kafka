@@ -95,6 +95,7 @@ public class TimestampedKeyValueStoreBuilder<K, V>
             this.wrapped = wrapped;
         }
 
+        @Deprecated
         @Override
         public void init(final ProcessorContext context,
                          final StateStore root) {

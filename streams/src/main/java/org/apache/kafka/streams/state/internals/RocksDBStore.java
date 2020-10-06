@@ -26,6 +26,8 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -65,8 +67,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Supplier;
 
 import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
+import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.getMetricsImpl;
 
 /**
  * A persistent key-value store based on RocksDB.
@@ -102,7 +106,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     private final RocksDBMetricsRecorder metricsRecorder;
 
-    ProcessorContext internalProcessorContext;
     // visible for testing
     volatile BatchingStateRestoreCallback batchingStateRestoreCallback = null;
 
@@ -122,7 +125,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     }
 
     @SuppressWarnings("unchecked")
-    void openDB(final ProcessorContext context) {
+    void openDB(final Map<String, Object> configs, final File stateDir) {
         // initialize the default rocksdb options
 
         final DBOptions dbOptions = new DBOptions();
@@ -161,7 +164,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         fOptions = new FlushOptions();
         fOptions.setWaitForFlush(true);
 
-        final Map<String, Object> configs = context.appConfigs();
         final Class<RocksDBConfigSetter> configSetterClass =
             (Class<RocksDBConfigSetter>) configs.get(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG);
 
@@ -170,7 +172,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
             configSetter.setConfig(name, userSpecifiedOptions, configs);
         }
 
-        dbDir = new File(new File(context.stateDir(), parentDir), name);
+        dbDir = new File(new File(stateDir, parentDir), name);
 
         try {
             Files.createDirectories(dbDir.getParentFile().toPath());
@@ -232,13 +234,26 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         }
     }
 
+    @Deprecated
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
         // open the DB dir
-        internalProcessorContext = context;
-        metricsRecorder.init((StreamsMetricsImpl) context.metrics(), context.taskId());
-        openDB(context);
+        metricsRecorder.init(getMetricsImpl(context), context.taskId());
+        openDB(context.appConfigs(), context.stateDir());
+        batchingStateRestoreCallback = new RocksDBBatchingRestoreCallback(this);
+
+        // value getter should always read directly from rocksDB
+        // since it is only for values that are already flushed
+        context.register(root, batchingStateRestoreCallback);
+    }
+
+    @Override
+    public void init(final StateStoreContext context,
+                     final StateStore root) {
+        // open the DB dir
+        metricsRecorder.init(getMetricsImpl(context), context.taskId());
+        openDB(context.appConfigs(), context.stateDir());
         batchingStateRestoreCallback = new RocksDBBatchingRestoreCallback(this);
 
         // value getter should always read directly from rocksDB

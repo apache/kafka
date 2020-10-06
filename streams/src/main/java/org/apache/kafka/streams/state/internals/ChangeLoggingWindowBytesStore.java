@@ -26,6 +26,8 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
+import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
+
 /**
  * Simple wrapper around a {@link WindowStore} to support writing
  * updates to a changelog
@@ -44,27 +46,18 @@ class ChangeLoggingWindowBytesStore
         this.retainDuplicates = retainDuplicates;
     }
 
+    @Deprecated
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
-        if (!(context instanceof InternalProcessorContext)) {
-            throw new IllegalArgumentException(
-                "Change logging requires internal features of KafkaStreams and must be disabled for unit tests."
-            );
-        }
-        this.context = (InternalProcessorContext) context;
+        this.context = asInternalProcessorContext(context);
         super.init(context, root);
     }
 
     @Override
     public void init(final StateStoreContext context,
                      final StateStore root) {
-        if (!(context instanceof InternalProcessorContext)) {
-            throw new IllegalArgumentException(
-                "Change logging requires internal features of KafkaStreams and must be disabled for unit tests."
-            );
-        }
-        this.context = (InternalProcessorContext) context;
+        this.context = asInternalProcessorContext(context);
         super.init(context, root);
     }
 

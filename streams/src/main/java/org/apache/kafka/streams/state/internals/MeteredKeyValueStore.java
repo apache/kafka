@@ -85,6 +85,7 @@ public class MeteredKeyValueStore<K, V>
         this.valueSerde = valueSerde;
     }
 
+    @Deprecated
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
@@ -129,6 +130,7 @@ public class MeteredKeyValueStore<K, V>
         e2eLatencySensor = StateStoreMetrics.e2ELatencySensor(taskId, metricsScope, name(), streamsMetrics);
     }
 
+    @Deprecated
     @SuppressWarnings("unchecked")
     void initStoreSerde(final ProcessorContext context) {
         final String storeName = name();

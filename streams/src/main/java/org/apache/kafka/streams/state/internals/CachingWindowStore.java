@@ -69,6 +69,7 @@ class CachingWindowStore
         this.maxObservedTimestamp = new AtomicLong(RecordQueue.UNKNOWN);
     }
 
+    @Deprecated
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
         initInternal(asInternalProcessorContext(context));
