@@ -48,7 +48,6 @@ public final class AssignorConfiguration {
     private final String logPrefix;
     private final Logger log;
     private final TaskManager taskManager;
-    private final Admin adminClient;
 
     private final StreamsConfig streamsConfig;
     private final Map<String, ?> internalConfigs;
@@ -82,25 +81,6 @@ public final class AssignorConfiguration {
             }
 
             taskManager = (TaskManager) o;
-        }
-
-        {
-            final Object o = configs.get(StreamsConfig.InternalConfig.STREAMS_ADMIN_CLIENT);
-            if (o == null) {
-                final KafkaException fatalException = new KafkaException("Admin is not specified");
-                log.error(fatalException.getMessage(), fatalException);
-                throw fatalException;
-            }
-
-            if (!(o instanceof Admin)) {
-                final KafkaException fatalException = new KafkaException(
-                    String.format("%s is not an instance of %s", o.getClass().getName(), Admin.class.getName())
-                );
-                log.error(fatalException.getMessage(), fatalException);
-                throw fatalException;
-            }
-
-            adminClient = (Admin) o;
         }
 
         {
@@ -291,11 +271,7 @@ public final class AssignorConfiguration {
         }
     }
 
-    public Admin adminClient() {
-        return adminClient;
-    }
-
-    public InternalTopicManager internalTopicManager() {
+    public InternalTopicManager internalTopicManager(final Admin adminClient) {
         return new InternalTopicManager(time(), adminClient, streamsConfig);
     }
 

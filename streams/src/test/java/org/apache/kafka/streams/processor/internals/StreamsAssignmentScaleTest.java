@@ -16,24 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import static java.util.Collections.emptySet;
-import static java.util.Collections.singletonList;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_TASKS;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.createMockAdminClientForAssignor;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getInfo;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.uuidForInt;
-import static org.easymock.EasyMock.expect;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
@@ -61,6 +43,25 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+
+import static java.util.Collections.emptySet;
+import static java.util.Collections.singletonList;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_TASKS;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.createMockAdminClientForAssignor;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getInfo;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.uuidForInt;
+import static org.easymock.EasyMock.expect;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 @Category({IntegrationTest.class})
 public class StreamsAssignmentScaleTest {
@@ -167,21 +168,19 @@ public class StreamsAssignmentScaleTest {
         builder.setApplicationId(APPLICATION_ID);
         builder.buildTopology();
 
+        final AdminClient adminClient = createMockAdminClientForAssignor(changelogEndOffsets);
         final Consumer<byte[], byte[]> mainConsumer = EasyMock.createNiceMock(Consumer.class);
         final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
         expect(taskManager.builder()).andStubReturn(builder);
         expect(taskManager.mainConsumer()).andStubReturn(mainConsumer);
+        expect(taskManager.adminClient()).andReturn(adminClient).anyTimes();
         expect(mainConsumer.committed(new HashSet<>())).andStubReturn(Collections.emptyMap());
-        final AdminClient adminClient = createMockAdminClientForAssignor(changelogEndOffsets);
-
-        final StreamsPartitionAssignor partitionAssignor = new StreamsPartitionAssignor();
 
         final Map<String, Object> configMap = new HashMap<>();
         configMap.put(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID);
         configMap.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:8080");
         configMap.put(InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR, taskManager);
         configMap.put(InternalConfig.STREAMS_METADATA_STATE_FOR_PARTITION_ASSIGNOR, EasyMock.createNiceMock(StreamsMetadataState.class));
-        configMap.put(InternalConfig.STREAMS_ADMIN_CLIENT, adminClient);
         configMap.put(InternalConfig.ASSIGNMENT_ERROR_CODE, new AtomicInteger());
         configMap.put(InternalConfig.NEXT_SCHEDULED_REBALANCE_MS, new AtomicLong(Long.MAX_VALUE));
         configMap.put(InternalConfig.TIME, new MockTime());
@@ -194,9 +193,10 @@ public class StreamsAssignmentScaleTest {
             new MockClientSupplier().restoreConsumer,
             false
         );
-        partitionAssignor.configure(configMap);
         EasyMock.replay(taskManager, adminClient, mainConsumer);
 
+        final StreamsPartitionAssignor partitionAssignor = new StreamsPartitionAssignor();
+        partitionAssignor.configure(configMap);
         partitionAssignor.setInternalTopicManager(mockInternalTopicManager);
 
         final Map<String, Subscription> subscriptions = new HashMap<>();

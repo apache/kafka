@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
@@ -175,7 +174,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     protected int usedSubscriptionMetadataVersion = LATEST_SUPPORTED_VERSION;
 
-    private Admin adminClient;
     private InternalTopicManager internalTopicManager;
     private CopartitionedTopicsEnforcer copartitionedTopicsEnforcer;
     private RebalanceProtocol rebalanceProtocol;
@@ -206,8 +204,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         assignmentConfigs = assignorConfiguration.assignmentConfigs();
         partitionGrouper = assignorConfiguration.partitionGrouper();
         userEndPoint = assignorConfiguration.userEndPoint();
-        adminClient = assignorConfiguration.adminClient();
-        internalTopicManager = assignorConfiguration.internalTopicManager();
+        internalTopicManager = assignorConfiguration.internalTopicManager(taskManager.adminClient());
         copartitionedTopicsEnforcer = assignorConfiguration.copartitionedTopicsEnforcer();
         rebalanceProtocol = assignorConfiguration.rebalanceProtocol();
         taskAssignorSupplier = assignorConfiguration::taskAssignor;
@@ -803,7 +800,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             // Make the listOffsets request first so it can  fetch the offsets for non-source changelogs
             // asynchronously while we use the blocking Consumer#committed call to fetch source-changelog offsets
             final KafkaFuture<Map<TopicPartition, ListOffsetsResultInfo>> endOffsetsFuture =
-                fetchEndOffsetsFuture(preexistingChangelogPartitions, adminClient);
+                fetchEndOffsetsFuture(preexistingChangelogPartitions, taskManager.adminClient());
 
             final Map<TopicPartition, Long> sourceChangelogEndOffsets =
                 fetchCommittedOffsets(preexistingSourceChangelogPartitions, taskManager.mainConsumer());

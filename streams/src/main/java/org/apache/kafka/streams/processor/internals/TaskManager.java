@@ -124,6 +124,10 @@ public class TaskManager {
         return mainConsumer;
     }
 
+    Admin adminClient() {
+        return adminClient;
+    }
+
     public UUID processId() {
         return processId;
     }
