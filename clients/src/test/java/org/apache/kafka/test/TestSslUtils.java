@@ -240,8 +240,6 @@ public class TestSslUtils {
             key = exportPrivateKey(ksPath, ksPassword, keyPassword, ksType, pemKeyPassword);
             if (!encryptPrivateKey)
                 sslProps.remove(SslConfigs.SSL_KEY_PASSWORD_CONFIG);
-        } else if (!encryptPrivateKey) {
-
         }
 
         if (certChain != null) {

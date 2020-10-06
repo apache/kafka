@@ -80,10 +80,6 @@ public class CertStores {
 
 
     public Map<String, Object> getTrustingConfig(CertStores truststoreConfig) {
-        return getTrustingConfig(truststoreConfig, false);
-    }
-
-    public Map<String, Object> getTrustingConfig(CertStores truststoreConfig, boolean usePemCerts) {
         Map<String, Object> config = new HashMap<>(sslConfig);
         for (String propName : TRUSTSTORE_PROPS) {
             config.put(propName, truststoreConfig.sslConfig.get(propName));
