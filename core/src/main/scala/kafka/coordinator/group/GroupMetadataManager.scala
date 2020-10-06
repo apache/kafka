@@ -1040,10 +1040,8 @@ object GroupMetadataManager {
       .setOffset(offsetAndMetadata.offset)
       .setMetadata(offsetAndMetadata.metadata)
       .setCommitTimestamp(offsetAndMetadata.commitTimestamp)
-      // leaderEpoch is ignorable so auto-generated protocol would then use it only for the supported versions.
       .setLeaderEpoch(offsetAndMetadata.leaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
       // version 1 has a non empty expireTimestamp field
-      // expireTimestamp is ignorable so auto-generated protocol would then use it only for the supported versions.
       .setExpireTimestamp(offsetAndMetadata.expireTimestamp.getOrElse(OffsetCommitRequest.DEFAULT_TIMESTAMP))
     )
   }
