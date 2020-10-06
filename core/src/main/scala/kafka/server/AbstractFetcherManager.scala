@@ -143,7 +143,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
         }
 
         val initialOffsetAndEpochs = initialFetchOffsets.map { case (tp, brokerAndInitOffset) =>
-          tp -> OffsetAndEpoch(brokerAndInitOffset.initOffset, brokerAndInitOffset.currentLeaderEpoch)
+          tp -> OffsetAndEpoch(brokerAndInitOffset.initOffset, brokerAndInitOffset.currentLeaderEpoch, brokerAndInitOffset.lastFetchedEpoch)
         }
 
         addPartitionsToFetcherThread(fetcherThread, initialOffsetAndEpochs)
@@ -227,6 +227,6 @@ class FailedPartitions {
 
 case class BrokerAndFetcherId(broker: BrokerEndPoint, fetcherId: Int)
 
-case class InitialFetchState(leader: BrokerEndPoint, currentLeaderEpoch: Int, initOffset: Long)
+case class InitialFetchState(leader: BrokerEndPoint, currentLeaderEpoch: Int, initOffset: Long, lastFetchedEpoch: Option[Int])
 
 case class BrokerIdAndFetcherId(brokerId: Int, fetcherId: Int)

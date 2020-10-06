@@ -17,8 +17,10 @@
 package kafka.server
 
 import java.nio.charset.StandardCharsets
+import java.util
 import java.util.{Collections, Optional}
 
+import kafka.api.{ApiVersion, KAFKA_2_6_IV0}
 import kafka.cluster.{BrokerEndPoint, Partition}
 import kafka.log.{Log, LogManager}
 import kafka.server.QuotaFactory.UnboundedQuota
@@ -82,8 +84,19 @@ class ReplicaFetcherThreadTest {
   }
 
   @Test
-  def shouldFetchLeaderEpochRequestIfLastEpochDefinedForSomePartitions(): Unit = {
-    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
+  def testFetchLeaderEpochRequestIfLastEpochDefinedForSomePartitions(): Unit = {
+    shouldFetchLeaderEpochRequestIfLastEpochDefinedForSomePartitions(ibp = ApiVersion.latestVersion)
+  }
+
+  @Test
+  def testFetchLeaderEpochRequestIfLastEpochDefinedForSomePartitionsWithIbp26(): Unit = {
+    shouldFetchLeaderEpochRequestIfLastEpochDefinedForSomePartitions(KAFKA_2_6_IV0)
+  }
+
+  private def shouldFetchLeaderEpochRequestIfLastEpochDefinedForSomePartitions(ibp: ApiVersion): Unit = {
+    val props = TestUtils.createBrokerConfig(1, "localhost:1234")
+    props.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, ibp.version)
+    val config = KafkaConfig.fromProps(props)
 
     //Setup all dependencies
     val quota: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
@@ -102,6 +115,8 @@ class ReplicaFetcherThreadTest {
     expect(log.latestEpoch).andReturn(Some(leaderEpoch)).once()
     expect(log.latestEpoch).andReturn(Some(leaderEpoch)).once()
     expect(log.latestEpoch).andReturn(None).once()  // t2p1 doesnt support epochs
+    if (ApiVersion.isTruncationOnFetchSupported(ibp))
+      expect(log.latestEpoch).andReturn(Some(leaderEpoch)).times(2) // to set lastFetchedEpoch
     expect(log.endOffsetForEpoch(leaderEpoch)).andReturn(
       Some(OffsetAndEpoch(0, leaderEpoch))).anyTimes()
     expect(replicaManager.logManager).andReturn(logManager).anyTimes()
@@ -123,7 +138,7 @@ class ReplicaFetcherThreadTest {
 
     val thread = new ReplicaFetcherThread("bob", 0, brokerEndPoint, config, failedPartitions, replicaManager, new Metrics(), new SystemTime(), quota, Some(mockNetwork))
 
-    // topic 1 supports epoch, t2 doesn't
+    // topic 1 supports epoch, t2 doesn't. `lastFetchedEpoch` not set for any partition
     thread.addPartitions(Map(
       t1p0 -> offsetAndEpoch(0L),
       t1p1 -> offsetAndEpoch(0L),
@@ -152,6 +167,122 @@ class ReplicaFetcherThreadTest {
     assertPartitionStates(thread, shouldBeReadyForFetch = true, shouldBeTruncatingLog = false, shouldBeDelayed = false)
 
     //Assert that truncate to is called exactly once (despite two loops)
+    verify(logManager)
+  }
+
+  @Test
+  def testFetchLeaderEpochRequestIfLastFetchedEpochDefinedForSomePartitions(): Unit = {
+    verifyFetchLeaderEpochRequestWithLastFetchedEpoch(ApiVersion.latestVersion, hasUnknownLastFetchedEpoch = true)
+  }
+
+  @Test
+  def testFetchLeaderEpochRequestIfLastFetchedEpochDefinedForAllPartitions(): Unit = {
+    verifyFetchLeaderEpochRequestWithLastFetchedEpoch(ApiVersion.latestVersion, hasUnknownLastFetchedEpoch = false)
+  }
+
+  @Test
+  def testFetchLeaderEpochRequestIfLastFetchedEpochDefinedForSomePartitionsIbp26(): Unit = {
+    verifyFetchLeaderEpochRequestWithLastFetchedEpoch(KAFKA_2_6_IV0, hasUnknownLastFetchedEpoch = true)
+  }
+
+  @Test
+  def testFetchLeaderEpochRequestIfLastFetchedEpochDefinedForAllPartitionsIbp26(): Unit = {
+    verifyFetchLeaderEpochRequestWithLastFetchedEpoch(KAFKA_2_6_IV0, hasUnknownLastFetchedEpoch = false)
+  }
+
+  private def verifyFetchLeaderEpochRequestWithLastFetchedEpoch(ibp: ApiVersion, hasUnknownLastFetchedEpoch: Boolean): Unit = {
+    val props = TestUtils.createBrokerConfig(1, "localhost:1234")
+    props.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, ibp.version)
+    val config = KafkaConfig.fromProps(props)
+
+    //Setup all dependencies
+    val quota: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
+    val logManager: LogManager = createMock(classOf[LogManager])
+    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
+    val log: Log = createNiceMock(classOf[Log])
+    val partition: Partition = createMock(classOf[Partition])
+    val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
+
+    val leaderEpoch = 5
+
+    //Stubs
+    expect(partition.localLogOrException).andReturn(log).anyTimes()
+    expect(log.logEndOffset).andReturn(0).anyTimes()
+    expect(log.highWatermark).andReturn(0).anyTimes()
+    expect(log.latestEpoch).andReturn(Some(leaderEpoch)).anyTimes()
+    expect(log.endOffsetForEpoch(leaderEpoch)).andReturn(
+      Some(OffsetAndEpoch(0, leaderEpoch))).anyTimes()
+    expect(replicaManager.logManager).andReturn(logManager).anyTimes()
+    expect(replicaManager.replicaAlterLogDirsManager).andReturn(replicaAlterLogDirsManager).anyTimes()
+    expect(replicaManager.brokerTopicStats).andReturn(mock(classOf[BrokerTopicStats]))
+    stub(partition, replicaManager, log)
+
+    //Expectations
+    expect(partition.truncateTo(anyLong(), anyBoolean())).times(3)
+
+    replay(replicaManager, logManager, quota, partition, log)
+
+    //Define the offsets for the OffsetsForLeaderEpochResponse
+    val offsets: util.Map[TopicPartition, EpochEndOffset] = if (!ApiVersion.isTruncationOnFetchSupported(ibp))
+      Map(t1p0 -> new EpochEndOffset(leaderEpoch, 1),
+        t1p1 -> new EpochEndOffset(leaderEpoch, 1),
+        t2p1 -> new EpochEndOffset(leaderEpoch, 1)).asJava
+    else if (hasUnknownLastFetchedEpoch)
+      Collections.singletonMap(t2p1, new EpochEndOffset(leaderEpoch, 1))
+    else
+      Collections.emptyMap[TopicPartition, EpochEndOffset]
+
+    //Create the fetcher thread
+    val mockNetwork = new ReplicaFetcherMockBlockingSend(offsets, brokerEndPoint, new SystemTime())
+
+    val thread = new ReplicaFetcherThread("bob", 0, brokerEndPoint, config, failedPartitions, replicaManager, new Metrics(), new SystemTime(), quota, Some(mockNetwork))
+
+    val lastFetchedEpoch = Some(4)
+    thread.addPartitions(Map(
+      t1p0 -> OffsetAndEpoch(0, leaderEpoch, lastFetchedEpoch),
+      t1p1 -> OffsetAndEpoch(0L, leaderEpoch, lastFetchedEpoch),
+      t2p1 -> OffsetAndEpoch(0L, leaderEpoch, if (hasUnknownLastFetchedEpoch) None else lastFetchedEpoch)))
+
+    def verifyPartitionStates(fetching: Set[TopicPartition],
+                              truncating: Set[TopicPartition]): Unit = {
+      for (tp <- List(t1p0, t1p1, t2p1)) {
+        assertTrue(thread.fetchState(tp).isDefined)
+        val fetchState = thread.fetchState(tp).get
+
+        val shouldBeReadyForFetch = fetching.contains(tp)
+        assertEquals(
+          s"Partition $tp should${if (!shouldBeReadyForFetch) " NOT" else ""} be ready for fetching",
+          shouldBeReadyForFetch, fetchState.isReadyForFetch)
+
+        val shouldBeTruncatingLog = truncating.contains(tp)
+        assertEquals(
+          s"Partition $tp should${if (!shouldBeTruncatingLog) " NOT" else ""} be truncating its log",
+          shouldBeTruncatingLog, fetchState.isTruncating)
+
+        assertFalse(s"Partition $tp should not be delayed", fetchState.isDelayed)
+      }
+    }
+
+    val truncating = if (!ApiVersion.isTruncationOnFetchSupported(ibp))
+      Set(t1p0, t1p1, t2p1)
+    else if (hasUnknownLastFetchedEpoch)
+      Set(t2p1)
+    else
+      Set.empty[TopicPartition]
+    verifyPartitionStates(Set(t1p0, t1p1, t2p1) -- truncating, truncating)
+    //Loop 1
+    thread.doWork()
+    val expectedEpochFetchCount = if (hasUnknownLastFetchedEpoch || !ApiVersion.isTruncationOnFetchSupported(ibp)) 1 else 0
+    assertEquals(expectedEpochFetchCount, mockNetwork.epochFetchCount)
+    assertEquals(1, mockNetwork.fetchCount)
+
+    verifyPartitionStates(Set(t1p0, t1p1, t2p1), Set.empty)
+
+    //Loop 2 we should not fetch epochs
+    thread.doWork()
+    assertEquals(expectedEpochFetchCount, mockNetwork.epochFetchCount)
+    assertEquals(2, mockNetwork.fetchCount)
+    verifyPartitionStates(Set(t1p0, t1p1, t2p1), Set.empty)
     verify(logManager)
   }
 
@@ -541,7 +672,7 @@ class ReplicaFetcherThreadTest {
     expect(partition.truncateTo(capture(truncated), anyBoolean())).anyTimes()
     expect(partition.localLogOrException).andReturn(log).anyTimes()
     expect(log.highWatermark).andReturn(initialFetchOffset).anyTimes()
-    expect(log.latestEpoch).andReturn(Some(5))
+    expect(log.latestEpoch).andReturn(Some(5)).times(2)
     expect(replicaManager.logManager).andReturn(logManager).anyTimes()
     expect(replicaManager.replicaAlterLogDirsManager).andReturn(replicaAlterLogDirsManager).anyTimes()
     expect(replicaManager.brokerTopicStats).andReturn(mock(classOf[BrokerTopicStats]))

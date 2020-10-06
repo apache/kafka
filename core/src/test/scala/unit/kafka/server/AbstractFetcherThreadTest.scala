@@ -308,6 +308,8 @@ class AbstractFetcherThreadTest {
         throw new UnsupportedOperationException
 
       override protected def isOffsetForLeaderEpochSupported: Boolean = false
+
+      override protected def isTruncationOnFetchSupported: Boolean = false
     }
 
     val replicaLog = Seq(
@@ -980,6 +982,8 @@ class AbstractFetcherThreadTest {
     }
 
     override protected def isOffsetForLeaderEpochSupported: Boolean = true
+
+    override protected def isTruncationOnFetchSupported: Boolean = false
 
     override def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = {
       fetchRequest.fetchData.asScala.map { case (partition, fetchData) =>

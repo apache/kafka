@@ -162,7 +162,7 @@ public class ReplicaFetcherThreadBenchmark {
 
             partition.makeFollower(partitionState, offsetCheckpoints);
             pool.put(tp, partition);
-            offsetAndEpochs.put(tp, new OffsetAndEpoch(0, 0));
+            offsetAndEpochs.put(tp, new OffsetAndEpoch(0, 0, Option.empty()));
             BaseRecords fetched = new BaseRecords() {
                 @Override
                 public int sizeInBytes() {
@@ -288,7 +288,7 @@ public class ReplicaFetcherThreadBenchmark {
 
         @Override
         public Option<OffsetAndEpoch> endOffsetForEpoch(TopicPartition topicPartition, int epoch) {
-            return OptionConverters.toScala(Optional.of(new OffsetAndEpoch(0, 0)));
+            return OptionConverters.toScala(Optional.of(new OffsetAndEpoch(0, 0, Option.empty())));
         }
 
         @Override

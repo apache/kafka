@@ -177,7 +177,7 @@ class ReplicaManagerQuotasTest {
 
       val tp = new TopicPartition("t1", 0)
       val fetchPartitionStatus = FetchPartitionStatus(LogOffsetMetadata(messageOffset = 50L, segmentBaseOffset = 0L,
-         relativePositionInSegment = 250), new PartitionData(50, 0, 1, Optional.empty()))
+         relativePositionInSegment = 250), new PartitionData(50, 0, 1, Optional.empty()), hasDivergingEpoch = false)
       val fetchMetadata = FetchMetadata(fetchMinBytes = 1,
         fetchMaxBytes = 1000,
         hardMaxBytesLimit = true,

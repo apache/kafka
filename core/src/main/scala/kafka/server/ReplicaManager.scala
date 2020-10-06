@@ -769,8 +769,9 @@ class ReplicaManager(val config: KafkaConfig,
             val futureLog = futureLocalLogOrException(topicPartition)
             logManager.abortAndPauseCleaning(topicPartition)
 
+            val (fetchOffset, lastFetchedEpoch) = initialFetchOffsetAndEpoch(futureLog)
             val initialFetchState = InitialFetchState(BrokerEndPoint(config.brokerId, "localhost", -1),
-              partition.getLeaderEpoch, futureLog.highWatermark)
+              partition.getLeaderEpoch, fetchOffset, lastFetchedEpoch)
             replicaAlterLogDirsManager.addFetcherForPartitions(Map(topicPartition -> initialFetchState))
           }
 
@@ -1088,7 +1089,7 @@ class ReplicaManager(val config: KafkaConfig,
       fetchInfos.foreach { case (topicPartition, partitionData) =>
         logReadResultMap.get(topicPartition).foreach(logReadResult => {
           val logOffsetMetadata = logReadResult.info.fetchOffsetMetadata
-          fetchPartitionStatus += (topicPartition -> FetchPartitionStatus(logOffsetMetadata, partitionData))
+          fetchPartitionStatus += (topicPartition -> FetchPartitionStatus(logOffsetMetadata, partitionData, logReadResult.divergingEpoch.nonEmpty))
         })
       }
       val fetchMetadata: SFetchMetadata = SFetchMetadata(fetchMinBytes, fetchMaxBytes, hardMaxBytesLimit,
@@ -1483,8 +1484,9 @@ class ReplicaManager(val config: KafkaConfig,
           // replica from source dir to destination dir
           logManager.abortAndPauseCleaning(topicPartition)
 
+          val (fetchOffset, lastFetchedEpoch) = initialFetchOffsetAndEpoch(log)
           futureReplicasAndInitialOffset.put(topicPartition, InitialFetchState(leader,
-            partition.getLeaderEpoch, log.highWatermark))
+            partition.getLeaderEpoch, fetchOffset, lastFetchedEpoch))
         }
       }
     }
@@ -1667,8 +1669,9 @@ class ReplicaManager(val config: KafkaConfig,
         val partitionsToMakeFollowerWithLeaderAndOffset = partitionsToMakeFollower.map { partition =>
           val leader = metadataCache.getAliveBrokers.find(_.id == partition.leaderReplicaIdOpt.get).get
             .brokerEndPoint(config.interBrokerListenerName)
-          val fetchOffset = partition.localLogOrException.highWatermark
-          partition.topicPartition -> InitialFetchState(leader, partition.getLeaderEpoch, fetchOffset)
+          val log = partition.localLogOrException
+          val (fetchOffset, lastFetchedEpoch) = initialFetchOffsetAndEpoch(log)
+          partition.topicPartition -> InitialFetchState(leader, partition.getLeaderEpoch, fetchOffset, lastFetchedEpoch)
        }.toMap
 
         replicaFetcherManager.addFetcherForPartitions(partitionsToMakeFollowerWithLeaderAndOffset)
@@ -1689,6 +1692,19 @@ class ReplicaManager(val config: KafkaConfig,
       }
 
     partitionsToMakeFollower
+  }
+
+  /**
+   * From IBP 2.7 onwards, we send latest fetch epoch in the request and truncate if a
+   * diverging epoch is returned in the response, avoiding the need for a separate OffsetForLeaderEpoch
+   * request. We use log end offset as the next fetch offset and include the corresponding epoch.
+   */
+  private def initialFetchOffsetAndEpoch(log: Log): (Long, Option[Int]) = {
+    val latestEpoch = log.latestEpoch
+    if (ApiVersion.isTruncationOnFetchSupported(config.interBrokerProtocolVersion) && latestEpoch.nonEmpty)
+      (log.logEndOffset, latestEpoch)
+    else
+      (log.highWatermark, None)
   }
 
   private def maybeShrinkIsr(): Unit = {
