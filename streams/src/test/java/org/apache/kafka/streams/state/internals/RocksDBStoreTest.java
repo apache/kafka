@@ -40,6 +40,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockRocksDbConfigSetter;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
@@ -298,9 +299,21 @@ public class RocksDBStoreTest {
     public void shouldCallRocksDbConfigSetter() {
         MockRocksDbConfigSetter.called = false;
 
+        final Properties props = StreamsTestUtils.getStreamsConfig();
+        props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
+        final Object param = new Object();
+        props.put("abc.def", param);
+        final InternalMockProcessorContext context = new InternalMockProcessorContext(
+            dir,
+            Serdes.String(),
+            Serdes.String(),
+            new StreamsConfig(props)
+        );
+
         rocksDBStore.init((StateStoreContext) context, rocksDBStore);
 
         assertTrue(MockRocksDbConfigSetter.called);
+        assertThat(MockRocksDbConfigSetter.configMap.get("abc.def"), equalTo(param));
     }
 
     @Test
@@ -695,17 +708,6 @@ public class RocksDBStoreTest {
             ));
             assertThat("Metric " + propertyname + " not found!", metric, notNullValue());
             metric.metricValue();
-        }
-    }
-
-    public static class MockRocksDbConfigSetter implements RocksDBConfigSetter {
-        static boolean called;
-
-        @Override
-        public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
-            called = true;
-
-            options.setLevel0FileNumCompactionTrigger(10);
         }
     }
 
