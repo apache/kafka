@@ -598,7 +598,6 @@ public class StreamThread extends Thread {
         log.warn("Detected that shutdown was requested. " +
                 "The all clients in this app will now begin to shutdown");
         assignmentErrorCode.set(assignorError.code());
-        log.error("WHAT set to " + assignmentErrorCode.get());
         mainConsumer.unsubscribe();
         subscribeConsumer();
     }

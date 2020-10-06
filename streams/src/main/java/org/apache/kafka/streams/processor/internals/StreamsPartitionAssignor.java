@@ -237,8 +237,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         handleRebalanceStart(topics);
 
-        log.error("WHAT recived" + assignmentErrorCode.get());
-
         return new SubscriptionInfo(
             usedSubscriptionMetadataVersion,
             LATEST_SUPPORTED_VERSION,
@@ -297,6 +295,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         int minReceivedMetadataVersion = LATEST_SUPPORTED_VERSION;
         int minSupportedMetadataVersion = LATEST_SUPPORTED_VERSION;
+
         boolean shutdownRequested = false;
         int futureMetadataVersion = UNKNOWN;
         for (final Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {

@@ -97,7 +97,6 @@ public class SubscriptionInfo {
         data.setVersion(version);
         data.setProcessId(processId);
 
-
         if (version >= 2) {
             data.setUserEndPoint(userEndPoint == null
                                      ? new byte[0]

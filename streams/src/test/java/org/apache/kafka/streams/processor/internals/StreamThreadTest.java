@@ -227,7 +227,7 @@ public class StreamThreadTest {
             stateDirectory,
             new MockStateRestoreListener(),
             threadIdx,
-                new AtomicInteger());
+            new AtomicInteger());
     }
 
     private static class StateListenerStub implements StreamThread.StateListener {
@@ -475,7 +475,7 @@ public class StreamThreadTest {
             CLIENT_ID,
             new LogContext(""),
             new AtomicLong(Long.MAX_VALUE),
-                new AtomicInteger());
+            new AtomicInteger());
         thread.setNow(mockTime.milliseconds());
         thread.maybeCommit();
         mockTime.sleep(commitInterval - 10L);
@@ -515,7 +515,7 @@ public class StreamThreadTest {
             stateDirectory,
             new MockStateRestoreListener(),
             threadIdx,
-                new AtomicInteger());
+            new AtomicInteger());
 
         mockConsumer.enforceRebalance();
         EasyMock.replay(mockConsumer);
@@ -703,7 +703,7 @@ public class StreamThreadTest {
             CLIENT_ID,
             new LogContext(""),
             new AtomicLong(Long.MAX_VALUE),
-                new AtomicInteger());
+            new AtomicInteger());
         thread.setNow(mockTime.milliseconds());
         thread.maybeCommit();
         mockTime.sleep(commitInterval - 10L);
@@ -740,7 +740,7 @@ public class StreamThreadTest {
             CLIENT_ID,
             new LogContext(""),
             new AtomicLong(Long.MAX_VALUE),
-                new AtomicInteger());
+            new AtomicInteger());
 
         thread.setNow(mockTime.milliseconds());
         thread.maybeCommit();
@@ -930,7 +930,7 @@ public class StreamThreadTest {
             CLIENT_ID,
             new LogContext(""),
             new AtomicLong(Long.MAX_VALUE),
-                new AtomicInteger()).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
+            new AtomicInteger()).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
         thread.setStateListener(
             (t, newState, oldState) -> {
                 if (oldState == StreamThread.State.CREATED && newState == StreamThread.State.STARTING) {
@@ -988,7 +988,7 @@ public class StreamThreadTest {
             CLIENT_ID,
             new LogContext(""),
             new AtomicLong(Long.MAX_VALUE),
-                new AtomicInteger()).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
+            new AtomicInteger()).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
 
         final IllegalStateException thrown = assertThrows(
             IllegalStateException.class, thread::run);
@@ -1024,7 +1024,7 @@ public class StreamThreadTest {
             CLIENT_ID,
             new LogContext(""),
             new AtomicLong(Long.MAX_VALUE),
-                new AtomicInteger()).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
+            new AtomicInteger()).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
         thread.shutdown();
         verify(taskManager);
     }
@@ -1053,7 +1053,7 @@ public class StreamThreadTest {
             CLIENT_ID,
             new LogContext(""),
             new AtomicLong(Long.MAX_VALUE),
-                new AtomicInteger()).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
+            new AtomicInteger()).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
         thread.shutdown();
         // Execute the run method. Verification of the mock will check that shutdown was only done once
         thread.run();
@@ -1388,7 +1388,7 @@ public class StreamThreadTest {
             stateDirectory,
             new MockStateRestoreListener(),
             threadIdx,
-                new AtomicInteger());
+            new AtomicInteger());
 
         thread.setState(StreamThread.State.STARTING);
         thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
@@ -1954,7 +1954,7 @@ public class StreamThreadTest {
             CLIENT_ID,
             new LogContext(""),
             new AtomicLong(Long.MAX_VALUE),
-                new AtomicInteger()).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
+            new AtomicInteger()).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
 
         consumer.schedulePollTask(() -> {
             thread.setState(StreamThread.State.PARTITIONS_REVOKED);
@@ -1997,7 +1997,7 @@ public class StreamThreadTest {
             CLIENT_ID,
             new LogContext(""),
             new AtomicLong(Long.MAX_VALUE),
-                new AtomicInteger()).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
+            new AtomicInteger()).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
 
         consumer.schedulePollTask(() -> {
             thread.setState(StreamThread.State.PARTITIONS_REVOKED);
@@ -2046,7 +2046,7 @@ public class StreamThreadTest {
             CLIENT_ID,
             new LogContext(""),
             new AtomicLong(Long.MAX_VALUE),
-                new AtomicInteger()) {
+            new AtomicInteger()) {
             @Override
             void runOnce() {
                 setState(State.PENDING_SHUTDOWN);
@@ -2103,7 +2103,7 @@ public class StreamThreadTest {
             CLIENT_ID,
             new LogContext(""),
             new AtomicLong(Long.MAX_VALUE),
-                new AtomicInteger()) {
+            new AtomicInteger()) {
             @Override
             void runOnce() {
                 setState(State.PENDING_SHUTDOWN);
@@ -2161,7 +2161,7 @@ public class StreamThreadTest {
             CLIENT_ID,
             new LogContext(""),
             new AtomicLong(Long.MAX_VALUE),
-                new AtomicInteger());
+            new AtomicInteger());
 
         EasyMock.replay(task1, task2, task3, taskManager);
 
@@ -2326,7 +2326,7 @@ public class StreamThreadTest {
             CLIENT_ID,
             new LogContext(""),
             new AtomicLong(Long.MAX_VALUE),
-                new AtomicInteger());
+            new AtomicInteger());
 
         assertThat(dummyProducerMetrics, is(thread.producerMetrics()));
     }
@@ -2359,7 +2359,7 @@ public class StreamThreadTest {
             CLIENT_ID,
             new LogContext(""),
             new AtomicLong(Long.MAX_VALUE),
-                new AtomicInteger());
+            new AtomicInteger());
         final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<>());
         final Metric testMetric = new KafkaMetric(
             new Object(),
