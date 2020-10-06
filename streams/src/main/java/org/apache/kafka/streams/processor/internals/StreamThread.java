@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -362,7 +363,7 @@ public class StreamThread extends Thread {
         final Map<String, Object> consumerConfigs = config.getMainConsumerConfigs(applicationId, getConsumerClientId(threadId), threadIdx);
         consumerConfigs.put(StreamsConfig.InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
 
-        final String originalReset = ((String) consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG)).toLowerCase(Locale.ROOT);
+        final String originalReset = OffsetResetStrategy.forName((String) consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG)).toString();
         // If there are any overrides, we never fall through to the consumer, but only handle offset management ourselves.
         if (!builder.latestResetTopicsPattern().pattern().isEmpty() || !builder.earliestResetTopicsPattern().pattern().isEmpty()) {
             consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");

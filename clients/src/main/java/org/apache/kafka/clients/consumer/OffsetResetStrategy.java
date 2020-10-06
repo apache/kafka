@@ -16,10 +16,29 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import java.util.Locale;
+import java.util.Objects;
+
+/**
+ * @see ConsumerConfig#AUTO_OFFSET_RESET_CONFIG
+ * @see ConsumerConfig#AUTO_OFFSET_RESET_DOC
+ */
 public enum OffsetResetStrategy {
     LATEST, EARLIEST, NONE;
 
+    // Enums are singletons, this means that this conversion happens once the
+    // first time a variant is actually used, and never again.
+    private final String id = name().toLowerCase(Locale.ROOT);
+
+    /**
+     * Get the {@link OffsetResetStrategy} for the given {@code name}.
+     *
+     * @throws IllegalArgumentException if the given {@code name} does not match any {@link OffsetResetStrategy}.
+     * @throws NullPointerException     if the given {@code name} is null.
+     */
     public static OffsetResetStrategy forName(final String name) {
+        Objects.requireNonNull(name, "name must not be null");
+
         for (final OffsetResetStrategy value : values()) {
             if (value.name().equalsIgnoreCase(name)) {
                 return value;
@@ -27,5 +46,10 @@ public enum OffsetResetStrategy {
         }
 
         throw new IllegalArgumentException("Unknown offset reset strategy: " + name);
+    }
+
+    @Override
+    public String toString() {
+        return id;
     }
 }

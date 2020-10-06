@@ -21,6 +21,7 @@ import org.junit.Test;
 
 import java.nio.ByteBuffer;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -52,5 +53,12 @@ public class CompressionTypeTest {
         KafkaLZ4BlockInputStream in = (KafkaLZ4BlockInputStream) CompressionType.LZ4.wrapForInput(
                 buffer, RecordBatch.MAGIC_VALUE_V1, BufferSupplier.create());
         assertFalse(in.ignoreFlagDescriptorChecksum());
+    }
+
+    @Test
+    public void testFromName() {
+        assertEquals(CompressionType.NONE, CompressionType.forName("none"));
+        assertEquals(CompressionType.GZIP, CompressionType.forName("GZIP"));
+        assertEquals(CompressionType.SNAPPY, CompressionType.forName("SnApPy"));
     }
 }

@@ -25,9 +25,12 @@ import org.junit.Test;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.function.Function;
 
-import static org.junit.Assert.assertFalse;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
 public class ConsumerConfigTest {
@@ -129,5 +132,27 @@ public class ConsumerConfigTest {
         properties.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClassName);
         properties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClassName);
         assertFalse(new ConsumerConfig(properties).getBoolean(ConsumerConfig.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED));
+    }
+
+    @Test
+    public void testOffsetResetStrategy() {
+        assertThrows(NullPointerException.class, () -> OffsetResetStrategy.forName(null));
+
+        assertEquals("earliest", OffsetResetStrategy.EARLIEST.toString());
+        assertEquals("latest", OffsetResetStrategy.LATEST.toString());
+        assertEquals("none", OffsetResetStrategy.NONE.toString());
+
+        final Function<String, OffsetResetStrategy> config = (value) -> {
+            final Properties properties = new Properties();
+            properties.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClassName);
+            properties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClassName);
+            properties.setProperty(AUTO_OFFSET_RESET_CONFIG, value);
+            return OffsetResetStrategy.forName(
+                new ConsumerConfig(properties).getString(AUTO_OFFSET_RESET_CONFIG)
+            );
+        };
+        assertEquals(OffsetResetStrategy.EARLIEST, config.apply("earliest"));
+        assertEquals(OffsetResetStrategy.LATEST, config.apply("LATEST"));
+        assertEquals(OffsetResetStrategy.NONE, config.apply("NoNe"));
     }
 }
