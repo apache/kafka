@@ -64,7 +64,9 @@ public class ChangeLoggingSessionBytesStoreTest {
         store.init((StateStoreContext) context, store);
     }
 
-    @Test void shouldDelegateDeprecatedInit() {
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldDelegateDeprecatedInit() {
         inner.init((ProcessorContext) context, store);
         EasyMock.expectLastCall();
         EasyMock.replay(inner);
@@ -72,7 +74,8 @@ public class ChangeLoggingSessionBytesStoreTest {
         EasyMock.verify(inner);
     }
 
-    @Test void shouldDelegateInit() {
+    @Test
+    public void shouldDelegateInit() {
         inner.init((StateStoreContext) context, store);
         EasyMock.expectLastCall();
         EasyMock.replay(inner);

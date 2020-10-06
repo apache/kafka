@@ -157,7 +157,7 @@ public class RocksDBStoreTest {
         metricsRecorder.addValueProviders(eq(DB_NAME), notNull(), notNull(), isNull());
         replay(metricsRecorder);
 
-        rocksDBStore.openDB(context);
+        rocksDBStore.openDB(context.appConfigs(), context.stateDir());
 
         verify(metricsRecorder);
         reset(metricsRecorder);
@@ -171,7 +171,7 @@ public class RocksDBStoreTest {
         metricsRecorder.addValueProviders(eq(DB_NAME), notNull(), notNull(), notNull());
         replay(metricsRecorder);
 
-        rocksDBStore.openDB(context);
+        rocksDBStore.openDB(context.appConfigs(), context.stateDir());
 
         verify(metricsRecorder);
         reset(metricsRecorder);
@@ -182,7 +182,7 @@ public class RocksDBStoreTest {
         rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
         try {
             context = getProcessorContext(RecordingLevel.DEBUG);
-            rocksDBStore.openDB(context);
+            rocksDBStore.openDB(context.appConfigs(), context.stateDir());
             reset(metricsRecorder);
             metricsRecorder.removeValueProviders(DB_NAME);
             replay(metricsRecorder);
@@ -212,7 +212,7 @@ public class RocksDBStoreTest {
         metricsRecorder.addValueProviders(eq(DB_NAME), notNull(), notNull(), isNull());
         replay(metricsRecorder);
 
-        rocksDBStore.openDB(context);
+        rocksDBStore.openDB(context.appConfigs(), context.stateDir());
         verify(metricsRecorder);
         reset(metricsRecorder);
     }
@@ -242,7 +242,7 @@ public class RocksDBStoreTest {
                 "the block-based table format of RocksDB. Do not provide a new instance of BlockBasedTableConfig to " +
                 "the RocksDB options.",
             ProcessorStateException.class,
-            () -> rocksDBStore.openDB(context)
+            () -> rocksDBStore.openDB(context.appConfigs(), context.stateDir())
         );
     }
 
@@ -268,7 +268,7 @@ public class RocksDBStoreTest {
         metricsRecorder.addValueProviders(eq(DB_NAME), notNull(), isNull(), notNull());
         replay(metricsRecorder);
 
-        rocksDBStore.openDB(context);
+        rocksDBStore.openDB(context.appConfigs(), context.stateDir());
         verify(metricsRecorder);
         reset(metricsRecorder);
     }
@@ -310,7 +310,7 @@ public class RocksDBStoreTest {
 
         assertTrue(tmpDir.setReadOnly());
 
-        assertThrows(ProcessorStateException.class, () -> rocksDBStore.openDB(tmpContext));
+        assertThrows(ProcessorStateException.class, () -> rocksDBStore.openDB(tmpContext.appConfigs(), tmpContext.stateDir()));
     }
 
     @Test

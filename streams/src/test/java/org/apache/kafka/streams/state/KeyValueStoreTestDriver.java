@@ -28,6 +28,7 @@ import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
@@ -331,7 +332,7 @@ public class KeyValueStoreTestDriver<K, V> {
      * @return the processing context; never null
      * @see #addEntryToRestoreLog(Object, Object)
      */
-    public ProcessorContext context() {
+    public StateStoreContext context() {
         return context;
     }
 
