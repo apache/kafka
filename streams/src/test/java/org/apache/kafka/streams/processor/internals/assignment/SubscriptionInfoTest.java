@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import java.util.Map;
-
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task;
@@ -61,7 +60,6 @@ public class SubscriptionInfoTest {
     );
 
     private final static String IGNORED_USER_ENDPOINT = "ignoredUserEndpoint:80";
-
     private static final byte[] IGNORED_UNIQUE_FIELD = Bytes.EMPTY;
 
     @Test(expected = IllegalArgumentException.class)

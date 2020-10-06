@@ -485,6 +485,7 @@ public class StreamsPartitionAssignorTest {
 
         Collections.sort(subscription.topics());
         assertEquals(asList("topic1", "topic2"), subscription.topics());
+
         final SubscriptionInfo info = getInfo(UUID_1, prevTasks, standbyTasks, uniqueField);
         assertEquals(info, SubscriptionInfo.decode(subscription.userData()));
     }
