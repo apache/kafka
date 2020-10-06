@@ -613,7 +613,7 @@ public class StreamThread extends Thread {
             return;
         }
 
-        // we need to first add closed tasks and then created tasks to work with those revived / recycled tasks
+        // we need to first add any closed revoked/corrupted/recycled tasks and then add the initialized tasks to update the changelogs of revived/recycled tasks
         restoreThread.addClosedTasks(taskManager.drainRemovedTasks());
 
         // try to initialize created tasks that are either newly assigned or re-created from corrupted tasks
