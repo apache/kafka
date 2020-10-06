@@ -378,7 +378,9 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         try {
             checkpointFile.write(filteredOffsets);
         } catch (final IOException e) {
-            log.warn("Failed to write offset checkpoint file to {} for global stores: {}", checkpointFile, e);
+            log.warn("Failed to write offset checkpoint file to {} for global stores: {}." +
+                " This may occur if OS cleaned the state.dir in case when it located in /tmp directory." +
+                " You can change location for state.dir to resolve problem", checkpointFile, e);
         }
     }
 
