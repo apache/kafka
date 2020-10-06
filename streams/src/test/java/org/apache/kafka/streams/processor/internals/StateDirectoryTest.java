@@ -308,7 +308,7 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldLogCleanupOfStateDirectoryOnlyOnce() {
+    public void shouldCleanupObsoleteStateDirectoriesOnlyOnce() {
         final File dir = directory.directoryForTask(new TaskId(2, 0));
         assertTrue(new File(dir, "store").mkdir());
         assertEquals(1, directory.listAllTaskDirectories().length);
