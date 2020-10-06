@@ -316,13 +316,30 @@ public class CachingSessionStoreTest {
         final Windowed<Bytes> a3 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 2, SEGMENT_INTERVAL * 2));
         cachingStore.put(a1, "1".getBytes());
         cachingStore.put(a2, "2".getBytes());
-        cachingStore.put(a3, "3".getBytes());
         cachingStore.flush();
+        cachingStore.put(a3, "3".getBytes());
         final KeyValueIterator<Windowed<Bytes>, byte[]> results =
             cachingStore.findSessions(keyA, 0, SEGMENT_INTERVAL * 2);
         assertEquals(a1, results.next().key);
         assertEquals(a2, results.next().key);
         assertEquals(a3, results.next().key);
+        assertFalse(results.hasNext());
+    }
+
+    @Test
+    public void shouldBackwardFetchCorrectlyAcrossSegments() {
+        final Windowed<Bytes> a1 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 0, SEGMENT_INTERVAL * 0));
+        final Windowed<Bytes> a2 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 1, SEGMENT_INTERVAL * 1));
+        final Windowed<Bytes> a3 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 2, SEGMENT_INTERVAL * 2));
+        cachingStore.put(a1, "1".getBytes());
+        cachingStore.put(a2, "2".getBytes());
+        cachingStore.flush();
+        cachingStore.put(a3, "3".getBytes());
+        final KeyValueIterator<Windowed<Bytes>, byte[]> results =
+            cachingStore.backwardFindSessions(keyA, 0, SEGMENT_INTERVAL * 2);
+        assertEquals(a3, results.next().key);
+        assertEquals(a2, results.next().key);
+        assertEquals(a1, results.next().key);
         assertFalse(results.hasNext());
     }
 
@@ -511,6 +528,24 @@ public class CachingSessionStoreTest {
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> singleKeyIterator = cachingStore.findSessions(keyAA, 0L, 10L);
         final KeyValueIterator<Windowed<Bytes>, byte[]> keyRangeIterator = cachingStore.findSessions(keyAA, keyAA, 0L, 10L);
+
+        assertEquals(singleKeyIterator.next(), keyRangeIterator.next());
+        assertEquals(singleKeyIterator.next(), keyRangeIterator.next());
+        assertFalse(singleKeyIterator.hasNext());
+        assertFalse(keyRangeIterator.hasNext());
+    }
+
+    @Test
+    public void shouldReturnSameResultsForSingleKeyFindSessionsBackwardsAndEqualKeyRangeFindSessions() {
+        cachingStore.put(new Windowed<>(keyA, new SessionWindow(0, 1)), "1".getBytes());
+        cachingStore.put(new Windowed<>(keyAA, new SessionWindow(2, 3)), "2".getBytes());
+        cachingStore.put(new Windowed<>(keyAA, new SessionWindow(4, 5)), "3".getBytes());
+        cachingStore.put(new Windowed<>(keyB, new SessionWindow(6, 7)), "4".getBytes());
+
+        final KeyValueIterator<Windowed<Bytes>, byte[]> singleKeyIterator =
+            cachingStore.backwardFindSessions(keyAA, 0L, 10L);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> keyRangeIterator =
+            cachingStore.backwardFindSessions(keyAA, keyAA, 0L, 10L);
 
         assertEquals(singleKeyIterator.next(), keyRangeIterator.next());
         assertEquals(singleKeyIterator.next(), keyRangeIterator.next());
