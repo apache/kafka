@@ -24,7 +24,6 @@ import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
-import org.slf4j.Logger;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -208,8 +207,7 @@ public interface Task {
     }
 
     void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
-                                     final TimeoutException timeoutException,
-                                     final Logger log) throws StreamsException;
+                                     final TimeoutException timeoutException) throws StreamsException;
 
-    void clearTaskTimeout(final Logger log);
+    void clearTaskTimeout();
 }

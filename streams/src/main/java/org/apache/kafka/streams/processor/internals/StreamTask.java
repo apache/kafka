@@ -992,6 +992,17 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return commitRequested;
     }
 
+    @Override
+    public void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
+                                            final TimeoutException timeoutException) throws StreamsException {
+        maybeInitTaskTimeoutOrThrow(currentWallClockMs, timeoutException, log);
+    }
+
+    @Override
+    public void clearTaskTimeout() {
+        clearTaskTimeout(log);
+    }
+
     static String encodeTimestamp(final long partitionTime) {
         final ByteBuffer buffer = ByteBuffer.allocate(9);
         buffer.put(LATEST_MAGIC_BYTE);

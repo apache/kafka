@@ -147,10 +147,9 @@ public abstract class AbstractTask implements Task {
         topology.updateSourceTopics(nodeToSourceTopics);
     }
 
-    @Override
-    public void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
-                                            final TimeoutException timeoutException,
-                                            final Logger log) throws StreamsException {
+    void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
+                                     final TimeoutException timeoutException,
+                                     final Logger log) throws StreamsException {
         if (deadlineMs == NO_DEADLINE) {
             deadlineMs = currentWallClockMs + taskTimeoutMs;
         } else if (currentWallClockMs > deadlineMs) {
@@ -183,8 +182,7 @@ public abstract class AbstractTask implements Task {
 
     }
 
-    @Override
-    public void clearTaskTimeout(final Logger log) {
+    void clearTaskTimeout(final Logger log) {
         if (deadlineMs != NO_DEADLINE) {
             log.debug("Clearing task timeout.");
             deadlineMs = NO_DEADLINE;
