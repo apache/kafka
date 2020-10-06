@@ -166,6 +166,8 @@ public interface Task {
 
     StateStore getStore(final String name);
 
+    ProcessorStateManager stateManager();
+
     Set<TopicPartition> inputPartitions();
 
     /**

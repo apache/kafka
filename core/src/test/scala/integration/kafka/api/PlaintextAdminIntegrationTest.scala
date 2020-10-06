@@ -44,6 +44,7 @@ import org.apache.kafka.common.{ConsumerGroupState, ElectionType, TopicPartition
 import org.junit.Assert._
 import org.junit.{After, Before, Ignore, Test}
 import org.scalatest.Assertions.intercept
+import org.slf4j.LoggerFactory
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
@@ -1044,6 +1045,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
       def createProperties(groupInstanceId: String): Properties = {
         val newConsumerConfig = new Properties(consumerConfig)
+        // We need to disable the auto commit because after the members got removed from group, the offset commit
+        // will cause the member rejoining and the test will be flaky (check ConsumerCoordinator#OffsetCommitResponseHandler)
+        newConsumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
         newConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
         newConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
         if (groupInstanceId != EMPTY_GROUP_INSTANCE_ID) {
@@ -2058,11 +2062,12 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @Test
   def testDescribeConfigsForLog4jLogLevels(): Unit = {
     client = Admin.create(createConfig)
-
+    LoggerFactory.getLogger("kafka.cluster.Replica").trace("Message to create the logger")
     val loggerConfig = describeBrokerLoggers()
-    val rootLogLevel = loggerConfig.get(Log4jController.ROOT_LOGGER).value()
+    val kafkaLogLevel = loggerConfig.get("kafka").value()
     val logCleanerLogLevelConfig = loggerConfig.get("kafka.cluster.Replica")
-    assertEquals(rootLogLevel, logCleanerLogLevelConfig.value()) // we expect an undefined log level to be the same as the root logger
+    // we expect the log level to be inherited from the first ancestor with a level configured
+    assertEquals(kafkaLogLevel, logCleanerLogLevelConfig.value())
     assertEquals("kafka.cluster.Replica", logCleanerLogLevelConfig.name())
     assertEquals(ConfigEntry.ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG, logCleanerLogLevelConfig.source())
     assertEquals(false, logCleanerLogLevelConfig.isReadOnly)

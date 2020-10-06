@@ -25,6 +25,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -193,7 +194,7 @@ public class ProcessorStateManager implements StateManager {
         processorContext.uninitialize();
         for (final StateStore store : allStores) {
             if (!stores.containsKey(store.name())) {
-                store.init(processorContext, store);
+                store.init((StateStoreContext) processorContext, store);
             }
             log.trace("Registered state store {}", store.name());
         }
@@ -538,7 +539,7 @@ public class ProcessorStateManager implements StateManager {
         log.debug("Preparing to transit state manager for task {} from {} to {}", taskId, taskType, newType);
     }
 
-    void maybeConvertToNewTaskType() {
+    void maybeCompleteTaskTypeConversion() {
         if (!taskType.equals(newType)) {
             taskType = newType;
 

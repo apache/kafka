@@ -30,7 +30,6 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -50,7 +49,6 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.ChangelogRegister;
 import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.GlobalProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.GlobalStateManager;
@@ -59,7 +57,6 @@ import org.apache.kafka.streams.processor.internals.GlobalStateUpdateTask;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
-import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
@@ -444,13 +441,7 @@ public class TopologyTestDriver implements Closeable {
                 new LogAndContinueExceptionHandler()
             );
             globalStateTask.initialize();
-            globalProcessorContext.setRecordContext(new ProcessorRecordContext(
-                0L,
-                -1L,
-                -1,
-                ProcessorContextImpl.NONEXIST_TOPIC,
-                new RecordHeaders())
-            );
+            globalProcessorContext.setRecordContext(null);
         } else {
             globalStateManager = null;
             globalStateTask = null;
@@ -509,13 +500,7 @@ public class TopologyTestDriver implements Closeable {
             );
             task.initializeIfNeeded();
             task.completeRestorationIfPossible();
-            task.processorContext().setRecordContext(new ProcessorRecordContext(
-                0L,
-                -1L,
-                -1,
-                ProcessorContextImpl.NONEXIST_TOPIC,
-                new RecordHeaders())
-            );
+            task.processorContext().setRecordContext(null);
         } else {
             task = null;
         }
@@ -1196,20 +1181,6 @@ public class TopologyTestDriver implements Closeable {
             producer.close();
         }
         stateDirectory.clean();
-    }
-
-    static class MockChangelogRegister implements ChangelogRegister {
-        private final Set<TopicPartition> restoringPartitions = new HashSet<>();
-
-        @Override
-        public void register(final TopicPartition partition, final ProcessorStateManager stateManager) {
-            restoringPartitions.add(partition);
-        }
-
-        @Override
-        public void unregister(final Collection<TopicPartition> partitions) {
-            restoringPartitions.removeAll(partitions);
-        }
     }
 
     static class MockTime implements Time {

@@ -27,11 +27,13 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -106,18 +108,18 @@ public class StateRestoreThread extends Thread {
         }
     }
 
-    public synchronized void addInitializedTasks(final List<AbstractTask> tasks) {
+    public synchronized void addInitializedTasks(final List<Task> tasks) {
         if (!tasks.isEmpty()) {
-            for (final AbstractTask task: tasks) {
+            for (final Task task: tasks) {
                 taskItemQueue.add(new TaskItem(task, ItemType.CREATE, task.changelogPartitions()));
             }
             notifyAll();
         }
     }
 
-    public synchronized void addClosedTasks(final Map<AbstractTask, Collection<TopicPartition>> tasks) {
+    public synchronized void addClosedTasks(final Map<Task, Collection<TopicPartition>> tasks) {
         if (!tasks.isEmpty()) {
-            for (final Map.Entry<AbstractTask, Collection<TopicPartition>> entry : tasks.entrySet()) {
+            for (final Map.Entry<Task, Collection<TopicPartition>> entry : tasks.entrySet()) {
                 taskItemQueue.add(new TaskItem(entry.getKey(), ItemType.CLOSE, entry.getValue()));
             }
             notifyAll();
@@ -161,28 +163,26 @@ public class StateRestoreThread extends Thread {
         final List<TaskItem> items = new ArrayList<>();
         taskItemQueue.drainTo(items);
 
-        if (!items.isEmpty()) {
-            for (final TaskItem item : items) {
-                // TODO: we should consider also call the listener if the
-                //       changelog is not yet completed
-                if (item.type == ItemType.CLOSE) {
-                    changelogReader.unregister(item.changelogPartitions);
+        for (final TaskItem item : items) {
+            // TODO KAFKA-10575: we should consider also call the listener if the
+            //                   task is closed but not yet completed restoration
+            if (item.type == ItemType.CLOSE) {
+                changelogReader.unregister(item.changelogPartitions);
 
-                    log.info("Unregistered changelogs {} for closing task {}",
-                            item.task.changelogPartitions(),
-                            item.task.id());
-                } else if (item.type == ItemType.CREATE) {
-                    // we should only convert the state manager type right StateRestoreThreadTest.javabefore re-registering the changelog
-                    item.task.stateMgr.maybeConvertToNewTaskType();
+                log.info("Unregistered changelogs {} for closing task {}",
+                        item.task.changelogPartitions(),
+                        item.task.id());
+            } else if (item.type == ItemType.CREATE) {
+                // we should only convert the state manager type right before re-registering the changelog
+                item.task.stateManager().maybeCompleteTaskTypeConversion();
 
-                    for (final TopicPartition partition : item.changelogPartitions) {
-                        changelogReader.register(partition, item.task.stateMgr);
-                    }
-
-                    log.info("Registered changelogs {} for created task {}",
-                            item.task.changelogPartitions(),
-                            item.task.id());
+                for (final TopicPartition partition : item.changelogPartitions) {
+                    changelogReader.register(partition, item.task.stateManager());
                 }
+
+                log.info("Registered changelogs {} for created task {}",
+                        item.task.changelogPartitions(),
+                        item.task.id());
             }
         }
         items.clear();
@@ -191,7 +191,7 @@ public class StateRestoreThread extends Thread {
         final long startMs = time.milliseconds();
         try {
             final int numRestored = changelogReader.restore();
-            // TODO: we should record the restoration related metrics
+            // TODO KIP-444: we should record the restoration related metrics including restore-ratio
             log.debug("Restored {} records in {} ms", numRestored, time.milliseconds() - startMs);
         } catch (final TaskCorruptedException e) {
             log.warn("Detected the states of tasks " + e.corruptedTaskWithChangelogs() + " are corrupted. " +
@@ -219,7 +219,23 @@ public class StateRestoreThread extends Thread {
     }
 
     public TaskCorruptedException nextCorruptedException() {
-        return corruptedExceptions.poll();
+        final List<TaskCorruptedException> exceptions = new ArrayList<>();
+        corruptedExceptions.drainTo(exceptions);
+
+        if (exceptions.isEmpty()) {
+            return null;
+        } else if (exceptions.size() == 1) {
+            return exceptions.get(0);
+        } else {
+            // if there are more exceptions accumulated, try to consolidate them as a single exception
+            // for the main thread to re-throw and handle
+            final Map<TaskId, Collection<TopicPartition>> taskWithChangelogs = new HashMap<>();
+            for (final TaskCorruptedException exception : exceptions) {
+                taskWithChangelogs.putAll(exception.corruptedTaskWithChangelogs());
+            }
+
+            return new TaskCorruptedException(taskWithChangelogs);
+        }
     }
 
     public void shutdown(final long timeoutMs) throws InterruptedException {
@@ -228,9 +244,9 @@ public class StateRestoreThread extends Thread {
         isRunning.set(false);
         interrupt();
 
-        final boolean ret = shutdownLatch.await(timeoutMs, TimeUnit.MILLISECONDS);
+        final boolean shutdownComplete = shutdownLatch.await(timeoutMs, TimeUnit.MILLISECONDS);
 
-        if (ret) {
+        if (shutdownComplete) {
             log.info("Shutdown complete");
         } else {
             log.warn("Shutdown timed out after {}", timeoutMs);
@@ -239,16 +255,15 @@ public class StateRestoreThread extends Thread {
 
     private enum ItemType {
         CREATE,
-        CLOSE,
-        REVIVE
+        CLOSE
     }
 
     private static class TaskItem {
+        private final Task task;
         private final ItemType type;
-        private final AbstractTask task;
         private final Collection<TopicPartition> changelogPartitions;
 
-        private TaskItem(final AbstractTask task, final ItemType type, final Collection<TopicPartition> changelogPartitions) {
+        private TaskItem(final Task task, final ItemType type, final Collection<TopicPartition> changelogPartitions) {
             this.task = task;
             this.type = type;
             this.changelogPartitions = changelogPartitions;

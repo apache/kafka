@@ -59,6 +59,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -1129,7 +1130,7 @@ public class StreamThreadTest {
         final AtomicBoolean processed = new AtomicBoolean(false);
         internalTopologyBuilder.addProcessor(
             "proc",
-            () -> (key, value) -> {
+            () -> record -> {
                 if (shouldThrow.get()) {
                     throw new TaskCorruptedException(singletonMap(task1, new HashSet<>(singleton(storeChangelogTopicPartition))));
                 } else {
@@ -1138,12 +1139,12 @@ public class StreamThreadTest {
             },
             "name");
         internalTopologyBuilder.addStateStore(
-            Stores.keyValueStoreBuilder(
-                Stores.persistentKeyValueStore(storeName),
-                Serdes.String(),
-                Serdes.String()
-            ),
-            "proc"
+                Stores.keyValueStoreBuilder(
+                        Stores.persistentKeyValueStore(storeName),
+                        Serdes.String(),
+                        Serdes.String()
+                ),
+                "proc"
         );
 
         thread.setState(StreamThread.State.STARTING);
@@ -1161,12 +1162,12 @@ public class StreamThreadTest {
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.mainConsumer();
         mockConsumer.assign(assignedPartitions);
         mockConsumer.updateBeginningOffsets(mkMap(
-            mkEntry(t1p1, 0L)
+                mkEntry(t1p1, 0L)
         ));
 
         final MockConsumer<byte[], byte[]> restoreConsumer = (MockConsumer<byte[], byte[]>) thread.restoreConsumer();
         restoreConsumer.updateBeginningOffsets(mkMap(
-            mkEntry(storeChangelogTopicPartition, 0L)
+                mkEntry(storeChangelogTopicPartition, 0L)
         ));
         final MockAdminClient admin = (MockAdminClient) thread.adminClient();
         admin.updateEndOffsets(singletonMap(storeChangelogTopicPartition, 0L));

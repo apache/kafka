@@ -46,10 +46,12 @@ import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -132,7 +134,7 @@ public class StreamTaskTest {
     private final MockSourceNode<Integer, Integer, Integer, Integer> source2 = new MockSourceNode<>(intDeserializer, intDeserializer);
     private final MockSourceNode<Integer, Integer, ?, ?> source3 = new MockSourceNode<Integer, Integer, Object, Object>(intDeserializer, intDeserializer) {
         @Override
-        public void process(final Integer key, final Integer value) {
+        public void process(final Record<Integer, Integer> record) {
             throw new RuntimeException("KABOOM!");
         }
 
@@ -466,10 +468,11 @@ public class StreamTaskTest {
                 this.context = context;
                 super.init(context);
             }
+
             @Override
-            public void process(final Integer key, final Integer value) {
-                if (key % 2 == 0) {
-                    context.forward(key, value);
+            public void process(final Record<Integer, Integer> record) {
+                if (record.key() % 2 == 0) {
+                    context.forward(record);
                 }
             }
         };
@@ -1224,6 +1227,18 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldNotShareHeadersBetweenPunctuateIterations() {
+        task = createStatelessTask(createConfig(false, "100"), StreamsConfig.METRICS_LATEST);
+        task.initializeIfNeeded();
+        task.completeRestorationIfPossible();
+
+        task.punctuate(processorSystemTime, 1, PunctuationType.WALL_CLOCK_TIME,
+            timestamp -> task.processorContext().headers().add("dummy", null));
+        task.punctuate(processorSystemTime, 1, PunctuationType.WALL_CLOCK_TIME,
+            timestamp -> assertFalse(task.processorContext().headers().iterator().hasNext()));
+    }
+
+    @Test
     public void shouldWrapKafkaExceptionWithStreamsExceptionWhenProcess() {
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();
         EasyMock.expect(stateManager.changelogOffsets()).andReturn(Collections.emptyMap()).anyTimes();
@@ -1322,10 +1337,10 @@ public class StreamTaskTest {
         task.completeRestorationIfPossible();
 
         task.prepareCommit();
-        task.postCommit(true);  // should checkpoint
+        task.postCommit(true);   // should checkpoint
 
         task.prepareCommit();
-        task.postCommit(false); // should not checkpoint
+        task.postCommit(false);   // should not checkpoint
 
         EasyMock.verify(stateManager, recordCollector);
     }
@@ -1565,7 +1580,7 @@ public class StreamTaskTest {
         task.postCommit(true);
         EasyMock.verify(stateManager);
     }
-
+    
     @Test
     public void shouldNotCheckpointForSuspendedRunningTaskWithSmallProgress() {
         EasyMock.expect(stateManager.changelogOffsets())
@@ -2017,6 +2032,46 @@ public class StreamTaskTest {
         assertThat(task.state(), equalTo(SUSPENDED));
     }
 
+    @Test
+    public void shouldThrowTopologyExceptionIfTaskCreatedForUnknownTopic() {
+        final InternalProcessorContext context = new ProcessorContextImpl(
+                taskId,
+                createConfig(false, "100"),
+                stateManager,
+                streamsMetrics,
+                null
+        );
+        final StreamsMetricsImpl metrics = new StreamsMetricsImpl(this.metrics, "test", StreamsConfig.METRICS_LATEST, time);
+        EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet());
+        EasyMock.replay(stateManager);
+
+        // The processor topology is missing the topics
+        final ProcessorTopology topology = withSources(asList(), mkMap());
+
+        final TopologyException  exception = assertThrows(
+            TopologyException.class,
+            () -> new StreamTask(
+                taskId,
+                partitions,
+                topology,
+                consumer,
+                createConfig(false, "100"),
+                metrics,
+                stateDirectory,
+                cache,
+                time,
+                stateManager,
+                recordCollector,
+                context
+            )
+        );
+
+        assertThat(exception.getMessage(), equalTo("Invalid topology: " +
+                "Topic is unkown to the topology. This may happen if different KafkaStreams instances of the same " +
+                "application execute different Topologies. Note that Topologies are only identical if all operators " +
+                "are added in the same order."));
+    }
+
     private List<MetricName> getTaskMetrics() {
         return metrics.metrics().keySet().stream().filter(m -> m.tags().containsKey("task-id")).collect(Collectors.toList());
     }
@@ -2250,8 +2305,7 @@ public class StreamTaskTest {
         );
     }
 
-    private ConsumerRecord<byte[], byte[]> getConsumerRecord(final Integer key,
-                                                             final long offset) {
+    private ConsumerRecord<byte[], byte[]> getConsumerRecord(final Integer key, final long offset) {
         return new ConsumerRecord<>(
             topic1,
             1,

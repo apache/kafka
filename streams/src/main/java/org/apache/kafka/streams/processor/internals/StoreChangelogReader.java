@@ -59,7 +59,7 @@ import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchComm
  * restoring active tasks. It manages the restore consumer, including its assigned partitions, when to pause / resume
  * these partitions, etc.
  * <p>
- * This object is thread-safe for concurrent access between the two threads.
+ * This object is note thread-safe, it is supposed to be accessed by the restore thread only.
  * <p>
  * The reader also maintains the source of truth for restoration state: only active tasks restoring changelog could
  * be completed, while standby tasks updating changelog would always be in restoring state after being initialized.
@@ -107,7 +107,6 @@ public class StoreChangelogReader implements ChangelogReader {
 
         private final ProcessorStateManager stateManager;
 
-        // NOTE only this field may be concurrently accessed by stream and restore threads
         private ChangelogState changelogState;
 
         private long totalRestored;
@@ -208,11 +207,8 @@ public class StoreChangelogReader implements ChangelogReader {
     // source of the truth of the current registered changelogs;
     // NOTE a changelog would only be removed when its corresponding task
     // is being removed from the thread; otherwise it would stay in this map even after completed
-    //
-    // this map may be concurrently accessed by different threads and hence need to be guarded
     private final Map<TopicPartition, ChangelogMetadata> changelogs;
 
-    // this state may be concurrently accessed by different threads and hence need to be guarded
     private ChangelogReaderState state;
 
     public StoreChangelogReader(final Time time,
@@ -456,7 +452,9 @@ public class StoreChangelogReader implements ChangelogReader {
                 final Map<TaskId, Collection<TopicPartition>> taskWithCorruptedChangelogs = new HashMap<>();
                 for (final TopicPartition partition : e.partitions()) {
                     final ChangelogMetadata metadata = changelogs.get(partition);
-                    if (metadata != null) {
+                    if (metadata == null) {
+                        throw new IllegalStateException("Cannot find the changelog metadata for " + partition);
+                    } else {
                         final TaskId taskId = metadata.stateManager.taskId();
                         taskWithCorruptedChangelogs.computeIfAbsent(taskId, k -> new HashSet<>()).add(partition);
                     }

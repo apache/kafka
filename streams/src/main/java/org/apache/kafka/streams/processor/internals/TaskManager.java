@@ -83,7 +83,7 @@ public class TaskManager {
     // materializing this relationship because the lookup is on the hot path
     private final Map<TopicPartition, Task> partitionToTask = new HashMap<>();
 
-    private Map<AbstractTask, Collection<TopicPartition>> removedTasks = new HashMap<>();
+    private Map<Task, Collection<TopicPartition>> removedTasks = new HashMap<>();
 
     private Consumer<byte[], byte[]> mainConsumer;
 
@@ -200,8 +200,8 @@ public class TaskManager {
             }
             task.closeDirty();
 
-            removedTasks.put((AbstractTask) task, task.changelogPartitions());
-            ((AbstractTask) task).stateMgr.clear();
+            removedTasks.put(task, task.changelogPartitions());
+            task.stateManager().clear();
 
             // For active tasks pause their input partitions so we won't poll any more records
             // for this task until it has been re-initialized;
@@ -284,6 +284,8 @@ public class TaskManager {
         handleCloseAndRecycle(tasksToRecycle, tasksToCloseClean, tasksToCloseDirty, activeTasksToCreate, standbyTasksToCreate, taskCloseExceptions);
 
         if (!taskCloseExceptions.isEmpty()) {
+            log.error("Hit exceptions while closing / recycling tasks: {}", taskCloseExceptions);
+
             for (final Map.Entry<TaskId, RuntimeException> entry : taskCloseExceptions.entrySet()) {
                 if (!(entry.getValue() instanceof TaskMigratedException)) {
                     if (entry.getValue() instanceof KafkaException) {
@@ -455,7 +457,7 @@ public class TaskManager {
         }
 
         tasks.remove(task.id());
-        removedTasks.put((AbstractTask) task, task.changelogPartitions());
+        removedTasks.put(task, task.changelogPartitions());
 
         if (clearStateManager) {
             ((AbstractTask) task).stateMgr.clear();
@@ -465,12 +467,12 @@ public class TaskManager {
     /**
      * Tries to initialize any newly assigned tasks, so that they can be restored by the restoration threads
      */
-    public List<AbstractTask> tryInitializeNewTasks() {
-        final List<AbstractTask> initializedTasks = new LinkedList<>();
+    public List<Task> tryInitializeNewTasks() {
+        final List<Task> initializedTasks = new LinkedList<>();
         for (final Task task : tasks.values()) {
             try {
                 if (task.initializeIfNeeded()) {
-                    initializedTasks.add((AbstractTask) task);
+                    initializedTasks.add(task);
                 }
             } catch (final LockException | TimeoutException e) {
                 // it is possible that if there are multiple threads within the instance that one thread
@@ -483,8 +485,8 @@ public class TaskManager {
         return initializedTasks;
     }
 
-    public Map<AbstractTask, Collection<TopicPartition>> drainRemovedTasks() {
-        final Map<AbstractTask, Collection<TopicPartition>> drainedList = removedTasks;
+    public Map<Task, Collection<TopicPartition>> drainRemovedTasks() {
+        final Map<Task, Collection<TopicPartition>> drainedList = removedTasks;
         removedTasks = new HashMap<>();
 
         return drainedList;
@@ -495,7 +497,7 @@ public class TaskManager {
      *
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
-     * @return {@code true} if all tasks are fully restored
+     * @return {@code true} if all tasks are fully restored; this is only for testing
      */
     boolean tryToCompleteRestoration(final Set<TopicPartition> restoredChangelogs) {
         boolean allActiveTasksRestored = true;
@@ -656,7 +658,7 @@ public class TaskManager {
             if (task.isActive()) {
                 closeTaskDirty(task);
                 iterator.remove();
-                removedTasks.put((AbstractTask) task, task.changelogPartitions());
+                removedTasks.put(task, task.changelogPartitions());
                 ((AbstractTask) task).stateMgr.clear();
 
                 try {

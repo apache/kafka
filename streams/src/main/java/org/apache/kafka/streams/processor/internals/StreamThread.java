@@ -617,20 +617,16 @@ public class StreamThread extends Thread {
         restoreThread.addClosedTasks(taskManager.drainRemovedTasks());
 
         // try to initialize created tasks that are either newly assigned or re-created from corrupted tasks
-        final List<AbstractTask> initializedTasks;
+        final List<Task> initializedTasks;
         if (!(initializedTasks = taskManager.tryInitializeNewTasks()).isEmpty()) {
-            if (log.isDebugEnabled()) {
-                log.debug("Initializing newly created tasks {} under state {}",
-                        initializedTasks.stream().map(AbstractTask::id).collect(Collectors.toList()), state);
-            }
+            log.info("Initialized new tasks {} under state {}, will start restoring them",
+                    initializedTasks.stream().map(Task::id).collect(Collectors.toList()), state);
 
             restoreThread.addInitializedTasks(initializedTasks);
         }
 
         // try complete restoration if there are any restoring tasks
-        if (taskManager.tryToCompleteRestoration(restoreThread.completedChangelogs())) {
-            log.debug("Completed restoring all tasks now");
-        }
+        taskManager.tryToCompleteRestoration(restoreThread.completedChangelogs());
 
         if (state == State.PARTITIONS_ASSIGNED && taskManager.allTasksRunning()) {
             // it is possible that we have no assigned tasks in which case we would still transit state
@@ -651,8 +647,8 @@ public class StreamThread extends Thread {
         long totalProcessLatency = 0L;
         long totalPunctuateLatency = 0L;
 
-        // TODO: we should allow active tasks processing even if we are not yet in RUNNING
-        //       after restoration is moved to the other thread
+        // TODO KAFKA-10577: we should allow active tasks processing even if we are not yet in RUNNING
+        //                   after restoration is moved to the other thread
         if (state == State.RUNNING) {
             /*
              * Within an iteration, after processing up to N (N initialized as 1 upon start up) records for each applicable tasks, check the current time:

@@ -223,6 +223,10 @@ public class StandbyTask extends AbstractTask implements Task {
 
     @Override
     public void closeCleanAndRecycleState() {
+        if (state() != State.SUSPENDED) {
+            throw new IllegalStateException("Illegal state " + state() + " while closing-and-recycling standby task " + id);
+        }
+
         streamsMetrics.removeAllTaskLevelSensors(Thread.currentThread().getName(), id.toString());
 
         closeTaskSensor.record();

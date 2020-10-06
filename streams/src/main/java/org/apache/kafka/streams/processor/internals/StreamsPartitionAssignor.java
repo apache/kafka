@@ -462,8 +462,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final Map<String, InternalTopicConfig> repartitionTopicMetadata = new HashMap<>();
         for (final TopicsInfo topicsInfo : topicGroups.values()) {
             for (final String topic : topicsInfo.sourceTopics) {
-                if (!topicsInfo.repartitionSourceTopics.containsKey(topic) &&
-                        !metadata.topics().contains(topic)) {
+                if (!topicsInfo.repartitionSourceTopics.containsKey(topic) && !metadata.topics().contains(topic)) {
                     log.error("Source topic {} is missing/unknown during rebalance, please make sure all source topics " +
                                   "have been pre-created before starting the Streams application. Returning error {}",
                                   topic, AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.name());
@@ -1059,14 +1058,14 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
             if (!activeTasksRemovedPendingRevokation.isEmpty()) {
                 // TODO: once KAFKA-10078 is resolved we can leave it to the client to trigger this rebalance
-                log.info("Requesting {} followup rebalance be scheduled immediately due to tasks changing ownership.", consumer);
+                log.info("Requesting followup rebalance be scheduled immediately by {} due to tasks changing ownership.", consumer);
                 info.setNextRebalanceTime(0L);
                 followupRebalanceRequiredForRevokedTasks = true;
                 // Don't bother to schedule a probing rebalance if an immediate one is already scheduled
                 shouldEncodeProbingRebalance = false;
             } else if (shouldEncodeProbingRebalance) {
                 final long nextRebalanceTimeMs = time.milliseconds() + probingRebalanceIntervalMs();
-                log.info("Requesting {} followup rebalance be scheduled for {} ms to probe for caught-up replica tasks.",
+                log.info("Requesting followup rebalance be scheduled by {} for {} ms to probe for caught-up replica tasks.",
                         consumer, nextRebalanceTimeMs);
                 info.setNextRebalanceTime(nextRebalanceTimeMs);
                 shouldEncodeProbingRebalance = false;

@@ -282,6 +282,10 @@ public interface FieldType {
             return true;
         }
 
+        public String typeName() {
+            return type;
+        }
+
         @Override
         public String toString() {
             return type;

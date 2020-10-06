@@ -249,7 +249,7 @@ public class KTableMapValuesTest {
             (KTableImpl<String, String, String>) builder.table(topic1, consumed);
         final KTableImpl<String, String, Integer> table2 =
             (KTableImpl<String, String, Integer>) table1.mapValues(s -> Integer.valueOf(s));
-        table2.enableSendingOldValues();
+        table2.enableSendingOldValues(true);
 
         final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
         builder.build().addProcessor("proc", supplier, table2.name);
