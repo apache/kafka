@@ -943,8 +943,14 @@ public class Values {
                 } catch (ArithmeticException e) {
                     // continue
                 }
+                float fValue = decimal.floatValue();
+                if (fValue != Float.NEGATIVE_INFINITY && fValue != Float.POSITIVE_INFINITY
+                    && decimal.scale() != 0) {
+                    return new SchemaAndValue(Schema.FLOAT32_SCHEMA, fValue);
+                }
                 double dValue = decimal.doubleValue();
-                if (dValue != Double.NEGATIVE_INFINITY && dValue != Double.POSITIVE_INFINITY) {
+                if (dValue != Double.NEGATIVE_INFINITY && dValue != Double.POSITIVE_INFINITY
+                    && decimal.scale() != 0) {
                     return new SchemaAndValue(Schema.FLOAT64_SCHEMA, dValue);
                 }
                 Schema schema = Decimal.schema(decimal.scale());
