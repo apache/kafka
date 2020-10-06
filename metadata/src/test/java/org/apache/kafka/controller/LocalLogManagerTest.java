@@ -17,8 +17,11 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.common.metadata.BrokerRecord;
+import org.apache.kafka.common.protocol.ApiMessageAndVersion;
 import org.apache.kafka.controller.LocalLogManager.LeaderInfo;
 import org.apache.kafka.controller.LocalLogManager.LockRegistry;
+import org.apache.kafka.test.TestUtils;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
@@ -30,9 +33,13 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.apache.kafka.controller.MockMetaLogManagerListener.COMMIT;
+import static org.apache.kafka.controller.MockMetaLogManagerListener.LAST_COMMITTED_OFFSET;
+import static org.apache.kafka.controller.MockMetaLogManagerListener.SHUTDOWN;
 import static org.junit.Assert.assertEquals;
 
 public class LocalLogManagerTest {
@@ -153,35 +160,64 @@ public class LocalLogManagerTest {
         }
     }
 
-//    /**
-//     * Test that all the log managers see all the commits.
-//     */
-//    @Test
-//    public void testCommits() throws Exception {
-//        CommitChecker checker = new CommitChecker(Arrays.asList(
-//            new TestCommit(0, 0, new BrokerRecord().setBrokerId(0)),
-//            new TestCommit(0, 1, new BrokerRecord().setBrokerId(1)),
-//            new TestCommit(0, 2, new BrokerRecord().setBrokerId(2)),
-//            new TestCommit(0, 3, new BrokerRecord().setBrokerId(0))
-//        ));
-//        final int numManagers = 3;
-//        try (LocalLogManagerTestEnv env =
-//                new LocalLogManagerTestEnv(checker, numManagers)) {
-//            LeaderInfo leaderInfo = env.waitForLeader();
-//            for (int i = 0; i < checker.commits.size(); i++) {
-//                TestCommit testCommit = checker.commits.get(i);
-//                long index = env.logManagers().get(leaderInfo.nodeId()).
-//                    scheduleWrite(testCommit.epoch,
-//                        new ApiMessageAndVersion(testCommit.message, (short) 0));
-//                log.trace("scheduleWrite(epoch=" + testCommit.epoch +
-//                    ", nodeId=" + leaderInfo.nodeId() + ") = " + index);
-//            }
-//            TestUtils.retryOnExceptionWithTimeout(3, 20000, () -> {
-//                checker.verifyCursorsHaveReachedCommitNumber(numManagers,
-//                    checker.commits.size());
-//            });
-//            env.close();
-//            assertEquals(null, env.firstError.get());
-//        }
-//    }
+    private static void waitForLastCommittedOffset(long targetOffset,
+                LocalLogManager logManager) throws InterruptedException {
+        TestUtils.retryOnExceptionWithTimeout(3, 20000, () -> {
+            MockMetaLogManagerListener listener =
+                (MockMetaLogManagerListener) logManager.listener();
+            long highestOffset = -1;
+            for (String event : listener.serializedEvents()) {
+                if (event.startsWith(LAST_COMMITTED_OFFSET)) {
+                    long offset = Long.valueOf(
+                        event.substring(LAST_COMMITTED_OFFSET.length() + 1));
+                    if (offset < highestOffset) {
+                        throw new RuntimeException("Invalid offset: " + offset +
+                            " is less than the previous offset of " + highestOffset);
+                    }
+                    highestOffset = offset;
+                }
+            }
+            if (highestOffset < targetOffset) {
+                throw new RuntimeException("Offset for log manager " +
+                    logManager.nodeId() + " only reached " + highestOffset);
+            }
+        });
+    }
+
+    /**
+     * Test that all the log managers see all the commits.
+     */
+    @Test
+    public void testCommits() throws Exception {
+        try (LocalLogManagerTestEnv env =
+                 LocalLogManagerTestEnv.createWithMockListeners(3)) {
+            LeaderInfo leaderInfo = env.waitForLeader();
+            LocalLogManager activeLogManager = env.logManagers().get(leaderInfo.nodeId());
+            long epoch = activeLogManager.listener().currentClaimEpoch();
+            List<ApiMessageAndVersion> messages = Arrays.asList(
+                new ApiMessageAndVersion(new BrokerRecord().setBrokerId(0), (short) 0),
+                new ApiMessageAndVersion(new BrokerRecord().setBrokerId(1), (short) 0),
+                new ApiMessageAndVersion(new BrokerRecord().setBrokerId(2), (short) 0));
+            activeLogManager.scheduleWrite(epoch, messages);
+            for (LocalLogManager logManager : env.logManagers()) {
+                waitForLastCommittedOffset(2, logManager);
+            }
+            env.close();
+            for (LocalLogManager logManager : env.logManagers()) {
+                MockMetaLogManagerListener listener =
+                    (MockMetaLogManagerListener) logManager.listener();
+                List<String> events = listener.serializedEvents();
+                assertEquals(SHUTDOWN, events.get(events.size() - 1));
+                int foundIndex = 0;
+                for (String event : events) {
+                    if (event.startsWith(COMMIT)) {
+                        assertEquals(messages.get(foundIndex).message().toString(),
+                            event.substring(COMMIT.length() + 1));
+                        foundIndex++;
+                    }
+                }
+                assertEquals(messages.size(), foundIndex);
+            }
+        }
+    }
 }

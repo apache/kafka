@@ -62,7 +62,7 @@ public interface MetaLogManager extends AutoCloseable {
          * If this listener is currently active, return the controller epoch it is active
          * for.  Otherwise, return -1.
          */
-        long currentClaim();
+        long currentClaimEpoch();
     }
 
     /**
