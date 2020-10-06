@@ -451,7 +451,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         set. If Admin client is not going to be used, don't set the environment variable.
         """
         kafka_topic_script = self.path.script("kafka-topics.sh", node)
-        skip_security_settings = force_use_zk_connection or not self.all_nodes_topic_command_supports_bootstrap_server()
+        skip_security_settings = force_use_zk_connection or not self.all_nodes_topic_command_supports_bootstrap_server() \
+                                 or self.interbroker_security_protocol == SecurityConfig.PLAINTEXT
         return kafka_topic_script if skip_security_settings else \
             "KAFKA_OPTS='-D%s -D%s' %s" % (KafkaService.JAAS_CONF_PROPERTY, KafkaService.KRB5_CONF, kafka_topic_script)
 
@@ -460,7 +461,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         Return --command-config parameter to the kafka-topics.sh command. The config parameter specifies
         the security settings that AdminClient uses to connect to a secure kafka server.
         """
-        skip_command_config = force_use_zk_connection or not self.all_nodes_topic_command_supports_bootstrap_server()
+        skip_command_config = force_use_zk_connection or not self.all_nodes_topic_command_supports_bootstrap_server() \
+                              or self.interbroker_security_protocol == SecurityConfig.PLAINTEXT
         return "" if skip_command_config else " --command-config <(echo '%s')" % (self.security_config.client_config())
 
     def all_nodes_topic_command_supports_bootstrap_server(self):
@@ -631,9 +633,12 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def _connect_setting_kafka_configs_scram(self, node):
         # Use this for kafka-configs when operating on User SCRAM Credentials
         if self.all_nodes_configs_command_uses_bootstrap_server_scram():
-            return "--bootstrap-server %s --command-config <(echo '%s')" %\
-                   (self.bootstrap_servers(self.security_protocol),
-                    self.security_config.client_config(use_inter_broker_mechanism_for_client = True))
+            if self.interbroker_security_protocol == SecurityConfig.PLAINTEXT:
+                return "--bootstrap-server %s" % (self.bootstrap_servers(self.interbroker_security_protocol))
+            else:
+                return "--bootstrap-server %s --command-config <(echo '%s')" % \
+                       (self.bootstrap_servers(self.interbroker_security_protocol),
+                        self.security_config.client_config(use_inter_broker_mechanism_for_client = True))
         else:
             return "--zookeeper %s %s" % (self.zk_connect_setting(), self.zk.zkTlsConfigFileOption())
 
@@ -983,7 +988,10 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         bootstrap server, otherwise returns zookeeper connection string.
         """
         if not force_use_zk_connection and self.all_nodes_topic_command_supports_bootstrap_server():
-            connection_setting = "--bootstrap-server %s" % (self.bootstrap_servers(self.security_protocol))
+            if self.interbroker_security_protocol == SecurityConfig.PLAINTEXT:
+                connection_setting = "--bootstrap-server %s" % (self.bootstrap_servers(self.interbroker_security_protocol))
+            else:
+                connection_setting = "--bootstrap-server %s" % (self.bootstrap_servers(self.security_protocol))
         else:
             connection_setting = "--zookeeper %s" % (self.zk_connect_setting())
 

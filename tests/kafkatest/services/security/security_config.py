@@ -291,21 +291,23 @@ class SecurityConfig(TemplateRenderer):
             self.properties.update({'tls.version': 'TLSv1.2'})
 
     def maybe_setup_broker_scram_credentials(self, node, path, connect):
-        self.maybe_create_scram_credentials(node, connect, path, self.interbroker_sasl_mechanism,
-                                            SecurityConfig.SCRAM_BROKER_USER, SecurityConfig.SCRAM_BROKER_PASSWORD)
+        # we only need to create broker credentials when the broker mechanism is SASL/SCRAM
+        if self.is_sasl(self.interbroker_security_protocol) and self.is_sasl_scram(self.interbroker_sasl_mechanism):
+            self._create_scram_credentials(node, connect, path, self.interbroker_sasl_mechanism,
+                                           SecurityConfig.SCRAM_BROKER_USER, SecurityConfig.SCRAM_BROKER_PASSWORD)
 
     def maybe_setup_client_scram_credentials(self, node, path, connect):
-        self.maybe_create_scram_credentials(node, connect, path, self.client_sasl_mechanism,
-                                            SecurityConfig.SCRAM_CLIENT_USER, SecurityConfig.SCRAM_CLIENT_PASSWORD,
-                                            self.export_kafka_opts_for_admin_client_as_broker())
+        # we only need to create client credentials when the client mechanism is SASL/SCRAM
+        if self.is_sasl(self.security_protocol) and self.is_sasl_scram(self.client_sasl_mechanism):
+            self._create_scram_credentials(node, connect, path, self.client_sasl_mechanism,
+                                           SecurityConfig.SCRAM_CLIENT_USER, SecurityConfig.SCRAM_CLIENT_PASSWORD,
+                                           self.export_kafka_opts_for_admin_client_as_broker())
 
-    def maybe_create_scram_credentials(self, node, connect, path, mechanism, user_name, password, kafka_opts_for_admin_client_as_broker = ""):
-        # we only need to create these credentials when the client and broker mechanisms are both SASL/SCRAM
-        if self.has_sasl and self.is_sasl_scram(mechanism) and self.is_sasl_scram(self.interbroker_sasl_mechanism):
-            cmd = "%s %s %s --entity-name %s --entity-type users --alter --add-config %s=[password=%s]" % \
-                  (kafka_opts_for_admin_client_as_broker, path.script("kafka-configs.sh", node), connect,
-                  user_name, mechanism, password)
-            node.account.ssh(cmd)
+    def _create_scram_credentials(self, node, connect, path, mechanism, user_name, password, kafka_opts_for_admin_client_as_broker = ""):
+        cmd = "%s %s %s --entity-name %s --entity-type users --alter --add-config %s=[password=%s]" % \
+              (kafka_opts_for_admin_client_as_broker, path.script("kafka-configs.sh", node), connect,
+               user_name, mechanism, password)
+        node.account.ssh(cmd)
 
     def clean_node(self, node):
         if self.security_protocol != SecurityConfig.PLAINTEXT:
