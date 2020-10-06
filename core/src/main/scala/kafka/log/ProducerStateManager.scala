@@ -585,18 +585,18 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   private def loadFromSnapshot(logStartOffset: Long, currentTime: Long): Unit = {
     while (true) {
       latestSnapshotFile match {
-        case Some(file) =>
+        case Some(snapshot) =>
           try {
-            info(s"Loading producer state from snapshot file '$file'")
-            val loadedProducers = readSnapshot(file.file).filter { producerEntry => !isProducerExpired(currentTime, producerEntry) }
+            info(s"Loading producer state from snapshot file '$snapshot'")
+            val loadedProducers = readSnapshot(snapshot.file).filter { producerEntry => !isProducerExpired(currentTime, producerEntry) }
             loadedProducers.foreach(loadProducerEntry)
-            lastSnapOffset = file.offset
+            lastSnapOffset = snapshot.offset
             lastMapOffset = lastSnapOffset
             return
           } catch {
             case e: CorruptSnapshotException =>
-              warn(s"Failed to load producer snapshot from '$file': ${e.getMessage}")
-              Option(snapshots.remove(file.offset)).foreach(_.deleteIfExists())
+              warn(s"Failed to load producer snapshot from '${snapshot.file}': ${e.getMessage}")
+              removeAndDeleteSnapshot(snapshot.offset)
           }
         case None =>
           lastSnapOffset = logStartOffset
@@ -637,7 +637,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
     // remove all out of range snapshots
     snapshots.values().asScala.foreach { snapshot =>
       if (snapshot.offset > logEndOffset || snapshot.offset <= logStartOffset) {
-        Option(snapshots.remove(snapshot.offset)).foreach(_.deleteIfExists())
+        removeAndDeleteSnapshot(snapshot.offset)
       }
     }
 
@@ -756,7 +756,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
     ongoingTxns.clear()
     unreplicatedTxns.clear()
     snapshots.values().asScala.foreach { snapshot =>
-      Option(snapshots.remove(snapshot.offset)).foreach(_.deleteIfExists())
+      removeAndDeleteSnapshot(snapshot.offset)
     }
     lastSnapOffset = 0L
     lastMapOffset = 0L
@@ -789,7 +789,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   @threadsafe
   def deleteSnapshotsBefore(offset: Long): Unit = {
     snapshots.subMap(0, offset).values().asScala.foreach { snapshot =>
-      Option(snapshots.remove(snapshot.offset)).foreach(_.deleteIfExists())
+      removeAndDeleteSnapshot(snapshot.offset)
     }
   }
 
