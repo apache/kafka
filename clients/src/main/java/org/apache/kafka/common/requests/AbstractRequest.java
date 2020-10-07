@@ -257,6 +257,8 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return new EndQuorumEpochRequest(struct, apiVersion);
             case ALTER_ISR:
                 return new AlterIsrRequest(new AlterIsrRequestData(struct, apiVersion), apiVersion);
+            case UPDATE_FEATURES:
+                return new UpdateFeaturesRequest(struct, apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));
