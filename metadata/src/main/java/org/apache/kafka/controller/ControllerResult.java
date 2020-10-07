@@ -21,6 +21,7 @@ import org.apache.kafka.common.protocol.ApiMessageAndVersion;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 class ControllerResult<T> {
     private final List<ApiMessageAndVersion> records;
@@ -32,6 +33,8 @@ class ControllerResult<T> {
 
     ControllerResult(List<ApiMessageAndVersion> records,
                      T response) {
+        Objects.requireNonNull(records);
+        Objects.requireNonNull(response);
         this.records = records;
         this.response = response;
     }
@@ -42,5 +45,20 @@ class ControllerResult<T> {
 
     public T response() {
         return response;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == null || (!o.getClass().equals(getClass()))) {
+            return false;
+        }
+        ControllerResult other = (ControllerResult) o;
+        return records.equals(other.records) &&
+            response.equals(other.response);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(records, response);
     }
 }
