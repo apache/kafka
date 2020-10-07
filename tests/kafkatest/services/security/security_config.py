@@ -386,7 +386,7 @@ class SecurityConfig(TemplateRenderer):
             return ""
         if self.has_sasl and not self.static_jaas_conf and 'sasl.jaas.config' not in self.properties:
             raise Exception("JAAS configuration property has not yet been initialized")
-        config_lines = (prefix + key + "=" + value for key, value in self.properties.iteritems())
+        config_lines = (prefix + key + "=" + value for key, value in self.properties.items())
         # Extra blank lines ensure this can be appended/prepended safely
         return "\n".join(itertools.chain([""], config_lines, [""]))
 

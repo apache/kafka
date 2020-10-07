@@ -23,7 +23,7 @@ from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
 from ducktape.cluster.remoteaccount import RemoteCommandError
 
-from config import KafkaConfig
+from .config import KafkaConfig
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.kafka import config_property
 from kafkatest.services.monitor.jmx import JmxMixin
@@ -678,11 +678,11 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
             fields = line.split("\t")
             # ["Partition: 4", "Leader: 0"] -> ["4", "0"]
-            fields = map(lambda x: x.split(" ")[1], fields)
+            fields = list(map(lambda x: x.split(" ")[1], fields))
             partitions.append(
                 {"topic": fields[0],
                  "partition": int(fields[1]),
-                 "replicas": map(int, fields[3].split(','))})
+                 "replicas": list(map(int, fields[3].split(',')))})
         return {"partitions": partitions}
 
 
