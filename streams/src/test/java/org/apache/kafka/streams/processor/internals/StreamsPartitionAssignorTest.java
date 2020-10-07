@@ -188,7 +188,6 @@ public class StreamsPartitionAssignorTest {
     private final AtomicInteger assignmentError = new AtomicInteger();
     private final AtomicLong nextScheduledRebalanceMs = new AtomicLong(Long.MAX_VALUE);
     private final MockTime time = new MockTime();
-
     private final byte[] uniqueField = {1};
 
     private Map<String, Object> configProps() {

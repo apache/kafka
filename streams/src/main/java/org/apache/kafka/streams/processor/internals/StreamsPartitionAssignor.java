@@ -215,7 +215,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         taskAssignorSupplier = assignorConfiguration::taskAssignor;
         assignmentListener = assignorConfiguration.assignmentListener();
         uniqueField = usedSubscriptionMetadataVersion >= 8 ? new byte[1] : new byte[0];
-
     }
 
     @Override
