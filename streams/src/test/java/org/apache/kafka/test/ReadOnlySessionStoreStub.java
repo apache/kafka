@@ -44,27 +44,27 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
 
     @Override
     public KeyValueIterator<Windowed<K>, V> findSessions(K key, long earliestSessionEndTime, long latestSessionStartTime) {
-        return null;
+        throw new UnsupportedOperationException("Moved from Session Store. Implement if needed");
     }
 
     @Override
     public KeyValueIterator<Windowed<K>, V> backwardFindSessions(K key, long earliestSessionEndTime, long latestSessionStartTime) {
-        return null;
+        throw new UnsupportedOperationException("Moved from Session Store. Implement if needed");
     }
 
     @Override
     public KeyValueIterator<Windowed<K>, V> findSessions(K keyFrom, K keyTo, long earliestSessionEndTime, long latestSessionStartTime) {
-        return null;
+        throw new UnsupportedOperationException("Moved from Session Store. Implement if needed");
     }
 
     @Override
     public KeyValueIterator<Windowed<K>, V> backwardFindSessions(K keyFrom, K keyTo, long earliestSessionEndTime, long latestSessionStartTime) {
-        return null;
+        throw new UnsupportedOperationException("Moved from Session Store. Implement if needed");
     }
 
     @Override
     public V fetchSession(K key, long startTime, long endTime) {
-        return null;
+        throw new UnsupportedOperationException("Moved from Session Store. Implement if needed");
     }
 
     @Override
@@ -124,7 +124,36 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
 
     @Override
     public KeyValueIterator<Windowed<K>, V> backwardFetch(K from, K to) {
-        return null;
+        if (!open) {
+            throw new InvalidStateStoreException("not open");
+        }
+        if (sessions.subMap(from, true, to, true).isEmpty()) {
+            return new KeyValueIteratorStub<>(Collections.<KeyValue<Windowed<K>, V>>emptyIterator());
+        }
+        final Iterator<List<KeyValue<Windowed<K>, V>>> keysIterator = sessions.subMap(from, true, to, true)
+            .descendingMap().values().iterator();
+        return new KeyValueIteratorStub<>(
+            new Iterator<KeyValue<Windowed<K>, V>>() {
+
+                Iterator<KeyValue<Windowed<K>, V>> it;
+
+                @Override
+                public boolean hasNext() {
+                    while (it == null || !it.hasNext()) {
+                        if (!keysIterator.hasNext()) {
+                            return false;
+                        }
+                        it = keysIterator.next().iterator();
+                    }
+                    return true;
+                }
+
+                @Override
+                public KeyValue<Windowed<K>, V> next() {
+                    return it.next();
+                }
+            }
+        );
     }
 
     @Override

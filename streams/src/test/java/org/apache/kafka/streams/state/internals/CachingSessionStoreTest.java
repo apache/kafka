@@ -44,15 +44,13 @@ import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
-import java.util.Set;
 
 import static java.util.Arrays.asList;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.test.StreamsTestUtils.toList;
 import static org.apache.kafka.test.StreamsTestUtils.verifyKeyValueList;
 import static org.apache.kafka.test.StreamsTestUtils.verifyWindowedKeyValue;
@@ -314,15 +312,24 @@ public class CachingSessionStoreTest {
         final Windowed<Bytes> a1 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 0, SEGMENT_INTERVAL * 0));
         final Windowed<Bytes> a2 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 1, SEGMENT_INTERVAL * 1));
         final Windowed<Bytes> a3 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 2, SEGMENT_INTERVAL * 2));
+        final Windowed<Bytes> a4 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 3, SEGMENT_INTERVAL * 3));
+        final Windowed<Bytes> a5 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 4, SEGMENT_INTERVAL * 4));
+        final Windowed<Bytes> a6 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 5, SEGMENT_INTERVAL * 5));
         cachingStore.put(a1, "1".getBytes());
         cachingStore.put(a2, "2".getBytes());
-        cachingStore.flush();
         cachingStore.put(a3, "3".getBytes());
+        cachingStore.flush();
+        cachingStore.put(a4, "4".getBytes());
+        cachingStore.put(a5, "5".getBytes());
+        cachingStore.put(a6, "6".getBytes());
         final KeyValueIterator<Windowed<Bytes>, byte[]> results =
-            cachingStore.findSessions(keyA, 0, SEGMENT_INTERVAL * 2);
+            cachingStore.findSessions(keyA, 0, SEGMENT_INTERVAL * 5);
         assertEquals(a1, results.next().key);
         assertEquals(a2, results.next().key);
         assertEquals(a3, results.next().key);
+        assertEquals(a4, results.next().key);
+        assertEquals(a5, results.next().key);
+        assertEquals(a6, results.next().key);
         assertFalse(results.hasNext());
     }
 
@@ -331,12 +338,21 @@ public class CachingSessionStoreTest {
         final Windowed<Bytes> a1 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 0, SEGMENT_INTERVAL * 0));
         final Windowed<Bytes> a2 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 1, SEGMENT_INTERVAL * 1));
         final Windowed<Bytes> a3 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 2, SEGMENT_INTERVAL * 2));
+        final Windowed<Bytes> a4 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 3, SEGMENT_INTERVAL * 3));
+        final Windowed<Bytes> a5 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 4, SEGMENT_INTERVAL * 4));
+        final Windowed<Bytes> a6 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 5, SEGMENT_INTERVAL * 5));
         cachingStore.put(a1, "1".getBytes());
         cachingStore.put(a2, "2".getBytes());
-        cachingStore.flush();
         cachingStore.put(a3, "3".getBytes());
+        cachingStore.flush();
+        cachingStore.put(a4, "4".getBytes());
+        cachingStore.put(a5, "5".getBytes());
+        cachingStore.put(a6, "6".getBytes());
         final KeyValueIterator<Windowed<Bytes>, byte[]> results =
-            cachingStore.backwardFindSessions(keyA, 0, SEGMENT_INTERVAL * 2);
+            cachingStore.backwardFindSessions(keyA, 0, SEGMENT_INTERVAL * 5);
+        assertEquals(a6, results.next().key);
+        assertEquals(a5, results.next().key);
+        assertEquals(a4, results.next().key);
         assertEquals(a3, results.next().key);
         assertEquals(a2, results.next().key);
         assertEquals(a1, results.next().key);
@@ -358,12 +374,12 @@ public class CachingSessionStoreTest {
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> rangeResults =
             cachingStore.findSessions(keyA, keyAA, 0, SEGMENT_INTERVAL * 2);
-        final Set<Windowed<Bytes>> keys = new HashSet<>();
+        final List<Windowed<Bytes>> keys = new ArrayList<>();
         while (rangeResults.hasNext()) {
             keys.add(rangeResults.next().key);
         }
         rangeResults.close();
-        assertEquals(mkSet(a1, a2, a3, aa1, aa3), keys);
+        assertEquals(Arrays.asList(a1, aa1, a2, a3, aa3), keys);
     }
 
     @Test
@@ -381,12 +397,12 @@ public class CachingSessionStoreTest {
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> rangeResults =
             cachingStore.backwardFindSessions(keyA, keyAA, 0, SEGMENT_INTERVAL * 2);
-        final Set<Windowed<Bytes>> keys = new HashSet<>();
+        final List<Windowed<Bytes>> keys = new ArrayList<>();
         while (rangeResults.hasNext()) {
             keys.add(rangeResults.next().key);
         }
         rangeResults.close();
-        assertEquals(mkSet(a1, a2, a3, aa1, aa3), keys);
+        assertEquals(Arrays.asList(aa3, a3, a2, aa1, a1), keys);
     }
 
     @Test
@@ -627,7 +643,7 @@ public class CachingSessionStoreTest {
     }
 
     @Test
-    public void shouldNotThrowInvalidBackwardRangeExceptionWithNegativeFromKey() {
+    public void shouldNotThrowInvalidRangeExceptionWhenBackwardWithNegativeFromKey() {
         final Bytes keyFrom = Bytes.wrap(Serdes.Integer().serializer().serialize("", -1));
         final Bytes keyTo = Bytes.wrap(Serdes.Integer().serializer().serialize("", 1));
 
