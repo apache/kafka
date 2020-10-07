@@ -64,7 +64,7 @@ public class KafkaRaftMetrics implements AutoCloseable {
         this.numUnknownVoterConnections = 0;
         this.logEndOffset = new OffsetAndEpoch(0L, 0);
 
-        this.currentStateMetricName = metrics.metricName("current-state", metricGroupName, "The current state of this member; possible values are leader, candidate, follower, observer");
+        this.currentStateMetricName = metrics.metricName("current-state", metricGroupName, "The current state of this member; possible values are leader, candidate, voted, follower, unattached");
         Gauge<String> stateProvider = (mConfig, currentTimeMs) -> {
             if (state.isLeader()) {
                 return "leader";

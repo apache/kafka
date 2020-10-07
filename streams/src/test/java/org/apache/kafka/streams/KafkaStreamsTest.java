@@ -50,13 +50,13 @@ import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockRocksDbConfigSetter;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
@@ -796,17 +796,9 @@ public class KafkaStreamsTest {
         PowerMock.verify(Executors.class, rocksDBMetricsRecordingTriggerThread);
     }
 
-    public static class TestRocksDbConfigSetter implements RocksDBConfigSetter {
-        @Override
-        public void setConfig(final String storeName,
-                              final org.rocksdb.Options options,
-                              final Map<String, Object> configs) {
-        }
-    }
-
     @Test
     public void shouldWarnAboutRocksDBConfigSetterIsNotGuaranteedToBeBackwardsCompatible() {
-        props.setProperty(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, TestRocksDbConfigSetter.class.getName());
+        props.setProperty(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class.getName());
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
             new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
