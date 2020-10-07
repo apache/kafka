@@ -93,7 +93,7 @@ public final class QuorumController implements Controller {
          * Process the event, modifying any in-memory data structures that need to be
          * modified.
          */
-        ControllerResult<T> process();
+        ControllerResultAndOffset<T> process();
     }
 
     /**
@@ -105,7 +105,7 @@ public final class QuorumController implements Controller {
         private final ControllerEventHandler<T> handler;
         private final long targetEpoch;
         private long startProcessingTimeNs;
-        private ControllerResult<T> result;
+        private ControllerResultAndOffset<T> result;
 
         ControllerEvent(String name, ControllerEventHandler<T> handler) {
             this.name = name;
@@ -127,11 +127,11 @@ public final class QuorumController implements Controller {
 //            }
             startProcessingTimeNs = time.nanoseconds();
             result = handler.process();
-            if (result.offsetToWaitFor() < 0) {
+            if (result.offset() < 0) {
                 complete(null);
             } else {
 //                offset = logManager.scheduleWrite(curEpoch, result.records());
-                purgatory.add(result.offsetToWaitFor(), this);
+                purgatory.add(result.offset(), this);
             }
         }
 

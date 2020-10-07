@@ -19,28 +19,19 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.common.protocol.ApiMessageAndVersion;
 
-import java.util.Collections;
 import java.util.List;
 
-class ControllerResult<T> {
-    private final List<ApiMessageAndVersion> records;
-    private final T response;
+class ControllerResultAndOffset<T> extends ControllerResult<T> {
+    private final long offset;
 
-    static <T> ControllerResult<T> of(T response) {
-        return new ControllerResult<>(Collections.emptyList(), response);
+    ControllerResultAndOffset(long offset,
+                              List<ApiMessageAndVersion> records,
+                              T response) {
+        super(records, response);
+        this.offset = offset;
     }
 
-    ControllerResult(List<ApiMessageAndVersion> records,
-                     T response) {
-        this.records = records;
-        this.response = response;
-    }
-
-    public List<ApiMessageAndVersion> records() {
-        return records;
-    }
-
-    public T response() {
-        return response;
+    public long offset() {
+        return offset;
     }
 }
