@@ -315,7 +315,7 @@ public class StateDirectory {
     }
 
     private void cleanRemovedTasksCalledByCleanerThread(final long cleanupDelayMs) {
-        for (final File taskDir : listAllTaskDirectories()) {
+        for (final File taskDir : listNonEmptyTaskDirectories()) {
             final String dirName = taskDir.getName();
             final TaskId id = TaskId.parse(dirName);
             if (!locks.containsKey(id)) {
