@@ -188,7 +188,10 @@
 
   <subpackage name="controller">
     <allow pkg="org.apache.kafka.clients" />
+    <allow pkg="org.apache.kafka.clients.admin" />
+    <allow pkg="org.apache.kafka.common.config" />
     <allow pkg="org.apache.kafka.common.feature" />
+    <allow pkg="org.apache.kafka.common.internals" />
     <allow pkg="org.apache.kafka.common.message" />
     <allow pkg="org.apache.kafka.common.metadata" />
     <allow pkg="org.apache.kafka.common.metrics" />
@@ -197,8 +200,8 @@
     <allow pkg="org.apache.kafka.common.requests" />
     <allow pkg="org.apache.kafka.controller" />
     <allow pkg="org.apache.kafka.metadata" />
-    <allow pkg="org.apache.kafka.timeline" />
     <allow pkg="org.apache.kafka.test" />
+    <allow pkg="org.apache.kafka.timeline" />
   </subpackage>
 
   <subpackage name="metadata">
