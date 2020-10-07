@@ -349,14 +349,6 @@ class SecurityConfig(TemplateRenderer):
         else:
             return ""
 
-    def export_kafka_opts_for_admin_client_as_broker(self):
-        if self.has_sasl and self.static_jaas_conf:
-            kafka_opts_to_use = "\"-Djava.security.auth.login.config=%s -Djava.security.krb5.conf=%s\""\
-                                % (SecurityConfig.ADMIN_CLIENT_AS_BROKER_JAAS_CONF_PATH, SecurityConfig.KRB5CONF_PATH)
-        else:
-            kafka_opts_to_use = self.kafka_opts
-        return "export KAFKA_OPTS=%s;" % kafka_opts_to_use
-
     def props(self, prefix=''):
         """
         Return properties as string with line separators, optionally with a prefix.

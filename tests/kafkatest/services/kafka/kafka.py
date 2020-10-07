@@ -445,44 +445,76 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                                          clean_shutdown=False, allow_fail=True)
         node.account.ssh("sudo rm -rf -- %s" % KafkaService.PERSISTENT_ROOT, allow_fail=False)
 
-    def kafka_topics_cmd_with_optional_security_settings(self, node, force_use_zk_connection, kafka_security_protocol = SecurityConfig.PLAINTEXT):
+    def kafka_topics_cmd_with_optional_security_settings(self, node, force_use_zk_connection, kafka_security_protocol = None):
         if force_use_zk_connection:
             bootstrap_server_or_zookeeper = "--zookeeper %s" % (self.zk_connect_setting())
             skip_optional_security_settings = True
         else:
-            bootstrap_server_or_zookeeper = "--bootstrap-server %s" % (self.bootstrap_servers(kafka_security_protocol))
-            skip_optional_security_settings = kafka_security_protocol == SecurityConfig.PLAINTEXT
+            if kafka_security_protocol is None:
+                # it wasn't specified, so use the inter-broker security protocol if it is PLAINTEXT,
+                # otherwise use the client security protocol
+                if self.interbroker_security_protocol == SecurityConfig.PLAINTEXT:
+                    security_protocol_to_use = SecurityConfig.PLAINTEXT
+                else:
+                    security_protocol_to_use = self.security_protocol
+            else:
+                security_protocol_to_use = kafka_security_protocol
+            bootstrap_server_or_zookeeper = "--bootstrap-server %s" % (self.bootstrap_servers(security_protocol_to_use))
+            skip_optional_security_settings = security_protocol_to_use == SecurityConfig.PLAINTEXT
         if skip_optional_security_settings:
             optional_jass_krb_system_props_prefix = ""
             optional_command_config_suffix = ""
         else:
-            optional_jass_krb_system_props_prefix = "KAFKA_OPTS='-D%s -D%s' " % (KafkaService.JAAS_CONF_PROPERTY, KafkaService.KRB5_CONF)
-            optional_command_config_suffix = " --command-config <(echo '%s')" % (self.security_config.client_config())
+            # we need security configs because aren't going to ZooKeeper and we aren't using PLAINTEXT
+            if (security_protocol_to_use == self.interbroker_security_protocol):
+                # configure JAAS to provide the broker's credentials
+                # since this is an authenticating cluster and we are going to use the inter-broker security protocol
+                jaas_conf_prop = SecurityConfig.ADMIN_CLIENT_AS_BROKER_JAAS_CONF_PATH
+                use_inter_broker_mechanism_for_client = True
+            else:
+                # configure JAAS to provide the typical client credentials
+                jaas_conf_prop = KafkaService.JAAS_CONF_PROPERTY
+                use_inter_broker_mechanism_for_client = False
+            optional_jass_krb_system_props_prefix = "KAFKA_OPTS='-Djava.security.auth.login.config=%s -Djava.security.krb5.conf=%s' " % (jaas_conf_prop, KafkaService.KRB5_CONF)
+            optional_command_config_suffix = " --command-config <(echo '%s')" % (self.security_config.client_config(use_inter_broker_mechanism_for_client = use_inter_broker_mechanism_for_client))
         kafka_topic_script = self.path.script("kafka-topics.sh", node)
         return "%s%s %s%s" % \
                (optional_jass_krb_system_props_prefix, kafka_topic_script,
                 bootstrap_server_or_zookeeper, optional_command_config_suffix)
 
-    def kafka_configs_cmd_with_optional_security_settings(self, node, force_use_zk_connection, kafka_security_protocol = SecurityConfig.PLAINTEXT):
+    def kafka_configs_cmd_with_optional_security_settings(self, node, force_use_zk_connection, kafka_security_protocol = None):
         if force_use_zk_connection:
+            # kafka-configs supports a TLS config file, so include it if there is one
             bootstrap_server_or_zookeeper = "--zookeeper %s %s" % (self.zk_connect_setting(), self.zk.zkTlsConfigFileOption())
             skip_optional_security_settings = True
         else:
-            bootstrap_server_or_zookeeper = "--bootstrap-server %s" % (self.bootstrap_servers(kafka_security_protocol))
-            skip_optional_security_settings = kafka_security_protocol == SecurityConfig.PLAINTEXT
+            if kafka_security_protocol is None:
+                # it wasn't specified, so use the inter-broker security protocol if it is PLAINTEXT,
+                # otherwise use the client security protocol
+                if self.interbroker_security_protocol == SecurityConfig.PLAINTEXT:
+                    security_protocol_to_use = SecurityConfig.PLAINTEXT
+                else:
+                    security_protocol_to_use = self.security_protocol
+            else:
+                security_protocol_to_use = kafka_security_protocol
+            bootstrap_server_or_zookeeper = "--bootstrap-server %s" % (self.bootstrap_servers(security_protocol_to_use))
+            skip_optional_security_settings = security_protocol_to_use == SecurityConfig.PLAINTEXT
         if skip_optional_security_settings:
             optional_jass_krb_system_props_prefix = ""
             optional_command_config_suffix = ""
         else:
-            if (kafka_security_protocol == self.interbroker_security_protocol):
+            # we need security configs because aren't going to ZooKeeper and we aren't using PLAINTEXT
+            if (security_protocol_to_use == self.interbroker_security_protocol):
                 # configure JAAS to provide the broker's credentials
                 # since this is an authenticating cluster and we are going to use the inter-broker security protocol
                 jaas_conf_prop = SecurityConfig.ADMIN_CLIENT_AS_BROKER_JAAS_CONF_PATH
+                use_inter_broker_mechanism_for_client = True
             else:
                 # configure JAAS to provide the typical client credentials
                 jaas_conf_prop = KafkaService.JAAS_CONF_PROPERTY
-            optional_jass_krb_system_props_prefix = "KAFKA_OPTS='-D%s -D%s' " % (jaas_conf_prop, KafkaService.KRB5_CONF)
-            optional_command_config_suffix = " --command-config <(echo '%s')" % (self.security_config.client_config())
+                use_inter_broker_mechanism_for_client = False
+            optional_jass_krb_system_props_prefix = "KAFKA_OPTS='-Djava.security.auth.login.config=%s -Djava.security.krb5.conf=%s' " % (jaas_conf_prop, KafkaService.KRB5_CONF)
+            optional_command_config_suffix = " --command-config <(echo '%s')" % (self.security_config.client_config(use_inter_broker_mechanism_for_client = use_inter_broker_mechanism_for_client))
         kafka_config_script = self.path.script("kafka-configs.sh", node)
         return "%s%s %s%s" % \
                (optional_jass_krb_system_props_prefix, kafka_config_script,
@@ -673,21 +705,40 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.info("Running alter unclean leader command...\n%s" % cmd)
         node.account.ssh(cmd)
 
-    def kafka_acls_cmd_with_optional_security_settings(self, node, force_use_zk_connection, kafka_security_protocol = SecurityConfig.PLAINTEXT, override_command_config = None):
+    def kafka_acls_cmd_with_optional_security_settings(self, node, force_use_zk_connection, kafka_security_protocol = None, override_command_config = None):
         force_use_zk_connection = force_use_zk_connection or not self.all_nodes_acl_command_supports_bootstrap_server
         if force_use_zk_connection:
             bootstrap_server_or_authorizer_zk_props = "--authorizer-properties zookeeper.connect=%s" % (self.zk_connect_setting())
             skip_optional_security_settings = True
         else:
-            bootstrap_server_or_authorizer_zk_props = "--bootstrap-server %s" % (self.bootstrap_servers(kafka_security_protocol))
-            skip_optional_security_settings = kafka_security_protocol == SecurityConfig.PLAINTEXT
+            if kafka_security_protocol is None:
+                # it wasn't specified, so use the inter-broker security protocol if it is PLAINTEXT,
+                # otherwise use the client security protocol
+                if self.interbroker_security_protocol == SecurityConfig.PLAINTEXT:
+                    security_protocol_to_use = SecurityConfig.PLAINTEXT
+                else:
+                    security_protocol_to_use = self.security_protocol
+            else:
+                security_protocol_to_use = kafka_security_protocol
+            bootstrap_server_or_authorizer_zk_props = "--bootstrap-server %s" % (self.bootstrap_servers(security_protocol_to_use))
+            skip_optional_security_settings = security_protocol_to_use == SecurityConfig.PLAINTEXT
         if skip_optional_security_settings:
             optional_jass_krb_system_props_prefix = ""
             optional_command_config_suffix = ""
         else:
-            optional_jass_krb_system_props_prefix = "KAFKA_OPTS='-D%s -D%s' " % (KafkaService.JAAS_CONF_PROPERTY, KafkaService.KRB5_CONF)
+            # we need security configs because aren't going to ZooKeeper and we aren't using PLAINTEXT
+            if (security_protocol_to_use == self.interbroker_security_protocol):
+                # configure JAAS to provide the broker's credentials
+                # since this is an authenticating cluster and we are going to use the inter-broker security protocol
+                jaas_conf_prop = SecurityConfig.ADMIN_CLIENT_AS_BROKER_JAAS_CONF_PATH
+                use_inter_broker_mechanism_for_client = True
+            else:
+                # configure JAAS to provide the typical client credentials
+                jaas_conf_prop = KafkaService.JAAS_CONF_PROPERTY
+                use_inter_broker_mechanism_for_client = False
+            optional_jass_krb_system_props_prefix = "KAFKA_OPTS='-Djava.security.auth.login.config=%s -Djava.security.krb5.conf=%s' " % (jaas_conf_prop, KafkaService.KRB5_CONF)
             if override_command_config is None:
-                optional_command_config_suffix = " --command-config <(echo '%s')" % (self.security_config.client_config())
+                optional_command_config_suffix = " --command-config <(echo '%s')" % (self.security_config.client_config(use_inter_broker_mechanism_for_client = use_inter_broker_mechanism_for_client))
             else:
                 optional_command_config_suffix = " --command-config %s" % (override_command_config)
         kafka_acls_script = self.path.script("kafka-acls.sh", node)
