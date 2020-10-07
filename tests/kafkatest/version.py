@@ -49,6 +49,19 @@ class KafkaVersion(LooseVersion):
         else:
             return LooseVersion.__str__(self)
 
+    def _cmp(self, other):
+        if isinstance(other, str):
+            other = KafkaVersion(other)
+
+        if other.is_dev:
+            if self.is_dev:
+                return 0
+            return -1
+        elif self.is_dev:
+            return 1
+
+        return LooseVersion._cmp(self, other)
+
     def supports_named_listeners(self):
         return self >= V_0_10_2_0
 
