@@ -146,10 +146,37 @@ public class MirrorConnectorConfigTest {
     }
 
     @Test
+    public void testSourceConsumerConfigWithSourcePrefix() {
+        String prefix = MirrorConnectorConfig.SOURCE_CLUSTER_PREFIX + MirrorConnectorConfig.CONSUMER_CLIENT_PREFIX;
+        Map<String, String> connectorProps = makeProps(
+                prefix + "auto.offset.reset", "latest",
+                prefix + "max.poll.interval.ms", "100"
+        );
+        MirrorConnectorConfig config = new MirrorConnectorConfig(connectorProps);
+        Map<String, Object> connectorConsumerProps = config.sourceConsumerConfig();
+        Map<String, Object> expectedConsumerProps = new HashMap<>();
+        expectedConsumerProps.put("enable.auto.commit", "false");
+        expectedConsumerProps.put("auto.offset.reset", "latest");
+        expectedConsumerProps.put("max.poll.interval.ms", "100");
+        assertEquals(expectedConsumerProps, connectorConsumerProps);
+    }
+
+    @Test
     public void testSourceProducerConfig() {
         Map<String, String> connectorProps = makeProps(
                 MirrorConnectorConfig.PRODUCER_CLIENT_PREFIX + "acks", "1"
         );
+        MirrorConnectorConfig config = new MirrorConnectorConfig(connectorProps);
+        Map<String, Object> connectorProducerProps = config.sourceProducerConfig();
+        Map<String, Object> expectedProducerProps = new HashMap<>();
+        expectedProducerProps.put("acks", "1");
+        assertEquals(expectedProducerProps, connectorProducerProps);
+    }
+
+    @Test
+    public void testSourceProducerConfigWithSourcePrefix() {
+        String prefix = MirrorConnectorConfig.SOURCE_CLUSTER_PREFIX + MirrorConnectorConfig.PRODUCER_CLIENT_PREFIX;
+        Map<String, String> connectorProps = makeProps(prefix + "acks", "1");
         MirrorConnectorConfig config = new MirrorConnectorConfig(connectorProps);
         Map<String, Object> connectorProducerProps = config.sourceProducerConfig();
         Map<String, Object> expectedProducerProps = new HashMap<>();

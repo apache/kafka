@@ -70,8 +70,8 @@ public class MirrorMakerConfig extends AbstractConfig {
     private static final String BYTE_ARRAY_CONVERTER_CLASS =
         "org.apache.kafka.connect.converters.ByteArrayConverter";
 
-    static final String SOURCE_CLUSTER_PREFIX = "source.cluster.";
-    static final String TARGET_CLUSTER_PREFIX = "target.cluster.";
+    static final String SOURCE_CLUSTER_PREFIX = "source.";
+    static final String TARGET_CLUSTER_PREFIX = "target.";
 
     private final Plugins plugins;
    
