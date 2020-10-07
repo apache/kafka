@@ -605,7 +605,9 @@ public class ProcessorStateManager implements StateManager {
         } catch (final IOException e) {
             log.warn("Failed to write offset checkpoint file to [{}]." +
                 " This may occur if OS cleaned the state.dir in case when it located in /tmp directory." +
-                " You can change location for state.dir to resolve problem", checkpointFile, e);
+                " You can change location for state.dir to resolve problem." +
+                " This can also occur due to running multiple instances on the same machine using the same state dir.",
+                checkpointFile, e);
         }
     }
 
