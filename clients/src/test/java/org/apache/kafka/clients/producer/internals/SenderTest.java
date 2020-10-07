@@ -23,6 +23,7 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.common.errors.TransactionAbortedException;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
@@ -2356,6 +2357,31 @@ public class SenderTest {
         } finally {
             m.close();
         }
+    }
+
+    @Test
+    public void testTransactionAbortedExceptionOnAbortWithoutError() throws InterruptedException, ExecutionException {
+        ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
+        TransactionManager txnManager = new TransactionManager(logContext, "testTransactionAbortedExceptionOnAbortWithoutError", 60000, 100, apiVersions, false);
+
+        setupWithTransactionState(txnManager, false, null);
+        doInitTransactions(txnManager, producerIdAndEpoch);
+        // Begin the transaction
+        txnManager.beginTransaction();
+        txnManager.maybeAddPartitionToTransaction(tp0);
+        client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp0, Errors.NONE)));
+        // Run it once so that the partition is added to the transaction.
+        sender.runOnce();
+        // Append a record to the accumulator.
+        FutureRecordMetadata metadata = appendToAccumulator(tp0, time.milliseconds(), "key", "value");
+        // Now abort the transaction manually.
+        txnManager.beginAbort();
+        // Try to send.
+        // This should abort the existing transaction and
+        // drain all the unsent batches with a TransactionAbortedException.
+        sender.runOnce();
+        // Now attempt to fetch the result for the record.
+        TestUtils.assertFutureThrows(metadata, TransactionAbortedException.class);
     }
 
     @Test
