@@ -198,9 +198,19 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
     @Deprecated
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
+        this.context = ProcessorContextUtils.asInternalProcessorContext(context);
+        init(root);
+    }
+
+    @Override
+    public void init(final StateStoreContext context, final StateStore root) {
+        this.context = ProcessorContextUtils.asInternalProcessorContext(context);
+        init(root);
+    }
+
+    private void init(final StateStore root) {
         taskId = context.taskId().toString();
-        this.context = (InternalProcessorContext) context;
-        streamsMetrics = this.context.metrics();
+        streamsMetrics = context.metrics();
 
         threadId = Thread.currentThread().getName();
         bufferSizeSensor = StateStoreMetrics.suppressionBufferSizeSensor(
@@ -223,39 +233,6 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         updateBufferMetrics();
         open = true;
         partition = context.taskId().partition;
-    }
-
-    @Override
-    public void init(final StateStoreContext context, final StateStore root) {
-        this.context = ProcessorContextUtils.asInternalProcessorContext(context);
-        init(root);
-    }
-
-    private void init(final StateStore root) {
-        taskId = this.context.taskId().toString();
-        streamsMetrics = this.context.metrics();
-
-        threadId = Thread.currentThread().getName();
-        bufferSizeSensor = StateStoreMetrics.suppressionBufferSizeSensor(
-            threadId,
-            taskId,
-            METRIC_SCOPE,
-            storeName,
-            streamsMetrics
-        );
-        bufferCountSensor = StateStoreMetrics.suppressionBufferCountSensor(
-            threadId,
-            taskId,
-            METRIC_SCOPE,
-            storeName,
-            streamsMetrics
-        );
-
-        this.context.register(root, (RecordBatchingStateRestoreCallback) this::restoreBatch);
-        changelogTopic = ProcessorStateManager.storeChangelogTopic(this.context.applicationId(), storeName);
-        updateBufferMetrics();
-        open = true;
-        partition = this.context.taskId().partition;
     }
 
     @Override
