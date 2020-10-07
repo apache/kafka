@@ -1570,13 +1570,14 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     response.maybeThrow()
   }
 
-  def updateFeatureZNode(nodeContents: FeatureZNode): Unit = {
+  def updateFeatureZNode(nodeContents: FeatureZNode): Int = {
     val setRequest = SetDataRequest(
       FeatureZNode.path,
       FeatureZNode.encode(nodeContents),
       ZkVersion.MatchAnyVersion)
     val response = retryRequestUntilConnected(setRequest)
     response.maybeThrow()
+    response.stat.getVersion
   }
 
   def deleteFeatureZNode(): Unit = {

@@ -37,6 +37,7 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.FeatureUpdateFailedException;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
@@ -1305,6 +1306,73 @@ public interface Admin extends AutoCloseable {
      */
     AlterUserScramCredentialsResult alterUserScramCredentials(List<UserScramCredentialAlteration> alterations,
                                                               AlterUserScramCredentialsOptions options);
+
+    /**
+     * Describes finalized as well as supported features. By default, the request is issued to any
+     * broker. It can be optionally directed only to the controller via DescribeFeaturesOptions
+     * parameter. This is particularly useful if the user requires strongly consistent reads of
+     * finalized features.
+     * <p>
+     * The following exceptions can be anticipated when calling {@code get()} on the future from the
+     * returned {@link DescribeFeaturesResult}:
+     * <ul>
+     *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *   If the request timed out before the describe operation could finish.</li>
+     * </ul>
+     * <p>
+     * @param options   the options to use
+     *
+     * @return          the {@link DescribeFeaturesResult} containing the result
+     */
+    DescribeFeaturesResult describeFeatures(DescribeFeaturesOptions options);
+
+    /**
+     * Applies specified updates to finalized features. This operation is not transactional so some
+     * updates may succeed while the rest may fail.
+     * <p>
+     * The API takes in a map of finalized feature names to {@link FeatureUpdate} that needs to be
+     * applied. Each entry in the map specifies the finalized feature to be added or updated or
+     * deleted, along with the new max feature version level value. This request is issued only to
+     * the controller since the API is only served by the controller. The return value contains an
+     * error code for each supplied {@link FeatureUpdate}, and the code indicates if the update
+     * succeeded or failed in the controller.
+     * <ul>
+     * <li>Downgrade of feature version level is not a regular operation/intent. It is only allowed
+     * in the controller if the {@link FeatureUpdate} has the allowDowngrade flag set. Setting this
+     * flag conveys user intent to attempt downgrade of a feature max version level. Note that
+     * despite the allowDowngrade flag being set, certain downgrades may be rejected by the
+     * controller if it is deemed impossible.</li>
+     * <li>Deletion of a finalized feature version is not a regular operation/intent. It could be
+     * done by setting the allowDowngrade flag to true in the {@link FeatureUpdate}, and, setting
+     * the max version level to a value less than 1.</li>
+     * </ul>
+     * <p>
+     * The following exceptions can be anticipated when calling {@code get()} on the futures
+     * obtained from the returned {@link UpdateFeaturesResult}:
+     * <ul>
+     *   <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
+     *   If the authenticated user didn't have alter access to the cluster.</li>
+     *   <li>{@link org.apache.kafka.common.errors.InvalidRequestException}
+     *   If the request details are invalid. e.g., a non-existing finalized feature is attempted
+     *   to be deleted or downgraded.</li>
+     *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *   If the request timed out before the updates could finish. It cannot be guaranteed whether
+     *   the updates succeeded or not.</li>
+     *   <li>{@link FeatureUpdateFailedException}
+     *   This means there was an unexpected error encountered when the update was applied on
+     *   the controller. There is no guarantee on whether the update succeeded or failed. The best
+     *   way to find out is to issue a {@link Admin#describeFeatures(DescribeFeaturesOptions)}
+     *   request to the controller to get the latest features.</li>
+     * </ul>
+     * <p>
+     * This operation is supported by brokers with version 2.7.0 or higher.
+
+     * @param featureUpdates   the map of finalized feature name to {@link FeatureUpdate}
+     * @param options          the options to use
+     *
+     * @return                 the {@link UpdateFeaturesResult} containing the result
+     */
+    UpdateFeaturesResult updateFeatures(Map<String, FeatureUpdate> featureUpdates, UpdateFeaturesOptions options);
 
     /**
      * Get the metrics kept by the adminClient
