@@ -183,7 +183,7 @@ public class StateRestoreThreadTest {
         restoreThread.addTaskCorruptedException(e2);
         restoreThread.addTaskCorruptedException(e3);
 
-        RuntimeException e = restoreThread.pollNextExceptionIfAny();
+        final RuntimeException e = restoreThread.pollNextExceptionIfAny();
 
         assertTrue(e instanceof TaskCorruptedException);
         assertEquals(3, ((TaskCorruptedException) e).corruptedTaskWithChangelogs().size());
