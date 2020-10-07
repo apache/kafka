@@ -53,7 +53,8 @@ public class ChangeLoggingKeyValueBytesStore
                      final StateStore root) {
         super.init(context, root);
         this.context = asInternalProcessorContext(context);
-        maybeSetEvictionListener(); }
+        maybeSetEvictionListener();
+    }
 
     private void maybeSetEvictionListener() {
         // if the inner store is an LRU cache, add the eviction listener to log removed record

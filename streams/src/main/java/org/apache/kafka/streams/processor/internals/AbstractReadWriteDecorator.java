@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.List;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -32,6 +31,8 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
+import java.util.List;
+
 abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends WrappedStateStore<T, K, V> {
     static final String ERROR_MESSAGE = "This method may only be called by Kafka Streams";
 
@@ -42,6 +43,12 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
     @Deprecated
     @Override
     public void init(final ProcessorContext context,
+                     final StateStore root) {
+        throw new UnsupportedOperationException(ERROR_MESSAGE);
+    }
+
+    @Override
+    public void init(final StateStoreContext context,
                      final StateStore root) {
         throw new UnsupportedOperationException(ERROR_MESSAGE);
     }
