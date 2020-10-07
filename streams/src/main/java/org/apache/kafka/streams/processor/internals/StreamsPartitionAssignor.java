@@ -342,17 +342,14 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         // ---------------- Step One ---------------- //
 
+        if (shutdownRequested) {
+            return new GroupAssignment(errorAssignment(clientMetadataMap, AssignorError.SHUTDOWN_REQUESTED.code()));
+        }
+
         // parse the topology to determine the repartition source topics,
         // making sure they are created with the number of partitions as
         // the maximum of the depending sub-topologies source topics' number of partitions
         final Map<Integer, TopicsInfo> topicGroups = taskManager.builder().topicGroups();
-
-        if (shutdownRequested) {
-            return new GroupAssignment(
-                    errorAssignment(clientMetadataMap,
-                            AssignorError.SHUTDOWN_REQUESTED.code())
-            );
-        }
 
         final Map<TopicPartition, PartitionInfo> allRepartitionTopicPartitions;
         try {

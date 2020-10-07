@@ -397,6 +397,7 @@ public class KafkaStreams implements AutoCloseable {
                                StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse.SHUTDOWN_STREAM_THREAD;
                         thread.setStreamsUncaughtExceptionHandler(defaultHandler);
                     }
+
                 }
             } else {
                 throw new IllegalStateException("Can only set UncaughtExceptionHandler in CREATED state. " +
@@ -511,7 +512,9 @@ public class KafkaStreams implements AutoCloseable {
             }
 
             if (setState(State.ERROR)) {
-                metrics.close();
+                if (rocksDBMetricsRecordingService != null) {
+                    rocksDBMetricsRecordingService.shutdownNow();
+                }
                 stateDirCleaner.shutdownNow();
                 log.error("All stream threads have died. The instance will be in error state and should be closed.");
             }

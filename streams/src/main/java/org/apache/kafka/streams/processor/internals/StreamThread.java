@@ -391,7 +391,8 @@ public class StreamThread extends Thread {
             threadId,
             logContext,
             nextScheduledRebalanceMs,
-            assignmentErrorCode);
+            assignmentErrorCode
+        );
 
         taskManager.setPartitionResetter(partitions -> streamThread.resetOffsets(partitions, null));
 
@@ -539,7 +540,6 @@ public class StreamThread extends Thread {
             throw e;
         } finally {
             completeShutdown(cleanRun);
-
         }
     }
 
@@ -573,12 +573,8 @@ public class StreamThread extends Thread {
             } catch (final TaskMigratedException e) {
                 handleTaskMigrated(e);
             } catch (final Exception e) {
-                if (streamsUncaughtExceptionHandler != null) {
-                    final StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse action = streamsUncaughtExceptionHandler.handle(e);
-                    if (action != StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse.SHUTDOWN_KAFKA_STREAMS_APPLICATION) {
-                        throw e;
-                    }
-                } else {
+                final StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse action = streamsUncaughtExceptionHandler.handle(e);
+                if (action != StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse.SHUTDOWN_KAFKA_STREAMS_APPLICATION) {
                     throw e;
                 }
             }
@@ -967,8 +963,6 @@ public class StreamThread extends Thread {
             completeShutdown(true);
         }
     }
-
-
 
     private void completeShutdown(final boolean cleanRun) {
         // set the state to pending shutdown first as it may be called due to error;
