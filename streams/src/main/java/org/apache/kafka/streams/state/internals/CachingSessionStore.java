@@ -348,17 +348,21 @@ class CachingSessionStore
             this.keyFrom = keyFrom;
             this.keyTo = keyTo;
             this.latestSessionStartTime = latestSessionStartTime;
-            this.lastSegmentId = cacheFunction.segmentId(maxObservedTimestamp);
             this.segmentInterval = cacheFunction.getSegmentInterval();
             this.forward = forward;
 
-            this.currentSegmentId = cacheFunction.segmentId(earliestSessionEndTime);
-
-            setCacheKeyRange(earliestSessionEndTime, currentSegmentLastTime());
 
             if (forward) {
+                this.currentSegmentId = cacheFunction.segmentId(earliestSessionEndTime);
+                this.lastSegmentId = cacheFunction.segmentId(maxObservedTimestamp);
+
+                setCacheKeyRange(earliestSessionEndTime, currentSegmentLastTime());
                 this.current = context.cache().range(cacheName, cacheKeyFrom, cacheKeyTo);
             } else {
+                this.lastSegmentId = cacheFunction.segmentId(earliestSessionEndTime);
+                this.currentSegmentId = cacheFunction.segmentId(maxObservedTimestamp);
+
+                setCacheKeyRange(currentSegmentBeginTime(), Math.min(latestSessionStartTime, maxObservedTimestamp));
                 this.current = context.cache().reverseRange(cacheName, cacheKeyFrom, cacheKeyTo);
             }
         }

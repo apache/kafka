@@ -65,7 +65,7 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 @SuppressWarnings("PointlessArithmeticExpression")
-public class CachingSessionStoreTest {
+public class CachingPersistentSessionStoreTest {
 
     private static final int MAX_CACHE_SIZE_BYTES = 600;
     private static final Long DEFAULT_TIMESTAMP = 10L;
@@ -77,13 +77,19 @@ public class CachingSessionStoreTest {
     private final Bytes keyAA = Bytes.wrap("aa".getBytes());
     private final Bytes keyB = Bytes.wrap("b".getBytes());
 
-    private SessionStore<Bytes, byte[]> underlyingStore =
-        new InMemorySessionStore("store-name", Long.MAX_VALUE, "metric-scope");
+    private SessionStore<Bytes, byte[]> underlyingStore;
     private CachingSessionStore cachingStore;
     private ThreadCache cache;
 
     @Before
     public void before() {
+        final RocksDBSegmentedBytesStore segmented = new RocksDBSegmentedBytesStore(
+            "store-name",
+            "metric-scope",
+            Long.MAX_VALUE,
+            SEGMENT_INTERVAL,
+            new SessionKeySchema());
+        underlyingStore = new RocksDBSessionStore(segmented);
         cachingStore = new CachingSessionStore(underlyingStore, SEGMENT_INTERVAL);
         cache = new ThreadCache(new LogContext("testCache "), MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
         final InternalMockProcessorContext context = new InternalMockProcessorContext(TestUtils.tempDirectory(), null, null, null, cache);
