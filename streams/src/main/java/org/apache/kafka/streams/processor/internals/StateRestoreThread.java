@@ -302,11 +302,11 @@ public class StateRestoreThread extends Thread {
         return changelogReader;
     }
 
-    void setFatalException(RuntimeException e) {
+    void setFatalException(final RuntimeException e) {
         fatalException.set(e);
     }
 
-    void addTaskCorruptedException(TaskCorruptedException e) {
+    void addTaskCorruptedException(final TaskCorruptedException e) {
         corruptedExceptions.add(e);
     }
 
