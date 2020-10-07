@@ -26,18 +26,24 @@ import kafka.utils.{Exit, Logging, TestUtils}
 import kafka.zk.{ConfigEntityChangeNotificationZNode, DeleteTopicsTopicZNode}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin._
+import org.apache.kafka.common.Node
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.TopicPartitionInfo
 import org.apache.kafka.common.config.{ConfigException, ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.ClusterAuthorizationException
+import org.apache.kafka.common.errors.ThrottlingQuotaExceededException
 import org.apache.kafka.common.errors.TopicExistsException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.junit.Assert.assertThrows
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.rules.TestName
 import org.junit.{After, Before, Rule, Test}
-import org.mockito.Mockito
+import org.mockito.ArgumentMatcher
+import org.mockito.ArgumentMatchers.{eq => eqThat, _}
+import org.mockito.Mockito._
 import org.scalatest.Assertions.{fail, intercept}
 
 import scala.jdk.CollectionConverters._
@@ -821,7 +827,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
 
   @Test
   def testDescribeDoesNotFailWhenListingReassignmentIsUnauthorized(): Unit = {
-    adminClient = Mockito.spy(adminClient)
+    adminClient = spy(adminClient)
     topicService = AdminClientTopicService(adminClient)
 
     val result = AdminClientTestUtils.listPartitionReassignmentsResult(
@@ -829,7 +835,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
 
     // Passing `null` here to help the compiler disambiguate the `doReturn` methods,
     // compilation for scala 2.12 fails otherwise.
-    Mockito.doReturn(result, null).when(adminClient).listPartitionReassignments(
+    doReturn(result, null).when(adminClient).listPartitionReassignments(
       Set(new TopicPartition(testTopicName, 0)).asJava
     )
 
@@ -843,5 +849,73 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     val rows = output.split("\n")
     assertEquals(2, rows.size)
     rows(0).startsWith(s"Topic:$testTopicName\tPartitionCount:1")
+  }
+
+  @Test
+  def testCreateTopicDoesNotRetryThrottlingQuotaExceededException(): Unit = {
+    val adminClient = mock(classOf[Admin])
+    val topicService = AdminClientTopicService(adminClient)
+
+    val result = AdminClientTestUtils.createTopicsResult(testTopicName, Errors.THROTTLING_QUOTA_EXCEEDED.exception())
+    when(adminClient.createTopics(any(), any())).thenReturn(result)
+
+    assertThrows(classOf[ThrottlingQuotaExceededException],
+      () => topicService.createTopic(new TopicCommandOptions(Array("--topic", testTopicName))))
+
+    val expectedNewTopic = new NewTopic(testTopicName, Optional.empty[Integer](), Optional.empty[java.lang.Short]())
+      .configs(Map.empty[String, String].asJava)
+
+    verify(adminClient, times(1)).createTopics(
+      eqThat(Set(expectedNewTopic).asJava),
+      argThat((_.shouldRetryOnQuotaViolation() == false): ArgumentMatcher[CreateTopicsOptions])
+    )
+  }
+
+  @Test
+  def testDeleteTopicDoesNotRetryThrottlingQuotaExceededException(): Unit = {
+    val adminClient = mock(classOf[Admin])
+    val topicService = AdminClientTopicService(adminClient)
+
+    val listResult = AdminClientTestUtils.listTopicsResult(testTopicName)
+    when(adminClient.listTopics(any())).thenReturn(listResult)
+
+    val result = AdminClientTestUtils.deleteTopicsResult(testTopicName, Errors.THROTTLING_QUOTA_EXCEEDED.exception())
+    when(adminClient.deleteTopics(any(), any())).thenReturn(result)
+
+    val exception = assertThrows(classOf[ExecutionException],
+      () => topicService.deleteTopic(new TopicCommandOptions(Array("--topic", testTopicName))))
+    assertTrue(exception.getCause.isInstanceOf[ThrottlingQuotaExceededException])
+
+    verify(adminClient, times(1)).deleteTopics(
+      eqThat(Seq(testTopicName).asJavaCollection),
+      argThat((_.shouldRetryOnQuotaViolation() == false): ArgumentMatcher[DeleteTopicsOptions])
+    )
+  }
+
+  @Test
+  def testCreatePartitionsDoesNotRetryThrottlingQuotaExceededException(): Unit = {
+    val adminClient = mock(classOf[Admin])
+    val topicService = AdminClientTopicService(adminClient)
+
+    val listResult = AdminClientTestUtils.listTopicsResult(testTopicName)
+    when(adminClient.listTopics(any())).thenReturn(listResult)
+
+    val topicPartitionInfo = new TopicPartitionInfo(0, new Node(0, "", 0),
+      Collections.emptyList(), Collections.emptyList())
+    val describeResult = AdminClientTestUtils.describeTopicsResult(testTopicName, new TopicDescription(
+      testTopicName, false, Collections.singletonList(topicPartitionInfo)))
+    when(adminClient.describeTopics(any())).thenReturn(describeResult)
+
+    val result = AdminClientTestUtils.createPartitionsResult(testTopicName, Errors.THROTTLING_QUOTA_EXCEEDED.exception())
+    when(adminClient.createPartitions(any(), any())).thenReturn(result)
+
+    val exception = assertThrows(classOf[ExecutionException],
+      () => topicService.alterTopic(new TopicCommandOptions(Array("--topic", testTopicName, "--partitions", "3"))))
+    assertTrue(exception.getCause.isInstanceOf[ThrottlingQuotaExceededException])
+
+    verify(adminClient, times(1)).createPartitions(
+      argThat((_.get(testTopicName).totalCount() == 3): ArgumentMatcher[java.util.Map[String, NewPartitions]]),
+      argThat((_.shouldRetryOnQuotaViolation() == false): ArgumentMatcher[CreatePartitionsOptions])
+    )
   }
 }

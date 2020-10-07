@@ -310,10 +310,10 @@ public class MockLog implements ReplicatedLog {
     }
 
     @Override
-    public void assignEpochStartOffset(int epoch, long startOffset) {
-        if (startOffset != endOffset().offset)
-            throw new IllegalArgumentException(
-                "Can only assign epoch for the end offset " + endOffset().offset + ", but get offset " + startOffset);
+    public void initializeLeaderEpoch(int epoch) {
+        long startOffset = endOffset().offset;
+        epochStartOffsets.removeIf(epochStartOffset ->
+            epochStartOffset.startOffset >= startOffset || epochStartOffset.epoch >= epoch);
         epochStartOffsets.add(new EpochStartOffset(epoch, startOffset));
     }
 

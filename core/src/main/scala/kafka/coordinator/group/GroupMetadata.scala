@@ -476,7 +476,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
               // future versions of the consumer protocol. VO must prefix all new versions.
               val buffer = ByteBuffer.wrap(member.metadata(protocolName.get))
               ConsumerProtocol.deserializeVersion(buffer)
-              ConsumerProtocol.deserializeSubscriptionV0(buffer).topics.asScala.toSet
+              ConsumerProtocol.deserializeSubscription(buffer, 0).topics.asScala.toSet
             }.reduceLeft(_ ++ _)
           )
         } catch {

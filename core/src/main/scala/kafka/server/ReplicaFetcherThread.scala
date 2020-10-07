@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import java.util.Collections
 import java.util.Optional
 
 import kafka.api._
@@ -28,6 +29,7 @@ import kafka.utils.Implicits._
 import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.KafkaStorageException
+import org.apache.kafka.common.message.ListOffsetRequestData.{ListOffsetPartition, ListOffsetTopic}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, Records}
@@ -229,22 +231,27 @@ class ReplicaFetcherThread(name: String,
   }
 
   private def fetchOffsetFromLeader(topicPartition: TopicPartition, currentLeaderEpoch: Int, earliestOrLatest: Long): Long = {
-    val requestPartitionData = new ListOffsetRequest.PartitionData(earliestOrLatest,
-      Optional.of[Integer](currentLeaderEpoch))
-    val requestPartitions = Map(topicPartition -> requestPartitionData)
+    val topic = new ListOffsetTopic()
+      .setName(topicPartition.topic)
+      .setPartitions(Collections.singletonList(
+          new ListOffsetPartition()
+            .setPartitionIndex(topicPartition.partition)
+            .setCurrentLeaderEpoch(currentLeaderEpoch)
+            .setTimestamp(earliestOrLatest)))
     val requestBuilder = ListOffsetRequest.Builder.forReplica(listOffsetRequestVersion, replicaId)
-      .setTargetTimes(requestPartitions.asJava)
+      .setTargetTimes(Collections.singletonList(topic))
 
     val clientResponse = leaderEndpoint.sendRequest(requestBuilder)
     val response = clientResponse.responseBody.asInstanceOf[ListOffsetResponse]
+    val responsePartition = response.topics.asScala.find(_.name == topicPartition.topic).get
+      .partitions.asScala.find(_.partitionIndex == topicPartition.partition).get
 
-    val responsePartitionData = response.responseData.get(topicPartition)
-    responsePartitionData.error match {
+     Errors.forCode(responsePartition.errorCode) match {
       case Errors.NONE =>
         if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_10_1_IV2)
-          responsePartitionData.offset
+          responsePartition.offset
         else
-          responsePartitionData.offsets.get(0)
+          responsePartition.oldStyleOffsets.get(0)
       case error => throw error.exception
     }
   }

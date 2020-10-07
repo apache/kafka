@@ -274,7 +274,7 @@ public class KafkaRaftClient implements RaftClient {
     private void onBecomeLeader(long currentTimeMs) {
         LeaderState state = quorum.leaderStateOrThrow();
 
-        log.assignEpochStartOffset(quorum.epoch(), log.endOffset().offset);
+        log.initializeLeaderEpoch(quorum.epoch());
 
         // The high watermark can only be advanced once we have written a record
         // from the new leader's epoch. Hence we write a control message immediately

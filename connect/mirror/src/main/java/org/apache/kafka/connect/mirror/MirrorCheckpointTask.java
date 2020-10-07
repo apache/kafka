@@ -168,7 +168,7 @@ public class MirrorCheckpointTask extends SourceTask {
         return listConsumerGroupOffsets(group).entrySet().stream()
             .filter(x -> shouldCheckpointTopic(x.getKey().topic()))
             .map(x -> checkpoint(group, x.getKey(), x.getValue()))
-            .filter(x -> x.downstreamOffset() > 0)  // ignore offsets we cannot translate accurately
+            .filter(x -> x.downstreamOffset() >= 0)  // ignore offsets we cannot translate accurately
             .collect(Collectors.toList());
     }
 

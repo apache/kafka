@@ -82,7 +82,6 @@ class KafkaMetadataLog(log: Log,
   }
 
   override def endOffsetForEpoch(leaderEpoch: Int): Optional[raft.OffsetAndEpoch] = {
-    // TODO: Does this handle empty log case (when epoch is None) as we expect?
     val endOffsetOpt = log.endOffsetForEpoch(leaderEpoch).map { offsetAndEpoch =>
       new raft.OffsetAndEpoch(offsetAndEpoch.offset, offsetAndEpoch.leaderEpoch)
     }
@@ -107,8 +106,8 @@ class KafkaMetadataLog(log: Log,
     log.truncateTo(offset)
   }
 
-  override def assignEpochStartOffset(epoch: Int, startOffset: Long): Unit = {
-    log.maybeAssignEpochStartOffset(epoch, startOffset)
+  override def initializeLeaderEpoch(epoch: Int): Unit = {
+    log.maybeAssignEpochStartOffset(epoch, log.logEndOffset)
   }
 
   override def updateHighWatermark(offsetMetadata: LogOffsetMetadata): Unit = {
