@@ -31,6 +31,7 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -82,7 +83,7 @@ public class ConfigurationControlManager {
                                                 Map<String, Entry<OpType, String>> keysToOps,
                                                 List<ApiMessageAndVersion> outputRecords,
                                                 Map<ConfigResource, ApiError> outputResults) {
-        ApiError error = configResourceError(configResource);
+        ApiError error = checkConfigResource(configResource);
         if (error.isFailure()) {
             outputResults.put(configResource, error);
             return;
@@ -143,11 +144,76 @@ public class ConfigurationControlManager {
         outputResults.put(configResource, ApiError.NONE);
     }
 
+    /**
+     * Determine the result of applying a batch of legacy configuration changes.  Note
+     * that this method does not change the contents of memory.  It just generates a
+     * result, that you can replay later if you wish using replay().
+     *
+     * @param newConfigs        The new configurations to install for each resource.
+     *                          All existing configurations will be overwritten.
+     * @return                  The result.
+     */
+    ControllerResult<Map<ConfigResource, ApiError>> legacyAlterConfigs(
+        Map<ConfigResource, Map<String, String>> newConfigs) {
+        List<ApiMessageAndVersion> outputRecords = new ArrayList<>();
+        Map<ConfigResource, ApiError> outputResults = new HashMap<>();
+        for (Entry<ConfigResource, Map<String, String>> resourceEntry :
+            newConfigs.entrySet()) {
+            legacyAlterConfigResource(resourceEntry.getKey(),
+                resourceEntry.getValue(),
+                outputRecords,
+                outputResults);
+        }
+        return new ControllerResult<>(outputRecords, outputResults);
+    }
+
+    private void legacyAlterConfigResource(ConfigResource configResource,
+                                           Map<String, String> newConfigs,
+                                           List<ApiMessageAndVersion> outputRecords,
+                                           Map<ConfigResource, ApiError> outputResults) {
+        ApiError error = checkConfigResource(configResource);
+        if (error.isFailure()) {
+            outputResults.put(configResource, error);
+            return;
+        }
+        List<ApiMessageAndVersion> newRecords = new ArrayList<>();
+        Map<String, String> currentConfigs = configData.get(configResource);
+        if (currentConfigs == null) {
+            currentConfigs = Collections.emptyMap();
+        }
+        for (Entry<String, String> entry : newConfigs.entrySet()) {
+            String key = entry.getKey();
+            String newValue = entry.getValue();
+            String currentValue = currentConfigs.get(key);
+            if (!Objects.equals(newValue, currentValue)) {
+                newRecords.add(new ApiMessageAndVersion(new ConfigRecord().
+                    setResourceType(configResource.type().id()).
+                    setResourceName(configResource.name()).
+                    setName(key).
+                    setValue(newValue), (short) 0));
+            }
+        }
+        for (String key : currentConfigs.keySet()) {
+            if (!newConfigs.containsKey(key)) {
+                newRecords.add(new ApiMessageAndVersion(new ConfigRecord().
+                    setResourceType(configResource.type().id()).
+                    setResourceName(configResource.name()).
+                    setName(key).
+                    setValue(null), (short) 0));
+            }
+        }
+        outputRecords.addAll(newRecords);
+        outputResults.put(configResource, ApiError.NONE);
+    }
+
     private List<String> getParts(String value, String key, ConfigResource configResource) {
         if (value == null) {
             value = getConfigValueDefault(configResource.type(), key);
         }
         List<String> parts = new ArrayList<>();
+        if (value == null) {
+            return parts;
+        }
         String[] splitValues = value.split(",");
         for (String splitValue : splitValues) {
             if (!splitValue.isEmpty()) {
@@ -157,11 +223,18 @@ public class ConfigurationControlManager {
         return parts;
     }
 
-    private static ApiError configResourceError(ConfigResource configResource) {
+    static ApiError checkConfigResource(ConfigResource configResource) {
         switch (configResource.type()) {
             case BROKER_LOGGER:
-                // TODO: are there any rules for the names of these?
-                return ApiError.NONE;
+                // We do not handle resources of type BROKER_LOGGER in
+                // ConfigurationControlManager, since they are not persisted to the
+                // metadata log.
+                //
+                // When using incrementalAlterConfigs, we handle changes to BROKER_LOGGER
+                // in ControllerApis.scala.  When using the legacy alterConfigs,
+                // BROKER_LOGGER is not supported at all.
+                return new ApiError(Errors.INVALID_REQUEST, "Unsupported " +
+                    "configuration resource type BROKER_LOGGER ");
             case BROKER:
                 if (!configResource.name().isEmpty()) {
                     try {
@@ -213,10 +286,7 @@ public class ConfigurationControlManager {
             return null;
         }
         ConfigKey configKey = configDef.configKeys().get(key);
-        if (configKey == null) {
-            return null;
-        }
-        if (configKey.defaultValue == null) {
+        if (configKey == null || !configKey.hasDefault()) {
             return null;
         }
         return ConfigDef.convertToString(configKey.defaultValue, configKey.type);
@@ -235,6 +305,20 @@ public class ConfigurationControlManager {
             configs = new TimelineHashMap<>(snapshotRegistry, 0);
             configData.put(configResource, configs);
         }
-        configs.put(record.name(), record.value());
+        if (record.value() == null) {
+            configs.remove(record.name());
+        } else {
+            configs.put(record.name(), record.value());
+        }
+    }
+
+    // VisibleForTesting
+    Map<String, String> getConfigs(ConfigResource configResource) {
+        Map<String, String> map = configData.get(configResource);
+        if (map == null) {
+            return Collections.emptyMap();
+        } else {
+            return Collections.unmodifiableMap(new HashMap<>(map));
+        }
     }
 }

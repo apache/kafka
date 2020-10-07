@@ -20,6 +20,7 @@ package org.apache.kafka.controller;
 import org.apache.kafka.common.protocol.ApiMessageAndVersion;
 
 import java.util.List;
+import java.util.Objects;
 
 class ControllerResultAndOffset<T> extends ControllerResult<T> {
     private final long offset;
@@ -33,5 +34,21 @@ class ControllerResultAndOffset<T> extends ControllerResult<T> {
 
     public long offset() {
         return offset;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == null || (!o.getClass().equals(getClass()))) {
+            return false;
+        }
+        ControllerResultAndOffset other = (ControllerResultAndOffset) o;
+        return records().equals(other.records()) &&
+            response().equals(other.response()) &&
+            offset == other.offset;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(records(), response(), offset);
     }
 }
