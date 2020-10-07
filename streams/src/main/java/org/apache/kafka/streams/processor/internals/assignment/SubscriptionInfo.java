@@ -87,7 +87,6 @@ public class SubscriptionInfo {
         final SubscriptionInfoData data = new SubscriptionInfoData();
         data.setVersion(version);
         data.setProcessId(processId);
-
         data.setUniqueField(uniqueField);
 
         if (version >= 2) {
