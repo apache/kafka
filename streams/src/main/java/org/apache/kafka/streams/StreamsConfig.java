@@ -694,7 +694,7 @@ public class StreamsConfig extends AbstractConfig {
                     CommonClientConfigs.SECURITY_PROTOCOL_DOC)
             .define(TASK_TIMEOUT_MS_CONFIG,
                     Type.LONG,
-                    Duration.ofSeconds(5L).toMillis(),
+                    Duration.ofMinutes(5L).toMillis(),
                     atLeast(0L),
                     Importance.MEDIUM,
                     TASK_TIMEOUT_MS_DOC)

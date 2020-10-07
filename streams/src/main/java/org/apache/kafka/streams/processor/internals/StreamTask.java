@@ -119,7 +119,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                       final ProcessorStateManager stateMgr,
                       final RecordCollector recordCollector,
                       final InternalProcessorContext processorContext) {
-        super(id, topology, stateDirectory, stateMgr, partitions);
+        super(id, topology, stateDirectory, stateMgr, partitions, config.getLong(StreamsConfig.TASK_TIMEOUT_MS_CONFIG));
         this.mainConsumer = mainConsumer;
 
         this.processorContext = processorContext;
@@ -1012,6 +1012,17 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     @Override
     public boolean commitRequested() {
         return commitRequested;
+    }
+
+    @Override
+    public void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
+                                            final TimeoutException timeoutException) throws StreamsException {
+        maybeInitTaskTimeoutOrThrow(currentWallClockMs, timeoutException, log);
+    }
+
+    @Override
+    public void clearTaskTimeout() {
+        clearTaskTimeout(log);
     }
 
     static String encodeTimestamp(final long partitionTime) {
