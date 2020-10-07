@@ -60,11 +60,6 @@ public class CachingKeyValueStore
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
-        if (!(context instanceof InternalProcessorContext)) {
-            throw new IllegalArgumentException(
-                "Caching requires internal features of KafkaStreams and must be disabled for unit tests."
-            );
-        }
         initInternal(asInternalProcessorContext(context));
         super.init(context, root);
         // save the stream thread as we only ever want to trigger a flush
