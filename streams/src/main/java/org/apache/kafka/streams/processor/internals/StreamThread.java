@@ -613,12 +613,12 @@ public class StreamThread extends Thread {
             return;
         }
 
-        // we need to first add closed tasks and then created tasks to work with those revived / recycled tasks
+        // we need to first add any closed revoked/corrupted/recycled tasks and then add the initialized tasks to update the changelogs of revived/recycled tasks
         restoreThread.addClosedTasks(taskManager.drainRemovedTasks());
 
-        // try to initialize created tasks that are either newly assigned or re-created from corrupted tasks
-        final List<Task> initializedTasks;
-        if (!(initializedTasks = taskManager.tryInitializeNewTasks()).isEmpty()) {
+        // try to initialize created tasks that are either newly assigned, recycled, or revived from corrupted tasks
+        final List<Task> initializedTasks = taskManager.tryInitializeNewTasks();
+        if (!initializedTasks.isEmpty()) {
             log.info("Initialized new tasks {} under state {}, will start restoring them",
                     initializedTasks.stream().map(Task::id).collect(Collectors.toList()), state);
 
@@ -632,7 +632,7 @@ public class StreamThread extends Thread {
             // it is possible that we have no assigned tasks in which case we would still transit state
             setState(State.RUNNING);
 
-            log.debug("All tasks are now running and transited State to {}", State.RUNNING);
+            log.info("All tasks are now running");
         }
 
         // check if restore thread has encountered TaskCorrupted exception; if yes
