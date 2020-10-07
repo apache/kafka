@@ -63,13 +63,25 @@ public class StreamThreadStateStoreProvider {
                 if (task == null) {
                     return Collections.emptyList();
                 }
-                final T store = validateAndListStores(task.getStore(storeName), queryableStoreType, storeName, keyTaskId);
+                final T store = validateAndListStores(
+                    task.getStore(storeName),
+                    queryableStoreType,
+                    storeName,
+                    keyTaskId,
+                    storeQueryParams.bypassCacheEnabled()
+                );
                 if (store != null) {
                     return Collections.singletonList(store);
                 }
             } else {
                 for (final Task streamTask : tasks.values()) {
-                    final T store = validateAndListStores(streamTask.getStore(storeName), queryableStoreType, storeName, streamTask.id());
+                    final T store = validateAndListStores(
+                        streamTask.getStore(storeName),
+                        queryableStoreType,
+                        storeName,
+                        streamTask.id(),
+                        storeQueryParams.bypassCacheEnabled()
+                    );
                     if (store != null) {
                         stores.add(store);
                     }
@@ -84,7 +96,11 @@ public class StreamThreadStateStoreProvider {
     }
 
     @SuppressWarnings("unchecked")
-    private <T> T validateAndListStores(final StateStore store, final QueryableStoreType<T> queryableStoreType, final String storeName, final TaskId taskId) {
+    private static <T> T validateAndListStores(final StateStore store,
+                                               final QueryableStoreType<T> queryableStoreType,
+                                               final String storeName,
+                                               final TaskId taskId,
+                                               final boolean bypassCache) {
         if (store != null && queryableStoreType.accepts(store)) {
             if (!store.isOpen()) {
                 throw new InvalidStateStoreException(
@@ -92,15 +108,38 @@ public class StreamThreadStateStoreProvider {
                             " because the store is not open. " +
                             "The state store may have migrated to another instances.");
             }
+            final StateStore maybeUncached = maybeBypassCache(store, bypassCache);
             if (store instanceof TimestampedKeyValueStore && queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
-                return (T) new ReadOnlyKeyValueStoreFacade<>((TimestampedKeyValueStore<Object, Object>) store);
+                return (T) new ReadOnlyKeyValueStoreFacade<>((TimestampedKeyValueStore<Object, Object>) maybeUncached);
             } else if (store instanceof TimestampedWindowStore && queryableStoreType instanceof QueryableStoreTypes.WindowStoreType) {
-                return (T) new ReadOnlyWindowStoreFacade<>((TimestampedWindowStore<Object, Object>) store);
+                return (T) new ReadOnlyWindowStoreFacade<>((TimestampedWindowStore<Object, Object>) maybeUncached);
             } else {
-                return (T) store;
+                return (T) maybeUncached;
             }
         } else {
             return null;
+        }
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static StateStore maybeBypassCache(final StateStore store, final boolean bypassCache) {
+        if (!bypassCache) {
+            return store;
+        } else if (store instanceof MeteredStore) {
+            final MeteredStore meteredStore = (MeteredStore) store;
+            final StateStore wrapped = meteredStore.wrapped();
+            final StateStore uncached = maybeBypassCache(wrapped, bypassCache);
+            if (uncached == wrapped) {
+                return store;
+            } else {
+                return meteredStore.reWrap(uncached);
+            }
+        } else if (WrappedStateStore.isCachingLayer(store)) {
+            return ((WrappedStateStore) store).wrapped();
+        } else if (store instanceof WrappedStateStore) {
+            return maybeBypassCache(((WrappedStateStore) store).wrapped(), bypassCache);
+        } else {
+            return store;
         }
     }
 

@@ -27,19 +27,21 @@ public class StoreQueryParameters<T> {
 
     private Integer partition;
     private boolean staleStores;
+    private boolean bypassCache;
     private final String storeName;
     private final QueryableStoreType<T> queryableStoreType;
 
-    private StoreQueryParameters(final String storeName, final QueryableStoreType<T>  queryableStoreType, final Integer partition, final boolean staleStores) {
+    private StoreQueryParameters(final String storeName, final QueryableStoreType<T> queryableStoreType, final Integer partition, final boolean staleStores, final boolean bypassCache) {
         this.storeName = storeName;
         this.queryableStoreType = queryableStoreType;
         this.partition = partition;
         this.staleStores = staleStores;
+        this.bypassCache = bypassCache;
     }
 
     public static <T> StoreQueryParameters<T> fromNameAndType(final String storeName,
                                                               final QueryableStoreType<T>  queryableStoreType) {
-        return new StoreQueryParameters<T>(storeName, queryableStoreType, null, false);
+        return new StoreQueryParameters<T>(storeName, queryableStoreType, null, false, false);
     }
 
     /**
@@ -50,7 +52,7 @@ public class StoreQueryParameters<T> {
      * @return StoreQueryParameters a new {@code StoreQueryParameters} instance configured with the specified partition
      */
     public StoreQueryParameters<T> withPartition(final Integer partition) {
-        return new StoreQueryParameters<T>(storeName, queryableStoreType, partition, staleStores);
+        return new StoreQueryParameters<T>(storeName, queryableStoreType, partition, staleStores, bypassCache);
     }
 
     /**
@@ -59,7 +61,11 @@ public class StoreQueryParameters<T> {
      * @return StoreQueryParameters a new {@code StoreQueryParameters} instance configured with serving from stale stores enabled
      */
     public StoreQueryParameters<T> enableStaleStores() {
-        return new StoreQueryParameters<T>(storeName, queryableStoreType, partition, true);
+        return new StoreQueryParameters<T>(storeName, queryableStoreType, partition, true, bypassCache);
+    }
+
+    public StoreQueryParameters<T> enableBypassCache() {
+        return new StoreQueryParameters<>(storeName, queryableStoreType, partition, staleStores, true);
     }
 
     /**
@@ -100,30 +106,35 @@ public class StoreQueryParameters<T> {
         return staleStores;
     }
 
-    @Override
-    public boolean equals(final Object obj) {
-        if (!(obj instanceof StoreQueryParameters)) {
-            return false;
-        }
-        final StoreQueryParameters storeQueryParameters = (StoreQueryParameters) obj;
-        return Objects.equals(storeQueryParameters.partition, partition)
-                && Objects.equals(storeQueryParameters.staleStores, staleStores)
-                && Objects.equals(storeQueryParameters.storeName, storeName)
-                && Objects.equals(storeQueryParameters.queryableStoreType, queryableStoreType);
+    public boolean bypassCacheEnabled() {
+        return bypassCache;
     }
 
     @Override
-    public String toString() {
-        return "StoreQueryParameters {" +
-                "partition=" + partition +
-                ", staleStores=" + staleStores +
-                ", storeName=" + storeName +
-                ", queryableStoreType=" + queryableStoreType +
-                '}';
+    public boolean equals(final Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        final StoreQueryParameters<?> that = (StoreQueryParameters<?>) o;
+        return staleStores == that.staleStores &&
+            bypassCache == that.bypassCache &&
+            Objects.equals(partition, that.partition) &&
+            Objects.equals(storeName, that.storeName) &&
+            Objects.equals(queryableStoreType, that.queryableStoreType);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(partition, staleStores, storeName, queryableStoreType);
+        return Objects.hash(partition, staleStores, bypassCache, storeName, queryableStoreType);
+    }
+
+    @Override
+    public String toString() {
+        return "StoreQueryParameters{" +
+            "partition=" + partition +
+            ", staleStores=" + staleStores +
+            ", bypassCache=" + bypassCache +
+            ", storeName='" + storeName + '\'' +
+            ", queryableStoreType=" + queryableStoreType +
+            '}';
     }
 }

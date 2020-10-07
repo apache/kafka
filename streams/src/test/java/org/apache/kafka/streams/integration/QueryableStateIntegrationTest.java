@@ -29,13 +29,14 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KafkaStreamsTest;
+import org.apache.kafka.streams.KeyQueryMetadata;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.LagInfo;
+import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.KeyQueryMetadata;
-import org.apache.kafka.streams.KafkaStreams.State;
-import org.apache.kafka.streams.LagInfo;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
@@ -48,13 +49,13 @@ import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueMapper;
-import org.apache.kafka.streams.state.QueryableStoreTypes;
-import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
-import org.apache.kafka.streams.state.StreamsMetadata;
-import org.apache.kafka.streams.state.ReadOnlyWindowStore;
-import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.QueryableStoreTypes;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlyWindowStore;
+import org.apache.kafka.streams.state.StreamsMetadata;
+import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.NoRetryException;
@@ -304,8 +305,13 @@ public class QueryableStateIntegrationTest {
 
                     final int index = queryMetadata.activeHost().port();
                     final KafkaStreams streamsWithKey = pickInstanceByPort ? streamsList.get(index) : streams;
+                    final StoreQueryParameters<ReadOnlyKeyValueStore<String, Long>> param =
+                        StoreQueryParameters.fromNameAndType(
+                            storeName,
+                            QueryableStoreTypes.<String, Long>keyValueStore()
+                        ).enableStaleStores();
                     final ReadOnlyKeyValueStore<String, Long> store =
-                        IntegrationTestUtils.getStore(storeName, streamsWithKey, true, QueryableStoreTypes.keyValueStore());
+                        IntegrationTestUtils.getStore(IntegrationTestUtils.DEFAULT_TIMEOUT, streamsWithKey, param);
                     if (store == null) {
                         nullStoreKeys.add(key);
                         continue;
@@ -363,8 +369,13 @@ public class QueryableStateIntegrationTest {
 
                     final int index = queryMetadata.activeHost().port();
                     final KafkaStreams streamsWithKey = pickInstanceByPort ? streamsList.get(index) : streams;
+                    final StoreQueryParameters<ReadOnlyWindowStore<String, Long>> param =
+                        StoreQueryParameters.fromNameAndType(
+                            storeName,
+                            QueryableStoreTypes.<String, Long>windowStore()
+                        ).enableStaleStores();
                     final ReadOnlyWindowStore<String, Long> store =
-                        IntegrationTestUtils.getStore(storeName, streamsWithKey, true, QueryableStoreTypes.windowStore());
+                        IntegrationTestUtils.getStore(IntegrationTestUtils.DEFAULT_TIMEOUT, streamsWithKey, param);
                     if (store == null) {
                         nullStoreKeys.add(key);
                         continue;
@@ -798,6 +809,76 @@ public class QueryableStateIntegrationTest {
                 assertNull(myMapStore.get(batchEntry.key));
             }
         }
+    }
+
+    @Test
+    public void shouldQueryKeyValueWithCacheBypassed() throws Exception {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final String[] keys = {"hello", "goodbye", "welcome", "go", "kafka"};
+
+        final Set<KeyValue<String, String>> batch1 = new TreeSet<>(stringComparator);
+        batch1.addAll(Arrays.asList(
+            new KeyValue<>(keys[0], "hello"),
+            new KeyValue<>(keys[1], "goodbye"),
+            new KeyValue<>(keys[2], "welcome"),
+            new KeyValue<>(keys[3], "go"),
+            new KeyValue<>(keys[4], "kafka")));
+
+        final Set<KeyValue<String, Long>> expectedCount = new TreeSet<>(stringLongComparator);
+        for (final String key : keys) {
+            expectedCount.add(new KeyValue<>(key, 1L));
+        }
+
+        IntegrationTestUtils.produceKeyValuesSynchronously(
+            streamOne,
+            batch1,
+            TestUtils.producerConfig(
+                CLUSTER.bootstrapServers(),
+                StringSerializer.class,
+                StringSerializer.class,
+                new Properties()),
+            mockTime);
+
+        final KStream<String, String> s1 = builder.stream(streamOne);
+
+        // Non Windowed
+        final String storeName = "my-count";
+        s1.groupByKey()
+            .count(Materialized.as(storeName))
+            .toStream()
+            .to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
+
+        final String windowStoreName = "windowed-count";
+        s1.groupByKey()
+            .windowedBy(TimeWindows.of(ofMillis(WINDOW_SIZE)))
+            .count(Materialized.as(windowStoreName));
+        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
+        startKafkaStreamsAndWaitForRunningState(kafkaStreams);
+
+        waitUntilAtLeastNumRecordProcessed(outputTopic, 1);
+
+        final ReadOnlyKeyValueStore<String, Long> myCount =
+            IntegrationTestUtils.getStore(
+                IntegrationTestUtils.DEFAULT_TIMEOUT,
+                kafkaStreams,
+                StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.<String, Long>keyValueStore()).enableBypassCache()
+            );
+
+        final Set<KeyValue<String, Long>> countState = new TreeSet<>(stringLongComparator);
+
+        final long timeout = System.currentTimeMillis() + 30000;
+        while ((countState.size() < keys.length) && System.currentTimeMillis() < timeout) {
+            Thread.sleep(10);
+            for (final String key : keys) {
+                final Long value = myCount.get(key);
+                if (value != null) {
+                    countState.add(new KeyValue<>(key, value));
+                }
+            }
+        }
+        assertThat(countState, equalTo(expectedCount));
+
+        verifyRangeAndAll(expectedCount, myCount);
     }
 
     private void verifyCanQueryState(final int cacheSizeBytes) throws Exception {

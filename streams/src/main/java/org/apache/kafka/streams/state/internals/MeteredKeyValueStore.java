@@ -46,41 +46,88 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
  * @param <K>
  * @param <V>
  */
-public class MeteredKeyValueStore<K, V>
-    extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, K, V>
+public class MeteredKeyValueStore<K, V, OwnType extends MeteredKeyValueStore<K, V, OwnType>>
+    extends MeteredStore<K, V, MeteredKeyValueStore<K, V, OwnType>, KeyValueStore<Bytes, byte[]>>
     implements KeyValueStore<K, V> {
 
     final Serde<K> keySerde;
     final Serde<V> valueSerde;
     StateSerdes<K, V> serdes;
 
-    private final String metricsScope;
+    protected final String metricsScope;
     protected final Time time;
     protected Sensor putSensor;
-    private Sensor putIfAbsentSensor;
+    protected Sensor putIfAbsentSensor;
     protected Sensor getSensor;
-    private Sensor deleteSensor;
-    private Sensor putAllSensor;
-    private Sensor allSensor;
-    private Sensor rangeSensor;
-    private Sensor flushSensor;
-    private Sensor e2eLatencySensor;
-    private ProcessorContext context;
-    private StreamsMetricsImpl streamsMetrics;
-    private final String threadId;
-    private String taskId;
+    protected Sensor deleteSensor;
+    protected Sensor putAllSensor;
+    protected Sensor allSensor;
+    protected Sensor rangeSensor;
+    protected Sensor flushSensor;
+    protected Sensor e2eLatencySensor;
+    protected ProcessorContext context;
+    protected StreamsMetricsImpl streamsMetrics;
+    protected final String threadId;
+    protected String taskId;
 
     MeteredKeyValueStore(final KeyValueStore<Bytes, byte[]> inner,
                          final String metricsScope,
                          final Time time,
                          final Serde<K> keySerde,
                          final Serde<V> valueSerde) {
+        this(
+            inner,
+            metricsScope,
+            Thread.currentThread().getName(),
+            time != null ? time : Time.SYSTEM,
+            keySerde,
+            valueSerde
+        );
+    }
+
+    protected MeteredKeyValueStore(final KeyValueStore<Bytes, byte[]> inner,
+                         final String metricsScope,
+                         final String threadId,
+                         final Time time,
+                         final Serde<K> keySerde,
+                         final Serde<V> valueSerde) {
         super(inner);
         this.metricsScope = metricsScope;
-        threadId = Thread.currentThread().getName();
-        this.time = time != null ? time : Time.SYSTEM;
+        this.threadId = threadId;
+        this.time = time;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
+    }
+
+    public MeteredKeyValueStore<K, V, OwnType> reWrap(final KeyValueStore<Bytes, byte[]> inner) {
+        final MeteredKeyValueStore<K, V, OwnType> reWrapped = new MeteredKeyValueStore<>(
+            inner,
+            metricsScope,
+            threadId,
+            time,
+            keySerde,
+            valueSerde
+        );
+
+        copyInit(reWrapped);
+
+        return reWrapped;
+    }
+
+    protected void copyInit(final MeteredKeyValueStore<K, V, OwnType> reWrapped) {
+        reWrapped.context = context;
+        reWrapped.taskId = taskId;
+        reWrapped.serdes = serdes;
+        reWrapped.streamsMetrics = streamsMetrics;
+        reWrapped.putSensor = putSensor;
+        reWrapped.putIfAbsentSensor = putIfAbsentSensor;
+        reWrapped.putAllSensor = putAllSensor;
+        reWrapped.getSensor = getSensor;
+        reWrapped.allSensor = allSensor;
+        reWrapped.rangeSensor = rangeSensor;
+        reWrapped.flushSensor = flushSensor;
+        reWrapped.deleteSensor = deleteSensor;
+        reWrapped.e2eLatencySensor = e2eLatencySensor;
     }
 
     @Override
@@ -112,7 +159,7 @@ public class MeteredKeyValueStore<K, V>
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
         serdes = new StateSerdes<>(
-             changelogTopic != null ?
+            changelogTopic != null ?
                 changelogTopic :
                 ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName),
             keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
@@ -252,7 +299,7 @@ public class MeteredKeyValueStore<K, V>
     private void maybeRecordE2ELatency() {
         if (e2eLatencySensor.shouldRecord()) {
             final long currentTime = time.milliseconds();
-            final long e2eLatency =  currentTime - context.timestamp();
+            final long e2eLatency = currentTime - context.timestamp();
             e2eLatencySensor.record(e2eLatency, currentTime);
         }
     }
@@ -267,7 +314,7 @@ public class MeteredKeyValueStore<K, V>
                                         final Sensor sensor) {
             this.iter = iter;
             this.sensor = sensor;
-            this.startNs = time.nanoseconds();
+            startNs = time.nanoseconds();
         }
 
         @Override
