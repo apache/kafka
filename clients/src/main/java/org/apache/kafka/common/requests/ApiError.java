@@ -21,6 +21,8 @@ import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
+import java.util.Objects;
+
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_MESSAGE;
 
@@ -106,6 +108,21 @@ public class ApiError {
 
     public ApiException exception() {
         return error.exception(message);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(error, message);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof ApiError)) {
+            return false;
+        }
+        ApiError other = (ApiError) o;
+        return Objects.equals(error, other.error) &&
+            Objects.equals(message, other.message);
     }
 
     @Override
