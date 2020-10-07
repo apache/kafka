@@ -598,4 +598,10 @@ public class ProcessorStateManager implements StateManager {
     private Long changelogOffsetFromCheckpointedOffset(final long offset) {
         return offset != OFFSET_UNKNOWN ? offset : null;
     }
+
+    public void deleteCheckPointFileIfEOSEnabled() throws IOException {
+        if (eosEnabled) {
+            checkpointFile.delete();
+        }
+    }
 }
