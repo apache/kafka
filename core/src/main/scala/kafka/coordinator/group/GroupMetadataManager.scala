@@ -1092,7 +1092,7 @@ object GroupMetadataManager {
           .setGroupInstanceId(memberMetadata.groupInstanceId.orNull)
           // The group is non-empty, so the current protocol must be defined
           .setSubscription(groupMetadata.protocolName.map(memberMetadata.metadata)
-            .getOrElse(throw new IllegalStateException(s"Attempted to write member ${memberMetadata.memberId} of group ${groupMetadata.groupId} with no defined protocol")))
+            .getOrElse(throw new IllegalStateException("Attempted to write non-empty group metadata with no defined protocol.")))
           .setAssignment(assignment.getOrElse(memberMetadata.memberId,
             throw new IllegalStateException(s"Attempted to write member ${memberMetadata.memberId} of group ${groupMetadata.groupId} with no assignment.")))
       }.asJava))
@@ -1111,7 +1111,7 @@ object GroupMetadataManager {
       val key = new OffsetCommitKey(new ByteBufferAccessor(buffer), version)
       OffsetKey(version, GroupTopicPartition(key.group, new TopicPartition(key.topic, key.partition)))
     } else if (version >= GroupMetadataKeyData.LOWEST_SUPPORTED_VERSION && version <= GroupMetadataKeyData.HIGHEST_SUPPORTED_VERSION) {
-      // version 2 refers to offset
+      // version 2 refers to group metadata
       val key = new GroupMetadataKeyData(new ByteBufferAccessor(buffer), version)
       GroupMetadataKey(version, key.group)
     } else throw new IllegalStateException(s"Unknown group metadata message version: $version")
