@@ -50,9 +50,11 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.StateDirectory.LOCK_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.endsWith;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -286,6 +288,7 @@ public class StateDirectoryTest {
         }
     }
 
+
     @Test
     public void shouldCleanupStateDirectoriesWhenLastModifiedIsLessThanNowMinusCleanupDelay() {
         final File dir = directory.directoryForTask(new TaskId(2, 0));
@@ -302,6 +305,36 @@ public class StateDirectoryTest {
         assertTrue(dir.exists());
         assertEquals(1, directory.listAllTaskDirectories().length);
         assertEquals(0, directory.listNonEmptyTaskDirectories().length);
+    }
+
+    @Test
+    public void shouldCleanupObsoleteStateDirectoriesOnlyOnce() {
+        final File dir = directory.directoryForTask(new TaskId(2, 0));
+        assertTrue(new File(dir, "store").mkdir());
+        assertEquals(1, directory.listAllTaskDirectories().length);
+        assertEquals(1, directory.listNonEmptyTaskDirectories().length);
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
+            directory.cleanRemovedTasks(0);
+            assertTrue(dir.exists());
+            assertEquals(1, directory.listAllTaskDirectories().length);
+            assertEquals(0, directory.listNonEmptyTaskDirectories().length);
+            assertThat(
+                appender.getMessages(),
+                hasItem(containsString("Deleting obsolete state directory"))
+            );
+        }
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
+            directory.cleanRemovedTasks(0);
+            assertTrue(dir.exists());
+            assertEquals(1, directory.listAllTaskDirectories().length);
+            assertEquals(0, directory.listNonEmptyTaskDirectories().length);
+            assertThat(
+                appender.getMessages(),
+                not(hasItem(containsString("Deleting obsolete state directory")))
+            );
+        }
     }
 
     @Test
