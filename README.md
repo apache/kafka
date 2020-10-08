@@ -1,3 +1,5 @@
+[![Gitpod ready-to-code](https://img.shields.io/badge/Gitpod-ready--to--code-blue?logo=gitpod)](https://35-225-174-237.ip.mygitpod.com/#https://github.com/apache/kafka)
+
 Apache Kafka
 =================
 See our [web site](https://kafka.apache.org) for details on the project.
