@@ -101,7 +101,6 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
         final byte[][] headerKeysBytes;
         final byte[][] headerValuesBytes;
 
-
         int size = 0;
         size += Long.BYTES; // value.context.timestamp
         size += Long.BYTES; // value.context.offset
