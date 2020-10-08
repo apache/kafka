@@ -63,7 +63,7 @@ class KafkaNetworkChannelTest {
     val destinationId = 2
     val destinationNode = new Node(destinationId, "127.0.0.1", 9092)
     channel.updateEndpoint(destinationId, new InetSocketAddress(destinationNode.host, destinationNode.port))
-    client.blackout(destinationNode, 500)
+    client.backoff(destinationNode, 500)
     assertBrokerNotAvailable(destinationId)
   }
 
@@ -90,7 +90,7 @@ class KafkaNetworkChannelTest {
       client.createPendingAuthenticationError(destinationNode, 100)
       sendAndAssertErrorResponse(apiKey, destinationId, Errors.CLUSTER_AUTHORIZATION_FAILED)
 
-      // reset to clear blackout time
+      // reset to clear backoff time
       client.reset()
     }
   }
