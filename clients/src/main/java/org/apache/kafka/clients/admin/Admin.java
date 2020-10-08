@@ -1306,6 +1306,17 @@ public interface Admin extends AutoCloseable {
      */
     AlterUserScramCredentialsResult alterUserScramCredentials(List<UserScramCredentialAlteration> alterations,
                                                               AlterUserScramCredentialsOptions options);
+    /**
+     * Describes finalized as well as supported features.
+     * <p>
+     * This is a convenience method for {@link #describeFeatures(DescribeFeaturesOptions)} with default options.
+     * See the overload for more details.
+     *
+     * @return the {@link DescribeFeaturesResult} containing the result
+     */
+    default DescribeFeaturesResult describeFeatures() {
+        return describeFeatures(new DescribeFeaturesOptions());
+    }
 
     /**
      * Describes finalized as well as supported features. By default, the request is issued to any
@@ -1320,9 +1331,9 @@ public interface Admin extends AutoCloseable {
      *   If the request timed out before the describe operation could finish.</li>
      * </ul>
      * <p>
-     * @param options   the options to use
      *
-     * @return          the {@link DescribeFeaturesResult} containing the result
+     * @param options the options to use
+     * @return the {@link DescribeFeaturesResult} containing the result
      */
     DescribeFeaturesResult describeFeatures(DescribeFeaturesOptions options);
 
@@ -1367,10 +1378,9 @@ public interface Admin extends AutoCloseable {
      * <p>
      * This operation is supported by brokers with version 2.7.0 or higher.
 
-     * @param featureUpdates   the map of finalized feature name to {@link FeatureUpdate}
-     * @param options          the options to use
-     *
-     * @return                 the {@link UpdateFeaturesResult} containing the result
+     * @param featureUpdates the map of finalized feature name to {@link FeatureUpdate}
+     * @param options the options to use
+     * @return the {@link UpdateFeaturesResult} containing the result
      */
     UpdateFeaturesResult updateFeatures(Map<String, FeatureUpdate> featureUpdates, UpdateFeaturesOptions options);
 
