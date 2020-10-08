@@ -98,6 +98,10 @@ public class StateDirectory {
             throw new ProcessorStateException(
                 String.format("state directory [%s] doesn't exist and couldn't be created", stateDir.getPath()));
         }
+        if (hasPersistentStores && stateDirName.startsWith("/tmp")) {
+            log.warn("Using /tmp directory in the state.dir property can cause failures with writing the checkpoint file" +
+                " due to the fact that this directory can be cleared by the OS");
+        }
     }
 
     /**
