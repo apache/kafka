@@ -26,6 +26,7 @@ import org.apache.kafka.streams.kstream.KGroupedTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.KeyValueWithPreviousMapper;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Predicate;
@@ -472,6 +473,37 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             processorSupplier,
             tableNode,
             builder);
+    }
+
+    @Override
+    public <VR> KStream<K, VR> toStream(final KeyValueWithPreviousMapper<? super K, ? super V, ? extends VR> mapper) {
+        return toStream(mapper, NamedInternal.empty());
+    }
+
+    @Override
+    public <VR> KStream<K, VR> toStream(final KeyValueWithPreviousMapper<? super K, ? super V, ? extends VR> mapper,
+            final Named named) {
+        Objects.requireNonNull(mapper, "mapper can't be null");
+        Objects.requireNonNull(named, "named can't be null");
+
+        enableSendingOldValues(true);
+        final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, TOSTREAM_NAME);
+
+        final ProcessorSupplier<K, Change<V>> kStreamMapValues =
+            new KStreamMapValues<>((key, change) -> mapper.apply(key, change.oldValue, change.newValue));
+        final ProcessorParameters<K, V, ?, ?> processorParameters = unsafeCastProcessorParametersToCompletelyDifferentType(
+            new ProcessorParameters<>(kStreamMapValues, name)
+        );
+
+        final ProcessorGraphNode<K, V> toStreamNode = new ProcessorGraphNode<>(
+            name,
+            processorParameters
+        );
+
+        builder.addGraphNode(this.streamsGraphNode, toStreamNode);
+
+        // we can inherit parent key and value serde
+        return new KStreamImpl<>(name, keySerde, null, subTopologySourceNodes, false, toStreamNode, builder);
     }
 
     @Override
