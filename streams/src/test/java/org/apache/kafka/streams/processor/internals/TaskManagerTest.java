@@ -2692,7 +2692,7 @@ public class TaskManagerTest {
                          final Set<TopicPartition> partitions,
                          final boolean active,
                          final ProcessorStateManager processorStateManager) {
-            super(id, null, null, processorStateManager, partitions);
+            super(id, null, null, processorStateManager, partitions, 0L);
             this.active = active;
         }
 
@@ -2764,6 +2764,13 @@ public class TaskManagerTest {
                 transitionTo(State.RUNNING);
             }
         }
+
+        @Override
+        public void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
+                                                final TimeoutException timeoutException) throws StreamsException {};
+
+        @Override
+        public void clearTaskTimeout() {}
 
         @Override
         public void closeClean() {

@@ -441,7 +441,6 @@ public class SuppressionIntegrationTest {
         final String input = "input" + testId;
         final String outputSuppressed = "output-suppressed" + testId;
         final String outputRaw = "output-raw" + testId;
-        final String changeLog = "suppressionintegrationtest-shouldAllowDisablingChangelog-KTABLE-SUPPRESS-STATE-STORE-0000000004-changelog";
 
         cleanStateBeforeTest(CLUSTER, input, outputRaw, outputSuppressed);
 

@@ -20,6 +20,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -48,9 +49,11 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.slf4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -555,6 +558,34 @@ public class StandbyTaskTest {
         assertThat(task.state(), equalTo(RUNNING));
         task.suspend();
         assertThat(task.state(), equalTo(SUSPENDED));
+    }
+
+    @Test
+    public void shouldInitTaskTimeoutAndEventuallyThrow() {
+        EasyMock.replay(stateManager);
+
+        final Logger log = new LogContext().logger(StreamTaskTest.class);
+        task = createStandbyTask();
+
+        task.maybeInitTaskTimeoutOrThrow(0L, null, log);
+        task.maybeInitTaskTimeoutOrThrow(Duration.ofMinutes(5).toMillis(), null, log);
+
+        assertThrows(
+            TimeoutException.class,
+            () -> task.maybeInitTaskTimeoutOrThrow(Duration.ofMinutes(5).plus(Duration.ofMillis(1L)).toMillis(), null, log)
+        );
+    }
+
+    @Test
+    public void shouldCLearTaskTimeout() {
+        EasyMock.replay(stateManager);
+
+        final Logger log = new LogContext().logger(StreamTaskTest.class);
+        task = createStandbyTask();
+
+        task.maybeInitTaskTimeoutOrThrow(0L, null, log);
+        task.clearTaskTimeout(log);
+        task.maybeInitTaskTimeoutOrThrow(Duration.ofMinutes(5).plus(Duration.ofMillis(1L)).toMillis(), null, log);
     }
 
     private StandbyTask createStandbyTask() {

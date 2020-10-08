@@ -1554,7 +1554,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   val controlledShutdownEnable = getBoolean(KafkaConfig.ControlledShutdownEnableProp)
 
   /** ********* Feature configuration ***********/
-  def isFeatureVersioningEnabled = interBrokerProtocolVersion >= KAFKA_2_7_IV0
+  def isFeatureVersioningSupported = interBrokerProtocolVersion >= KAFKA_2_7_IV0
 
   /** ********* Group coordinator configuration ***********/
   val groupMinSessionTimeoutMs = getInt(KafkaConfig.GroupMinSessionTimeoutMsProp)

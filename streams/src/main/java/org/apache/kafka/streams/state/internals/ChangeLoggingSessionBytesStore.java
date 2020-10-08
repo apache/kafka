@@ -20,9 +20,12 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
+
+import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 
 /**
  * Simple wrapper around a {@link SessionStore} to support writing
@@ -38,10 +41,17 @@ class ChangeLoggingSessionBytesStore
         super(bytesStore);
     }
 
+    @Deprecated
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
         super.init(context, root);
-        this.context = (InternalProcessorContext) context;
+        this.context = asInternalProcessorContext(context);
+    }
+
+    @Override
+    public void init(final StateStoreContext context, final StateStore root) {
+        super.init(context, root);
+        this.context = asInternalProcessorContext(context);
     }
 
     @Override

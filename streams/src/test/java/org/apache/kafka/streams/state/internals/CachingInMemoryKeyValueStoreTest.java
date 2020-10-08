@@ -84,7 +84,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
 
     @SuppressWarnings("unchecked")
     @Override
-    protected <K, V> KeyValueStore<K, V> createKeyValueStore(final ProcessorContext context) {
+    protected <K, V> KeyValueStore<K, V> createKeyValueStore(final StateStoreContext context) {
         final StoreBuilder<KeyValueStore<K, V>> storeBuilder = Stores.keyValueStoreBuilder(
                 Stores.persistentKeyValueStore("cache-store"),
                 (Serde<K>) context.keySerde(),
@@ -94,6 +94,31 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         final KeyValueStore<K, V> store = storeBuilder.build();
         store.init(context, store);
         return store;
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldDelegateDeprecatedInit() {
+        final KeyValueStore<Bytes, byte[]> inner = EasyMock.mock(InMemoryKeyValueStore.class);
+        final CachingKeyValueStore outer = new CachingKeyValueStore(inner);
+        EasyMock.expect(inner.name()).andStubReturn("store");
+        inner.init((ProcessorContext) context, outer);
+        EasyMock.expectLastCall();
+        EasyMock.replay(inner);
+        outer.init((ProcessorContext) context, outer);
+        EasyMock.verify(inner);
+    }
+
+    @Test
+    public void shouldDelegateInit() {
+        final KeyValueStore<Bytes, byte[]> inner = EasyMock.mock(InMemoryKeyValueStore.class);
+        final CachingKeyValueStore outer = new CachingKeyValueStore(inner);
+        EasyMock.expect(inner.name()).andStubReturn("store");
+        inner.init((StateStoreContext) context, outer);
+        EasyMock.expectLastCall();
+        EasyMock.replay(inner);
+        outer.init((StateStoreContext) context, outer);
+        EasyMock.verify(inner);
     }
 
     @Test

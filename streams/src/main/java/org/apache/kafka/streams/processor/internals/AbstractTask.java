@@ -16,23 +16,29 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.slf4j.Logger;
 
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.apache.kafka.streams.processor.internals.Task.State.CLOSED;
 import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
 
 public abstract class AbstractTask implements Task {
+    private final static long NO_DEADLINE = -1L;
+
     private Task.State state = CREATED;
+    private long deadlineMs = NO_DEADLINE;
     protected Set<TopicPartition> inputPartitions;
 
     /**
@@ -47,17 +53,20 @@ public abstract class AbstractTask implements Task {
     protected final ProcessorTopology topology;
     protected final StateDirectory stateDirectory;
     protected final ProcessorStateManager stateMgr;
+    private final long taskTimeoutMs;
 
     AbstractTask(final TaskId id,
                  final ProcessorTopology topology,
                  final StateDirectory stateDirectory,
                  final ProcessorStateManager stateMgr,
-                 final Set<TopicPartition> inputPartitions) {
+                 final Set<TopicPartition> inputPartitions,
+                 final long taskTimeoutMs) {
         this.id = id;
         this.stateMgr = stateMgr;
         this.topology = topology;
         this.inputPartitions = inputPartitions;
         this.stateDirectory = stateDirectory;
+        this.taskTimeoutMs = taskTimeoutMs;
     }
 
     /**
@@ -136,5 +145,47 @@ public abstract class AbstractTask implements Task {
     public void update(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> nodeToSourceTopics) {
         this.inputPartitions = topicPartitions;
         topology.updateSourceTopics(nodeToSourceTopics);
+    }
+
+    void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
+                                     final TimeoutException timeoutException,
+                                     final Logger log) throws StreamsException {
+        if (deadlineMs == NO_DEADLINE) {
+            deadlineMs = currentWallClockMs + taskTimeoutMs;
+        } else if (currentWallClockMs > deadlineMs) {
+            final String errorMessage = String.format(
+                "Task %s did not make progress within %d ms. Adjust `%s` if needed.",
+                id,
+                currentWallClockMs - deadlineMs + taskTimeoutMs,
+                StreamsConfig.TASK_TIMEOUT_MS_CONFIG
+            );
+
+            if (timeoutException != null) {
+                throw new TimeoutException(errorMessage, timeoutException);
+            } else {
+                throw new TimeoutException(errorMessage);
+            }
+        }
+
+        if (timeoutException != null) {
+            log.debug(
+                "Timeout exception. Remaining time to deadline {}; retrying.",
+                deadlineMs - currentWallClockMs,
+                timeoutException
+            );
+        } else {
+            log.debug(
+                "Task did not make progress. Remaining time to deadline {}; retrying.",
+                deadlineMs - currentWallClockMs
+            );
+        }
+
+    }
+
+    void clearTaskTimeout(final Logger log) {
+        if (deadlineMs != NO_DEADLINE) {
+            log.debug("Clearing task timeout.");
+            deadlineMs = NO_DEADLINE;
+        }
     }
 }

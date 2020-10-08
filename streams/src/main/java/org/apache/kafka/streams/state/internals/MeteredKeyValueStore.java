@@ -24,6 +24,8 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -65,7 +67,7 @@ public class MeteredKeyValueStore<K, V>
     private Sensor rangeSensor;
     private Sensor flushSensor;
     private Sensor e2eLatencySensor;
-    private ProcessorContext context;
+    private InternalProcessorContext context;
     private StreamsMetricsImpl streamsMetrics;
     private final String threadId;
     private String taskId;
@@ -83,14 +85,40 @@ public class MeteredKeyValueStore<K, V>
         this.valueSerde = valueSerde;
     }
 
+    @Deprecated
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
-        this.context = context;
+        this.context = context instanceof InternalProcessorContext ? (InternalProcessorContext) context : null;
         taskId = context.taskId().toString();
         initStoreSerde(context);
         streamsMetrics = (StreamsMetricsImpl) context.metrics();
 
+        registerMetrics();
+        final Sensor restoreSensor =
+            StateStoreMetrics.restoreSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
+
+        // register and possibly restore the state from the logs
+        maybeMeasureLatency(() -> super.init(context, root), time, restoreSensor);
+    }
+
+    @Override
+    public void init(final StateStoreContext context,
+                     final StateStore root) {
+        this.context = context instanceof InternalProcessorContext ? (InternalProcessorContext) context : null;
+        taskId = context.taskId().toString();
+        initStoreSerde(context);
+        streamsMetrics = (StreamsMetricsImpl) context.metrics();
+
+        registerMetrics();
+        final Sensor restoreSensor =
+            StateStoreMetrics.restoreSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
+
+        // register and possibly restore the state from the logs
+        maybeMeasureLatency(() -> super.init(context, root), time, restoreSensor);
+    }
+
+    private void registerMetrics() {
         putSensor = StateStoreMetrics.putSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
         putIfAbsentSensor = StateStoreMetrics.putIfAbsentSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
         putAllSensor = StateStoreMetrics.putAllSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
@@ -100,15 +128,23 @@ public class MeteredKeyValueStore<K, V>
         flushSensor = StateStoreMetrics.flushSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
         deleteSensor = StateStoreMetrics.deleteSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
         e2eLatencySensor = StateStoreMetrics.e2ELatencySensor(taskId, metricsScope, name(), streamsMetrics);
-        final Sensor restoreSensor =
-            StateStoreMetrics.restoreSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
+    }
 
-        // register and possibly restore the state from the logs
-        maybeMeasureLatency(() -> super.init(context, root), time, restoreSensor);
+    @Deprecated
+    @SuppressWarnings("unchecked")
+    void initStoreSerde(final ProcessorContext context) {
+        final String storeName = name();
+        final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
+        serdes = new StateSerdes<>(
+            changelogTopic != null ?
+                changelogTopic :
+                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName),
+            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
+            valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
     }
 
     @SuppressWarnings("unchecked")
-    void initStoreSerde(final ProcessorContext context) {
+    void initStoreSerde(final StateStoreContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
         serdes = new StateSerdes<>(
@@ -250,7 +286,9 @@ public class MeteredKeyValueStore<K, V>
     }
 
     private void maybeRecordE2ELatency() {
-        if (e2eLatencySensor.shouldRecord()) {
+        // Context is null if the provided context isn't an implementation of InternalProcessorContext.
+        // In that case, we _can't_ get the current timestamp, so we don't record anything.
+        if (e2eLatencySensor.shouldRecord() && context != null) {
             final long currentTime = time.milliseconds();
             final long e2eLatency =  currentTime - context.timestamp();
             e2eLatencySensor.record(e2eLatency, currentTime);

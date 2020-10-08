@@ -270,7 +270,7 @@ setup_custom_ducktape() {
     docker_run ducker01 "${image_name}"
     local running_container="$(docker ps -f=network=ducknet -q)"
     must_do -v -o docker cp "${custom_ducktape}" "${running_container}:/opt/ducktape"
-    docker exec --user=root ducker01 bash -c 'set -x && cd /opt/kafka-dev/tests && sudo python ./setup.py develop install && cd /opt/ducktape && sudo python ./setup.py develop install'
+    docker exec --user=root ducker01 bash -c 'set -x && cd /opt/kafka-dev/tests && sudo python3 ./setup.py develop install && cd /opt/ducktape && sudo python3 ./setup.py develop install'
     [[ $? -ne 0 ]] && die "failed to install the new ducktape."
     must_do -v -o docker commit ducker01 "${image_name}"
     must_do -v docker kill "${running_container}"
