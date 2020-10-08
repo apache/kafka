@@ -22,6 +22,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordQueue;
@@ -34,6 +35,7 @@ import java.util.LinkedList;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 
+import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 import static org.apache.kafka.streams.state.internals.ExceptionUtils.executeAll;
 import static org.apache.kafka.streams.state.internals.ExceptionUtils.throwSuppressed;
 
@@ -61,9 +63,16 @@ class CachingSessionStore
         this.maxObservedTimestamp = RecordQueue.UNKNOWN;
     }
 
+    @Deprecated
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
-        initInternal((InternalProcessorContext) context);
+        initInternal(asInternalProcessorContext(context));
+        super.init(context, root);
+    }
+
+    @Override
+    public void init(final StateStoreContext context, final StateStore root) {
+        initInternal(asInternalProcessorContext(context));
         super.init(context, root);
     }
 

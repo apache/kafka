@@ -35,10 +35,10 @@ import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
-import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -775,8 +775,8 @@ public class ProcessorTopologyTest {
         }
 
         @Override
-        public void process(final String key, final String value) {
-            context.forward(key, value);
+        public void process(final Record<String, String> record) {
+            context.forward(record);
         }
     }
 
@@ -792,8 +792,8 @@ public class ProcessorTopologyTest {
         }
 
         @Override
-        public void process(final String key, final String value) {
-            context.forward(key, value, To.all().withTimestamp(context.timestamp() + 10));
+        public void process(final Record<String, String> record) {
+            context.forward(record.withTimestamp(record.timestamp() + 10));
         }
     }
 
@@ -814,11 +814,11 @@ public class ProcessorTopologyTest {
         }
 
         @Override
-        public void process(final String key, final String value) {
-            context.forward(key, value);
-            context.forward(key, value, To.child(firstChild).withTimestamp(context.timestamp() + 5));
-            context.forward(key, value, To.child(secondChild));
-            context.forward(key, value, To.all().withTimestamp(context.timestamp() + 2));
+        public void process(final Record<String, String> record) {
+            context.forward(record);
+            context.forward(record.withTimestamp(record.timestamp() + 5), firstChild);
+            context.forward(record, secondChild);
+            context.forward(record.withTimestamp(record.timestamp() + 2));
         }
     }
 
@@ -831,9 +831,11 @@ public class ProcessorTopologyTest {
         }
 
         @Override
-        public void process(final String key, final String value) {
-            context.headers().add(HEADER);
-            context.forward(key, value);
+        public void process(final Record<String, String> record) {
+            // making a copy of headers for safety.
+            final Record<String, String> toForward = record.withHeaders(record.headers());
+            toForward.headers().add(HEADER);
+            context.forward(toForward);
         }
     }
 
@@ -850,8 +852,8 @@ public class ProcessorTopologyTest {
         }
 
         @Override
-        public void process(final String key, final String value) {
-            context.forward(key, value.split("@")[0]);
+        public void process(final Record<String, String> record) {
+            context.forward(record.withValue(record.value().split("@")[0]));
         }
     }
 
@@ -935,8 +937,8 @@ public class ProcessorTopologyTest {
         }
 
         @Override
-        public void process(final String key, final String value) {
-            store.put(key, value);
+        public void process(final Record<String, String> record) {
+            store.put(record.key(), record.value());
         }
     }
 

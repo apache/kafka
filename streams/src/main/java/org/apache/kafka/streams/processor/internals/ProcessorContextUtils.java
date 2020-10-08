@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
 /**
@@ -47,9 +48,42 @@ public final class ProcessorContextUtils {
         return (StreamsMetricsImpl) context.metrics();
     }
 
+    /**
+     * Should be removed as part of KAFKA-10217
+     */
+    public static StreamsMetricsImpl getMetricsImpl(final StateStoreContext context) {
+        return (StreamsMetricsImpl) context.metrics();
+    }
+
     public static String changelogFor(final ProcessorContext context, final String storeName) {
         return context instanceof InternalProcessorContext
             ? ((InternalProcessorContext) context).changelogFor(storeName)
             : ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName);
+    }
+
+    public static String changelogFor(final StateStoreContext context, final String storeName) {
+        return context instanceof InternalProcessorContext
+            ? ((InternalProcessorContext) context).changelogFor(storeName)
+            : ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName);
+    }
+
+    public static InternalProcessorContext asInternalProcessorContext(final ProcessorContext context) {
+        if (context instanceof InternalProcessorContext) {
+            return (InternalProcessorContext) context;
+        } else {
+            throw new IllegalArgumentException(
+                "This component requires internal features of Kafka Streams and must be disabled for unit tests."
+            );
+        }
+    }
+
+    public static InternalProcessorContext asInternalProcessorContext(final StateStoreContext context) {
+        if (context instanceof InternalProcessorContext) {
+            return (InternalProcessorContext) context;
+        } else {
+            throw new IllegalArgumentException(
+                "This component requires internal features of Kafka Streams and must be disabled for unit tests."
+            );
+        }
     }
 }

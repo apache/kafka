@@ -31,11 +31,13 @@ import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
@@ -66,7 +68,6 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
  */
 public class StreamTask extends AbstractTask implements ProcessorNodePunctuator, Task {
 
-    private static final ConsumerRecord<Object, Object> DUMMY_RECORD = new ConsumerRecord<>(ProcessorContextImpl.NONEXIST_TOPIC, -1, -1L, null, null);
     // visible for testing
     static final byte LATEST_MAGIC_BYTE = 1;
 
@@ -118,7 +119,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                       final ProcessorStateManager stateMgr,
                       final RecordCollector recordCollector,
                       final InternalProcessorContext processorContext) {
-        super(id, topology, stateDirectory, stateMgr, partitions);
+        super(id, topology, stateDirectory, stateMgr, partitions, config.getLong(StreamsConfig.TASK_TIMEOUT_MS_CONFIG));
         this.mainConsumer = mainConsumer;
 
         this.processorContext = processorContext;
@@ -332,6 +333,15 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             case SUSPENDED:
                 // just transit the state without any logical changes: suspended and restoring states
                 // are not actually any different for inner modules
+
+                // Deleting checkpoint file before transition to RESTORING state (KAFKA-10362)
+                try {
+                    stateMgr.deleteCheckPointFileIfEOSEnabled();
+                    log.debug("Deleted check point file upon resuming with EOS enabled");
+                } catch (final IOException ioe) {
+                    log.error("Encountered error while deleting the checkpoint file due to this exception", ioe);
+                }
+
                 transitionTo(State.RESTORING);
                 log.info("Resumed to restoring state");
 
@@ -671,9 +681,26 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             log.trace("Start processing one record [{}]", record);
 
-            updateProcessorContext(record, currNode, wallClockTime);
+            updateProcessorContext(
+                currNode,
+                wallClockTime,
+                new ProcessorRecordContext(
+                    record.timestamp,
+                    record.offset(),
+                    record.partition(),
+                    record.topic(),
+                    record.headers()
+                )
+            );
+
             maybeRecordE2ELatency(record.timestamp, wallClockTime, currNode.name());
-            maybeMeasureLatency(() -> currNode.process(record.key(), record.value()), time, processLatencySensor);
+            final Record<Object, Object> toProcess = new Record<>(
+                record.key(),
+                record.value(),
+                processorContext.timestamp(),
+                processorContext.headers()
+            );
+            maybeMeasureLatency(() -> currNode.process(toProcess), time, processLatencySensor);
 
             log.trace("Completed processing one record [{}]", record);
 
@@ -743,7 +770,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             throw new IllegalStateException(String.format("%sCurrent node is not null", logPrefix));
         }
 
-        updateProcessorContext(new StampedRecord(DUMMY_RECORD, timestamp), node, time.milliseconds());
+        updateProcessorContext(node, time.milliseconds(), null);
 
         if (log.isTraceEnabled()) {
             log.trace("Punctuating processor {} with timestamp {} and punctuation type {}", node.name(), timestamp, type);
@@ -760,14 +787,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
     }
 
-    private void updateProcessorContext(final StampedRecord record, final ProcessorNode<?, ?, ?, ?> currNode, final long wallClockTime) {
-        processorContext.setRecordContext(
-            new ProcessorRecordContext(
-                record.timestamp,
-                record.offset(),
-                record.partition(),
-                record.topic(),
-                record.headers()));
+    private void updateProcessorContext(final ProcessorNode<?, ?, ?, ?> currNode,
+                                        final long wallClockTime,
+                                        final ProcessorRecordContext recordContext) {
+        processorContext.setRecordContext(recordContext);
         processorContext.setCurrentNode(currNode);
         processorContext.setSystemTimeMs(wallClockTime);
     }
@@ -991,6 +1014,17 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return commitRequested;
     }
 
+    @Override
+    public void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
+                                            final TimeoutException timeoutException) throws StreamsException {
+        maybeInitTaskTimeoutOrThrow(currentWallClockMs, timeoutException, log);
+    }
+
+    @Override
+    public void clearTaskTimeout() {
+        clearTaskTimeout(log);
+    }
+
     static String encodeTimestamp(final long partitionTime) {
         final ByteBuffer buffer = ByteBuffer.allocate(9);
         buffer.put(LATEST_MAGIC_BYTE);
@@ -1109,6 +1143,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         public RecordQueue createQueue(final TopicPartition partition) {
             final SourceNode<?, ?, ?, ?> source = topology.source(partition.topic());
+            if (source == null) {
+                throw new TopologyException(
+                        "Topic is unkown to the topology. " +
+                                "This may happen if different KafkaStreams instances of the same application execute different Topologies. " +
+                                "Note that Topologies are only identical if all operators are added in the same order."
+                );
+            }
+
             final TimestampExtractor sourceTimestampExtractor = source.getTimestampExtractor();
             final TimestampExtractor timestampExtractor = sourceTimestampExtractor != null ? sourceTimestampExtractor : defaultTimestampExtractor;
             return new RecordQueue(

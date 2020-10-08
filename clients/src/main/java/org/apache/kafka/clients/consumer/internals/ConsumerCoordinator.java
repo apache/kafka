@@ -408,7 +408,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 firstException.compareAndSet(null, invokePartitionsRevoked(revokedPartitions));
 
                 // If revoked any partitions, need to re-join the group afterwards
-                log.debug("Need to revoke partitions {} and re-join the group", revokedPartitions);
+                log.info("Need to revoke partitions {} and re-join the group", revokedPartitions);
                 requestRejoin();
             }
         }

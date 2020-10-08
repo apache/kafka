@@ -26,6 +26,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -77,7 +78,7 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
         cache = new ThreadCache(new LogContext("testCache "), maxCacheSizeBytes, new MockStreamsMetrics(new Metrics()));
         context = new InternalMockProcessorContext(null, null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, null));
-        store.init(context, null);
+        store.init((StateStoreContext) context, null);
     }
 
     @After
@@ -87,7 +88,7 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     @SuppressWarnings("unchecked")
     @Override
-    protected <K, V> KeyValueStore<K, V> createKeyValueStore(final ProcessorContext context) {
+    protected <K, V> KeyValueStore<K, V> createKeyValueStore(final StateStoreContext context) {
         final StoreBuilder<KeyValueStore<K, V>> storeBuilder = Stores.keyValueStoreBuilder(
                 Stores.persistentKeyValueStore("cache-store"),
                 (Serde<K>) context.keySerde(),
@@ -97,6 +98,31 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
         final KeyValueStore<K, V> store = storeBuilder.build();
         store.init(context, store);
         return store;
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldDelegateDeprecatedInit() {
+        final KeyValueStore<Bytes, byte[]> inner = EasyMock.mock(InMemoryKeyValueStore.class);
+        final CachingKeyValueStore outer = new CachingKeyValueStore(inner);
+        EasyMock.expect(inner.name()).andStubReturn("store");
+        inner.init((ProcessorContext) context, outer);
+        EasyMock.expectLastCall();
+        EasyMock.replay(inner);
+        outer.init((ProcessorContext) context, outer);
+        EasyMock.verify(inner);
+    }
+
+    @Test
+    public void shouldDelegateInit() {
+        final KeyValueStore<Bytes, byte[]> inner = EasyMock.mock(InMemoryKeyValueStore.class);
+        final CachingKeyValueStore outer = new CachingKeyValueStore(inner);
+        EasyMock.expect(inner.name()).andStubReturn("store");
+        inner.init((StateStoreContext) context, outer);
+        EasyMock.expectLastCall();
+        EasyMock.replay(inner);
+        outer.init((StateStoreContext) context, outer);
+        EasyMock.verify(inner);
     }
 
     @Test
@@ -178,7 +204,7 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
         cache = EasyMock.niceMock(ThreadCache.class);
         context = new InternalMockProcessorContext(TestUtils.tempDirectory(), null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, null));
-        store.init(context, store);
+        store.init((StateStoreContext) context, store);
     }
 
     @Test

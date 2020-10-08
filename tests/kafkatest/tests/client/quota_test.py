@@ -162,7 +162,7 @@ class QuotaTest(Test):
             jmx_attributes=['bytes-consumed-rate'], version=client_version)
         consumer.run()
 
-        for idx, messages in consumer.messages_consumed.iteritems():
+        for idx, messages in consumer.messages_consumed.items():
             assert len(messages) > 0, "consumer %d didn't consume any message before timeout" % idx
 
         success, msg = self.validate(self.kafka, producer, consumer)

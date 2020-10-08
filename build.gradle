@@ -265,7 +265,7 @@ subprojects {
     }
   }
 
-  def shouldUseJUnit5 = it.project.name == 'tools'
+  def shouldUseJUnit5 = ["tools", "raft"].contains(it.project.name)
   def testLoggingEvents = ["passed", "skipped", "failed"]
   def testShowStandardStreams = false
   def testExceptionFormat = 'full'
@@ -1174,8 +1174,7 @@ project(':raft') {
 
     testCompile project(':clients')
     testCompile project(':clients').sourceSets.test.output
-    testCompile libs.junitJupiterApi
-    testCompile libs.junitVintageEngine
+    testCompile libs.junitJupiter
     testCompile libs.mockitoCore
 
     testRuntime libs.slf4jlog4j
@@ -1235,7 +1234,7 @@ project(':raft') {
   }
 
   javadoc {
-    include "**/org/apache/kafka/raft/*"
+    enabled = false
   }
 }
 

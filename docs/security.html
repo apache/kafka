@@ -282,6 +282,22 @@ keyUsage               = digitalSignature, keyEncipherment
             <p>For some tooling assistance on this topic, please check out the <a href="https://github.com/OpenVPN/easy-rsa">easyRSA</a> project which has
                 extensive scripting in place to help with these steps.</p>
 
+            <h5>SSL key and certificates in PEM format</h5>
+            From 2.7.0 onwards, SSL key and trust stores can be configured for Kafka brokers and clients directly in the configuration in PEM format.
+            This avoids the need to store separate files on the file system and benefits from password protection features of Kafka configuration.
+            PEM may also be used as the store type for file-based key and trust stores in addition to JKS and PKCS12. To configure PEM key store directly in the
+            broker or client configuration, private key in PEM format should be provided in <code>ssl.keystore.key</code> and the certificate chain in PEM format
+            should be provided in <code>ssl.keystore.certificate.chain</code>.  To configure trust store, trust certificates, e.g. public certificate of CA,
+            should be provided in <code>ssl.truststore.certificates</code>. Since PEM is typically stored as multi-line base-64 strings, the configuration value
+            can be included in Kafka configuration as multi-line strings with lines terminating in backslash ('\') for line continuation.
+
+            <p>Store password configs <code>ssl.keystore.password</code> and <code>ssl.truststore.password</code> are not used for PEM. 
+            If private key is encrypted using a password, the key password must be provided in <code>ssl.key.password</code>. Private keys may be provided
+            in unencrypted form without a password when PEM is specified directly in the config value. In production deployments, configs should be encrypted or
+            externalized using password protection feature in Kafka in this case. Note that the default SSL engine factory has limited capabilities for decryption
+            of encrypted private keys when external tools like OpenSSL are used for encryption. Third party libraries like BouncyCastle may be integrated witn a
+            custom <code>SslEngineFactory</code> to support a wider range of encrypted private keys.</p>
+
         </li>
         <li><h4><a id="security_ssl_production" href="#security_ssl_production">Common Pitfalls in Production</a></h4>
             The above paragraphs show the process to create your own CA and use it to sign certificates for your cluster.

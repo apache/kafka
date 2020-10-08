@@ -30,6 +30,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -98,7 +99,7 @@ public abstract class AbstractSessionBytesStoreTest {
                 new MockStreamsMetrics(new Metrics())));
         context.setTime(1L);
 
-        sessionStore.init(context, sessionStore);
+        sessionStore.init((StateStoreContext) context, sessionStore);
     }
 
     @After
@@ -263,7 +264,7 @@ public abstract class AbstractSessionBytesStoreTest {
     @Test
     public void shouldFetchExactKeys() {
         sessionStore = buildSessionStore(0x7a00000000000000L, Serdes.String(), Serdes.Long());
-        sessionStore.init(context, sessionStore);
+        sessionStore.init((StateStoreContext) context, sessionStore);
 
         sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
         sessionStore.put(new Windowed<>("aa", new SessionWindow(0, 10)), 2L);
@@ -302,7 +303,7 @@ public abstract class AbstractSessionBytesStoreTest {
         final SessionStore<Bytes, String> sessionStore =
             buildSessionStore(RETENTION_PERIOD, Serdes.Bytes(), Serdes.String());
 
-        sessionStore.init(context, sessionStore);
+        sessionStore.init((StateStoreContext) context, sessionStore);
 
         final Bytes key1 = Bytes.wrap(new byte[] {0});
         final Bytes key2 = Bytes.wrap(new byte[] {0, 0});
@@ -427,7 +428,7 @@ public abstract class AbstractSessionBytesStoreTest {
         final Time time = new SystemTime();
         context.setTime(1L);
         context.setSystemTimeMs(time.milliseconds());
-        sessionStore.init(context, sessionStore);
+        sessionStore.init((StateStoreContext) context, sessionStore);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
             // Advance stream time by inserting record with large enough timestamp that records with timestamp 0 are expired

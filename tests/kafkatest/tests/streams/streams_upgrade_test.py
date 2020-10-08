@@ -23,7 +23,7 @@ from kafkatest.services.kafka import KafkaService
 from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService, \
     StreamsUpgradeTestJobRunnerService
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.tests.streams.utils import extract_generation_from_logs
+from kafkatest.tests.streams.utils import extract_generation_from_logs, extract_generation_id
 from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, \
     LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, DEV_BRANCH, DEV_VERSION, KafkaVersion
 
@@ -530,7 +530,7 @@ class StreamsUpgradeTest(Test):
         return current_generation
 
     def extract_highest_generation(self, found_generations):
-        return int(found_generations[-1])
+        return extract_generation_id(found_generations[-1])
 
     def verify_metadata_no_upgraded_yet(self):
         for p in self.processors:
