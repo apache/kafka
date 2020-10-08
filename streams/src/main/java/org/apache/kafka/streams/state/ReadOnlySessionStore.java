@@ -24,7 +24,7 @@ import org.apache.kafka.streams.kstream.Windowed;
  * Implementations should be thread-safe as concurrent reads and writes
  * are expected.
  *
- * @param <K>   the key type
+ * @param <K> the key type
  * @param <AGG> the aggregated value type
  */
 public interface ReadOnlySessionStore<K, AGG> {
@@ -44,7 +44,7 @@ public interface ReadOnlySessionStore<K, AGG> {
     default KeyValueIterator<Windowed<K>, AGG> findSessions(final K key,
                                                             final long earliestSessionEndTime,
                                                             final long latestSessionStartTime) {
-        throw new UnsupportedOperationException("Moved from SessionStore");
+        throw new UnsupportedOperationException("This API is not supported by this implementation of ReadOnlySessionStore.");
     }
 
     /**
@@ -62,7 +62,7 @@ public interface ReadOnlySessionStore<K, AGG> {
     default KeyValueIterator<Windowed<K>, AGG> backwardFindSessions(final K key,
                                                                     final long earliestSessionEndTime,
                                                                     final long latestSessionStartTime) {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("This API is not supported by this implementation of ReadOnlySessionStore.");
     }
 
     /**
@@ -82,7 +82,7 @@ public interface ReadOnlySessionStore<K, AGG> {
                                                             final K keyTo,
                                                             final long earliestSessionEndTime,
                                                             final long latestSessionStartTime) {
-        throw new UnsupportedOperationException("Moved from SessionStore");
+        throw new UnsupportedOperationException("This API is not supported by this implementation of ReadOnlySessionStore.");
     }
 
 
@@ -103,7 +103,7 @@ public interface ReadOnlySessionStore<K, AGG> {
                                                                     final K keyTo,
                                                                     final long earliestSessionEndTime,
                                                                     final long latestSessionStartTime) {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("This API is not supported by this implementation of ReadOnlySessionStore.");
     }
 
     /**
@@ -116,7 +116,7 @@ public interface ReadOnlySessionStore<K, AGG> {
      * @throws NullPointerException If {@code null} is used for any key.
      */
     default AGG fetchSession(final K key, final long startTime, final long endTime) {
-        throw new UnsupportedOperationException("Moved from SessionStore");
+        throw new UnsupportedOperationException("This API is not supported by this implementation of ReadOnlySessionStore.");
     }
 
     /**
@@ -126,9 +126,10 @@ public interface ReadOnlySessionStore<K, AGG> {
      * For each key, the iterator guarantees ordering of sessions, starting from the oldest/earliest
      * available session to the newest/latest session.
      *
-     * @param key record key to find aggregated session values for
-     * @return KeyValueIterator containing all sessions for the provided key, from oldest to newest session.
-     * @throws NullPointerException If null is used for key.
+     * @param    key record key to find aggregated session values for
+     * @return   KeyValueIterator containing all sessions for the provided key, from oldest to newest session.
+     * @throws   NullPointerException If null is used for key.
+     *
      */
     KeyValueIterator<Windowed<K>, AGG> fetch(final K key);
 
@@ -144,7 +145,7 @@ public interface ReadOnlySessionStore<K, AGG> {
      * @throws NullPointerException If null is used for key.
      */
     default KeyValueIterator<Windowed<K>, AGG> backwardFetch(final K key) {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("This API is not supported by this implementation of ReadOnlySessionStore.");
     }
 
     /**
@@ -154,10 +155,10 @@ public interface ReadOnlySessionStore<K, AGG> {
      * For each key, the iterator guarantees ordering of sessions, starting from the oldest/earliest
      * available session to the newest/latest session.
      *
-     * @param from first key in the range to find aggregated session values for
-     * @param to   last key in the range to find aggregated session values for
-     * @return KeyValueIterator containing all sessions for the provided key, from oldest to newest session.
-     * @throws NullPointerException If null is used for any of the keys.
+     * @param    from first key in the range to find aggregated session values for
+     * @param    to last key in the range to find aggregated session values for
+     * @return   KeyValueIterator containing all sessions for the provided key, from oldest to newest session.
+     * @throws   NullPointerException If null is used for any of the keys.
      */
     KeyValueIterator<Windowed<K>, AGG> fetch(final K from, final K to);
 
@@ -174,6 +175,6 @@ public interface ReadOnlySessionStore<K, AGG> {
      * @throws NullPointerException If null is used for any of the keys.
      */
     default KeyValueIterator<Windowed<K>, AGG> backwardFetch(final K from, final K to) {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("This API is not supported by this implementation of ReadOnlySessionStore.");
     }
 }

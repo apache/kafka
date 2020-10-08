@@ -250,8 +250,8 @@ public class MeteredSessionStoreTest {
     @Test
     public void shouldFindSessionsFromStoreAndRecordFetchMetric() {
         expect(innerStore.findSessions(KEY_BYTES, 0, 0))
-            .andReturn(new KeyValueIteratorStub<>(
-                Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, VALUE_BYTES)).iterator()));
+                .andReturn(new KeyValueIteratorStub<>(
+                        Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, VALUE_BYTES)).iterator()));
         init();
 
         final KeyValueIterator<Windowed<String>, String> iterator = store.findSessions(KEY, 0, 0);
@@ -267,8 +267,11 @@ public class MeteredSessionStoreTest {
     @Test
     public void shouldBackwardFindSessionsFromStoreAndRecordFetchMetric() {
         expect(innerStore.backwardFindSessions(KEY_BYTES, 0, 0))
-            .andReturn(new KeyValueIteratorStub<>(
-                Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, VALUE_BYTES)).iterator()));
+            .andReturn(
+                new KeyValueIteratorStub<>(
+                    Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, VALUE_BYTES)).iterator()
+                )
+            );
         init();
 
         final KeyValueIterator<Windowed<String>, String> iterator = store.backwardFindSessions(KEY, 0, 0);
@@ -284,8 +287,8 @@ public class MeteredSessionStoreTest {
     @Test
     public void shouldFindSessionRangeFromStoreAndRecordFetchMetric() {
         expect(innerStore.findSessions(KEY_BYTES, KEY_BYTES, 0, 0))
-            .andReturn(new KeyValueIteratorStub<>(
-                Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, VALUE_BYTES)).iterator()));
+                .andReturn(new KeyValueIteratorStub<>(
+                        Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, VALUE_BYTES)).iterator()));
         init();
 
         final KeyValueIterator<Windowed<String>, String> iterator = store.findSessions(KEY, KEY, 0, 0);
@@ -301,8 +304,11 @@ public class MeteredSessionStoreTest {
     @Test
     public void shouldBackwardFindSessionRangeFromStoreAndRecordFetchMetric() {
         expect(innerStore.backwardFindSessions(KEY_BYTES, KEY_BYTES, 0, 0))
-            .andReturn(new KeyValueIteratorStub<>(
-                Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, VALUE_BYTES)).iterator()));
+            .andReturn(
+                new KeyValueIteratorStub<>(
+                    Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, VALUE_BYTES)).iterator()
+                )
+            );
         init();
 
         final KeyValueIterator<Windowed<String>, String> iterator = store.backwardFindSessions(KEY, KEY, 0, 0);
@@ -332,8 +338,8 @@ public class MeteredSessionStoreTest {
     @Test
     public void shouldFetchForKeyAndRecordFetchMetric() {
         expect(innerStore.fetch(KEY_BYTES))
-            .andReturn(new KeyValueIteratorStub<>(
-                Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, VALUE_BYTES)).iterator()));
+                .andReturn(new KeyValueIteratorStub<>(
+                        Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, VALUE_BYTES)).iterator()));
         init();
 
         final KeyValueIterator<Windowed<String>, String> iterator = store.fetch(KEY);
@@ -349,8 +355,11 @@ public class MeteredSessionStoreTest {
     @Test
     public void shouldBackwardFetchForKeyAndRecordFetchMetric() {
         expect(innerStore.backwardFetch(KEY_BYTES))
-            .andReturn(new KeyValueIteratorStub<>(
-                Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, VALUE_BYTES)).iterator()));
+            .andReturn(
+                new KeyValueIteratorStub<>(
+                    Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, VALUE_BYTES)).iterator()
+                )
+            );
         init();
 
         final KeyValueIterator<Windowed<String>, String> iterator = store.backwardFetch(KEY);
@@ -366,8 +375,8 @@ public class MeteredSessionStoreTest {
     @Test
     public void shouldFetchRangeFromStoreAndRecordFetchMetric() {
         expect(innerStore.fetch(KEY_BYTES, KEY_BYTES))
-            .andReturn(new KeyValueIteratorStub<>(
-                Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, VALUE_BYTES)).iterator()));
+                .andReturn(new KeyValueIteratorStub<>(
+                        Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, VALUE_BYTES)).iterator()));
         init();
 
         final KeyValueIterator<Windowed<String>, String> iterator = store.fetch(KEY, KEY);
@@ -383,8 +392,11 @@ public class MeteredSessionStoreTest {
     @Test
     public void shouldBackwardFetchRangeFromStoreAndRecordFetchMetric() {
         expect(innerStore.backwardFetch(KEY_BYTES, KEY_BYTES))
-            .andReturn(new KeyValueIteratorStub<>(
-                Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, VALUE_BYTES)).iterator()));
+            .andReturn(
+                new KeyValueIteratorStub<>(
+                    Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, VALUE_BYTES)).iterator()
+                )
+            );
         init();
 
         final KeyValueIterator<Windowed<String>, String> iterator = store.backwardFetch(KEY, KEY);

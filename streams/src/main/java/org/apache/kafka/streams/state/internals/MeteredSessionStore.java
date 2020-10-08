@@ -193,7 +193,8 @@ public class MeteredSessionStore<K, V>
             fetchSensor,
             streamsMetrics,
             serdes,
-            time);
+            time
+        );
     }
 
     @Override
@@ -219,7 +220,8 @@ public class MeteredSessionStore<K, V>
             fetchSensor,
             streamsMetrics,
             serdes,
-            time);
+            time
+        );
     }
 
     @Override
@@ -249,11 +251,13 @@ public class MeteredSessionStore<K, V>
             wrapped().backwardFindSessions(
                 bytesKey,
                 earliestSessionEndTime,
-                latestSessionStartTime),
+                latestSessionStartTime
+            ),
             fetchSensor,
             streamsMetrics,
             serdes,
-            time);
+            time
+        );
     }
 
     @Override
@@ -291,11 +295,13 @@ public class MeteredSessionStore<K, V>
                 bytesKeyFrom,
                 bytesKeyTo,
                 earliestSessionEndTime,
-                latestSessionStartTime),
+                latestSessionStartTime
+            ),
             fetchSensor,
             streamsMetrics,
             serdes,
-            time);
+            time
+        );
     }
 
     @Override

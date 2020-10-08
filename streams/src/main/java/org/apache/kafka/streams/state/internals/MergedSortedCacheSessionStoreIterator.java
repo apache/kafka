@@ -24,9 +24,9 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 
 /**
  * Merges two iterators. Assumes each of them is sorted by key
+ *
  */
-class MergedSortedCacheSessionStoreIterator
-    extends AbstractMergedSortedCacheStoreIterator<Windowed<Bytes>, Windowed<Bytes>, byte[], byte[]> {
+class MergedSortedCacheSessionStoreIterator extends AbstractMergedSortedCacheStoreIterator<Windowed<Bytes>, Windowed<Bytes>, byte[], byte[]> {
 
     private final SegmentedCacheFunction cacheFunction;
 

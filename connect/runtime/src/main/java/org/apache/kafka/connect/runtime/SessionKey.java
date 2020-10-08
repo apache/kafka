@@ -29,8 +29,7 @@ public class SessionKey {
 
     /**
      * Create a new session key with the given key value and creation timestamp
-     *
-     * @param key               the actual cryptographic key to use for request validation; may not be null
+     * @param key the actual cryptographic key to use for request validation; may not be null
      * @param creationTimestamp the time at which the key was generated
      */
     public SessionKey(SecretKey key, long creationTimestamp) {

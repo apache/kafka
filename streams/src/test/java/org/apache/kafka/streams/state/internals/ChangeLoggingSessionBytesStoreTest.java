@@ -202,4 +202,6 @@ public class ChangeLoggingSessionBytesStoreTest {
         store.close();
         EasyMock.verify(inner);
     }
+
+
 }

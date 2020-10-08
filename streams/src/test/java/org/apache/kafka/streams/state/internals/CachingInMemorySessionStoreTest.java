@@ -44,7 +44,6 @@ import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
@@ -379,7 +378,7 @@ public class CachingInMemorySessionStoreTest {
             keys.add(rangeResults.next().key);
         }
         rangeResults.close();
-        assertEquals(Arrays.asList(a1, aa1, a2, a3, aa3), keys);
+        assertEquals(asList(a1, aa1, a2, a3, aa3), keys);
     }
 
     @Test
@@ -402,7 +401,7 @@ public class CachingInMemorySessionStoreTest {
             keys.add(rangeResults.next().key);
         }
         rangeResults.close();
-        assertEquals(Arrays.asList(aa3, a3, a2, aa1, a1), keys);
+        assertEquals(asList(aa3, a3, a2, aa1, a1), keys);
     }
 
     @Test
@@ -654,10 +653,12 @@ public class CachingInMemorySessionStoreTest {
             final List<String> messages = appender.getMessages();
             assertThat(
                 messages,
-                hasItem("Returning empty iterator for fetch with invalid key range: from > to." +
-                    " This may be due to range arguments set in the wrong order, " +
-                    "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
-                    " Note that the built-in numerical serdes do not follow this for negative numbers")
+                hasItem(
+                    "Returning empty iterator for fetch with invalid key range: from > to." +
+                        " This may be due to range arguments set in the wrong order, " +
+                        "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
+                        " Note that the built-in numerical serdes do not follow this for negative numbers"
+                )
             );
         }
     }

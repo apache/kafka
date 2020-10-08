@@ -23,8 +23,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class CacheFlushListenerStub<K, V> implements CacheFlushListener<byte[], byte[]> {
-    final Deserializer<K> keyDeserializer;
-    final Deserializer<V> valueDeserializer;
+    private final Deserializer<K> keyDeserializer;
+    private final Deserializer<V> valueDeserializer;
     final Map<K, Change<V>> forwarded = new HashMap<>();
 
     CacheFlushListenerStub(final Deserializer<K> keyDeserializer,
@@ -42,6 +42,8 @@ public class CacheFlushListenerStub<K, V> implements CacheFlushListener<byte[], 
             keyDeserializer.deserialize(null, key),
             new Change<>(
                 valueDeserializer.deserialize(null, newValue),
-                valueDeserializer.deserialize(null, oldValue)));
+                valueDeserializer.deserialize(null, oldValue)
+            )
+        );
     }
 }

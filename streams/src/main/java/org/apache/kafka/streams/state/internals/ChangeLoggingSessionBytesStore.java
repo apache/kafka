@@ -50,7 +50,9 @@ class ChangeLoggingSessionBytesStore
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFindSessions(final Bytes key, final long earliestSessionEndTime, final long latestSessionStartTime) {
+    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFindSessions(final Bytes key,
+                                                                          final long earliestSessionEndTime,
+                                                                          final long latestSessionStartTime) {
         return wrapped().backwardFindSessions(key, earliestSessionEndTime, latestSessionStartTime);
     }
 
@@ -60,7 +62,9 @@ class ChangeLoggingSessionBytesStore
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFindSessions(final Bytes keyFrom, final Bytes keyTo, final long earliestSessionEndTime, final long latestSessionStartTime) {
+    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFindSessions(final Bytes keyFrom, final Bytes keyTo,
+                                                                          final long earliestSessionEndTime,
+                                                                          final long latestSessionStartTime) {
         return wrapped().backwardFindSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
     }
 
