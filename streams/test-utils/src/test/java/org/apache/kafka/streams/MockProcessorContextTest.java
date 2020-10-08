@@ -43,6 +43,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+@SuppressWarnings("deprecation") // this is a test of a deprecated API
 public class MockProcessorContextTest {
     @Test
     public void shouldCaptureOutputRecords() {
@@ -160,7 +161,6 @@ public class MockProcessorContextTest {
     @Test
     public void shouldThrowIfForwardedWithDeprecatedChildIndex() {
         final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
-            @SuppressWarnings("deprecation")
             @Override
             public void process(final String key, final Long value) {
                 context().forward(key, value, 0);
@@ -182,7 +182,6 @@ public class MockProcessorContextTest {
     @Test
     public void shouldThrowIfForwardedWithDeprecatedChildName() {
         final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
-            @SuppressWarnings("deprecation")
             @Override
             public void process(final String key, final Long value) {
                 context().forward(key, value, "child1");
@@ -231,14 +230,13 @@ public class MockProcessorContextTest {
 
         assertFalse(context.committed());
     }
-    @SuppressWarnings({"deprecation", "unchecked"}) // TODO deprecation will be fixed in KAFKA-10437
+
     @Test
     public void shouldStoreAndReturnStateStores() {
         final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
             @Override
             public void process(final String key, final Long value) {
-                @SuppressWarnings("unchecked")
-                final KeyValueStore<String, Long> stateStore = (KeyValueStore<String, Long>) context().getStateStore("my-state");
+                final KeyValueStore<String, Long> stateStore = context().getStateStore("my-state");
                 stateStore.put(key, (stateStore.get(key) == null ? 0 : stateStore.get(key)) + value);
                 stateStore.put("all", (stateStore.get("all") == null ? 0 : stateStore.get("all")) + value);
             }
