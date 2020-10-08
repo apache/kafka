@@ -216,11 +216,9 @@ class KafkaNetworkChannel(time: Time,
     endpoints.put(id, node)
   }
 
-  def postInboundRequest(header: RequestHeader,
-                         request: AbstractRequest,
-                         onResponseReceived: ResponseHandler): Unit = {
+  def postInboundRequest(request: AbstractRequest, onResponseReceived: ResponseHandler): Unit = {
     val data = requestData(request)
-    val correlationId = header.correlationId
+    val correlationId = newCorrelationId()
     val req = new RaftRequest.Inbound(correlationId, data, time.milliseconds())
     pendingInbound.put(correlationId, onResponseReceived)
     if (!undelivered.offer(req))

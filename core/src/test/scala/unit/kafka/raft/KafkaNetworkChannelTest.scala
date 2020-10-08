@@ -21,11 +21,11 @@ import java.util
 import java.util.Collections
 import java.util.concurrent.atomic.AtomicReference
 
-import org.apache.kafka.clients.{ApiVersion, MockClient, NodeApiVersions}
 import org.apache.kafka.clients.MockClient.MockMetadataUpdater
+import org.apache.kafka.clients.{ApiVersion, MockClient, NodeApiVersions}
 import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, EndQuorumEpochResponseData, FetchResponseData, VoteResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
-import org.apache.kafka.common.requests.{AbstractResponse, BeginQuorumEpochRequest, EndQuorumEpochRequest, RequestHeader, VoteRequest, VoteResponse}
+import org.apache.kafka.common.requests.{AbstractResponse, BeginQuorumEpochRequest, EndQuorumEpochRequest, VoteRequest, VoteResponse}
 import org.apache.kafka.common.utils.{MockTime, Time}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.raft.{RaftRequest, RaftResponse, RaftUtil}
@@ -120,18 +120,14 @@ class KafkaNetworkChannelTest {
     for (apiKey <- RaftApis) {
       val request = KafkaNetworkChannel.buildRequest(buildTestRequest(apiKey)).build()
       val responseRef = new AtomicReference[AbstractResponse]()
-      val correlationId = 15
-      val header = new RequestHeader(apiKey, request.version, "clientId", correlationId)
 
-      channel.postInboundRequest(header, request, responseRef.set)
+      channel.postInboundRequest(request, responseRef.set)
       val inbound = channel.receive(1000).asScala
       assertEquals(1, inbound.size)
 
       val inboundRequest = inbound.head.asInstanceOf[RaftRequest.Inbound]
-      assertEquals(correlationId, inboundRequest.correlationId)
-
       val errorResponse = buildTestErrorResponse(apiKey, Errors.INVALID_REQUEST)
-      val outboundResponse = new RaftResponse.Outbound(correlationId, errorResponse)
+      val outboundResponse = new RaftResponse.Outbound(inboundRequest.correlationId, errorResponse)
       channel.send(outboundResponse)
       channel.receive(1000)
 

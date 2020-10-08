@@ -112,4 +112,25 @@ public class ByteBufferAccessor implements Readable, Writable {
     public void writeByteBuffer(ByteBuffer src) {
         buf.put(src);
     }
+
+    @Override
+    public void writeVarint(int i) {
+        ByteUtils.writeVarint(i, buf);
+    }
+
+    @Override
+    public void writeVarlong(long i) {
+        ByteUtils.writeVarlong(i, buf);
+    }
+
+    @Override
+    public int readVarint() {
+        return ByteUtils.readVarint(buf);
+    }
+
+    @Override
+    public long readVarlong() {
+        return ByteUtils.readVarlong(buf);
+    }
+
 }

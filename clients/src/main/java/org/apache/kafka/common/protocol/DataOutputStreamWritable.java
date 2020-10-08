@@ -14,27 +14,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.common.protocol;
 
-import org.apache.kafka.common.UUID;
+import java.io.Closeable;
+import java.io.DataOutputStream;
+import java.io.IOException;
 
-import java.nio.ByteBuffer;
+public class DataOutputStreamWritable extends DataOutputWritable implements Closeable {
 
-public interface Writable {
-    void writeByte(byte val);
-    void writeShort(short val);
-    void writeInt(int val);
-    void writeLong(long val);
-    void writeDouble(double val);
-    void writeByteArray(byte[] arr);
-    void writeUnsignedVarint(int i);
-    void writeByteBuffer(ByteBuffer buf);
-    void writeVarint(int i);
-    void writeVarlong(long i);
+    public DataOutputStreamWritable(DataOutputStream out) {
+        super(out);
+    }
 
-    default void writeUUID(UUID uuid) {
-        writeLong(uuid.getMostSignificantBits());
-        writeLong(uuid.getLeastSignificantBits());
+    public void flush() {
+        try {
+            ((DataOutputStream) super.out).flush();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public void close() {
+        try {
+            ((DataOutputStream) super.out).close();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 }
