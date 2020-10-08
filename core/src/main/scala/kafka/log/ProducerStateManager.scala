@@ -496,7 +496,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
    */
   private def loadSnapshots(): ConcurrentSkipListMap[java.lang.Long, SnapshotFile] = {
     val tm = new ConcurrentSkipListMap[java.lang.Long, SnapshotFile]()
-    for (f <- ProducerStateManager.listSnapshotFiles(_logDir)) {
+    for (f <- listSnapshotFiles(_logDir)) {
       tm.put(f.offset, f)
     }
     tm
@@ -507,7 +507,8 @@ class ProducerStateManager(val topicPartition: TopicPartition,
    * corresponding to one of the provided offsets in segmentBaseOffsets will be removed, except in the case that there
    * is a snapshot file at a higher offset than any offset in segmentBaseOffsets.
    *
-   * The goal here is to remove any snapshot files which do not have an associated segment file, but not to remove
+   * The goal here is to remove any snapshot files which do not have an associated segment file, but not to remove the
+   * largest stray snapshot file which was emitted during clean shutdown.
    */
   private[log] def removeStraySnapshots(segmentBaseOffsets: Set[Long]): Unit = {
     var latestStraySnapshot: Option[SnapshotFile] = None

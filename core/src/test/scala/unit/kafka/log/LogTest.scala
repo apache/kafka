@@ -1314,13 +1314,47 @@ class LogTest {
     assertEquals("expected a snapshot file per segment base offset, excluding the first", log.logSegments.map(_.baseOffset).toSeq.sorted.drop(1), ProducerStateManager.listSnapshotFiles(logDir).map(_.offset).sorted)
   }
 
+  /**
+   * After loading the log, producer state is truncated such that there are no producer state snapshot files which
+   * exceed the log end offset. This test verifies that these are removed.
+   */
   @Test
-  def testLoadingLogCleansOrphanedProducerStateSnapshots(): Unit = {
-    val orphanedSnapshotFile = Log.producerSnapshotFile(logDir, 42).toPath
-    Files.createFile(orphanedSnapshotFile)
+  def testLoadingLogDeletesProducerStateSnapshotsPastLogEndOffset(): Unit = {
+    val straySnapshotFile = Log.producerSnapshotFile(logDir, 42).toPath
+    Files.createFile(straySnapshotFile)
     val logConfig = LogTest.createLogConfig(segmentBytes = 2048 * 5, retentionBytes = -1, fileDeleteDelayMs = 0)
     createLog(logDir, logConfig)
-    assertEquals("expected orphaned producer state snapshot file to be cleaned up", 0, ProducerStateManager.listSnapshotFiles(logDir).size)
+    assertEquals("expected producer state snapshots greater than the log end offset to be cleaned up", 0, ProducerStateManager.listSnapshotFiles(logDir).size)
+  }
+
+  @Test
+  def testLoadingLogKeepsLargestStrayProducerStateSnapshot(): Unit = {
+    val logConfig = LogTest.createLogConfig(segmentBytes = 2048 * 5, retentionBytes = 0, retentionMs = 1000 * 60, fileDeleteDelayMs = 0)
+    val log = createLog(logDir, logConfig)
+    val pid1 = 1L
+    val epoch = 0.toShort
+
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("a".getBytes)), producerId = pid1, producerEpoch = epoch, sequence = 0), leaderEpoch = 0)
+    log.roll()
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("b".getBytes)), producerId = pid1, producerEpoch = epoch, sequence = 1), leaderEpoch = 0)
+    log.roll()
+
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("c".getBytes)), producerId = pid1, producerEpoch = epoch, sequence = 2), leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("d".getBytes)), producerId = pid1, producerEpoch = epoch, sequence = 3), leaderEpoch = 0)
+
+    // Close the log, we should now have 3 segments
+    log.close()
+    assertEquals(log.logSegments.size, 3)
+    // We expect 3 snapshot files, two of which are for the first two segments, the last was written out during log closing.
+    assertEquals(Seq(1, 2, 4), ProducerStateManager.listSnapshotFiles(logDir).map(_.offset).sorted)
+    // Inject a stray snapshot file within the bounds of the log at offset 3, it should be cleaned up after loading the log
+    val straySnapshotFile = Log.producerSnapshotFile(logDir, 3).toPath
+    Files.createFile(straySnapshotFile)
+    assertEquals(Seq(1, 2, 3, 4), ProducerStateManager.listSnapshotFiles(logDir).map(_.offset).sorted)
+
+    createLog(logDir, logConfig)
+    // We should clean up the stray producer state snapshot file, but keep the largest snapshot file (4)
+    assertEquals(Seq(1, 2, 4), ProducerStateManager.listSnapshotFiles(logDir).map(_.offset).sorted)
   }
 
   @Test
@@ -1759,7 +1793,6 @@ class LogTest {
     log.maybeIncrementLogStartOffset(2L, ClientRecordDeletion)
     log.deleteOldSegments() // force retention to kick in so that the snapshot files are cleaned up.
     mockTime.sleep(logConfig.fileDeleteDelayMs + 1000) // advance the clock so file deletion takes place
-    mockTime.scheduler.tick()
 
     // Deleting records should not remove producer state but should delete snapshots after the file deletion delay.
     assertEquals(2, log.activeProducersWithLastSequence.size)
