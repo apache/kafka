@@ -464,8 +464,7 @@ public class MeteredSessionStoreTest {
         store.findSessions("a", null, 0, 0);
     }
 
-    private interface CachedSessionStore extends SessionStore<Bytes, byte[]>, CachedStateStore<byte[], byte[]> {
-    }
+    private interface CachedSessionStore extends SessionStore<Bytes, byte[]>, CachedStateStore<byte[], byte[]> { }
 
     @SuppressWarnings("unchecked")
     @Test
@@ -522,9 +521,9 @@ public class MeteredSessionStoreTest {
 
     private List<MetricName> storeMetrics() {
         return metrics.metrics()
-            .keySet()
-            .stream()
-            .filter(name -> name.group().equals(storeLevelGroup) && name.tags().equals(tags))
-            .collect(Collectors.toList());
+                      .keySet()
+                      .stream()
+                      .filter(name -> name.group().equals(storeLevelGroup) && name.tags().equals(tags))
+                      .collect(Collectors.toList());
     }
 }
