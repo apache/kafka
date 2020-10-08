@@ -166,7 +166,7 @@ object HostedPartition {
 
 object ReplicaManager {
   val HighWatermarkFilename = "replication-offset-checkpoint"
-  val IsrChangePropagationBlackOut = 5000L
+  val IsrChangePropagationBackoff = 5000L
   val IsrChangePropagationInterval = 60000L
 }
 
@@ -292,7 +292,7 @@ class ReplicaManager(val config: KafkaConfig,
     val now = System.currentTimeMillis()
     isrChangeSet synchronized {
       if (isrChangeSet.nonEmpty &&
-        (lastIsrChangeMs.get() + ReplicaManager.IsrChangePropagationBlackOut < now ||
+        (lastIsrChangeMs.get() + ReplicaManager.IsrChangePropagationBackoff < now ||
           lastIsrPropagationMs.get() + ReplicaManager.IsrChangePropagationInterval < now)) {
         zkClient.propagateIsrChanges(isrChangeSet)
         isrChangeSet.clear()
