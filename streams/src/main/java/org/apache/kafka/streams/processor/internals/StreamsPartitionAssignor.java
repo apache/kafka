@@ -241,7 +241,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         handleRebalanceStart(topics);
         uniqueField[0]++;
 
-
         return new SubscriptionInfo(
             usedSubscriptionMetadataVersion,
             LATEST_SUPPORTED_VERSION,

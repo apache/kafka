@@ -287,6 +287,7 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
                 mkEntry(StreamsConfig.InternalConfig.ASSIGNMENT_LISTENER, configuredAssignmentListener),
                 mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, "100"),
                 mkEntry(StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, HighAvailabilityTaskAssignor.class.getName()),
+                // Increasing the number of threads to ensure that a rebalance happens each time a consumer sends a rejoin
                 mkEntry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 40)
             )
         );
