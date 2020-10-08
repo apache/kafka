@@ -92,6 +92,7 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
         return "";
     }
 
+    @Deprecated
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
 

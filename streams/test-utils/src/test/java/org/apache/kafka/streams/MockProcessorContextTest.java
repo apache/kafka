@@ -231,8 +231,7 @@ public class MockProcessorContextTest {
 
         assertFalse(context.committed());
     }
-
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"deprecation", "unchecked"}) // TODO deprecation will be fixed in KAFKA-10437
     @Test
     public void shouldStoreAndReturnStateStores() {
         final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
