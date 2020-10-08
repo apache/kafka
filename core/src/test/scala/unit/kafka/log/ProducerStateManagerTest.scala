@@ -840,9 +840,9 @@ class ProducerStateManagerTest {
     // the broker shutdown cleanly and emitted a snapshot file larger than the base offset of the active segment.
 
     // Create 3 snapshot files at different offsets.
-    Log.producerSnapshotFile(logDir, 42).createNewFile()
-    Log.producerSnapshotFile(logDir, 5).createNewFile()
-    Log.producerSnapshotFile(logDir, 2).createNewFile()
+    Log.producerSnapshotFile(logDir, 5).createNewFile() // not stray
+    Log.producerSnapshotFile(logDir, 2).createNewFile() // stray
+    Log.producerSnapshotFile(logDir, 42).createNewFile() // not stray
 
     // claim that we only have one segment with a base offset of 5
     stateManager.removeStraySnapshots(Seq(5))
@@ -856,13 +856,13 @@ class ProducerStateManagerTest {
 
   @Test
   def testRemoveAllStraySnapshots(): Unit = {
-    // Test that when stray snapshots are removed, all stray snapshots are removed when the base offset of the largest
-    // segment exceeds the offset of the largest stray snapshot.
+    // Test that when stray snapshots are removed, we remove only the stray snapshots below the largest segment base offset.
+    // Snapshots associated with an offset in the list of segment base offsets should remain.
 
     // Create 3 snapshot files at different offsets.
-    Log.producerSnapshotFile(logDir, 42).createNewFile()
-    Log.producerSnapshotFile(logDir, 5).createNewFile()
-    Log.producerSnapshotFile(logDir, 2).createNewFile()
+    Log.producerSnapshotFile(logDir, 5).createNewFile() // stray
+    Log.producerSnapshotFile(logDir, 2).createNewFile() // stray
+    Log.producerSnapshotFile(logDir, 42).createNewFile() // not stray
 
     stateManager.removeStraySnapshots(Seq(42))
     assertEquals(Seq(42), ProducerStateManager.listSnapshotFiles(logDir).map(_.offset).sorted)
