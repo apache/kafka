@@ -4410,6 +4410,10 @@ public class KafkaAdminClient extends AdminClient {
 
         final Map<String, KafkaFutureImpl<Void>> updateFutures = new HashMap<>();
         for (final Map.Entry<String, FeatureUpdate> entry : featureUpdates.entrySet()) {
+            final String feature = entry.getKey();
+            if (feature.trim().isEmpty()) {
+                throw new IllegalArgumentException("Provided feature can not be empty.");
+            }
             updateFutures.put(entry.getKey(), new KafkaFutureImpl<>());
         }
 
@@ -4424,10 +4428,6 @@ public class KafkaAdminClient extends AdminClient {
                 for (Map.Entry<String, FeatureUpdate> entry : featureUpdates.entrySet()) {
                     final String feature = entry.getKey();
                     final FeatureUpdate update = entry.getValue();
-                    if (feature.trim().isEmpty()) {
-                        throw new IllegalArgumentException("Provided feature can not be null or empty.");
-                    }
-
                     final UpdateFeaturesRequestData.FeatureUpdateKey requestItem =
                         new UpdateFeaturesRequestData.FeatureUpdateKey();
                     requestItem.setFeature(feature);
@@ -4471,7 +4471,8 @@ public class KafkaAdminClient extends AdminClient {
                         break;
                     default:
                         for (final Map.Entry<String, KafkaFutureImpl<Void>> entry : updateFutures.entrySet()) {
-                            entry.getValue().completeExceptionally(topLevelError.exception());
+                            final String errorMsg = response.data().errorMessage();
+                            entry.getValue().completeExceptionally(topLevelError.exception(errorMsg));
                         }
                         break;
                 }
