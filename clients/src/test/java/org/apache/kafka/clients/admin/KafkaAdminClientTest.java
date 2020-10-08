@@ -4062,19 +4062,12 @@ public class KafkaAdminClientTest {
     @Test
     public void testUpdateFeaturesShouldFailRequestForInvalidFeatureName() {
         try (final AdminClientUnitTestEnv env = mockClientEnv()) {
-            final UpdateFeaturesResult result = env.adminClient().updateFeatures(
-                Utils.mkMap(Utils.mkEntry("", new FeatureUpdate((short) 2, false))),
-                            new UpdateFeaturesOptions());
-
-            final Map<String, KafkaFuture<Void>> futures = result.values();
-            for (Map.Entry<String, KafkaFuture<Void>> entry : futures.entrySet()) {
-                final Throwable cause = assertThrows(ExecutionException.class, () -> entry.getValue().get());
-                assertEquals(KafkaException.class, cause.getCause().getClass());
-            }
-
-            final KafkaFuture<Void> future = result.all();
-            final Throwable cause = assertThrows(ExecutionException.class, () -> future.get());
-            assertEquals(KafkaException.class, cause.getCause().getClass());
+            assertThrows(
+                IllegalArgumentException.class,
+                () -> env.adminClient().updateFeatures(
+                    Utils.mkMap(Utils.mkEntry("feature", new FeatureUpdate((short) 2, false)),
+                                Utils.mkEntry("", new FeatureUpdate((short) 2, false))),
+                    new UpdateFeaturesOptions()));
         }
     }
 
