@@ -170,7 +170,7 @@ public class StreamThreadStateStoreProviderTest {
         tasks.put(new TaskId(0, 1), taskTwo);
 
         threadMock = EasyMock.createNiceMock(StreamThread.class);
-        provider = new StreamThreadStateStoreProvider(threadMock, internalTopologyBuilder);
+        provider = new StreamThreadStateStoreProvider(threadMock);
 
     }
 
