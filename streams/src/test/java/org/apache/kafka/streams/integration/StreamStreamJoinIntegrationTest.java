@@ -94,7 +94,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
 
             kafkaStreams.start();
             latch.await();
-            assertThrows(InvalidStateStoreException.class, () -> kafkaStreams.store(StoreQueryParameters.fromNameAndType("join-store", QueryableStoreTypes.keyValueStore())));
+            assertThrows(InvalidStateStoreException.class, () -> kafkaStreams.store(StoreQueryParameters.fromNameAndType("join-store", QueryableStoreTypes.keyValueStore())).get(1));
         }
     }
 
