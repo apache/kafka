@@ -3483,10 +3483,11 @@ public class KafkaAdminClientTest {
             partitionLevelErrResult.values().get(tp2).get();
 
             // 4. top-level error
+            String errorMessage = "this is custom error message";
             AlterPartitionReassignmentsResponseData topLevelErrResponseData =
                     new AlterPartitionReassignmentsResponseData()
                             .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code())
-                            .setErrorMessage(Errors.CLUSTER_AUTHORIZATION_FAILED.message())
+                            .setErrorMessage(errorMessage)
                             .setResponses(Arrays.asList(
                                     new ReassignableTopicResponse()
                                             .setName("A")
@@ -3497,9 +3498,9 @@ public class KafkaAdminClientTest {
                             );
             env.kafkaClient().prepareResponse(new AlterPartitionReassignmentsResponse(topLevelErrResponseData));
             AlterPartitionReassignmentsResult topLevelErrResult = env.adminClient().alterPartitionReassignments(reassignments);
-            TestUtils.assertFutureError(topLevelErrResult.all(), Errors.CLUSTER_AUTHORIZATION_FAILED.exception().getClass());
-            TestUtils.assertFutureError(topLevelErrResult.values().get(tp1), Errors.CLUSTER_AUTHORIZATION_FAILED.exception().getClass());
-            TestUtils.assertFutureError(topLevelErrResult.values().get(tp2), Errors.CLUSTER_AUTHORIZATION_FAILED.exception().getClass());
+            assertEquals(errorMessage, TestUtils.assertFutureThrows(topLevelErrResult.all(), Errors.CLUSTER_AUTHORIZATION_FAILED.exception().getClass()).getMessage());
+            assertEquals(errorMessage, TestUtils.assertFutureThrows(topLevelErrResult.values().get(tp1), Errors.CLUSTER_AUTHORIZATION_FAILED.exception().getClass()).getMessage());
+            assertEquals(errorMessage, TestUtils.assertFutureThrows(topLevelErrResult.values().get(tp2), Errors.CLUSTER_AUTHORIZATION_FAILED.exception().getClass()).getMessage());
 
             // 5. unrepresentable topic name error
             TopicPartition invalidTopicTP = new TopicPartition("", 0);
