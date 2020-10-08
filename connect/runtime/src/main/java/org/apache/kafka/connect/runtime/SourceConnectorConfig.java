@@ -47,9 +47,9 @@ public class SourceConnectorConfig extends ConnectorConfig {
             + "created by source connectors";
     private static final String TOPIC_CREATION_GROUPS_DISPLAY = "Topic Creation Groups";
 
-    private static class EnrichedSourceConnectorConfig extends AbstractConfig {
-        EnrichedSourceConnectorConfig(ConfigDef configDef, Map<String, String> props) {
-            super(configDef, props);
+    private static class EnrichedSourceConnectorConfig extends ConnectorConfig {
+        EnrichedSourceConnectorConfig(Plugins plugins, ConfigDef configDef, Map<String, String> props) {
+            super(plugins, configDef, props);
         }
 
         @Override
@@ -129,8 +129,9 @@ public class SourceConnectorConfig extends ConnectorConfig {
             propsWithoutRegexForDefaultGroup.entrySet()
                     .removeIf(e -> e.getKey().equals(DEFAULT_TOPIC_CREATION_PREFIX + INCLUDE_REGEX_CONFIG)
                             || e.getKey().equals(DEFAULT_TOPIC_CREATION_PREFIX + EXCLUDE_REGEX_CONFIG));
-            enrichedSourceConfig = new EnrichedSourceConnectorConfig(enrich(defaultConfigDef, props,
-                    defaultGroup), propsWithoutRegexForDefaultGroup);
+            enrichedSourceConfig = new EnrichedSourceConnectorConfig(plugins,
+                    enrich(defaultConfigDef, props, defaultGroup),
+                    propsWithoutRegexForDefaultGroup);
         } else {
             enrichedSourceConfig = null;
         }
@@ -180,6 +181,6 @@ public class SourceConnectorConfig extends ConnectorConfig {
     }
 
     public static void main(String[] args) {
-        System.out.println(config.toHtml());
+        System.out.println(config.toHtml(4, config -> "sourceconnectorconfigs_" + config));
     }
 }

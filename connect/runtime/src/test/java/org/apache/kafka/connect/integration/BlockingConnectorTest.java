@@ -28,9 +28,11 @@ import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
+import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,8 +46,14 @@ import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
+import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.Assert.assertThrows;
 
+/**
+ * Tests situations during which certain connector operations, such as start, validation,
+ * configuration and others, take longer than expected.
+ */
+@Category(IntegrationTest.class)
 public class BlockingConnectorTest {
 
     private static final Logger log = LoggerFactory.getLogger(BlockingConnectorTest.class);
@@ -55,6 +63,7 @@ public class BlockingConnectorTest {
     private static final String NORMAL_CONNECTOR_NAME = "normal-connector";
     private static final String TEST_TOPIC = "normal-topic";
     private static final int NUM_RECORDS_PRODUCED = 100;
+    private static final long CONNECT_WORKER_STARTUP_TIMEOUT = TimeUnit.SECONDS.toMillis(30);
     private static final long RECORD_TRANSFER_DURATION_MS = TimeUnit.SECONDS.toMillis(30);
     private static final long REST_REQUEST_TIMEOUT = Worker.CONNECTOR_GRACEFUL_SHUTDOWN_TIMEOUT_MS * 2;
 
@@ -62,7 +71,7 @@ public class BlockingConnectorTest {
     private ConnectorHandle normalConnectorHandle;
 
     @Before
-    public void setup() {
+    public void setup() throws Exception {
         // Artificially reduce the REST request timeout so that these don't take forever
         ConnectorsResource.setRequestTimeout(REST_REQUEST_TIMEOUT);
         // build a Connect cluster backed by Kafka and Zk
@@ -76,6 +85,15 @@ public class BlockingConnectorTest {
 
         // start the clusters
         connect.start();
+
+        // wait for the Connect REST API to become available. necessary because of the reduced REST
+        // request timeout; otherwise, we may get an unexpected 500 with our first real REST request
+        // if the worker is still getting on its feet.
+        waitForCondition(
+            () -> connect.requestGet(connect.endpointForResource("connectors/nonexistent")).getStatus() == 404,
+            CONNECT_WORKER_STARTUP_TIMEOUT,
+            "Worker did not complete startup in time"
+        );
     }
 
     @After

@@ -128,7 +128,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
 
     //And should get no leader for partition error from t1p1 (as it's not on broker 0)
     assertTrue(offsetsForEpochs(t1p1).hasError)
-    assertEquals(NOT_LEADER_FOR_PARTITION, offsetsForEpochs(t1p1).error)
+    assertEquals(NOT_LEADER_OR_FOLLOWER, offsetsForEpochs(t1p1).error)
     assertEquals(UNDEFINED_EPOCH_OFFSET, offsetsForEpochs(t1p1).endOffset)
 
     //Repointing to broker 1 we should get the correct offset for t1p1
@@ -239,9 +239,9 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     var result = true
     for (topic <- List(topic1, topic2)) {
       val tp = new TopicPartition(topic, 0)
-      val leo = broker.getLogManager().getLog(tp).get.logEndOffset
+      val leo = broker.getLogManager.getLog(tp).get.logEndOffset
       result = result && leo > 0 && brokers.forall { broker =>
-        broker.getLogManager().getLog(tp).get.logSegments.iterator.forall { segment =>
+        broker.getLogManager.getLog(tp).get.logSegments.iterator.forall { segment =>
           if (segment.read(minOffset, Integer.MAX_VALUE) == null) {
             false
           } else {

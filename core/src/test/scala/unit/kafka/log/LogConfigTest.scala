@@ -17,7 +17,7 @@
 
 package kafka.log
 
-import java.util.Properties
+import java.util.{Collections, Properties}
 
 import kafka.server.{KafkaConfig, KafkaServer, ThrottledReplicaListValidator}
 import kafka.utils.TestUtils
@@ -126,8 +126,8 @@ class LogConfigTest {
   /* Sanity check that toHtml produces one of the expected configs */
   @Test
   def testToHtml(): Unit = {
-    val html = LogConfig.configDefCopy.toHtml
-    val expectedConfig = "<h4><a id=\"file.delete.delay.ms\" href=\"#file.delete.delay.ms\">file.delete.delay.ms</a></h4>"
+    val html = LogConfig.configDefCopy.toHtml(4, (key: String) => "prefix_" + key, Collections.emptyMap())
+    val expectedConfig = "<h4><a id=\"file.delete.delay.ms\"></a><a id=\"prefix_file.delete.delay.ms\" href=\"#prefix_file.delete.delay.ms\">file.delete.delay.ms</a></h4>"
     assertTrue(s"Could not find `$expectedConfig` in:\n $html", html.contains(expectedConfig))
   }
 

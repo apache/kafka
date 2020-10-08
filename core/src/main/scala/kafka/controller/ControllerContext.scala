@@ -18,6 +18,7 @@
 package kafka.controller
 
 import kafka.cluster.Broker
+import kafka.utils.Implicits._
 import org.apache.kafka.common.TopicPartition
 
 import scala.collection.{Map, Seq, Set, mutable}
@@ -416,15 +417,13 @@ class ControllerContext {
     partitionLeadershipInfo.get(partition)
   }
 
-  def partitionsLeadershipInfo(): Iterable[(TopicPartition, LeaderIsrAndControllerEpoch)] = {
+  def partitionsLeadershipInfo: Map[TopicPartition, LeaderIsrAndControllerEpoch] =
     partitionLeadershipInfo
-  }
 
-  def partitionsWithLeaders(): Set[TopicPartition] = {
-    partitionLeadershipInfo.keys.filter(tp => !isTopicQueuedUpForDeletion(tp.topic)).toSet
-  }
+  def partitionsWithLeaders: Set[TopicPartition] =
+    partitionLeadershipInfo.keySet.filter(tp => !isTopicQueuedUpForDeletion(tp.topic))
 
-  def partitionsWithOfflineLeader(): Set[TopicPartition] = {
+  def partitionsWithOfflineLeader: Set[TopicPartition] = {
     partitionLeadershipInfo.filter { case (topicPartition, leaderIsrAndControllerEpoch) =>
       !isReplicaOnline(leaderIsrAndControllerEpoch.leaderAndIsr.leader, topicPartition) &&
         !isTopicQueuedUpForDeletion(topicPartition.topic)
@@ -439,13 +438,9 @@ class ControllerContext {
     }.keySet
   }
 
-  def clearPartitionLeadershipInfo(): Unit = {
-    partitionLeadershipInfo.clear()
-  }
+  def clearPartitionLeadershipInfo(): Unit = partitionLeadershipInfo.clear()
 
-  def partitionWithLeadersCount(): Int = {
-    partitionLeadershipInfo.size
-  }
+  def partitionWithLeadersCount: Int = partitionLeadershipInfo.size
 
   private def updatePreferredReplicaImbalanceMetric(partition: TopicPartition,
                                                     oldReplicaAssignment: Option[ReplicaAssignment],
@@ -470,7 +465,7 @@ class ControllerContext {
   }
 
   private def cleanPreferredReplicaImbalanceMetric(topic: String): Unit = {
-    partitionAssignments.getOrElse(topic, mutable.Map.empty).foreach { case (partition, replicaAssignment) =>
+    partitionAssignments.getOrElse(topic, mutable.Map.empty).forKeyValue { (partition, replicaAssignment) =>
       partitionLeadershipInfo.get(new TopicPartition(topic, partition)).foreach { leadershipInfo =>
         if (!hasPreferredLeader(replicaAssignment, leadershipInfo))
           preferredReplicaImbalanceCount -= 1

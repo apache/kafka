@@ -17,29 +17,28 @@
 
 package org.apache.kafka.trogdor.common;
 
-import org.junit.Rule;
-import org.junit.rules.Timeout;
-import org.junit.Test;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import org.junit.jupiter.api.Timeout;
 
-import static org.junit.Assert.assertEquals;
-
+@Timeout(value = 120000, unit = MILLISECONDS)
 public class StringExpanderTest {
-    @Rule
-    final public Timeout globalTimeout = Timeout.millis(120000);
 
     @Test
-    public void testNoExpansionNeeded() throws Exception {
+    public void testNoExpansionNeeded() {
         assertEquals(Collections.singleton("foo"), StringExpander.expand("foo"));
         assertEquals(Collections.singleton("bar"), StringExpander.expand("bar"));
         assertEquals(Collections.singleton(""), StringExpander.expand(""));
     }
 
     @Test
-    public void testExpansions() throws Exception {
+    public void testExpansions() {
         HashSet<String> expected1 = new HashSet<>(Arrays.asList(
             "foo1",
             "foo2",

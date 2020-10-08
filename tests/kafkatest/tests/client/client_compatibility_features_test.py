@@ -14,6 +14,8 @@
 # limitations under the License.
 
 import os
+
+import errno
 import time
 from random import randint
 
@@ -23,7 +25,7 @@ from ducktape.tests.test import TestContext
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from ducktape.tests.test import Test
-from kafkatest.version import DEV_BRANCH, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, V_0_11_0_0, V_0_10_1_0, KafkaVersion
+from kafkatest.version import DEV_BRANCH, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, V_0_11_0_0, V_0_10_1_0, KafkaVersion
 
 def get_broker_features(broker_version):
     features = {}
@@ -39,8 +41,10 @@ def get_broker_features(broker_version):
         features["expect-record-too-large-exception"] = False
     if broker_version < V_0_11_0_0:
         features["describe-acls-supported"] = False
+        features["describe-configs-supported"] = False
     else:
         features["describe-acls-supported"] = True
+        features["describe-configs-supported"] = True
     return features
 
 def run_command(node, cmd, ssh_log_file):
@@ -51,7 +55,7 @@ def run_command(node, cmd, ssh_log_file):
                 f.write(line)
         except Exception as e:
             f.write("** Command failed!")
-            print e
+            print(e)
             raise
 
 
@@ -84,14 +88,14 @@ class ClientCompatibilityFeaturesTest(Test):
                "--topic %s " % (self.zk.path.script("kafka-run-class.sh", node),
                                self.kafka.bootstrap_servers(),
                                len(self.kafka.nodes),
-                               self.topics.keys()[0]))
-        for k, v in features.iteritems():
+                               list(self.topics.keys())[0]))
+        for k, v in features.items():
             cmd = cmd + ("--%s %s " % (k, v))
         results_dir = TestContext.results_dir(self.test_context, 0)
         try:
             os.makedirs(results_dir)
         except OSError as e:
-            if e.errno == errno.EEXIST and os.path.isdir(path):
+            if e.errno == errno.EEXIST and os.path.isdir(results_dir):
                 pass
             else:
                 raise
@@ -115,6 +119,7 @@ class ClientCompatibilityFeaturesTest(Test):
     @parametrize(broker_version=str(LATEST_2_2))
     @parametrize(broker_version=str(LATEST_2_3))
     @parametrize(broker_version=str(LATEST_2_4))
+    @parametrize(broker_version=str(LATEST_2_5))
     def run_compatibility_test(self, broker_version):
         self.zk.start()
         self.kafka.set_version(KafkaVersion(broker_version))

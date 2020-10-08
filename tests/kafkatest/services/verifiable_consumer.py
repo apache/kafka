@@ -97,7 +97,7 @@ class ConsumerEventHandler(object):
                     if tp in self.position:
                         self.position[tp] = max_offset + 1
                     logger.warn(msg)
-            self.total_consumed += event["count"]
+        self.total_consumed += event["count"]
 
     def handle_partitions_revoked(self, event):
         self.revoked_count += 1
@@ -361,7 +361,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
 
     def current_assignment(self):
         with self.lock:
-            return { handler.node: handler.current_assignment() for handler in self.event_handlers.itervalues() }
+            return { handler.node: handler.current_assignment() for handler in self.event_handlers.values() }
 
     def current_position(self, tp):
         with self.lock:
@@ -372,7 +372,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
 
     def owner(self, tp):
         with self.lock:
-            for handler in self.event_handlers.itervalues():
+            for handler in self.event_handlers.values():
                 if tp in handler.current_assignment():
                     return handler.node
             return None
@@ -386,33 +386,33 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
 
     def total_consumed(self):
         with self.lock:
-            return sum(handler.total_consumed for handler in self.event_handlers.itervalues())
+            return sum(handler.total_consumed for handler in self.event_handlers.values())
 
     def num_rebalances(self):
         with self.lock:
-            return max(handler.assigned_count for handler in self.event_handlers.itervalues())
+            return max(handler.assigned_count for handler in self.event_handlers.values())
 
     def num_revokes_for_alive(self, keep_alive=1):
         with self.lock:
-            return max([handler.revoked_count for handler in self.event_handlers.itervalues()
-                       if handler.idx <= keep_alive])
+            return max(handler.revoked_count for handler in self.event_handlers.values()
+                       if handler.idx <= keep_alive)
 
     def joined_nodes(self):
         with self.lock:
-            return [handler.node for handler in self.event_handlers.itervalues()
+            return [handler.node for handler in self.event_handlers.values()
                     if handler.state == ConsumerState.Joined]
 
     def rebalancing_nodes(self):
         with self.lock:
-            return [handler.node for handler in self.event_handlers.itervalues()
+            return [handler.node for handler in self.event_handlers.values()
                     if handler.state == ConsumerState.Rebalancing]
 
     def dead_nodes(self):
         with self.lock:
-            return [handler.node for handler in self.event_handlers.itervalues()
+            return [handler.node for handler in self.event_handlers.values()
                     if handler.state == ConsumerState.Dead]
 
     def alive_nodes(self):
         with self.lock:
-            return [handler.node for handler in self.event_handlers.itervalues()
+            return [handler.node for handler in self.event_handlers.values()
                     if handler.state != ConsumerState.Dead]

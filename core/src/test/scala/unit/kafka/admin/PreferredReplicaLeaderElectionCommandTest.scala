@@ -79,7 +79,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
       () =>
         servers.forall { server =>
           partitionsAndAssignments.forall { partitionAndAssignment =>
-            server.getLogManager().getLog(partitionAndAssignment._1).isDefined
+            server.getLogManager.getLog(partitionAndAssignment._1).isDefined
           }
         },
       "Replicas for topic test not created"

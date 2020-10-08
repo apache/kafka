@@ -34,6 +34,7 @@ import static org.junit.Assert.assertTrue;
  * Demonstrate the use of {@link MockProcessorContext} for testing the {@link Processor} in the {@link WordCountProcessorDemo}.
  */
 public class WordCountProcessorTest {
+    @SuppressWarnings("deprecation") // TODO will be fixed in KAFKA-10437
     @Test
     public void test() {
         final MockProcessorContext context = new MockProcessorContext();
@@ -42,6 +43,7 @@ public class WordCountProcessorTest {
         final KeyValueStore<String, Integer> store =
             Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore("Counts"), Serdes.String(), Serdes.Integer())
                 .withLoggingDisabled() // Changelog is not supported by MockProcessorContext.
+                // Caching is disabled by default, but FYI: caching is also not supported by MockProcessorContext.
                 .build();
         store.init(context, store);
         context.register(store, null);

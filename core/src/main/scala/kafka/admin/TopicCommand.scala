@@ -28,11 +28,14 @@ import kafka.utils.Implicits._
 import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.{Admin, ConfigEntry, ListPartitionReassignmentsOptions, ListTopicsOptions, NewPartitions, NewTopic, PartitionReassignment, Config => JConfig}
+import org.apache.kafka.clients.admin.CreatePartitionsOptions
+import org.apache.kafka.clients.admin.CreateTopicsOptions
+import org.apache.kafka.clients.admin.DeleteTopicsOptions
+import org.apache.kafka.clients.admin.{Admin, ConfigEntry, ListTopicsOptions, NewPartitions, NewTopic, PartitionReassignment, Config => JConfig}
 import org.apache.kafka.common.{Node, TopicPartition, TopicPartitionInfo}
 import org.apache.kafka.common.config.ConfigResource.Type
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
-import org.apache.kafka.common.errors.{InvalidTopicException, TopicExistsException, UnsupportedVersionException}
+import org.apache.kafka.common.errors.{ClusterAuthorizationException, InvalidTopicException, TopicExistsException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -47,7 +50,6 @@ import scala.io.StdIn
 object TopicCommand extends Logging {
 
   def main(args: Array[String]): Unit = {
-
     val opts = new TopicCommandOptions(args)
     opts.checkArgs()
 
@@ -69,14 +71,24 @@ object TopicCommand extends Logging {
       else if (opts.hasDeleteOption)
         topicService.deleteTopic(opts)
     } catch {
+      case e: ExecutionException =>
+        if (e.getCause != null)
+          printException(e.getCause)
+        else
+          printException(e)
+        exitCode = 1
       case e: Throwable =>
-        println("Error while executing topic command : " + e.getMessage)
-        error(Utils.stackTrace(e))
+        printException(e)
         exitCode = 1
     } finally {
       topicService.close()
       Exit.exit(exitCode)
     }
+  }
+
+  private def printException(e: Throwable): Unit = {
+    println("Error while executing topic command : " + e.getMessage)
+    error(Utils.stackTrace(e))
   }
 
   class CommandTopicPartition(opts: TopicCommandOptions) {
@@ -244,7 +256,8 @@ object TopicCommand extends Logging {
           .toMap.asJava
 
         newTopic.configs(configsMap)
-        val createResult = adminClient.createTopics(Collections.singleton(newTopic))
+        val createResult = adminClient.createTopics(Collections.singleton(newTopic),
+          new CreateTopicsOptions().retryOnQuotaViolation(false))
         createResult.all().get()
         println(s"Created topic ${topic.name}.")
       } catch {
@@ -267,7 +280,7 @@ object TopicCommand extends Logging {
 
       if (topics.nonEmpty) {
         val topicsInfo = adminClient.describeTopics(topics.asJavaCollection).values()
-        adminClient.createPartitions(topics.map { topicName =>
+        val newPartitions = topics.map { topicName =>
           if (topic.hasReplicaAssignment) {
             val startPartitionId = topicsInfo.get(topicName).get().partitions().size()
             val newAssignment = {
@@ -278,19 +291,20 @@ object TopicCommand extends Logging {
           } else {
             topicName -> NewPartitions.increaseTo(topic.partitions.get)
           }
-        }.toMap.asJava).all().get()
+        }.toMap
+        adminClient.createPartitions(newPartitions.asJava,
+          new CreatePartitionsOptions().retryOnQuotaViolation(false)).all().get()
       }
     }
 
     private def listAllReassignments(topicPartitions: util.Set[TopicPartition]): Map[TopicPartition, PartitionReassignment] = {
       try {
-        adminClient.listPartitionReassignments(topicPartitions, new ListPartitionReassignmentsOptions)
-          .reassignments().get().asScala
+        adminClient.listPartitionReassignments(topicPartitions).reassignments().get().asScala
       } catch {
         case e: ExecutionException =>
           e.getCause match {
-            case ex: UnsupportedVersionException =>
-              logger.debug("Couldn't query reassignments through the AdminClient API", ex)
+            case ex @ (_: UnsupportedVersionException | _: ClusterAuthorizationException) =>
+              logger.debug(s"Couldn't query reassignments through the AdminClient API: ${ex.getMessage}", ex)
               Map()
             case t => throw t
           }
@@ -341,7 +355,8 @@ object TopicCommand extends Logging {
     override def deleteTopic(opts: TopicCommandOptions): Unit = {
       val topics = getTopics(opts.topic, opts.excludeInternalTopics)
       ensureTopicExists(topics, opts.topic, !opts.ifExists)
-      adminClient.deleteTopics(topics.asJavaCollection).all().get()
+      adminClient.deleteTopics(topics.asJavaCollection, new DeleteTopicsOptions().retryOnQuotaViolation(false))
+        .all().get()
     }
 
     override def getTopics(topicWhitelist: Option[String], excludeInternalTopics: Boolean = false): Seq[String] = {
@@ -618,10 +633,13 @@ object TopicCommand extends Logging {
                          .describedAs("topic")
                          .ofType(classOf[String])
     private val nl = System.getProperty("line.separator")
-    private val configOpt = parser.accepts("config", "A topic configuration override for the topic being created or altered."  +
-                                             "The following is a list of valid configurations: " + nl + LogConfig.configNames.map("\t" + _).mkString(nl) + nl +
+    private val kafkaConfigsCanAlterTopicConfigsViaBootstrapServer =
+      " (the kafka-configs CLI supports altering topic configs with a --bootstrap-server option)"
+    private val configOpt = parser.accepts("config", "A topic configuration override for the topic being created or altered." +
+                                             " The following is a list of valid configurations: " + nl + LogConfig.configNames.map("\t" + _).mkString(nl) + nl +
                                              "See the Kafka documentation for full details on the topic configs." +
-                                             "It is supported only in combination with --create if --bootstrap-server option is used.")
+                                             " It is supported only in combination with --create if --bootstrap-server option is used" +
+                                             kafkaConfigsCanAlterTopicConfigsViaBootstrapServer + ".")
                            .withRequiredArg
                            .describedAs("name=value")
                            .ofType(classOf[String])
@@ -730,7 +748,8 @@ object TopicCommand extends Logging {
       if (has(createOpt) && !has(replicaAssignmentOpt) && has(zkConnectOpt))
         CommandLineUtils.checkRequiredArgs(parser, options, partitionsOpt, replicationFactorOpt)
       if (has(bootstrapServerOpt) && has(alterOpt)) {
-        CommandLineUtils.checkInvalidArgsSet(parser, options, Set(bootstrapServerOpt, configOpt), Set(alterOpt))
+        CommandLineUtils.checkInvalidArgsSet(parser, options, Set(bootstrapServerOpt, configOpt), Set(alterOpt),
+        Some(kafkaConfigsCanAlterTopicConfigsViaBootstrapServer))
         CommandLineUtils.checkRequiredArgs(parser, options, partitionsOpt)
       }
 

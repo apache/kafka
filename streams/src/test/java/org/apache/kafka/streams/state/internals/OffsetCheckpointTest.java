@@ -32,9 +32,13 @@ import org.junit.Test;
 
 import static org.apache.kafka.streams.state.internals.OffsetCheckpoint.writeEntry;
 import static org.apache.kafka.streams.state.internals.OffsetCheckpoint.writeIntLine;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 public class OffsetCheckpointTest {
 
@@ -82,7 +86,7 @@ public class OffsetCheckpointTest {
     }
 
     @Test
-    public void shouldSkipNegativeOffsetsDuringRead() throws IOException {
+    public void shouldSkipInvalidOffsetsDuringRead() throws IOException {
         final File file = TestUtils.tempFile();
         final OffsetCheckpoint checkpoint = new OffsetCheckpoint(file);
 
@@ -91,26 +95,56 @@ public class OffsetCheckpointTest {
             offsets.put(new TopicPartition(topic, 0), -1L);
 
             writeVersion0(offsets, file);
+            assertTrue(checkpoint.read().isEmpty());
         } finally {
             checkpoint.delete();
         }
     }
 
     @Test
-    public void shouldThrowOnNegativeOffsetInWrite() throws IOException {
+    public void shouldReadAndWriteSentinelOffset() throws IOException {
+        final File f = TestUtils.tempFile();
+        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(f);
+        final long sentinelOffset = -4L;
+
+        try {
+            final Map<TopicPartition, Long> offsetsToWrite = new HashMap<>();
+            offsetsToWrite.put(new TopicPartition(topic, 1), sentinelOffset);
+            checkpoint.write(offsetsToWrite);
+
+            final Map<TopicPartition, Long> readOffsets = checkpoint.read();
+            assertThat(readOffsets.get(new TopicPartition(topic, 1)), equalTo(sentinelOffset));
+        } finally {
+            checkpoint.delete();
+        }
+    }
+
+    @Test
+    public void shouldThrowOnInvalidOffsetInWrite() throws IOException {
         final File f = TestUtils.tempFile();
         final OffsetCheckpoint checkpoint = new OffsetCheckpoint(f);
 
         try {
             final Map<TopicPartition, Long> offsets = new HashMap<>();
             offsets.put(new TopicPartition(topic, 0), 0L);
-            offsets.put(new TopicPartition(topic, 1), -1L);
+            offsets.put(new TopicPartition(topic, 1), -1L); // invalid
             offsets.put(new TopicPartition(topic, 2), 2L);
 
             assertThrows(IllegalStateException.class, () -> checkpoint.write(offsets));
         } finally {
             checkpoint.delete();
         }
+    }
+
+    @Test
+    public void shouldThrowIOExceptionWhenWritingToNotExistedFile() {
+        final Map<TopicPartition, Long> offsetsToWrite = Collections.singletonMap(new TopicPartition(topic, 0), 0L);
+
+        final File notExistedFile = new File("/not_existed_dir/not_existed_file");
+        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(notExistedFile);
+        
+        final IOException e = assertThrows(IOException.class, () -> checkpoint.write(offsetsToWrite));
+        assertThat(e.getMessage(), containsString("No such file or directory"));
     }
 
     /**

@@ -24,7 +24,7 @@ from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
 from kafkatest.utils.remote_account import java_version
-from kafkatest.version import LATEST_0_8_2, LATEST_0_9, LATEST_0_10, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, V_0_9_0_0, V_0_11_0_0, DEV_BRANCH, KafkaVersion
+from kafkatest.version import LATEST_0_8_2, LATEST_0_9, LATEST_0_10, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, V_0_9_0_0, V_0_11_0_0, DEV_BRANCH, KafkaVersion
 from kafkatest.services.kafka.util import new_jdk_not_supported
 
 class TestUpgrade(ProduceConsumeValidateTest):
@@ -51,7 +51,7 @@ class TestUpgrade(ProduceConsumeValidateTest):
         self.logger.info("Upgrade ZooKeeper from %s to %s" % (str(self.zk.nodes[0].version), str(DEV_BRANCH)))
         self.zk.set_version(DEV_BRANCH)
         self.zk.restart_cluster()
-        # Confirm we have a successful ZoKeeper upgrade by describing the topic.
+        # Confirm we have a successful ZooKeeper upgrade by describing the topic.
         # Not trying to detect a problem here leads to failure in the ensuing Kafka roll, which would be a less
         # intuitive failure than seeing a problem here, so detect ZooKeeper upgrade problems before involving Kafka.
         self.zk.describe(self.topic)
@@ -78,6 +78,8 @@ class TestUpgrade(ProduceConsumeValidateTest):
     @cluster(num_nodes=6)
     @parametrize(from_kafka_version=str(LATEST_2_4), to_message_format_version=None, compression_types=["none"])
     @parametrize(from_kafka_version=str(LATEST_2_4), to_message_format_version=None, compression_types=["zstd"])
+    @parametrize(from_kafka_version=str(LATEST_2_5), to_message_format_version=None, compression_types=["none"])
+    @parametrize(from_kafka_version=str(LATEST_2_5), to_message_format_version=None, compression_types=["zstd"])
     @parametrize(from_kafka_version=str(LATEST_2_3), to_message_format_version=None, compression_types=["none"])
     @parametrize(from_kafka_version=str(LATEST_2_3), to_message_format_version=None, compression_types=["zstd"])
     @parametrize(from_kafka_version=str(LATEST_2_2), to_message_format_version=None, compression_types=["none"])

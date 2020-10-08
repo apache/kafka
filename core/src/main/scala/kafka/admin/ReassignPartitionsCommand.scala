@@ -24,6 +24,7 @@ import kafka.common.AdminCommandFailedException
 import kafka.log.LogConfig
 import kafka.server.{ConfigType, DynamicConfig}
 import kafka.utils.{CommandDefaultOptions, CommandLineUtils, CoreUtils, Exit, Json, Logging}
+import kafka.utils.Implicits._
 import kafka.utils.json.JsonValue
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -798,7 +799,7 @@ object ReassignPartitionsCommand extends Logging {
                           : Map[TopicPartition, Seq[Int]] = {
     val groupedByTopic = currentAssignment.groupBy { case (tp, _) => tp.topic }
     val proposedAssignments = mutable.Map[TopicPartition, Seq[Int]]()
-    groupedByTopic.foreach { case (topic, assignment) =>
+    groupedByTopic.forKeyValue { (topic, assignment) =>
       val (_, replicas) = assignment.head
       val assignedReplicas = AdminUtils.
         assignReplicasToBrokers(brokerMetadatas, assignment.size, replicas.size)
@@ -1111,7 +1112,7 @@ object ReassignPartitionsCommand extends Logging {
     // Check for the presence of the legacy partition reassignment ZNode.  This actually
     // won't detect all rebalances... only ones initiated by the legacy method.
     // This is a limitation of the legacy ZK API.
-    val reassignPartitionsInProgress = zkClient.reassignPartitionsInProgress()
+    val reassignPartitionsInProgress = zkClient.reassignPartitionsInProgress
     if (reassignPartitionsInProgress) {
       // Note: older versions of this tool would modify the broker quotas here (but not
       // topic quotas, for some reason).  This behavior wasn't documented in the --execute

@@ -23,6 +23,7 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.common.errors.TransactionAbortedException;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
@@ -262,7 +263,7 @@ public class SenderTest {
         Cluster cluster = TestUtils.singletonCluster("test", 1);
         Node node = cluster.nodes().get(0);
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
-                1000, 1000, 64 * 1024, 64 * 1024, 1000,  ClientDnsLookup.USE_ALL_DNS_IPS,
+                1000, 1000, 64 * 1024, 64 * 1024, 1000, 10 * 1000, 127 * 1000, ClientDnsLookup.USE_ALL_DNS_IPS,
                 time, true, new ApiVersions(), throttleTimeSensor, logContext);
 
         ByteBuffer buffer = ApiVersionsResponse.createApiVersionsResponse(
@@ -870,7 +871,7 @@ public class SenderTest {
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
 
-        client.respondToRequest(firstClientRequest, produceResponse(tp0, -1, Errors.NOT_LEADER_FOR_PARTITION, -1));
+        client.respondToRequest(firstClientRequest, produceResponse(tp0, -1, Errors.NOT_LEADER_OR_FOLLOWER, -1));
 
         sender.runOnce(); // receive response 0
 
@@ -1086,7 +1087,7 @@ public class SenderTest {
 
         assertEquals(2, client.inFlightRequestCount());
 
-        sendIdempotentProducerResponse(0, tp0, Errors.NOT_LEADER_FOR_PARTITION, -1);
+        sendIdempotentProducerResponse(0, tp0, Errors.NOT_LEADER_OR_FOLLOWER, -1);
         sender.runOnce();  // receive first response
 
         Node node = metadata.fetch().nodes().get(0);
@@ -1142,7 +1143,7 @@ public class SenderTest {
 
         assertEquals(2, client.inFlightRequestCount());
 
-        sendIdempotentProducerResponse(0, tp0, Errors.NOT_LEADER_FOR_PARTITION, -1);
+        sendIdempotentProducerResponse(0, tp0, Errors.NOT_LEADER_OR_FOLLOWER, -1);
         sender.runOnce();  // receive first response
 
         Node node = metadata.fetch().nodes().get(0);
@@ -1172,7 +1173,7 @@ public class SenderTest {
         // Send first ProduceRequest
         Future<RecordMetadata> request1 = appendToAccumulator(tp0, 0L, "key", "value");
         sender.runOnce();  // send request
-        sendIdempotentProducerResponse(0, tp0, Errors.NOT_LEADER_FOR_PARTITION, -1);
+        sendIdempotentProducerResponse(0, tp0, Errors.NOT_LEADER_OR_FOLLOWER, -1);
 
         sender.runOnce();  // receive response
         assertEquals(1L, transactionManager.sequenceNumber(tp0).longValue());
@@ -1219,7 +1220,7 @@ public class SenderTest {
         assertEquals(1, client.inFlightRequestCount());
 
         Map<TopicPartition, OffsetAndError> responses = new LinkedHashMap<>();
-        responses.put(tp1, new OffsetAndError(-1, Errors.NOT_LEADER_FOR_PARTITION));
+        responses.put(tp1, new OffsetAndError(-1, Errors.NOT_LEADER_OR_FOLLOWER));
         responses.put(tp0, new OffsetAndError(-1, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER));
         client.respond(produceResponse(responses));
 
@@ -1260,7 +1261,7 @@ public class SenderTest {
         assertEquals(1, client.inFlightRequestCount());
 
         Map<TopicPartition, OffsetAndError> responses = new LinkedHashMap<>();
-        responses.put(tp1, new OffsetAndError(-1, Errors.NOT_LEADER_FOR_PARTITION));
+        responses.put(tp1, new OffsetAndError(-1, Errors.NOT_LEADER_OR_FOLLOWER));
         responses.put(tp0, new OffsetAndError(-1, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER));
         client.respond(produceResponse(responses));
         sender.initiateClose(); // initiate close
@@ -1293,7 +1294,7 @@ public class SenderTest {
         assertEquals(1, client.inFlightRequestCount());
 
         Map<TopicPartition, OffsetAndError> responses = new LinkedHashMap<>();
-        responses.put(tp1, new OffsetAndError(-1, Errors.NOT_LEADER_FOR_PARTITION));
+        responses.put(tp1, new OffsetAndError(-1, Errors.NOT_LEADER_OR_FOLLOWER));
         responses.put(tp0, new OffsetAndError(-1, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER));
         client.respond(produceResponse(responses));
         sender.runOnce(); // out of order sequence error triggers producer ID reset because epoch is maxed out
@@ -1327,7 +1328,7 @@ public class SenderTest {
         assertEquals(1, client.inFlightRequestCount());
 
         Map<TopicPartition, OffsetAndError> responses = new LinkedHashMap<>();
-        responses.put(tp1, new OffsetAndError(-1, Errors.NOT_LEADER_FOR_PARTITION));
+        responses.put(tp1, new OffsetAndError(-1, Errors.NOT_LEADER_OR_FOLLOWER));
         responses.put(tp0, new OffsetAndError(-1, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER));
         client.respond(produceResponse(responses));
         sender.runOnce();
@@ -1338,7 +1339,7 @@ public class SenderTest {
 
         assertFalse(successfulResponse.isDone());
         // The response comes back with a retriable error.
-        client.respond(produceResponse(tp1, 0, Errors.NOT_LEADER_FOR_PARTITION, -1));
+        client.respond(produceResponse(tp1, 0, Errors.NOT_LEADER_OR_FOLLOWER, -1));
         sender.runOnce();
 
         // The response
@@ -2149,7 +2150,7 @@ public class SenderTest {
         assertEquals(1, client.inFlightRequestCount());
         time.sleep(deliverTimeoutMs);
 
-        client.respond(produceResponse(tp0, -1, Errors.NOT_LEADER_FOR_PARTITION, -1)); // return a retriable error
+        client.respond(produceResponse(tp0, -1, Errors.NOT_LEADER_OR_FOLLOWER, -1)); // return a retriable error
 
         sender.runOnce();  // expire the batch
         assertTrue(request1.isDone());
@@ -2208,7 +2209,7 @@ public class SenderTest {
         InOrder inOrder = inOrder(client);
         inOrder.verify(client, atLeastOnce()).ready(any(), anyLong());
         inOrder.verify(client, atLeastOnce()).newClientRequest(anyString(), any(), anyLong(), anyBoolean(), anyInt(),
-                any());
+                any(), any(), any());
         inOrder.verify(client, atLeastOnce()).send(any(), anyLong());
         inOrder.verify(client).poll(eq(0L), anyLong());
         inOrder.verify(client).poll(eq(accumulator.getDeliveryTimeoutMs()), anyLong());
@@ -2356,6 +2357,31 @@ public class SenderTest {
         } finally {
             m.close();
         }
+    }
+
+    @Test
+    public void testTransactionAbortedExceptionOnAbortWithoutError() throws InterruptedException, ExecutionException {
+        ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
+        TransactionManager txnManager = new TransactionManager(logContext, "testTransactionAbortedExceptionOnAbortWithoutError", 60000, 100, apiVersions, false);
+
+        setupWithTransactionState(txnManager, false, null);
+        doInitTransactions(txnManager, producerIdAndEpoch);
+        // Begin the transaction
+        txnManager.beginTransaction();
+        txnManager.maybeAddPartitionToTransaction(tp0);
+        client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp0, Errors.NONE)));
+        // Run it once so that the partition is added to the transaction.
+        sender.runOnce();
+        // Append a record to the accumulator.
+        FutureRecordMetadata metadata = appendToAccumulator(tp0, time.milliseconds(), "key", "value");
+        // Now abort the transaction manually.
+        txnManager.beginAbort();
+        // Try to send.
+        // This should abort the existing transaction and
+        // drain all the unsent batches with a TransactionAbortedException.
+        sender.runOnce();
+        // Now attempt to fetch the result for the record.
+        TestUtils.assertFutureThrows(metadata, TransactionAbortedException.class);
     }
 
     @Test
@@ -2524,7 +2550,7 @@ public class SenderTest {
     private TransactionManager createTransactionManager() {
         return new TransactionManager(new LogContext(), null, 0, 100L, new ApiVersions(), false);
     }
-    
+
     private void setupWithTransactionState(TransactionManager transactionManager) {
         setupWithTransactionState(transactionManager, false, null);
     }

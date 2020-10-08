@@ -27,6 +27,7 @@ import kafka.message.UncompressedCodec
 import kafka.server.{Defaults, FetchLogEnd, ReplicaManager}
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{Logging, Pool, Scheduler}
+import kafka.utils.Implicits._
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
@@ -173,7 +174,7 @@ class TransactionStateManager(brokerId: Int,
           }
 
         def removeFromCacheCallback(responses: collection.Map[TopicPartition, PartitionResponse]): Unit = {
-          responses.foreach { case (topicPartition, response) =>
+          responses.forKeyValue { (topicPartition, response) =>
             inReadLock(stateLock) {
               val toRemove = transactionalIdByPartition(topicPartition.partition)
               transactionMetadataCache.get(topicPartition.partition).foreach { txnMetadataCacheEntry =>
@@ -513,7 +514,7 @@ class TransactionStateManager(brokerId: Int,
                | Errors.REQUEST_TIMED_OUT => // note that for timed out request we return NOT_AVAILABLE error code to let client retry
             Errors.COORDINATOR_NOT_AVAILABLE
 
-          case Errors.NOT_LEADER_FOR_PARTITION
+          case Errors.NOT_LEADER_OR_FOLLOWER
                | Errors.KAFKA_STORAGE_ERROR =>
             Errors.NOT_COORDINATOR
 

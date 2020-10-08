@@ -530,6 +530,13 @@ public interface KGroupedStream<K, V> {
     <W extends Window> TimeWindowedKStream<K, V> windowedBy(final Windows<W> windows);
 
     /**
+     * Create a new {@link TimeWindowedKStream} instance that can be used to perform sliding windowed aggregations.
+     * @param windows the specification of the aggregation {@link SlidingWindows}
+     * @return an instance of {@link TimeWindowedKStream}
+     */
+    TimeWindowedKStream<K, V> windowedBy(final SlidingWindows windows);
+
+    /**
      * Create a new {@link SessionWindowedKStream} instance that can be used to perform session windowed aggregations.
      * @param windows the specification of the aggregation {@link SessionWindows}
      * @return an instance of {@link TimeWindowedKStream}
@@ -549,9 +556,9 @@ public interface KGroupedStream<K, V> {
      * is passed into {@link CogroupedKStream#aggregate(Initializer)}) and the record's value.
      *
      * @param aggregator an {@link Aggregator} that computes a new aggregate result
-     * @param <Vout> the type of the output values
+     * @param <VOut> the type of the output values
      * @return a {@link CogroupedKStream}
      */
-    <Vout> CogroupedKStream<K, Vout> cogroup(final Aggregator<? super K, ? super V, Vout> aggregator);
+    <VOut> CogroupedKStream<K, VOut> cogroup(final Aggregator<? super K, ? super V, VOut> aggregator);
 
 }

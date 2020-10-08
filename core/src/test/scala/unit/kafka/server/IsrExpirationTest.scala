@@ -22,6 +22,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.cluster.Partition
 import kafka.log.{Log, LogManager}
+import kafka.utils.TestUtils.MockAlterIsrManager
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
@@ -52,15 +53,18 @@ class IsrExpirationTest {
 
   var replicaManager: ReplicaManager = null
 
+  var alterIsrManager: MockAlterIsrManager = _
+
   @Before
   def setUp(): Unit = {
     val logManager: LogManager = EasyMock.createMock(classOf[LogManager])
     EasyMock.expect(logManager.liveLogDirs).andReturn(Array.empty[File]).anyTimes()
     EasyMock.replay(logManager)
 
+    alterIsrManager = TestUtils.createAlterIsrManager()
     replicaManager = new ReplicaManager(configs.head, metrics, time, null, null, logManager, new AtomicBoolean(false),
       QuotaFactory.instantiate(configs.head, metrics, time, ""), new BrokerTopicStats, new MetadataCache(configs.head.brokerId),
-      new LogDirFailureChannel(configs.head.logDirs.size))
+      new LogDirFailureChannel(configs.head.logDirs.size), alterIsrManager)
   }
 
   @After
