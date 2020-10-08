@@ -259,8 +259,16 @@ class SecurityConfig(TemplateRenderer):
         if self.static_jaas_conf:
             node.account.create_file(SecurityConfig.JAAS_CONF_PATH, jaas_conf)
             node.account.create_file(SecurityConfig.ADMIN_CLIENT_AS_BROKER_JAAS_CONF_PATH,
-                                     self.render_jaas_config("admin_client_as_broker_jaas.conf",
-                                                             {'SecurityConfig': SecurityConfig}))
+                                     self.render_jaas_config(
+                                         "admin_client_as_broker_jaas.conf",
+                                         {
+                                             'node': node,
+                                             'is_ibm_jdk': any('IBM' in line for line in java_version),
+                                             'SecurityConfig': SecurityConfig,
+                                             'client_sasl_mechanism': self.client_sasl_mechanism,
+                                             'enabled_sasl_mechanisms': self.enabled_sasl_mechanisms
+                                         }
+                                     ))
 
         elif 'sasl.jaas.config' not in self.properties:
             self.properties['sasl.jaas.config'] = jaas_conf.replace("\n", " \\\n")
