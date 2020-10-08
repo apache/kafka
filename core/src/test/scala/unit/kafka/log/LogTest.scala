@@ -782,7 +782,7 @@ class LogTest {
     }
 
     // Retain snapshots for the last 2 segments
-    ProducerStateManager.listSnapshotFiles(logDir).filter(_.offset < segmentOffsets(segmentOffsets.size - 2)).foreach(_.deleteIfExists())
+    log.producerStateManager.deleteSnapshotsBefore(segmentOffsets(segmentOffsets.size - 2))
     log = createLogWithInterceptedReads(offsetForRecoveryPointSegment)
     // We will reload all segments because the recovery point is behind the producer snapshot files (pre KAFKA-5829 behaviour)
     assertEquals(expectedSegmentsWithReads, segmentsWithReads.map(_.baseOffset))
@@ -794,7 +794,7 @@ class LogTest {
 
     // Only delete snapshots before the base offset of the recovery point segment (post KAFKA-5829 behaviour) to
     // avoid reading all segments
-    ProducerStateManager.listSnapshotFiles(logDir).filter(_.offset < offsetForRecoveryPointSegment).foreach(_.deleteIfExists())
+    log.producerStateManager.deleteSnapshotsBefore(offsetForRecoveryPointSegment)
     log = createLogWithInterceptedReads(recoveryPoint = recoveryPoint)
     assertEquals(Set(activeSegmentOffset), segmentsWithReads.map(_.baseOffset))
     assertEquals(segOffsetsAfterRecovery, recoveredSegments.map(_.baseOffset))
