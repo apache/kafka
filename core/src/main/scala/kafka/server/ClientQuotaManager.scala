@@ -238,15 +238,25 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     }
   }
 
+  private def isQuotaMetric(metricName : MetricName) : Boolean = {
+    metricName.group().equals(quotaType.toString) &&
+      (metricName.name().equals("byte-rate") || metricName.name().equals("throttle-time") ||
+        metricName.name().equals("request-time")) &&
+      (metricName.tags().containsKey("client-id") || metricName.tags().containsKey("user"))
+  }
+
   def logQuotaMetrics(): Unit = {
     val metricsMap = metrics.metrics().asScala
     metricsMap.foreach {
       case (metricName: MetricName, kafkaMetric: KafkaMetric) =>
-        if (metricName.group().equals(quotaType.toString) &&
-          (metricName.name().equals("byte-rate") || metricName.name().equals("throttle-time") ||
-            metricName.name().equals("request-time")) &&
-          (metricName.tags().containsKey("client-id") || metricName.tags().containsKey("user"))) {
-          info("Metric name (" + metricName + ") has value (" + kafkaMetric.metricValue() + ")")
+        if (isQuotaMetric(metricName)) {
+          val quotaValueStr = kafkaMetric.metricValue().toString()
+          if (!quotaValueStr.equals("NaN") && !quotaValueStr.equals("0.0")) {
+            val metricConfig = kafkaMetric.config()
+            val quota = metricConfig.quota();
+            val quotaBoundsStr = if (quota == null) "not configured" else quota.bound().toString()
+            info("Metric name (" + metricName + ") has value (" + quotaValueStr + ") with bound (" + quotaBoundsStr + ")")
+          }
         }
     }
   }
@@ -298,7 +308,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     } catch {
       case e: QuotaViolationException =>
         val throttleTimeMs = throttleTime(e, timeMs).toInt
-        debug(s"Quota violated for sensor (${clientSensors.quotaSensor.name}). Delay time: ($throttleTimeMs)")
+        info(s"Quota violated for sensor (${clientSensors.quotaSensor.name}). Delay time: ($throttleTimeMs)")
         throttleTimeMs
     }
   }
