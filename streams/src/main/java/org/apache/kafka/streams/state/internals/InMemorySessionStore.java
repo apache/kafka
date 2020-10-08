@@ -72,6 +72,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         return name;
     }
 
+    @Deprecated
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
         this.context = (InternalProcessorContext) context;

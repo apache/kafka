@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -95,9 +96,15 @@ public class TimestampedKeyValueStoreBuilder<K, V>
             this.wrapped = wrapped;
         }
 
+        @Deprecated
         @Override
         public void init(final ProcessorContext context,
                          final StateStore root) {
+            wrapped.init(context, root);
+        }
+
+        @Override
+        public void init(final StateStoreContext context, final StateStore root) {
             wrapped.init(context, root);
         }
 

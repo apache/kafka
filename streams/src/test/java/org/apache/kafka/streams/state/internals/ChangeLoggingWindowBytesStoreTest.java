@@ -57,11 +57,30 @@ public class ChangeLoggingWindowBytesStoreTest {
     private void init() {
         EasyMock.expect(context.taskId()).andReturn(taskId);
         EasyMock.expect(context.recordCollector()).andReturn(collector);
-        inner.init((ProcessorContext) context, store);
+        inner.init((StateStoreContext) context, store);
         EasyMock.expectLastCall();
         EasyMock.replay(inner, context);
 
         store.init((StateStoreContext) context, store);
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldDelegateDeprecatedInit() {
+        inner.init((ProcessorContext) context, store);
+        EasyMock.expectLastCall();
+        EasyMock.replay(inner);
+        store.init((ProcessorContext) context, store);
+        EasyMock.verify(inner);
+    }
+
+    @Test
+    public void shouldDelegateInit() {
+        inner.init((StateStoreContext) context, store);
+        EasyMock.expectLastCall();
+        EasyMock.replay(inner);
+        store.init((StateStoreContext) context, store);
+        EasyMock.verify(inner);
     }
 
     @Test
