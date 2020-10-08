@@ -46,7 +46,8 @@ public class TimestampedKeyValueStoreBuilder<K, V>
             keySerde,
             valueSerde == null ? null : new ValueAndTimestampSerde<>(valueSerde),
             time);
-        Objects.requireNonNull(storeSupplier, "bytesStoreSupplier can't be null");
+        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
+        Objects.requireNonNull(storeSupplier.metricsScope(), "storeSupplier's metricsScope can't be null");
         this.storeSupplier = storeSupplier;
     }
 
