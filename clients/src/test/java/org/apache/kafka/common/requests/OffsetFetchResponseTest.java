@@ -164,6 +164,7 @@ public class OffsetFetchResponseTest {
             leaderEpochOne,
             null,
             Errors.UNKNOWN_TOPIC_OR_PARTITION);
+        // test PartitionData.equals with null metadata
         assertEquals(pd, pd);
         partitionDataMap.clear();
         partitionDataMap.put(new TopicPartition(topicOne, partitionOne), pd);
