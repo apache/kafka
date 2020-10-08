@@ -57,4 +57,9 @@ public interface ReplicationPolicy {
         return topic.endsWith(".internal") || topic.endsWith("-internal") || topic.startsWith("__")
             || topic.startsWith(".");
     }
+
+    /** Checks if the policy can track back to the source of the topic. */
+    default boolean canTrackSource(String topic) {
+        return !isInternalTopic(topic);
+    }
 }

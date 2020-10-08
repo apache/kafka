@@ -16,29 +16,29 @@
  */
 package org.apache.kafka.connect.mirror;
 
-import org.apache.kafka.common.Configurable;
-
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.HashSet;
-import java.util.Arrays;
 import java.util.concurrent.TimeoutException;
+
+import org.apache.kafka.common.Configurable;
 
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
-public class MirrorClientTest {
+public class MirrorClientLegacyReplicationPolicyTest {
 
     private static class FakeMirrorClient extends MirrorClient {
 
         List<String> topics;
 
         FakeMirrorClient(List<String> topics) {
-            super(null, new DefaultReplicationPolicy(), null);
+            super(null, new LegacyReplicationPolicy(), null);
             this.topics = topics;
         }
 
@@ -78,15 +78,24 @@ public class MirrorClientTest {
     @Test
     public void countHopsForTopicTest() throws InterruptedException, TimeoutException {
         MirrorClient client = new FakeMirrorClient();
+
+        // We can count hops only for heartbeats topics.
         assertEquals(-1, client.countHopsForTopic("topic", "source"));
         assertEquals(-1, client.countHopsForTopic("source", "source"));
         assertEquals(-1, client.countHopsForTopic("sourcetopic", "source"));
         assertEquals(-1, client.countHopsForTopic("source1.topic", "source2"));
-        assertEquals(1, client.countHopsForTopic("source1.topic", "source1"));
-        assertEquals(1, client.countHopsForTopic("source2.source1.topic", "source2"));
-        assertEquals(2, client.countHopsForTopic("source2.source1.topic", "source1"));
-        assertEquals(3, client.countHopsForTopic("source3.source2.source1.topic", "source1"));
+        assertEquals(-1, client.countHopsForTopic("source1.topic", "source1"));
+        assertEquals(-1, client.countHopsForTopic("source2.source1.topic", "source2"));
+        assertEquals(-1, client.countHopsForTopic("source2.source1.topic", "source1"));
+        assertEquals(-1, client.countHopsForTopic("source3.source2.source1.topic", "source1"));
         assertEquals(-1, client.countHopsForTopic("source3.source2.source1.topic", "source4"));
+
+        assertEquals(-1, client.countHopsForTopic("heartbeats", "source"));
+        assertEquals(1, client.countHopsForTopic("source1.heartbeats", "source1"));
+        assertEquals(1, client.countHopsForTopic("source2.source1.heartbeats", "source2"));
+        assertEquals(2, client.countHopsForTopic("source2.source1.heartbeats", "source1"));
+        assertEquals(3, client.countHopsForTopic("source3.source2.source1.heartbeats", "source1"));
+        assertEquals(-1, client.countHopsForTopic("source3.source2.source1.heartbeats", "source4"));
     }
 
     @Test
@@ -110,23 +119,25 @@ public class MirrorClientTest {
     @Test
     public void replicationHopsTest() throws InterruptedException, TimeoutException {
         MirrorClient client = new FakeMirrorClient(Arrays.asList("topic1", "topic2", "heartbeats",
-            "source1.heartbeats", "source1.source2.heartbeats", "source3.heartbeats"));
+            "source1.heartbeats", "source1.source2.heartbeats", "source3.heartbeats", "source4.topic1"));
         assertEquals(1, client.replicationHops("source1"));
         assertEquals(2, client.replicationHops("source2")); 
         assertEquals(1, client.replicationHops("source3"));
-        assertEquals(-1, client.replicationHops("source4"));
+        assertEquals(-1, client.replicationHops("source4"));  // can't count hops for non-heartbeats topic
+        assertEquals(-1, client.replicationHops("source5"));
     }
 
     @Test
     public void upstreamClustersTest() throws InterruptedException {
         MirrorClient client = new FakeMirrorClient(Arrays.asList("topic1", "topic2", "heartbeats",
-            "source1.heartbeats", "source1.source2.heartbeats", "source3.source4.source5.heartbeats"));
+            "source1.heartbeats", "source1.source2.heartbeats", "source3.source4.source5.heartbeats", "source6.topic1"));
         Set<String> sources = client.upstreamClusters();
         assertTrue(sources.contains("source1"));
         assertTrue(sources.contains("source2"));
         assertTrue(sources.contains("source3"));
         assertTrue(sources.contains("source4"));
         assertTrue(sources.contains("source5"));
+        assertFalse(sources.contains("source6"));  // non-heartbeats topic can't indicate upstream cluster
         assertFalse(sources.contains("sourceX"));
         assertFalse(sources.contains(""));
         assertFalse(sources.contains(null));
@@ -135,29 +146,43 @@ public class MirrorClientTest {
     @Test
     public void remoteTopicsTest() throws InterruptedException {
         MirrorClient client = new FakeMirrorClient(Arrays.asList("topic1", "topic2", "topic3",
-            "source1.topic4", "source1.source2.topic5", "source3.source4.source5.topic6"));
+            "source1.topic4", "source1.source2.topic5", "source3.source4.source5.topic6",
+            "source1.heartbeats", "source1.source2.heartbeats", "source3.source4.source5.heartbeats"));
         Set<String> remoteTopics = client.remoteTopics();
+
+        // We recognize as remote only heartbeats topics.
         assertFalse(remoteTopics.contains("topic1"));
         assertFalse(remoteTopics.contains("topic2"));
         assertFalse(remoteTopics.contains("topic3"));
-        assertTrue(remoteTopics.contains("source1.topic4"));
-        assertTrue(remoteTopics.contains("source1.source2.topic5"));
-        assertTrue(remoteTopics.contains("source3.source4.source5.topic6"));
+        assertFalse(remoteTopics.contains("source1.topic4"));
+        assertFalse(remoteTopics.contains("source1.source2.topic5"));
+        assertFalse(remoteTopics.contains("source3.source4.source5.topic6"));
+
+        assertTrue(remoteTopics.contains("source1.heartbeats"));
+        assertTrue(remoteTopics.contains("source1.source2.heartbeats"));
+        assertTrue(remoteTopics.contains("source3.source4.source5.heartbeats"));
     }
 
     @Test
     public void remoteTopicsSeparatorTest() throws InterruptedException {
         MirrorClient client = new FakeMirrorClient(Arrays.asList("topic1", "topic2", "topic3",
-            "source1__topic4", "source1__source2__topic5", "source3__source4__source5__topic6"));
+            "source1__topic4", "source1__source2__topic5", "source3__source4__source5__topic6",
+            "source1__heartbeats", "source1__source2__heartbeats", "source3__source4__source5__heartbeats"));
         ((Configurable) client.replicationPolicy()).configure(
             Collections.singletonMap("replication.policy.separator", "__"));
         Set<String> remoteTopics = client.remoteTopics();
+
+        // We recognize as remote only heartbeats topics.
         assertFalse(remoteTopics.contains("topic1"));
         assertFalse(remoteTopics.contains("topic2"));
         assertFalse(remoteTopics.contains("topic3"));
-        assertTrue(remoteTopics.contains("source1__topic4"));
-        assertTrue(remoteTopics.contains("source1__source2__topic5"));
-        assertTrue(remoteTopics.contains("source3__source4__source5__topic6"));
+        assertFalse(remoteTopics.contains("source1__topic4"));
+        assertFalse(remoteTopics.contains("source1__source2__topic5"));
+        assertFalse(remoteTopics.contains("source3__source4__source5__topic6"));
+
+        assertTrue(remoteTopics.contains("source1__heartbeats"));
+        assertTrue(remoteTopics.contains("source1__source2__heartbeats"));
+        assertTrue(remoteTopics.contains("source3__source4__source5__heartbeats"));
     }
 
 }
