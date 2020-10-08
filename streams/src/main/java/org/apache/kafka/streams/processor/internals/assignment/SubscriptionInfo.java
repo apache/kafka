@@ -87,7 +87,6 @@ public class SubscriptionInfo {
         final SubscriptionInfoData data = new SubscriptionInfoData();
         data.setVersion(version);
         data.setProcessId(processId);
-        data.setUniqueField(uniqueField);
 
         if (version >= 2) {
             data.setUserEndPoint(userEndPoint == null
@@ -96,6 +95,9 @@ public class SubscriptionInfo {
         }
         if (version >= 3) {
             data.setLatestSupportedVersion(latestSupportedVersion);
+        }
+        if (version >= 8) {
+            data.setUniqueField(uniqueField);
         }
 
         this.data = data;

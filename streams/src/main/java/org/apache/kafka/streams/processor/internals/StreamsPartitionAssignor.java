@@ -213,7 +213,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         rebalanceProtocol = assignorConfiguration.rebalanceProtocol();
         taskAssignorSupplier = assignorConfiguration::taskAssignor;
         assignmentListener = assignorConfiguration.assignmentListener();
-        uniqueField = usedSubscriptionMetadataVersion >= 8 ? new byte[1] : new byte[0];
+        uniqueField = new byte[1];
     }
 
     @Override
@@ -239,9 +239,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         // 3. Unique Field to ensure a rebalance when a thread rejoins by forcing the user data to be different
 
         handleRebalanceStart(topics);
-        if (usedSubscriptionMetadataVersion >= 8) {
-            uniqueField[0]++;
-        }
+        uniqueField[0]++;
+
 
         return new SubscriptionInfo(
             usedSubscriptionMetadataVersion,
