@@ -78,6 +78,7 @@ public class CachingInMemorySessionStoreTest {
     private final Bytes keyB = Bytes.wrap("b".getBytes());
 
     private SessionStore<Bytes, byte[]> underlyingStore;
+    private InternalMockProcessorContext context;
     private CachingSessionStore cachingStore;
     private ThreadCache cache;
 
