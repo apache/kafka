@@ -510,33 +510,38 @@ class ProducerStateManager(val topicPartition: TopicPartition,
    * The goal here is to remove any snapshot files which do not have an associated segment file, but not to remove the
    * largest stray snapshot file which was emitted during clean shutdown.
    */
-  private[log] def removeStraySnapshots(segmentBaseOffsets: Set[Long]): Unit = {
+  private[log] def removeStraySnapshots(segmentBaseOffsets: Seq[Long]): Unit = {
+    val maxSegmentBaseOffset = segmentBaseOffsets.maxOption
+    val baseOffsets = segmentBaseOffsets.toSet
     var latestStraySnapshot: Option[SnapshotFile] = None
+
     val ss = loadSnapshots()
     for (snapshot <- ss.values().asScala) {
       val key = snapshot.offset
       latestStraySnapshot match {
         case Some(prev) =>
-          if (!segmentBaseOffsets.contains(key)) {
+          if (!baseOffsets.contains(key)) {
             // this snapshot is now the largest stray snapshot.
             prev.deleteIfExists()
             ss.remove(prev.offset)
             latestStraySnapshot = Some(snapshot)
           }
         case None =>
-          if (!segmentBaseOffsets.contains(key)) {
+          if (!baseOffsets.contains(key)) {
             latestStraySnapshot = Some(snapshot)
           }
       }
     }
-    this.snapshots = ss
-    for (strayOffset <- latestStraySnapshot.map(_.offset); latestOffset <- latestSnapshotOffset) {
-      // if the latestStraySnapshot is not equal to the latest offset, we know it's lower than all other
-      // offsets, so we can delete it.
-      if (strayOffset != latestOffset) {
-        Option(this.snapshots.remove(strayOffset)).foreach(_.deleteIfExists())
+
+    // Check to see if the latestStraySnapshot is larger than the largest segment base offset, if it is not,
+    // delete the largestStraySnapshot.
+    for (strayOffset <- latestStraySnapshot.map(_.offset); maxOffset <- maxSegmentBaseOffset) {
+      if (strayOffset < maxOffset) {
+        Option(ss.remove(strayOffset)).foreach(_.deleteIfExists())
       }
     }
+
+    this.snapshots = ss
   }
 
   /**

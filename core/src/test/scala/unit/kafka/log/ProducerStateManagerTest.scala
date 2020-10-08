@@ -845,7 +845,7 @@ class ProducerStateManagerTest {
     Log.producerSnapshotFile(logDir, 2).createNewFile()
 
     // claim that we only have one segment with a base offset of 5
-    stateManager.removeStraySnapshots(Set(5))
+    stateManager.removeStraySnapshots(Seq(5))
 
     // The snapshot file at offset 2 should be considered a stray, but the snapshot at 42 should be kept
     // around because it is the largest snapshot.
@@ -864,7 +864,7 @@ class ProducerStateManagerTest {
     Log.producerSnapshotFile(logDir, 5).createNewFile()
     Log.producerSnapshotFile(logDir, 2).createNewFile()
 
-    stateManager.removeStraySnapshots(Set(42))
+    stateManager.removeStraySnapshots(Seq(42))
     assertEquals(Seq(42), ProducerStateManager.listSnapshotFiles(logDir).map(_.offset).sorted)
   }
 

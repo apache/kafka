@@ -317,7 +317,7 @@ class Log(@volatile private var _dir: File,
     // Reload all snapshots into the ProducerStateManager cache, the intermediate ProducerStateManager used
     // during log recovery may have deleted some files without the Log.producerStateManager instance witnessing the
     // deletion.
-    producerStateManager.removeStraySnapshots(segments.values().asScala.map(_.baseOffset).toSet)
+    producerStateManager.removeStraySnapshots(segments.values().asScala.map(_.baseOffset).toSeq)
     loadProducerState(logEndOffset, reloadFromCleanShutdown = hasCleanShutdownFile)
   }
 
