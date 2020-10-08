@@ -2447,7 +2447,7 @@ class Log(@volatile private var _dir: File,
 
       // replace old segment with new ones
       info(s"Replacing overflowed segment $segment with split segments $newSegments")
-      replaceSegments(newSegments.toList, List(segment), isRecoveredSwapFile = false)
+      replaceSegments(newSegments.toList, List(segment))
       newSegments.toList
     } catch {
       case e: Exception =>

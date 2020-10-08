@@ -46,6 +46,7 @@ import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
@@ -122,6 +123,14 @@ public class StreamThreadStateStoreProviderTest {
                     Duration.ofMillis(10L),
                     Duration.ofMillis(2L),
                     false),
+                Serdes.String(),
+                Serdes.String()),
+            "the-processor");
+        topology.addStateStore(
+            Stores.sessionStoreBuilder(
+                Stores.inMemorySessionStore(
+                    "session-store",
+                    Duration.ofMillis(10L)),
                 Serdes.String(),
                 Serdes.String()),
             "the-processor");
@@ -258,6 +267,17 @@ public class StreamThreadStateStoreProviderTest {
         }
     }
 
+    @Test
+    public void shouldFindSessionStores() {
+        mockThread(true);
+        final List<ReadOnlySessionStore<String, String>> sessionStores =
+            provider.stores(StoreQueryParameters.fromNameAndType("session-store", QueryableStoreTypes.sessionStore()));
+        assertEquals(2, sessionStores.size());
+        for (final ReadOnlySessionStore<String, String> store: sessionStores) {
+            assertThat(store, instanceOf(ReadOnlySessionStore.class));
+        }
+    }
+
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStoreExceptionIfKVStoreClosed() {
         mockThread(true);
@@ -284,6 +304,13 @@ public class StreamThreadStateStoreProviderTest {
         mockThread(true);
         taskOne.getStore("timestamped-window-store").close();
         provider.stores(StoreQueryParameters.fromNameAndType("timestamped-window-store", QueryableStoreTypes.timestampedWindowStore()));
+    }
+
+    @Test(expected = InvalidStateStoreException.class)
+    public void shouldThrowInvalidStoreExceptionIfSessionStoreClosed() {
+        mockThread(true);
+        taskOne.getStore("session-store").close();
+        provider.stores(StoreQueryParameters.fromNameAndType("session-store", QueryableStoreTypes.sessionStore()));
     }
 
     @Test

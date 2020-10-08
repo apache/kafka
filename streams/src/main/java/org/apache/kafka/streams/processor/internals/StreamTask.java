@@ -119,7 +119,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                       final ProcessorStateManager stateMgr,
                       final RecordCollector recordCollector,
                       final InternalProcessorContext processorContext) {
-        super(id, topology, stateDirectory, stateMgr, partitions);
+        super(id, topology, stateDirectory, stateMgr, partitions, config.getLong(StreamsConfig.TASK_TIMEOUT_MS_CONFIG));
         this.mainConsumer = mainConsumer;
 
         this.processorContext = processorContext;
@@ -333,6 +333,15 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             case SUSPENDED:
                 // just transit the state without any logical changes: suspended and restoring states
                 // are not actually any different for inner modules
+
+                // Deleting checkpoint file before transition to RESTORING state (KAFKA-10362)
+                try {
+                    stateMgr.deleteCheckPointFileIfEOSEnabled();
+                    log.debug("Deleted check point file upon resuming with EOS enabled");
+                } catch (final IOException ioe) {
+                    log.error("Encountered error while deleting the checkpoint file due to this exception", ioe);
+                }
+
                 transitionTo(State.RESTORING);
                 log.info("Resumed to restoring state");
 
@@ -1003,6 +1012,17 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     @Override
     public boolean commitRequested() {
         return commitRequested;
+    }
+
+    @Override
+    public void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
+                                            final TimeoutException timeoutException) throws StreamsException {
+        maybeInitTaskTimeoutOrThrow(currentWallClockMs, timeoutException, log);
+    }
+
+    @Override
+    public void clearTaskTimeout() {
+        clearTaskTimeout(log);
     }
 
     static String encodeTimestamp(final long partitionTime) {

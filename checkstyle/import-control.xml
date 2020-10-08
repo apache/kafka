@@ -291,7 +291,6 @@
         <allow pkg="com.fasterxml.jackson" />
         <allow pkg="kafka.utils" />
         <allow pkg="org.apache.zookeeper" />
-        <allow pkg="org.apache.zookeeper" />
         <allow pkg="org.apache.log4j" />
         <subpackage name="testutil">
           <allow pkg="org.apache.log4j" />
