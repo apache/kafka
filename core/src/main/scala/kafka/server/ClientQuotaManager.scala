@@ -214,17 +214,27 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     }
   }
 
-  def logQuotaMetrics(): Unit = {
+  private def isQuotaMetric(metricName : MetricName) : Boolean = {
+    metricName.group().equals(quotaType.toString) &&
+    (metricName.name().equals("byte-rate") || metricName.name().equals("throttle-time") ||
+    metricName.name().equals("request-time")) &&
+    (metricName.tags().containsKey("client-id") || metricName.tags().containsKey("user"))
+  }
+
+  def logQuotaMetrics() : Unit = {
     import scala.collection.JavaConverters._
     val metricsMap = metrics.metrics().asScala;
     metricsMap.foreach {
       case (metricName: MetricName, kafkaMetric: KafkaMetric) =>
-        if (metricName.group().equals(quotaType.toString) &&
-          (metricName.name().equals("byte-rate") || metricName.name().equals("throttle-time") ||
-            metricName.name().equals("request-time")) &&
-          (metricName.tags().containsKey("client-id") || metricName.tags().containsKey("user"))) {
-          info("Metric name (" + metricName + ") has value (" + kafkaMetric.metricValue() + ")")
-        }
+       if (isQuotaMetric(metricName)) {
+         val quotaValueStr = kafkaMetric.metricValue().toString()
+         if (!quotaValueStr.equals("NaN") && !quotaValueStr.equals("0.0")) {
+           val metricConfig = kafkaMetric.config()
+           val quota = metricConfig.quota();
+           val quotaBoundsStr = if (quota == null) "not configured" else quota.bound().toString()
+           info("Metric name (" + metricName + ") has value (" + quotaValueStr + ") with bound (" + quotaBoundsStr + ")")
+         }
+       }
     }
   }
 
@@ -284,7 +294,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
         // Compute the delay
         val clientMetric = metrics.metrics().get(clientRateMetricName(clientSensors.metricTags))
         throttleTimeMs = throttleTime(clientMetric).toInt
-        debug("Quota violated for sensor (%s). Delay time: (%d)".format(clientSensors.quotaSensor.name(), throttleTimeMs))
+        info("Quota violated for sensor (%s). Delay time: (%d)".format(clientSensors.quotaSensor.name(), throttleTimeMs))
     }
     throttleTimeMs
   }
