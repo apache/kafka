@@ -1080,6 +1080,7 @@ public class EosBetaUpgradeIntegrationTest {
             streams,
             StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.keyValueStore())
         );
+        waitForCondition(() -> store.get(-1L) == null, MAX_WAIT_TIME_MS, () -> "State store did not ready: " + storeName);
         final Set<Long> keys = new HashSet<>();
         try (final KeyValueIterator<Long, Long> it = store.all()) {
             while (it.hasNext()) {
