@@ -52,10 +52,10 @@ public class MirrorMakerConfigTest {
             "replication.factor", "4"));
         Map<String, String> connectorProps = mirrorConfig.connectorBaseConfig(new SourceAndTarget("a", "b"),
             MirrorSourceConnector.class);
-        assertEquals("source.cluster.bootstrap.servers is set",
-            "servers-one", connectorProps.get("source.cluster.bootstrap.servers"));
-        assertEquals("target.cluster.bootstrap.servers is set",
-            "servers-two", connectorProps.get("target.cluster.bootstrap.servers"));
+        assertEquals("source.bootstrap.servers is set",
+            "servers-one", connectorProps.get("source.bootstrap.servers"));
+        assertEquals("target.bootstrap.servers is set",
+            "servers-two", connectorProps.get("target.bootstrap.servers"));
         assertEquals("top-level security.protocol is passed through to connector config",
             "SASL", connectorProps.get("security.protocol"));
     }
