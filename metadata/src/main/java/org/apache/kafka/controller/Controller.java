@@ -17,8 +17,11 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.ApiError;
 
 import java.util.Map;
 import java.util.Set;
@@ -51,6 +54,29 @@ public interface Controller extends AutoCloseable {
         electLeaders(int timeoutMs, Set<TopicPartition> parts, boolean unclean);
 
     /**
+     * Perform some incremental configuration changes.
+     *
+     * @param configChanges The changes.
+     * @param validateOnly  True if we should validate the changes but not apply them.
+     *
+     * @return              A map from partitions to error results.
+     */
+    CompletableFuture<Map<ConfigResource, ApiError>> incrementalAlterConfigs(
+        Map<ConfigResource, Map<String, Map.Entry<AlterConfigOp.OpType, String>>> configChanges,
+        boolean validateOnly);
+
+    /**
+     * Perform some configuration changes using the legacy API.
+     *
+     * @param newConfigs    The new configuration maps to apply.
+     * @param validateOnly  True if we should validate the changes but not apply them.
+     *
+     * @return              A map from partitions to error results.
+     */
+    CompletableFuture<Map<ConfigResource, ApiError>> legacyAlterConfigs(
+        Map<ConfigResource, Map<String, String>> newConfigs, boolean validateOnly);
+
+    /**
      * Begin shutting down, but don't block.  You must still call close to clean up all
      * resources.
      */
@@ -59,5 +85,5 @@ public interface Controller extends AutoCloseable {
     /**
      * Blocks until we have shut down and freed all resources.
      */
-    void close();
+    void close() throws InterruptedException;
 }

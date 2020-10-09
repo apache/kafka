@@ -28,12 +28,11 @@ class ControllerResult<T> {
     private final List<ApiMessageAndVersion> records;
     private final T response;
 
-    static <T> ControllerResult<T> of(T response) {
-        return new ControllerResult<>(Collections.emptyList(), response);
+    public ControllerResult(T response) {
+        this(Collections.emptyList(), response);
     }
 
-    ControllerResult(List<ApiMessageAndVersion> records,
-                     T response) {
+    public ControllerResult(List<ApiMessageAndVersion> records, T response) {
         Objects.requireNonNull(records);
         Objects.requireNonNull(response);
         this.records = records;

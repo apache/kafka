@@ -31,6 +31,8 @@ public class QuorumControllerTest {
     final public Timeout globalTimeout = Timeout.seconds(40);
 
     @Test
-    public void testDoNothing() throws Throwable {
+    public void testCreateAndClose() throws Throwable {
+        try (QuorumController controller = new QuorumController.Builder(0).build()) {
+        }
     }
 }
