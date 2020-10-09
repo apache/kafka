@@ -33,6 +33,7 @@ import java.util.Map;
  *   - {@link Errors#INVALID_PRODUCER_ID_MAPPING}
  *   - {@link Errors#INVALID_PRODUCER_EPOCH} // for version <=1
  *   - {@link Errors#PRODUCER_FENCED}
+ *   - {@link Errors#TRANSACTION_TIMED_OUT}
  *   - {@link Errors#INVALID_TXN_STATE}
  *   - {@link Errors#GROUP_AUTHORIZATION_FAILED}
  *   - {@link Errors#TRANSACTIONAL_ID_AUTHORIZATION_FAILED}

@@ -369,7 +369,7 @@ public class TransactionManager {
         if (!newPartitionsInTransaction.isEmpty())
             enqueueRequest(addPartitionsToTransactionHandler());
 
-        // If the error is an INVALID_PRODUCER_ID_MAPPING error, the server will not accept an EndTxnRequest, so skip
+        // If the error is an INVALID_PRODUCER_ID_MAPPING/TRANSACTION_TIMED_OUT error, the server will not accept an EndTxnRequest, so skip
         // directly to InitProducerId. Otherwise, we must first abort the transaction, because the producer will be
         // fenced if we directly call InitProducerId.
         boolean needEndTxn = !(abortableError instanceof InvalidPidMappingException)
@@ -1213,7 +1213,6 @@ public class TransactionManager {
         newPartitionsInTransaction.clear();
         pendingPartitionsInTransaction.clear();
         partitionsInTransaction.clear();
-
     }
 
     private void completeTransaction() {
@@ -1372,6 +1371,7 @@ public class TransactionManager {
                 lastError = null;
                 abortableError = null;
                 if (this.isEpochBump) {
+                    epochBumpRequired = false;
                     resetSequenceNumbers();
                 }
                 result.done();

@@ -19,7 +19,7 @@
   "name": "AddPartitionsToTxnRequest",
   // Version 1 is the same as version 0.
   //
-  // Version 2 adds the support for new error code PRODUCER_FENCED.
+  // Version 2 adds the support for new error codes: PRODUCER_FENCED,TRANSACTION_TIMED_OUT.
   "validVersions": "0-2",
   "flexibleVersions": "none",
   "fields": [

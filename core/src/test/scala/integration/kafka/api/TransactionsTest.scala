@@ -581,6 +581,52 @@ class TransactionsTest extends KafkaServerTestHarness {
   }
 
   @Test
+  def testProducerUsableAfterTxnTimeOutAbortExcetion(): Unit = {
+    val producer = createTransactionalProducer("expiringProducer", transactionTimeoutMs = 100)
+
+    producer.initTransactions()
+    producer.beginTransaction()
+
+    // The first message and hence the first AddPartitions request should be successfully sent.
+    val firstMessageResult = producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "1", "1", willBeCommitted = false)).get()
+    assertTrue(firstMessageResult.hasOffset)
+
+    // Wait for the expiration cycle to kick in.
+    Thread.sleep(600)
+
+    try {
+      // Now that the transaction has expired, the second send should fail with a ProducerFencedException.
+      producer.commitTransaction()
+      fail("should have raised a TransactionTimeOutException since the transaction has expired")
+    } catch {
+      case _: TransactionTimeOutException =>
+      case e: ExecutionException =>
+        assertTrue(e.getCause.isInstanceOf[TransactionTimeOutException])
+    }
+
+    val transactionalConsumer = transactionalConsumers.head
+    transactionalConsumer.subscribe(List(topic1).asJava)
+
+    val transactionalRecords = TestUtils.consumeRecordsFor(transactionalConsumer, 1000)
+    assertTrue(transactionalRecords.isEmpty)
+
+    producer.abortTransaction()
+    producer.beginTransaction()
+    // The second message and hence the second AddPartitions request should be successfully sent.
+    val secondMessageResult = producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2",
+      "2", willBeCommitted = true)).get()
+    assertTrue(secondMessageResult.hasOffset)
+    producer.commitTransaction()
+
+    transactionalConsumer.subscribe(List(topic1).asJava)
+
+    val records = consumeRecords(transactionalConsumer, 1)
+    records.foreach { record =>
+      TestUtils.assertCommittedAndGetValue(record)
+    }
+  }
+
+  @Test
   def testMultipleMarkersOneLeader(): Unit = {
     val firstProducer = transactionalProducers.head
     val consumer = transactionalConsumers.head

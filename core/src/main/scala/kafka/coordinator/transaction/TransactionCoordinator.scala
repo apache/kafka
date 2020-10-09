@@ -368,8 +368,24 @@ class TransactionCoordinator(brokerId: Int,
                              producerEpoch: Short,
                              txnMarkerResult: TransactionResult,
                              isFromClient: Boolean,
+                             responseCallback: EndTxnCallback): Unit = {
+    endTransaction(transactionalId,
+      producerId,
+      producerEpoch,
+      txnMarkerResult,
+      isFromClient,
+      responseCallback,
+      isFromTimeoutAbort = false
+    )
+  }
+
+  private def endTransaction(transactionalId: String,
+                             producerId: Long,
+                             producerEpoch: Short,
+                             txnMarkerResult: TransactionResult,
+                             isFromClient: Boolean,
                              responseCallback: EndTxnCallback,
-                             timeoutAbort: Boolean = false): Unit = {
+                             isFromTimeoutAbort: Boolean): Unit = {
     var isEpochFence = false
     if (transactionalId == null || transactionalId.isEmpty)
       responseCallback(Errors.INVALID_REQUEST)
@@ -386,14 +402,12 @@ class TransactionCoordinator(brokerId: Int,
             if (txnMetadata.producerId != producerId)
               Left(Errors.INVALID_PRODUCER_ID_MAPPING)
             // Strict equality is enforced on the client side requests, as they shouldn't bump the producer epoch.
-            else if (isFromClient && producerEpoch != txnMetadata.producerEpoch) {
+            else if (isFromClient && producerEpoch != txnMetadata.producerEpoch || producerEpoch < txnMetadata.producerEpoch) {
               if (producerEpoch == txnMetadata.lastProducerEpoch) {
                 Left(Errors.TRANSACTION_TIMED_OUT)
               } else {
                 Left(Errors.PRODUCER_FENCED)
               }
-            } else if (producerEpoch < txnMetadata.producerEpoch) {
-              Left(Errors.PRODUCER_FENCED)
             } else if (txnMetadata.pendingTransitionInProgress
               && !txnMetadata.pendingState.contains(PrepareEpochFence))
               Left(Errors.CONCURRENT_TRANSACTIONS)
@@ -410,7 +424,7 @@ class TransactionCoordinator(brokerId: Int,
                   isEpochFence = true
                   txnMetadata.pendingState = None
                   txnMetadata.producerEpoch = producerEpoch
-                  txnMetadata.lastProducerEpoch = if (timeoutAbort)
+                  txnMetadata.lastProducerEpoch = if (isFromTimeoutAbort)
                     (producerEpoch - 1).toShort
                   else
                     RecordBatch.NO_PRODUCER_EPOCH
@@ -600,7 +614,7 @@ class TransactionCoordinator(brokerId: Int,
               TransactionResult.ABORT,
               isFromClient = false,
               onComplete(txnIdAndPidEpoch),
-              timeoutAbort = true)
+              isFromTimeoutAbort = true)
           }
       }
     }
