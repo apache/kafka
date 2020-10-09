@@ -259,8 +259,16 @@ class SecurityConfig(TemplateRenderer):
         if self.static_jaas_conf:
             node.account.create_file(SecurityConfig.JAAS_CONF_PATH, jaas_conf)
             node.account.create_file(SecurityConfig.ADMIN_CLIENT_AS_BROKER_JAAS_CONF_PATH,
-                                     self.render_jaas_config("admin_client_as_broker_jaas.conf",
-                                                             {'SecurityConfig': SecurityConfig}))
+                                     self.render_jaas_config(
+                                         "admin_client_as_broker_jaas.conf",
+                                         {
+                                             'node': node,
+                                             'is_ibm_jdk': any('IBM' in line for line in java_version),
+                                             'SecurityConfig': SecurityConfig,
+                                             'client_sasl_mechanism': self.client_sasl_mechanism,
+                                             'enabled_sasl_mechanisms': self.enabled_sasl_mechanisms
+                                         }
+                                     ))
 
         elif 'sasl.jaas.config' not in self.properties:
             self.properties['sasl.jaas.config'] = jaas_conf.replace("\n", " \\\n")
@@ -289,23 +297,6 @@ class SecurityConfig(TemplateRenderer):
 
         if java_version(node) <= 11 and self.properties.get('tls.version') == 'TLSv1.3':
             self.properties.update({'tls.version': 'TLSv1.2'})
-
-    def maybe_setup_broker_scram_credentials(self, node, path, connect):
-        self.maybe_create_scram_credentials(node, connect, path, self.interbroker_sasl_mechanism,
-                                            SecurityConfig.SCRAM_BROKER_USER, SecurityConfig.SCRAM_BROKER_PASSWORD)
-
-    def maybe_setup_client_scram_credentials(self, node, path, connect):
-        self.maybe_create_scram_credentials(node, connect, path, self.client_sasl_mechanism,
-                                            SecurityConfig.SCRAM_CLIENT_USER, SecurityConfig.SCRAM_CLIENT_PASSWORD,
-                                            self.export_kafka_opts_for_admin_client_as_broker())
-
-    def maybe_create_scram_credentials(self, node, connect, path, mechanism, user_name, password, kafka_opts_for_admin_client_as_broker = ""):
-        # we only need to create these credentials when the client and broker mechanisms are both SASL/SCRAM
-        if self.has_sasl and self.is_sasl_scram(mechanism) and self.is_sasl_scram(self.interbroker_sasl_mechanism):
-            cmd = "%s %s %s --entity-name %s --entity-type users --alter --add-config %s=[password=%s]" % \
-                  (kafka_opts_for_admin_client_as_broker, path.script("kafka-configs.sh", node), connect,
-                  user_name, mechanism, password)
-            node.account.ssh(cmd)
 
     def clean_node(self, node):
         if self.security_protocol != SecurityConfig.PLAINTEXT:
@@ -365,14 +356,6 @@ class SecurityConfig(TemplateRenderer):
                 return "\"-Djava.security.krb5.conf=%s\"" % SecurityConfig.KRB5CONF_PATH
         else:
             return ""
-
-    def export_kafka_opts_for_admin_client_as_broker(self):
-        if self.has_sasl and self.static_jaas_conf:
-            kafka_opts_to_use = "\"-Djava.security.auth.login.config=%s -Djava.security.krb5.conf=%s\""\
-                                % (SecurityConfig.ADMIN_CLIENT_AS_BROKER_JAAS_CONF_PATH, SecurityConfig.KRB5CONF_PATH)
-        else:
-            kafka_opts_to_use = self.kafka_opts
-        return "export KAFKA_OPTS=%s;" % kafka_opts_to_use
 
     def props(self, prefix=''):
         """
