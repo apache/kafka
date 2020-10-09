@@ -511,7 +511,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
    * largest stray snapshot file which was emitted during clean shutdown.
    */
   private[log] def removeStraySnapshots(segmentBaseOffsets: Seq[Long]): Unit = {
-    val maxSegmentBaseOffset = segmentBaseOffsets.maxOption
+    val maxSegmentBaseOffset = if (segmentBaseOffsets.isEmpty) None else Some(segmentBaseOffsets.max)
     val baseOffsets = segmentBaseOffsets.toSet
     var latestStraySnapshot: Option[SnapshotFile] = None
 
