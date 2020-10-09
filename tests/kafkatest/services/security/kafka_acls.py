@@ -19,6 +19,18 @@ class ACLs:
         self.context = context
 
     def set_acls(self, protocol, kafka, topic, group, force_use_zk_connection=False, additional_cluster_operations_to_grant = []):
+        """
+        Creates ACls for the Kafka Broker principal that brokers use in tests
+
+        :param protocol: the security protocol to use (e.g. PLAINTEXT, SASL_PLAINTEXT, etc.)
+        :param kafka: Kafka cluster upon which ClusterAction ACL is created
+        :param topic: topic for which produce and consume ACLs are created
+        :param group: consumer group for which consume ACL is created
+        :param force_use_zk_connection: forces the use of ZooKeeper when true, otherwise AdminClient is used when available.
+               This is necessary for the case where we are bootstrapping ACLs before Kafka is started or before authorizer is enabled
+        :param additional_cluster_operations_to_grant may be set to ['Alter', 'Create'] if the cluster is secured since these are required
+               to create SCRAM credentials and topics, respectively
+        """
         # Set server ACLs
         kafka_principal = "User:CN=systemtest" if protocol == "SSL" else "User:kafka"
         self.add_cluster_acl(kafka, kafka_principal, force_use_zk_connection=force_use_zk_connection, additional_cluster_operations_to_grant = additional_cluster_operations_to_grant)
