@@ -1011,11 +1011,11 @@ public class TransactionManagerTest {
         assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
 
         client.disconnect(brokerNode.idString());
-        client.blackout(brokerNode, 100);
+        client.backoff(brokerNode, 100);
         // send pid to coordinator. Should get disconnected before the send and resend the FindCoordinator
         // and InitPid requests.
         runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) == null);
-        time.sleep(110);  // waiting for the blackout period for the node to expire.
+        time.sleep(110);  // waiting for the backoff period for the node to expire.
 
         assertFalse(initPidResult.isCompleted());
         assertFalse(transactionManager.hasProducerId());
@@ -2358,7 +2358,7 @@ public class TransactionManagerTest {
         // expire the batch.
         Node clusterNode = metadata.fetch().nodes().get(0);
         client.disconnect(clusterNode.idString());
-        client.blackout(clusterNode, 100);
+        client.backoff(clusterNode, 100);
 
         runUntil(responseFuture::isDone);
 
@@ -2409,7 +2409,7 @@ public class TransactionManagerTest {
         // expire the batch.
         Node clusterNode = metadata.fetch().nodes().get(0);
         client.disconnect(clusterNode.idString());
-        client.blackout(clusterNode, 100);
+        client.backoff(clusterNode, 100);
 
         runUntil(firstBatchResponse::isDone);
         runUntil(secondBatchResponse::isDone);
@@ -2525,7 +2525,7 @@ public class TransactionManagerTest {
         // expire the batch.
         Node clusterNode = metadata.fetch().nodes().get(0);
         client.disconnect(clusterNode.idString());
-        client.blackout(clusterNode, 100);
+        client.backoff(clusterNode, 100);
 
         runUntil(responseFuture::isDone);  // We should try to flush the produce, but expire it instead without sending anything.
 
@@ -2909,7 +2909,7 @@ public class TransactionManagerTest {
         // expire the batch.
         Node clusterNode = metadata.fetch().nodes().get(0);
         client.disconnect(clusterNode.idString());
-        client.blackout(clusterNode, 100);
+        client.backoff(clusterNode, 100);
 
         runUntil(responseFuture2::isDone); // We should try to flush the produce, but expire it instead without sending anything.
 
@@ -2917,7 +2917,7 @@ public class TransactionManagerTest {
         TransactionalRequestResult abortResult = transactionManager.beginAbort();
 
         sender.runOnce();  // handle the abort
-        time.sleep(110);  // Sleep to make sure the node blackout period has passed
+        time.sleep(110);  // Sleep to make sure the node backoff period has passed
 
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
         prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, initialEpoch);

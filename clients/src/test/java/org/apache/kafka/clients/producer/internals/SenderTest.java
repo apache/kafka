@@ -23,6 +23,7 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.common.errors.TransactionAbortedException;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
@@ -467,7 +468,7 @@ public class SenderTest {
         // Disconnect the target node for the pending produce request. This will ensure that sender will try to
         // expire the batch.
         client.disconnect(clusterNode.idString());
-        client.blackout(clusterNode, 100);
+        client.backoff(clusterNode, 100);
 
         sender.runOnce();  // We should try to flush the batch, but we expire it instead without sending anything.
         assertEquals("Callbacks not invoked for expiry", messagesPerBatch, expiryCallbackCount.get());
@@ -992,7 +993,7 @@ public class SenderTest {
         Node node = metadata.fetch().nodes().get(0);
         time.sleep(10000L);
         client.disconnect(node.idString());
-        client.blackout(node, 10);
+        client.backoff(node, 10);
 
         sender.runOnce();
 
@@ -1030,7 +1031,7 @@ public class SenderTest {
         // Note deliveryTimeoutMs is 1500.
         time.sleep(600L);
         client.disconnect(node.idString());
-        client.blackout(node, 10);
+        client.backoff(node, 10);
 
         sender.runOnce(); // now expire the first batch.
         assertFutureFailure(request1, TimeoutException.class);
@@ -1092,7 +1093,7 @@ public class SenderTest {
         Node node = metadata.fetch().nodes().get(0);
         time.sleep(1000L);
         client.disconnect(node.idString());
-        client.blackout(node, 10);
+        client.backoff(node, 10);
 
         sender.runOnce(); // now expire the first batch.
         assertFutureFailure(request1, TimeoutException.class);
@@ -1148,7 +1149,7 @@ public class SenderTest {
         Node node = metadata.fetch().nodes().get(0);
         time.sleep(1000L);
         client.disconnect(node.idString());
-        client.blackout(node, 10);
+        client.backoff(node, 10);
 
         sender.runOnce(); // now expire the first batch.
         assertFutureFailure(request1, TimeoutException.class);
@@ -1180,7 +1181,7 @@ public class SenderTest {
         Node node = metadata.fetch().nodes().get(0);
         time.sleep(15000L);
         client.disconnect(node.idString());
-        client.blackout(node, 10);
+        client.backoff(node, 10);
 
         sender.runOnce(); // now expire the batch.
 
@@ -2356,6 +2357,31 @@ public class SenderTest {
         } finally {
             m.close();
         }
+    }
+
+    @Test
+    public void testTransactionAbortedExceptionOnAbortWithoutError() throws InterruptedException, ExecutionException {
+        ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
+        TransactionManager txnManager = new TransactionManager(logContext, "testTransactionAbortedExceptionOnAbortWithoutError", 60000, 100, apiVersions, false);
+
+        setupWithTransactionState(txnManager, false, null);
+        doInitTransactions(txnManager, producerIdAndEpoch);
+        // Begin the transaction
+        txnManager.beginTransaction();
+        txnManager.maybeAddPartitionToTransaction(tp0);
+        client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp0, Errors.NONE)));
+        // Run it once so that the partition is added to the transaction.
+        sender.runOnce();
+        // Append a record to the accumulator.
+        FutureRecordMetadata metadata = appendToAccumulator(tp0, time.milliseconds(), "key", "value");
+        // Now abort the transaction manually.
+        txnManager.beginAbort();
+        // Try to send.
+        // This should abort the existing transaction and
+        // drain all the unsent batches with a TransactionAbortedException.
+        sender.runOnce();
+        // Now attempt to fetch the result for the record.
+        TestUtils.assertFutureThrows(metadata, TransactionAbortedException.class);
     }
 
     @Test

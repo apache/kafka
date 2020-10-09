@@ -40,6 +40,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockRocksDbConfigSetter;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
@@ -157,7 +158,7 @@ public class RocksDBStoreTest {
         metricsRecorder.addValueProviders(eq(DB_NAME), notNull(), notNull(), isNull());
         replay(metricsRecorder);
 
-        rocksDBStore.openDB(context);
+        rocksDBStore.openDB(context.appConfigs(), context.stateDir());
 
         verify(metricsRecorder);
         reset(metricsRecorder);
@@ -171,7 +172,7 @@ public class RocksDBStoreTest {
         metricsRecorder.addValueProviders(eq(DB_NAME), notNull(), notNull(), notNull());
         replay(metricsRecorder);
 
-        rocksDBStore.openDB(context);
+        rocksDBStore.openDB(context.appConfigs(), context.stateDir());
 
         verify(metricsRecorder);
         reset(metricsRecorder);
@@ -182,7 +183,7 @@ public class RocksDBStoreTest {
         rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
         try {
             context = getProcessorContext(RecordingLevel.DEBUG);
-            rocksDBStore.openDB(context);
+            rocksDBStore.openDB(context.appConfigs(), context.stateDir());
             reset(metricsRecorder);
             metricsRecorder.removeValueProviders(DB_NAME);
             replay(metricsRecorder);
@@ -212,7 +213,7 @@ public class RocksDBStoreTest {
         metricsRecorder.addValueProviders(eq(DB_NAME), notNull(), notNull(), isNull());
         replay(metricsRecorder);
 
-        rocksDBStore.openDB(context);
+        rocksDBStore.openDB(context.appConfigs(), context.stateDir());
         verify(metricsRecorder);
         reset(metricsRecorder);
     }
@@ -242,7 +243,7 @@ public class RocksDBStoreTest {
                 "the block-based table format of RocksDB. Do not provide a new instance of BlockBasedTableConfig to " +
                 "the RocksDB options.",
             ProcessorStateException.class,
-            () -> rocksDBStore.openDB(context)
+            () -> rocksDBStore.openDB(context.appConfigs(), context.stateDir())
         );
     }
 
@@ -268,7 +269,7 @@ public class RocksDBStoreTest {
         metricsRecorder.addValueProviders(eq(DB_NAME), notNull(), isNull(), notNull());
         replay(metricsRecorder);
 
-        rocksDBStore.openDB(context);
+        rocksDBStore.openDB(context.appConfigs(), context.stateDir());
         verify(metricsRecorder);
         reset(metricsRecorder);
     }
@@ -298,9 +299,21 @@ public class RocksDBStoreTest {
     public void shouldCallRocksDbConfigSetter() {
         MockRocksDbConfigSetter.called = false;
 
+        final Properties props = StreamsTestUtils.getStreamsConfig();
+        props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
+        final Object param = new Object();
+        props.put("abc.def", param);
+        final InternalMockProcessorContext context = new InternalMockProcessorContext(
+            dir,
+            Serdes.String(),
+            Serdes.String(),
+            new StreamsConfig(props)
+        );
+
         rocksDBStore.init((StateStoreContext) context, rocksDBStore);
 
         assertTrue(MockRocksDbConfigSetter.called);
+        assertThat(MockRocksDbConfigSetter.configMap.get("abc.def"), equalTo(param));
     }
 
     @Test
@@ -310,7 +323,7 @@ public class RocksDBStoreTest {
 
         assertTrue(tmpDir.setReadOnly());
 
-        assertThrows(ProcessorStateException.class, () -> rocksDBStore.openDB(tmpContext));
+        assertThrows(ProcessorStateException.class, () -> rocksDBStore.openDB(tmpContext.appConfigs(), tmpContext.stateDir()));
     }
 
     @Test
@@ -695,17 +708,6 @@ public class RocksDBStoreTest {
             ));
             assertThat("Metric " + propertyname + " not found!", metric, notNullValue());
             metric.metricValue();
-        }
-    }
-
-    public static class MockRocksDbConfigSetter implements RocksDBConfigSetter {
-        static boolean called;
-
-        @Override
-        public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
-            called = true;
-
-            options.setLevel0FileNumCompactionTrigger(10);
         }
     }
 
