@@ -17,11 +17,15 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.EventQueue;
 import org.apache.kafka.common.utils.KafkaEventQueue;
 import org.apache.kafka.common.utils.LogContext;
@@ -30,18 +34,13 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
 
+import java.util.Collections;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 public final class QuorumController implements Controller {
-    private final Logger log;
-    private final int nodeId;
-    private final KafkaEventQueue queue;
-    private final Time time;
-    private final SnapshotRegistry snapshotRegistry;
-    private final ControllerPurgatory purgatory;
-
     /**
      * A builder class which creates the QuorumController.
      */
@@ -50,6 +49,7 @@ public final class QuorumController implements Controller {
         private Time time = Time.SYSTEM;
         private String threadNamePrefix = null;
         private LogContext logContext = null;
+        private Map<ConfigResource.Type, ConfigDef> configDefs = Collections.emptyMap();
 
         public Builder(int nodeId) {
             this.nodeId = nodeId;
@@ -70,6 +70,11 @@ public final class QuorumController implements Controller {
             return this;
         }
 
+        public Builder setConfigDefs(Map<ConfigResource.Type, ConfigDef> configDefs) {
+            this.configDefs = configDefs;
+            return this;
+        }
+
         public QuorumController build() {
             if (threadNamePrefix == null) {
                 threadNamePrefix = String.format("Node%d_", nodeId);
@@ -80,7 +85,7 @@ public final class QuorumController implements Controller {
             KafkaEventQueue queue = null;
             try {
                 queue = new KafkaEventQueue(time, logContext, threadNamePrefix);
-                return new QuorumController(logContext, nodeId, queue, time);
+                return new QuorumController(logContext, nodeId, queue, time, configDefs);
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
                 throw e;
@@ -159,10 +164,19 @@ public final class QuorumController implements Controller {
         }
     }
 
+    private final Logger log;
+    private final int nodeId;
+    private final KafkaEventQueue queue;
+    private final Time time;
+    private final SnapshotRegistry snapshotRegistry;
+    private final ControllerPurgatory purgatory;
+    private final ConfigurationControlManager configurationControlManager;
+
     private QuorumController(LogContext logContext,
                              int nodeId,
                              KafkaEventQueue queue,
-                             Time time) {
+                             Time time,
+                             Map<ConfigResource.Type, ConfigDef> configDefs) {
         this.log = logContext.logger(QuorumController.class);
         this.nodeId = nodeId;
         this.queue = queue;
@@ -170,6 +184,8 @@ public final class QuorumController implements Controller {
         this.snapshotRegistry = new SnapshotRegistry(-1);
         snapshotRegistry.createSnapshot(-1);
         this.purgatory = new ControllerPurgatory();
+        this.configurationControlManager =
+            new ConfigurationControlManager(snapshotRegistry, configDefs);
     }
 
     @Override
@@ -191,10 +207,34 @@ public final class QuorumController implements Controller {
     }
 
     @Override
-    public void beginShutdown() {
+    public CompletableFuture<Map<ConfigResource, ApiError>> incrementalAlterConfigs(
+            Map<ConfigResource, Map<String, Entry<OpType, String>>> configChanges,
+            boolean validateOnly) {
+        return null;
+//        ControllerEvent<Map<ConfigResource, ApiError>> event =
+//            new ControllerEvent<Map<ConfigResource, ApiError>>("incrementalAlterConfigs",
+//            () -> {
+//                ControllerResult<Map<ConfigResource, ApiError>> result =
+//                    configurationControlManager.incrementalAlterConfigs(configChanges);
+//                if (validateOnly) {
+//                    result = new ControllerResult<Map<ConfigResource, ApiError>>(result.response());
+//                }
+//            });
     }
 
     @Override
-    public void close() {
+    public CompletableFuture<Map<ConfigResource, ApiError>> legacyAlterConfigs(
+            Map<ConfigResource, Map<String, String>> newConfigs, boolean validateOnly) {
+        return null;
+    }
+
+    @Override
+    public void beginShutdown() {
+        queue.beginShutdown();
+    }
+
+    @Override
+    public void close() throws InterruptedException {
+        queue.close();
     }
 }

@@ -19,6 +19,7 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.common.protocol.ApiMessageAndVersion;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -26,7 +27,12 @@ import java.util.stream.Collectors;
 class ControllerResultAndOffset<T> extends ControllerResult<T> {
     private final long offset;
 
-    ControllerResultAndOffset(long offset,
+    public ControllerResultAndOffset(T response) {
+        super(Collections.emptyList(), response);
+        this.offset = -1;
+    }
+
+    public ControllerResultAndOffset(long offset,
                               List<ApiMessageAndVersion> records,
                               T response) {
         super(records, response);
