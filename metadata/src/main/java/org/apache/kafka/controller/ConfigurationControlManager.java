@@ -268,7 +268,7 @@ public class ConfigurationControlManager {
         }
     }
 
-    private boolean isSplittable(ConfigResource.Type type, String key) {
+    boolean isSplittable(ConfigResource.Type type, String key) {
         ConfigDef configDef = configDefs.get(type);
         if (configDef == null) {
             return false;
@@ -280,7 +280,7 @@ public class ConfigurationControlManager {
         return configKey.type == ConfigDef.Type.LIST;
     }
 
-    private String getConfigValueDefault(ConfigResource.Type type, String key) {
+    String getConfigValueDefault(ConfigResource.Type type, String key) {
         ConfigDef configDef = configDefs.get(type);
         if (configDef == null) {
             return null;

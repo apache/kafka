@@ -22,6 +22,7 @@ import org.apache.kafka.common.protocol.ApiMessageAndVersion;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 class ControllerResult<T> {
     private final List<ApiMessageAndVersion> records;
@@ -60,5 +61,12 @@ class ControllerResult<T> {
     @Override
     public int hashCode() {
         return Objects.hash(records, response);
+    }
+
+    @Override
+    public String toString() {
+        return "ControllerResult(records=" + String.join(",",
+            records.stream().map(r -> r.toString()).collect(Collectors.toList())) +
+            ", response=" + response + ")";
     }
 }
