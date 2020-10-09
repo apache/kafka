@@ -21,6 +21,7 @@ import org.apache.kafka.common.protocol.ApiMessageAndVersion;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 class ControllerResultAndOffset<T> extends ControllerResult<T> {
     private final long offset;
@@ -50,5 +51,12 @@ class ControllerResultAndOffset<T> extends ControllerResult<T> {
     @Override
     public int hashCode() {
         return Objects.hash(records(), response(), offset);
+    }
+
+    @Override
+    public String toString() {
+        return "ControllerResultAndOffset(records=" + String.join(",",
+            records().stream().map(r -> r.toString()).collect(Collectors.toList())) +
+            ", response=" + response() + ", offset=" + offset + ")";
     }
 }

@@ -24,13 +24,16 @@ import org.apache.kafka.common.protocol.ApiMessageAndVersion;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.timeline.SnapshotRegistry;
+import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
 
 import java.util.AbstractMap.SimpleImmutableEntry;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
@@ -56,8 +59,12 @@ public class ConfigurationControlManagerTest {
             define("quux", ConfigDef.Type.INT, ConfigDef.Importance.HIGH, "quux"));
         CONFIGS.put(TOPIC, new ConfigDef().
             define("abc", ConfigDef.Type.LIST, ConfigDef.Importance.HIGH, "abc").
-            define("def", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "def"));
+            define("def", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "def").
+            define("ghi", ConfigDef.Type.BOOLEAN, true, ConfigDef.Importance.HIGH, "ghi"));
     }
+
+    private static final ConfigResource BROKER0 = new ConfigResource(BROKER, "0");
+    private static final ConfigResource MYTOPIC = new ConfigResource(TOPIC, "mytopic");
 
     @SuppressWarnings("unchecked")
     private static <A, B> Map<A, B> toMap(Entry... entries) {
@@ -77,18 +84,16 @@ public class ConfigurationControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(0);
         ConfigurationControlManager manager =
             new ConfigurationControlManager(snapshotRegistry, CONFIGS);
-        assertEquals(Collections.emptyMap(),
-            manager.getConfigs(new ConfigResource(BROKER, "0")));
+        assertEquals(Collections.emptyMap(), manager.getConfigs(BROKER0));
         manager.replay(new ConfigRecord().
             setResourceType(BROKER.id()).setResourceName("0").
             setName("foo.bar").setValue("1,2"));
         assertEquals(Collections.singletonMap("foo.bar", "1,2"),
-            manager.getConfigs(new ConfigResource(BROKER, "0")));
+            manager.getConfigs(BROKER0));
         manager.replay(new ConfigRecord().
             setResourceType(BROKER.id()).setResourceName("0").
             setName("foo.bar").setValue(null));
-        assertEquals(Collections.emptyMap(),
-            manager.getConfigs(new ConfigResource(BROKER, "0")));
+        assertEquals(Collections.emptyMap(), manager.getConfigs(BROKER0));
         manager.replay(new ConfigRecord().
             setResourceType(TOPIC.id()).setResourceName("mytopic").
             setName("abc").setValue("x,y,z"));
@@ -96,7 +101,7 @@ public class ConfigurationControlManagerTest {
             setResourceType(TOPIC.id()).setResourceName("mytopic").
             setName("def").setValue("blah"));
         assertEquals(toMap(entry("abc", "x,y,z"), entry("def", "blah")),
-            manager.getConfigs(new ConfigResource(TOPIC, "mytopic")));
+            manager.getConfigs(MYTOPIC));
     }
 
     @Test
@@ -130,19 +135,69 @@ public class ConfigurationControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(0);
         ConfigurationControlManager manager =
             new ConfigurationControlManager(snapshotRegistry, CONFIGS);
-        ConfigResource broker0 = new ConfigResource(BROKER, "0");
-        ConfigResource mytopic = new ConfigResource(TOPIC, "mytopic");
         assertEquals(new ControllerResult<Map<ConfigResource, ApiError>>(Collections.singletonList(
             new ApiMessageAndVersion(new ConfigRecord().
                 setResourceType(TOPIC.id()).setResourceName("mytopic").
                 setName("abc").setValue("123"), (short) 0)),
-            toMap(entry(broker0, new ApiError(
+            toMap(entry(BROKER0, new ApiError(
                 Errors.INVALID_REQUEST, "A DELETE op was given with a non-null value.")),
-                entry(mytopic, ApiError.NONE))),
-            manager.incrementalAlterConfigs(toMap(entry(broker0, toMap(
+                entry(MYTOPIC, ApiError.NONE))),
+            manager.incrementalAlterConfigs(toMap(entry(BROKER0, toMap(
                 entry("foo.bar", entry(DELETE, "abc")),
                 entry("quux", entry(SET, "abc")))),
-            entry(mytopic, toMap(
+            entry(MYTOPIC, toMap(
                 entry("abc", entry(APPEND, "123")))))));
+    }
+
+    @Test
+    public void testIsSplittable() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(0);
+        ConfigurationControlManager manager =
+            new ConfigurationControlManager(snapshotRegistry, CONFIGS);
+        Assert.assertTrue(manager.isSplittable(BROKER, "foo.bar"));
+        Assert.assertFalse(manager.isSplittable(BROKER, "baz"));
+        Assert.assertFalse(manager.isSplittable(BROKER, "foo.baz.quux"));
+        Assert.assertFalse(manager.isSplittable(TOPIC, "baz"));
+        Assert.assertTrue(manager.isSplittable(TOPIC, "abc"));
+    }
+
+    @Test
+    public void testGetConfigValueDefault() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(0);
+        ConfigurationControlManager manager =
+            new ConfigurationControlManager(snapshotRegistry, CONFIGS);
+        Assert.assertEquals("1", manager.getConfigValueDefault(BROKER, "foo.bar"));
+        Assert.assertEquals(null, manager.getConfigValueDefault(BROKER, "foo.baz.quux"));
+        Assert.assertEquals(null, manager.getConfigValueDefault(TOPIC, "abc"));
+        Assert.assertEquals("true", manager.getConfigValueDefault(TOPIC, "ghi"));
+    }
+
+    @Test
+    public void testLegacyAlterConfigs() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(0);
+        ConfigurationControlManager manager =
+            new ConfigurationControlManager(snapshotRegistry, CONFIGS);
+        List<ApiMessageAndVersion> expectedRecords1 = Arrays.asList(
+            new ApiMessageAndVersion(new ConfigRecord().
+                setResourceType(TOPIC.id()).setResourceName("mytopic").
+                setName("abc").setValue("456"), (short) 0),
+            new ApiMessageAndVersion(new ConfigRecord().
+                setResourceType(TOPIC.id()).setResourceName("mytopic").
+                setName("def").setValue("901"), (short) 0));
+        assertEquals(new ControllerResult<Map<ConfigResource, ApiError>>(
+                expectedRecords1,
+                toMap(entry(MYTOPIC, ApiError.NONE))),
+            manager.legacyAlterConfigs(toMap(entry(MYTOPIC, toMap(
+                entry("abc", "456"), entry("def", "901"))))));
+        for (ApiMessageAndVersion message : expectedRecords1) {
+            manager.replay((ConfigRecord) message.message());
+        }
+        assertEquals(new ControllerResult<Map<ConfigResource, ApiError>>(Arrays.asList(
+            new ApiMessageAndVersion(new ConfigRecord().
+                setResourceType(TOPIC.id()).setResourceName("mytopic").
+                setName("abc").setValue(null), (short) 0)),
+                toMap(entry(MYTOPIC, ApiError.NONE))),
+            manager.legacyAlterConfigs(toMap(entry(MYTOPIC, toMap(
+                entry("def", "901"))))));
     }
 }
