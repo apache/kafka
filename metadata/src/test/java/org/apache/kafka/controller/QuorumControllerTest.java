@@ -32,7 +32,7 @@ public class QuorumControllerTest {
 
     @Test
     public void testCreateAndClose() throws Throwable {
-        try (QuorumController controller = new QuorumController.Builder(0).build()) {
+        try (LocalQuorumsTestEnv env = new LocalQuorumsTestEnv(1, __ -> { })) {
         }
     }
 }

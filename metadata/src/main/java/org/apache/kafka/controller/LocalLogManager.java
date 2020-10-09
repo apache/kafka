@@ -305,7 +305,7 @@ public final class LocalLogManager implements MetaLogManager {
         private final Condition claimedCond = lock.newCondition();
         private final Condition renouncedCond = lock.newCondition();
         private final FileChannel logChannel;
-        private final Listener listener;
+        private Listener listener = null;
         private final long logCheckIntervalMs;
         private final MetadataParser parser = new MetadataParser();
         private boolean shuttingDown = false;
@@ -321,12 +321,10 @@ public final class LocalLogManager implements MetaLogManager {
         private ByteBuffer dataBuffer = EMPTY;
 
         ScribeThread(FileChannel logChannel,
-                     Listener listener,
                      long logCheckIntervalMs,
                      String threadNamePrefix) {
             super(threadNamePrefix + "LeadershipClaimerThread", true);
             this.logChannel = logChannel;
-            this.listener = listener;
             this.logCheckIntervalMs = logCheckIntervalMs;
         }
 
@@ -519,7 +517,7 @@ public final class LocalLogManager implements MetaLogManager {
             int length = frameInt < 0 ? -frameInt : frameInt;
             setupDataBuffer(length);
             int dataLength = readData(dataBuffer, fileOffset + FRAME_LENGTH);
-            if (dataLength < 0) {
+            if (dataLength <= 0) {
                 return -FRAME_LENGTH + dataLength;
             }
             if (frameInt < 0) {
@@ -677,6 +675,13 @@ public final class LocalLogManager implements MetaLogManager {
                 lock.unlock();
             }
         }
+
+        private void setListener(Listener listener) {
+            if (this.listener != null) {
+                throw new RuntimeException("The listener was already set.");
+            }
+            this.listener = listener;
+        }
     }
 
     class WatcherThread extends KafkaThread {
@@ -728,14 +733,10 @@ public final class LocalLogManager implements MetaLogManager {
                            int nodeId,
                            String basePath,
                            String threadNamePrefix,
-                           Listener listener,
                            int logCheckIntervalMs) throws IOException {
         FileChannel leaderChannel = null;
         FileChannel logChannel = null;
         WatchService watchService = null;
-        LeadershipClaimerThread leadershipClaimerThread = null;
-        ScribeThread scribeThread = null;
-        WatcherThread watcherThread = null;
         this.log = logContext.logger(LocalLogManager.class);
         try {
             this.nodeId = nodeId;
@@ -747,46 +748,26 @@ public final class LocalLogManager implements MetaLogManager {
             Path logPath = realBase.resolve("log");
             logChannel = FileChannel.open(logPath, CREATE, WRITE, READ);
             watchService = FileSystems.getDefault().newWatchService();
-            this.leadershipClaimerThread = leadershipClaimerThread =
+            this.leadershipClaimerThread =
                 new LeadershipClaimerThread(leaderPath, leaderChannel, threadNamePrefix);
-            this.scribeThread = scribeThread =
-                new ScribeThread(logChannel, listener, logCheckIntervalMs, threadNamePrefix);
-            this.watcherThread = watcherThread =
+            this.scribeThread =
+                new ScribeThread(logChannel, logCheckIntervalMs, threadNamePrefix);
+            this.watcherThread =
                 new WatcherThread(realBase, watchService, threadNamePrefix);
-            this.leadershipClaimerThread.start();
-            this.scribeThread.start();
-            this.watcherThread.start();
         } catch (Throwable t) {
             log.error("Error creating LocalFileMetaLog", t);
             Utils.closeQuietly(leaderChannel, "leaderChannel");
             Utils.closeQuietly(logChannel, "logPath");
             Utils.closeQuietly(watchService, "watchService");
-            if (leadershipClaimerThread != null) {
-                leadershipClaimerThread.beginShutdown();
-                try {
-                    leadershipClaimerThread.join();
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-            }
-            if (scribeThread != null) {
-                scribeThread.beginShutdown();
-                try {
-                    scribeThread.join();
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-            }
-            if (watcherThread != null) {
-                watcherThread.beginShutdown();
-                try {
-                    watcherThread.join();
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-            }
             throw t;
         }
+    }
+
+    public void initialize(Listener listener) {
+        this.scribeThread.setListener(listener);
+        this.leadershipClaimerThread.start();
+        this.scribeThread.start();
+        this.watcherThread.start();
     }
 
     @Override
@@ -818,5 +799,8 @@ public final class LocalLogManager implements MetaLogManager {
         leadershipClaimerThread.join();
         scribeThread.join();
         watcherThread.join();
+        Utils.closeQuietly(leadershipClaimerThread.leaderChannel, "leaderChannel");
+        Utils.closeQuietly(scribeThread.logChannel, "logPath");
+        Utils.closeQuietly(watcherThread.watchService, "watchService");
     }
 }
