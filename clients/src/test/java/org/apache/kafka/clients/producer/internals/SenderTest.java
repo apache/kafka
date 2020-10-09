@@ -19,12 +19,14 @@ package org.apache.kafka.clients.producer.internals;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientRequest;
+import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.TransactionAbortedException;
+import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
@@ -527,6 +529,68 @@ public class SenderTest {
         TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
+        assertEquals(producerId, transactionManager.producerIdAndEpoch().producerId);
+        assertEquals((short) 0, transactionManager.producerIdAndEpoch().epoch);
+    }
+
+    /**
+     * Verifies that InitProducerId of transactional producer succeeds even if metadata requests
+     * are pending with only one bootstrap node available and maxInFlight=1, where multiple
+     * polls are necessary to send requests.
+     */
+    @Test
+    public void testInitProducerIdWithMaxInFlightOne() throws Exception {
+        final long producerId = 123456L;
+        int maxInFlight = 1;
+        client = new MockClient(time, metadata) {
+            volatile boolean canSendMore = true;
+            @Override
+            public Node leastLoadedNode(long now) {
+                for (Node node : metadata.fetch().nodes()) {
+                    if (isReady(node, now) && canSendMore)
+                        return node;
+                }
+                return null;
+            }
+
+            @Override
+            public List<ClientResponse> poll(long timeoutMs, long now) {
+                canSendMore = inFlightRequestCount() < maxInFlight;
+                return super.poll(timeoutMs, now);
+            }
+        };
+
+        // Send metadata request and wait until request is sent. `leastLoadedNode` will be null once
+        // request is in progress since no more requests can be sent to the node. Node will be ready
+        // on the next poll() after response is processed later on.
+        MetadataRequest.Builder builder = new MetadataRequest.Builder(Collections.emptyList(), false);
+        Node node = metadata.fetch().nodes().get(0);
+        ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true);
+        while (!client.ready(node, time.milliseconds()))
+            client.poll(0, time.milliseconds());
+        client.send(request, time.milliseconds());
+        while (client.leastLoadedNode(time.milliseconds()) != null)
+            client.poll(0, time.milliseconds());
+
+        // Initialize transaction manager. InitProducerId will be queued up until metadata response
+        // is processed and FindCoordinator can be sent to `leastLoadedNode`.
+        TransactionManager transactionManager = new TransactionManager(new LogContext(), "testInitProducerIdWithPendingMetadataRequest",
+                60000, 100L, new ApiVersions(), false);
+        setupWithTransactionState(transactionManager, false, null, false);
+        ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId, (short) 0);
+        transactionManager.initializeTransactions();
+        sender.runOnce();
+
+        // Process metadata response, prepare FindCoordinator and InitProducerId responses.
+        // Verify producerId after the sender is run to process responses.
+        MetadataResponse metadataUpdate = TestUtils.metadataUpdateWith(1, Collections.emptyMap());
+        client.respond(metadataUpdate);
+        prepareFindCoordinatorResponse(Errors.NONE);
+        prepareInitProducerResponse(Errors.NONE, producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
+        for (int i = 0; i < 5 && !transactionManager.hasProducerId(); i++)
+            sender.runOnce();
+
         assertTrue(transactionManager.hasProducerId());
         assertEquals(producerId, transactionManager.producerIdAndEpoch().producerId);
         assertEquals((short) 0, transactionManager.producerIdAndEpoch().epoch);
@@ -2578,10 +2642,14 @@ public class SenderTest {
     }
 
     private void setupWithTransactionState(TransactionManager transactionManager) {
-        setupWithTransactionState(transactionManager, false, null);
+        setupWithTransactionState(transactionManager, false, null, true);
     }
 
     private void setupWithTransactionState(TransactionManager transactionManager, boolean guaranteeOrder, BufferPool customPool) {
+        setupWithTransactionState(transactionManager, guaranteeOrder, customPool, true);
+    }
+
+    private void setupWithTransactionState(TransactionManager transactionManager, boolean guaranteeOrder, BufferPool customPool, boolean updateMetadata) {
         int deliveryTimeoutMs = 1500;
         long totalSize = 1024 * 1024;
         String metricGrpName = "producer-metrics";
@@ -2596,7 +2664,8 @@ public class SenderTest {
                 Integer.MAX_VALUE, this.senderMetricsRegistry, this.time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, transactionManager, apiVersions);
 
         metadata.add("test", time.milliseconds());
-        this.client.updateMetadata(TestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)));
+        if (updateMetadata)
+            this.client.updateMetadata(TestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)));
     }
 
     private void assertSendFailure(Class<? extends RuntimeException> expectedError) throws Exception {

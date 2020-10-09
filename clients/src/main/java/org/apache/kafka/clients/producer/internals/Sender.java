@@ -444,9 +444,19 @@ public class Sender implements Runnable {
         AbstractRequest.Builder<?> requestBuilder = nextRequestHandler.requestBuilder();
         Node targetNode = null;
         try {
-            targetNode = awaitNodeReady(nextRequestHandler.coordinatorType());
-            if (targetNode == null) {
+            FindCoordinatorRequest.CoordinatorType coordinatorType = nextRequestHandler.coordinatorType();
+            targetNode = coordinatorType != null ?
+                    transactionManager.coordinator(coordinatorType) :
+                    client.leastLoadedNode(time.milliseconds());
+            if (targetNode != null) {
+                awaitNodeReady(targetNode, coordinatorType);
+            } else if (coordinatorType != null) {
+                log.trace("Coordinator not known for {}, will retry {} after finding coordinator.", coordinatorType, requestBuilder.apiKey());
                 maybeFindCoordinatorAndRetry(nextRequestHandler);
+                return true;
+            } else {
+                log.trace("No nodes available to send requests, polling until a node is ready.");
+                client.poll(retryBackoffMs, time.milliseconds());
                 return true;
             }
 
@@ -512,11 +522,7 @@ public class Sender implements Runnable {
         return running;
     }
 
-    private Node awaitNodeReady(FindCoordinatorRequest.CoordinatorType coordinatorType) throws IOException {
-        Node node = coordinatorType != null ?
-                transactionManager.coordinator(coordinatorType) :
-                client.leastLoadedNode(time.milliseconds());
-
+    private void awaitNodeReady(Node node, FindCoordinatorRequest.CoordinatorType coordinatorType) throws IOException {
         if (node != null && NetworkClientUtils.awaitReady(client, node, time, requestTimeoutMs)) {
             if (coordinatorType == FindCoordinatorRequest.CoordinatorType.TRANSACTION) {
                 // Indicate to the transaction manager that the coordinator is ready, allowing it to check ApiVersions
@@ -524,9 +530,7 @@ public class Sender implements Runnable {
                 // the time when the abortable error is handled
                 transactionManager.handleCoordinatorReady();
             }
-            return node;
         }
-        return null;
     }
 
     /**
