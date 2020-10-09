@@ -337,7 +337,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   }
 
   @Test
-  def testListTopicsWithWhitelist(): Unit = {
+  def testListTopicsWithIncludeList(): Unit = {
     val topic1 = "kafka.testTopic1"
     val topic2 = "kafka.testTopic2"
     val topic3 = "oooof.testTopic1"

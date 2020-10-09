@@ -24,24 +24,24 @@ import org.junit.Test
 class TopicFilterTest {
 
   @Test
-  def testWhitelists(): Unit = {
+  def testIncludeLists(): Unit = {
 
-    val topicFilter1 = Whitelist("white1,white2")
-    assertTrue(topicFilter1.isTopicAllowed("white2", excludeInternalTopics = true))
-    assertTrue(topicFilter1.isTopicAllowed("white2", excludeInternalTopics = false))
-    assertFalse(topicFilter1.isTopicAllowed("black1", excludeInternalTopics = true))
-    assertFalse(topicFilter1.isTopicAllowed("black1", excludeInternalTopics = false))
+    val topicFilter1 = IncludeList("yes1,yes2")
+    assertTrue(topicFilter1.isTopicAllowed("yes2", excludeInternalTopics = true))
+    assertTrue(topicFilter1.isTopicAllowed("yes2", excludeInternalTopics = false))
+    assertFalse(topicFilter1.isTopicAllowed("no1", excludeInternalTopics = true))
+    assertFalse(topicFilter1.isTopicAllowed("no1", excludeInternalTopics = false))
 
-    val topicFilter2 = Whitelist(".+")
+    val topicFilter2 = IncludeList(".+")
     assertTrue(topicFilter2.isTopicAllowed("alltopics", excludeInternalTopics = true))
     assertFalse(topicFilter2.isTopicAllowed(Topic.GROUP_METADATA_TOPIC_NAME, excludeInternalTopics = true))
     assertTrue(topicFilter2.isTopicAllowed(Topic.GROUP_METADATA_TOPIC_NAME, excludeInternalTopics = false))
 
-    val topicFilter3 = Whitelist("white_listed-topic.+")
-    assertTrue(topicFilter3.isTopicAllowed("white_listed-topic1", excludeInternalTopics = true))
-    assertFalse(topicFilter3.isTopicAllowed("black1", excludeInternalTopics = true))
+    val topicFilter3 = IncludeList("included-topic.+")
+    assertTrue(topicFilter3.isTopicAllowed("included-topic1", excludeInternalTopics = true))
+    assertFalse(topicFilter3.isTopicAllowed("no1", excludeInternalTopics = true))
 
-    val topicFilter4 = Whitelist("test-(?!bad\\b)[\\w]+")
+    val topicFilter4 = IncludeList("test-(?!bad\\b)[\\w]+")
     assertTrue(topicFilter4.isTopicAllowed("test-good", excludeInternalTopics = true))
     assertFalse(topicFilter4.isTopicAllowed("test-bad", excludeInternalTopics = true))
   }
