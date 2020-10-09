@@ -91,7 +91,7 @@ object ReplicaVerificationTool extends Logging {
                          .describedAs("ms")
                          .ofType(classOf[java.lang.Integer])
                          .defaultsTo(1000)
-    val topicWhiteListOpt = parser.accepts("topic-white-list", "White list of topics to verify replica consistency. Defaults to all topics.")
+    val topicsIncludeOpt = parser.accepts("topics-include", "List of topics to verify replica consistency. Defaults to all topics.")
                          .withRequiredArg
                          .describedAs("Java regex (String)")
                          .ofType(classOf[String])
@@ -120,8 +120,8 @@ object ReplicaVerificationTool extends Logging {
     }
     CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt)
 
-    val regex = options.valueOf(topicWhiteListOpt)
-    val topicWhiteListFiler = new IncludeList(regex)
+    val regex = options.valueOf(topicsIncludeOpt)
+    val topicsIncludeListFiler = new IncludeList(regex)
 
     try Pattern.compile(regex)
     catch {
@@ -145,11 +145,11 @@ object ReplicaVerificationTool extends Logging {
     }
 
     val filteredTopicMetadata = topicsMetadata.filter { topicMetaData =>
-      topicWhiteListFiler.isTopicAllowed(topicMetaData.name, excludeInternalTopics = false)
+      topicsIncludeListFiler.isTopicAllowed(topicMetaData.name, excludeInternalTopics = false)
     }
 
     if (filteredTopicMetadata.isEmpty) {
-      error(s"No topics found. $topicWhiteListOpt if specified, is either filtering out all topics or there is no topic.")
+      error(s"No topics found. $topicsIncludeOpt if specified, is either filtering out all topics or there is no topic.")
       Exit.exit(1)
     }
 
