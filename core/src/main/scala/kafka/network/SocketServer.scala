@@ -552,8 +552,8 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
   private val blockedPercentMeter = newMeter(s"${metricPrefix}AcceptorBlockedPercent",
     "blocked time", TimeUnit.NANOSECONDS, Map(ListenerMetricTag -> endPoint.listenerName.value))
   private var currentProcessorIndex = 0
-  private case class DelayedCloseSocket(socket: SocketChannel, endThrottleTimeMs: Long)
-  private val throttledSockets = new util.HashMap[InetAddress, mutable.Queue[DelayedCloseSocket]]()
+  private[network] case class DelayedCloseSocket(socket: SocketChannel, endThrottleTimeMs: Long)
+  private[network] val throttledSockets = new util.HashMap[InetAddress, mutable.Queue[DelayedCloseSocket]]()
 
   private[network] def addProcessors(newProcessors: Buffer[Processor], processorThreadPrefix: String): Unit = synchronized {
     processors ++= newProcessors

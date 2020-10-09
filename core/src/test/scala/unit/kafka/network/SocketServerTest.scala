@@ -886,6 +886,11 @@ class SocketServerTest {
       (0 until connectionRate).map(_ => connect(overrideServer))
       // now try one more (should get throttled)
       var conn = connect(overrideServer)
+      val acceptors = overrideServer.dataPlaneAcceptors.asScala.values
+      acceptors.foreach(_.wakeup())
+      TestUtils.waitUntilTrue(() => acceptors.forall(_.throttledSockets.isEmpty),
+        "timeout waiting for sockets to get unthrottled",
+        1000)
       verifyRemoteConnectionClosed(conn)
 
       // new connection should succeed after previous connection closed
