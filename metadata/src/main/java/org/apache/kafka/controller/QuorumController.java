@@ -50,6 +50,7 @@ public final class QuorumController implements Controller {
         private String threadNamePrefix = null;
         private LogContext logContext = null;
         private Map<ConfigResource.Type, ConfigDef> configDefs = Collections.emptyMap();
+        private MetaLogManager logManager = null;
 
         public Builder(int nodeId) {
             this.nodeId = nodeId;
@@ -75,7 +76,15 @@ public final class QuorumController implements Controller {
             return this;
         }
 
+        public Builder setLogManager(MetaLogManager logManager) {
+            this.logManager = logManager;
+            return this;
+        }
+
         public QuorumController build() {
+            if (logManager == null) {
+                throw new RuntimeException("You must set a metadata log manager.");
+            }
             if (threadNamePrefix == null) {
                 threadNamePrefix = String.format("Node%d_", nodeId);
             }
@@ -85,7 +94,8 @@ public final class QuorumController implements Controller {
             KafkaEventQueue queue = null;
             try {
                 queue = new KafkaEventQueue(time, logContext, threadNamePrefix);
-                return new QuorumController(logContext, nodeId, queue, time, configDefs);
+                return new QuorumController(logContext, nodeId, queue, time, configDefs,
+                        logManager);
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
                 throw e;
@@ -171,12 +181,14 @@ public final class QuorumController implements Controller {
     private final SnapshotRegistry snapshotRegistry;
     private final ControllerPurgatory purgatory;
     private final ConfigurationControlManager configurationControlManager;
+    private final MetaLogManager logManager;
 
     private QuorumController(LogContext logContext,
                              int nodeId,
                              KafkaEventQueue queue,
                              Time time,
-                             Map<ConfigResource.Type, ConfigDef> configDefs) {
+                             Map<ConfigResource.Type, ConfigDef> configDefs,
+                             MetaLogManager logManager) {
         this.log = logContext.logger(QuorumController.class);
         this.nodeId = nodeId;
         this.queue = queue;
@@ -186,6 +198,7 @@ public final class QuorumController implements Controller {
         this.purgatory = new ControllerPurgatory();
         this.configurationControlManager =
             new ConfigurationControlManager(snapshotRegistry, configDefs);
+        this.logManager = logManager;
     }
 
     @Override

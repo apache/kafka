@@ -66,6 +66,15 @@ public interface MetaLogManager extends AutoCloseable {
     }
 
     /**
+     * Register the listener, and start this meta log manager.
+     * The manager must be ready to accept incoming calls after this function returns.
+     * It is an error to initialize a MetaLogManager more than once.
+     *
+     * @param listener      The listener to register.
+     */
+    void initialize(Listener listener);
+
+    /**
      * Schedule a write to the log.
      *
      * The write will be scheduled to happen at some time in the future.  There is no

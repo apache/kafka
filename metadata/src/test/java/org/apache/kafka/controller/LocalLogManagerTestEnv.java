@@ -29,7 +29,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
 
 public class LocalLogManagerTestEnv implements AutoCloseable {
     private static final Logger log =
@@ -52,12 +51,19 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
     private final List<LocalLogManager> logManagers;
 
     public static LocalLogManagerTestEnv createWithMockListeners(int numManagers) throws Exception {
-        return new LocalLogManagerTestEnv(numManagers,
-            __ -> new MockMetaLogManagerListener());
+        LocalLogManagerTestEnv testEnv = new LocalLogManagerTestEnv(numManagers);
+        try {
+            for (LocalLogManager logManager : testEnv.logManagers) {
+                logManager.initialize(new MockMetaLogManagerListener());
+            }
+        } catch (Exception e) {
+            testEnv.close();
+            throw e;
+        }
+        return testEnv;
     }
 
-    private LocalLogManagerTestEnv(int numManagers,
-            Function<Integer, LocalLogManager.Listener> listenerProvider) throws Exception {
+    LocalLogManagerTestEnv(int numManagers) throws Exception {
         dir = TestUtils.tempDirectory();
         List<LocalLogManager> newLogManagers = new ArrayList<>(numManagers);
         try {
@@ -68,7 +74,6 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
                     nodeId,
                     dir.getAbsolutePath(),
                     prefix,
-                    listenerProvider.apply(nodeId),
                     50));
             }
         } catch (Throwable t) {
