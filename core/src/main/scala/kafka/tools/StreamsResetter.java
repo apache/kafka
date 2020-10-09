@@ -42,13 +42,11 @@ import scala.collection.JavaConverters;
 
 import java.io.IOException;
 import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -446,7 +444,7 @@ public class StreamsResetter {
                 shiftOffsetsBy(client, inputTopicPartitions, options.valueOf(shiftByOption));
             } else if (options.has(toDatetimeOption)) {
                 final String ts = options.valueOf(toDatetimeOption);
-                final long timestamp = getDateTime(ts);
+                final long timestamp = Utils.getDateTime(ts);
                 resetToDatetime(client, inputTopicPartitions, timestamp);
             } else if (options.has(byDurationOption)) {
                 final String duration = options.valueOf(byDurationOption);
@@ -563,30 +561,6 @@ public class StreamsResetter {
         }
     }
 
-    // visible for testing
-    public long getDateTime(String timestamp) throws ParseException {
-        final String[] timestampParts = timestamp.split("T");
-        if (timestampParts.length < 2) {
-            throw new ParseException("Error parsing timestamp. It does not contain a 'T' according to ISO8601 format", timestamp.length());
-        }
-
-        final String secondPart = timestampParts[1];
-        if (secondPart == null || secondPart.isEmpty()) {
-            throw new ParseException("Error parsing timestamp. Time part after 'T' is null or empty", timestamp.length());
-        }
-
-        if (!(secondPart.contains("+") || secondPart.contains("-") || secondPart.contains("Z"))) {
-            timestamp = timestamp + "Z";
-        }
-
-        try {
-            final Date date = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX").parse(timestamp);
-            return date.getTime();
-        } catch (final ParseException e) {
-            final Date date = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX").parse(timestamp);
-            return date.getTime();
-        }
-    }
 
     private Map<TopicPartition, Long> parseResetPlan(final String resetPlanCsv) throws ParseException {
         final Map<TopicPartition, Long> topicPartitionAndOffset = new HashMap<>();

@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,12 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.clients.admin;
 
-package kafka.common
+import java.util.Map;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * Thrown when a get epoch request is made for partition, but no epoch exists for that partition
+ * Options for {@link AdminClient#updateFeatures(Map, UpdateFeaturesOptions)}.
+ *
+ * The API of this class is evolving. See {@link Admin} for details.
  */
-class NoEpochForPartitionException(message: String) extends RuntimeException(message) {
-  def this() = this(null)
+@InterfaceStability.Evolving
+public class UpdateFeaturesOptions extends AbstractOptions<UpdateFeaturesOptions> {
 }

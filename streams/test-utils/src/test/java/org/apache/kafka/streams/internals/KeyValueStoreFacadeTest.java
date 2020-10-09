@@ -53,6 +53,7 @@ public class KeyValueStoreFacadeTest {
         keyValueStoreFacade = new KeyValueStoreFacade<>(mockedKeyValueTimestampStore);
     }
 
+    @SuppressWarnings("deprecation") // TODO will be fixed in KAFKA-10437
     @Test
     public void shouldForwardInit() {
         final ProcessorContext context = mock(ProcessorContext.class);

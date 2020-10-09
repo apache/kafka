@@ -26,7 +26,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.MockLog.LogBatch;
 import org.apache.kafka.raft.MockLog.LogEntry;
 import org.apache.kafka.raft.internals.LogOffset;
-import org.junit.Test;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -49,11 +48,12 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-import static org.junit.Assume.assumeTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class RaftEventSimulationTest {
     private static final TopicPartition METADATA_PARTITION = new TopicPartition("__cluster_metadata", 0);
@@ -98,51 +98,9 @@ public class RaftEventSimulationTest {
             cluster.startAll();
             schedulePolling(scheduler, cluster, 3, 5);
             scheduler.schedule(router::deliverAll, 0, 2, 1);
-            scheduler.runUntil(cluster::hasConsistentLeader);
-        }
-    }
-
-    @Test
-    public void testReplicationNoLeaderChangeQuorumSizeOne() {
-        testReplicationNoLeaderChange(new QuorumConfig(1));
-    }
-
-    @Test
-    public void testReplicationNoLeaderChangeQuorumSizeTwo() {
-        testReplicationNoLeaderChange(new QuorumConfig(2));
-    }
-
-    @Test
-    public void testReplicationNoLeaderChangeQuorumSizeThree() {
-        testReplicationNoLeaderChange(new QuorumConfig(3, 0));
-    }
-
-    @Test
-    public void testReplicationNoLeaderChangeQuorumSizeFour() {
-        testReplicationNoLeaderChange(new QuorumConfig(4));
-    }
-
-    @Test
-    public void testReplicationNoLeaderChangeQuorumSizeFive() {
-        testReplicationNoLeaderChange(new QuorumConfig(5));
-    }
-
-    private void testReplicationNoLeaderChange(QuorumConfig config) {
-        for (int seed = 0; seed < 100; seed++) {
-            Cluster cluster = new Cluster(config, seed);
-            MessageRouter router = new MessageRouter(cluster);
-            EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
-
-            Set<Integer> voters = cluster.voters();
-            // Start with node 0 as the leader
-            cluster.initializeElection(ElectionState.withElectedLeader(2, 0, voters));
-            cluster.startAll();
-            assertTrue(cluster.hasConsistentLeader());
-
-            schedulePolling(scheduler, cluster, 3, 5);
-            scheduler.schedule(router::deliverAll, 0, 2, 0);
             scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
-            scheduler.runUntil(() -> cluster.anyReachedHighWatermark(10));
+            scheduler.runUntil(cluster::hasConsistentLeader);
+            scheduler.runUntil(() -> cluster.allReachedHighWatermark(10));
         }
     }
 
@@ -223,21 +181,17 @@ public class RaftEventSimulationTest {
             MessageRouter router = new MessageRouter(cluster);
             EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
 
-            // Start with node 0 as the leader
-            int leaderId = 0;
-            Set<Integer> voters = cluster.voters();
-            cluster.initializeElection(ElectionState.withElectedLeader(2, leaderId, voters));
-            cluster.startAll();
-            assertTrue(cluster.hasConsistentLeader());
-
             // Seed the cluster with some data
+            cluster.startAll();
             schedulePolling(scheduler, cluster, 3, 5);
             scheduler.schedule(router::deliverAll, 0, 2, 1);
             scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
+            scheduler.runUntil(cluster::hasConsistentLeader);
             scheduler.runUntil(() -> cluster.anyReachedHighWatermark(10));
 
             // Shutdown the leader and write some more data. We can verify the new leader has been elected
             // by verifying that the high watermark can still advance.
+            int leaderId = cluster.latestLeader().getAsInt();
             if (isGracefulShutdown) {
                 cluster.shutdown(leaderId);
             } else {
@@ -287,24 +241,21 @@ public class RaftEventSimulationTest {
             MessageRouter router = new MessageRouter(cluster);
             EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
 
-            // Start with node 1 as the leader
-            Set<Integer> voters = cluster.voters();
-            cluster.initializeElection(ElectionState.withElectedLeader(2, 1, voters));
-            cluster.startAll();
-            assertTrue(cluster.hasConsistentLeader());
-
             // Seed the cluster with some data
+            cluster.startAll();
             schedulePolling(scheduler, cluster, 3, 5);
             scheduler.schedule(router::deliverAll, 0, 2, 2);
             scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
+            scheduler.runUntil(cluster::hasConsistentLeader);
             scheduler.runUntil(() -> cluster.anyReachedHighWatermark(10));
 
             // The leader gets partitioned off. We can verify the new leader has been elected
             // by writing some data and ensuring that it gets replicated
-            router.filter(1, new DropAllTraffic());
+            int leaderId = cluster.latestLeader().getAsInt();
+            router.filter(leaderId, new DropAllTraffic());
 
             Set<Integer> nonPartitionedNodes = new HashSet<>(cluster.nodes());
-            nonPartitionedNodes.remove(1);
+            nonPartitionedNodes.remove(leaderId);
 
             scheduler.runUntil(() -> cluster.allReachedHighWatermark(20, nonPartitionedNodes));
         }
@@ -329,20 +280,17 @@ public class RaftEventSimulationTest {
             MessageRouter router = new MessageRouter(cluster);
             EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
 
-            // Start with node 1 as the leader
-            Set<Integer> voters = cluster.voters();
-            cluster.initializeElection(ElectionState.withElectedLeader(2, 1, voters));
-            cluster.startAll();
-            assertTrue(cluster.hasConsistentLeader());
-
             // Seed the cluster with some data
+            cluster.startAll();
             schedulePolling(scheduler, cluster, 3, 5);
             scheduler.schedule(router::deliverAll, 0, 2, 2);
             scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
+            scheduler.runUntil(cluster::hasConsistentLeader);
             scheduler.runUntil(() -> cluster.anyReachedHighWatermark(10));
 
-            // Partition the nodes into two sets. Nodes are reachable within each set, but the
-            // two sets cannot communicate with each other.
+            // Partition the nodes into two sets. Nodes are reachable within each set,
+            // but the two sets cannot communicate with each other. We should be able
+            // to make progress even if an election is needed in the larger set.
             router.filter(0, new DropOutboundRequestsFrom(Utils.mkSet(2, 3, 4)));
             router.filter(1, new DropOutboundRequestsFrom(Utils.mkSet(2, 3, 4)));
             router.filter(2, new DropOutboundRequestsFrom(Utils.mkSet(0, 1)));
@@ -383,25 +331,21 @@ public class RaftEventSimulationTest {
             MessageRouter router = new MessageRouter(cluster);
             EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
 
-            // Start with node 1 as the leader
-            Set<Integer> voters = cluster.voters();
-            cluster.initializeElection(ElectionState.withElectedLeader(2, 1, voters));
-            cluster.startAll();
-            assertTrue(cluster.hasConsistentLeader());
-
             // Seed the cluster with some data
+            cluster.startAll();
             schedulePolling(scheduler, cluster, 3, 5);
             scheduler.schedule(router::deliverAll, 0, 2, 5);
             scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
+            scheduler.runUntil(cluster::hasConsistentLeader);
             scheduler.runUntil(() -> cluster.anyReachedHighWatermark(10));
 
-            // Now partition off node 1 and wait for a new leader
-            router.filter(1, new DropAllTraffic());
-            scheduler.runUntil(() -> cluster.latestLeader().isPresent() && cluster.latestLeader().getAsInt() != 1);
+            int leaderId = cluster.latestLeader().getAsInt();
+            router.filter(leaderId, new DropAllTraffic());
+            scheduler.runUntil(() -> cluster.latestLeader().isPresent() && cluster.latestLeader().getAsInt() != leaderId);
 
-            // As soon as we have a new leader, restore traffic to node 1 and partition the new leader
+            // As soon as we have a new leader, restore traffic to the old leader and partition the new leader
             int newLeaderId = cluster.latestLeader().getAsInt();
-            router.filter(1, new PermitAllTraffic());
+            router.filter(leaderId, new PermitAllTraffic());
             router.filter(newLeaderId, new DropAllTraffic());
 
             // Verify now that we can make progress
@@ -656,6 +600,7 @@ public class RaftEventSimulationTest {
             for (RaftNode node : running.values()) {
                 if (node.quorum.epoch() > latestEpoch) {
                     latestLeader = node.quorum.leaderId();
+                    latestEpoch = node.quorum.epoch();
                 } else if (node.quorum.epoch() == latestEpoch && node.quorum.leaderId().isPresent()) {
                     latestLeader = node.quorum.leaderId();
                 }
@@ -704,20 +649,6 @@ public class RaftEventSimulationTest {
 
         Collection<RaftNode> running() {
             return running.values();
-        }
-
-        void initializeElection(ElectionState election) {
-            if (election.hasLeader() && !voters.contains(election.leaderId()))
-                throw new IllegalArgumentException("Illegal election of observer " + election.leaderId());
-
-            nodes.values().forEach(state -> {
-                state.store.writeElectionState(election);
-                if (election.hasLeader()) {
-                    Optional<OffsetAndEpoch> endOffset = state.log.endOffsetForEpoch(election.epoch);
-                    if (!endOffset.isPresent())
-                        state.log.assignEpochStartOffset(election.epoch, state.log.endOffset().offset);
-                }
-            });
         }
 
         void ifRunning(int nodeId, Consumer<RaftNode> action) {
@@ -938,8 +869,9 @@ public class RaftEventSimulationTest {
                     .filter(entry -> cluster.voters.contains(entry.getKey()))
                     .filter(entry -> entry.getValue().log.endOffset().offset >= highWatermark)
                     .count();
-                assertTrue("Insufficient nodes have reached current high watermark",
-                    numReachedHighWatermark >= cluster.majoritySize());
+                assertTrue(
+                    numReachedHighWatermark >= cluster.majoritySize(),
+                    "Insufficient nodes have reached current high watermark");
             });
         }
     }
@@ -1037,8 +969,9 @@ public class RaftEventSimulationTest {
                     committedSequenceNumbers.putIfAbsent(offset, sequence);
 
                     int committedSequence = committedSequenceNumbers.get(offset);
-                    assertEquals("Committed sequence at offset " + offset + " changed on node " + nodeId,
-                        committedSequence, sequence);
+                    assertEquals(
+                        committedSequence, sequence,
+                        "Committed sequence at offset " + offset + " changed on node " + nodeId);
                 }
             }
         }

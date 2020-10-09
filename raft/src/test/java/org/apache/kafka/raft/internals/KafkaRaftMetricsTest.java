@@ -27,8 +27,8 @@ import org.apache.kafka.raft.LogOffsetMetadata;
 import org.apache.kafka.raft.MockQuorumStateStore;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.QuorumState;
-import org.junit.After;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -36,7 +36,7 @@ import java.util.OptionalLong;
 import java.util.Random;
 import java.util.Set;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class KafkaRaftMetricsTest {
 
@@ -49,7 +49,7 @@ public class KafkaRaftMetricsTest {
     private final Random random = new Random(1);
     private KafkaRaftMetrics raftMetrics;
 
-    @After
+    @AfterEach
     public void tearDown() {
         if (raftMetrics != null) {
             raftMetrics.close();

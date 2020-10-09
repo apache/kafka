@@ -42,7 +42,7 @@
         "about": "Each partition in the request.", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",
           "about": "The partition index." },
-        { "name": "CurrentLeaderEpoch", "type": "int32", "versions": "4+",
+        { "name": "CurrentLeaderEpoch", "type": "int32", "versions": "4+", "default": "-1",
           "about": "The current leader epoch." },
         { "name": "Timestamp", "type": "int64", "versions": "0+",
           "about": "The current timestamp." },
