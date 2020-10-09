@@ -1590,6 +1590,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         return taskManager;
     }
 
+    protected byte[] uniqueField() {
+        return uniqueField;
+    }
+
     protected void handleRebalanceStart(final Set<String> topics) {
         taskManager.handleRebalanceStart(topics);
     }

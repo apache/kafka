@@ -2023,18 +2023,12 @@ public class StreamsPartitionAssignorTest {
         configureDefaultPartitionAssignor();
         final Set<String> topics = mkSet("input");
 
-        final Subscription subscription = new Subscription(new ArrayList<>(topics), partitionAssignor.subscriptionUserData(topics));
-
-        final SubscriptionInfo info1 = new SubscriptionInfo(LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, UUID_1, "", getTaskOffsetSums(EMPTY_TASKS, EMPTY_TASKS), uniqueField);
-        assertEquals(info1, SubscriptionInfo.decode(subscription.userData()));
-
-        uniqueField[0]++;
-        final SubscriptionInfo info2 = new SubscriptionInfo(LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, UUID_1, "", getTaskOffsetSums(EMPTY_TASKS, EMPTY_TASKS), uniqueField);
-        assertEquals(info2, SubscriptionInfo.decode(partitionAssignor.subscriptionUserData(topics)));
-
-        uniqueField[0]++;
-        final SubscriptionInfo info3 = new SubscriptionInfo(LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, UUID_1, "", getTaskOffsetSums(EMPTY_TASKS, EMPTY_TASKS), uniqueField);
-        assertEquals(info3, SubscriptionInfo.decode(partitionAssignor.subscriptionUserData(topics)));
+        final Subscription subscription = new Subscription(new ArrayList<>(topics), defaultSubscriptionInfo.encode());
+        assertEquals(0, partitionAssignor.uniqueField()[0]);
+        partitionAssignor.subscriptionUserData(topics);
+        assertEquals(1, partitionAssignor.uniqueField()[0]);
+        partitionAssignor.subscriptionUserData(topics);
+        assertEquals(2, partitionAssignor.uniqueField()[0]);
 
     }
 
