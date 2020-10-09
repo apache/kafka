@@ -1358,13 +1358,14 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
     counts.synchronized {
       val startThrottleTimeMs = time.milliseconds
 
+      waitForConnectionSlot(listenerName, startThrottleTimeMs, acceptorBlockedPercentMeter)
+
       val ipThrottleTimeMs = recordIpConnectionMaybeThrottle(address, startThrottleTimeMs)
       if (ipThrottleTimeMs > 0) {
         trace(s"Throttling $address for $ipThrottleTimeMs ms")
+        unrecordListenerConnection(listenerName, startThrottleTimeMs)
         throw new ConnectionThrottledException(address, startThrottleTimeMs, ipThrottleTimeMs)
       }
-
-      waitForConnectionSlot(listenerName, startThrottleTimeMs, acceptorBlockedPercentMeter)
 
       val count = counts.getOrElseUpdate(address, 0)
       counts.put(address, count + 1)
@@ -1572,6 +1573,22 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
       val brokerThrottleTimeMs = recordAndGetThrottleTimeMs(brokerConnectionRateSensor, timeMs)
       recordAndGetListenerThrottleTime(brokerThrottleTimeMs)
     }
+  }
+
+  /**
+   * To avoid over-recording listener/broker connection rate, we unrecord a listener or broker connection
+   * if the IP gets throttled later.
+   *
+   * @param listenerName listener to unrecord connection
+   * @param timeMs current time in milliseconds
+   */
+  private def unrecordListenerConnection(listenerName: ListenerName, timeMs: Long): Unit = {
+    if (!protectedListener(listenerName)) {
+      brokerConnectionRateSensor.record(-1.0, timeMs, false)
+    }
+    maxConnectionsPerListener
+      .get(listenerName)
+      .foreach(_.connectionRateSensor.record(-1.0, timeMs, false))
   }
 
   /**
