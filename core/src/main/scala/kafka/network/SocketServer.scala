@@ -733,9 +733,8 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
     val iter = throttledSockets.values.iterator
     while (iter.hasNext) {
       val throttledSockets = iter.next
-      throttledSockets.dequeueWhile { socket =>
-        socket.endThrottleTimeMs < timeMs
-      }.foreach { closingSocket =>
+      while (throttledSockets.headOption.exists(_.endThrottleTimeMs < timeMs)) {
+        val closingSocket = throttledSockets.dequeue()
         debug(s"Closing socket from ip ${closingSocket.socket.getRemoteAddress}")
         closeSocket(closingSocket.socket)
       }
@@ -1431,7 +1430,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
         }
         updateConnectionRateQuota(connectionRateForIp(address), IpQuotaEntity(address))
       case None =>
-        val newQuota = maxConnectionRate.getOrElse(Int.MaxValue)
+        val newQuota = maxConnectionRate.getOrElse(DynamicConfig.Ip.DefaultConnectionCreationRate)
         info(s"Updating default max IP connection rate to $newQuota")
         defaultConnectionRatePerIp = newQuota
         val allMetrics = metrics.metrics
