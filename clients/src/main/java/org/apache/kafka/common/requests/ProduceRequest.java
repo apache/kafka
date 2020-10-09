@@ -20,6 +20,7 @@ import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.message.ProduceRequestData;
+import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
@@ -214,13 +215,25 @@ public class ProduceRequest extends AbstractRequest {
             return null;
 
         Errors error = Errors.forException(e);
-        Map<TopicPartition, ProduceResponse.PartitionResponse> responseMap = new HashMap<>();
-        ProduceResponse.PartitionResponse partitionResponse = new ProduceResponse.PartitionResponse(error);
-
-        for (TopicPartition tp : partitions())
-            responseMap.put(tp, partitionResponse);
-
-        return new ProduceResponse(responseMap, throttleTimeMs);
+        return new ProduceResponse(new ProduceResponseData()
+            .setResponses(partitionSizes.keySet()
+                .stream()
+                .collect(Collectors.groupingBy(TopicPartition::topic))
+                .entrySet()
+                .stream()
+                .map(tp -> new ProduceResponseData.TopicProduceResponse()
+                    .setName(tp.getKey())
+                    .setPartitions(tp.getValue().stream().map(p -> new ProduceResponseData.PartitionProduceResponse()
+                        .setPartitionIndex(p.partition())
+                        .setBaseOffset(ProduceResponse.INVALID_OFFSET)
+                        .setErrorCode(error.code())
+                        .setErrorMessage(error.message())
+                        .setLogAppendTimeMs(RecordBatch.NO_TIMESTAMP)
+                        .setLogStartOffset(ProduceResponse.INVALID_OFFSET)
+                        .setRecordErrors(Collections.emptyList()))
+                        .collect(Collectors.toList())))
+                .collect(Collectors.toList()))
+            .setThrottleTimeMs(throttleTimeMs));
     }
 
     @Override

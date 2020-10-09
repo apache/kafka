@@ -200,6 +200,7 @@ public class NetworkClientTest {
                 request.apiKey().responseHeaderVersion(PRODUCE.latestVersion()));
         Struct resp = new Struct(PRODUCE.responseSchema(PRODUCE.latestVersion()));
         resp.set("responses", new Object[0]);
+        resp.set(CommonFields.THROTTLE_TIME_MS, 100);
         Struct responseHeaderStruct = respHeader.toStruct();
         int size = responseHeaderStruct.sizeOf() + resp.sizeOf();
         ByteBuffer buffer = ByteBuffer.allocate(size);
