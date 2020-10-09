@@ -19,117 +19,28 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
+import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.CommonFields;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
+import java.util.AbstractMap;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-
-import static org.apache.kafka.common.protocol.CommonFields.NULLABLE_TRANSACTIONAL_ID;
-import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
-import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
-import static org.apache.kafka.common.protocol.types.Type.INT16;
-import static org.apache.kafka.common.protocol.types.Type.INT32;
-import static org.apache.kafka.common.protocol.types.Type.RECORDS;
+import java.util.stream.Collectors;
 
 public class ProduceRequest extends AbstractRequest {
-    private static final String ACKS_KEY_NAME = "acks";
-    private static final String TIMEOUT_KEY_NAME = "timeout";
-    private static final String TOPIC_DATA_KEY_NAME = "topic_data";
-
-    // topic level field names
-    private static final String PARTITION_DATA_KEY_NAME = "data";
-
-    // partition level field names
-    private static final String RECORD_SET_KEY_NAME = "record_set";
-
-
-    private static final Schema TOPIC_PRODUCE_DATA_V0 = new Schema(
-            TOPIC_NAME,
-            new Field(PARTITION_DATA_KEY_NAME, new ArrayOf(new Schema(
-                    PARTITION_ID,
-                    new Field(RECORD_SET_KEY_NAME, RECORDS)))));
-
-    private static final Schema PRODUCE_REQUEST_V0 = new Schema(
-            new Field(ACKS_KEY_NAME, INT16, "The number of acknowledgments the producer requires the leader to have " +
-                    "received before considering a request complete. Allowed values: 0 for no acknowledgments, 1 for " +
-                    "only the leader and -1 for the full ISR."),
-            new Field(TIMEOUT_KEY_NAME, INT32, "The time to await a response in ms."),
-            new Field(TOPIC_DATA_KEY_NAME, new ArrayOf(TOPIC_PRODUCE_DATA_V0)));
-
-    /**
-     * The body of PRODUCE_REQUEST_V1 is the same as PRODUCE_REQUEST_V0.
-     * The version number is bumped up to indicate that the client supports quota throttle time field in the response.
-     */
-    private static final Schema PRODUCE_REQUEST_V1 = PRODUCE_REQUEST_V0;
-    /**
-     * The body of PRODUCE_REQUEST_V2 is the same as PRODUCE_REQUEST_V1.
-     * The version number is bumped up to indicate that message format V1 is used which has relative offset and
-     * timestamp.
-     */
-    private static final Schema PRODUCE_REQUEST_V2 = PRODUCE_REQUEST_V1;
-
-    // Produce request V3 adds the transactional id which is used for authorization when attempting to write
-    // transactional data. This version also adds support for message format V2.
-    private static final Schema PRODUCE_REQUEST_V3 = new Schema(
-            CommonFields.NULLABLE_TRANSACTIONAL_ID,
-            new Field(ACKS_KEY_NAME, INT16, "The number of acknowledgments the producer requires the leader to have " +
-                    "received before considering a request complete. Allowed values: 0 for no acknowledgments, 1 " +
-                    "for only the leader and -1 for the full ISR."),
-            new Field(TIMEOUT_KEY_NAME, INT32, "The time to await a response in ms."),
-            new Field(TOPIC_DATA_KEY_NAME, new ArrayOf(TOPIC_PRODUCE_DATA_V0)));
-
-    /**
-     * The body of PRODUCE_REQUEST_V4 is the same as PRODUCE_REQUEST_V3.
-     * The version number is bumped up to indicate that the client supports KafkaStorageException.
-     * The KafkaStorageException will be translated to NotLeaderOrFollowerException in the response if version <= 3
-     */
-    private static final Schema PRODUCE_REQUEST_V4 = PRODUCE_REQUEST_V3;
-
-    /**
-     * The body of the PRODUCE_REQUEST_V5 is the same as PRODUCE_REQUEST_V4.
-     * The version number is bumped since the PRODUCE_RESPONSE_V5 includes an additional partition level
-     * field: the log_start_offset.
-     */
-    private static final Schema PRODUCE_REQUEST_V5 = PRODUCE_REQUEST_V4;
-
-    /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     */
-    private static final Schema PRODUCE_REQUEST_V6 = PRODUCE_REQUEST_V5;
-
-    /**
-     * V7 bumped up to indicate ZStandard capability. (see KIP-110)
-     */
-    private static final Schema PRODUCE_REQUEST_V7 = PRODUCE_REQUEST_V6;
-
-    /**
-     * V8 bumped up to add two new fields record_errors offset list and error_message to {@link org.apache.kafka.common.requests.ProduceResponse.PartitionResponse}
-     * (See KIP-467)
-     */
-    private static final Schema PRODUCE_REQUEST_V8 = PRODUCE_REQUEST_V7;
-
-    public static Schema[] schemaVersions() {
-        return new Schema[] {PRODUCE_REQUEST_V0, PRODUCE_REQUEST_V1, PRODUCE_REQUEST_V2, PRODUCE_REQUEST_V3,
-            PRODUCE_REQUEST_V4, PRODUCE_REQUEST_V5, PRODUCE_REQUEST_V6, PRODUCE_REQUEST_V7, PRODUCE_REQUEST_V8};
-    }
 
     public static class Builder extends AbstractRequest.Builder<ProduceRequest> {
         private final short acks;
@@ -194,7 +105,27 @@ public class ProduceRequest extends AbstractRequest {
                     ProduceRequest.validateRecords(version, records);
                 }
             }
-            return new ProduceRequest(version, acks, timeout, partitionRecords, transactionalId);
+
+            List<ProduceRequestData.TopicProduceData> tpd = partitionRecords
+                .entrySet()
+                .stream()
+                .collect(Collectors.groupingBy(e -> e.getKey().topic()))
+                .entrySet()
+                .stream()
+                .map(e -> new ProduceRequestData.TopicProduceData()
+                    .setName(e.getKey())
+                    .setPartitions(e.getValue().stream()
+                        .map(tpAndRecord -> new ProduceRequestData.PartitionProduceData()
+                            .setPartitionIndex(tpAndRecord.getKey().partition())
+                            .setRecords(tpAndRecord.getValue().buffer()))
+                        .collect(Collectors.toList())))
+                .collect(Collectors.toList());
+
+            return new ProduceRequest(new ProduceRequestData()
+                .setAcks(acks)
+                .setTimeout(timeout)
+                .setTransactionalId(transactionalId)
+                .setTopicData(tpd), version);
         }
 
         @Override
@@ -210,65 +141,42 @@ public class ProduceRequest extends AbstractRequest {
         }
     }
 
+    /**
+     * We have to copy acks, timeout, transactionalId and partitionSizes from data since data maybe reset to eliminate
+     * the reference to ByteBuffer but those metadata are still useful.
+     */
     private final short acks;
     private final int timeout;
     private final String transactionalId;
-
-    private final Map<TopicPartition, Integer> partitionSizes;
-
+    // visible for testing
+    final Map<TopicPartition, Integer> partitionSizes;
+    private boolean hasTransactionalRecords = false;
+    private boolean hasIdempotentRecords = false;
     // This is set to null by `clearPartitionRecords` to prevent unnecessary memory retention when a produce request is
     // put in the purgatory (due to client throttling, it can take a while before the response is sent).
     // Care should be taken in methods that use this field.
-    private volatile Map<TopicPartition, MemoryRecords> partitionRecords;
-    private boolean hasTransactionalRecords = false;
-    private boolean hasIdempotentRecords = false;
+    private volatile ProduceRequestData data;
 
-    private ProduceRequest(short version, short acks, int timeout, Map<TopicPartition, MemoryRecords> partitionRecords, String transactionalId) {
+    public ProduceRequest(ProduceRequestData produceRequestData, short version) {
         super(ApiKeys.PRODUCE, version);
-        this.acks = acks;
-        this.timeout = timeout;
-
-        this.transactionalId = transactionalId;
-        this.partitionRecords = partitionRecords;
-        this.partitionSizes = createPartitionSizes(partitionRecords);
-
-        for (MemoryRecords records : partitionRecords.values()) {
-            setFlags(records);
-        }
-    }
-
-    private static Map<TopicPartition, Integer> createPartitionSizes(Map<TopicPartition, MemoryRecords> partitionRecords) {
-        Map<TopicPartition, Integer> result = new HashMap<>(partitionRecords.size());
-        for (Map.Entry<TopicPartition, MemoryRecords> entry : partitionRecords.entrySet())
-            result.put(entry.getKey(), entry.getValue().sizeInBytes());
-        return result;
-    }
-
-    public ProduceRequest(Struct struct, short version) {
-        super(ApiKeys.PRODUCE, version);
-        partitionRecords = new HashMap<>();
-        for (Object topicDataObj : struct.getArray(TOPIC_DATA_KEY_NAME)) {
-            Struct topicData = (Struct) topicDataObj;
-            String topic = topicData.get(TOPIC_NAME);
-            for (Object partitionResponseObj : topicData.getArray(PARTITION_DATA_KEY_NAME)) {
-                Struct partitionResponse = (Struct) partitionResponseObj;
-                int partition = partitionResponse.get(PARTITION_ID);
-                MemoryRecords records = (MemoryRecords) partitionResponse.getRecords(RECORD_SET_KEY_NAME);
-                setFlags(records);
-                partitionRecords.put(new TopicPartition(topic, partition), records);
-            }
-        }
-        partitionSizes = createPartitionSizes(partitionRecords);
-        acks = struct.getShort(ACKS_KEY_NAME);
-        timeout = struct.getInt(TIMEOUT_KEY_NAME);
-        transactionalId = struct.getOrElse(NULLABLE_TRANSACTIONAL_ID, null);
-    }
-
-    private void setFlags(MemoryRecords records) {
-        Iterator<MutableRecordBatch> iterator = records.batches().iterator();
-        MutableRecordBatch entry = iterator.next();
-        hasIdempotentRecords = hasIdempotentRecords || entry.hasProducerId();
-        hasTransactionalRecords = hasTransactionalRecords || entry.isTransactional();
+        this.data = produceRequestData;
+        this.data.topicData().forEach(topicProduceData -> topicProduceData.partitions()
+            .forEach(partitionProduceData -> {
+                MemoryRecords records = MemoryRecords.readableRecords(partitionProduceData.records());
+                Iterator<MutableRecordBatch> iterator = records.batches().iterator();
+                MutableRecordBatch entry = iterator.next();
+                hasIdempotentRecords = hasIdempotentRecords || entry.hasProducerId();
+                hasTransactionalRecords = hasTransactionalRecords || entry.isTransactional();
+            }));
+        this.acks = data.acks();
+        this.timeout = data.timeout();
+        this.transactionalId = data.transactionalId();
+        this.partitionSizes = data.topicData()
+            .stream()
+            .flatMap(e -> e.partitions()
+                .stream()
+                .map(p -> new AbstractMap.SimpleEntry<>(new TopicPartition(e.name(), p.partitionIndex()), p.records().limit())))
+            .collect(Collectors.groupingBy(AbstractMap.SimpleEntry::getKey, Collectors.summingInt(AbstractMap.SimpleEntry::getValue)));
     }
 
     /**
@@ -277,31 +185,10 @@ public class ProduceRequest extends AbstractRequest {
     @Override
     public Struct toStruct() {
         // Store it in a local variable to protect against concurrent updates
-        Map<TopicPartition, MemoryRecords> partitionRecords = partitionRecordsOrFail();
-        short version = version();
-        Struct struct = new Struct(ApiKeys.PRODUCE.requestSchema(version));
-        Map<String, Map<Integer, MemoryRecords>> recordsByTopic = CollectionUtils.groupPartitionDataByTopic(partitionRecords);
-        struct.set(ACKS_KEY_NAME, acks);
-        struct.set(TIMEOUT_KEY_NAME, timeout);
-        struct.setIfExists(NULLABLE_TRANSACTIONAL_ID, transactionalId);
-
-        List<Struct> topicDatas = new ArrayList<>(recordsByTopic.size());
-        for (Map.Entry<String, Map<Integer, MemoryRecords>> topicEntry : recordsByTopic.entrySet()) {
-            Struct topicData = struct.instance(TOPIC_DATA_KEY_NAME);
-            topicData.set(TOPIC_NAME, topicEntry.getKey());
-            List<Struct> partitionArray = new ArrayList<>();
-            for (Map.Entry<Integer, MemoryRecords> partitionEntry : topicEntry.getValue().entrySet()) {
-                MemoryRecords records = partitionEntry.getValue();
-                Struct part = topicData.instance(PARTITION_DATA_KEY_NAME)
-                        .set(PARTITION_ID, partitionEntry.getKey())
-                        .set(RECORD_SET_KEY_NAME, records);
-                partitionArray.add(part);
-            }
-            topicData.set(PARTITION_DATA_KEY_NAME, partitionArray.toArray());
-            topicDatas.add(topicData);
-        }
-        struct.set(TOPIC_DATA_KEY_NAME, topicDatas.toArray());
-        return struct;
+        ProduceRequestData tmp = data;
+        if (tmp == null)
+            throw new IllegalStateException("The partition records are no longer available because clearPartitionRecords() has been invoked.");
+        return tmp.toStruct(version());
     }
 
     @Override
@@ -367,19 +254,24 @@ public class ProduceRequest extends AbstractRequest {
     }
 
     /**
-     * Returns the partition records or throws IllegalStateException if clearPartitionRecords() has been invoked.
+     * convert the generated data to Map<TopicPartition, MemoryRecords>.
+     * Noted that the cost of conversion can be expensive so caller should keep and reuse the returned collection.
      */
     public Map<TopicPartition, MemoryRecords> partitionRecordsOrFail() {
         // Store it in a local variable to protect against concurrent updates
-        Map<TopicPartition, MemoryRecords> partitionRecords = this.partitionRecords;
-        if (partitionRecords == null)
-            throw new IllegalStateException("The partition records are no longer available because " +
-                    "clearPartitionRecords() has been invoked.");
-        return partitionRecords;
+        ProduceRequestData tmp = data;
+        if (tmp == null)
+            throw new IllegalStateException("The partition records are no longer available because clearPartitionRecords() has been invoked.");
+        Map<TopicPartition, MemoryRecords> partitionRecords = new HashMap<>();
+        tmp.topicData().forEach(tpData -> tpData.partitions().forEach(p -> {
+            TopicPartition tp = new TopicPartition(tpData.name(), p.partitionIndex());
+            partitionRecords.put(tp, MemoryRecords.readableRecords(p.records()));
+        }));
+        return Collections.unmodifiableMap(partitionRecords);
     }
 
     public void clearPartitionRecords() {
-        partitionRecords = null;
+        data = null;
     }
 
     public static void validateRecords(short version, MemoryRecords records) {
@@ -409,7 +301,7 @@ public class ProduceRequest extends AbstractRequest {
     }
 
     public static ProduceRequest parse(ByteBuffer buffer, short version) {
-        return new ProduceRequest(ApiKeys.PRODUCE.parseRequest(version, buffer), version);
+        return new ProduceRequest(new ProduceRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
     public static byte requiredMagicForVersion(short produceRequestVersion) {

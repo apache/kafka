@@ -626,6 +626,24 @@ public class RequestResponseTest {
     }
 
     @Test
+    public void testPartitionSize() {
+        TopicPartition tp0 = new TopicPartition("test", 0);
+        TopicPartition tp1 = new TopicPartition("test", 1);
+        MemoryRecords records0 = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2,
+            CompressionType.NONE, new SimpleRecord("woot".getBytes()));
+        MemoryRecords records1 = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2,
+            CompressionType.NONE, new SimpleRecord("woot".getBytes()), new SimpleRecord("woot".getBytes()));
+        Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
+        produceData.put(tp0, records0);
+        produceData.put(tp1, records1);
+        ProduceRequest request = ProduceRequest.Builder.forMagic(RecordBatch.MAGIC_VALUE_V2, (short) 1, 5000, produceData, "transactionalId")
+            .build((short) 3);
+        assertEquals(2, request.partitionSizes.size());
+        assertEquals(records0.sizeInBytes(), (int) request.partitionSizes.get(tp0));
+        assertEquals(records1.sizeInBytes(), (int) request.partitionSizes.get(tp1));
+    }
+
+    @Test
     public void produceRequestToStringTest() {
         ProduceRequest request = createProduceRequest(ApiKeys.PRODUCE.latestVersion());
         assertEquals(1, request.partitionRecordsOrFail().size());

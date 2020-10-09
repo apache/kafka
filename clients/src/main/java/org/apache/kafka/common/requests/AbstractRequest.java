@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.AlterIsrRequestData;
+import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -146,7 +147,7 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
     public static AbstractRequest parseRequest(ApiKeys apiKey, short apiVersion, Struct struct) {
         switch (apiKey) {
             case PRODUCE:
-                return new ProduceRequest(struct, apiVersion);
+                return new ProduceRequest(new ProduceRequestData(struct, apiVersion), apiVersion);
             case FETCH:
                 return new FetchRequest(new FetchRequestData(struct, apiVersion), apiVersion);
             case LIST_OFFSETS:
