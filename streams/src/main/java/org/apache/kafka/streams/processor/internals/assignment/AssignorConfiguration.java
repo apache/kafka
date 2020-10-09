@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigDef;
@@ -34,6 +35,7 @@ import org.apache.kafka.streams.processor.internals.TaskManager;
 import org.slf4j.Logger;
 
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -47,7 +49,7 @@ public final class AssignorConfiguration {
 
     private final String logPrefix;
     private final Logger log;
-    private final TaskManager taskManager;
+    private final ReferenceContainer referenceContainer;
 
     private final StreamsConfig streamsConfig;
     private final Map<String, ?> internalConfigs;
@@ -65,22 +67,22 @@ public final class AssignorConfiguration {
         log = logContext.logger(getClass());
 
         {
-            final Object o = configs.get(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR);
+            final Object o = configs.get(InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR);
             if (o == null) {
-                final KafkaException fatalException = new KafkaException("TaskManager is not specified");
+                final KafkaException fatalException = new KafkaException("ReferenceContainer is not specified");
                 log.error(fatalException.getMessage(), fatalException);
                 throw fatalException;
             }
 
-            if (!(o instanceof TaskManager)) {
+            if (!(o instanceof ReferenceContainer)) {
                 final KafkaException fatalException = new KafkaException(
-                    String.format("%s is not an instance of %s", o.getClass().getName(), TaskManager.class.getName())
+                    String.format("%s is not an instance of %s", o.getClass().getName(), ReferenceContainer.class.getName())
                 );
                 log.error(fatalException.getMessage(), fatalException);
                 throw fatalException;
             }
 
-            taskManager = (TaskManager) o;
+            referenceContainer = (ReferenceContainer) o;
         }
 
         {
@@ -150,26 +152,11 @@ public final class AssignorConfiguration {
     }
 
     public TaskManager taskManager() {
-        return taskManager;
+        return Objects.requireNonNull(referenceContainer.taskManager, "TaskManager was not specified");
     }
 
     public StreamsMetadataState streamsMetadataState() {
-        final Object o = internalConfigs.get(StreamsConfig.InternalConfig.STREAMS_METADATA_STATE_FOR_PARTITION_ASSIGNOR);
-        if (o == null) {
-            final KafkaException fatalException = new KafkaException("StreamsMetadataState is not specified");
-            log.error(fatalException.getMessage(), fatalException);
-            throw fatalException;
-        }
-
-        if (!(o instanceof StreamsMetadataState)) {
-            final KafkaException fatalException = new KafkaException(
-                String.format("%s is not an instance of %s", o.getClass().getName(), StreamsMetadataState.class.getName())
-            );
-            log.error(fatalException.getMessage(), fatalException);
-            throw fatalException;
-        }
-
-        return (StreamsMetadataState) o;
+        return Objects.requireNonNull(referenceContainer.streamsMetadataState, "StreamsMetadataState consumer was not specified");
     }
 
     public RebalanceProtocol rebalanceProtocol() {
@@ -271,8 +258,16 @@ public final class AssignorConfiguration {
         }
     }
 
-    public InternalTopicManager internalTopicManager(final Admin adminClient) {
-        return new InternalTopicManager(time(), adminClient, streamsConfig);
+    public Consumer<byte[], byte[]> mainConsumer() {
+        return Objects.requireNonNull(referenceContainer.mainConsumer, "Main consumer was not specified");
+    }
+
+    public Admin adminClient() {
+        return Objects.requireNonNull(referenceContainer.adminClient, "Admin client was not specified");
+    }
+
+    public InternalTopicManager internalTopicManager() {
+        return new InternalTopicManager(time(), referenceContainer.adminClient, streamsConfig);
     }
 
     public CopartitionedTopicsEnforcer copartitionedTopicsEnforcer() {

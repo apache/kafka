@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.GroupSubscription;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
@@ -36,6 +37,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockClientSupplier;
@@ -119,8 +121,12 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         final Map<String, Object> configurationMap = new HashMap<>();
         configurationMap.put(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID);
         configurationMap.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, USER_END_POINT);
-        configurationMap.put(InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR, taskManager);
-        configurationMap.put(InternalConfig.STREAMS_METADATA_STATE_FOR_PARTITION_ASSIGNOR, streamsMetadataState);
+        final ReferenceContainer referenceContainer = new ReferenceContainer();
+        referenceContainer.mainConsumer = EasyMock.mock(Consumer.class);
+        referenceContainer.adminClient = adminClient;
+        referenceContainer.taskManager = taskManager;
+        referenceContainer.streamsMetadataState = streamsMetadataState;
+        configurationMap.put(InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
         configurationMap.put(InternalConfig.ASSIGNMENT_ERROR_CODE, assignmentError);
         configurationMap.put(InternalConfig.NEXT_SCHEDULED_REBALANCE_MS, nextProbingRebalanceMs);
         configurationMap.put(InternalConfig.TIME, time);
@@ -130,13 +136,12 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
 
     // Make sure to complete setting up any mocks (such as TaskManager or AdminClient) before configuring the assignor
     private void configurePartitionAssignorWith(final Map<String, Object> props) {
-        EasyMock.replay(taskManager, adminClient);
-
         final Map<String, Object> configMap = configProps();
         configMap.putAll(props);
 
         streamsConfig = new StreamsConfig(configMap);
         partitionAssignor.configure(configMap);
+        EasyMock.replay(taskManager, adminClient);
 
         overwriteInternalTopicManagerWithMock();
     }
@@ -151,7 +156,6 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         expect(taskManager.builder()).andReturn(builder).anyTimes();
         expect(taskManager.getTaskOffsetSums()).andReturn(taskOffsetSums).anyTimes();
         expect(taskManager.processId()).andReturn(UUID_1).anyTimes();
-        expect(taskManager.adminClient()).andReturn(adminClient).anyTimes();
         builder.setApplicationId(APPLICATION_ID);
         builder.buildTopology();
     }
@@ -204,8 +208,8 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         builder.addStateStore(new MockKeyValueStoreBuilder("store1", false), "processor1");
         final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
 
-        adminClient = EasyMock.createMock(AdminClient.class);
         createMockTaskManager(allTasks);
+        adminClient = EasyMock.createMock(AdminClient.class);
         expect(adminClient.listOffsets(anyObject())).andThrow(new StreamsException("Should be handled"));
         configurePartitionAssignorWith(singletonMap(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, rebalanceInterval));
 
@@ -255,10 +259,10 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         builder.addStateStore(new MockKeyValueStoreBuilder("store1", false), "processor1");
         final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
 
+        createMockTaskManager(allTasks);
         createMockAdminClient(getTopicPartitionOffsetsMap(
             singletonList(APPLICATION_ID + "-store1-changelog"),
             singletonList(3)));
-        createMockTaskManager(allTasks);
         configurePartitionAssignorWith(singletonMap(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, rebalanceInterval));
 
         final String firstConsumer = "consumer1";

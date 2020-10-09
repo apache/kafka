@@ -31,6 +31,7 @@ import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
 import org.apache.kafka.test.IntegrationTest;
@@ -168,19 +169,21 @@ public class StreamsAssignmentScaleTest {
         builder.setApplicationId(APPLICATION_ID);
         builder.buildTopology();
 
-        final AdminClient adminClient = createMockAdminClientForAssignor(changelogEndOffsets);
         final Consumer<byte[], byte[]> mainConsumer = EasyMock.createNiceMock(Consumer.class);
         final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
         expect(taskManager.builder()).andStubReturn(builder);
-        expect(taskManager.mainConsumer()).andStubReturn(mainConsumer);
-        expect(taskManager.adminClient()).andReturn(adminClient).anyTimes();
         expect(mainConsumer.committed(new HashSet<>())).andStubReturn(Collections.emptyMap());
+        final AdminClient adminClient = createMockAdminClientForAssignor(changelogEndOffsets);
 
         final Map<String, Object> configMap = new HashMap<>();
         configMap.put(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID);
         configMap.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:8080");
-        configMap.put(InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR, taskManager);
-        configMap.put(InternalConfig.STREAMS_METADATA_STATE_FOR_PARTITION_ASSIGNOR, EasyMock.createNiceMock(StreamsMetadataState.class));
+        final ReferenceContainer referenceContainer = new ReferenceContainer();
+        referenceContainer.mainConsumer = mainConsumer;
+        referenceContainer.adminClient = adminClient;
+        referenceContainer.taskManager = taskManager;
+        referenceContainer.streamsMetadataState = EasyMock.createNiceMock(StreamsMetadataState.class);
+        configMap.put(InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
         configMap.put(InternalConfig.ASSIGNMENT_ERROR_CODE, new AtomicInteger());
         configMap.put(InternalConfig.NEXT_SCHEDULED_REBALANCE_MS, new AtomicLong(Long.MAX_VALUE));
         configMap.put(InternalConfig.TIME, new MockTime());

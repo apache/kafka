@@ -120,14 +120,6 @@ public class TaskManager {
         this.mainConsumer = mainConsumer;
     }
 
-    Consumer<byte[], byte[]> mainConsumer() {
-        return mainConsumer;
-    }
-
-    Admin adminClient() {
-        return adminClient;
-    }
-
     public UUID processId() {
         return processId;
     }
@@ -208,7 +200,7 @@ public class TaskManager {
             // for this task until it has been re-initialized;
             // Note, closeDirty already clears the partitiongroup for the task.
             if (task.isActive()) {
-                final Set<TopicPartition> currentAssignment = mainConsumer().assignment();
+                final Set<TopicPartition> currentAssignment = mainConsumer.assignment();
                 final Set<TopicPartition> taskInputPartitions = task.inputPartitions();
                 final Set<TopicPartition> assignedToPauseAndReset =
                     intersection(HashSet::new, currentAssignment, taskInputPartitions);
@@ -221,12 +213,12 @@ public class TaskManager {
                     );
                 }
 
-                mainConsumer().pause(assignedToPauseAndReset);
-                final Map<TopicPartition, OffsetAndMetadata> committed = mainConsumer().committed(assignedToPauseAndReset);
+                mainConsumer.pause(assignedToPauseAndReset);
+                final Map<TopicPartition, OffsetAndMetadata> committed = mainConsumer.committed(assignedToPauseAndReset);
                 for (final Map.Entry<TopicPartition, OffsetAndMetadata> committedEntry : committed.entrySet()) {
                     final OffsetAndMetadata offsetAndMetadata = committedEntry.getValue();
                     if (offsetAndMetadata != null) {
-                        mainConsumer().seek(committedEntry.getKey(), offsetAndMetadata);
+                        mainConsumer.seek(committedEntry.getKey(), offsetAndMetadata);
                         assignedToPauseAndReset.remove(committedEntry.getKey());
                     }
                 }

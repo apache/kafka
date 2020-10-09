@@ -163,6 +163,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     private String userEndPoint;
     private AssignmentConfigs assignmentConfigs;
+    private AssignorConfiguration assignorConfiguration;
 
     private TaskManager taskManager;
     private StreamsMetadataState streamsMetadataState;
@@ -190,12 +191,11 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      */
     @Override
     public void configure(final Map<String, ?> configs) {
-        final AssignorConfiguration assignorConfiguration = new AssignorConfiguration(configs);
+        assignorConfiguration = new AssignorConfiguration(configs);
 
         logPrefix = assignorConfiguration.logPrefix();
         log = new LogContext(logPrefix).logger(getClass());
-        usedSubscriptionMetadataVersion = assignorConfiguration
-            .configuredMetadataVersion(usedSubscriptionMetadataVersion);
+        usedSubscriptionMetadataVersion = assignorConfiguration.configuredMetadataVersion(usedSubscriptionMetadataVersion);
         taskManager = assignorConfiguration.taskManager();
         streamsMetadataState = assignorConfiguration.streamsMetadataState();
         assignmentErrorCode = assignorConfiguration.assignmentErrorCode();
@@ -204,7 +204,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         assignmentConfigs = assignorConfiguration.assignmentConfigs();
         partitionGrouper = assignorConfiguration.partitionGrouper();
         userEndPoint = assignorConfiguration.userEndPoint();
-        internalTopicManager = assignorConfiguration.internalTopicManager(taskManager.adminClient());
+        internalTopicManager = assignorConfiguration.internalTopicManager();
         copartitionedTopicsEnforcer = assignorConfiguration.copartitionedTopicsEnforcer();
         rebalanceProtocol = assignorConfiguration.rebalanceProtocol();
         taskAssignorSupplier = assignorConfiguration::taskAssignor;
@@ -800,10 +800,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             // Make the listOffsets request first so it can  fetch the offsets for non-source changelogs
             // asynchronously while we use the blocking Consumer#committed call to fetch source-changelog offsets
             final KafkaFuture<Map<TopicPartition, ListOffsetsResultInfo>> endOffsetsFuture =
-                fetchEndOffsetsFuture(preexistingChangelogPartitions, taskManager.adminClient());
+                fetchEndOffsetsFuture(preexistingChangelogPartitions, assignorConfiguration.adminClient());
 
             final Map<TopicPartition, Long> sourceChangelogEndOffsets =
-                fetchCommittedOffsets(preexistingSourceChangelogPartitions, taskManager.mainConsumer());
+                fetchCommittedOffsets(preexistingSourceChangelogPartitions, assignorConfiguration.mainConsumer());
 
             final Map<TopicPartition, ListOffsetsResultInfo> endOffsets = ClientUtils.getEndOffsets(endOffsetsFuture);
 
