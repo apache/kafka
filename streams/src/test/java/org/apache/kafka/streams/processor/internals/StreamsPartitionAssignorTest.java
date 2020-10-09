@@ -219,12 +219,11 @@ public class StreamsPartitionAssignorTest {
 
     // Make sure to complete setting up any mocks (such as TaskManager or AdminClient) before configuring the assignor
     private MockInternalTopicManager configurePartitionAssignorWith(final Map<String, Object> props) {
-        EasyMock.replay(taskManager, adminClient);
-
         final Map<String, Object> configMap = configProps();
         configMap.putAll(props);
 
         partitionAssignor.configure(configMap);
+        EasyMock.replay(taskManager, adminClient);
 
         return overwriteInternalTopicManagerWithMock(false);
     }
@@ -535,11 +534,11 @@ public class StreamsPartitionAssignorTest {
         final Set<TaskId> standbyTasks11 = mkSet(TASK_0_2);
         final Set<TaskId> standbyTasks20 = mkSet(TASK_0_0);
 
+        createMockTaskManager(prevTasks10, standbyTasks10);
         adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
             singletonList(APPLICATION_ID + "-store-changelog"),
             singletonList(3))
         );
-        createMockTaskManager(prevTasks10, standbyTasks10);
         configureDefaultPartitionAssignor();
 
         subscriptions.put("consumer10",
@@ -661,11 +660,11 @@ public class StreamsPartitionAssignorTest {
         final List<String> topics = asList("topic1", "topic2");
         final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
 
+        createDefaultMockTaskManager();
         adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
             singletonList(APPLICATION_ID + "-store1-changelog"),
             singletonList(3))
         );
-        createDefaultMockTaskManager();
         configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, SingleGroupPartitionGrouperStub.class));
 
         // will throw exception if it fails
@@ -951,11 +950,11 @@ public class StreamsPartitionAssignorTest {
         final Set<TaskId> standbyTasks01 = mkSet(TASK_0_1);
         final Set<TaskId> standbyTasks02 = mkSet(TASK_0_2);
 
+        createMockTaskManager(prevTasks00, standbyTasks01);
         adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
             singletonList(APPLICATION_ID + "-store1-changelog"),
             singletonList(3))
         );
-        createMockTaskManager(prevTasks00, standbyTasks01);
         configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1));
 
         subscriptions.put("consumer10",
@@ -1039,6 +1038,8 @@ public class StreamsPartitionAssignorTest {
         standbyTasks.put(TASK_0_1, mkSet(t3p1));
         standbyTasks.put(TASK_0_2, mkSet(t3p2));
 
+        taskManager.handleAssignment(activeTasks, standbyTasks);
+        EasyMock.expectLastCall();
         streamsMetadataState = EasyMock.createStrictMock(StreamsMetadataState.class);
         final Capture<Cluster> capturedCluster = EasyMock.newCapture();
         streamsMetadataState.onChange(EasyMock.eq(hostState), EasyMock.anyObject(), EasyMock.capture(capturedCluster));
@@ -1046,11 +1047,6 @@ public class StreamsPartitionAssignorTest {
         EasyMock.replay(streamsMetadataState);
 
         configureDefaultPartitionAssignor();
-
-        EasyMock.resetToDefault(taskManager);
-        taskManager.handleAssignment(activeTasks, standbyTasks);
-        EasyMock.expectLastCall();
-        EasyMock.replay(taskManager);
 
         final List<TaskId> activeTaskList = asList(TASK_0_0, TASK_0_3);
         final AssignmentInfo info = new AssignmentInfo(LATEST_SUPPORTED_VERSION, activeTaskList, standbyTasks, hostState, emptyMap(), 0);
@@ -1487,11 +1483,11 @@ public class StreamsPartitionAssignorTest {
         streamsBuilder.stream("topic1").groupByKey().count();
         builder = TopologyWrapper.getInternalTopologyBuilder(streamsBuilder.build());
 
+        createDefaultMockTaskManager();
         adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
             singletonList(APPLICATION_ID + "-KSTREAM-AGGREGATE-STATE-STORE-0000000001-changelog"),
             singletonList(3))
         );
-        createDefaultMockTaskManager();
 
         final Map<String, Object> props = new HashMap<>();
         props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
