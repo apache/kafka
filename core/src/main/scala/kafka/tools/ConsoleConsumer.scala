@@ -70,7 +70,7 @@ object ConsoleConsumer extends Logging {
       if (conf.partitionArg.isDefined)
         new ConsumerWrapper(Option(conf.topicArg), conf.partitionArg, Option(conf.offsetArg), None, consumer, timeoutMs)
       else
-        new ConsumerWrapper(Option(conf.topicArg), None, None, Option(conf.whitelistArg), consumer, timeoutMs)
+        new ConsumerWrapper(Option(conf.topicArg), None, None, Option(conf.includeArg), consumer, timeoutMs)
 
     addShutdownHook(consumerWrapper, conf)
 
@@ -193,9 +193,9 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("topic")
       .ofType(classOf[String])
-    val whitelistOpt = parser.accepts("whitelist", "Regular expression specifying whitelist of topics to include for consumption.")
+    val includeOpt = parser.accepts("include", "Regular expression specifying the list of topics to include for consumption.")
       .withRequiredArg
-      .describedAs("whitelist")
+      .describedAs("include")
       .ofType(classOf[String])
     val partitionIdOpt = parser.accepts("partition", "The partition to consume from. Consumption " +
       "starts from the end of the partition unless '--offset' is specified.")
@@ -289,7 +289,7 @@ object ConsoleConsumer extends Logging {
 
     // topic must be specified.
     var topicArg: String = null
-    var whitelistArg: String = null
+    var includeArg: String = null
     var filterSpec: TopicFilter = null
     val extraConsumerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(consumerPropertyOpt).asScala)
     val consumerProps = if (options.has(consumerConfigOpt))
@@ -317,11 +317,11 @@ object ConsoleConsumer extends Logging {
 
     formatter.configure(formatterArgs.asScala.asJava)
 
-    val topicOrFilterOpt = List(topicIdOpt, whitelistOpt).filter(options.has)
+    val topicOrFilterOpt = List(topicIdOpt, includeOpt).filter(options.has)
     if (topicOrFilterOpt.size != 1)
-      CommandLineUtils.printUsageAndDie(parser, "Exactly one of whitelist/topic is required.")
+      CommandLineUtils.printUsageAndDie(parser, "Exactly one of include/topic is required.")
     topicArg = options.valueOf(topicIdOpt)
-    whitelistArg = options.valueOf(whitelistOpt)
+    includeArg = options.valueOf(includeOpt)
 
     if (partitionArg.isDefined) {
       if (!options.has(topicIdOpt))
@@ -394,13 +394,13 @@ object ConsoleConsumer extends Logging {
     }
   }
 
-  private[tools] class ConsumerWrapper(topic: Option[String], partitionId: Option[Int], offset: Option[Long], whitelist: Option[String],
+  private[tools] class ConsumerWrapper(topic: Option[String], partitionId: Option[Int], offset: Option[Long], include: Option[String],
                                        consumer: Consumer[Array[Byte], Array[Byte]], val timeoutMs: Long = Long.MaxValue) {
     consumerInit()
     var recordIter = Collections.emptyList[ConsumerRecord[Array[Byte], Array[Byte]]]().iterator()
 
     def consumerInit(): Unit = {
-      (topic, partitionId, offset, whitelist) match {
+      (topic, partitionId, offset, include) match {
         case (Some(topic), Some(partitionId), Some(offset), None) =>
           seek(topic, partitionId, offset)
         case (Some(topic), Some(partitionId), None, None) =>
@@ -408,11 +408,11 @@ object ConsoleConsumer extends Logging {
           seek(topic, partitionId, ListOffsetRequest.LATEST_TIMESTAMP)
         case (Some(topic), None, None, None) =>
           consumer.subscribe(Collections.singletonList(topic))
-        case (None, None, None, Some(whitelist)) =>
-          consumer.subscribe(Pattern.compile(whitelist))
+        case (None, None, None, Some(include)) =>
+          consumer.subscribe(Pattern.compile(include))
         case _ =>
           throw new IllegalArgumentException("An invalid combination of arguments is provided. " +
-            "Exactly one of 'topic' or 'whitelist' must be provided. " +
+            "Exactly one of 'topic' or 'include' must be provided. " +
             "If 'topic' is provided, an optional 'partition' may also be provided. " +
             "If 'partition' is provided, an optional 'offset' may also be provided, otherwise, consumption starts from the end of the partition.")
       }
