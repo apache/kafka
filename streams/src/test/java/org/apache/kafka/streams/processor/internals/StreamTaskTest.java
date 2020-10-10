@@ -39,6 +39,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
@@ -46,10 +47,12 @@ import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -67,6 +70,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.slf4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
@@ -132,7 +136,7 @@ public class StreamTaskTest {
     private final MockSourceNode<Integer, Integer, Integer, Integer> source2 = new MockSourceNode<>(intDeserializer, intDeserializer);
     private final MockSourceNode<Integer, Integer, ?, ?> source3 = new MockSourceNode<Integer, Integer, Object, Object>(intDeserializer, intDeserializer) {
         @Override
-        public void process(final Integer key, final Integer value) {
+        public void process(final Record<Integer, Integer> record) {
             throw new RuntimeException("KABOOM!");
         }
 
@@ -466,10 +470,11 @@ public class StreamTaskTest {
                 this.context = context;
                 super.init(context);
             }
+
             @Override
-            public void process(final Integer key, final Integer value) {
-                if (key % 2 == 0) {
-                    context.forward(key, value);
+            public void process(final Record<Integer, Integer> record) {
+                if (record.key() % 2 == 0) {
+                    context.forward(record);
                 }
             }
         };
@@ -1230,10 +1235,10 @@ public class StreamTaskTest {
         task.completeRestoration();
 
         task.punctuate(processorSystemTime, 1, PunctuationType.WALL_CLOCK_TIME, timestamp -> {
-            task.processorContext().recordContext().headers().add("dummy", (byte[]) null);
+            task.processorContext().headers().add("dummy", (byte[]) null);
         });
         task.punctuate(processorSystemTime, 1, PunctuationType.WALL_CLOCK_TIME, timestamp -> {
-            assertFalse(task.processorContext().recordContext().headers().iterator().hasNext());
+            assertFalse(task.processorContext().headers().iterator().hasNext());
         });
     }
 
@@ -2030,6 +2035,70 @@ public class StreamTaskTest {
         assertThat(task.state(), equalTo(RUNNING));
         assertThrows(RuntimeException.class, () -> task.suspend());
         assertThat(task.state(), equalTo(SUSPENDED));
+    }
+
+    @Test
+    public void shouldThrowTopologyExceptionIfTaskCreatedForUnknownTopic() {
+        final InternalProcessorContext context = new ProcessorContextImpl(
+                taskId,
+                createConfig(false, "100"),
+                stateManager,
+                streamsMetrics,
+                null
+        );
+        final StreamsMetricsImpl metrics = new StreamsMetricsImpl(this.metrics, "test", StreamsConfig.METRICS_LATEST, time);
+        EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet());
+        EasyMock.replay(stateManager);
+
+        // The processor topology is missing the topics
+        final ProcessorTopology topology = withSources(asList(), mkMap());
+
+        final TopologyException  exception = assertThrows(
+            TopologyException.class,
+            () -> new StreamTask(
+                taskId,
+                partitions,
+                topology,
+                consumer,
+                createConfig(false, "100"),
+                metrics,
+                stateDirectory,
+                cache,
+                time,
+                stateManager,
+                recordCollector,
+                context
+            )
+        );
+
+        assertThat(exception.getMessage(), equalTo("Invalid topology: " +
+                "Topic is unkown to the topology. This may happen if different KafkaStreams instances of the same " +
+                "application execute different Topologies. Note that Topologies are only identical if all operators " +
+                "are added in the same order."));
+    }
+
+    @Test
+    public void shouldInitTaskTimeoutAndEventuallyThrow() {
+        final Logger log = new LogContext().logger(StreamTaskTest.class);
+        task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
+
+        task.maybeInitTaskTimeoutOrThrow(0L, null, log);
+        task.maybeInitTaskTimeoutOrThrow(Duration.ofMinutes(5).toMillis(), null, log);
+
+        assertThrows(
+            TimeoutException.class,
+            () -> task.maybeInitTaskTimeoutOrThrow(Duration.ofMinutes(5).plus(Duration.ofMillis(1L)).toMillis(), null, log)
+        );
+    }
+
+    @Test
+    public void shouldCLearTaskTimeout() {
+        final Logger log = new LogContext().logger(StreamTaskTest.class);
+        task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
+
+        task.maybeInitTaskTimeoutOrThrow(0L, null, log);
+        task.clearTaskTimeout(log);
+        task.maybeInitTaskTimeoutOrThrow(Duration.ofMinutes(5).plus(Duration.ofMillis(1L)).toMillis(), null, log);
     }
 
     private List<MetricName> getTaskMetrics() {

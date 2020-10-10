@@ -17,7 +17,6 @@
 
 package kafka.admin
 
-import java.text.{ParseException, SimpleDateFormat}
 import java.time.{Duration, Instant}
 import java.util.Properties
 
@@ -112,19 +111,6 @@ object ConsumerGroupCommand extends Logging {
   def printError(msg: String, e: Option[Throwable] = None): Unit = {
     println(s"\nError: $msg")
     e.foreach(_.printStackTrace())
-  }
-
-  def convertTimestamp(timeString: String): java.lang.Long = {
-    val datetime: String = timeString match {
-      case ts if ts.split("T")(1).contains("+") || ts.split("T")(1).contains("-") || ts.split("T")(1).contains("Z") => ts.toString
-      case ts => s"${ts}Z"
-    }
-    val date = try {
-      new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX").parse(datetime)
-    } catch {
-      case _: ParseException => new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX").parse(datetime)
-    }
-    date.getTime
   }
 
   def printOffsetsToReset(groupAssignmentsToReset: Map[String, Map[TopicPartition, OffsetAndMetadata]]): Unit = {
@@ -824,7 +810,7 @@ object ConsumerGroupCommand extends Logging {
           case (topicPartition, newOffset) => (topicPartition, new OffsetAndMetadata(newOffset))
         }
       } else if (opts.options.has(opts.resetToDatetimeOpt)) {
-        val timestamp = convertTimestamp(opts.options.valueOf(opts.resetToDatetimeOpt))
+        val timestamp = Utils.getDateTime(opts.options.valueOf(opts.resetToDatetimeOpt))
         val logTimestampOffsets = getLogTimestampOffsets(groupId, partitionsToReset, timestamp)
         partitionsToReset.map { topicPartition =>
           val logTimestampOffset = logTimestampOffsets.get(topicPartition)

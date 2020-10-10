@@ -29,6 +29,7 @@ import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -371,15 +372,12 @@ public class TopologyTest {
         public Processor<Object, Object, Object, Object> get() {
             return new Processor<Object, Object, Object, Object>() {
                 @Override
-                public void init(final ProcessorContext context) {
+                public void init(final ProcessorContext<Object, Object> context) {
                     context.getStateStore(STORE_NAME);
                 }
 
                 @Override
-                public void process(final Object key, final Object value) { }
-
-                @Override
-                public void close() { }
+                public void process(final Record<Object, Object> record) { }
             };
         }
     }

@@ -28,7 +28,7 @@ import kafka.log.{Log, LogConfig, LogManager}
 import kafka.network.{ConnectionQuotas, Processor, RequestChannel, SocketServer}
 import kafka.raft.{KafkaFuturePurgatory, KafkaMetadataLog, KafkaNetworkChannel}
 import kafka.security.CredentialProvider
-import kafka.server.{BrokerTopicStats, KafkaConfig, KafkaRequestHandlerPool, KafkaServer, LogDirFailureChannel, RaftRequestHandler}
+import kafka.server.{BrokerTopicStats, KafkaConfig, KafkaRequestHandlerPool, KafkaServer, LogDirFailureChannel}
 import kafka.utils.timer.SystemTimer
 import kafka.utils.{CommandLineUtils, CoreUtils, Exit, KafkaScheduler, Logging, ShutdownableThread}
 import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ManualMetadataUpdater, NetworkClient}
@@ -100,7 +100,7 @@ class TestRaftServer(val config: KafkaConfig) extends Logging {
 
     raftClient.initialize()
 
-    val requestHandler = new RaftRequestHandler(
+    val requestHandler = new TestRaftRequestHandler(
       networkChannel,
       socketServer.dataPlaneRequestChannel,
       time,

@@ -47,6 +47,7 @@ public class WindowStoreFacadeTest {
         windowStoreFacade = new WindowStoreFacade<>(mockedWindowTimestampStore);
     }
 
+    @SuppressWarnings("deprecation") // TODO will be fixed in KAFKA-10437
     @Test
     public void shouldForwardInit() {
         final ProcessorContext context = mock(ProcessorContext.class);
