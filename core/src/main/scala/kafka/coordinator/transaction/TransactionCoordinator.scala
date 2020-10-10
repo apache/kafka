@@ -166,7 +166,8 @@ class TransactionCoordinator(brokerId: Int,
               newMetadata.producerEpoch,
               TransactionResult.ABORT,
               isFromClient = false,
-              sendRetriableErrorCallback)
+              sendRetriableErrorCallback,
+              isFromTimeoutAbort = false)
           } else {
             def sendPidResponseCallback(error: Errors): Unit = {
               if (error == Errors.NONE) {
@@ -360,23 +361,8 @@ class TransactionCoordinator(brokerId: Int,
       producerEpoch,
       txnMarkerResult,
       isFromClient = true,
-      responseCallback)
-  }
-
-  private def endTransaction(transactionalId: String,
-                             producerId: Long,
-                             producerEpoch: Short,
-                             txnMarkerResult: TransactionResult,
-                             isFromClient: Boolean,
-                             responseCallback: EndTxnCallback): Unit = {
-    endTransaction(transactionalId,
-      producerId,
-      producerEpoch,
-      txnMarkerResult,
-      isFromClient,
       responseCallback,
-      isFromTimeoutAbort = false
-    )
+      isFromTimeoutAbort = false)
   }
 
   private def endTransaction(transactionalId: String,
