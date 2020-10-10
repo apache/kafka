@@ -29,7 +29,7 @@ import kafka.utils.TestUtils
 import kafka.utils.TestUtils.consumeRecords
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, OffsetAndMetadata}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
-import org.apache.kafka.common.errors.{ProducerFencedException, TimeoutException, TransactionTimeOutException}
+import org.apache.kafka.common.errors.{ProducerFencedException, TimeoutException, TransactionTimeoutException}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
@@ -557,9 +557,9 @@ class TransactionsTest extends KafkaServerTestHarness {
       producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "2", willBeCommitted = false)).get()
       fail("should have raised a TransactionTimeOutException since the transaction has expired")
     } catch {
-      case _: TransactionTimeOutException =>
+      case _: TransactionTimeoutException =>
       case e: ExecutionException =>
-      assertTrue(e.getCause.isInstanceOf[TransactionTimeOutException])
+      assertTrue(e.getCause.isInstanceOf[TransactionTimeoutException])
     }
 
     // Verify that the first message was aborted and the second one was never written at all.
@@ -599,9 +599,9 @@ class TransactionsTest extends KafkaServerTestHarness {
       producer.commitTransaction()
       fail("should have raised a TransactionTimeOutException since the transaction has expired")
     } catch {
-      case _: TransactionTimeOutException =>
+      case _: TransactionTimeoutException =>
       case e: ExecutionException =>
-        assertTrue(e.getCause.isInstanceOf[TransactionTimeOutException])
+        assertTrue(e.getCause.isInstanceOf[TransactionTimeoutException])
     }
 
     val transactionalConsumer = transactionalConsumers.head

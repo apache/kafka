@@ -26,7 +26,7 @@ import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.errors.InvalidPidMappingException;
 import org.apache.kafka.common.errors.RetriableException;
-import org.apache.kafka.common.errors.TransactionTimeOutException;
+import org.apache.kafka.common.errors.TransactionTimeoutException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
@@ -373,7 +373,7 @@ public class TransactionManager {
         // directly to InitProducerId. Otherwise, we must first abort the transaction, because the producer will be
         // fenced if we directly call InitProducerId.
         boolean needEndTxn = !(abortableError instanceof InvalidPidMappingException)
-                && !(abortableError instanceof TransactionTimeOutException);
+                && !(abortableError instanceof TransactionTimeoutException);
         if (needEndTxn) {
             EndTxnRequest.Builder builder = new EndTxnRequest.Builder(
                     new EndTxnRequestData()

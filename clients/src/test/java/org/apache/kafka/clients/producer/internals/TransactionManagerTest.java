@@ -24,7 +24,7 @@ import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
-import org.apache.kafka.common.errors.TransactionTimeOutException;
+import org.apache.kafka.common.errors.TransactionTimeoutException;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -1698,7 +1698,7 @@ public class TransactionManagerTest {
             responseFuture.get();
             fail("Expected to get a ExecutionException from the response");
         } catch (ExecutionException e) {
-            assertTrue(e.getCause() instanceof TransactionTimeOutException);
+            assertTrue(e.getCause() instanceof TransactionTimeoutException);
         }
     }
 

@@ -36,7 +36,7 @@ import org.apache.kafka.common.errors.ElectionNotNeededException;
 import org.apache.kafka.common.errors.EligibleLeadersNotAvailableException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.FencedLeaderEpochException;
-import org.apache.kafka.common.errors.TransactionTimeOutException;
+import org.apache.kafka.common.errors.TransactionTimeoutException;
 import org.apache.kafka.common.internals.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.ListenerNotFoundException;
 import org.apache.kafka.common.errors.InvalidUpdateVersionException;
@@ -339,7 +339,7 @@ public enum Errors {
             "voter-only request is not one of the expected voters", InconsistentVoterSetException::new),
     INVALID_UPDATE_VERSION(95, "The given update version was invalid.", InvalidUpdateVersionException::new),
     TRANSACTION_TIMED_OUT(96, "The last ongoing transaction timed out on the coordinator, should retry initialization" +
-                                  " with current epoch.", TransactionTimeOutException::new);
+                                  " with current epoch.", TransactionTimeoutException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

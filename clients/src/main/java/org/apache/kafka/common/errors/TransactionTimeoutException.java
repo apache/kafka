@@ -20,11 +20,11 @@ package org.apache.kafka.common.errors;
  * This exception indicates that the last ongoing transaction timed out on the coordinator.
  * When encountering this exception, the producer should retry initialization with current epoch.
  */
-public class TransactionTimeOutException extends ApiException {
+public class TransactionTimeoutException extends ApiException {
 
     private static final long serialVersionUID = 1L;
 
-    public TransactionTimeOutException(String message) {
+    public TransactionTimeoutException(String message) {
         super(message);
     }
 }
