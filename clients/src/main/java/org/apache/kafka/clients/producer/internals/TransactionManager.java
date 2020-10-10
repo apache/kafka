@@ -1370,6 +1370,7 @@ public class TransactionManager {
                 lastError = null;
                 abortableError = null;
                 if (this.isEpochBump) {
+                    epochBumpRequired = false;
                     resetSequenceNumbers();
                 }
                 result.done();
