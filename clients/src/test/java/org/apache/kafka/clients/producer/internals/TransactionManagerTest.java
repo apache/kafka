@@ -2985,7 +2985,6 @@ public class TransactionManagerTest {
         runUntil(transactionManager::hasAbortableError);  // Send AddOffsetsRequest
         TransactionalRequestResult abortResult = transactionManager.beginAbort();
 
-        prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, initialEpoch);
         prepareInitPidResponse(Errors.NONE, false, producerId, bumpedEpoch);
         runUntil(abortResult::isCompleted);
         assertEquals(bumpedEpoch, transactionManager.producerIdAndEpoch().epoch);

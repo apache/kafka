@@ -367,7 +367,7 @@ public class TransactionManager {
         if (!newPartitionsInTransaction.isEmpty())
             enqueueRequest(addPartitionsToTransactionHandler());
 
-        // If the error is an INVALID_PRODUCER_ID_MAPPING/TransactionTimeOutException error, the server will not accept an EndTxnRequest, so skip
+        // If the error is an INVALID_PRODUCER_ID_MAPPING error, the server will not accept an EndTxnRequest, so skip
         // directly to InitProducerId. Otherwise, we must first abort the transaction, because the producer will be
         // fenced if we directly call InitProducerId.
         if (!(abortableError instanceof InvalidPidMappingException)) {
