@@ -226,6 +226,7 @@ class TestRaftServer(
       metadataLog,
       quorumState,
       time,
+      gracefulShutdownTimeoutMs,
       expirationService,
       logContext
     )
@@ -420,7 +421,7 @@ class TestRaftServer(
 
     override def initiateShutdown(): Boolean = {
       if (super.initiateShutdown()) {
-        client.shutdown(5000).whenComplete { (_, exception) =>
+        client.shutdown(gracefulShutdownTimeoutMs).whenComplete { (_, exception) =>
           if (exception != null) {
             error("Graceful shutdown of RaftClient failed", exception)
           } else {
@@ -441,6 +442,8 @@ class TestRaftServer(
 }
 
 object TestRaftServer extends Logging {
+
+  private val gracefulShutdownTimeoutMs = 5000
 
   case class PendingAppend(
     offset: Long,
