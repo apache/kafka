@@ -153,6 +153,8 @@ public class KafkaStreams implements AutoCloseable {
     private final QueryableStoreProvider queryableStoreProvider;
     private final Admin adminClient;
     private final StreamsMetricsImpl streamsMetrics;
+    private final ProcessorTopology taskTopology;
+    private final ProcessorTopology globalTaskTopology;
 
     GlobalStreamThread globalStreamThread;
     private KafkaStreams.StateListener stateListener;
@@ -702,7 +704,7 @@ public class KafkaStreams implements AutoCloseable {
         internalTopologyBuilder.rewriteTopology(config);
 
         // sanity check to fail-fast in case we cannot build a ProcessorTopology due to an exception
-        final ProcessorTopology taskTopology = internalTopologyBuilder.buildTopology();
+        taskTopology = internalTopologyBuilder.buildTopology();
 
         streamsMetadataState = new StreamsMetadataState(
                 internalTopologyBuilder,
@@ -719,7 +721,7 @@ public class KafkaStreams implements AutoCloseable {
         // create the stream thread, global update thread, and cleanup thread
         threads = new StreamThread[numStreamThreads];
 
-        final ProcessorTopology globalTaskTopology = internalTopologyBuilder.buildGlobalStateTopology();
+        globalTaskTopology = internalTopologyBuilder.buildGlobalStateTopology();
         final boolean hasGlobalTopology = globalTaskTopology != null;
 
         if (numStreamThreads == 0 && !hasGlobalTopology) {
@@ -1202,6 +1204,13 @@ public class KafkaStreams implements AutoCloseable {
      * {@code queryableStoreType} doesn't exist
      */
     public <T> T store(final StoreQueryParameters<T> storeQueryParameters) {
+        final String storeName = storeQueryParameters.storeName();
+        if ((taskTopology == null || !taskTopology.hasStore(storeName))
+            && (globalTaskTopology == null || !globalTaskTopology.hasStore(storeName))) {
+            throw new InvalidStateStoreException(
+                "Cannot get state store " + storeName + " because no such store is registered in the topology."
+            );
+        }
         validateIsRunningOrRebalancing();
         return queryableStoreProvider.getStore(storeQueryParameters);
     }
