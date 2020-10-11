@@ -548,7 +548,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
      *
      *   -----BEGIN ENCRYPTED PRIVATE KEY-----
      *   Base64 private key
-     *   -----BEGIN ENCRYPTED PRIVATE KEY-----
+     *   -----END ENCRYPTED PRIVATE KEY-----
      *   Additional data may be included before headers, so we match all entres within the PEM.
      */
     static class PemParser {
