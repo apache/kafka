@@ -94,7 +94,7 @@ public class StreamThreadStateStoreProvider {
                 throw new InvalidStateStoreException(
                         "Cannot get state store " + storeName + " for task " + taskId +
                             " because the store is not open. " +
-                            "The state store may have migrated to another instances.");
+                            "The state store may have migrated to another instance.");
             }
             if (store instanceof TimestampedKeyValueStore && queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
                 return (T) new ReadOnlyKeyValueStoreFacade<>((TimestampedKeyValueStore<Object, Object>) store);
@@ -106,7 +106,7 @@ public class StreamThreadStateStoreProvider {
         } else {
             throw new InvalidStateStoreException(
                 "Cannot get state store " + storeName +
-                    " because the queriable store type [" + queryableStoreType.getClass() +
+                    " because the queryable store type [" + queryableStoreType.getClass() +
                     "] does not accept the actual store type [" + store.getClass() + "]."
             );
         }

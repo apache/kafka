@@ -1200,8 +1200,12 @@ public class KafkaStreams implements AutoCloseable {
      *
      * @param storeQueryParameters   the parameters used to fetch a queryable store
      * @return A facade wrapping the local {@link StateStore} instances
-     * @throws InvalidStateStoreException if Kafka Streams is (re-)initializing or a store with {@code storeName} and
-     * {@code queryableStoreType} doesn't exist
+     * @throws InvalidStateStoreException If the specified store name does not exist in the topology
+     *                                    or if the Streams instance isn't in a queryable state.
+     *                                    If the store's type does not match the QueryableStoreType,
+     *                                    the Streams instance is not in a queryable state with respect
+     *                                    to the parameters, or if the store is not available locally, then
+     *                                    an InvalidStateStoreException is thrown upon store access.
      */
     public <T> T store(final StoreQueryParameters<T> storeQueryParameters) {
         final String storeName = storeQueryParameters.storeName();

@@ -512,7 +512,7 @@ public class QueryableStateIntegrationTest {
             assertThat(
                 exception.getMessage(),
                 is(
-                    "Cannot get state store " + storeName + " because the queriable store type" +
+                    "Cannot get state store " + storeName + " because the queryable store type" +
                         " [class org.apache.kafka.streams.state.QueryableStoreTypes$SessionStoreType]" +
                         " does not accept the actual store type" +
                         " [class org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStore]."

@@ -215,7 +215,7 @@ public class StreamThreadStateStoreProviderTest {
         assertThat(
             exception.getMessage(),
             is(
-                "Cannot get state store kv-store because the queriable store type " +
+                "Cannot get state store kv-store because the queryable store type " +
                     "[class org.apache.kafka.streams.state.QueryableStoreTypes$TimestampedKeyValueStoreType] " +
                     "does not accept the actual store type " +
                     "[class org.apache.kafka.streams.state.internals.MeteredKeyValueStore]."
@@ -269,7 +269,7 @@ public class StreamThreadStateStoreProviderTest {
         assertThat(
             exception.getMessage(),
             is(
-                "Cannot get state store window-store because the queriable store type " +
+                "Cannot get state store window-store because the queryable store type " +
                     "[class org.apache.kafka.streams.state.QueryableStoreTypes$TimestampedWindowStoreType] " +
                     "does not accept the actual store type " +
                     "[class org.apache.kafka.streams.state.internals.MeteredWindowStore]."
