@@ -632,7 +632,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *
      * @throws IllegalStateException if no transactional.id has been configured, no transaction has been started
      * @throws TransactionTimeoutException if the producer has encountered a previously aborted transaction on coordinator side.
-     *         Application should catch it and retry starting another transaction in this case.
+     *         Application should catch and abort it, then retry starting another transaction in this case.
      * @throws ProducerFencedException fatal error indicating another producer with the same transactional.id is active
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
      *         does not support transactions (i.e. if its version is lower than 0.11.0.0)
@@ -669,7 +669,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *
      * @throws IllegalStateException if no transactional.id has been configured or no transaction has been started.
      * @throws TransactionTimeoutException if the producer has encountered a previously aborted transaction on coordinator side.
-     *         Application should catch it and retry starting another transaction in this case.
+     *         Application should catch and abort it, then retry starting another transaction in this case.
      * @throws ProducerFencedException fatal error indicating another producer with the same transactional.id is active
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
      *         does not support transactions (i.e. if its version is lower than 0.11.0.0) or
@@ -712,7 +712,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *
      * @throws IllegalStateException if no transactional.id has been configured or no transaction has been started
      * @throws TransactionTimeoutException if the producer has encountered a previously aborted transaction on coordinator side.
-     *         Application should catch it and retry starting another transaction in this case.
+     *         Application should catch and abort it, then retry starting another transaction in this case.
      * @throws ProducerFencedException fatal error indicating another producer with the same transactional.id is active
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
      *         does not support transactions (i.e. if its version is lower than 0.11.0.0)
@@ -743,7 +743,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *
      * @throws IllegalStateException if no transactional.id has been configured or no transaction has been started
      * @throws TransactionTimeoutException if the producer has encountered a previously aborted transaction on coordinator side.
-     *         Application should catch it and retry starting another transaction in this case.
+     *         Application should catch and abort it, then retry starting another transaction in this case.
      * @throws ProducerFencedException fatal error indicating another producer with the same transactional.id is active
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
      *         does not support transactions (i.e. if its version is lower than 0.11.0.0)

@@ -600,8 +600,6 @@ class TransactionsTest extends KafkaServerTestHarness {
       fail("should have raised a TransactionTimeOutException since the transaction has expired")
     } catch {
       case _: TransactionTimeoutException =>
-      case e: ExecutionException =>
-        assertTrue(e.getCause.isInstanceOf[TransactionTimeoutException])
     }
 
     val transactionalConsumer = transactionalConsumers.head
@@ -612,7 +610,6 @@ class TransactionsTest extends KafkaServerTestHarness {
 
     producer.abortTransaction()
     producer.beginTransaction()
-    // The second message and hence the second AddPartitions request should be successfully sent.
     val secondMessageResult = producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2",
       "2", willBeCommitted = true)).get()
     assertTrue(secondMessageResult.hasOffset)

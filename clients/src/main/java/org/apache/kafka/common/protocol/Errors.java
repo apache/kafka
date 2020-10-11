@@ -340,8 +340,8 @@ public enum Errors {
             "voter-only request is not one of the expected voters", InconsistentVoterSetException::new),
     INVALID_UPDATE_VERSION(95, "The given update version was invalid.", InvalidUpdateVersionException::new),
     FEATURE_UPDATE_FAILED(96, "Unable to update finalized features due to an unexpected server error.", FeatureUpdateFailedException::new),
-    TRANSACTION_TIMED_OUT(97, "The last ongoing transaction timed out on the coordinator, should retry initialization" +
-                                  " with current epoch.", TransactionTimeoutException::new);
+    TRANSACTION_TIMED_OUT(97, "The last ongoing transaction timed out on the coordinator, should do the transaction " +
+            "abortion and restart a new transaction.", TransactionTimeoutException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
