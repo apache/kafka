@@ -624,6 +624,43 @@ class TransactionsTest extends KafkaServerTestHarness {
   }
 
   @Test
+  def testProducerUnUsableIfNotAbortAfterTxnTimeOutAbortExcetion(): Unit = {
+    val producer = createTransactionalProducer("expiringProducer", transactionTimeoutMs = 100)
+
+    producer.initTransactions()
+    producer.beginTransaction()
+
+    // The first message and hence the first AddPartitions request should be successfully sent.
+    val firstMessageResult = producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "1", "1", willBeCommitted = false)).get()
+    assertTrue(firstMessageResult.hasOffset)
+
+    // Wait for the expiration cycle to kick in.
+    Thread.sleep(600)
+
+    try {
+      // Now that the transaction has expired, the second send should fail with a ProducerFencedException.
+      producer.commitTransaction()
+      fail("should have raised a TransactionTimeOutException since the transaction has expired")
+    } catch {
+      case _: TransactionTimeoutException =>
+    }
+
+    val transactionalConsumer = transactionalConsumers.head
+    transactionalConsumer.subscribe(List(topic1).asJava)
+
+    val transactionalRecords = TestUtils.consumeRecordsFor(transactionalConsumer, 1000)
+    assertTrue(transactionalRecords.isEmpty)
+
+    try {
+      // Now that the transaction has expired, the second send should fail with a ProducerFencedException.
+      producer.beginTransaction()
+      fail("should have raised a Kafkaexception since the transaction has expired")
+    } catch {
+      case _: KafkaException =>
+    }
+  }
+
+  @Test
   def testMultipleMarkersOneLeader(): Unit = {
     val firstProducer = transactionalProducers.head
     val consumer = transactionalConsumers.head
