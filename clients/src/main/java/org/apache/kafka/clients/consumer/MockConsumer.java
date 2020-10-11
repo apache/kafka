@@ -196,7 +196,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         final List<TopicPartition> toClear = new ArrayList<>();
 
         for (Map.Entry<TopicPartition, List<ConsumerRecord<K, V>>> entry : this.records.entrySet()) {
-            if (!subscriptions.isPaused(entry.getKey())) {
+            if (!subscriptions.isPaused(entry.getKey()) && subscriptions.hasValidPosition(entry.getKey())) {
                 final List<ConsumerRecord<K, V>> recs = entry.getValue();
                 for (final ConsumerRecord<K, V> rec : recs) {
                     long position = subscriptions.position(entry.getKey()).offset;
