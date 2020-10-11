@@ -207,7 +207,9 @@ public class S3RemoteStorageManager implements RemoteStorageManager {
 
     @Override
     public void close() throws IOException {
-        transferManager.shutdownNow(); // shuts down the S3 client too
+        if (transferManager != null) {
+            transferManager.shutdownNow(); // shuts down the S3 client too
+        }
     }
 
     private String logFileKey(final RemoteLogSegmentId remoteLogSegmentId, final long fileNameBaseOffset) {
