@@ -1218,14 +1218,13 @@ object ReassignPartitionsCommand extends Logging {
       adminClient.alterPartitionReassignments(reassignments.map {
           (_, (None: Option[NewPartitionReassignment]).asJava)
         }.toMap.asJava).values().asScala
-    results.flatMap {
-      case (part, future) =>
-        try {
-          future.get()
-          None
-        } catch {
-          case t: ExecutionException => Some(part, t.getCause())
-        }
+    results.flatMap { case (part, future) =>
+      try {
+        future.get()
+        None
+      } catch {
+        case t: ExecutionException => Some(part, t.getCause())
+      }
     }
   }
 
@@ -1234,9 +1233,9 @@ object ReassignPartitionsCommand extends Logging {
     // Add the current reassignments to the move map.
     currentReassignments.foreach { case (part, reassignment) =>
       val move = PartitionMove(new mutable.HashSet[Int](), new mutable.HashSet[Int]())
-      reassignment.replicas.forEach {
-        replica => move.sources += replica
-          move.destinations += replica
+      reassignment.replicas.forEach { replica =>
+        move.sources += replica
+        move.destinations += replica
       }
       reassignment.addingReplicas.forEach(move.destinations += _)
       reassignment.removingReplicas.forEach(move.destinations -= _)

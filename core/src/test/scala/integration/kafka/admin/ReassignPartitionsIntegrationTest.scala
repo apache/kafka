@@ -168,10 +168,10 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
     cluster.setup()
     cluster.produceMessages("foo", 0, 50)
     cluster.produceMessages("baz", 2, 60)
-    val assignment = """{"version":1,"partitions":""" +
-      """[{"topic":"foo","partition":0,"replicas":[0,3,2],"log_dirs":["any","any","any"]},""" +
-      """{"topic":"baz","partition":2,"replicas":[3,2,1],"log_dirs":["any","any","any"]}""" +
-      """]}"""
+    val assignment = """{"version":1,"partitions":
+      [{"topic":"foo","partition":0,"replicas":[0,3,2],"log_dirs":["any","any","any"]},
+      {"topic":"baz","partition":2,"replicas":[3,2,1],"log_dirs":["any","any","any"]}
+      ]}"""
 
     // Execute the assignment with a low throttle
     val initialThrottle = 1L
@@ -487,7 +487,7 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
 
     val logDirs = replicas.map { replicaId =>
       if (replicaId == brokerId)
-        "\"%s\"".format(newDir)
+        s""""$newDir""""
       else
         "\"any\""
     }
