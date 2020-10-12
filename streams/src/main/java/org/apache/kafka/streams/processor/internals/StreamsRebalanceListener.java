@@ -56,7 +56,7 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
             throw new MissingSourceTopicException("One or more source topics were missing during rebalance");
         } else if (assignmentErrorCode.get() == AssignorError.SHUTDOWN_REQUESTED.code()) {
             log.error("An application is requesting Shutdown");
-            streamThread.shutdown();
+            streamThread.shutdownToError();
         }
 
         streamThread.setState(State.PARTITIONS_ASSIGNED);

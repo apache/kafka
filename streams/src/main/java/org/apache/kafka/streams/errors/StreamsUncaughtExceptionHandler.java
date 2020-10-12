@@ -18,10 +18,19 @@ package org.apache.kafka.streams.errors;
 
 public interface StreamsUncaughtExceptionHandler {
     /**
-     * Inspect a record and the exception received.
+     * Inspect the exception received in a stream thread and respond with an action.
      * @param exception the actual exception
      */
     StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse handle(final Throwable exception);
+
+
+    /**
+     * Inspect the exception received in a global stream thread.
+     * @param exception the actual exception
+     */
+    default StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponseGlobalThread handleExceptionInGlobalThread(final Throwable exception) {
+        return StreamsUncaughtExceptionHandlerResponseGlobalThread.SHUTDOWN_KAFKA_STREAMS_CLIENT;
+    }
 
     /**
      * Enumeration that describes the response from the exception handler.
@@ -39,6 +48,24 @@ public interface StreamsUncaughtExceptionHandler {
         public final int id;
 
         StreamsUncaughtExceptionHandlerResponse(final int id, final String name) {
+            this.id = id;
+            this.name = name;
+        }
+    }
+
+    /**
+     * Enumeration that describes the response from the exception handler.
+     */
+    enum StreamsUncaughtExceptionHandlerResponseGlobalThread {
+        SHUTDOWN_KAFKA_STREAMS_CLIENT(2, "SHUTDOWN_KAFKA_STREAMS_CLIENT");
+
+        /** an english description of the api--this is for debugging and can change */
+        public final String name;
+
+        /** the permanent and immutable id of an API--this can't change ever */
+        public final int id;
+
+        StreamsUncaughtExceptionHandlerResponseGlobalThread(final int id, final String name) {
             this.id = id;
             this.name = name;
         }

@@ -167,7 +167,7 @@ public class AppShutdownIntegrationTest {
             latch.await(10, TimeUnit.SECONDS);
 
             assertThat(processorValueCollector.size(), equalTo(1));
-            assertThat(kafkaStreams.state(), equalTo(KafkaStreams.State.ERROR));
+            assertThat(kafkaStreams.state(), equalTo(KafkaStreams.State.NOT_RUNNING));
         }
     }
 

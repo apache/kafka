@@ -68,6 +68,7 @@ import static org.apache.kafka.streams.processor.internals.ClientUtils.getShared
 
 public class StreamThread extends Thread {
 
+
     /**
      * Stream thread states are the possible states that a stream thread can be in.
      * A thread must only be in one state at a time
@@ -286,6 +287,12 @@ public class StreamThread extends Thread {
 
     private final AtomicInteger assignmentErrorCode;
 
+    private final ShutdownErrorHook shutdownErrorHook;
+
+    public interface ShutdownErrorHook {
+        void shutdown();
+    }
+
     public static StreamThread create(final InternalTopologyBuilder builder,
                                       final StreamsConfig config,
                                       final KafkaClientSupplier clientSupplier,
@@ -299,7 +306,8 @@ public class StreamThread extends Thread {
                                       final StateDirectory stateDirectory,
                                       final StateRestoreListener userStateRestoreListener,
                                       final int threadIdx,
-                                      final AtomicInteger assignmentErrorCode) {
+                                      final AtomicInteger assignmentErrorCode,
+                                      final ShutdownErrorHook shutdownErrorHook) {
         final String threadId = clientId + "-StreamThread-" + threadIdx;
 
         final String logPrefix = String.format("stream-thread [%s] ", threadId);
@@ -391,7 +399,8 @@ public class StreamThread extends Thread {
             threadId,
             logContext,
             nextScheduledRebalanceMs,
-            assignmentErrorCode
+            assignmentErrorCode,
+            shutdownErrorHook
         );
 
         taskManager.setPartitionResetter(partitions -> streamThread.resetOffsets(partitions, null));
@@ -442,10 +451,12 @@ public class StreamThread extends Thread {
                         final String threadId,
                         final LogContext logContext,
                         final AtomicLong nextProbingRebalanceMs,
-                        final AtomicInteger assignmentErrorCode) {
+                        final AtomicInteger assignmentErrorCode,
+                        final ShutdownErrorHook shutdownErrorHook) {
         super(threadId);
         this.stateLock = new Object();
 
+        this.shutdownErrorHook = shutdownErrorHook;
         this.adminClient = adminClient;
         this.streamsMetrics = streamsMetrics;
         this.commitSensor = ThreadMetrics.commitSensor(threadId, streamsMetrics);
@@ -588,6 +599,10 @@ public class StreamThread extends Thread {
      */
     public void setStreamsUncaughtExceptionHandler(final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
+    }
+
+    public void shutdownToError() {
+        shutdownErrorHook.shutdown();
     }
 
     public void sendShutdownRequest(final AssignorError assignorError) {
