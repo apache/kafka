@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state.internals;
+package org.apache.kafka.common.utils;
 
 /**
  * This class was taken from Hive org.apache.hive.common.util;
@@ -145,9 +145,9 @@ public class Murmur3 {
         for (int i = 0; i < nblocks; i++) {
             int i_4 = i << 2;
             int k = (data[offset + i_4] & 0xff)
-                    | ((data[offset + i_4 + 1] & 0xff) << 8)
-                    | ((data[offset + i_4 + 2] & 0xff) << 16)
-                    | ((data[offset + i_4 + 3] & 0xff) << 24);
+                | ((data[offset + i_4 + 1] & 0xff) << 8)
+                | ((data[offset + i_4 + 2] & 0xff) << 16)
+                | ((data[offset + i_4 + 3] & 0xff) << 24);
 
             hash = mix32(k, hash);
         }
@@ -268,13 +268,13 @@ public class Murmur3 {
         for (int i = 0; i < nblocks; i++) {
             final int i8 = i << 3;
             long k = ((long) data[offset + i8] & 0xff)
-                    | (((long) data[offset + i8 + 1] & 0xff) << 8)
-                    | (((long) data[offset + i8 + 2] & 0xff) << 16)
-                    | (((long) data[offset + i8 + 3] & 0xff) << 24)
-                    | (((long) data[offset + i8 + 4] & 0xff) << 32)
-                    | (((long) data[offset + i8 + 5] & 0xff) << 40)
-                    | (((long) data[offset + i8 + 6] & 0xff) << 48)
-                    | (((long) data[offset + i8 + 7] & 0xff) << 56);
+                | (((long) data[offset + i8 + 1] & 0xff) << 8)
+                | (((long) data[offset + i8 + 2] & 0xff) << 16)
+                | (((long) data[offset + i8 + 3] & 0xff) << 24)
+                | (((long) data[offset + i8 + 4] & 0xff) << 32)
+                | (((long) data[offset + i8 + 5] & 0xff) << 40)
+                | (((long) data[offset + i8 + 6] & 0xff) << 48)
+                | (((long) data[offset + i8 + 7] & 0xff) << 56);
 
             // mix functions
             k *= C1;
@@ -343,22 +343,22 @@ public class Murmur3 {
         for (int i = 0; i < nblocks; i++) {
             final int i16 = i << 4;
             long k1 = ((long) data[offset + i16] & 0xff)
-                    | (((long) data[offset + i16 + 1] & 0xff) << 8)
-                    | (((long) data[offset + i16 + 2] & 0xff) << 16)
-                    | (((long) data[offset + i16 + 3] & 0xff) << 24)
-                    | (((long) data[offset + i16 + 4] & 0xff) << 32)
-                    | (((long) data[offset + i16 + 5] & 0xff) << 40)
-                    | (((long) data[offset + i16 + 6] & 0xff) << 48)
-                    | (((long) data[offset + i16 + 7] & 0xff) << 56);
+                | (((long) data[offset + i16 + 1] & 0xff) << 8)
+                | (((long) data[offset + i16 + 2] & 0xff) << 16)
+                | (((long) data[offset + i16 + 3] & 0xff) << 24)
+                | (((long) data[offset + i16 + 4] & 0xff) << 32)
+                | (((long) data[offset + i16 + 5] & 0xff) << 40)
+                | (((long) data[offset + i16 + 6] & 0xff) << 48)
+                | (((long) data[offset + i16 + 7] & 0xff) << 56);
 
             long k2 = ((long) data[offset + i16 + 8] & 0xff)
-                    | (((long) data[offset + i16 + 9] & 0xff) << 8)
-                    | (((long) data[offset + i16 + 10] & 0xff) << 16)
-                    | (((long) data[offset + i16 + 11] & 0xff) << 24)
-                    | (((long) data[offset + i16 + 12] & 0xff) << 32)
-                    | (((long) data[offset + i16 + 13] & 0xff) << 40)
-                    | (((long) data[offset + i16 + 14] & 0xff) << 48)
-                    | (((long) data[offset + i16 + 15] & 0xff) << 56);
+                | (((long) data[offset + i16 + 9] & 0xff) << 8)
+                | (((long) data[offset + i16 + 10] & 0xff) << 16)
+                | (((long) data[offset + i16 + 11] & 0xff) << 24)
+                | (((long) data[offset + i16 + 12] & 0xff) << 32)
+                | (((long) data[offset + i16 + 13] & 0xff) << 40)
+                | (((long) data[offset + i16 + 14] & 0xff) << 48)
+                | (((long) data[offset + i16 + 15] & 0xff) << 56);
 
             // mix functions for k1
             k1 *= C1;

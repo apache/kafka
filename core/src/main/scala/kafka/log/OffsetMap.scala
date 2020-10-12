@@ -18,10 +18,10 @@
 package kafka.log
 
 import java.util.Arrays
-import java.security.MessageDigest
 import java.nio.ByteBuffer
+
 import kafka.utils._
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{Murmur3, Utils}
 
 trait OffsetMap {
   def slots: Int
@@ -35,23 +35,19 @@ trait OffsetMap {
 }
 
 /**
- * An hash table used for deduplicating the log. This hash table uses a cryptographicly secure hash of the key as a proxy for the key
+ * An hash table used for deduplicating the log. This hash table uses a Murmur3 hash of the key as a proxy for the key
  * for comparisons and to save space on object overhead. Collisions are resolved by probing. This hash table does not support deletes.
  * @param memory The amount of memory this map can use
- * @param hashAlgorithm The hash algorithm instance to use: MD2, MD5, SHA-1, SHA-256, SHA-384, SHA-512
  */
 @nonthreadsafe
-class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extends OffsetMap {
+class SkimpyOffsetMap(val memory: Int) extends OffsetMap {
   private val bytes = ByteBuffer.allocate(memory)
-  
-  /* the hash algorithm instance to use, default is MD5 */
-  private val digest = MessageDigest.getInstance(hashAlgorithm)
-  
-  /* the number of bytes for this hash algorithm */
-  private val hashSize = digest.getDigestLength
+
+  /* Murmur produces a 128 bit hash which is 16 bytes */
+  private val hashSize = 16
   
   /* create some hash buffers to avoid reallocating each time */
-  private val hash1 = new Array[Byte](hashSize)
+  private val hash1 = ByteBuffer.wrap(new Array[Byte](hashSize))
   private val hash2 = new Array[Byte](hashSize)
   
   /* number of entries put into the map */
@@ -91,7 +87,7 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
     while(!isEmpty(pos)) {
       bytes.position(pos)
       bytes.get(hash2)
-      if(Arrays.equals(hash1, hash2)) {
+      if(Arrays.equals(hash1.array(), hash2)) {
         // we found an existing entry, overwrite it and return (size does not change)
         bytes.putLong(offset)
         lastOffset = offset
@@ -137,7 +133,7 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
         return -1L
       bytes.get(hash2)
       attempt += 1
-    } while(!Arrays.equals(hash1, hash2))
+    } while(!Arrays.equals(hash1.array(), hash2))
     bytes.getLong()
   }
   
@@ -179,8 +175,8 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
    * @param attempt The ith probe
    * @return The byte offset in the buffer at which the ith probing for the given hash would reside
    */
-  private def positionOf(hash: Array[Byte], attempt: Int): Int = {
-    val probe = CoreUtils.readInt(hash, math.min(attempt, hashSize - 4)) + math.max(0, attempt - hashSize + 4)
+  private def positionOf(hash: ByteBuffer, attempt: Int): Int = {
+    val probe = CoreUtils.readInt(hash.array(), math.min(attempt, hashSize - 4)) + math.max(0, attempt - hashSize + 4)
     val slot = Utils.abs(probe) % slots
     this.probes += 1
     slot * bytesPerEntry
@@ -191,11 +187,19 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
    * @param key The key to hash
    * @param buffer The buffer to store the hash into
    */
-  private def hashInto(key: ByteBuffer, buffer: Array[Byte]): Unit = {
+  private def hashInto(key: ByteBuffer, buffer: ByteBuffer): Unit = {
     key.mark()
-    digest.update(key)
+
+    val bytes = new Array[Byte](key.remaining)
+    key.get(bytes)
+
+    val ret = Murmur3.hash128(bytes)
+    buffer.clear()
+    buffer.putLong(ret(0))
+    buffer.putLong(ret(1))
+    buffer.flip()
+
     key.reset()
-    digest.digest(buffer, 0, hashSize)
   }
   
 }

@@ -4600,6 +4600,15 @@ object LogTest {
       yield TestUtils.readString(record.key).toLong
   }
 
+  def keysValuesInLog(log: Log): Map[String, String] = {
+    {
+      for (logSegment <- log.logSegments;
+           batch <- logSegment.log.batches.asScala if !batch.isControlBatch;
+           record <- batch.asScala if record.hasValue && record.hasKey)
+        yield TestUtils.readString(record.key) -> TestUtils.readString(record.value)
+    }.toMap
+  }
+
   def recoverAndCheck(logDir: File,
                       config: LogConfig,
                       expectedKeys: Iterable[Long],
