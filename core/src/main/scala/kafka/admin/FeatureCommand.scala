@@ -148,7 +148,7 @@ class FeatureApis(var opts: FeatureCommandOptions) {
   def upgradeAllFeatures(): Unit = {
     val metadata = describeFeatures(true)
     val existingFinalizedFeatures = metadata.finalizedFeatures
-    val updates = supportedFeatures.features().asScala.map {
+    val updates = supportedFeatures.features.asScala.map {
       case (feature, targetVersionRange) =>
         val existingVersionRange = existingFinalizedFeatures.get(feature)
         if (existingVersionRange == null) {
@@ -164,8 +164,8 @@ class FeatureApis(var opts: FeatureCommandOptions) {
               upgradeOp +
               s"\tFeature: $feature" +
               s"\tExistingFinalizedMaxVersion: ${existingVersionRange.maxVersionLevel}" +
-              s"\tNewFinalizedMaxVersion: ${targetVersionRange.max()}"
-            (feature, (updateStr, new FeatureUpdate(targetVersionRange.max(), false)))
+              s"\tNewFinalizedMaxVersion: ${targetVersionRange.max}"
+            (feature, (updateStr, new FeatureUpdate(targetVersionRange.max, false)))
           } else {
             (feature, null)
           }
@@ -191,7 +191,7 @@ class FeatureApis(var opts: FeatureCommandOptions) {
   def downgradeAllFeatures(): Unit = {
     val metadata = describeFeatures(true)
     val existingFinalizedFeatures = metadata.finalizedFeatures
-    val supportedFeaturesMap = supportedFeatures.features()
+    val supportedFeaturesMap = supportedFeatures.features
     val updates = existingFinalizedFeatures.asScala.map {
       case (feature, existingVersionRange) =>
         val targetVersionRange = supportedFeaturesMap.get(feature)
@@ -199,7 +199,7 @@ class FeatureApis(var opts: FeatureCommandOptions) {
           val updateStr =
             deleteOp +
             s"\tFeature: $feature" +
-            s"\tExistingFinalizedMaxVersion: ${existingVersionRange.maxVersionLevel()}" +
+            s"\tExistingFinalizedMaxVersion: ${existingVersionRange.maxVersionLevel}" +
             s"\tNewFinalizedMaxVersion: -"
           (feature, (updateStr, new FeatureUpdate(0, true)))
         } else {
@@ -208,8 +208,8 @@ class FeatureApis(var opts: FeatureCommandOptions) {
               downgradeOp +
               s"\tFeature: $feature" +
               s"\tExistingFinalizedMaxVersion: ${existingVersionRange.maxVersionLevel}" +
-              s"\tNewFinalizedMaxVersion: ${targetVersionRange.max()}"
-            (feature, (updateStr, new FeatureUpdate(targetVersionRange.max(), true)))
+              s"\tNewFinalizedMaxVersion: ${targetVersionRange.max}"
+            (feature, (updateStr, new FeatureUpdate(targetVersionRange.max, true)))
           } else {
             (feature, null)
           }
@@ -239,7 +239,7 @@ class FeatureApis(var opts: FeatureCommandOptions) {
       val result = adminClient.updateFeatures(
         updates.map { case(feature, (_, update)) => (feature, update)}.asJava,
         new UpdateFeaturesOptions())
-      val failures = ListMap(result.values().asScala.toSeq.sortBy(_._1):_*).map {
+      val failures = ListMap(result.values.asScala.toSeq.sortBy(_._1):_*).map {
         case (feature, updateFuture) =>
           val (updateStr, _) = updates(feature)
           try {
