@@ -68,4 +68,8 @@ class ControllerResult<T> {
             records.stream().map(r -> r.toString()).collect(Collectors.toList())) +
             ", response=" + response + ")";
     }
+
+    public ControllerResult<T> withoutRecords() {
+        return new ControllerResult<>(Collections.emptyList(), response);
+    }
 }

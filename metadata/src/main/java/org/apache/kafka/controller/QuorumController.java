@@ -22,6 +22,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.Errors;
@@ -37,8 +38,10 @@ import org.slf4j.Logger;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 
 public final class QuorumController implements Controller {
     /**
@@ -103,32 +106,20 @@ public final class QuorumController implements Controller {
         }
     }
 
-    interface ControllerEventHandler<T> {
-        /**
-         * Process the event, modifying any in-memory data structures that need to be
-         * modified.
-         */
-        ControllerResultAndOffset<T> process();
-    }
-
     /**
-     * The base class for controller events.
+     * A controller event that reads the committed internal state.
      */
-    class ControllerEvent<T> implements EventQueue.Event, DeferredEvent {
+    class ControllerReadEvent<T> implements EventQueue.Event {
         private final String name;
         private final CompletableFuture<T> future;
-        private final ControllerEventHandler<T> handler;
-        private final long targetEpoch;
+        private final Supplier<T> handler;
         private long startProcessingTimeNs;
-        private ControllerResultAndOffset<T> result;
 
-        ControllerEvent(String name, ControllerEventHandler<T> handler) {
+        ControllerReadEvent(String name, Supplier<T> handler) {
             this.name = name;
             this.future = new CompletableFuture<T>();
             this.handler = handler;
-            this.targetEpoch = -1; // TODO: load current epoch
             this.startProcessingTimeNs = -1;
-            this.result = null;
         }
 
         CompletableFuture<T> future() {
@@ -137,17 +128,97 @@ public final class QuorumController implements Controller {
 
         @Override
         public void run() throws Exception {
-//            if (curEpoch != targetEpoch) {
-//                throw new NotControllerException("The controller has changed."); 
-//            }
             startProcessingTimeNs = time.nanoseconds();
-            result = handler.process();
-            if (result.offset() < 0) {
-                complete(null);
+            complete(handler.get(), null);
+        }
+
+        @Override
+        public void handleException(Throwable exception) {
+            complete(null, exception);
+        }
+
+        private void complete(T result, Throwable exception) {
+            long endProcessingTime = time.nanoseconds();
+            long deltaNs = endProcessingTime - startProcessingTimeNs;
+            if (exception != null) {
+                log.info("{}: failed with {} in ns", name,
+                    exception.getClass().getSimpleName(), deltaNs);
+                if (exception instanceof ApiException) {
+                    future.completeExceptionally(exception);
+                } else {
+                    future.completeExceptionally(new UnknownServerException(exception));
+                }
             } else {
-//                offset = logManager.scheduleWrite(curEpoch, result.records());
-                purgatory.add(result.offset(), this);
+                log.info("Processed {} in {} ns", name, deltaNs);
+                future.complete(result);
             }
+        }
+    }
+
+    private <T> CompletableFuture<T> appendReadEvent(String name, Supplier<T> handler) {
+        ControllerReadEvent<T> event = new ControllerReadEvent<T>(name, handler);
+        queue.append(event);
+        return event.future();
+    }
+
+    /**
+     * A controller event that modifies the controller state.
+     */
+    class ControllerWriteEvent<T> implements EventQueue.Event, DeferredEvent {
+        private final String name;
+        private final CompletableFuture<T> future;
+        private final Supplier<ControllerResult<T>> handler;
+        private long startProcessingTimeNs;
+        private ControllerResultAndOffset<T> resultAndOffset;
+
+        ControllerWriteEvent(String name, Supplier<ControllerResult<T>> handler) {
+            this.name = name;
+            this.future = new CompletableFuture<T>();
+            this.handler = handler;
+            this.startProcessingTimeNs = -1;
+            this.resultAndOffset = null;
+        }
+
+        CompletableFuture<T> future() {
+            return future;
+        }
+
+        @Override
+        public void run() throws Exception {
+            if (activeState == null) {
+                throw new NotControllerException("Node " + nodeId + " is not the " +
+                    "current controller.");
+            }
+            startProcessingTimeNs = time.nanoseconds();
+            ControllerResult<T> result = handler.get();
+            if (result.records().isEmpty()) {
+                // If the handler did not return any records, then the operation was
+                // actually just a read after all, and not a read + write.  However,
+                // this read was done from the latest in-memory state, which might contain
+                // uncommitted data.
+                Optional<Long> maybeOffset = purgatory.highestPendingOffset();
+                if (!maybeOffset.isPresent()) {
+                    // If the purgatory is empty, there are no pending operations and no
+                    // uncommitted state.  We can return immediately.
+                    this.resultAndOffset = new ControllerResultAndOffset<>(-1,
+                        Collections.emptyList(), result.response());
+                    complete(null);
+                    return;
+                }
+                // If there are operations in the purgatory, we want to wait for the latest
+                // one to complete before returning our result to the user.
+                this.resultAndOffset = new ControllerResultAndOffset<>(maybeOffset.get(),
+                    result.records(), result.response());
+            } else {
+                // If the handler returned a batch of records, those records need to be
+                // written before we can return our result to the user.  Here, we hand off
+                // the batch of records to the metadata log manager.  They will be written
+                // out asynchronously.
+                long offset = logManager.scheduleWrite(activeState.epoch(), result.records());
+                this.resultAndOffset = new ControllerResultAndOffset<>(offset,
+                    result.records(), result.response());
+            }
+            purgatory.add(resultAndOffset.offset(), this);
         }
 
         @Override
@@ -169,8 +240,27 @@ public final class QuorumController implements Controller {
                 }
             } else {
                 log.info("Processed {} in {} ns", name, deltaNs);
-                future.complete(result.response());
+                future.complete(resultAndOffset.response());
             }
+        }
+    }
+
+    private <T> CompletableFuture<T> appendWriteEvent(String name,
+                                                      Supplier<ControllerResult<T>> handler) {
+        ControllerWriteEvent<T> event = new ControllerWriteEvent<>(name, handler);
+        queue.append(event);
+        return event.future();
+    }
+
+    static class ActiveState {
+        private final long epoch;
+
+        ActiveState(long epoch) {
+            this.epoch = epoch;
+        }
+
+        long epoch() {
+            return epoch;
         }
     }
 
@@ -182,6 +272,7 @@ public final class QuorumController implements Controller {
     private final ControllerPurgatory purgatory;
     private final ConfigurationControlManager configurationControlManager;
     private final MetaLogManager logManager;
+    private ActiveState activeState;
 
     private QuorumController(LogContext logContext,
                              int nodeId,
@@ -199,6 +290,7 @@ public final class QuorumController implements Controller {
         this.configurationControlManager =
             new ConfigurationControlManager(snapshotRegistry, configDefs);
         this.logManager = logManager;
+        this.activeState = null;
     }
 
     @Override
@@ -223,22 +315,29 @@ public final class QuorumController implements Controller {
     public CompletableFuture<Map<ConfigResource, ApiError>> incrementalAlterConfigs(
             Map<ConfigResource, Map<String, Entry<OpType, String>>> configChanges,
             boolean validateOnly) {
-        return null;
-//        ControllerEvent<Map<ConfigResource, ApiError>> event =
-//            new ControllerEvent<Map<ConfigResource, ApiError>>("incrementalAlterConfigs",
-//            () -> {
-//                ControllerResult<Map<ConfigResource, ApiError>> result =
-//                    configurationControlManager.incrementalAlterConfigs(configChanges);
-//                if (validateOnly) {
-//                    result = new ControllerResult<Map<ConfigResource, ApiError>>(result.response());
-//                }
-//            });
+        return appendWriteEvent("incrementalAlterConfigs", () -> {
+            ControllerResult<Map<ConfigResource, ApiError>> result =
+                configurationControlManager.incrementalAlterConfigs(configChanges);
+            if (validateOnly) {
+                return result.withoutRecords();
+            } else {
+                return result;
+            }
+        });
     }
 
     @Override
     public CompletableFuture<Map<ConfigResource, ApiError>> legacyAlterConfigs(
             Map<ConfigResource, Map<String, String>> newConfigs, boolean validateOnly) {
-        return null;
+        return appendWriteEvent("legacyAlterConfigs", () -> {
+            ControllerResult<Map<ConfigResource, ApiError>> result =
+                configurationControlManager.legacyAlterConfigs(newConfigs);
+            if (validateOnly) {
+                return result.withoutRecords();
+            } else {
+                return result;
+            }
+        });
     }
 
     @Override
