@@ -147,7 +147,7 @@ public class MirrorConnectorConfigTest {
 
     @Test
     public void testSourceConsumerConfigWithSourcePrefix() {
-        String prefix = MirrorConnectorConfig.SOURCE_CLUSTER_PREFIX + MirrorConnectorConfig.CONSUMER_CLIENT_PREFIX;
+        String prefix = MirrorConnectorConfig.SOURCE_PREFIX + MirrorConnectorConfig.CONSUMER_CLIENT_PREFIX;
         Map<String, String> connectorProps = makeProps(
                 prefix + "auto.offset.reset", "latest",
                 prefix + "max.poll.interval.ms", "100"
@@ -175,7 +175,7 @@ public class MirrorConnectorConfigTest {
 
     @Test
     public void testSourceProducerConfigWithSourcePrefix() {
-        String prefix = MirrorConnectorConfig.SOURCE_CLUSTER_PREFIX + MirrorConnectorConfig.PRODUCER_CLIENT_PREFIX;
+        String prefix = MirrorConnectorConfig.SOURCE_PREFIX + MirrorConnectorConfig.PRODUCER_CLIENT_PREFIX;
         Map<String, String> connectorProps = makeProps(prefix + "acks", "1");
         MirrorConnectorConfig config = new MirrorConnectorConfig(connectorProps);
         Map<String, Object> connectorProducerProps = config.sourceProducerConfig();
