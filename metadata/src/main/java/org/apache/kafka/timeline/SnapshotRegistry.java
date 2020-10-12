@@ -21,13 +21,16 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.stream.Collectors;
 
+import org.apache.kafka.common.utils.LogContext;
+import org.slf4j.Logger;
+
 /**
  * A registry containing snapshots of timeline data structures.
  * We generally expect a small number of snapshots-- perhaps 1 or 2 at a time.
  * Therefore, we use ArrayLists here rather than a data structure with higher overhead.
  */
 public class SnapshotRegistry {
-    private final static int EXPECTED_NUM_SNAPSHOTS = 2;
+    private final Logger log;
 
     /**
      * The current epoch.  All snapshot epochs are lower than this number.
@@ -40,8 +43,13 @@ public class SnapshotRegistry {
     private final ArrayList<Snapshot> snapshots;
 
     public SnapshotRegistry(long startEpoch) {
+        this(new LogContext(), startEpoch);
+    }
+
+    public SnapshotRegistry(LogContext logContext, long startEpoch) {
+        this.log = logContext.logger(SnapshotRegistry.class);
         this.curEpoch = startEpoch;
-        this.snapshots = new ArrayList<>(EXPECTED_NUM_SNAPSHOTS);
+        this.snapshots = new ArrayList<>(5);
     }
 
     /**
@@ -77,6 +85,7 @@ public class SnapshotRegistry {
         Snapshot snapshot = new Snapshot(epoch);
         snapshots.add(snapshot);
         curEpoch = epoch + 1;
+        log.debug("Creating snapshot {}", epoch);
         return snapshot;
     }
 
@@ -90,6 +99,7 @@ public class SnapshotRegistry {
         while (iter.hasNext()) {
             Snapshot snapshot = iter.next();
             if (snapshot.epoch() == epoch) {
+                log.debug("Deleting snapshot {}", epoch);
                 iter.remove();
                 return;
             }
@@ -118,6 +128,7 @@ public class SnapshotRegistry {
                 iter.remove();
             }
         }
+        log.info("Reverting to snapshot {}", epoch);
         target.handleRevert();
         curEpoch = epoch;
     }
@@ -127,5 +138,17 @@ public class SnapshotRegistry {
      */
     public long curEpoch() {
         return curEpoch;
+    }
+
+    public void deleteSnapshotsUpTo(long offset) {
+        Iterator<Snapshot> iter = snapshots.iterator();
+        while (iter.hasNext()) {
+            Snapshot snapshot = iter.next();
+            if (snapshot.epoch() >= offset) {
+                break;
+            }
+            log.debug("Deleting snapshot {}", snapshot.epoch());
+            iter.remove();
+        }
     }
 }
