@@ -831,7 +831,7 @@ class KafkaController(val config: KafkaConfig,
               new ApiError(Errors.UNKNOWN_SERVER_ERROR)
           }
         } else {
-            new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, "The partition does not exist.")
+          new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, "The partition does not exist.")
         }
       }
 
