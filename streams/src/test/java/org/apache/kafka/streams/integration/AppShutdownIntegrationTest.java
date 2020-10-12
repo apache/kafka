@@ -31,8 +31,6 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.ThreadMetadata;
-import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -133,17 +131,10 @@ public class AppShutdownIntegrationTest {
             kafkaStreams.start();
 
             produceMessages(0L, inputTopic, "A");
-            latch.await(10, TimeUnit.SECONDS);
+            latch.await(15, TimeUnit.SECONDS);
 
-            assertThat(processorValueCollector.size(), equalTo(1));
-            assertThat(kafkaStreams.state(), equalTo(KafkaStreams.State.RUNNING));
-            final ArrayList<String> threadstates = new ArrayList<>();
-            for (final ThreadMetadata threadMetadata: kafkaStreams.localThreadsMetadata()) {
-                threadstates.add(threadMetadata.threadState());
-            }
-            assertThat("a thread should be dead", threadstates.contains(StreamThread.State.DEAD.toString()));
-            assertThat("not all threads should be dead", threadstates.contains(StreamThread.State.DEAD.toString()));
-
+            assertThat(processorValueCollector.size(), equalTo(2));
+            assertThat(kafkaStreams.state(), equalTo(KafkaStreams.State.ERROR));
         }
     }
 
@@ -164,7 +155,7 @@ public class AppShutdownIntegrationTest {
             kafkaStreams.start();
 
             produceMessages(0L, inputTopic, "A");
-            latch.await(10, TimeUnit.SECONDS);
+            latch.await(15, TimeUnit.SECONDS);
 
             assertThat(processorValueCollector.size(), equalTo(1));
             assertThat(kafkaStreams.state(), equalTo(KafkaStreams.State.NOT_RUNNING));

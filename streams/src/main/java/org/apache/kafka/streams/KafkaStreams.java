@@ -83,6 +83,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
@@ -384,33 +385,28 @@ public class KafkaStreams implements AutoCloseable {
      *
      * @param streamsUncaughtExceptionHandler the uncaught exception handler of type {@link StreamsUncaughtExceptionHandler} for all internal threads; {@code null} deletes the current handler
      * @throws IllegalStateException if this {@code KafkaStreams} instance is not in state {@link State#CREATED CREATED}.
+     * @throws NullPointerException @NotNull if streamsUncaughtExceptionHandler is null.
      */
     public void setUncaughtExceptionHandler(final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
-        final StreamsUncaughtExceptionHandler handler = throwable -> handleStreamsUncaughtException(throwable, streamsUncaughtExceptionHandler);
+        final StreamsUncaughtExceptionHandler handler = new StreamsUncaughtExceptionHandler() {
+            @Override
+            public StreamsUncaughtExceptionHandlerResponse handle(final Throwable exception) {
+                return handleStreamsUncaughtException(exception, streamsUncaughtExceptionHandler);
+            }
+
+            @Override
+            public StreamsUncaughtExceptionHandlerResponseGlobalThread handleExceptionInGlobalThread(final Throwable exception) {
+                return handleStreamsUncaughtExceptionGlobalThread(exception, streamsUncaughtExceptionHandler);
+            }
+        };
         synchronized (stateLock) {
             if (state == State.CREATED) {
+                Objects.requireNonNull(streamsUncaughtExceptionHandler);
                 for (final StreamThread thread : threads) {
-                    if (streamsUncaughtExceptionHandler != null)  {
-                        thread.setStreamsUncaughtExceptionHandler(handler);
-                    } else {
-                        final StreamsUncaughtExceptionHandler defaultHandler = exception ->
-                               StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse.SHUTDOWN_STREAM_THREAD;
-                        thread.setStreamsUncaughtExceptionHandler(defaultHandler);
-                    }
-
+                    thread.setStreamsUncaughtExceptionHandler(handler);
                 }
-                if (globalStreamThread != null && streamsUncaughtExceptionHandler != null) {
-                    globalStreamThread.setUncaughtExceptionHandler(new StreamsUncaughtExceptionHandler() {
-                        @Override
-                        public StreamsUncaughtExceptionHandlerResponse handle(final Throwable exception) {
-                            return handler.handle(exception);
-                        }
-
-                        @Override
-                        public StreamsUncaughtExceptionHandlerResponseGlobalThread handleExceptionInGlobalThread(final Throwable exception) {
-                            return handleStreamsUncaughtExceptionGlobalThread(exception, streamsUncaughtExceptionHandler);
-                        }
-                    });
+                if (globalStreamThread != null) {
+                    globalStreamThread.setUncaughtExceptionHandler(handler);
                 }
             } else {
                 throw new IllegalStateException("Can only set UncaughtExceptionHandler in CREATED state. " +
@@ -536,10 +532,6 @@ public class KafkaStreams implements AutoCloseable {
             }
 
             if (setState(State.ERROR)) {
-                if (rocksDBMetricsRecordingService != null) {
-                    rocksDBMetricsRecordingService.shutdownNow();
-                }
-                stateDirCleaner.shutdownNow();
                 log.error("All stream threads have died. The instance will be in error state and should be closed.");
             }
         }

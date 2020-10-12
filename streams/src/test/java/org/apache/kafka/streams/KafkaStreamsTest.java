@@ -101,6 +101,7 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -620,24 +621,20 @@ public class KafkaStreamsTest {
     public void shouldThrowExceptionSettingUncaughtExceptionHandlerNotInCreateState() {
         final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         streams.start();
-        try {
-            streams.setUncaughtExceptionHandler((Thread.UncaughtExceptionHandler) null);
-            fail("Should throw IllegalStateException");
-        } catch (final IllegalStateException e) {
-            // expected
-        }
+        assertThrows(IllegalStateException.class, () -> streams.setUncaughtExceptionHandler((StreamsUncaughtExceptionHandler) null));
     }
 
     @Test
     public void shouldThrowExceptionSettingStreamsUncaughtExceptionHandlerNotInCreateState() {
         final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         streams.start();
-        try {
-            streams.setUncaughtExceptionHandler((StreamsUncaughtExceptionHandler) null);
-            fail("Should throw IllegalStateException");
-        } catch (final IllegalStateException e) {
-            // expected
-        }
+        assertThrows(IllegalStateException.class, () -> streams.setUncaughtExceptionHandler((StreamsUncaughtExceptionHandler) null));
+
+    }
+    @Test
+    public void shouldThrowNullPointerExceptionSettingStreamsUncaughtExceptionHandlerIfNull() {
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
+        assertThrows(NullPointerException.class, () -> streams.setUncaughtExceptionHandler((StreamsUncaughtExceptionHandler) null));
     }
 
     @Test
