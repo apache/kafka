@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.TreeMap;
 
 /**
@@ -88,8 +89,20 @@ class ControllerPurgatory {
         List<DeferredEvent> events = pending.get(offset);
         if (events == null) {
             events = new ArrayList<>();
+            pending.put(offset, events);
         }
         events.add(event);
-        pending.put(offset, events);
+    }
+
+    /**
+     * Get the offset of the highest pending event, or empty if there are no pending
+     * events.
+     */
+    Optional<Long> highestPendingOffset() {
+        if (pending.isEmpty()) {
+            return Optional.empty();
+        } else {
+            return Optional.of(pending.lastKey());
+        }
     }
 }
