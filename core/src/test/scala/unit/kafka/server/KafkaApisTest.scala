@@ -115,6 +115,8 @@ class KafkaApisTest {
 
   def createKafkaApis(interBrokerProtocolVersion: ApiVersion = ApiVersion.latestVersion,
                       authorizer: Option[Authorizer] = None): KafkaApis = {
+    val brokerFeatures = BrokerFeatures.createDefault()
+    val cache = new FinalizedFeatureCache(brokerFeatures)
     val properties = TestUtils.createBrokerConfig(brokerId, "zk")
     properties.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerProtocolVersion.toString)
     properties.put(KafkaConfig.LogMessageFormatVersionProp, interBrokerProtocolVersion.toString)
@@ -135,8 +137,9 @@ class KafkaApisTest {
       brokerTopicStats,
       clusterId,
       time,
-      null
-    )
+      null,
+      brokerFeatures,
+      cache)
   }
 
   @Test

@@ -19,7 +19,7 @@ package org.apache.kafka.common.feature;
 import java.util.Map;
 
 /**
- * An extended {@link BaseVersionRange} representing the min/max versions for supported features.
+ * An extended {@link BaseVersionRange} representing the min/max versions for a supported feature.
  */
 public class SupportedVersionRange extends BaseVersionRange {
     // Label for the min version key, that's used only to convert to/from a map.
@@ -28,8 +28,12 @@ public class SupportedVersionRange extends BaseVersionRange {
     // Label for the max version key, that's used only to convert to/from a map.
     private static final String MAX_VERSION_KEY_LABEL = "max_version";
 
-    public SupportedVersionRange(short minVersionLevel, short maxVersionLevel) {
-        super(MIN_VERSION_KEY_LABEL, minVersionLevel, MAX_VERSION_KEY_LABEL, maxVersionLevel);
+    public SupportedVersionRange(short minVersion, short maxVersion) {
+        super(MIN_VERSION_KEY_LABEL, minVersion, MAX_VERSION_KEY_LABEL, maxVersion);
+    }
+
+    public SupportedVersionRange(short maxVersion) {
+        this((short) 1, maxVersion);
     }
 
     public static SupportedVersionRange fromMap(Map<String, Short> versionRangeMap) {

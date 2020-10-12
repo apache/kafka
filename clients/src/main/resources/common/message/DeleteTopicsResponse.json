@@ -38,7 +38,7 @@
         "about": "The topic name" },
       { "name": "ErrorCode", "type": "int16", "versions": "0+",
         "about": "The deletion error, or 0 if the deletion succeeded." },
-      { "name": "ErrorMessage", "type": "string", "versions": "5+", "nullableVersions": "5+", "ignorable": true,
+      { "name": "ErrorMessage", "type": "string", "versions": "5+", "nullableVersions": "5+", "ignorable": true, "default": "null",
         "about": "The error message, or null if there was no error." }
     ]}
   ]

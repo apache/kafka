@@ -193,8 +193,11 @@ public class SaslServerAuthenticator implements Authenticator {
             try {
                 saslServer = Subject.doAs(subject, (PrivilegedExceptionAction<SaslServer>) () ->
                     Sasl.createSaslServer(saslMechanism, "kafka", serverAddress().getHostName(), configs, callbackHandler));
+                if (saslServer == null) {
+                    throw new SaslException("Kafka Server failed to create a SaslServer to interact with a client during session authentication with server mechanism " + saslMechanism);
+                }
             } catch (PrivilegedActionException e) {
-                throw new SaslException("Kafka Server failed to create a SaslServer to interact with a client during session authentication", e.getCause());
+                throw new SaslException("Kafka Server failed to create a SaslServer to interact with a client during session authentication with server mechanism " + saslMechanism, e.getCause());
             }
         }
     }

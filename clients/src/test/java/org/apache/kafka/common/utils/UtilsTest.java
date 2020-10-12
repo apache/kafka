@@ -58,6 +58,7 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.utils.Utils.murmur2;
 import static org.apache.kafka.common.utils.Utils.union;
 import static org.apache.kafka.common.utils.Utils.validHostPattern;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -74,6 +75,9 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 public class UtilsTest {
 
@@ -784,4 +788,34 @@ public class UtilsTest {
         assertEquals(msg, exception.get().getMessage());
         assertEquals(1, count.get());
     }
+
+    @Test
+    public void shouldAcceptValidDateFormats() throws ParseException {
+        //check valid formats
+        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS"));
+        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ"));
+        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX"));
+        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXX"));
+        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX"));
+    }
+
+    @Test
+    public void shouldThrowOnInvalidDateFormat() {
+        //check some invalid formats
+        assertThat(assertThrows(ParseException.class, () -> {
+            invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss"));
+        }).getMessage(), containsString("Unparseable date"));
+
+        assertThat(assertThrows(ParseException.class, () -> {
+            invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.X"));
+        }).getMessage(), containsString("Unparseable date"));
+
+    }
+
+    private void invokeGetDateTimeMethod(final SimpleDateFormat format) throws ParseException {
+        final Date checkpoint = new Date();
+        final String formattedCheckpoint = format.format(checkpoint);
+        Utils.getDateTime(formattedCheckpoint);
+    }
+
 }

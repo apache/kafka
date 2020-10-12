@@ -45,7 +45,6 @@ public class StreamsBrokerDownResilienceTest {
 
     private static final String SINK_TOPIC = "streamsResilienceSink";
 
-    @SuppressWarnings("deprecation") // TODO revisit in follow up PR
     public static void main(final String[] args) throws IOException {
         if (args.length < 2) {
             System.err.println("StreamsBrokerDownResilienceTest are expecting two parameters: propFile, additionalConfigs; but only see " + args.length + " parameter");
@@ -123,7 +122,6 @@ public class StreamsBrokerDownResilienceTest {
         });
     }
 
-    @SuppressWarnings("deprecation") // TODO revisit in follow up PR
     private static boolean confirmCorrectConfigs(final Properties properties) {
         return properties.containsKey(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) &&
                properties.containsKey(StreamsConfig.producerPrefix(ProducerConfig.RETRIES_CONFIG)) &&

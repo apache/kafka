@@ -63,6 +63,7 @@ import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -1201,9 +1202,8 @@ public class StreamThreadTest {
         internalTopologyBuilder.addProcessor(
             "proc",
             () -> new Processor<Object, Object, Object, Object>() {
-
                 @Override
-                public void process(final Object key, final Object value) {
+                public void process(final Record<Object, Object> record) {
                     if (shouldThrow.get()) {
                         throw new TaskCorruptedException(singletonMap(task1, new HashSet<>(singleton(storeChangelogTopicPartition))));
                     } else {

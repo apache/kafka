@@ -21,6 +21,7 @@ import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.time.Duration;
@@ -65,25 +66,19 @@ public class MockApiProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VI
             scheduleCancellable = context.schedule(
                 Duration.ofMillis(scheduleInterval),
                 punctuationType,
-                timestamp -> {
-                    if (punctuationType == PunctuationType.STREAM_TIME) {
-                        assertThat(context.timestamp(), is(timestamp));
-                    }
-                    assertThat(context.partition(), is(-1));
-                    assertThat(context.offset(), is(-1L));
-
-                    (punctuationType == PunctuationType.STREAM_TIME ? punctuatedStreamTime : punctuatedSystemTime)
-                        .add(timestamp);
-                });
+                (punctuationType == PunctuationType.STREAM_TIME ? punctuatedStreamTime : punctuatedSystemTime)::add
+            );
         }
     }
 
     @Override
-    public void process(final KIn key, final VIn value) {
-        final KeyValueTimestamp<KIn, VIn> keyValueTimestamp = new KeyValueTimestamp<>(key, value, context.timestamp());
+    public void process(final Record<KIn, VIn> record) {
+        final KIn key = record.key();
+        final VIn value = record.value();
+        final KeyValueTimestamp<KIn, VIn> keyValueTimestamp = new KeyValueTimestamp<>(key, value, record.timestamp());
 
         if (value != null) {
-            lastValueAndTimestampPerKey.put(key, ValueAndTimestamp.make(value, context.timestamp()));
+            lastValueAndTimestampPerKey.put(key, ValueAndTimestamp.make(value, record.timestamp()));
         } else {
             lastValueAndTimestampPerKey.remove(key);
         }

@@ -40,6 +40,7 @@ import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertThrows;
 
 public class WindowedWordCountProcessorTest {
+    @SuppressWarnings("deprecation") // TODO will be fixed in KAFKA-10437
     @Test
     public void shouldWorkWithInMemoryStore() {
         final MockProcessorContext context = new MockProcessorContext();
@@ -86,6 +87,7 @@ public class WindowedWordCountProcessorTest {
         assertThat(capturedForwards.hasNext(), is(false));
     }
 
+    @SuppressWarnings("deprecation") // TODO will be fixed in KAFKA-10437
     @Test
     public void shouldWorkWithPersistentStore() throws IOException {
         final Properties properties = new Properties();
@@ -146,6 +148,7 @@ public class WindowedWordCountProcessorTest {
         }
     }
 
+    @SuppressWarnings("deprecation") // TODO will be fixed in KAFKA-10437
     @Test
     public void shouldFailWithLogging() {
         final MockProcessorContext context = new MockProcessorContext();
@@ -164,6 +167,7 @@ public class WindowedWordCountProcessorTest {
         assertThrows(IllegalArgumentException.class, () -> store.init(context, store));
     }
 
+    @SuppressWarnings("deprecation") // TODO will be fixed in KAFKA-10437
     @Test
     public void shouldFailWithCaching() {
         final MockProcessorContext context = new MockProcessorContext();

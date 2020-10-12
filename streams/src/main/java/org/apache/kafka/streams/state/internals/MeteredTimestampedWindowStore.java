@@ -20,6 +20,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.StateSerdes;
@@ -28,10 +29,11 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
 
 /**
- * A Metered {@link MeteredTimestampedWindowStore} wrapper that is used for recording operation metrics, and hence its
+ * A Metered {@link TimestampedWindowStore} wrapper that is used for recording operation metrics, and hence its
  * inner WindowStore implementation do not need to provide its own metrics collecting functionality.
  * The inner {@link WindowStore} of this class is of type &lt;Bytes,byte[]&gt;, hence we use {@link Serde}s
  * to convert from &lt;K,ValueAndTimestamp&lt;V&gt&gt; to &lt;Bytes,byte[]&gt;
+ *
  * @param <K>
  * @param <V>
  */
@@ -48,9 +50,24 @@ class MeteredTimestampedWindowStore<K, V>
         super(inner, windowSizeMs, metricScope, time, keySerde, valueSerde);
     }
 
+    @Deprecated
     @SuppressWarnings("unchecked")
     @Override
     void initStoreSerde(final ProcessorContext context) {
+        final String storeName = name();
+        final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
+        serdes = new StateSerdes<>(
+            changelogTopic != null ?
+                changelogTopic :
+                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName),
+            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
+            valueSerde == null ? new ValueAndTimestampSerde<>((Serde<V>) context.valueSerde()) : valueSerde
+        );
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    void initStoreSerde(final StateStoreContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
         serdes = new StateSerdes<>(

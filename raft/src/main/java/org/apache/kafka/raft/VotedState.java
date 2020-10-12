@@ -23,8 +23,10 @@ import java.util.OptionalInt;
 import java.util.Set;
 
 /**
- * The "voted" state is for voters who have cast their vote for a
- * specific candidate.
+ * The "voted" state is for voters who have cast their vote for a specific candidate.
+ * Once a vote has been cast, it is not possible for a voter to change its vote until a
+ * new election is started. If the election timeout expires before a new leader is elected,
+ * then the voter will become a candidate.
  */
 public class VotedState implements EpochState {
     private final int epoch;

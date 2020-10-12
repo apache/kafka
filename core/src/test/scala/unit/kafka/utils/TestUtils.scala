@@ -65,7 +65,6 @@ import org.apache.zookeeper.data.ACL
 import org.junit.Assert._
 import org.scalatest.Assertions.fail
 
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.collection.{Map, Seq, mutable}
@@ -538,7 +537,7 @@ object TestUtils extends Logging {
             return true
           cur = null
         }
-        // should never reach her
+        // should never reach here
         throw new RuntimeException("should not reach here")
       }
 
@@ -586,7 +585,6 @@ object TestUtils extends Logging {
   /**
    * Create a (new) producer with a few pre-configured properties.
    */
-  @nowarn("cat=deprecation")
   def createProducer[K, V](brokerList: String,
                            acks: Int = -1,
                            maxBlockMs: Long = 60 * 1000L,

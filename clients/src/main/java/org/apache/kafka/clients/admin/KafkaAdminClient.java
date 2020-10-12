@@ -79,6 +79,8 @@ import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData.AlterRepli
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirPartitionResult;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirTopicResult;
 import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData;
+import org.apache.kafka.common.message.ApiVersionsResponseData.FinalizedFeatureKey;
+import org.apache.kafka.common.message.ApiVersionsResponseData.SupportedFeatureKey;
 import org.apache.kafka.common.message.CreateAclsRequestData;
 import org.apache.kafka.common.message.CreateAclsRequestData.AclCreation;
 import org.apache.kafka.common.message.CreateAclsResponseData.AclCreationResult;
@@ -143,6 +145,8 @@ import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteReque
 import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteRequestTopic;
 import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection;
 import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
+import org.apache.kafka.common.message.UpdateFeaturesRequestData;
+import org.apache.kafka.common.message.UpdateFeaturesResponseData.UpdatableFeatureResult;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -169,6 +173,8 @@ import org.apache.kafka.common.requests.AlterReplicaLogDirsResponse;
 import org.apache.kafka.common.requests.AlterUserScramCredentialsRequest;
 import org.apache.kafka.common.requests.AlterUserScramCredentialsResponse;
 import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.common.requests.ApiVersionsRequest;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.CreateAclsRequest;
 import org.apache.kafka.common.requests.CreateAclsResponse;
 import org.apache.kafka.common.requests.CreateDelegationTokenRequest;
@@ -226,6 +232,8 @@ import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.RenewDelegationTokenRequest;
 import org.apache.kafka.common.requests.RenewDelegationTokenResponse;
+import org.apache.kafka.common.requests.UpdateFeaturesRequest;
+import org.apache.kafka.common.requests.UpdateFeaturesResponse;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.scram.internals.ScramFormatter;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
@@ -549,7 +557,6 @@ public class KafkaAdminClient extends AdminClient {
         return new LogContext("[AdminClient clientId=" + clientId + "] ");
     }
 
-    @SuppressWarnings("deprecation")
     private KafkaAdminClient(AdminClientConfig config,
                              String clientId,
                              Time time,
@@ -1445,6 +1452,24 @@ public class KafkaAdminClient extends AdminClient {
                 entry.getValue().completeExceptionally(new ApiException(messageFormatter.apply(entry.getKey()))));
     }
 
+    /**
+     * Fail futures in the given Map which were retried due to exceeding quota. We propagate
+     * the initial error back to the caller if the request timed out.
+     */
+    private static <K, V> void maybeCompleteQuotaExceededException(
+            boolean shouldRetryOnQuotaViolation,
+            Throwable throwable,
+            Map<K, KafkaFutureImpl<V>> futures,
+            Map<K, ThrottlingQuotaExceededException> quotaExceededExceptions,
+            int throttleTimeDelta) {
+        if (shouldRetryOnQuotaViolation && throwable instanceof TimeoutException) {
+            quotaExceededExceptions.forEach((key, value) -> futures.get(key).completeExceptionally(
+                new ThrottlingQuotaExceededException(
+                    Math.max(0, value.throttleTimeMs() - throttleTimeDelta),
+                    value.getMessage())));
+        }
+    }
+
     @Override
     public CreateTopicsResult createTopics(final Collection<NewTopic> newTopics,
                                            final CreateTopicsOptions options) {
@@ -1464,7 +1489,8 @@ public class KafkaAdminClient extends AdminClient {
         if (!topics.isEmpty()) {
             final long now = time.milliseconds();
             final long deadline = calcDeadlineMs(now, options.timeoutMs());
-            final Call call = getCreateTopicsCall(options, topicFutures, topics, deadline);
+            final Call call = getCreateTopicsCall(options, topicFutures, topics,
+                Collections.emptyMap(), now, deadline);
             runnable.call(call, now);
         }
         return new CreateTopicsResult(new HashMap<>(topicFutures));
@@ -1473,6 +1499,8 @@ public class KafkaAdminClient extends AdminClient {
     private Call getCreateTopicsCall(final CreateTopicsOptions options,
                                      final Map<String, KafkaFutureImpl<TopicMetadataAndConfig>> futures,
                                      final CreatableTopicCollection topics,
+                                     final Map<String, ThrottlingQuotaExceededException> quotaExceededExceptions,
+                                     final long now,
                                      final long deadline) {
         return new Call("createTopics", deadline, new ControllerNodeProvider()) {
             @Override
@@ -1491,6 +1519,7 @@ public class KafkaAdminClient extends AdminClient {
                 // Handle server responses for particular topics.
                 final CreateTopicsResponse response = (CreateTopicsResponse) abstractResponse;
                 final CreatableTopicCollection retryTopics = new CreatableTopicCollection();
+                final Map<String, ThrottlingQuotaExceededException> retryTopicQuotaExceededExceptions = new HashMap<>();
                 for (CreatableTopicResult result : response.data().topics()) {
                     KafkaFutureImpl<TopicMetadataAndConfig> future = futures.get(result.name());
                     if (future == null) {
@@ -1499,11 +1528,13 @@ public class KafkaAdminClient extends AdminClient {
                         ApiError error = new ApiError(result.errorCode(), result.errorMessage());
                         if (error.isFailure()) {
                             if (error.is(Errors.THROTTLING_QUOTA_EXCEEDED)) {
+                                ThrottlingQuotaExceededException quotaExceededException = new ThrottlingQuotaExceededException(
+                                    response.throttleTimeMs(), error.messageWithFallback());
                                 if (options.shouldRetryOnQuotaViolation()) {
                                     retryTopics.add(topics.find(result.name()).duplicate());
+                                    retryTopicQuotaExceededExceptions.put(result.name(), quotaExceededException);
                                 } else {
-                                    future.completeExceptionally(new ThrottlingQuotaExceededException(
-                                        response.throttleTimeMs(), error.messageWithFallback()));
+                                    future.completeExceptionally(quotaExceededException);
                                 }
                             } else {
                                 future.completeExceptionally(error.exception());
@@ -1535,8 +1566,10 @@ public class KafkaAdminClient extends AdminClient {
                     completeUnrealizedFutures(futures.entrySet().stream(),
                         topic -> "The controller response did not contain a result for topic " + topic);
                 } else {
-                    final Call call = getCreateTopicsCall(options, futures, retryTopics, deadline);
-                    runnable.call(call, time.milliseconds());
+                    final long now = time.milliseconds();
+                    final Call call = getCreateTopicsCall(options, futures, retryTopics,
+                        retryTopicQuotaExceededExceptions, now, deadline);
+                    runnable.call(call, now);
                 }
             }
 
@@ -1554,6 +1587,11 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             void handleFailure(Throwable throwable) {
+                // If there were any topics retries due to a quota exceeded exception, we propagate
+                // the initial error back to the caller if the request timed out.
+                maybeCompleteQuotaExceededException(options.shouldRetryOnQuotaViolation(),
+                    throwable, futures, quotaExceededExceptions, (int) (time.milliseconds() - now));
+                // Fail all the other remaining futures
                 completeAllExceptionally(futures.values(), throwable);
             }
         };
@@ -1578,7 +1616,8 @@ public class KafkaAdminClient extends AdminClient {
         if (!validTopicNames.isEmpty()) {
             final long now = time.milliseconds();
             final long deadline = calcDeadlineMs(now, options.timeoutMs());
-            final Call call = getDeleteTopicsCall(options, topicFutures, validTopicNames, deadline);
+            final Call call = getDeleteTopicsCall(options, topicFutures, validTopicNames,
+                Collections.emptyMap(), now, deadline);
             runnable.call(call, now);
         }
         return new DeleteTopicsResult(new HashMap<>(topicFutures));
@@ -1587,6 +1626,8 @@ public class KafkaAdminClient extends AdminClient {
     private Call getDeleteTopicsCall(final DeleteTopicsOptions options,
                                      final Map<String, KafkaFutureImpl<Void>> futures,
                                      final List<String> topics,
+                                     final Map<String, ThrottlingQuotaExceededException> quotaExceededExceptions,
+                                     final long now,
                                      final long deadline) {
         return new Call("deleteTopics", deadline, new ControllerNodeProvider()) {
             @Override
@@ -1604,6 +1645,7 @@ public class KafkaAdminClient extends AdminClient {
                 // Handle server responses for particular topics.
                 final DeleteTopicsResponse response = (DeleteTopicsResponse) abstractResponse;
                 final List<String> retryTopics = new ArrayList<>();
+                final Map<String, ThrottlingQuotaExceededException> retryTopicQuotaExceededExceptions = new HashMap<>();
                 for (DeletableTopicResult result : response.data().responses()) {
                     KafkaFutureImpl<Void> future = futures.get(result.name());
                     if (future == null) {
@@ -1612,11 +1654,13 @@ public class KafkaAdminClient extends AdminClient {
                         ApiError error = new ApiError(result.errorCode(), result.errorMessage());
                         if (error.isFailure()) {
                             if (error.is(Errors.THROTTLING_QUOTA_EXCEEDED)) {
+                                ThrottlingQuotaExceededException quotaExceededException = new ThrottlingQuotaExceededException(
+                                    response.throttleTimeMs(), error.messageWithFallback());
                                 if (options.shouldRetryOnQuotaViolation()) {
                                     retryTopics.add(result.name());
+                                    retryTopicQuotaExceededExceptions.put(result.name(), quotaExceededException);
                                 } else {
-                                    future.completeExceptionally(new ThrottlingQuotaExceededException(
-                                        response.throttleTimeMs(), error.messageWithFallback()));
+                                    future.completeExceptionally(quotaExceededException);
                                 }
                             } else {
                                 future.completeExceptionally(error.exception());
@@ -1632,13 +1676,20 @@ public class KafkaAdminClient extends AdminClient {
                     completeUnrealizedFutures(futures.entrySet().stream(),
                         topic -> "The controller response did not contain a result for topic " + topic);
                 } else {
-                    final Call call = getDeleteTopicsCall(options, futures, retryTopics, deadline);
-                    runnable.call(call, time.milliseconds());
+                    final long now = time.milliseconds();
+                    final Call call = getDeleteTopicsCall(options, futures, retryTopics,
+                        retryTopicQuotaExceededExceptions, now, deadline);
+                    runnable.call(call, now);
                 }
             }
 
             @Override
             void handleFailure(Throwable throwable) {
+                // If there were any topics retries due to a quota exceeded exception, we propagate
+                // the initial error back to the caller if the request timed out.
+                maybeCompleteQuotaExceededException(options.shouldRetryOnQuotaViolation(),
+                    throwable, futures, quotaExceededExceptions, (int) (time.milliseconds() - now));
+                // Fail all the other remaining futures
                 completeAllExceptionally(futures.values(), throwable);
             }
         };
@@ -2478,7 +2529,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public CreatePartitionsResult createPartitions(final Map<String, NewPartitions> newPartitions,
-        final CreatePartitionsOptions options) {
+                                                   final CreatePartitionsOptions options) {
         final Map<String, KafkaFutureImpl<Void>> futures = new HashMap<>(newPartitions.size());
         final CreatePartitionsTopicCollection topics = new CreatePartitionsTopicCollection(newPartitions.size());
         for (Map.Entry<String, NewPartitions> entry : newPartitions.entrySet()) {
@@ -2498,16 +2549,19 @@ public class KafkaAdminClient extends AdminClient {
         if (!topics.isEmpty()) {
             final long now = time.milliseconds();
             final long deadline = calcDeadlineMs(now, options.timeoutMs());
-            final Call call = getCreatePartitionsCall(options, futures, topics, deadline);
+            final Call call = getCreatePartitionsCall(options, futures, topics,
+                Collections.emptyMap(), now, deadline);
             runnable.call(call, now);
         }
         return new CreatePartitionsResult(new HashMap<>(futures));
     }
 
     private Call getCreatePartitionsCall(final CreatePartitionsOptions options,
-        final Map<String, KafkaFutureImpl<Void>> futures,
-        final CreatePartitionsTopicCollection topics,
-        final long deadline) {
+                                         final Map<String, KafkaFutureImpl<Void>> futures,
+                                         final CreatePartitionsTopicCollection topics,
+                                         final Map<String, ThrottlingQuotaExceededException> quotaExceededExceptions,
+                                         final long now,
+                                         final long deadline) {
         return new Call("createPartitions", deadline, new ControllerNodeProvider()) {
             @Override
             public CreatePartitionsRequest.Builder createRequest(int timeoutMs) {
@@ -2525,6 +2579,7 @@ public class KafkaAdminClient extends AdminClient {
                 // Handle server responses for particular topics.
                 final CreatePartitionsResponse response = (CreatePartitionsResponse) abstractResponse;
                 final CreatePartitionsTopicCollection retryTopics = new CreatePartitionsTopicCollection();
+                final Map<String, ThrottlingQuotaExceededException> retryTopicQuotaExceededExceptions = new HashMap<>();
                 for (CreatePartitionsTopicResult result : response.data().results()) {
                     KafkaFutureImpl<Void> future = futures.get(result.name());
                     if (future == null) {
@@ -2533,11 +2588,13 @@ public class KafkaAdminClient extends AdminClient {
                         ApiError error = new ApiError(result.errorCode(), result.errorMessage());
                         if (error.isFailure()) {
                             if (error.is(Errors.THROTTLING_QUOTA_EXCEEDED)) {
+                                ThrottlingQuotaExceededException quotaExceededException = new ThrottlingQuotaExceededException(
+                                    response.throttleTimeMs(), error.messageWithFallback());
                                 if (options.shouldRetryOnQuotaViolation()) {
                                     retryTopics.add(topics.find(result.name()).duplicate());
+                                    retryTopicQuotaExceededExceptions.put(result.name(), quotaExceededException);
                                 } else {
-                                    future.completeExceptionally(new ThrottlingQuotaExceededException(
-                                        response.throttleTimeMs(), error.messageWithFallback()));
+                                    future.completeExceptionally(quotaExceededException);
                                 }
                             } else {
                                 future.completeExceptionally(error.exception());
@@ -2553,13 +2610,20 @@ public class KafkaAdminClient extends AdminClient {
                     completeUnrealizedFutures(futures.entrySet().stream(),
                         topic -> "The controller response did not contain a result for topic " + topic);
                 } else {
-                    final Call call = getCreatePartitionsCall(options, futures, retryTopics, deadline);
-                    runnable.call(call, time.milliseconds());
+                    final long now = time.milliseconds();
+                    final Call call = getCreatePartitionsCall(options, futures, retryTopics,
+                        retryTopicQuotaExceededExceptions, now, deadline);
+                    runnable.call(call, now);
                 }
             }
 
             @Override
             void handleFailure(Throwable throwable) {
+                // If there were any topics retries due to a quota exceeded exception, we propagate
+                // the initial error back to the caller if the request timed out.
+                maybeCompleteQuotaExceededException(options.shouldRetryOnQuotaViolation(),
+                    throwable, futures, quotaExceededExceptions, (int) (time.milliseconds() - now));
+                // Fail all the other remaining futures
                 completeAllExceptionally(futures.values(), throwable);
             }
         };
@@ -4277,6 +4341,151 @@ public class KafkaAdminClient extends AdminClient {
     private static byte[] getSaltedPasword(ScramMechanism publicScramMechanism, byte[] password, byte[] salt, int iterations) throws NoSuchAlgorithmException, InvalidKeyException {
         return new ScramFormatter(org.apache.kafka.common.security.scram.internals.ScramMechanism.forMechanismName(publicScramMechanism.mechanismName()))
                 .hi(password, salt, iterations);
+    }
+
+    public DescribeFeaturesResult describeFeatures(final DescribeFeaturesOptions options) {
+        final KafkaFutureImpl<FeatureMetadata> future = new KafkaFutureImpl<>();
+        final long now = time.milliseconds();
+        final NodeProvider provider =
+            options.sendRequestToController() ? new ControllerNodeProvider() : new LeastLoadedNodeProvider();
+
+        final Call call = new Call(
+            "describeFeatures", calcDeadlineMs(now, options.timeoutMs()), provider) {
+
+            private FeatureMetadata createFeatureMetadata(final ApiVersionsResponse response) {
+                final Map<String, FinalizedVersionRange> finalizedFeatures = new HashMap<>();
+                for (final FinalizedFeatureKey key : response.data().finalizedFeatures().valuesSet()) {
+                    finalizedFeatures.put(key.name(), new FinalizedVersionRange(key.minVersionLevel(), key.maxVersionLevel()));
+                }
+
+                Optional<Long> finalizedFeaturesEpoch;
+                if (response.data().finalizedFeaturesEpoch() >= 0L) {
+                    finalizedFeaturesEpoch = Optional.of(response.data().finalizedFeaturesEpoch());
+                } else {
+                    finalizedFeaturesEpoch = Optional.empty();
+                }
+
+                final Map<String, SupportedVersionRange> supportedFeatures = new HashMap<>();
+                for (final SupportedFeatureKey key : response.data().supportedFeatures().valuesSet()) {
+                    supportedFeatures.put(key.name(), new SupportedVersionRange(key.minVersion(), key.maxVersion()));
+                }
+
+                return new FeatureMetadata(finalizedFeatures, finalizedFeaturesEpoch, supportedFeatures);
+            }
+
+            @Override
+            ApiVersionsRequest.Builder createRequest(int timeoutMs) {
+                return new ApiVersionsRequest.Builder();
+            }
+
+            @Override
+            void handleResponse(AbstractResponse response) {
+                final ApiVersionsResponse apiVersionsResponse = (ApiVersionsResponse) response;
+                if (apiVersionsResponse.data.errorCode() == Errors.NONE.code()) {
+                    future.complete(createFeatureMetadata(apiVersionsResponse));
+                } else if (options.sendRequestToController() &&
+                           apiVersionsResponse.data.errorCode() == Errors.NOT_CONTROLLER.code()) {
+                    handleNotControllerError(Errors.NOT_CONTROLLER);
+                } else {
+                    future.completeExceptionally(Errors.forCode(apiVersionsResponse.data.errorCode()).exception());
+                }
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                completeAllExceptionally(Collections.singletonList(future), throwable);
+            }
+        };
+
+        runnable.call(call, now);
+        return new DescribeFeaturesResult(future);
+    }
+
+    @Override
+    public UpdateFeaturesResult updateFeatures(final Map<String, FeatureUpdate> featureUpdates,
+                                               final UpdateFeaturesOptions options) {
+        if (featureUpdates.isEmpty()) {
+            throw new IllegalArgumentException("Feature updates can not be null or empty.");
+        }
+
+        final Map<String, KafkaFutureImpl<Void>> updateFutures = new HashMap<>();
+        for (final Map.Entry<String, FeatureUpdate> entry : featureUpdates.entrySet()) {
+            final String feature = entry.getKey();
+            if (feature.trim().isEmpty()) {
+                throw new IllegalArgumentException("Provided feature can not be empty.");
+            }
+            updateFutures.put(entry.getKey(), new KafkaFutureImpl<>());
+        }
+
+        final long now = time.milliseconds();
+        final Call call = new Call("updateFeatures", calcDeadlineMs(now, options.timeoutMs()),
+            new ControllerNodeProvider()) {
+
+            @Override
+            UpdateFeaturesRequest.Builder createRequest(int timeoutMs) {
+                final UpdateFeaturesRequestData.FeatureUpdateKeyCollection featureUpdatesRequestData
+                    = new UpdateFeaturesRequestData.FeatureUpdateKeyCollection();
+                for (Map.Entry<String, FeatureUpdate> entry : featureUpdates.entrySet()) {
+                    final String feature = entry.getKey();
+                    final FeatureUpdate update = entry.getValue();
+                    final UpdateFeaturesRequestData.FeatureUpdateKey requestItem =
+                        new UpdateFeaturesRequestData.FeatureUpdateKey();
+                    requestItem.setFeature(feature);
+                    requestItem.setMaxVersionLevel(update.maxVersionLevel());
+                    requestItem.setAllowDowngrade(update.allowDowngrade());
+                    featureUpdatesRequestData.add(requestItem);
+                }
+                return new UpdateFeaturesRequest.Builder(
+                    new UpdateFeaturesRequestData()
+                        .setTimeoutMs(timeoutMs)
+                        .setFeatureUpdates(featureUpdatesRequestData));
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                final UpdateFeaturesResponse response =
+                    (UpdateFeaturesResponse) abstractResponse;
+
+                Errors topLevelError = Errors.forCode(response.data().errorCode());
+                switch (topLevelError) {
+                    case NONE:
+                        for (final UpdatableFeatureResult result : response.data().results()) {
+                            final KafkaFutureImpl<Void> future = updateFutures.get(result.feature());
+                            if (future == null) {
+                                log.warn("Server response mentioned unknown feature {}", result.feature());
+                            } else {
+                                final Errors error = Errors.forCode(result.errorCode());
+                                if (error == Errors.NONE) {
+                                    future.complete(null);
+                                } else {
+                                    future.completeExceptionally(error.exception(result.errorMessage()));
+                                }
+                            }
+                        }
+                        // The server should send back a response for every feature, but we do a sanity check anyway.
+                        completeUnrealizedFutures(updateFutures.entrySet().stream(),
+                            feature -> "The controller response did not contain a result for feature " + feature);
+                        break;
+                    case NOT_CONTROLLER:
+                        handleNotControllerError(topLevelError);
+                        break;
+                    default:
+                        for (final Map.Entry<String, KafkaFutureImpl<Void>> entry : updateFutures.entrySet()) {
+                            final String errorMsg = response.data().errorMessage();
+                            entry.getValue().completeExceptionally(topLevelError.exception(errorMsg));
+                        }
+                        break;
+                }
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                completeAllExceptionally(updateFutures.values(), throwable);
+            }
+        };
+
+        runnable.call(call, now);
+        return new UpdateFeaturesResult(new HashMap<>(updateFutures));
     }
 
     /**

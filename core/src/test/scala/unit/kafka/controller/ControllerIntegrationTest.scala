@@ -21,12 +21,13 @@ import java.util.Properties
 import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue}
 
 import com.yammer.metrics.core.Timer
-import kafka.api.LeaderAndIsr
+import kafka.api.{ApiVersion, KAFKA_2_6_IV0, KAFKA_2_7_IV0, LeaderAndIsr}
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{LogCaptureAppender, TestUtils}
-import kafka.zk._
+import kafka.zk.{FeatureZNodeStatus, _}
 import org.apache.kafka.common.errors.{ControllerMovedException, StaleBrokerEpochException}
+import org.apache.kafka.common.feature.Features
 import org.apache.kafka.common.metrics.KafkaMetric
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.{ElectionType, TopicPartition}
@@ -596,6 +597,36 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   }
 
   @Test
+  def testControllerFeatureZNodeSetupWhenFeatureVersioningIsEnabledWithNonExistingFeatureZNode(): Unit = {
+    testControllerFeatureZNodeSetup(Option.empty, KAFKA_2_7_IV0)
+  }
+
+  @Test
+  def testControllerFeatureZNodeSetupWhenFeatureVersioningIsEnabledWithDisabledExistingFeatureZNode(): Unit = {
+    testControllerFeatureZNodeSetup(Some(new FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures())), KAFKA_2_7_IV0)
+  }
+
+  @Test
+  def testControllerFeatureZNodeSetupWhenFeatureVersioningIsEnabledWithEnabledExistingFeatureZNode(): Unit = {
+    testControllerFeatureZNodeSetup(Some(new FeatureZNode(FeatureZNodeStatus.Enabled, Features.emptyFinalizedFeatures())), KAFKA_2_7_IV0)
+  }
+
+  @Test
+  def testControllerFeatureZNodeSetupWhenFeatureVersioningIsDisabledWithNonExistingFeatureZNode(): Unit = {
+    testControllerFeatureZNodeSetup(Option.empty, KAFKA_2_6_IV0)
+  }
+
+  @Test
+  def testControllerFeatureZNodeSetupWhenFeatureVersioningIsDisabledWithDisabledExistingFeatureZNode(): Unit = {
+    testControllerFeatureZNodeSetup(Some(new FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures())), KAFKA_2_6_IV0)
+  }
+
+  @Test
+  def testControllerFeatureZNodeSetupWhenFeatureVersioningIsDisabledWithEnabledExistingFeatureZNode(): Unit = {
+    testControllerFeatureZNodeSetup(Some(new FeatureZNode(FeatureZNodeStatus.Enabled, Features.emptyFinalizedFeatures())), KAFKA_2_6_IV0)
+  }
+
+  @Test
   def testControllerDetectsBouncedBrokers(): Unit = {
     servers = makeServers(2, enableControlledShutdown = false)
     val controller = getController().kafkaController
@@ -715,7 +746,72 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     doAnswer((_: InvocationOnMock) => {
       latch.countDown()
     }).doCallRealMethod().when(spyThread).awaitShutdown()
-    controller.shutdown() 
+    controller.shutdown()
+  }
+
+  private def testControllerFeatureZNodeSetup(initialZNode: Option[FeatureZNode],
+                                              interBrokerProtocolVersion: ApiVersion): Unit = {
+    val versionBeforeOpt = initialZNode match {
+      case Some(node) =>
+        zkClient.createFeatureZNode(node)
+        Some(zkClient.getDataAndVersion(FeatureZNode.path)._2)
+      case None =>
+        Option.empty
+    }
+    servers = makeServers(1, interBrokerProtocolVersion = Some(interBrokerProtocolVersion))
+    TestUtils.waitUntilControllerElected(zkClient)
+    // Below we wait on a dummy event to finish processing in the controller event thread.
+    // We schedule this dummy event only after the controller is elected, which is a sign that the
+    // controller has already started processing the Startup event. Waiting on the dummy event is
+    // used to make sure that the event thread has completed processing Startup event, that triggers
+    // the setup of FeatureZNode.
+    val controller = getController().kafkaController
+    val latch = new CountDownLatch(1)
+    controller.eventManager.put(new MockEvent(ControllerState.TopicChange) {
+      override def process(): Unit = {
+        latch.countDown()
+      }
+      override def preempt(): Unit = {}
+    })
+    latch.await()
+
+    val (mayBeFeatureZNodeBytes, versionAfter) = zkClient.getDataAndVersion(FeatureZNode.path)
+    val newZNode = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
+    if (interBrokerProtocolVersion >= KAFKA_2_7_IV0) {
+      val emptyZNode = new FeatureZNode(FeatureZNodeStatus.Enabled, Features.emptyFinalizedFeatures)
+      initialZNode match {
+        case Some(node) => {
+          node.status match {
+            case FeatureZNodeStatus.Enabled =>
+              assertEquals(versionBeforeOpt.get, versionAfter)
+              assertEquals(node, newZNode)
+            case FeatureZNodeStatus.Disabled =>
+              assertEquals(versionBeforeOpt.get + 1, versionAfter)
+              assertEquals(emptyZNode, newZNode)
+          }
+        }
+        case None =>
+          assertEquals(0, versionAfter)
+          assertEquals(new FeatureZNode(FeatureZNodeStatus.Enabled, Features.emptyFinalizedFeatures), newZNode)
+      }
+    } else {
+      val emptyZNode = new FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures)
+      initialZNode match {
+        case Some(node) => {
+          node.status match {
+            case FeatureZNodeStatus.Enabled =>
+              assertEquals(versionBeforeOpt.get + 1, versionAfter)
+              assertEquals(emptyZNode, newZNode)
+            case FeatureZNodeStatus.Disabled =>
+              assertEquals(versionBeforeOpt.get, versionAfter)
+              assertEquals(emptyZNode, newZNode)
+          }
+        }
+        case None =>
+          assertEquals(0, versionAfter)
+          assertEquals(new FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures), newZNode)
+      }
+    }
   }
 
   @Test
@@ -840,6 +936,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
                           listeners : Option[String] = None,
                           listenerSecurityProtocolMap : Option[String] = None,
                           controlPlaneListenerName : Option[String] = None,
+                          interBrokerProtocolVersion: Option[ApiVersion] = None,
                           logDirCount: Int = 1) = {
     val configs = TestUtils.createBrokerConfigs(numConfigs, zkConnect, enableControlledShutdown = enableControlledShutdown, logDirCount = logDirCount)
     configs.foreach { config =>
@@ -849,6 +946,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       listeners.foreach(listener => config.setProperty(KafkaConfig.ListenersProp, listener))
       listenerSecurityProtocolMap.foreach(listenerMap => config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, listenerMap))
       controlPlaneListenerName.foreach(controlPlaneListener => config.setProperty(KafkaConfig.ControlPlaneListenerNameProp, controlPlaneListener))
+      interBrokerProtocolVersion.foreach(ibp => config.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, ibp.toString))
     }
     configs.map(config => TestUtils.createServer(KafkaConfig.fromProps(config)))
   }
