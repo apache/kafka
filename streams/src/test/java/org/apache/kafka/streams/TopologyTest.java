@@ -1032,7 +1032,7 @@ public class TopologyTest {
                 "      <-- KSTREAM-SOURCE-0000000001\n" +
                 // previously, this was
                 //   Processor: KTABLE-MAPVALUES-0000000004 (stores: [KTABLE-MAPVALUES-STATE-STORE-0000000003]
-                // but we added a change not to materialize non-queriable stores. This change shouldn't break compatibility.
+                // but we added a change not to materialize non-queryable stores. This change shouldn't break compatibility.
                 "    Processor: KTABLE-MAPVALUES-0000000004 (stores: [])\n" +
                 "      --> none\n" +
                 "      <-- KTABLE-SOURCE-0000000002\n" +
@@ -1099,7 +1099,7 @@ public class TopologyTest {
                 "      <-- KSTREAM-SOURCE-0000000001\n" +
                 // Previously, this was
                 //   Processor: KTABLE-FILTER-0000000004 (stores: [KTABLE-FILTER-STATE-STORE-0000000003]
-                // but we added a change not to materialize non-queriable stores. This change shouldn't break compatibility.
+                // but we added a change not to materialize non-queryable stores. This change shouldn't break compatibility.
                 "    Processor: KTABLE-FILTER-0000000004 (stores: [])\n" +
                 "      --> none\n" +
                 "      <-- KTABLE-SOURCE-0000000002\n" +
