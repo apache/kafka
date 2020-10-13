@@ -17,25 +17,19 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
-import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
-import org.apache.kafka.streams.processor.internals.TaskManager;
 import org.slf4j.Logger;
 
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -132,31 +126,8 @@ public final class AssignorConfiguration {
         return (AtomicLong) al;
     }
 
-    public Time time() {
-        final Object t = internalConfigs.get(InternalConfig.TIME);
-        if (t == null) {
-            final KafkaException fatalException = new KafkaException("time is not specified");
-            log.error(fatalException.getMessage(), fatalException);
-            throw fatalException;
-        }
-
-        if (!(t instanceof Time)) {
-            final KafkaException fatalException = new KafkaException(
-                String.format("%s is not an instance of %s", t.getClass().getName(), Time.class.getName())
-            );
-            log.error(fatalException.getMessage(), fatalException);
-            throw fatalException;
-        }
-
-        return (Time) t;
-    }
-
-    public TaskManager taskManager() {
-        return Objects.requireNonNull(referenceContainer.taskManager, "TaskManager was not specified");
-    }
-
-    public StreamsMetadataState streamsMetadataState() {
-        return Objects.requireNonNull(referenceContainer.streamsMetadataState, "StreamsMetadataState consumer was not specified");
+    public ReferenceContainer referenceContainer() {
+        return referenceContainer;
     }
 
     public RebalanceProtocol rebalanceProtocol() {
@@ -258,16 +229,8 @@ public final class AssignorConfiguration {
         }
     }
 
-    public Consumer<byte[], byte[]> mainConsumer() {
-        return Objects.requireNonNull(referenceContainer.mainConsumer, "Main consumer was not specified");
-    }
-
-    public Admin adminClient() {
-        return Objects.requireNonNull(referenceContainer.adminClient, "Admin client was not specified");
-    }
-
     public InternalTopicManager internalTopicManager() {
-        return new InternalTopicManager(time(), referenceContainer.adminClient, streamsConfig);
+        return new InternalTopicManager(referenceContainer.time, referenceContainer.adminClient, streamsConfig);
     }
 
     public CopartitionedTopicsEnforcer copartitionedTopicsEnforcer() {

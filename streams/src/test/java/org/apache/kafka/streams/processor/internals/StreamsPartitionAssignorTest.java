@@ -199,10 +199,10 @@ public class StreamsPartitionAssignorTest {
         referenceContainer.adminClient = adminClient != null ? adminClient : mock(Admin.class);
         referenceContainer.taskManager = taskManager;
         referenceContainer.streamsMetadataState = streamsMetadataState;
+        referenceContainer.time = time;
         configurationMap.put(InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
         configurationMap.put(InternalConfig.ASSIGNMENT_ERROR_CODE, assignmentError);
         configurationMap.put(InternalConfig.NEXT_SCHEDULED_REBALANCE_MS, nextScheduledRebalanceMs);
-        configurationMap.put(InternalConfig.TIME, time);
         configurationMap.put(InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, taskAssignor.getName());
         return configurationMap;
     }
@@ -1864,7 +1864,7 @@ public class StreamsPartitionAssignorTest {
         final Map<String, Object> props = configProps();
         final AssignorConfiguration assignorConfiguration = new AssignorConfiguration(props);
 
-        assertThat(assignorConfiguration.time().milliseconds(), equalTo(Long.MAX_VALUE));
+        assertThat(assignorConfiguration.referenceContainer().time.milliseconds(), equalTo(Long.MAX_VALUE));
     }
 
     @Test

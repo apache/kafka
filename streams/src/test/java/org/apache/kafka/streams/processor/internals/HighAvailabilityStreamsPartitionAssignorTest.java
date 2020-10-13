@@ -126,10 +126,10 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         referenceContainer.adminClient = adminClient;
         referenceContainer.taskManager = taskManager;
         referenceContainer.streamsMetadataState = streamsMetadataState;
+        referenceContainer.time = time;
         configurationMap.put(InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
         configurationMap.put(InternalConfig.ASSIGNMENT_ERROR_CODE, assignmentError);
         configurationMap.put(InternalConfig.NEXT_SCHEDULED_REBALANCE_MS, nextProbingRebalanceMs);
-        configurationMap.put(InternalConfig.TIME, time);
         configurationMap.put(InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, HighAvailabilityTaskAssignor.class.getName());
         return configurationMap;
     }

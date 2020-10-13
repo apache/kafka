@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.processor.internals.TaskManager;
 
@@ -26,4 +27,5 @@ public class ReferenceContainer {
     public Admin adminClient;
     public TaskManager taskManager;
     public StreamsMetadataState streamsMetadataState;
+    public Time time;
 }

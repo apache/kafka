@@ -42,6 +42,7 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
 import org.apache.kafka.streams.processor.internals.assignment.CopartitionedTopicsEnforcer;
 import org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
 import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
@@ -59,6 +60,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.PriorityQueue;
 import java.util.Queue;
@@ -196,11 +198,13 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         logPrefix = assignorConfiguration.logPrefix();
         log = new LogContext(logPrefix).logger(getClass());
         usedSubscriptionMetadataVersion = assignorConfiguration.configuredMetadataVersion(usedSubscriptionMetadataVersion);
-        taskManager = assignorConfiguration.taskManager();
-        streamsMetadataState = assignorConfiguration.streamsMetadataState();
+
+        final ReferenceContainer referenceContainer = assignorConfiguration.referenceContainer();
+        taskManager = Objects.requireNonNull(referenceContainer.taskManager, "TaskManager was not specified");
+        streamsMetadataState = Objects.requireNonNull(referenceContainer.streamsMetadataState, "StreamsMetadataState was not specified");
+        time = Objects.requireNonNull(referenceContainer.time, "Time was not specified");
         assignmentErrorCode = assignorConfiguration.assignmentErrorCode();
         nextScheduledRebalanceMs = assignorConfiguration.nextScheduledRebalanceMs();
-        time = assignorConfiguration.time();
         assignmentConfigs = assignorConfiguration.assignmentConfigs();
         partitionGrouper = assignorConfiguration.partitionGrouper();
         userEndPoint = assignorConfiguration.userEndPoint();
@@ -800,10 +804,16 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             // Make the listOffsets request first so it can  fetch the offsets for non-source changelogs
             // asynchronously while we use the blocking Consumer#committed call to fetch source-changelog offsets
             final KafkaFuture<Map<TopicPartition, ListOffsetsResultInfo>> endOffsetsFuture =
-                fetchEndOffsetsFuture(preexistingChangelogPartitions, assignorConfiguration.adminClient());
+                fetchEndOffsetsFuture(
+                    preexistingChangelogPartitions,
+                    Objects.requireNonNull(assignorConfiguration.referenceContainer().adminClient, "Admin client was not specified")
+                );
 
             final Map<TopicPartition, Long> sourceChangelogEndOffsets =
-                fetchCommittedOffsets(preexistingSourceChangelogPartitions, assignorConfiguration.mainConsumer());
+                fetchCommittedOffsets(
+                    preexistingSourceChangelogPartitions,
+                    Objects.requireNonNull(assignorConfiguration.referenceContainer().mainConsumer, "Main consumer was not specified")
+                );
 
             final Map<TopicPartition, ListOffsetsResultInfo> endOffsets = ClientUtils.getEndOffsets(endOffsetsFuture);
 

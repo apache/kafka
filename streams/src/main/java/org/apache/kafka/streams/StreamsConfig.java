@@ -903,7 +903,6 @@ public class StreamsConfig extends AbstractConfig {
         public static final String REFERENCE_CONTAINER_PARTITION_ASSIGNOR = "__reference.container.instance__";
         public static final String ASSIGNMENT_ERROR_CODE = "__assignment.error.code__";
         public static final String NEXT_SCHEDULED_REBALANCE_MS = "__next.probing.rebalance.ms__";
-        public static final String TIME = "__time__";
 
         // This is settable in the main Streams config, but it's a private API for testing
         public static final String ASSIGNMENT_LISTENER = "__assignment.listener__";
