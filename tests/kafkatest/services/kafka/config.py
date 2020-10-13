@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import config_property
+from . import config_property
 
 
 class KafkaConfig(dict):
@@ -34,7 +34,7 @@ class KafkaConfig(dict):
 
         # Set defaults
         for key, val in self.DEFAULTS.items():
-            if not self.has_key(key):
+            if key not in self:
                 self[key] = val
 
     def render(self):

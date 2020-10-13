@@ -162,6 +162,39 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
       localLogOrException(part).highWatermark)
   }
 
+  @Test
+  def testAlterReassignmentThrottle(): Unit = {
+    cluster = new ReassignPartitionsTestCluster(zkConnect)
+    cluster.setup()
+    cluster.produceMessages("foo", 0, 50)
+    cluster.produceMessages("baz", 2, 60)
+    val assignment = """{"version":1,"partitions":
+      [{"topic":"foo","partition":0,"replicas":[0,3,2],"log_dirs":["any","any","any"]},
+      {"topic":"baz","partition":2,"replicas":[3,2,1],"log_dirs":["any","any","any"]}
+      ]}"""
+
+    // Execute the assignment with a low throttle
+    val initialThrottle = 1L
+    runExecuteAssignment(cluster.adminClient, false, assignment, initialThrottle, -1L)
+    waitForInterBrokerThrottle(Set(0, 1, 2, 3), initialThrottle)
+
+    // Now update the throttle and verify the reassignment completes
+    val updatedThrottle = 300000L
+    runExecuteAssignment(cluster.adminClient, additional = true, assignment, updatedThrottle, -1L)
+    waitForInterBrokerThrottle(Set(0, 1, 2, 3), updatedThrottle)
+
+    val finalAssignment = Map(
+      new TopicPartition("foo", 0) ->
+        PartitionReassignmentState(Seq(0, 3, 2), Seq(0, 3, 2), true),
+      new TopicPartition("baz", 2) ->
+        PartitionReassignmentState(Seq(3, 2, 1), Seq(3, 2, 1), true))
+
+    // Now remove the throttles.
+    waitForVerifyAssignment(cluster.adminClient, assignment, false,
+      VerifyAssignmentResult(finalAssignment))
+    waitForBrokerLevelThrottles(unthrottledBrokerConfigs)
+  }
+
   /**
    * Test running a reassignment with the interBrokerThrottle set.
    */
@@ -192,20 +225,8 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
     // Execute the assignment
     val interBrokerThrottle = 300000L
     runExecuteAssignment(cluster.adminClient, false, assignment, interBrokerThrottle, -1L)
+    waitForInterBrokerThrottle(Set(0, 1, 2, 3), interBrokerThrottle)
 
-    val throttledConfigMap = Map[String, Long](
-      brokerLevelLeaderThrottle -> interBrokerThrottle,
-      brokerLevelFollowerThrottle -> interBrokerThrottle,
-      brokerLevelLogDirThrottle -> -1L
-    )
-    val throttledBrokerConfigs = Map[Int, Map[String, Long]](
-      0 -> throttledConfigMap,
-      1 -> throttledConfigMap,
-      2 -> throttledConfigMap,
-      3 -> throttledConfigMap,
-      4 -> unthrottledBrokerConfigs(4)
-    )
-    waitForBrokerLevelThrottles(throttledBrokerConfigs)
     val finalAssignment = Map(
       new TopicPartition("foo", 0) ->
         PartitionReassignmentState(Seq(0, 3, 2), Seq(0, 3, 2), true),
@@ -227,7 +248,7 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
           assertEquals(Seq(3, 2, 1),
             result.partStates(new TopicPartition("baz", 2)).targetReplicas)
           logger.info(s"Current result: ${result}")
-          waitForBrokerLevelThrottles(throttledBrokerConfigs)
+          waitForInterBrokerThrottle(Set(0, 1, 2, 3), interBrokerThrottle)
           false
         }
       }, "Expected reassignment to complete.")
@@ -236,7 +257,7 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
     waitForVerifyAssignment(zkClient, assignment, true,
       VerifyAssignmentResult(finalAssignment))
     // The throttles should still have been preserved, since we ran with --preserve-throttles
-    waitForBrokerLevelThrottles(throttledBrokerConfigs)
+    waitForInterBrokerThrottle(Set(0, 1, 2, 3), interBrokerThrottle)
     // Now remove the throttles.
     waitForVerifyAssignment(cluster.adminClient, assignment, false,
       VerifyAssignmentResult(finalAssignment))
@@ -285,19 +306,8 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
       describeBrokerLevelThrottles(unthrottledBrokerConfigs.keySet.toSeq))
     val interBrokerThrottle = 1L
     runExecuteAssignment(cluster.adminClient, false, assignment, interBrokerThrottle, -1L)
-    val throttledConfigMap = Map[String, Long](
-      brokerLevelLeaderThrottle -> interBrokerThrottle,
-      brokerLevelFollowerThrottle -> interBrokerThrottle,
-      brokerLevelLogDirThrottle -> -1L
-    )
-    val throttledBrokerConfigs = Map[Int, Map[String, Long]](
-      0 -> throttledConfigMap,
-      1 -> throttledConfigMap,
-      2 -> throttledConfigMap,
-      3 -> throttledConfigMap,
-      4 -> unthrottledBrokerConfigs(4)
-    )
-    waitForBrokerLevelThrottles(throttledBrokerConfigs)
+    waitForInterBrokerThrottle(Set(0, 1, 2, 3), interBrokerThrottle)
+
     // Verify that the reassignment is running.  The very low throttle should keep it
     // from completing before this runs.
     waitForVerifyAssignment(cluster.adminClient, assignment, true,
@@ -311,13 +321,41 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
         new TopicPartition("baz", 1)
       ), Set()), runCancelAssignment(cluster.adminClient, assignment, true))
     // Broker throttles are still active because we passed --preserve-throttles
-    waitForBrokerLevelThrottles(throttledBrokerConfigs)
+    waitForInterBrokerThrottle(Set(0, 1, 2, 3), interBrokerThrottle)
     // Cancelling the reassignment again should reveal nothing to cancel.
     assertEquals((Set(), Set()), runCancelAssignment(cluster.adminClient, assignment, false))
     // This time, the broker throttles were removed.
     waitForBrokerLevelThrottles(unthrottledBrokerConfigs)
     // Verify that there are no ongoing reassignments.
     assertFalse(runVerifyAssignment(cluster.adminClient, assignment, false).partsOngoing)
+  }
+
+  private def waitForLogDirThrottle(throttledBrokers: Set[Int], logDirThrottle: Long): Unit = {
+    val throttledConfigMap = Map[String, Long](
+      brokerLevelLeaderThrottle -> -1,
+      brokerLevelFollowerThrottle -> -1,
+      brokerLevelLogDirThrottle -> logDirThrottle)
+    waitForBrokerThrottles(throttledBrokers, throttledConfigMap)
+  }
+
+  private def waitForInterBrokerThrottle(throttledBrokers: Set[Int], interBrokerThrottle: Long): Unit = {
+    val throttledConfigMap = Map[String, Long](
+      brokerLevelLeaderThrottle -> interBrokerThrottle,
+      brokerLevelFollowerThrottle -> interBrokerThrottle,
+      brokerLevelLogDirThrottle -> -1L)
+    waitForBrokerThrottles(throttledBrokers, throttledConfigMap)
+  }
+
+  private def waitForBrokerThrottles(throttledBrokers: Set[Int], throttleConfig: Map[String, Long]): Unit = {
+    val throttledBrokerConfigs = unthrottledBrokerConfigs.map { case (brokerId, unthrottledConfig) =>
+      val expectedThrottleConfig = if (throttledBrokers.contains(brokerId)) {
+        throttleConfig
+      } else {
+        unthrottledConfig
+      }
+      brokerId -> expectedThrottleConfig
+    }
+    waitForBrokerLevelThrottles(throttledBrokerConfigs)
   }
 
   private def waitForBrokerLevelThrottles(targetThrottles: Map[Int, Map[String, Long]]): Unit = {
@@ -349,54 +387,32 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
    * Test moving partitions between directories.
    */
   @Test
-  def testReplicaDirectoryMoves(): Unit = {
+  def testLogDirReassignment(): Unit = {
+    val topicPartition = new TopicPartition("foo", 0)
+
     cluster = new ReassignPartitionsTestCluster(zkConnect)
     cluster.setup()
-    cluster.produceMessages("foo", 0, 7000)
-    cluster.produceMessages("baz", 1, 6000)
+    cluster.produceMessages(topicPartition.topic, topicPartition.partition, 700)
 
-    val result0 = cluster.adminClient.describeLogDirs(
-        0.to(4).map(_.asInstanceOf[Integer]).asJavaCollection)
-    val info0 = new BrokerDirs(result0, 0)
-    assertTrue(info0.futureLogDirs.isEmpty)
-    assertEquals(Set(new TopicPartition("foo", 0),
-        new TopicPartition("baz", 0),
-        new TopicPartition("baz", 1),
-        new TopicPartition("baz", 2)),
-      info0.curLogDirs.keySet)
-    val curFoo1Dir = info0.curLogDirs.getOrElse(new TopicPartition("foo", 0), "")
-    assertFalse(curFoo1Dir.equals(""))
-    val newFoo1Dir = info0.logDirs.find(!_.equals(curFoo1Dir)).get
-    val assignment = """{"version":1,"partitions":""" +
-        """[{"topic":"foo","partition":0,"replicas":[0,1,2],""" +
-          "\"log_dirs\":[\"%s\",\"any\",\"any\"]}".format(newFoo1Dir) +
-            "]}"
+    val targetBrokerId = 0
+    val replicas = Seq(0, 1, 2)
+    val reassignment = buildLogDirReassignment(topicPartition, targetBrokerId, replicas)
+
     // Start the replica move, but throttle it to be very slow so that it can't complete
     // before our next checks happen.
-    runExecuteAssignment(cluster.adminClient, false, assignment, -1L, 1L)
+    val logDirThrottle = 1L
+    runExecuteAssignment(cluster.adminClient, additional = false, reassignment.json,
+      interBrokerThrottle = -1L, logDirThrottle)
 
     // Check the output of --verify
-    waitForVerifyAssignment(cluster.adminClient, assignment, true,
+    waitForVerifyAssignment(cluster.adminClient, reassignment.json, true,
       VerifyAssignmentResult(Map(
-          new TopicPartition("foo", 0) -> PartitionReassignmentState(Seq(0, 1, 2), Seq(0, 1, 2), true)
+          topicPartition -> PartitionReassignmentState(Seq(0, 1, 2), Seq(0, 1, 2), true)
         ), false, Map(
-          new TopicPartitionReplica("foo", 0, 0) -> ActiveMoveState(curFoo1Dir, newFoo1Dir, newFoo1Dir)
+          new TopicPartitionReplica(topicPartition.topic, topicPartition.partition, 0) ->
+            ActiveMoveState(reassignment.currentDir, reassignment.targetDir, reassignment.targetDir)
         ), true))
-
-    // Check that the appropriate broker throttle is in place.
-    val throttledConfigMap = Map[String, Long](
-      brokerLevelLeaderThrottle -> -1,
-      brokerLevelFollowerThrottle -> -1,
-      brokerLevelLogDirThrottle -> 1L
-    )
-    val throttledBrokerConfigs = Map[Int, Map[String, Long]](
-      0 -> throttledConfigMap,
-      1 -> unthrottledBrokerConfigs(1),
-      2 -> unthrottledBrokerConfigs(2),
-      3 -> unthrottledBrokerConfigs(3),
-      4 -> unthrottledBrokerConfigs(4)
-    )
-    waitForBrokerLevelThrottles(throttledBrokerConfigs)
+    waitForLogDirThrottle(Set(0), logDirThrottle)
 
     // Remove the throttle
     cluster.adminClient.incrementalAlterConfigs(Collections.singletonMap(
@@ -407,17 +423,90 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
     waitForBrokerLevelThrottles(unthrottledBrokerConfigs)
 
     // Wait for the directory movement to complete.
-    waitForVerifyAssignment(cluster.adminClient, assignment, true,
+    waitForVerifyAssignment(cluster.adminClient, reassignment.json, true,
         VerifyAssignmentResult(Map(
-          new TopicPartition("foo", 0) -> PartitionReassignmentState(Seq(0, 1, 2), Seq(0, 1, 2), true)
+          topicPartition -> PartitionReassignmentState(Seq(0, 1, 2), Seq(0, 1, 2), true)
         ), false, Map(
-          new TopicPartitionReplica("foo", 0, 0) -> CompletedMoveState(newFoo1Dir)
+          new TopicPartitionReplica(topicPartition.topic, topicPartition.partition, 0) ->
+            CompletedMoveState(reassignment.targetDir)
         ), false))
 
     val info1 = new BrokerDirs(cluster.adminClient.describeLogDirs(0.to(4).
         map(_.asInstanceOf[Integer]).asJavaCollection), 0)
-    assertEquals(newFoo1Dir,
-      info1.curLogDirs.getOrElse(new TopicPartition("foo", 0), ""))
+    assertEquals(reassignment.targetDir,
+      info1.curLogDirs.getOrElse(topicPartition, ""))
+  }
+
+  @Test
+  def testAlterLogDirReassignmentThrottle(): Unit = {
+    val topicPartition = new TopicPartition("foo", 0)
+
+    cluster = new ReassignPartitionsTestCluster(zkConnect)
+    cluster.setup()
+    cluster.produceMessages(topicPartition.topic, topicPartition.partition, 700)
+
+    val targetBrokerId = 0
+    val replicas = Seq(0, 1, 2)
+    val reassignment = buildLogDirReassignment(topicPartition, targetBrokerId, replicas)
+
+    // Start the replica move with a low throttle so it does not complete
+    val initialLogDirThrottle = 1L
+    runExecuteAssignment(cluster.adminClient, false, reassignment.json,
+      interBrokerThrottle = -1L, initialLogDirThrottle)
+    waitForLogDirThrottle(Set(0), initialLogDirThrottle)
+
+    // Now increase the throttle and verify that the log dir movement completes
+    val updatedLogDirThrottle = 3000000L
+    runExecuteAssignment(cluster.adminClient, additional = true, reassignment.json,
+      interBrokerThrottle = -1L, replicaAlterLogDirsThrottle = updatedLogDirThrottle)
+    waitForLogDirThrottle(Set(0), updatedLogDirThrottle)
+
+    waitForVerifyAssignment(cluster.adminClient, reassignment.json, true,
+      VerifyAssignmentResult(Map(
+        topicPartition -> PartitionReassignmentState(Seq(0, 1, 2), Seq(0, 1, 2), true)
+      ), false, Map(
+        new TopicPartitionReplica(topicPartition.topic, topicPartition.partition, targetBrokerId) ->
+          CompletedMoveState(reassignment.targetDir)
+      ), false))
+  }
+
+  case class LogDirReassignment(json: String, currentDir: String, targetDir: String)
+
+  private def buildLogDirReassignment(topicPartition: TopicPartition,
+                                      brokerId: Int,
+                                      replicas: Seq[Int]): LogDirReassignment = {
+
+    val describeLogDirsResult = cluster.adminClient.describeLogDirs(
+      0.to(4).map(_.asInstanceOf[Integer]).asJavaCollection)
+
+    val logDirInfo = new BrokerDirs(describeLogDirsResult, brokerId)
+    assertTrue(logDirInfo.futureLogDirs.isEmpty)
+
+    val currentDir = logDirInfo.curLogDirs(topicPartition)
+    val newDir = logDirInfo.logDirs.find(!_.equals(currentDir)).get
+
+    val logDirs = replicas.map { replicaId =>
+      if (replicaId == brokerId)
+        s""""$newDir""""
+      else
+        "\"any\""
+    }
+
+    val reassignmentJson =
+      s"""
+         | { "version": 1,
+         |  "partitions": [
+         |    {
+         |     "topic": "${topicPartition.topic}",
+         |     "partition": ${topicPartition.partition},
+         |     "replicas": [${replicas.mkString(",")}],
+         |     "log_dirs": [${logDirs.mkString(",")}]
+         |    }
+         |   ]
+         |  }
+         |""".stripMargin
+
+    LogDirReassignment(reassignmentJson, currentDir = currentDir, targetDir = newDir)
   }
 
   private def runVerifyAssignment(adminClient: Admin, jsonString: String,
@@ -459,10 +548,10 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
   }
 
   private def runExecuteAssignment(adminClient: Admin,
-                        additional: Boolean,
-                        reassignmentJson: String,
-                        interBrokerThrottle: Long,
-                        replicaAlterLogDirsThrottle: Long) = {
+                                   additional: Boolean,
+                                   reassignmentJson: String,
+                                   interBrokerThrottle: Long,
+                                   replicaAlterLogDirsThrottle: Long) = {
     println(s"==> executeAssignment(adminClient, additional=${additional}, " +
       s"reassignmentJson=${reassignmentJson}, " +
       s"interBrokerThrottle=${interBrokerThrottle}, " +

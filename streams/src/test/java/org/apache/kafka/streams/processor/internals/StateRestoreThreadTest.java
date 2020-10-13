@@ -20,6 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.processor.TaskId;
@@ -168,25 +169,40 @@ public class StateRestoreThreadTest {
         restoreThread.addTaskCorruptedException(corrupted);
 
         assertEquals(fatal, restoreThread.pollNextExceptionIfAny());
+
+        // fatal exception would not clear itself once set
+        assertEquals(fatal, restoreThread.pollNextExceptionIfAny());
     }
 
     @Test
     public void shouldMergeTaskCorruptedException() {
+        final TopicPartition t2p = new TopicPartition("topic2", partition);
+        final TopicPartition tp2 = new TopicPartition(topic, 1);
+        final TopicPartition t2p2 = new TopicPartition("topic2", 1);
+        final TaskId taskId2 = new TaskId(0, 1);
         final TaskCorruptedException e1 = new TaskCorruptedException(
             Collections.singletonMap(taskId, Collections.singleton(tp)));
         final TaskCorruptedException e2 = new TaskCorruptedException(
-            Collections.singletonMap(new TaskId(0, 1), Collections.singleton(new TopicPartition(topic, 1))));
+                Collections.singletonMap(taskId, Collections.singleton(t2p)));
         final TaskCorruptedException e3 = new TaskCorruptedException(
-                Collections.singletonMap(new TaskId(0, 2), Collections.singleton(new TopicPartition(topic, 2))));
+            Collections.singletonMap(taskId2, Collections.singleton(tp2)));
+        final TaskCorruptedException e4 = new TaskCorruptedException(
+                Collections.singletonMap(taskId2, Collections.singleton(t2p2)));
 
         restoreThread.addTaskCorruptedException(e1);
         restoreThread.addTaskCorruptedException(e2);
         restoreThread.addTaskCorruptedException(e3);
+        restoreThread.addTaskCorruptedException(e4);
 
         final RuntimeException e = restoreThread.pollNextExceptionIfAny();
 
         assertTrue(e instanceof TaskCorruptedException);
-        assertEquals(3, ((TaskCorruptedException) e).corruptedTaskWithChangelogs().size());
+        assertEquals(2, ((TaskCorruptedException) e).corruptedTaskWithChangelogs().size());
+        assertEquals(Utils.mkSet(tp, t2p), ((TaskCorruptedException) e).corruptedTaskWithChangelogs().get(taskId));
+        assertEquals(Utils.mkSet(tp2, t2p2), ((TaskCorruptedException) e).corruptedTaskWithChangelogs().get(taskId2));
+
+        // transient exception would be cleared once returned
+        assertNull(restoreThread.pollNextExceptionIfAny());
     }
 
     @Test

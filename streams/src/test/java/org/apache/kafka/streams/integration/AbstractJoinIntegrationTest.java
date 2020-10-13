@@ -190,7 +190,7 @@ public abstract class AbstractJoinIntegrationTest {
             }
 
             final TestRecord<Long, String> updatedExpectedFinalResult =
-                new TestRecord<Long, String>(
+                new TestRecord<>(
                     expectedFinalResult.key(),
                     expectedFinalResult.value(),
                     null,

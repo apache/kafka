@@ -23,6 +23,7 @@ import org.junit.Test;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -73,6 +74,18 @@ public class ValuesTest {
         STRING_LIST.add("bar");
         INT_LIST.add(1234567890);
         INT_LIST.add(-987654321);
+    }
+
+    @Test(timeout = 5000)
+    public void shouldNotEncounterInfiniteLoop() {
+        // This byte sequence gets parsed as CharacterIterator.DONE and can cause issues if
+        // comparisons to that character are done to check if the end of a string has been reached.
+        // For more information, see https://issues.apache.org/jira/browse/KAFKA-10574
+        byte[] bytes = new byte[] {-17, -65,  -65};
+        String str = new String(bytes, StandardCharsets.UTF_8);
+        SchemaAndValue schemaAndValue = Values.parseString(str);
+        assertEquals(Type.STRING, schemaAndValue.schema().type());
+        assertEquals(str, schemaAndValue.value());
     }
 
     @Test

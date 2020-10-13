@@ -34,6 +34,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -256,7 +257,13 @@ public class StateRestoreThread extends Thread {
                 // for the main thread to re-throw and handle
                 final Map<TaskId, Collection<TopicPartition>> taskWithChangelogs = new HashMap<>();
                 for (final TaskCorruptedException exception : exceptions) {
-                    taskWithChangelogs.putAll(exception.corruptedTaskWithChangelogs());
+                    for (final Map.Entry<TaskId, Collection<TopicPartition>> entry : exception.corruptedTaskWithChangelogs().entrySet()) {
+                        if (taskWithChangelogs.containsKey(entry.getKey())) {
+                            taskWithChangelogs.get(entry.getKey()).addAll(entry.getValue());
+                        } else {
+                            taskWithChangelogs.put(entry.getKey(), new HashSet<>(entry.getValue()));
+                        }
+                    }
                 }
 
                 return new TaskCorruptedException(taskWithChangelogs);

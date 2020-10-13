@@ -19,6 +19,8 @@ package org.apache.kafka.test;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.AbstractTask;
@@ -55,9 +57,16 @@ public class StateMachineTask extends AbstractTask implements Task {
                             final Set<TopicPartition> partitions,
                             final boolean active,
                             final ProcessorStateManager processorStateManager) {
-        super(id, null, null, processorStateManager, partitions);
+        super(id, null, null, processorStateManager, partitions, 0L);
         this.active = active;
     }
+
+    @Override
+    public void clearTaskTimeout() {}
+
+    @Override
+    public void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
+                                            final TimeoutException timeoutException) throws StreamsException {}
 
     @Override
     public boolean initializeIfNeeded() {
