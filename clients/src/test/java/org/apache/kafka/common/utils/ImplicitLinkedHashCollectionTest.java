@@ -32,6 +32,7 @@ import java.util.Set;
 
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertEquals;
@@ -103,7 +104,8 @@ public class ImplicitLinkedHashCollectionTest {
 
         @Override
         public int hashCode() {
-            return key;
+            long hashCode = 2654435761L * key;
+            return (int) (hashCode >> 32);
         }
     }
 
@@ -595,5 +597,26 @@ public class ImplicitLinkedHashCollectionTest {
         expectTraversal(coll.iterator(), 2, 3, 1);
         Assert.assertThrows(RuntimeException.class, () ->
             coll.moveToEnd(new TestElement(4, 4)));
+    }
+
+    @Test
+    public void testRemovals() {
+        ImplicitLinkedHashCollection<TestElement> coll = new ImplicitLinkedHashCollection<>();
+        List<TestElement> elements  = new ArrayList<>();
+        for (int i = 0; i < 100; i++) {
+            TestElement element  = new TestElement(i, i); //random.nextInt(0x7fff) << 16 | i, i);
+            elements.add(element);
+            coll.add(element);
+        }
+        assertEquals(100, coll.size());
+        Iterator<TestElement> iter = coll.iterator();
+        for (int i = 0; i < 50; i++) {
+            iter.next();
+            iter.remove();
+        }
+        assertEquals(50, coll.size());
+        for (int i = 50; i < 100; i++) {
+            assertNotNull(coll.find(elements.get(i)));
+        }
     }
 }
