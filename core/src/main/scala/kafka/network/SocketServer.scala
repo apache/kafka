@@ -29,6 +29,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import kafka.cluster.{BrokerEndPoint, EndPoint}
 import kafka.metrics.KafkaMetricsGroup
+import kafka.network.ConnectionQuotas._
 import kafka.network.Processor._
 import kafka.network.RequestChannel.{CloseConnectionResponse, EndThrottlingResponse, NoOpResponse, SendResponse, StartThrottlingResponse}
 import kafka.network.SocketServer._
@@ -1317,19 +1318,38 @@ private[kafka] class Processor(val id: Int,
 }
 
 sealed trait ConnectionQuotaEntity {
-  def entityName: String
+  def sensorName: String
+  def metricName: String
+  def sensorExpiration: Long
+  def metricTags: Map[String, String]
 }
 
-private case class ListenerQuotaEntity(listenerName: String) extends ConnectionQuotaEntity {
-  override def entityName: String = listenerName
-}
+object ConnectionQuotas {
+  private val InactiveSensorExpirationTimeSeconds = TimeUnit.HOURS.toSeconds(1)
+  private val ConnectionRateSensorName = "Connection-Accept-Rate"
+  private val ConnectionRateMetricName = "connection-accept-rate"
+  private val IpMetricTag = "ip"
 
-private case object BrokerQuotaEntity extends ConnectionQuotaEntity {
-  override def entityName: String = "broker-wide"
-}
+  private case class ListenerQuotaEntity(listenerName: String) extends ConnectionQuotaEntity {
+    override def sensorName: String = s"$ConnectionRateSensorName-$listenerName"
+    override def sensorExpiration: Long = Long.MaxValue
+    override def metricName: String = ConnectionRateMetricName
+    override def metricTags: Map[String, String] = Map(ListenerMetricTag -> listenerName)
+  }
 
-private case class IpQuotaEntity(ip: InetAddress) extends ConnectionQuotaEntity {
-  override def entityName: String = ip.toString
+  private case object BrokerQuotaEntity extends ConnectionQuotaEntity {
+    override def sensorName: String = ConnectionRateSensorName
+    override def sensorExpiration: Long = Long.MaxValue
+    override def metricName: String = s"broker-$ConnectionRateMetricName"
+    override def metricTags: Map[String, String] = Map.empty
+  }
+
+  private case class IpQuotaEntity(ip: InetAddress) extends ConnectionQuotaEntity {
+    override def sensorName: String = s"$ConnectionRateSensorName-$ip"
+    override def sensorExpiration: Long = InactiveSensorExpirationTimeSeconds
+    override def metricName: String = ConnectionRateMetricName
+    override def metricTags: Map[String, String] = Map(IpMetricTag -> ip.toString)
+  }
 }
 
 class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extends Logging with AutoCloseable {
@@ -1345,14 +1365,12 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
   private[network] val maxConnectionsPerListener = mutable.Map[ListenerName, ListenerConnectionQuota]()
   @volatile private var totalCount = 0
   @volatile private var defaultConnectionRatePerIp = DynamicConfig.Ip.DefaultConnectionCreationRate
-  private val inactiveSensorExpirationTimeSeconds = TimeUnit.HOURS.toSeconds(1);
   private val connectionRatePerIp = new ConcurrentHashMap[InetAddress, Int]()
   private val lock = new ReentrantReadWriteLock()
   private val sensorAccessor = new SensorAccess(lock, metrics)
   // sensor that tracks broker-wide connection creation rate and limit (quota)
   private val brokerConnectionRateSensor = getOrCreateConnectionRateQuotaSensor(config.maxConnectionCreationRate, BrokerQuotaEntity)
   private val maxThrottleTimeMs = TimeUnit.SECONDS.toMillis(config.quotaWindowSizeSeconds.toLong)
-
 
   def inc(listenerName: ListenerName, address: InetAddress, acceptorBlockedPercentMeter: com.yammer.metrics.core.Meter): Unit = {
     counts.synchronized {
@@ -1410,9 +1428,9 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
    */
   def updateIpConnectionRate(ip: Option[String], maxConnectionRate: Option[Int]): Unit = {
     def isIpConnectionRateMetric(metricName: MetricName) = {
-      metricName.name == "connection-accept-rate" &&
+      metricName.name == ConnectionRateMetricName &&
       metricName.group == MetricsGroup &&
-      metricName.tags.containsKey("ip")
+      metricName.tags.containsKey(IpMetricTag)
     }
 
     def shouldUpdateQuota(metric: KafkaMetric, quotaLimit: Int) = {
@@ -1422,12 +1440,13 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
     ip match {
       case Some(addr) =>
         val address = InetAddress.getByName(addr)
-        if (maxConnectionRate.isDefined) {
-          info(s"Updating max connection rate override for $address to ${maxConnectionRate.get}")
-          connectionRatePerIp.put(address, maxConnectionRate.get)
-        } else {
-          info(s"Removing max connection rate override for $address")
-          connectionRatePerIp.remove(address)
+        maxConnectionRate match {
+          case Some(rate) =>
+            info(s"Updating max connection rate override for $address to $rate")
+            connectionRatePerIp.put(address, rate)
+          case None =>
+            info(s"Removing max connection rate override for $address")
+            connectionRatePerIp.remove(address)
         }
         updateConnectionRateQuota(connectionRateForIp(address), IpQuotaEntity(address))
       case None =>
@@ -1605,7 +1624,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
     if (!quotaEnabled) {
       return 0
     }
-    val sensor = getOrCreateConnectionRateQuotaSensor(connectionRateForIp(address), IpQuotaEntity(address))
+    val sensor = getOrCreateConnectionRateQuotaSensor(connectionRateQuota, IpQuotaEntity(address))
     val throttleMs = recordAndGetThrottleTimeMs(sensor, timeMs)
     if (throttleMs > 0) {
       // unrecord the connection since we won't accept the connection
@@ -1640,14 +1659,9 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
    * @param connectionQuotaEntity entity to create the sensor for
    */
   private def getOrCreateConnectionRateQuotaSensor(quotaLimit: Int, connectionQuotaEntity: ConnectionQuotaEntity): Sensor = {
-    val (sensorName, sensorExpiration) = connectionQuotaEntity match {
-      case BrokerQuotaEntity => ("ConnectionAcceptRate", Long.MaxValue)
-      case listenerEntity: ListenerQuotaEntity => (s"ConnectionAcceptRate-${listenerEntity.entityName}", Long.MaxValue)
-      case ipEntity: IpQuotaEntity => (s"ConnectionAcceptRate-${ipEntity.entityName}", inactiveSensorExpirationTimeSeconds)
-    }
     sensorAccessor.getOrCreate(
-      sensorName,
-      sensorExpiration,
+      connectionQuotaEntity.sensorName,
+      connectionQuotaEntity.sensorExpiration,
       sensor => sensor.add(connectionRateMetricName(connectionQuotaEntity), new Rate, rateQuotaMetricConfig(quotaLimit))
     )
   }
@@ -1659,21 +1673,16 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
     val metricOpt = Option(metrics.metric(connectionRateMetricName(connectionQuotaEntity)))
     metricOpt.foreach { metric =>
       metric.config(rateQuotaMetricConfig(quotaLimit))
-      info(s"Updated ${connectionQuotaEntity.entityName} max connection creation rate to $quotaLimit")
+      info(s"Updated ${connectionQuotaEntity.metricName} max connection creation rate to $quotaLimit")
     }
   }
 
   private def connectionRateMetricName(connectionQuotaEntity: ConnectionQuotaEntity): MetricName = {
-    val (namePrefix, tags) = connectionQuotaEntity match {
-      case BrokerQuotaEntity => ("broker-", Map.empty[String, String])
-      case listener: ListenerQuotaEntity => ("", Map("listener" -> listener.entityName))
-      case ip: IpQuotaEntity => ("", Map("ip" -> ip.entityName))
-    }
     metrics.metricName(
-      s"${namePrefix}connection-accept-rate",
+      connectionQuotaEntity.metricName,
       MetricsGroup,
       s"Tracking rate of accepting new connections (per second)",
-      tags.asJava)
+      connectionQuotaEntity.metricTags.asJava)
   }
 
   private def rateQuotaMetricConfig(quotaLimit: Int): MetricConfig = {
@@ -1684,7 +1693,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
   }
 
   def close(): Unit = {
-    metrics.removeSensor("ConnectionAcceptRate")
+    metrics.removeSensor(brokerConnectionRateSensor.name)
     maxConnectionsPerListener.values.foreach(_.close())
   }
 
