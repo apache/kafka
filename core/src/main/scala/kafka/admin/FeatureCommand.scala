@@ -44,6 +44,8 @@ object FeatureCommand {
         printException(e)
         opts.parser.printHelpOn(System.err)
         exitCode = 1
+      case _: UpdateFeaturesException =>
+        exitCode = 1
       case e: Throwable =>
         printException(e)
         exitCode = 1
@@ -101,23 +103,12 @@ class FeatureApis(var opts: FeatureCommandOptions) {
   def describeFeatures(): Unit = {
     val result = describeFeatures(opts.hasFromControllerOption)
     val features = result.supportedFeatures.asScala.keys.toSet ++ result.finalizedFeatures.asScala.keys.toSet
+
     features.toList.sorted.foreach {
-      case feature =>
-        val (finalizedMinVersionLevel, finalizedMaxVersionLevel) = {
-          val finalizedVersionRange = result.finalizedFeatures.get(feature)
-          if (finalizedVersionRange == null) {
-            ("-", "-")
-          } else {
-            (finalizedVersionRange.minVersionLevel, finalizedVersionRange.maxVersionLevel)
-          }
-        }
-        val epoch = {
-          if (result.finalizedFeaturesEpoch.isPresent) {
-            result.finalizedFeaturesEpoch.get.toString
-          } else {
-            "-"
-          }
-        }
+      feature =>
+        val output = new StringBuilder()
+        output.append(s"Feature: $feature")
+
         val (supportedMinVersion, supportedMaxVersion) = {
           val supportedVersionRange = result.supportedFeatures.get(feature)
           if (supportedVersionRange == null) {
@@ -126,12 +117,30 @@ class FeatureApis(var opts: FeatureCommandOptions) {
             (supportedVersionRange.minVersion, supportedVersionRange.maxVersion)
           }
         }
-        print(s"Feature: $feature")
-        print(s"\tSupportedMinVersion: $supportedMinVersion")
-        print(s"\tSupportedMaxVersion: $supportedMaxVersion")
-        print(s"\tFinalizedMinVersionLevel: $finalizedMinVersionLevel")
-        print(s"\tFinalizedMaxVersionLevel: $finalizedMaxVersionLevel")
-        println(s"\tEpoch: $epoch")
+        output.append(s"\tSupportedMinVersion: $supportedMinVersion")
+        output.append(s"\tSupportedMaxVersion: $supportedMaxVersion")
+
+        val (finalizedMinVersionLevel, finalizedMaxVersionLevel) = {
+          val finalizedVersionRange = result.finalizedFeatures.get(feature)
+          if (finalizedVersionRange == null) {
+            ("-", "-")
+          } else {
+            (finalizedVersionRange.minVersionLevel, finalizedVersionRange.maxVersionLevel)
+          }
+        }
+        output.append(s"\tFinalizedMinVersionLevel: $finalizedMinVersionLevel")
+        output.append(s"\tFinalizedMaxVersionLevel: $finalizedMaxVersionLevel")
+
+        val epoch = {
+          if (result.finalizedFeaturesEpoch.isPresent) {
+            result.finalizedFeaturesEpoch.get.toString
+          } else {
+            "-"
+          }
+        }
+        output.append(s"\tEpoch: $epoch")
+
+        println(output)
     }
   }
 
