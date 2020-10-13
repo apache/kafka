@@ -771,13 +771,12 @@ public class ProcessorStateManagerTest {
             stateMgr.updateChangelogOffsets(singletonMap(persistentStorePartition, 10L));
             stateMgr.checkpoint();
 
-
             boolean foundExpectedLogMessage = false;
             for (final LogCaptureAppender.Event event : appender.getEvents()) {
                 if ("WARN".equals(event.getLevel())
                     && event.getMessage().startsWith("process-state-manager-test Failed to write offset checkpoint file to [")
                     && event.getMessage().endsWith(".checkpoint]." +
-                        " This may occur if OS cleaned the state.dir in case when it located in /tmp directory." +
+                        " This may occur if OS cleaned the state.dir in case when it located in ${java.io.tmpdir} directory." +
                         " This may also occur due to running multiple instances on the same machine using the same state dir." +
                         " Changing the location of state.dir may resolve the problem.")
                     && event.getThrowableInfo().get().startsWith("java.io.FileNotFoundException: ")) {
