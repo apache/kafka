@@ -52,7 +52,9 @@ import java.util.concurrent.TimeUnit;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
-import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse.SHUTDOWN_KAFKA_STREAMS_APPLICATION;
+import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_KAFKA_STREAMS_APPLICATION;
+import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_KAFKA_STREAMS_CLIENT;
+import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_STREAM_THREAD;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateBeforeTest;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.purgeLocalStreamsState;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
@@ -62,7 +64,7 @@ import static org.junit.Assert.fail;
 
 
 @Category(IntegrationTest.class)
-public class AppShutdownIntegrationTest {
+public class StreamsHandlerIntegrationTest {
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
@@ -126,7 +128,12 @@ public class AppShutdownIntegrationTest {
             final CountDownLatch latch = new CountDownLatch(1);
             kafkaStreams.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
 
-            kafkaStreams.setUncaughtExceptionHandler(exception -> StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse.SHUTDOWN_STREAM_THREAD);
+            kafkaStreams.setUncaughtExceptionHandler(new StreamsUncaughtExceptionHandler() {
+                @Override
+                public StreamThreadExceptionResponse handleExceptionInStreamThread(final Throwable exception) {
+                    return SHUTDOWN_STREAM_THREAD;
+                }
+            });
 
             kafkaStreams.start();
 
@@ -150,7 +157,12 @@ public class AppShutdownIntegrationTest {
             final CountDownLatch latch = new CountDownLatch(1);
             kafkaStreams.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
 
-            kafkaStreams.setUncaughtExceptionHandler(exception -> StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse.SHUTDOWN_KAFKA_STREAMS_CLIENT);
+            kafkaStreams.setUncaughtExceptionHandler(new StreamsUncaughtExceptionHandler() {
+                @Override
+                public StreamThreadExceptionResponse handleExceptionInStreamThread(final Throwable exception) {
+                    return SHUTDOWN_KAFKA_STREAMS_CLIENT;
+                }
+            });
 
             kafkaStreams.start();
 
@@ -179,8 +191,18 @@ public class AppShutdownIntegrationTest {
             final CountDownLatch latch = new CountDownLatch(1);
             kafkaStreams.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
             kafkaStreams1.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
-            kafkaStreams.setUncaughtExceptionHandler(exception -> SHUTDOWN_KAFKA_STREAMS_APPLICATION);
-            kafkaStreams1.setUncaughtExceptionHandler(exception -> SHUTDOWN_KAFKA_STREAMS_APPLICATION);
+            kafkaStreams.setUncaughtExceptionHandler(new StreamsUncaughtExceptionHandler() {
+                @Override
+                public StreamThreadExceptionResponse handleExceptionInStreamThread(final Throwable exception) {
+                    return SHUTDOWN_KAFKA_STREAMS_APPLICATION;
+                }
+            });
+            kafkaStreams1.setUncaughtExceptionHandler(new StreamsUncaughtExceptionHandler() {
+                @Override
+                public StreamThreadExceptionResponse handleExceptionInStreamThread(final Throwable exception) {
+                    return SHUTDOWN_KAFKA_STREAMS_APPLICATION;
+                }
+            });
 
             kafkaStreams.start();
             kafkaStreams1.start();
@@ -227,8 +249,18 @@ public class AppShutdownIntegrationTest {
             final CountDownLatch latch = new CountDownLatch(1);
             kafkaStreams.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
             kafkaStreams1.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
-            kafkaStreams.setUncaughtExceptionHandler(exception -> SHUTDOWN_KAFKA_STREAMS_APPLICATION);
-            kafkaStreams1.setUncaughtExceptionHandler(exception -> SHUTDOWN_KAFKA_STREAMS_APPLICATION);
+            kafkaStreams.setUncaughtExceptionHandler(new StreamsUncaughtExceptionHandler() {
+                @Override
+                public StreamThreadExceptionResponse handleExceptionInStreamThread(final Throwable exception) {
+                    return SHUTDOWN_KAFKA_STREAMS_APPLICATION;
+                }
+            });
+            kafkaStreams1.setUncaughtExceptionHandler(new StreamsUncaughtExceptionHandler() {
+                @Override
+                public StreamThreadExceptionResponse handleExceptionInStreamThread(final Throwable exception) {
+                    return SHUTDOWN_KAFKA_STREAMS_APPLICATION;
+                }
+            });
 
             kafkaStreams.start();
             kafkaStreams1.start();

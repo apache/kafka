@@ -21,21 +21,23 @@ public interface StreamsUncaughtExceptionHandler {
      * Inspect the exception received in a stream thread and respond with an action.
      * @param exception the actual exception
      */
-    StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse handle(final Throwable exception);
+    default StreamThreadExceptionResponse handleExceptionInStreamThread(final Throwable exception) {
+        return StreamThreadExceptionResponse.SHUTDOWN_STREAM_THREAD;
+    }
 
 
     /**
      * Inspect the exception received in a global stream thread.
      * @param exception the actual exception
      */
-    default StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponseGlobalThread handleExceptionInGlobalThread(final Throwable exception) {
-        return StreamsUncaughtExceptionHandlerResponseGlobalThread.SHUTDOWN_KAFKA_STREAMS_CLIENT;
+    default GlobalThreadExceptionResponse handleExceptionInGlobalThread(final Throwable exception) {
+        return GlobalThreadExceptionResponse.SHUTDOWN_KAFKA_STREAMS_CLIENT;
     }
 
     /**
      * Enumeration that describes the response from the exception handler.
      */
-    enum StreamsUncaughtExceptionHandlerResponse {
+    enum StreamThreadExceptionResponse {
         SHUTDOWN_STREAM_THREAD(0, "SHUTDOWN_STREAM_THREAD"),
 //        REPLACE_STREAM_THREAD(1, "REPLACE_STREAM_THREAD"),
         SHUTDOWN_KAFKA_STREAMS_CLIENT(2, "SHUTDOWN_KAFKA_STREAMS_CLIENT"),
@@ -47,7 +49,7 @@ public interface StreamsUncaughtExceptionHandler {
         /** the permanent and immutable id of an API--this can't change ever */
         public final int id;
 
-        StreamsUncaughtExceptionHandlerResponse(final int id, final String name) {
+        StreamThreadExceptionResponse(final int id, final String name) {
             this.id = id;
             this.name = name;
         }
@@ -56,7 +58,7 @@ public interface StreamsUncaughtExceptionHandler {
     /**
      * Enumeration that describes the response from the exception handler.
      */
-    enum StreamsUncaughtExceptionHandlerResponseGlobalThread {
+    enum GlobalThreadExceptionResponse {
         SHUTDOWN_KAFKA_STREAMS_CLIENT(2, "SHUTDOWN_KAFKA_STREAMS_CLIENT");
 
         /** an english description of the api--this is for debugging and can change */
@@ -65,7 +67,7 @@ public interface StreamsUncaughtExceptionHandler {
         /** the permanent and immutable id of an API--this can't change ever */
         public final int id;
 
-        StreamsUncaughtExceptionHandlerResponseGlobalThread(final int id, final String name) {
+        GlobalThreadExceptionResponse(final int id, final String name) {
             this.id = id;
             this.name = name;
         }

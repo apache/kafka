@@ -214,7 +214,7 @@ public class GlobalStreamThread extends Thread {
         this.log = logContext.logger(getClass());
         this.cache = new ThreadCache(logContext, cacheSizeBytes, this.streamsMetrics);
         this.stateRestoreListener = stateRestoreListener;
-        this.streamsUncaughtExceptionHandler = exception -> StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse.SHUTDOWN_KAFKA_STREAMS_CLIENT;
+        this.streamsUncaughtExceptionHandler = new StreamsUncaughtExceptionHandler() { };
     }
 
     static class StateConsumer {

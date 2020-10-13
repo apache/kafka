@@ -490,7 +490,7 @@ public class StreamThread extends Thread {
         this.logPrefix = logContext.logPrefix();
         this.log = logContext.logger(StreamThread.class);
         this.rebalanceListener = new StreamsRebalanceListener(time, taskManager, this, this.log, this.assignmentErrorCode);
-        this.streamsUncaughtExceptionHandler = exception -> StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse.SHUTDOWN_STREAM_THREAD;
+        this.streamsUncaughtExceptionHandler = new StreamsUncaughtExceptionHandler() { };
         this.taskManager = taskManager;
         this.restoreConsumer = restoreConsumer;
         this.mainConsumer = mainConsumer;
@@ -584,8 +584,8 @@ public class StreamThread extends Thread {
             } catch (final TaskMigratedException e) {
                 handleTaskMigrated(e);
             } catch (final Exception e) {
-                final StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse action = streamsUncaughtExceptionHandler.handle(e);
-                if (action != StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse.SHUTDOWN_KAFKA_STREAMS_APPLICATION) {
+                final StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse action = streamsUncaughtExceptionHandler.handleExceptionInStreamThread(e);
+                if (action != StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_KAFKA_STREAMS_APPLICATION) {
                     throw e;
                 }
             }

@@ -390,12 +390,12 @@ public class KafkaStreams implements AutoCloseable {
     public void setUncaughtExceptionHandler(final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
         final StreamsUncaughtExceptionHandler handler = new StreamsUncaughtExceptionHandler() {
             @Override
-            public StreamsUncaughtExceptionHandlerResponse handle(final Throwable exception) {
+            public StreamThreadExceptionResponse handleExceptionInStreamThread(final Throwable exception) {
                 return handleStreamsUncaughtException(exception, streamsUncaughtExceptionHandler);
             }
 
             @Override
-            public StreamsUncaughtExceptionHandlerResponseGlobalThread handleExceptionInGlobalThread(final Throwable exception) {
+            public GlobalThreadExceptionResponse handleExceptionInGlobalThread(final Throwable exception) {
                 return handleStreamsUncaughtExceptionGlobalThread(exception, streamsUncaughtExceptionHandler);
             }
         };
@@ -415,22 +415,22 @@ public class KafkaStreams implements AutoCloseable {
         }
     }
 
-    private StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponseGlobalThread handleStreamsUncaughtExceptionGlobalThread(final Throwable e,
-                                                                                                                   final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
-        final StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponseGlobalThread action = streamsUncaughtExceptionHandler.handleExceptionInGlobalThread(e);
+    private StreamsUncaughtExceptionHandler.GlobalThreadExceptionResponse handleStreamsUncaughtExceptionGlobalThread(final Throwable e,
+                                                                                                                     final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
+        final StreamsUncaughtExceptionHandler.GlobalThreadExceptionResponse action = streamsUncaughtExceptionHandler.handleExceptionInGlobalThread(e);
         switch (action) {
             case SHUTDOWN_KAFKA_STREAMS_CLIENT:
                 log.error("Encountered the following exception during processing " +
                         "and the client is going to shut down: ", e);
-                close(Duration.ZERO);
+                closeToError();
                 break;
         }
         return action;
     }
 
-    private StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse handleStreamsUncaughtException(final Throwable e,
-                                                                                                                   final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
-        final StreamsUncaughtExceptionHandler.StreamsUncaughtExceptionHandlerResponse action = streamsUncaughtExceptionHandler.handle(e);
+    private StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse handleStreamsUncaughtException(final Throwable e,
+                                                                                                         final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
+        final StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse action = streamsUncaughtExceptionHandler.handleExceptionInStreamThread(e);
         switch (action) {
             case SHUTDOWN_STREAM_THREAD:
                 log.error("Encountered the following exception during processing " +
