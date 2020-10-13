@@ -38,7 +38,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
-import scala.collection.JavaConverters;
+import scala.jdk.CollectionConverters;
 
 import java.io.IOException;
 import java.text.ParseException;
@@ -299,7 +299,7 @@ public class StreamsResetter {
             optionParser,
             options,
             option,
-            JavaConverters.asScalaSetConverter(invalidOptions).asScala());
+            CollectionConverters.SetHasAsScala(invalidOptions).asScala());
     }
 
     private int maybeResetInputAndSeekToEndIntermediateTopicOffsets(final Map<Object, Object> consumerConfig,

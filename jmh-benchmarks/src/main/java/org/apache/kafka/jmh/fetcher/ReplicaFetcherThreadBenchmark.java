@@ -71,9 +71,9 @@ import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 import scala.Option;
 import scala.collection.Iterator;
-import scala.collection.JavaConverters;
 import scala.compat.java8.OptionConverters;
 import scala.collection.Map;
+import scala.jdk.CollectionConverters;
 
 import java.io.File;
 import java.io.IOException;
@@ -119,8 +119,8 @@ public class ReplicaFetcherThreadBenchmark {
         List<File> logDirs = Collections.singletonList(logDir);
         BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
         LogDirFailureChannel logDirFailureChannel = Mockito.mock(LogDirFailureChannel.class);
-        logManager = new LogManager(JavaConverters.asScalaIteratorConverter(logDirs.iterator()).asScala().toSeq(),
-                JavaConverters.asScalaIteratorConverter(new ArrayList<File>().iterator()).asScala().toSeq(),
+        logManager = new LogManager(CollectionConverters.IteratorHasAsScala(logDirs.iterator()).asScala().toSeq(),
+                CollectionConverters.IteratorHasAsScala(new ArrayList<File>().iterator()).asScala().toSeq(),
                 new scala.collection.mutable.HashMap<>(),
                 logConfig,
                 new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false, "MD5"),

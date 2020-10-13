@@ -50,7 +50,7 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 import scala.Option;
-import scala.collection.JavaConverters;
+import scala.jdk.CollectionConverters;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -81,8 +81,8 @@ public class UpdateFollowerFetchStateBenchmark {
         scheduler.startup();
         LogConfig logConfig = createLogConfig();
         List<File> logDirs = Collections.singletonList(logDir);
-        logManager = new LogManager(JavaConverters.asScalaIteratorConverter(logDirs.iterator()).asScala().toSeq(),
-                JavaConverters.asScalaIteratorConverter(new ArrayList<File>().iterator()).asScala().toSeq(),
+        logManager = new LogManager(CollectionConverters.IteratorHasAsScala(logDirs.iterator()).asScala().toSeq(),
+                CollectionConverters.IteratorHasAsScala(new ArrayList<File>().iterator()).asScala().toSeq(),
                 new scala.collection.mutable.HashMap<>(),
                 logConfig,
                 new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false, "MD5"),

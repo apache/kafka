@@ -48,8 +48,8 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
-import scala.collection.JavaConverters;
 import scala.collection.immutable.TreeMap;
+import scala.jdk.CollectionConverters;
 
 import java.lang.reflect.Field;
 import java.net.InetAddress;
@@ -144,7 +144,7 @@ public class AclAuthorizerBenchmark {
         TreeMap<ResourcePattern, VersionedAcls> aclCache = new TreeMap<>(new AclAuthorizer.ResourceOrdering());
         for (Map.Entry<ResourcePattern, Set<AclEntry>> entry : aclEntries.entrySet()) {
             aclCache = aclCache.updated(entry.getKey(),
-                new VersionedAcls(JavaConverters.asScalaSetConverter(entry.getValue()).asScala().toSet(), 1));
+                new VersionedAcls(CollectionConverters.SetHasAsScala(entry.getValue()).asScala().toSet(), 1));
         }
 
         return aclCache;

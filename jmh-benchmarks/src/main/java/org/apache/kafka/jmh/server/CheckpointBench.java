@@ -60,7 +60,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
-import scala.collection.JavaConverters;
+import scala.jdk.CollectionConverters;
 import scala.Option;
 
 @Warmup(iterations = 5)
@@ -105,8 +105,8 @@ public class CheckpointBench {
         this.time = new MockTime();
         this.failureChannel = new LogDirFailureChannel(brokerProperties.logDirs().size());
         final List<File> files =
-            JavaConverters.seqAsJavaList(brokerProperties.logDirs()).stream().map(File::new).collect(Collectors.toList());
-        this.logManager = TestUtils.createLogManager(JavaConverters.asScalaBuffer(files),
+            CollectionConverters.SeqHasAsJava(brokerProperties.logDirs()).asJava().stream().map(File::new).collect(Collectors.toList());
+        this.logManager = TestUtils.createLogManager(CollectionConverters.ListHasAsScala(files).asScala(),
                 LogConfig.apply(), CleanerConfig.apply(1, 4 * 1024 * 1024L, 0.9d,
                         1024 * 1024, 32 * 1024 * 1024,
                         Double.MAX_VALUE, 15 * 1000, true, "MD5"), time);
@@ -167,7 +167,7 @@ public class CheckpointBench {
         this.metrics.close();
         this.scheduler.shutdown();
         this.quotaManagers.shutdown();
-        for (File dir : JavaConverters.asJavaCollection(logManager.liveLogDirs())) {
+        for (File dir : CollectionConverters.SeqHasAsJava(logManager.liveLogDirs()).asJava()) {
             Utils.delete(dir);
         }
     }
