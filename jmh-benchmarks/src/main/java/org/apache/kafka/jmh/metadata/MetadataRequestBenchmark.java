@@ -22,6 +22,7 @@ import kafka.coordinator.group.GroupCoordinator;
 import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
 import kafka.server.AdminManager;
+import kafka.server.ApisUtils;
 import kafka.server.BrokerFeatures;
 import kafka.server.BrokerTopicStats;
 import kafka.server.ClientQuotaManager;
@@ -52,6 +53,7 @@ import org.apache.kafka.common.requests.UpdateMetadataRequest;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.Time;
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -167,7 +169,9 @@ public class MetadataRequestBenchmark {
         kafkaProps.put(KafkaConfig$.MODULE$.ZkConnectProp(), "zk");
         kafkaProps.put(KafkaConfig$.MODULE$.BrokerIdProp(), brokerId + "");
         BrokerFeatures brokerFeatures = BrokerFeatures.createDefault();
+        Time time = new SystemTime();
         return new KafkaApis(requestChannel,
+            new ApisUtils(requestChannel, Option.empty(), quotaManagers, time),
             replicaManager,
             adminManager,
             groupCoordinator,
@@ -183,7 +187,7 @@ public class MetadataRequestBenchmark {
             fetchManager,
             brokerTopicStats,
             "clusterId",
-            new SystemTime(),
+            time,
             null,
             brokerFeatures,
             new FinalizedFeatureCache(brokerFeatures));

@@ -1051,7 +1051,7 @@ object KafkaConfig {
       .define(ControllerConnectProp, LIST, null, HIGH, ControllerConnectDoc)
       .define(RegistrationHeartbeatIntervalMsProp, INT, Defaults.RegistrationHeartbeatIntervalMs, MEDIUM, RegistrationHeartbeatIntervalMsDoc)
       .define(RegistrationLeaseTimeoutMsProp, INT, Defaults.RegistrationLeaseTimeoutMs, MEDIUM, RegistrationLeaseTimeoutMsDoc)
-      .define(MetadataLogDirProp, null, HIGH, MetadataLogDirDoc)
+      .define(MetadataLogDirProp, STRING, null, HIGH, MetadataLogDirDoc)
 
       /************* Authorizer Configuration ***********/
       .define(AuthorizerClassNameProp, STRING, Defaults.AuthorizerClassName, LOW, AuthorizerClassNameDoc)
