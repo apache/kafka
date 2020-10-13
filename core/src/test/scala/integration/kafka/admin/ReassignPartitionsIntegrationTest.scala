@@ -80,7 +80,7 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
   @Test
   def testReassignmentCompletionDuringPartialUpgrade(): Unit = {
     // Test reassignment during a partial upgrade when some brokers are relying on
-    // `AlterIsr` and some on rely on the old notification logic through Zookeeper.
+    // `AlterIsr` and some rely on the old notification logic through Zookeeper.
     // In this test case, broker 0 starts up first on the latest IBP and is typically
     // elected as controller. The three remaining brokers start up on the older IBP.
     // We want to ensure that reassignment can still complete through the ISR change
