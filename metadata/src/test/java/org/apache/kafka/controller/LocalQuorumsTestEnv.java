@@ -17,11 +17,13 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.test.TestUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 public class LocalQuorumsTestEnv implements AutoCloseable {
@@ -47,6 +49,32 @@ public class LocalQuorumsTestEnv implements AutoCloseable {
             close();
             throw e;
         }
+    }
+
+    QuorumController activeController() throws InterruptedException {
+        AtomicReference<QuorumController> value = new AtomicReference<>(null);
+        TestUtils.retryOnExceptionWithTimeout(3, 20000, () -> {
+            QuorumController activeController = null;
+            for (QuorumController controller : controllers) {
+                long curEpoch = controller.curClaimEpoch();
+                if (curEpoch != -1) {
+                    if (activeController != null) {
+                        throw new RuntimeException("node " + activeController.nodeId() +
+                            " thinks it's the leader, but so does " + controller.nodeId());
+                    }
+                    activeController = controller;
+                }
+            }
+            if (activeController == null) {
+                throw new RuntimeException("No leader found.");
+            }
+            value.set(activeController);
+        });
+        return value.get();
+    }
+
+    public List<QuorumController> controllers() {
+        return controllers;
     }
 
     @Override

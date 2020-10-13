@@ -50,7 +50,7 @@ public class ConfigurationControlManagerTest {
     @Rule
     final public Timeout globalTimeout = Timeout.seconds(40);
 
-    private static final Map<ConfigResource.Type, ConfigDef> CONFIGS = new HashMap<>();
+    static final Map<ConfigResource.Type, ConfigDef> CONFIGS = new HashMap<>();
 
     static {
         CONFIGS.put(BROKER, new ConfigDef().
@@ -63,8 +63,8 @@ public class ConfigurationControlManagerTest {
             define("ghi", ConfigDef.Type.BOOLEAN, true, ConfigDef.Importance.HIGH, "ghi"));
     }
 
-    private static final ConfigResource BROKER0 = new ConfigResource(BROKER, "0");
-    private static final ConfigResource MYTOPIC = new ConfigResource(TOPIC, "mytopic");
+    static final ConfigResource BROKER0 = new ConfigResource(BROKER, "0");
+    static final ConfigResource MYTOPIC = new ConfigResource(TOPIC, "mytopic");
 
     @SuppressWarnings("unchecked")
     private static <A, B> Map<A, B> toMap(Entry... entries) {
@@ -75,7 +75,7 @@ public class ConfigurationControlManagerTest {
         return map;
     }
 
-    private static <A, B> Entry<A, B> entry(A a, B b) {
+    static <A, B> Entry<A, B> entry(A a, B b) {
         return new SimpleImmutableEntry<>(a, b);
     }
 
