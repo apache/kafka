@@ -105,7 +105,6 @@ import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.StoreQueryParameters.fromNameAndType;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.getRunningStreams;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.getStartedStreams;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
@@ -457,7 +456,7 @@ public class QueryableStateIntegrationTest {
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
         ));
 
-        try (final KafkaStreams streams = getStartedStreams(properties, builder, true)) {
+        try (final KafkaStreams streams = getRunningStreams(properties, builder, true)) {
             final ReadOnlyKeyValueStore<String, String> store =
                 streams.store(fromNameAndType("input-table", keyValueStore()));
             assertThat(store, Matchers.notNullValue());
