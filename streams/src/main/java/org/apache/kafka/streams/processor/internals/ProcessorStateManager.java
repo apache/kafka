@@ -194,9 +194,11 @@ public class ProcessorStateManager implements StateManager {
         processorContext.uninitialize();
         for (final StateStore store : allStores) {
             if (!stores.containsKey(store.name())) {
+                log.trace("Registered state store {}", store.name());
                 store.init((StateStoreContext) processorContext, store);
+            } else {
+                log.debug("Skipping the re-initialization of recycled state store {}", store.name());
             }
-            log.trace("Registered state store {}", store.name());
         }
     }
 
