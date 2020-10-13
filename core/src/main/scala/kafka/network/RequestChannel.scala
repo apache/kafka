@@ -430,6 +430,42 @@ class RequestChannel(val queueSize: Int,
     }
   }
 
+  def sendResponse(request: RequestChannel.Request,
+                   responseOpt: Option[AbstractResponse],
+                   onComplete: Option[Send => Unit]): Unit = {
+    // Update error metrics for each error code in the response including Errors.NONE
+    responseOpt.foreach(response => updateErrorMetrics(request.header.apiKey, response.errorCounts.asScala))
+
+    val response = responseOpt match {
+      case Some(response) =>
+        val responseSend = request.context.buildResponse(response)
+        val responseString =
+          if (RequestChannel.isRequestLoggingEnabled) Some(response.toString(request.context.apiVersion))
+          else None
+        new RequestChannel.SendResponse(request, responseSend, responseString, onComplete)
+      case None =>
+        new RequestChannel.NoOpResponse(request)
+    }
+
+    sendResponse(response)
+  }
+
+  def sendErrorOrCloseConnection(request: RequestChannel.Request, error: Throwable, throttleMs: Int): Unit = {
+    val requestBody = request.body[AbstractRequest]
+    val response = requestBody.getErrorResponse(throttleMs, error)
+    if (response == null)
+      closeConnection(request, requestBody.errorCounts(error))
+    else
+      sendResponse(request, Some(response), None)
+  }
+
+  def closeConnection(request: RequestChannel.Request, errorCounts: java.util.Map[Errors, Integer]): Unit = {
+    // This case is used when the request handler has encountered an error, but the client
+    // does not expect a response (e.g. when produce request has acks set to 0)
+    updateErrorMetrics(request.header.apiKey, errorCounts.asScala)
+    sendResponse(new RequestChannel.CloseConnectionResponse(request))
+  }
+
   /** Get the next request or block until specified time has elapsed */
   def receiveRequest(timeout: Long): RequestChannel.BaseRequest =
     requestQueue.poll(timeout, TimeUnit.MILLISECONDS)
