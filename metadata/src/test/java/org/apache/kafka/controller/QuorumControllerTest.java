@@ -23,6 +23,14 @@ import org.junit.rules.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
+
+import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
+import static org.apache.kafka.controller.ConfigurationControlManagerTest.BROKER0;
+import static org.apache.kafka.controller.ConfigurationControlManagerTest.CONFIGS;
+//import static org.apache.kafka.controller.ConfigurationControlManagerTest.MYTOPIC;
+import static org.apache.kafka.controller.ConfigurationControlManagerTest.entry;
+
 public class QuorumControllerTest {
     private static final Logger log =
         LoggerFactory.getLogger(QuorumControllerTest.class);
@@ -33,6 +41,15 @@ public class QuorumControllerTest {
     @Test
     public void testCreateAndClose() throws Throwable {
         try (LocalQuorumsTestEnv env = new LocalQuorumsTestEnv(1, __ -> { })) {
+        }
+    }
+
+    @Test
+    public void testWriteOperations() throws Throwable {
+        try (LocalQuorumsTestEnv env = new LocalQuorumsTestEnv(1,
+            builder -> builder.setConfigDefs(CONFIGS))) {
+            env.activeController().incrementalAlterConfigs(Collections.singletonMap(
+                BROKER0, Collections.singletonMap("baz", entry(SET, "123"))), true).get();
         }
     }
 }

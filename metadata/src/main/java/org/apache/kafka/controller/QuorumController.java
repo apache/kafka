@@ -46,6 +46,7 @@ import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -98,7 +99,7 @@ public final class QuorumController implements Controller {
                 threadNamePrefix = String.format("Node%d_", nodeId);
             }
             if (logContext == null) {
-                logContext = new LogContext(threadNamePrefix);
+                logContext = new LogContext(String.format("[Controller %d] ", nodeId));
             }
             KafkaEventQueue queue = null;
             try {
@@ -115,24 +116,26 @@ public final class QuorumController implements Controller {
     private void handleEventEnd(String name, long startProcessingTimeNs) {
         long endProcessingTime = time.nanoseconds();
         long deltaNs = endProcessingTime - startProcessingTimeNs;
-        log.debug("Processed {} in {} ns", name, deltaNs);
+        log.debug("Processed {} in {} us", name,
+            TimeUnit.MICROSECONDS.convert(deltaNs, TimeUnit.NANOSECONDS));
     }
 
     private Throwable handleEventException(String name, long startProcessingTimeNs,
                                            Throwable exception) {
         long endProcessingTime = time.nanoseconds();
         long deltaNs = endProcessingTime - startProcessingTimeNs;
-        log.info("{}: failed with {} in ns", name,
-            exception.getClass().getSimpleName(), deltaNs);
+        long deltaUs = TimeUnit.MICROSECONDS.convert(deltaNs, TimeUnit.NANOSECONDS);
         if (exception instanceof ApiException) {
+            log.debug("{}: failed with {} in {} us", name,
+                exception.getClass().getSimpleName(), deltaUs);
             return exception;
-        } else {
-            log.info("Renouncing the leadership at epoch {} due to an unknown server " +
-                "exception. Reverting to last committed offset {}.", curClaimEpoch,
-                lastCommittedOffset);
-            renounce();
-            return new UnknownServerException(exception);
         }
+        log.warn("{}: failed with unknown server exception {} at epoch {} in {} us.  " +
+            "Reverting to last committed offset {].",
+            name, exception.getClass().getSimpleName(), curClaimEpoch, deltaUs,
+            lastCommittedOffset, exception);
+        renounce();
+        return new UnknownServerException(exception);
     }
 
     /**
@@ -280,19 +283,11 @@ public final class QuorumController implements Controller {
 
         @Override
         public void complete(Throwable exception) {
-            long endProcessingTime = time.nanoseconds();
-            long deltaNs = endProcessingTime - startProcessingTimeNs;
-            if (exception != null) {
-                log.info("{}: failed with {} in ns", name,
-                        exception.getClass().getSimpleName(), deltaNs);
-                if (exception instanceof ApiException) {
-                    future.completeExceptionally(exception);
-                } else {
-                    future.completeExceptionally(new UnknownServerException(exception));
-                }
-            } else {
-                log.info("Processed {} in {} ns", name, deltaNs);
+            if (exception == null) {
                 future.complete(resultAndOffset.response());
+            } else {
+                future.completeExceptionally(
+                    handleEventException(name, startProcessingTimeNs, exception));
             }
         }
     }
@@ -337,24 +332,24 @@ public final class QuorumController implements Controller {
         }
 
         @Override
-        public void handleClaim(long epoch) {
+        public void handleClaim(long newEpoch) {
             appendControlEvent("handleClaim", () -> {
                 long curEpoch = curClaimEpoch;
-                if (curEpoch == -1) {
+                if (curEpoch != -1) {
                     throw new RuntimeException("Tried to claim controller epoch " +
-                        curEpoch + ", but we never renounced controller epoch " +
+                        newEpoch + ", but we never renounced controller epoch " +
                         curEpoch);
                 }
-                log.info("Becoming active at controller epoch {}.", epoch);
-                curClaimEpoch = epoch;
+                log.info("Becoming active at controller epoch {}.", newEpoch);
+                curClaimEpoch = newEpoch;
             });
         }
 
         @Override
-        public void handleRenounce(long epoch) {
+        public void handleRenounce(long oldEpoch) {
             appendControlEvent("handleClaim", () -> {
-                if (curClaimEpoch == epoch) {
-                    log.info("Renouncing the leadership at epoch {} due to a metadata " +
+                if (curClaimEpoch == oldEpoch) {
+                    log.info("Renouncing the leadership at oldEpoch {} due to a metadata " +
                             "log event. Reverting to last committed offset {}.", curClaimEpoch,
                         lastCommittedOffset);
                     renounce();
@@ -537,5 +532,13 @@ public final class QuorumController implements Controller {
     @Override
     public void close() throws InterruptedException {
         queue.close();
+    }
+
+    public int nodeId() {
+        return nodeId;
+    }
+
+    long curClaimEpoch() {
+        return curClaimEpoch;
     }
 }
