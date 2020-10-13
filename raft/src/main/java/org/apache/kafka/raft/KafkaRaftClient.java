@@ -985,13 +985,7 @@ public class KafkaRaftClient implements RaftClient {
             } else {
                 Records records = (Records) partitionResponse.recordSet();
                 if (records.sizeInBytes() > 0) {
-                    LogAppendInfo info = log.appendAsFollower(records);
-                    log.flush();
-
-                    OffsetAndEpoch endOffset = endOffset();
-                    kafkaRaftMetrics.updateFetchedRecords(info.lastOffset - info.firstOffset + 1);
-                    kafkaRaftMetrics.updateLogEnd(endOffset);
-                    logger.trace("Follower end offset updated to {} after append", endOffset);
+                    appendAsFollower(records);
                 }
                 OptionalLong highWatermark = partitionResponse.highWatermark() < 0 ?
                     OptionalLong.empty() : OptionalLong.of(partitionResponse.highWatermark());
@@ -1003,6 +997,18 @@ public class KafkaRaftClient implements RaftClient {
         } else {
             return handleUnexpectedError(error, responseMetadata);
         }
+    }
+
+    private void appendAsFollower(
+        Records records
+    ) {
+        LogAppendInfo info = log.appendAsFollower(records);
+        log.flush();
+
+        OffsetAndEpoch endOffset = endOffset();
+        kafkaRaftMetrics.updateFetchedRecords(info.lastOffset - info.firstOffset + 1);
+        kafkaRaftMetrics.updateLogEnd(endOffset);
+        logger.trace("Follower end offset updated to {} after append", endOffset);
     }
 
     private LogAppendInfo appendAsLeader(
