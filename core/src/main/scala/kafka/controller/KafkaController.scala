@@ -1780,6 +1780,11 @@ class KafkaController(val config: KafkaConfig,
         }
       }
 
+      validateReplicationFactors(partitionsToReassign).forKeyValue { (tp, apiError) =>
+        partitionsToReassign.remove(tp)
+        reassignmentResults.put(tp, apiError)
+      }
+
       // The latest reassignment (whether by API or through zk) always takes precedence,
       // so remove from active zk reassignment (if one exists)
       maybeRemoveFromZkReassignment((tp, _) => partitionsToReassign.contains(tp))
@@ -1810,6 +1815,26 @@ class KafkaController(val config: KafkaConfig,
           s"Replica assignment has brokers that are not alive. Replica list: " +
             s"${newAssignment.addingReplicas}, live broker list: ${controllerContext.liveBrokerIds}"))
       else None
+    }
+  }
+
+  private def validateReplicationFactors(partitionsToReassign: Map[TopicPartition, ReplicaAssignment]): Map[TopicPartition, ApiError] = {
+    partitionsToReassign.groupBy(_._1.topic()).flatMap {
+      case (topic, newAssignmentsForTopic) =>
+        val existingAssignmentsForTopic = controllerContext.partitionFullReplicaAssignmentForTopic(topic)
+        val targetAssignmentsForTopic = mutable.Map[TopicPartition, ReplicaAssignment]()
+        targetAssignmentsForTopic ++= existingAssignmentsForTopic
+        targetAssignmentsForTopic ++= newAssignmentsForTopic
+        val targetReplicationFactors = targetAssignmentsForTopic.map(_._2.targetReplicas.size).toSet
+        if (targetReplicationFactors.size > 1) {
+          val sortedPartitions = targetAssignmentsForTopic.toSeq.sortBy { case (tp, _) => tp.partition() }
+          val partitions = sortedPartitions.map { case (tp, _) => tp.partition() }
+          val replicationFactors = sortedPartitions.map { case (_, assignment) => assignment.targetReplicas.size }
+          val error = new ApiError(Errors.INVALID_REPLICA_ASSIGNMENT,
+            s"Inconsistent replication factor between partitions. Partitions [${partitions.mkString(", ")}]" +
+              s" will have replication factors [${replicationFactors.mkString(", ")}] respectively.")
+          newAssignmentsForTopic.map { case (tp, _) => (tp, error) }
+        } else Map.empty[TopicPartition, ApiError]
     }
   }
 
