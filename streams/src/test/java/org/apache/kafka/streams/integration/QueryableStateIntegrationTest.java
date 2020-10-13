@@ -441,12 +441,16 @@ public class QueryableStateIntegrationTest {
     }
 
     @Test
-    public void shouldRejectNonExistentStoreName() {
+    public void shouldRejectNonExistentStoreName() throws InterruptedException {
+        final String uniqueTestName = safeUniqueTestName(getClass(), testName);
+        final String input = uniqueTestName + "-input";
+        final String storeName = uniqueTestName + "-input-table";
+
         final StreamsBuilder builder = new StreamsBuilder();
         builder.table(
-            "input",
+            input,
             Materialized
-                .<String, String, KeyValueStore<Bytes, byte[]>>as("input-table")
+                .<String, String, KeyValueStore<Bytes, byte[]>>as(storeName)
                 .withKeySerde(Serdes.String())
                 .withValueSerde(Serdes.String())
         );
@@ -456,9 +460,11 @@ public class QueryableStateIntegrationTest {
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
         ));
 
+        CLUSTER.createTopic(input);
+
         try (final KafkaStreams streams = getRunningStreams(properties, builder, true)) {
             final ReadOnlyKeyValueStore<String, String> store =
-                streams.store(fromNameAndType("input-table", keyValueStore()));
+                streams.store(fromNameAndType(storeName, keyValueStore()));
             assertThat(store, Matchers.notNullValue());
 
             final InvalidStateStoreException exception = assertThrows(
@@ -469,6 +475,8 @@ public class QueryableStateIntegrationTest {
                 exception.getMessage(),
                 is("Cannot get state store no-table because no such store is registered in the topology.")
             );
+        } finally {
+            CLUSTER.deleteAllTopicsAndWait(0L);
         }
     }
 
