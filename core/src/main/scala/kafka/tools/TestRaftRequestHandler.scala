@@ -62,8 +62,8 @@ class TestRaftRequestHandler(
             response => sendResponse(request, Some(response)))
 
         case ApiKeys.API_VERSIONS =>
-          sendResponse(request, Option(ApiVersionsResponse.apiVersionsResponse(0, 2,
-            Features.emptySupportedFeatures())))
+          sendResponse(request, Option(ApiVersionsResponse.apiVersionsResponse(0,
+            ApiVersionsResponse.MIN_CONSTRAINT_IBP_VERSION, 2, Features.emptySupportedFeatures())))
 
         case ApiKeys.METADATA =>
           val metadataRequest = request.body[MetadataRequest]

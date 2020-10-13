@@ -1739,12 +1739,14 @@ class KafkaApis(val requestChannel: RequestChannel,
         finalizedFeaturesOpt match {
           case Some(finalizedFeatures) => ApiVersionsResponse.apiVersionsResponse(
             requestThrottleMs,
+            config.interBrokerProtocolVersion.id,
             config.interBrokerProtocolVersion.recordVersion.value,
             supportedFeatures,
             finalizedFeatures.features,
             finalizedFeatures.epoch)
           case None => ApiVersionsResponse.apiVersionsResponse(
             requestThrottleMs,
+            config.interBrokerProtocolVersion.id,
             config.interBrokerProtocolVersion.recordVersion.value,
             supportedFeatures)
         }

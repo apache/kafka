@@ -268,6 +268,7 @@ public class SenderTest {
 
         ByteBuffer buffer = ApiVersionsResponse.createApiVersionsResponse(
             400,
+            ApiVersionsResponse.MIN_CONSTRAINT_IBP_VERSION,
             RecordBatch.CURRENT_MAGIC_VALUE
         ).serialize(ApiKeys.API_VERSIONS, ApiKeys.API_VERSIONS.latestVersion(), 0);
         selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));

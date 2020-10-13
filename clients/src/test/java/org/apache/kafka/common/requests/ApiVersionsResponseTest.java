@@ -44,6 +44,7 @@ public class ApiVersionsResponseTest {
     public void shouldCreateApiResponseOnlyWithKeysSupportedByMagicValue() {
         final ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(
             10,
+            ApiVersionsResponse.MIN_CONSTRAINT_IBP_VERSION,
             RecordBatch.MAGIC_VALUE_V1,
             Features.emptySupportedFeatures());
         verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1);
@@ -64,9 +65,8 @@ public class ApiVersionsResponseTest {
     @Test
     public void shouldReturnAllKeysWhenMagicIsCurrentValueAndThrottleMsIsDefaultThrottle() {
         ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(
-            AbstractResponse.DEFAULT_THROTTLE_TIME,
-            RecordBatch.CURRENT_MAGIC_VALUE,
-            Features.emptySupportedFeatures());
+            AbstractResponse.DEFAULT_THROTTLE_TIME, ApiVersionsResponse.MIN_CONSTRAINT_IBP_VERSION,
+            RecordBatch.CURRENT_MAGIC_VALUE, Features.emptySupportedFeatures());
         assertEquals(new HashSet<>(ApiKeys.enabledApis()), apiKeysInResponse(response));
         assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs());
         assertTrue(response.data.supportedFeatures().isEmpty());
@@ -107,10 +107,12 @@ public class ApiVersionsResponseTest {
     public void shouldReturnFeatureKeysWhenMagicIsCurrentValueAndThrottleMsIsDefaultThrottle() {
         ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(
             10,
+            ApiVersionsResponse.MIN_CONSTRAINT_IBP_VERSION,
             RecordBatch.MAGIC_VALUE_V1,
             Features.supportedFeatures(Utils.mkMap(Utils.mkEntry("feature", new SupportedVersionRange((short) 1, (short) 4)))),
             Features.finalizedFeatures(Utils.mkMap(Utils.mkEntry("feature", new FinalizedVersionRange((short) 2, (short) 3)))),
-            10);
+            10
+        );
         verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1);
         assertEquals(10, response.throttleTimeMs());
 

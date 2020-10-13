@@ -17,7 +17,10 @@
 
 package kafka.api
 
-import org.apache.kafka.common.record.RecordVersion
+import org.apache.kafka.common.feature.Features
+import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.common.record.{RecordBatch, RecordVersion}
+import org.apache.kafka.common.requests.ApiVersionsResponse
 import org.junit.Test
 import org.junit.Assert._
 
@@ -96,6 +99,20 @@ class ApiVersionTest {
     assertEquals(KAFKA_2_4_IV1, ApiVersion("2.4"))
     assertEquals(KAFKA_2_4_IV0, ApiVersion("2.4-IV0"))
     assertEquals(KAFKA_2_4_IV1, ApiVersion("2.4-IV1"))
+
+    assertEquals(KAFKA_2_5_IV0, ApiVersion("2.5"))
+    assertEquals(KAFKA_2_5_IV0, ApiVersion("2.5-IV0"))
+
+    assertEquals(KAFKA_2_6_IV0, ApiVersion("2.6"))
+    assertEquals(KAFKA_2_6_IV0, ApiVersion("2.6-IV0"))
+
+    assertEquals(KAFKA_2_7_IV2, ApiVersion("2.7"))
+    assertEquals(KAFKA_2_7_IV0, ApiVersion("2.7-IV0"))
+    assertEquals(KAFKA_2_7_IV1, ApiVersion("2.7-IV1"))
+    assertEquals(KAFKA_2_7_IV2, ApiVersion("2.7-IV2"))
+
+    assertEquals(KAFKA_2_8_IV0, ApiVersion("2.8"))
+    assertEquals(KAFKA_2_8_IV0, ApiVersion("2.8-IV0"))
   }
 
   @Test
@@ -140,6 +157,10 @@ class ApiVersionTest {
     assertEquals("2.3", KAFKA_2_3_IV0.shortVersion)
     assertEquals("2.3", KAFKA_2_3_IV1.shortVersion)
     assertEquals("2.4", KAFKA_2_4_IV0.shortVersion)
+    assertEquals("2.5", KAFKA_2_5_IV0.shortVersion)
+    assertEquals("2.6", KAFKA_2_6_IV0.shortVersion)
+    assertEquals("2.7", KAFKA_2_7_IV2.shortVersion)
+    assertEquals("2.8", KAFKA_2_8_IV0.shortVersion)
   }
 
   @Test
@@ -149,4 +170,97 @@ class ApiVersionTest {
     assertEquals(ApiVersion.allVersions.size, apiVersions.length)
   }
 
+  @Test
+  def testInterBrokerProtocolVersionConstraint(): Unit = {
+    val response = ApiVersionsResponse.apiVersionsResponse(
+      10,
+      ApiVersion.latestVersion.id,
+      RecordBatch.MAGIC_VALUE_V2,
+      Features.emptySupportedFeatures())
+    response.data.apiKeys().forEach(
+      version => {
+        val apiKeys = ApiKeys.forId(version.apiKey())
+        apiKeys match {
+          case ApiKeys.ALTER_CONFIGS =>
+            if (ApiVersion.latestVersion >= KAFKA_2_8_IV0) {
+              verifyIBPVersionConstraint(apiKeys, 1)
+            }
+
+          case ApiKeys.INCREMENTAL_ALTER_CONFIGS =>
+            if (ApiVersion.latestVersion >= KAFKA_2_8_IV0) {
+              verifyIBPVersionConstraint(apiKeys, 1)
+            }
+
+          case ApiKeys.ALTER_CLIENT_QUOTAS =>
+            if (ApiVersion.latestVersion >= KAFKA_2_8_IV0) {
+              verifyIBPVersionConstraint(apiKeys, 0)
+            }
+
+          case ApiKeys.CREATE_ACLS =>
+            if (ApiVersion.latestVersion >= KAFKA_2_8_IV0) {
+              verifyIBPVersionConstraint(apiKeys, 2)
+            }
+
+          case ApiKeys.DELETE_ACLS =>
+            if (ApiVersion.latestVersion >= KAFKA_2_8_IV0) {
+              verifyIBPVersionConstraint(apiKeys, 2)
+            }
+
+          case ApiKeys.CREATE_DELEGATION_TOKEN =>
+            if (ApiVersion.latestVersion >= KAFKA_2_8_IV0) {
+              verifyIBPVersionConstraint(apiKeys, 2)
+            }
+
+          case ApiKeys.RENEW_DELEGATION_TOKEN =>
+            if (ApiVersion.latestVersion >= KAFKA_2_8_IV0) {
+              verifyIBPVersionConstraint(apiKeys, 2)
+            }
+
+          case ApiKeys.EXPIRE_DELEGATION_TOKEN =>
+            if (ApiVersion.latestVersion >= KAFKA_2_8_IV0) {
+              verifyIBPVersionConstraint(apiKeys, 2)
+            }
+
+          case ApiKeys.ALTER_PARTITION_REASSIGNMENTS =>
+            if (ApiVersion.latestVersion >= KAFKA_2_8_IV0) {
+              verifyIBPVersionConstraint(apiKeys, 0)
+            }
+
+          case ApiKeys.CREATE_PARTITIONS =>
+            if (ApiVersion.latestVersion >= KAFKA_2_8_IV0) {
+              verifyIBPVersionConstraint(apiKeys, 3)
+            }
+
+          case ApiKeys.CREATE_TOPICS =>
+            if (ApiVersion.latestVersion >= KAFKA_2_8_IV0) {
+              verifyIBPVersionConstraint(apiKeys, 6)
+            }
+
+          case ApiKeys.DELETE_TOPICS =>
+            if (ApiVersion.latestVersion >= KAFKA_2_8_IV0) {
+              verifyIBPVersionConstraint(apiKeys, 5)
+            }
+
+          case ApiKeys.UPDATE_FEATURES =>
+            if (ApiVersion.latestVersion >= KAFKA_2_8_IV0) {
+              verifyIBPVersionConstraint(apiKeys, 0)
+            }
+
+          case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS =>
+            if (ApiVersion.latestVersion >= KAFKA_2_8_IV0) {
+              verifyIBPVersionConstraint(apiKeys, 0)
+            }
+          case _ =>
+        }
+      }
+    )
+  }
+
+  private def verifyIBPVersionConstraint(apiKeys: ApiKeys, expectedVersion: Short): Unit = {
+    assertEquals(s"The latest version of RPC $apiKeys does not match " +
+      s"expected version $expectedVersion. If you recently " +
+      s"bumped this RPC version, you should also bump IBP and update this test correspondingly.",
+      expectedVersion, apiKeys.latestVersion())
+  }
 }
+
