@@ -20,6 +20,7 @@ package org.apache.kafka.common.utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -34,15 +35,41 @@ public class ConfigUtils {
     /**
      * Translates deprecated configurations into their non-deprecated equivalents
      *
+     * This is a convenience method for {@link ConfigUtils#translateDeprecatedConfigs(Map, Map)}
+     * until we can use Java 9+ {@code Map.of(..)} and {@code Set.of(...)}
+     *
      * @param configs the input configuration
      * @param aliasGroups An array of arrays of synonyms.  Each synonym array begins with the non-deprecated synonym
      *                    For example, new String[][] { { a, b }, { c, d, e} }
      *                    would declare b as a deprecated synonym for a,
      *                    and d and e as deprecated synonyms for c.
+     *                    The ordering of synonyms determines the order of precedence
+     *                    (e.g. the first synonym takes precedence over the second one)
      * @return a new configuration map with deprecated  keys translated to their non-deprecated equivalents
      */
     public static <T> Map<String, T> translateDeprecatedConfigs(Map<String, T> configs, String[][] aliasGroups) {
-        Set<String> aliasSet = Stream.of(aliasGroups).flatMap(Stream::of).collect(Collectors.toSet());
+        return translateDeprecatedConfigs(configs, Stream.of(aliasGroups)
+            .collect(Collectors.toMap(x -> x[0], x -> Stream.of(x).skip(1).collect(Collectors.toList()))));
+    }
+
+    /**
+     * Translates deprecated configurations into their non-deprecated equivalents
+     *
+     * @param configs the input configuration
+     * @param aliasGroups A map of config to synonyms.  Each key is the non-deprecated synonym
+     *                    For example, Map.of(a , Set.of(b), c, Set.of(d, e))
+     *                    would declare b as a deprecated synonym for a,
+     *                    and d and e as deprecated synonyms for c.
+     *                    The ordering of synonyms determines the order of precedence
+     *                    (e.g. the first synonym takes precedence over the second one)
+     * @return a new configuration map with deprecated  keys translated to their non-deprecated equivalents
+     */
+    public static <T> Map<String, T> translateDeprecatedConfigs(Map<String, T> configs,
+                                                                Map<String, List<String>> aliasGroups) {
+        Set<String> aliasSet = Stream.concat(
+            aliasGroups.keySet().stream(),
+            aliasGroups.values().stream().flatMap(Collection::stream))
+            .collect(Collectors.toSet());
 
         // pass through all configurations without aliases
         Map<String, T> newConfigs = configs.entrySet().stream()
@@ -51,11 +78,8 @@ public class ConfigUtils {
             .filter(e -> Objects.nonNull(e.getValue()))
             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-        Stream.of(aliasGroups).forEachOrdered(aliasGroup -> {
-            String target = aliasGroup[0];
-
-            List<String> deprecated = Stream.of(aliasGroup)
-                .skip(1) // skip target
+        aliasGroups.forEach((target, aliases) -> {
+            List<String> deprecated = aliases.stream()
                 .filter(configs::containsKey)
                 .collect(Collectors.toList());
 
