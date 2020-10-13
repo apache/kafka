@@ -1837,13 +1837,17 @@ class KafkaController(val config: KafkaConfig,
     if (!isActive) return
 
     if (controllerContext.partitionsBeingReassigned.contains(topicPartition)) {
-      val reassignment = controllerContext.partitionFullReplicaAssignment(topicPartition)
-      if (isReassignmentComplete(topicPartition, reassignment)) {
-        // resume the partition reassignment process
-        info(s"Target replicas ${reassignment.targetReplicas} have all caught up with the leader for " +
-          s"reassigning partition $topicPartition")
-        onPartitionReassignment(topicPartition, reassignment)
-      }
+      maybeCompleteReassignment(topicPartition)
+    }
+  }
+
+  private def maybeCompleteReassignment(topicPartition: TopicPartition): Unit = {
+    val reassignment = controllerContext.partitionFullReplicaAssignment(topicPartition)
+    if (isReassignmentComplete(topicPartition, reassignment)) {
+      // resume the partition reassignment process
+      info(s"Target replicas ${reassignment.targetReplicas} have all caught up with the leader for " +
+        s"reassigning partition $topicPartition")
+      onPartitionReassignment(topicPartition, reassignment)
     }
   }
 
@@ -2087,9 +2091,8 @@ class KafkaController(val config: KafkaConfig,
         // controller will not have registered watches for reassigning partitions, we
         // can still rely on the batch ISR change notification path in order to
         // complete the reassignment.
-        partitions.filter(controllerContext.partitionsBeingReassigned.contains).foreach { partition =>
-          val assignment = controllerContext.partitionFullReplicaAssignment(partition)
-          onPartitionReassignment(partition, assignment)
+        partitions.filter(controllerContext.partitionsBeingReassigned.contains).foreach { topicPartition =>
+          maybeCompleteReassignment(topicPartition)
         }
       }
     } finally {
@@ -2342,8 +2345,7 @@ class KafkaController(val config: KafkaConfig,
         if (controllerContext.partitionsBeingReassigned.contains(topicPartition)) {
           val isSuccessfulUpdate = partitionResponse.isRight
           if (isSuccessfulUpdate) {
-            val assignment = controllerContext.partitionFullReplicaAssignment(topicPartition)
-            onPartitionReassignment(topicPartition, assignment)
+            maybeCompleteReassignment(topicPartition)
           }
         }
       }
