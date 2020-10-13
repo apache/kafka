@@ -87,10 +87,16 @@ public class MirrorMakerConfig extends AbstractConfig {
             "Whether to bring up an internal-only REST server that allows multi-node clusters to operate correctly.";
 
     private final Plugins plugins;
-   
+
+    private final Map<String, String> rawProperties;
+
+    @SuppressWarnings("unchecked")
     public MirrorMakerConfig(Map<?, ?> props) {
         super(config(), props, true);
         plugins = new Plugins(originalsStrings());
+
+        rawProperties = new HashMap<>();
+        copyAsStrings((Map<String, ?>) props, rawProperties);
     }
 
     public Set<String> clusters() {
@@ -139,7 +145,7 @@ public class MirrorMakerConfig extends AbstractConfig {
       */
     public MirrorClientConfig clientConfig(String cluster) {
         Map<String, String> props = new HashMap<>();
-        props.putAll(originalsStrings());
+        props.putAll(rawProperties);
         props.putAll(clusterProps(cluster));
         return new MirrorClientConfig(transform(props));
     }
@@ -147,7 +153,6 @@ public class MirrorMakerConfig extends AbstractConfig {
     // loads properties of the form cluster.x.y.z
     Map<String, String> clusterProps(String cluster) {
         Map<String, String> props = new HashMap<>();
-        Map<String, String> strings = originalsStrings();
 
         props.putAll(stringsWithPrefixStripped(cluster + "."));
 
@@ -161,7 +166,7 @@ public class MirrorMakerConfig extends AbstractConfig {
         }
 
         for (String k : MirrorClientConfig.CLIENT_CONFIG_DEF.names()) {
-            String v = strings.get(k);
+            String v = rawProperties.get(k);
             if (v != null) {
                 props.putIfAbsent("producer." + k, v);
                 props.putIfAbsent("consumer." + k, v);
@@ -177,7 +182,7 @@ public class MirrorMakerConfig extends AbstractConfig {
     public Map<String, String> workerConfig(SourceAndTarget sourceAndTarget) {
         Map<String, String> props = new HashMap<>();
         props.putAll(clusterProps(sourceAndTarget.target()));
-      
+
         // Accept common top-level configs that are otherwise ignored by MM2.
         // N.B. all other worker properties should be configured for specific herders,
         // e.g. primary->backup.client.id
@@ -190,7 +195,7 @@ public class MirrorMakerConfig extends AbstractConfig {
         props.putAll(stringsWithPrefix("task"));
         props.putAll(stringsWithPrefix("worker"));
         props.putAll(stringsWithPrefix("replication.policy"));
- 
+
         // transform any expression like ${provider:path:key}, since the worker doesn't do so
         props = transform(props);
         props.putAll(stringsWithPrefix(CONFIG_PROVIDERS_CONFIG));
@@ -227,7 +232,7 @@ public class MirrorMakerConfig extends AbstractConfig {
     public Map<String, String> connectorBaseConfig(SourceAndTarget sourceAndTarget, Class<?> connectorClass) {
         Map<String, String> props = new HashMap<>();
 
-        props.putAll(originalsStrings());
+        props.putAll(rawProperties);
         props.keySet().retainAll(allConfigNames());
         
         props.putAll(stringsWithPrefix(CONFIG_PROVIDERS_CONFIG));
@@ -298,13 +303,13 @@ public class MirrorMakerConfig extends AbstractConfig {
         RestServerConfig.addInternalConfig(result);
         return result;
     }
- 
+
     private Map<String, String> stringsWithPrefixStripped(String prefix) {
-        return Utils.entriesWithPrefix(originalsStrings(), prefix);
+        return Utils.entriesWithPrefix(rawProperties, prefix);
     }
 
     private Map<String, String> stringsWithPrefix(String prefix) {
-        return Utils.entriesWithPrefix(originalsStrings(), prefix, false);
+        return Utils.entriesWithPrefix(rawProperties, prefix, false);
     }
 
     static Map<String, String> clusterConfigsWithPrefix(String prefix, Map<String, String> props) {
