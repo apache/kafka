@@ -65,7 +65,6 @@ public class SnapshotRegistryTest {
         assertIteratorContains(registry.snapshots(), snapshot123, snapshot456);
     }
 
-
     @Test
     public void testCreateAndDeleteSnapshots() {
         SnapshotRegistry registry = new SnapshotRegistry(0);
@@ -74,5 +73,15 @@ public class SnapshotRegistryTest {
         Snapshot snapshot789 = registry.createSnapshot(789);
         registry.deleteSnapshot(snapshot456.epoch());
         assertIteratorContains(registry.snapshots(), snapshot123, snapshot789);
+    }
+
+    @Test
+    public void testDeleteSnapshotUpTo() {
+        SnapshotRegistry registry = new SnapshotRegistry(0);
+        registry.createSnapshot(10);
+        registry.createSnapshot(12);
+        Snapshot snapshot14 = registry.createSnapshot(14);
+        registry.deleteSnapshotsUpTo(14);
+        assertIteratorContains(registry.snapshots(), snapshot14);
     }
 }
