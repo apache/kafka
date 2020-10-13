@@ -17,6 +17,7 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.common.requests.ApiError;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
@@ -30,6 +31,7 @@ import static org.apache.kafka.controller.ConfigurationControlManagerTest.BROKER
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.CONFIGS;
 //import static org.apache.kafka.controller.ConfigurationControlManagerTest.MYTOPIC;
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.entry;
+import static org.junit.Assert.assertEquals;
 
 public class QuorumControllerTest {
     private static final Logger log =
@@ -48,8 +50,9 @@ public class QuorumControllerTest {
     public void testWriteOperations() throws Throwable {
         try (LocalQuorumsTestEnv env = new LocalQuorumsTestEnv(1,
             builder -> builder.setConfigDefs(CONFIGS))) {
-            env.activeController().incrementalAlterConfigs(Collections.singletonMap(
-                BROKER0, Collections.singletonMap("baz", entry(SET, "123"))), true).get();
+            assertEquals(Collections.singletonMap(BROKER0, ApiError.NONE),
+                env.activeController().incrementalAlterConfigs(Collections.singletonMap(
+                    BROKER0, Collections.singletonMap("baz", entry(SET, "123"))), true).get());
         }
     }
 }

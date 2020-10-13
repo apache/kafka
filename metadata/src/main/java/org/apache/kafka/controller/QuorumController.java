@@ -39,6 +39,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -522,6 +523,13 @@ public final class QuorumController implements Controller {
                 return result;
             }
         });
+    }
+
+    @Override
+    public CompletableFuture<Map<ConfigResource, ResultOrError<Map<String, String>>>>
+            describeConfigs(Map<ConfigResource, Collection<String>> resources) {
+        return appendReadEvent("legacyAlterConfigs", () ->
+            configurationControlManager.describeConfigs(lastCommittedOffset, resources));
     }
 
     @Override
