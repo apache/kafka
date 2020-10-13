@@ -73,6 +73,11 @@ class KTableTransformValues<K, V, V1> implements KTableProcessorSupplier<K, V, V
 
     @Override
     public boolean enableSendingOldValues(final boolean forceMaterialization) {
+        if (queryableName != null) {
+            sendOldValues = true;
+            return true;
+        }
+
         if (parent.enableSendingOldValues(forceMaterialization)) {
             sendOldValues = true;
         }
