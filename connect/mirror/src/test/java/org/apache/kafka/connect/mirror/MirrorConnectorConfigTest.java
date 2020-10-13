@@ -70,9 +70,23 @@ public class MirrorConnectorConfigTest {
     @Test
     public void testConfigPropertyMatching() {
         MirrorConnectorConfig config = new MirrorConnectorConfig(
-            makeProps("config.properties.blacklist", "prop2"));
+            makeProps("config.properties.exclude", "prop2"));
         assertTrue(config.configPropertyFilter().shouldReplicateConfigProperty("prop1"));
         assertFalse(config.configPropertyFilter().shouldReplicateConfigProperty("prop2"));
+    }
+
+    @Test
+    public void testConfigBackwardsCompatibility() {
+        MirrorConnectorConfig config = new MirrorConnectorConfig(
+            makeProps("config.properties.blacklist", "prop1",
+                      "groups.blacklist", "group-1",
+                      "topics.blacklist", "topic-1"));
+        assertFalse(config.configPropertyFilter().shouldReplicateConfigProperty("prop1"));
+        assertTrue(config.configPropertyFilter().shouldReplicateConfigProperty("prop2"));
+        assertFalse(config.topicFilter().shouldReplicateTopic("topic-1"));
+        assertTrue(config.topicFilter().shouldReplicateTopic("topic-2"));
+        assertFalse(config.groupFilter().shouldReplicateGroup("group-1"));
+        assertTrue(config.groupFilter().shouldReplicateGroup("group-2"));
     }
 
     @Test
