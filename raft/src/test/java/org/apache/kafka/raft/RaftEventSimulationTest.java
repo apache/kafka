@@ -199,6 +199,56 @@ public class RaftEventSimulationTest {
             }
 
             scheduler.runUntil(() -> cluster.allReachedHighWatermark(20));
+            long highWatermark = cluster.maxHighWatermarkReached();
+
+            // Restart the node and verify it catches up
+            cluster.start(leaderId);
+            scheduler.runUntil(() -> cluster.allReachedHighWatermark(highWatermark + 10));
+        }
+    }
+
+    @Test
+    public void testRecoveryAfterAllNodesFailQuorumSizeThree() {
+        testRecoveryAfterAllNodesFail(new QuorumConfig(3));
+    }
+
+    @Test
+    public void testRecoveryAfterAllNodesFailQuorumSizeFour() {
+        testRecoveryAfterAllNodesFail(new QuorumConfig(4));
+    }
+
+    @Test
+    public void testRecoveryAfterAllNodesFailQuorumSizeFive() {
+        testRecoveryAfterAllNodesFail(new QuorumConfig(5));
+    }
+
+    private void testRecoveryAfterAllNodesFail(QuorumConfig config) {
+        for (int seed = 0; seed < 100; seed++) {
+            Cluster cluster = new Cluster(config, seed);
+            MessageRouter router = new MessageRouter(cluster);
+            EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
+
+            // Seed the cluster with some data
+            cluster.startAll();
+            schedulePolling(scheduler, cluster, 3, 5);
+            scheduler.schedule(router::deliverAll, 0, 2, 1);
+            scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
+            scheduler.runUntil(cluster::hasConsistentLeader);
+            scheduler.runUntil(() -> cluster.anyReachedHighWatermark(10));
+            long highWatermark = cluster.maxHighWatermarkReached();
+
+            // We kill all of the nodes. Then we bring back a majority and verify that
+            // they are able to elect a leader and continue making progress
+
+            cluster.killAll();
+
+            Iterator<Integer> nodeIdsIterator = cluster.nodes().iterator();
+            for (int i = 0; i < cluster.majoritySize(); i++) {
+                Integer nodeId = nodeIdsIterator.next();
+                cluster.start(nodeId);
+            }
+
+            scheduler.runUntil(() -> cluster.allReachedHighWatermark(highWatermark + 10));
         }
     }
 
@@ -627,6 +677,10 @@ public class RaftEventSimulationTest {
             return true;
         }
 
+        void killAll() {
+            running.clear();
+        }
+
         void kill(int nodeId) {
             running.remove(nodeId);
         }
@@ -701,6 +755,8 @@ public class RaftEventSimulationTest {
                     Function.identity(),
                     this::nodeAddress
                 ));
+
+            persistentState.log.reopen();
 
             KafkaRaftClient client = new KafkaRaftClient(channel, persistentState.log, quorum, time, metrics,
                 fetchPurgatory, appendPurgatory, voterConnectionMap, ELECTION_JITTER_MS,
