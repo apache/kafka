@@ -23,6 +23,7 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 
+import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -35,7 +36,7 @@ public interface Controller extends AutoCloseable {
      * @param brokerEpoch   The epoch of the broker making the change.
      * @param changes       The changes to make.
      *
-     * @return              A map from partitions to error results.
+     * @return              A future yielding a map from partitions to error results.
      */
     CompletableFuture<Map<TopicPartition, Errors>>
         alterIsr(int brokerId, long brokerEpoch, Map<TopicPartition, LeaderAndIsr> changes);
@@ -48,7 +49,7 @@ public interface Controller extends AutoCloseable {
      * @param unclean       If this is true, we will elect the first live replic if
      *                      there are no in-sync replicas.
      *
-     * @return              A map from partitions to error results.
+     * @return              A future yielding a map from partitions to error results.
      */
     CompletableFuture<Map<TopicPartition, PartitionLeaderElectionResult>>
         electLeaders(int timeoutMs, Set<TopicPartition> parts, boolean unclean);
@@ -59,7 +60,7 @@ public interface Controller extends AutoCloseable {
      * @param configChanges The changes.
      * @param validateOnly  True if we should validate the changes but not apply them.
      *
-     * @return              A map from partitions to error results.
+     * @return              A future yielding a map from partitions to error results.
      */
     CompletableFuture<Map<ConfigResource, ApiError>> incrementalAlterConfigs(
         Map<ConfigResource, Map<String, Map.Entry<AlterConfigOp.OpType, String>>> configChanges,
@@ -71,10 +72,22 @@ public interface Controller extends AutoCloseable {
      * @param newConfigs    The new configuration maps to apply.
      * @param validateOnly  True if we should validate the changes but not apply them.
      *
-     * @return              A map from partitions to error results.
+     * @return              A future yielding a map from partitions to error results.
      */
     CompletableFuture<Map<ConfigResource, ApiError>> legacyAlterConfigs(
         Map<ConfigResource, Map<String, String>> newConfigs, boolean validateOnly);
+
+    /**
+     * Describe the current configuration of various resources.
+     *
+     * @param resources     A map from resources to the collection of config keys that we
+     *                      want to describe for each.  If the collection is empty, then
+     *                      all configuration keys will be described.
+     *
+     * @return
+     */
+    CompletableFuture<Map<ConfigResource, ResultOrError<Map<String, String>>>>
+        describeConfigs(Map<ConfigResource, Collection<String>> resources);
 
     /**
      * Begin shutting down, but don't block.  You must still call close to clean up all

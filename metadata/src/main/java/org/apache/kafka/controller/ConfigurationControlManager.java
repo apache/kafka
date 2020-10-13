@@ -31,8 +31,10 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -240,12 +242,12 @@ public class ConfigurationControlManager {
                     try {
                         int brokerId = Integer.parseInt(configResource.name());
                         if (brokerId < 0) {
-                            return new ApiError(Errors.INVALID_REQUEST, "Cannot perform " +
-                                "operations on a BROKER resource with a negative integer name.");
+                            return new ApiError(Errors.INVALID_REQUEST, "Illegal " +
+                                "negative broker ID in BROKER resource.");
                         }
                     } catch (NumberFormatException e) {
-                        return new ApiError(Errors.INVALID_REQUEST, "Cannot perform " +
-                            "operations on a BROKER resource with a non-integer name.");
+                        return new ApiError(Errors.INVALID_REQUEST, "Illegal " +
+                            "non-integral BROKER resource type name.");
                     }
                 }
                 return ApiError.NONE;
@@ -254,17 +256,16 @@ public class ConfigurationControlManager {
                     try {
                         Topic.validate(configResource.name());
                     } catch (Exception e) {
-                        return new ApiError(Errors.INVALID_REQUEST, "Cannot perform " +
-                            "operations on a TOPIC resource with an illegal topic name.");
+                        return new ApiError(Errors.INVALID_REQUEST, "Illegal topic name.");
                     }
                 }
                 return ApiError.NONE;
             case UNKNOWN:
-                return new ApiError(Errors.INVALID_REQUEST, "Cannot perform operations " +
-                    "on a configuration resource with type UNKNOWN.");
+                return new ApiError(Errors.INVALID_REQUEST, "Unsupported configuration " +
+                    "resource type UNKNOWN.");
             default:
-                return new ApiError(Errors.INVALID_REQUEST, "Cannot perform operations " +
-                    "on a configuration resource with an unexpected type.");
+                return new ApiError(Errors.INVALID_REQUEST, "Unsupported unexpected " +
+                    "resource type");
         }
     }
 
@@ -320,5 +321,41 @@ public class ConfigurationControlManager {
         } else {
             return Collections.unmodifiableMap(new HashMap<>(map));
         }
+    }
+
+    public Map<ConfigResource, ResultOrError<Map<String, String>>> describeConfigs(
+            long lastCommittedOffset, Map<ConfigResource, Collection<String>> resources) {
+        Map<ConfigResource, ResultOrError<Map<String, String>>> results = new HashMap<>();
+        for (Entry<ConfigResource, Collection<String>> resourceEntry : resources.entrySet()) {
+            ConfigResource resource = resourceEntry.getKey();
+            ApiError error = checkConfigResource(resource);
+            if (error.isFailure()) {
+                results.put(resource, new ResultOrError<>(error));
+                continue;
+            }
+            Map<String, String> foundConfigs = new HashMap<>();
+            TimelineHashMap<String, String> configs =
+                configData.get(resource, lastCommittedOffset);
+            if (configs != null) {
+                Collection<String> targetConfigs = resourceEntry.getValue();
+                if (targetConfigs.isEmpty()) {
+                    Iterator<Entry<String, String>> iter =
+                        configs.entrySet(lastCommittedOffset).iterator();
+                    while (iter.hasNext()) {
+                        Entry<String, String> entry = iter.next();
+                        foundConfigs.put(entry.getKey(), entry.getValue());
+                    }
+                } else {
+                    for (String key : targetConfigs) {
+                        String value = configs.get(key, lastCommittedOffset);
+                        if (value != null) {
+                            foundConfigs.put(key, value);
+                        }
+                    }
+                }
+                results.put(resource, new ResultOrError<>(foundConfigs));
+            }
+        }
+        return results;
     }
 }

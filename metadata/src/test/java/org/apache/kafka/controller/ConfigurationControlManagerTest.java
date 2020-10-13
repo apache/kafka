@@ -110,22 +110,21 @@ public class ConfigurationControlManagerTest {
             "configuration resource type BROKER_LOGGER ").toString(),
             ConfigurationControlManager.checkConfigResource(
                 new ConfigResource(BROKER_LOGGER, "kafka.server.FetchContext")).toString());
-        assertEquals(new ApiError(Errors.INVALID_REQUEST, "Cannot perform " +
-            "operations on a TOPIC resource with an illegal topic name.").toString(),
+        assertEquals(new ApiError(Errors.INVALID_REQUEST, "Illegal topic name.").toString(),
             ConfigurationControlManager.checkConfigResource(
                 new ConfigResource(TOPIC, "* @ invalid$")).toString());
         assertEquals(new ApiError(Errors.NONE, null).toString(),
             ConfigurationControlManager.checkConfigResource(
                 new ConfigResource(TOPIC, "")).toString());
-        assertEquals(new ApiError(Errors.INVALID_REQUEST, "Cannot perform " +
-                "operations on a BROKER resource with a non-integer name.").toString(),
+        assertEquals(new ApiError(Errors.INVALID_REQUEST, "Illegal non-integral " +
+                "BROKER resource type name.").toString(),
             ConfigurationControlManager.checkConfigResource(
                 new ConfigResource(BROKER, "bob")).toString());
         assertEquals(new ApiError(Errors.NONE, null).toString(),
             ConfigurationControlManager.checkConfigResource(
                 new ConfigResource(BROKER, "")).toString());
-        assertEquals(new ApiError(Errors.INVALID_REQUEST, "Cannot perform " +
-                "operations on a configuration resource with type UNKNOWN.").toString(),
+        assertEquals(new ApiError(Errors.INVALID_REQUEST, "Unsupported configuration " +
+                "resource type UNKNOWN.").toString(),
             ConfigurationControlManager.checkConfigResource(
                 new ConfigResource(UNKNOWN, "bob")).toString());
     }
