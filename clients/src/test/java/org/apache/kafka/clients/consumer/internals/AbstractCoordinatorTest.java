@@ -248,9 +248,9 @@ public class AbstractCoordinatorTest {
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
 
-        // blackout the coordinator for 10 milliseconds to simulate a disconnect.
+        // cut out the coordinator for 10 milliseconds to simulate a disconnect.
         // after backing off, we should be able to connect.
-        mockClient.blackout(coordinatorNode, 10L);
+        mockClient.backoff(coordinatorNode, 10L);
 
         long initialTime = mockTime.milliseconds();
         coordinator.ensureCoordinatorReady(mockTime.timer(Long.MAX_VALUE));
@@ -976,7 +976,7 @@ public class AbstractCoordinatorTest {
     public void testLookupCoordinator() {
         setupCoordinator();
 
-        mockClient.blackout(node, 50);
+        mockClient.backoff(node, 50);
         RequestFuture<Void> noBrokersAvailableFuture = coordinator.lookupCoordinator();
         assertTrue("Failed future expected", noBrokersAvailableFuture.failed());
         mockTime.sleep(50);

@@ -468,7 +468,7 @@ public class SenderTest {
         // Disconnect the target node for the pending produce request. This will ensure that sender will try to
         // expire the batch.
         client.disconnect(clusterNode.idString());
-        client.blackout(clusterNode, 100);
+        client.backoff(clusterNode, 100);
 
         sender.runOnce();  // We should try to flush the batch, but we expire it instead without sending anything.
         assertEquals("Callbacks not invoked for expiry", messagesPerBatch, expiryCallbackCount.get());
@@ -993,7 +993,7 @@ public class SenderTest {
         Node node = metadata.fetch().nodes().get(0);
         time.sleep(10000L);
         client.disconnect(node.idString());
-        client.blackout(node, 10);
+        client.backoff(node, 10);
 
         sender.runOnce();
 
@@ -1031,7 +1031,7 @@ public class SenderTest {
         // Note deliveryTimeoutMs is 1500.
         time.sleep(600L);
         client.disconnect(node.idString());
-        client.blackout(node, 10);
+        client.backoff(node, 10);
 
         sender.runOnce(); // now expire the first batch.
         assertFutureFailure(request1, TimeoutException.class);
@@ -1093,7 +1093,7 @@ public class SenderTest {
         Node node = metadata.fetch().nodes().get(0);
         time.sleep(1000L);
         client.disconnect(node.idString());
-        client.blackout(node, 10);
+        client.backoff(node, 10);
 
         sender.runOnce(); // now expire the first batch.
         assertFutureFailure(request1, TimeoutException.class);
@@ -1149,7 +1149,7 @@ public class SenderTest {
         Node node = metadata.fetch().nodes().get(0);
         time.sleep(1000L);
         client.disconnect(node.idString());
-        client.blackout(node, 10);
+        client.backoff(node, 10);
 
         sender.runOnce(); // now expire the first batch.
         assertFutureFailure(request1, TimeoutException.class);
@@ -1181,7 +1181,7 @@ public class SenderTest {
         Node node = metadata.fetch().nodes().get(0);
         time.sleep(15000L);
         client.disconnect(node.idString());
-        client.blackout(node, 10);
+        client.backoff(node, 10);
 
         sender.runOnce(); // now expire the batch.
 

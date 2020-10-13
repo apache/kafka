@@ -536,7 +536,7 @@ object TestUtils extends Logging {
             return true
           cur = null
         }
-        // should never reach her
+        // should never reach here
         throw new RuntimeException("should not reach here")
       }
 
