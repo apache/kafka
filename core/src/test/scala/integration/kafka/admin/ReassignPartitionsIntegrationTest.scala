@@ -22,7 +22,7 @@ import java.util.{Collections, HashMap, List}
 
 import kafka.admin.ReassignPartitionsCommand._
 import kafka.api.KAFKA_2_7_IV1
-import kafka.server.{KafkaConfig, KafkaServer}
+import kafka.server.{IsrChangePropagationConfig, KafkaConfig, KafkaServer, ReplicaManager}
 import kafka.utils.Implicits._
 import kafka.utils.TestUtils
 import kafka.zk.{KafkaZkClient, ZooKeeperTestHarness}
@@ -57,26 +57,53 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
       brokerId -> brokerLevelThrottles.map(throttle => (throttle, -1L)).toMap
     }.toMap
 
+
+  @Test
+  def testReassignment(): Unit = {
+    cluster = new ReassignPartitionsTestCluster(zkConnect)
+    cluster.setup()
+    executeAndVerifyReassignment()
+  }
+
   @Test
   def testReassignmentWithAlterIsrDisabled(): Unit = {
     // Test reassignment when the IBP is on an older version which does not use
     // the `AlterIsr` API. In this case, the controller will register individual
     // watches for each reassigning partition so that the reassignment can be
     // completed as soon as the ISR is expanded.
-    testReassignment(Map(KafkaConfig.InterBrokerProtocolVersionProp -> KAFKA_2_7_IV1.version))
-  }
-
-  /**
-   * Test running a quick reassignment.
-   */
-  @Test
-  def testReassignment(): Unit = {
-    testReassignment(Map.empty)
-  }
-
-  def testReassignment(configOverrides: Map[String, String]): Unit = {
-    cluster = new ReassignPartitionsTestCluster(zkConnect, configOverrides)
+    val configOverrides = Map(KafkaConfig.InterBrokerProtocolVersionProp -> KAFKA_2_7_IV1.version)
+    cluster = new ReassignPartitionsTestCluster(zkConnect, configOverrides = configOverrides)
     cluster.setup()
+    executeAndVerifyReassignment()
+  }
+
+  @Test
+  def testReassignmentCompletionDuringPartialUpgrade(): Unit = {
+    // Test reassignment during a partial upgrade when some brokers are relying on
+    // `AlterIsr` and some on rely on the old notification logic through Zookeeper.
+    // In this test case, broker 0 starts up first on the latest IBP and is typically
+    // elected as controller. The three remaining brokers start up on the older IBP.
+    // We want to ensure that reassignment can still complete through the ISR change
+    // notification path even though the controller expects `AlterIsr`.
+
+    // Override change notification settings so that test is not delayed by ISR
+    // change notification delay
+    ReplicaManager.DefaultIsrPropagationConfig = IsrChangePropagationConfig(
+      checkIntervalMs = 500,
+      lingerMs = 100,
+      maxDelayMs = 500
+    )
+
+    val oldIbpConfig = Map(KafkaConfig.InterBrokerProtocolVersionProp -> KAFKA_2_7_IV1.version)
+    val brokerConfigOverrides = Map(1 -> oldIbpConfig, 2 -> oldIbpConfig, 3 -> oldIbpConfig)
+
+    cluster = new ReassignPartitionsTestCluster(zkConnect, brokerConfigOverrides = brokerConfigOverrides)
+    cluster.setup()
+
+    executeAndVerifyReassignment()
+  }
+
+  def executeAndVerifyReassignment(): Unit = {
     val assignment = """{"version":1,"partitions":""" +
       """[{"topic":"foo","partition":0,"replicas":[0,1,3],"log_dirs":["any","any","any"]},""" +
       """{"topic":"bar","partition":0,"replicas":[3,2,0],"log_dirs":["any","any","any"]}""" +
@@ -606,7 +633,8 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
 
   class ReassignPartitionsTestCluster(
     val zkConnect: String,
-    configOverrides: Map[String, String] = Map.empty
+    configOverrides: Map[String, String] = Map.empty,
+    brokerConfigOverrides: Map[Int, Map[String, String]] = Map.empty
   ) extends Closeable {
     val brokers = Map(
       0 -> "rack0",
@@ -635,9 +663,10 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
         // Don't move partition leaders automatically.
         config.setProperty(KafkaConfig.AutoLeaderRebalanceEnableProp, "false")
         config.setProperty(KafkaConfig.ReplicaLagTimeMaxMsProp, "1000")
+        configOverrides.forKeyValue(config.setProperty)
 
-        configOverrides.forKeyValue { (key, value) =>
-          config.setProperty(key, value)
+        brokerConfigOverrides.get(brokerId).foreach { overrides =>
+          overrides.forKeyValue(config.setProperty)
         }
 
         config

@@ -2080,6 +2080,17 @@ class KafkaController(val config: KafkaConfig,
       if (partitions.nonEmpty) {
         updateLeaderAndIsrCache(partitions)
         processUpdateNotifications(partitions)
+
+        // During a partial upgrade, the controller may be on an IBP which assumes
+        // ISR changes through the `AlterIsr` API while some brokers are on an older
+        // IBP which assumes notification through Zookeeper. In this case, since the
+        // controller will not have registered watches for reassigning partitions, we
+        // can still rely on the batch ISR change notification path in order to
+        // complete the reassignment.
+        partitions.filter(controllerContext.partitionsBeingReassigned.contains).foreach { partition =>
+          val assignment = controllerContext.partitionFullReplicaAssignment(partition)
+          onPartitionReassignment(partition, assignment)
+        }
       }
     } finally {
       // delete the notifications
