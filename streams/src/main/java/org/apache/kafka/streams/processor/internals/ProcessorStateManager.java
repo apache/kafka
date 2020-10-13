@@ -223,7 +223,7 @@ public class ProcessorStateManager implements StateManager {
 
             for (final StateStoreMetadata store : stores.values()) {
                 if (store.corrupted) {
-                    log.error("Tried to initialize store offsets for corrupted store {}", store);
+                    log.info("Tried to initialize store offsets for corrupted store {}", store);
                     throw new IllegalStateException("Should not initialize offsets for a corrupted task");
                 }
 
@@ -246,8 +246,8 @@ public class ProcessorStateManager implements StateManager {
                         if (eosEnabled && !storeDirIsEmpty) {
                             log.warn("State store {} did not find checkpoint offsets while stores are not empty, " +
                                 "since under EOS it has the risk of getting uncommitted data in stores we have to " +
-                                "treat it as a task corruption error and wipe out the local state of task {} " +
-                                "before re-bootstrapping", store.stateStore.name(), taskId);
+                                "treat it as a task corruption error and wipe out the local state of {} task {} " +
+                                "before re-bootstrapping", store.stateStore.name(), taskType, taskId);
 
                             throw new TaskCorruptedException(Collections.singletonMap(taskId, changelogPartitions()));
                         } else {
@@ -517,6 +517,41 @@ public class ProcessorStateManager implements StateManager {
             }
 
             // do not clear the store map since they will still be used for changelog de-registeration later
+        }
+
+        if (firstException != null) {
+            throw firstException;
+        }
+    }
+
+    public void resetCorruptedStores() {
+        log.trace("Closing state manager for {} task {}", taskType, taskId);
+
+        RuntimeException firstException = null;
+        if (!stores.isEmpty()) {
+            for (final Map.Entry<String, StateStoreMetadata> entry : stores.entrySet()) {
+                if (entry.getValue().corrupted) {
+                    final StateStore store = entry.getValue().stateStore;
+                    log.debug("Flushing corrupted store {}", store.name());
+
+                    try {
+                        store.flush();
+                    } catch (final RuntimeException exception) {
+                        if (firstException == null) {
+                            // do NOT wrap the error if it is actually caused by Streams itself
+                            if (exception instanceof StreamsException)
+                                firstException = exception;
+                            else
+                                firstException = new ProcessorStateException(
+                                    format("%sFailed to flush corrupted state store %s", logPrefix, store.name()), exception);
+                        }
+                        log.error("Failed to flush corrupted state store {}: ", store.name(), exception);
+                    }
+
+                    // reset corrupted flag
+                    entry.getValue().corrupted = false;
+                }
+            }
         }
 
         if (firstException != null) {

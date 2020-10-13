@@ -83,7 +83,7 @@ public class TaskManager {
     // materializing this relationship because the lookup is on the hot path
     private final Map<TopicPartition, Task> partitionToTask = new HashMap<>();
 
-    private Map<Task, Collection<TopicPartition>> removedTasks = new HashMap<>();
+    private List<Task> removedTasks = new LinkedList<>();
 
     private Consumer<byte[], byte[]> mainConsumer;
 
@@ -200,8 +200,9 @@ public class TaskManager {
             }
             task.closeDirty();
 
-            removedTasks.put(task, task.changelogPartitions());
-            task.stateManager().clear();
+            removedTasks.add(task);
+
+            task.revive();
 
             // For active tasks pause their input partitions so we won't poll any more records
             // for this task until it has been re-initialized;
@@ -232,7 +233,6 @@ public class TaskManager {
                 // throws if anything has no configured reset policy
                 resetter.accept(assignedToPauseAndReset);
             }
-            task.revive();
         }
     }
 
@@ -369,7 +369,7 @@ public class TaskManager {
         for (final Task task : tasksToCloseClean) {
             try {
                 completeTaskCloseClean(task);
-                removeTask(task, true, taskCloseExceptions);
+                removeTask(task, taskCloseExceptions);
             } catch (final RuntimeException e) {
                 final String uncleanMessage = String.format(
                         "Failed to close task %s cleanly. Attempting to close remaining tasks before re-throwing:",
@@ -391,7 +391,7 @@ public class TaskManager {
                     final Set<TopicPartition> partitions = activeTasksToCreate.remove(task.id());
                     newTask = activeTaskCreator.createActiveTaskFromStandby((StandbyTask) task, partitions, mainConsumer);
                 }
-                removeTask(task, false, taskCloseExceptions);
+                removeTask(task, taskCloseExceptions);
                 addNewTask(newTask);
             } catch (final RuntimeException e) {
                 final String uncleanMessage = String.format("Failed to recycle task %s cleanly. Attempting to close remaining tasks before re-throwing:", task.id());
@@ -404,7 +404,7 @@ public class TaskManager {
         // for tasks that cannot be cleanly closed or recycled, close them dirty
         for (final Task task : tasksToCloseDirty) {
             closeTaskDirty(task);
-            removeTask(task, true, taskCloseExceptions);
+            removeTask(task, taskCloseExceptions);
         }
     }
 
@@ -442,7 +442,6 @@ public class TaskManager {
     }
 
     private void removeTask(final Task task,
-                            final boolean clearStateManager,
                             final Map<TaskId, RuntimeException> taskCloseExceptions) {
         // first clean up the task producer if it is an active task
         if (task.isActive()) {
@@ -457,11 +456,7 @@ public class TaskManager {
         }
 
         tasks.remove(task.id());
-        removedTasks.put(task, task.changelogPartitions());
-
-        if (clearStateManager) {
-            ((AbstractTask) task).stateMgr.clear();
-        }
+        removedTasks.add(task);
     }
 
     /**
@@ -485,9 +480,9 @@ public class TaskManager {
         return initializedTasks;
     }
 
-    public Map<Task, Collection<TopicPartition>> drainRemovedTasks() {
-        final Map<Task, Collection<TopicPartition>> drainedList = removedTasks;
-        removedTasks = new HashMap<>();
+    public List<Task> drainRemovedTasks() {
+        final List<Task> drainedList = removedTasks;
+        removedTasks = new LinkedList<>();
 
         return drainedList;
     }
@@ -658,8 +653,7 @@ public class TaskManager {
             if (task.isActive()) {
                 closeTaskDirty(task);
                 iterator.remove();
-                removedTasks.put(task, task.changelogPartitions());
-                ((AbstractTask) task).stateMgr.clear();
+                removedTasks.add(task);
 
                 try {
                     activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());

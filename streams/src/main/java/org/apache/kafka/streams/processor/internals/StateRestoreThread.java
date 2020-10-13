@@ -113,17 +113,17 @@ public class StateRestoreThread extends Thread {
 
     public synchronized void addInitializedTasks(final List<Task> tasks) {
         if (!tasks.isEmpty()) {
-            for (final Task task: tasks) {
-                taskItemQueue.add(new TaskItem(task, ItemType.CREATE, task.changelogPartitions()));
+            for (final Task task : tasks) {
+                taskItemQueue.add(new TaskItem(task, ItemType.CREATE));
             }
             notifyAll();
         }
     }
 
-    public synchronized void addClosedTasks(final Map<Task, Collection<TopicPartition>> tasks) {
+    public synchronized void addClosedTasks(final List<Task> tasks) {
         if (!tasks.isEmpty()) {
-            for (final Map.Entry<Task, Collection<TopicPartition>> entry : tasks.entrySet()) {
-                taskItemQueue.add(new TaskItem(entry.getKey(), ItemType.CLOSE, entry.getValue()));
+            for (final Task task : tasks) {
+                taskItemQueue.add(new TaskItem(task, ItemType.CLOSE));
             }
             notifyAll();
         }
@@ -177,17 +177,19 @@ public class StateRestoreThread extends Thread {
             // TODO KAFKA-10575: we should consider also call the listener if the
             //                   task is closed but not yet completed restoration
             if (item.type == ItemType.CLOSE) {
-                changelogReader.unregister(item.changelogPartitions);
+                changelogReader.unregister(item.task.changelogPartitions());
 
                 log.info("Unregistered changelogs {} for closing task {}",
                         item.task.changelogPartitions(),
                         item.task.id());
             } else if (item.type == ItemType.CREATE) {
-                // we should only convert the state manager type right before re-registering the changelog
+                // we should only convert the state manager type right before re-registering the changelogs
                 item.task.stateManager().maybeCompleteTaskTypeConversion();
 
-                for (final TopicPartition partition : item.changelogPartitions) {
-                    changelogReader.register(partition, item.task.stateManager());
+                final Set<TopicPartition> allChangelogs = changelogReader.allChangelogs();
+                for (final TopicPartition partition : item.task.changelogPartitions()) {
+                    if (!allChangelogs.contains(partition))
+                        changelogReader.register(partition, item.task.stateManager());
                 }
 
                 log.info("Registered changelogs {} for created task {}",
@@ -205,11 +207,14 @@ public class StateRestoreThread extends Thread {
             log.debug("Restored {} records in {} ms", numRestored, time.milliseconds() - startMs);
         } catch (final TaskCorruptedException e) {
             log.warn("Detected the states of tasks " + e.corruptedTaskWithChangelogs() + " are corrupted. " +
-                    "Will close the task as dirty and re-create and bootstrap from scratch.", e);
+                    "Will unregister the affected changelog partitions for now and let the main thread to handle it.", e);
 
-            // remove corrupted partitions form the changelog reader and continue; we can still proceed
-            // and restore other partitions until the main thread come to handle this exception
-            changelogReader.unregister(e.corruptedTaskWithChangelogs().values().stream()
+            // we should remove all changelog partitions of the affected task, not just the corrupted partitions
+            // since the main thread could potentially close the whole state manager and wipe state stores;
+            // we can still proceed and restore other partitions until the main thread come revived the tasks
+            changelogReader.unregister(e.corruptedTaskWithChangelogs()
+                    .keySet().stream()
+                    .map(changelogReader::changelogsForTask)
                     .flatMap(Collection::stream)
                     .collect(Collectors.toList()));
 
@@ -294,12 +299,10 @@ public class StateRestoreThread extends Thread {
     private static class TaskItem {
         private final Task task;
         private final ItemType type;
-        private final Collection<TopicPartition> changelogPartitions;
 
-        private TaskItem(final Task task, final ItemType type, final Collection<TopicPartition> changelogPartitions) {
+        private TaskItem(final Task task, final ItemType type) {
             this.task = task;
             this.type = type;
-            this.changelogPartitions = changelogPartitions;
         }
     }
 

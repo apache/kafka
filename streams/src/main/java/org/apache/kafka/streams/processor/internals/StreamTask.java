@@ -61,6 +61,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.singleton;
+import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
 /**

@@ -565,7 +565,7 @@ public class TaskManagerTest {
         stateManager.markChangelogAsCorrupted(taskId00Partitions);
         EasyMock.expectLastCall().once();
         stateManager.clear();
-        EasyMock.expectLastCall().times(2);
+        EasyMock.expectLastCall().once();
         replay(stateManager);
 
         final AtomicBoolean enforcedCheckpoint = new AtomicBoolean(false);
@@ -614,7 +614,7 @@ public class TaskManagerTest {
         final ProcessorStateManager stateManager = EasyMock.createStrictMock(ProcessorStateManager.class);
         stateManager.markChangelogAsCorrupted(taskId00Partitions);
         stateManager.clear();
-        EasyMock.expectLastCall().times(2);
+        EasyMock.expectLastCall().once();
         replay(stateManager);
 
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager) {

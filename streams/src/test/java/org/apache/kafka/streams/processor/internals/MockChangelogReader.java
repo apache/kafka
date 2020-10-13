@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Collection;
 import java.util.HashSet;
@@ -48,6 +49,11 @@ public class MockChangelogReader implements ChangelogReader {
     @Override
     public Set<TopicPartition> completedChangelogs() {
         // assuming all restoring partitions are completed
+        return restoringPartitions;
+    }
+
+    @Override
+    public Set<TopicPartition> changelogsForTask(final TaskId id) {
         return restoringPartitions;
     }
 

@@ -36,6 +36,8 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
+
 /**
  * A StandbyTask
  */

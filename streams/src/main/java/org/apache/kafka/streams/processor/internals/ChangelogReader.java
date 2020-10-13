@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Set;
 
@@ -37,6 +38,8 @@ public interface ChangelogReader extends ChangelogRegister {
     Set<TopicPartition> completedChangelogs();
 
     Set<TopicPartition> allChangelogs();
+
+    Set<TopicPartition> changelogsForTask(final TaskId id);
 
     /**
      * Clear all partitions

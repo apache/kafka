@@ -412,6 +412,14 @@ public class StoreChangelogReader implements ChangelogReader {
                 .collect(Collectors.toSet());
     }
 
+    @Override
+    public Set<TopicPartition> changelogsForTask(final TaskId id) {
+        return changelogs.values().stream()
+                .filter(metadata -> metadata.stateManager.taskId().equals(id))
+                .map(metadata -> metadata.storeMetadata.changelogPartition())
+                .collect(Collectors.toSet());
+    }
+
     /**
      * 1. if there are any registered changelogs that needs initialization, try to initialize them first;
      * 2. if all changelogs have finished, return early;
