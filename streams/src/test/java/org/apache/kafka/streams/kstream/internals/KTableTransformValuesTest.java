@@ -21,8 +21,9 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
@@ -40,7 +41,6 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.SingletonNoOpValueTransformer;
@@ -58,6 +58,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 
+import static org.easymock.EasyMock.anyBoolean;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.replay;
@@ -188,11 +189,24 @@ public class KTableTransformValuesTest {
     }
 
     @Test
-    public void shouldSetSendOldValuesOnParent() {
-        expect(parent.enableSendingOldValues(true)).andReturn(true);
+    public void shouldNotSetSendOldValuesOnParentIfMaterialized() {
+        expect(parent.enableSendingOldValues(anyBoolean()))
+            .andThrow(new AssertionError("Should not call enableSendingOldValues"))
+            .anyTimes();
+
         replay(parent);
 
         new KTableTransformValues<>(parent, new SingletonNoOpValueTransformer<>(), QUERYABLE_NAME).enableSendingOldValues(true);
+
+        verify(parent);
+    }
+
+    @Test
+    public void shouldSetSendOldValuesOnParentIfNotMaterialized() {
+        expect(parent.enableSendingOldValues(true)).andReturn(true);
+        replay(parent);
+
+        new KTableTransformValues<>(parent, new SingletonNoOpValueTransformer<>(), null).enableSendingOldValues(true);
 
         verify(parent);
     }
