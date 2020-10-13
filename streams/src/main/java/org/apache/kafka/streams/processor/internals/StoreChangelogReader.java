@@ -55,7 +55,7 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchCommittedOffsets;
 
 /**
- * ChangelogReader is created and shared by the stream thread and restore thread. It is used for both updating standby tasks and
+ * ChangelogReader is created and maintained by the restore thread. It is used for both updating standby tasks and
  * restoring active tasks. It manages the restore consumer, including its assigned partitions, when to pause / resume
  * these partitions, etc.
  * <p>
