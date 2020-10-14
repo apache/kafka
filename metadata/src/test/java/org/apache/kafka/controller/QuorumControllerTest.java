@@ -53,6 +53,17 @@ public class QuorumControllerTest {
             assertEquals(Collections.singletonMap(BROKER0, ApiError.NONE),
                 env.activeController().incrementalAlterConfigs(Collections.singletonMap(
                     BROKER0, Collections.singletonMap("baz", entry(SET, "123"))), true).get());
+            assertEquals(Collections.singletonMap(BROKER0,
+                    new ResultOrError<>(Collections.emptyMap())),
+                env.activeController().describeConfigs(Collections.singletonMap(
+                    BROKER0, Collections.emptyList())).get());
+            assertEquals(Collections.singletonMap(BROKER0, ApiError.NONE),
+                env.activeController().incrementalAlterConfigs(Collections.singletonMap(
+                    BROKER0, Collections.singletonMap("baz", entry(SET, "123"))), false).get());
+            assertEquals(Collections.singletonMap(BROKER0, new ResultOrError<>(Collections.
+                    singletonMap("baz", "123"))),
+                env.activeController().describeConfigs(Collections.singletonMap(
+                    BROKER0, Collections.emptyList())).get());
         }
     }
 }

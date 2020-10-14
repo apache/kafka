@@ -61,7 +61,7 @@ class ResultOrError<T> {
 
     @Override
     public String toString() {
-        if (result == null) {
+        if (error.isSuccess()) {
             return "ResultOrError(" + result + ")";
         } else {
             return "ResultOrError(" + error + ")";
