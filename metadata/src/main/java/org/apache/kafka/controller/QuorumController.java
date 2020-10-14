@@ -121,10 +121,20 @@ public final class QuorumController implements Controller {
             TimeUnit.MICROSECONDS.convert(deltaNs, TimeUnit.NANOSECONDS));
     }
 
-    private Throwable handleEventException(String name, long startProcessingTimeNs,
+    private Throwable handleEventException(String name,
+                                           Optional<Long> startProcessingTimeNs,
                                            Throwable exception) {
+        if (!startProcessingTimeNs.isPresent()) {
+            log.debug("unable to start processing {} because of {}.", name,
+                exception.getClass().getSimpleName());
+            if (exception instanceof ApiException) {
+                return exception;
+            } else {
+                return new UnknownServerException(exception);
+            }
+        }
         long endProcessingTime = time.nanoseconds();
-        long deltaNs = endProcessingTime - startProcessingTimeNs;
+        long deltaNs = endProcessingTime - startProcessingTimeNs.get();
         long deltaUs = TimeUnit.MICROSECONDS.convert(deltaNs, TimeUnit.NANOSECONDS);
         if (exception instanceof ApiException) {
             log.debug("{}: failed with {} in {} us", name,
@@ -133,7 +143,7 @@ public final class QuorumController implements Controller {
         }
         log.warn("{}: failed with unknown server exception {} at epoch {} in {} us.  " +
             "Reverting to last committed offset {].",
-            name, exception.getClass().getSimpleName(), curClaimEpoch, deltaUs,
+            this, exception.getClass().getSimpleName(), curClaimEpoch, deltaUs,
             lastCommittedOffset, exception);
         renounce();
         return new UnknownServerException(exception);
@@ -145,7 +155,7 @@ public final class QuorumController implements Controller {
     class ControlEvent<T> implements EventQueue.Event {
         private final String name;
         private final Runnable handler;
-        private long startProcessingTimeNs;
+        private Optional<Long> startProcessingTimeNs = Optional.empty();
 
         ControlEvent(String name, Runnable handler) {
             this.name = name;
@@ -154,14 +164,20 @@ public final class QuorumController implements Controller {
 
         @Override
         public void run() throws Exception {
-            startProcessingTimeNs = time.nanoseconds();
+            startProcessingTimeNs = Optional.of(time.nanoseconds());
+            log.debug("Executing {}.", this);
             handler.run();
-            handleEventEnd(name, startProcessingTimeNs);
+            handleEventEnd(this.toString(), startProcessingTimeNs.get());
         }
 
         @Override
         public void handleException(Throwable exception) {
             handleEventException(name, startProcessingTimeNs, exception);
+        }
+
+        @Override
+        public String toString() {
+            return name;
         }
     }
 
@@ -178,13 +194,12 @@ public final class QuorumController implements Controller {
         private final String name;
         private final CompletableFuture<T> future;
         private final Supplier<T> handler;
-        private long startProcessingTimeNs;
+        private Optional<Long> startProcessingTimeNs = Optional.empty();
 
         ControllerReadEvent(String name, Supplier<T> handler) {
             this.name = name;
             this.future = new CompletableFuture<T>();
             this.handler = handler;
-            this.startProcessingTimeNs = -1;
         }
 
         CompletableFuture<T> future() {
@@ -193,9 +208,9 @@ public final class QuorumController implements Controller {
 
         @Override
         public void run() throws Exception {
-            startProcessingTimeNs = time.nanoseconds();
+            startProcessingTimeNs = Optional.of(time.nanoseconds());
             T value = handler.get();
-            handleEventEnd(name, startProcessingTimeNs);
+            handleEventEnd(this.toString(), startProcessingTimeNs.get());
             future.complete(value);
         }
 
@@ -203,6 +218,11 @@ public final class QuorumController implements Controller {
         public void handleException(Throwable exception) {
             future.completeExceptionally(
                 handleEventException(name, startProcessingTimeNs, exception));
+        }
+
+        @Override
+        public String toString() {
+            return name + "(" + System.identityHashCode(this) + ")";
         }
     }
 
@@ -219,14 +239,13 @@ public final class QuorumController implements Controller {
         private final String name;
         private final CompletableFuture<T> future;
         private final Supplier<ControllerResult<T>> handler;
-        private long startProcessingTimeNs;
+        private Optional<Long> startProcessingTimeNs = Optional.empty();
         private ControllerResultAndOffset<T> resultAndOffset;
 
         ControllerWriteEvent(String name, Supplier<ControllerResult<T>> handler) {
             this.name = name;
             this.future = new CompletableFuture<T>();
             this.handler = handler;
-            this.startProcessingTimeNs = -1;
             this.resultAndOffset = null;
         }
 
@@ -241,7 +260,7 @@ public final class QuorumController implements Controller {
                 throw new NotControllerException("Node " + nodeId + " is not the " +
                     "current controller.");
             }
-            startProcessingTimeNs = time.nanoseconds();
+            startProcessingTimeNs = Optional.of(time.nanoseconds());
             ControllerResult<T> result = handler.get();
             if (result.records().isEmpty()) {
                 // If the handler did not return any records, then the operation was
@@ -254,6 +273,8 @@ public final class QuorumController implements Controller {
                     // uncommitted state.  We can return immediately.
                     this.resultAndOffset = new ControllerResultAndOffset<>(-1,
                         Collections.emptyList(), result.response());
+                    log.debug("Completing read-only operation {} immediately because " +
+                        "the purgatory is empty.");
                     complete(null);
                     return;
                 }
@@ -261,6 +282,8 @@ public final class QuorumController implements Controller {
                 // one to complete before returning our result to the user.
                 this.resultAndOffset = new ControllerResultAndOffset<>(maybeOffset.get(),
                     result.records(), result.response());
+                log.debug("Read-only operation {} will be completed when the log " +
+                    "reaches offset {}", this, resultAndOffset.offset());
             } else {
                 // If the handler returned a batch of records, those records need to be
                 // written before we can return our result to the user.  Here, we hand off
@@ -273,6 +296,8 @@ public final class QuorumController implements Controller {
                     replay(message.message());
                 }
                 snapshotRegistry.createSnapshot(offset);
+                log.debug("Read-write operation {} will be completed when the log " +
+                    "reaches offset {}.", this, resultAndOffset.offset());
             }
             purgatory.add(resultAndOffset.offset(), this);
         }
@@ -285,11 +310,17 @@ public final class QuorumController implements Controller {
         @Override
         public void complete(Throwable exception) {
             if (exception == null) {
+                handleEventEnd(this.toString(), startProcessingTimeNs.get());
                 future.complete(resultAndOffset.response());
             } else {
                 future.completeExceptionally(
                     handleEventException(name, startProcessingTimeNs, exception));
             }
+        }
+
+        @Override
+        public String toString() {
+            return name + "(" + System.identityHashCode(this) + ")";
         }
     }
 
@@ -303,7 +334,7 @@ public final class QuorumController implements Controller {
     class MetaLogListener implements MetaLogManager.Listener {
         @Override
         public void handleCommits(long offset, List<ApiMessage> messages) {
-            appendControlEvent("handleCommits", () -> {
+            appendControlEvent("handleCommits[" + offset + "]", () -> {
                 if (curClaimEpoch == -1) {
                     if (log.isDebugEnabled()) {
                         if (log.isTraceEnabled()) {
@@ -334,7 +365,7 @@ public final class QuorumController implements Controller {
 
         @Override
         public void handleClaim(long newEpoch) {
-            appendControlEvent("handleClaim", () -> {
+            appendControlEvent("handleClaim[" + newEpoch + "]", () -> {
                 long curEpoch = curClaimEpoch;
                 if (curEpoch != -1) {
                     throw new RuntimeException("Tried to claim controller epoch " +
@@ -348,7 +379,7 @@ public final class QuorumController implements Controller {
 
         @Override
         public void handleRenounce(long oldEpoch) {
-            appendControlEvent("handleClaim", () -> {
+            appendControlEvent("handleRenounce[" + oldEpoch + "]", () -> {
                 if (curClaimEpoch == oldEpoch) {
                     log.info("Renouncing the leadership at oldEpoch {} due to a metadata " +
                             "log event. Reverting to last committed offset {}.", curClaimEpoch,
@@ -360,8 +391,7 @@ public final class QuorumController implements Controller {
 
         @Override
         public void beginShutdown() {
-            log.info("Shutting down the controller because the metadata log requested it.");
-            QuorumController.this.beginShutdown();
+            queue.beginShutdown("MetaLogManager.Listener");
         }
 
         @Override
@@ -528,13 +558,13 @@ public final class QuorumController implements Controller {
     @Override
     public CompletableFuture<Map<ConfigResource, ResultOrError<Map<String, String>>>>
             describeConfigs(Map<ConfigResource, Collection<String>> resources) {
-        return appendReadEvent("legacyAlterConfigs", () ->
+        return appendReadEvent("describeConfigs", () ->
             configurationControlManager.describeConfigs(lastCommittedOffset, resources));
     }
 
     @Override
     public void beginShutdown() {
-        queue.beginShutdown();
+        queue.beginShutdown("QuorumController#beginShutdown");
     }
 
     @Override
