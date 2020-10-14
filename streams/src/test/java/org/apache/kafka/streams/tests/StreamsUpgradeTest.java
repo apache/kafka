@@ -152,7 +152,7 @@ public class StreamsUpgradeTest {
             // 3. Task ids of valid local states on the client's state directory.
             final TaskManager taskManager = taskManager();
             handleRebalanceStart(topics);
-
+            final byte[] uniqueField = new byte[1];
             if (usedSubscriptionMetadataVersion <= LATEST_SUPPORTED_VERSION) {
                 return new SubscriptionInfo(
                     usedSubscriptionMetadataVersion,
@@ -160,7 +160,7 @@ public class StreamsUpgradeTest {
                     taskManager.processId(),
                     userEndPoint(),
                     taskManager.getTaskOffsetSums(),
-                    Bytes.EMPTY
+                    uniqueField
                 ).encode();
             } else {
                 return new FutureSubscriptionInfo(

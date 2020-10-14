@@ -2023,13 +2023,30 @@ public class StreamsPartitionAssignorTest {
         configureDefaultPartitionAssignor();
         final Set<String> topics = mkSet("input");
 
-        final Subscription subscription = new Subscription(new ArrayList<>(topics), defaultSubscriptionInfo.encode());
+        assertEquals(1, partitionAssignor.uniqueField().length);
         assertEquals(0, partitionAssignor.uniqueField()[0]);
         partitionAssignor.subscriptionUserData(topics);
         assertEquals(1, partitionAssignor.uniqueField()[0]);
         partitionAssignor.subscriptionUserData(topics);
         assertEquals(2, partitionAssignor.uniqueField()[0]);
+        assertEquals(1, partitionAssignor.uniqueField().length);
 
+    }
+
+    @Test
+    public void testUniqueFieldOverflow() {
+        createDefaultMockTaskManager();
+        configureDefaultPartitionAssignor();
+        final Set<String> topics = mkSet("input");
+
+        for (int i = 0; i < 127; i++) {
+            partitionAssignor.subscriptionUserData(topics);
+            System.out.println("HERE " + partitionAssignor.uniqueField()[0]);
+        }
+        System.out.println(partitionAssignor.uniqueField()[0]);
+        assertEquals(127, partitionAssignor.uniqueField()[0]);
+        partitionAssignor.subscriptionUserData(topics);
+        assertEquals(-128, partitionAssignor.uniqueField()[0]);
     }
 
     private static ByteBuffer encodeFutureSubscription() {
