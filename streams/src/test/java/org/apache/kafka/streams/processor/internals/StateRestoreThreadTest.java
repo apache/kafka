@@ -65,7 +65,7 @@ public class StateRestoreThreadTest {
 
         assertTrue(((MockChangelogReader) restoreThread.changelogReader()).isPartitionRegistered(tp));
 
-        restoreThread.addClosedTasks(Collections.singletonMap(task, Collections.singleton(tp)));
+        restoreThread.addClosedTasks(Collections.singletonList(task));
 
         restoreThread.runOnce();
 
@@ -83,7 +83,7 @@ public class StateRestoreThreadTest {
 
         assertTrue(((MockChangelogReader) restoreThread.changelogReader()).isPartitionRegistered(tp));
 
-        restoreThread.addClosedTasks(Collections.singletonMap(task, Collections.singleton(tp)));
+        restoreThread.addClosedTasks(Collections.singletonList(task));
 
         restoreThread.runOnce();
 
