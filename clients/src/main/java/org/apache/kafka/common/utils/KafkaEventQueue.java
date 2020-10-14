@@ -380,7 +380,8 @@ public final class KafkaEventQueue implements EventQueue {
     }
 
     @Override
-    public void beginShutdown(Event newCleanupEvent, TimeUnit timeUnit, long timeSpan) {
+    public void beginShutdown(String source, Event newCleanupEvent,
+                              TimeUnit timeUnit, long timeSpan) {
         if (timeSpan < 0) {
             throw new IllegalArgumentException("beginShutdown must be called with a " +
                 "non-negative timeout.");
@@ -389,9 +390,10 @@ public final class KafkaEventQueue implements EventQueue {
         lock.lock();
         try {
             if (cleanupEvent != null) {
-                log.debug("Event queue is already shut down.");
+                log.debug("{}: Event queue is already shut down.", source);
                 return;
             }
+            log.info("{}: shutting down event queue.", source);
             cleanupEvent = newCleanupEvent;
             long newClosingTimeNs = time.nanoseconds() + timeUnit.toNanos(timeSpan);
             if (closingTimeNs >= newClosingTimeNs)
@@ -404,7 +406,8 @@ public final class KafkaEventQueue implements EventQueue {
 
     @Override
     public void close() throws InterruptedException {
-        beginShutdown();
+        beginShutdown("KafkaEventQueue#close");
         eventHandlerThread.join();
+        log.info("closed event queue.");
     }
 }

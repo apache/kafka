@@ -98,7 +98,7 @@ public class KafkaEventQueueTest {
                 return 4;
             }));
         future4.get();
-        queue.beginShutdown();
+        queue.beginShutdown("testHandleEvents");
         queue.close();
     }
 
@@ -210,7 +210,7 @@ public class KafkaEventQueueTest {
         queue.scheduleDeferred("myDeferred",
             __ -> SystemTime.SYSTEM.nanoseconds() + TimeUnit.HOURS.toNanos(1),
             new FutureEvent<>(future, () -> count.getAndAdd(1)));
-        queue.beginShutdown();
+        queue.beginShutdown("testShutdownBeforeDeferred");
         assertThrows(ExecutionException.class, () -> future.get());
         assertEquals(0, count.get());
         queue.close();
