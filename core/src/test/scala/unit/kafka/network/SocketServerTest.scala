@@ -887,9 +887,12 @@ class SocketServerTest {
       // now try one more (should get throttled)
       var conn = connect(overrideServer)
       val acceptors = overrideServer.dataPlaneAcceptors.asScala.values
+      TestUtils.waitUntilTrue(() => acceptors.exists(_.throttledSockets.asScala.nonEmpty),
+        "timeout waiting for connection to get throttled",
+        1000)
       acceptors.foreach(_.wakeup())
-      TestUtils.waitUntilTrue(() => acceptors.forall(_.throttledSockets.isEmpty),
-        "timeout waiting for sockets to get unthrottled",
+      TestUtils.waitUntilTrue(() => acceptors.forall(_.throttledSockets.asScala.isEmpty),
+        "timeout waiting for connection to be unthrottled",
         1000)
       verifyRemoteConnectionClosed(conn)
 
