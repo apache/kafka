@@ -492,7 +492,7 @@ class WorkerSourceTask extends WorkerTask {
             // to persistent storage
 
             // Next we need to wait for all outstanding messages to finish sending
-            log.debug("{} flushing {} outstanding messages for offset commit", this, outstandingMessages.size());
+            log.info("{} flushing {} outstanding messages for offset commit", this, outstandingMessages.size());
             while (!outstandingMessages.isEmpty()) {
                 try {
                     long timeoutMs = timeout - time.milliseconds();
