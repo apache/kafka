@@ -399,7 +399,7 @@ object TestRaftServer extends Logging {
   )
 
   private class ByteArraySerde extends RecordSerde[Array[Byte]] {
-    override def newBatchContext(): AnyRef = null
+    override def newWriteContext(): AnyRef = null
 
     override def recordSize(data: Array[Byte], context: Any): Int = {
       data.length

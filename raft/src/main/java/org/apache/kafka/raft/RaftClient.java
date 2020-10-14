@@ -37,7 +37,7 @@ public interface RaftClient<T> {
          * a batch passed to {@link #handleCommit(int, long, List)}.
          *
          * @param epoch the epoch in which the write was accepted
-         * @param lastOffset the last offset of the recor
+         * @param lastOffset the offset of the last record in the record list
          * @param records the set of records that were committed
          */
         void handleCommit(int epoch, long lastOffset, List<T> records);

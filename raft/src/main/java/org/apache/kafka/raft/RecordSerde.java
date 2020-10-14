@@ -16,25 +16,26 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.protocol.DataOutputStreamWritable;
+import org.apache.kafka.common.protocol.Writable;
 
 public interface RecordSerde<T> {
     /**
      * Create a new context object for to be used when serializing a batch of records.
      * This allows for state to be shared between {@link #recordSize(Object, Object)}
-     * and {@link #write(Object, Object, DataOutputStreamWritable)}, which is useful
-     * in order to avoid redundant work (see e.g.
-     * {@link org.apache.kafka.common.protocol.ObjectSerializationCache}).
+     * and {@link #write(Object, Object, Writable)}, which is useful in order to avoid
+     * redundant work (see e.g. {@link org.apache.kafka.common.protocol.ObjectSerializationCache}).
      *
      * @return context object or null if none is needed
      */
-    Object newBatchContext();
+    default Object newWriteContext() {
+        return null;
+    }
 
     /**
      * Get the size of a record.
      *
      * @param data the record that will be serialized
-     * @param context context object created by {@link #newBatchContext()}
+     * @param context context object created by {@link #newWriteContext()}
      * @return the size in bytes of the serialized record
      */
     int recordSize(T data, Object context);
@@ -44,8 +45,8 @@ public interface RecordSerde<T> {
      * Write the record to the output stream.
      *
      * @param data the record to serialize and write
-     * @param context context object created by {@link #newBatchContext()}
+     * @param context context object created by {@link #newWriteContext()}
      * @param out the output stream to write the record to
      */
-    void write(T data, Object context, DataOutputStreamWritable out);
+    void write(T data, Object context, Writable out);
 }

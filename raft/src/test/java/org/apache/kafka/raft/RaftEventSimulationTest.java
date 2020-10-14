@@ -19,7 +19,7 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.protocol.DataOutputStreamWritable;
+import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.protocol.types.Type;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -29,6 +29,7 @@ import org.apache.kafka.raft.MockLog.LogBatch;
 import org.apache.kafka.raft.MockLog.LogEntry;
 import org.apache.kafka.raft.internals.BatchMemoryPool;
 import org.apache.kafka.raft.internals.LogOffset;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -51,8 +52,6 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-
-import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -1135,17 +1134,12 @@ public class RaftEventSimulationTest {
     private static class IntSerde implements RecordSerde<Integer> {
 
         @Override
-        public Object newBatchContext() {
-            return null;
-        }
-
-        @Override
         public int recordSize(Integer data, Object context) {
             return Type.INT32.sizeOf(data);
         }
 
         @Override
-        public void write(Integer data, Object context, DataOutputStreamWritable out) {
+        public void write(Integer data, Object context, Writable out) {
             out.writeInt(data);
         }
     }

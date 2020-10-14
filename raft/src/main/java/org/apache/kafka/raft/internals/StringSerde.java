@@ -16,16 +16,11 @@
  */
 package org.apache.kafka.raft.internals;
 
-import org.apache.kafka.common.protocol.DataOutputStreamWritable;
+import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.RecordSerde;
 
 public class StringSerde implements RecordSerde<String> {
-
-    @Override
-    public Object newBatchContext() {
-        return null;
-    }
 
     @Override
     public int recordSize(String data, Object context) {
@@ -37,7 +32,7 @@ public class StringSerde implements RecordSerde<String> {
     }
 
     @Override
-    public void write(String data, Object context, DataOutputStreamWritable out) {
+    public void write(String data, Object context, Writable out) {
         out.writeByteArray(Utils.utf8(data));
     }
 

@@ -90,7 +90,7 @@ public class BatchAccumulator<T> implements Closeable {
             return Long.MAX_VALUE;
         }
 
-        Object serdeContext = serde.newBatchContext();
+        Object serdeContext = serde.newWriteContext();
         int batchSize = 0;
         for (T record : records) {
             batchSize += serde.recordSize(record, serdeContext);
