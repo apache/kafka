@@ -34,11 +34,10 @@ public enum BrokerState {
     NOT_RUNNING((byte) 0),
 
     /**
-     * The state the broker is in when it has a lease, but isn't ready to start
-     * handling client requests.  Note: in pre-500-brokers this state was
-     * previously known as Starting.
+     * The state the broker is in when it is registering with the active controller.
+     * Note: in pre-500-brokers this state was previously known as Starting.
      */
-    FENCED((byte) 1),
+    REGISTERING((byte) 1),
 
     /**
      * The state the broker is in when it has a lease, but is still recovering
@@ -51,6 +50,11 @@ public enum BrokerState {
      * requests.
      */
     RUNNING((byte) 3),
+
+    /**
+     * The state the broker is in when it is fenced.
+     */
+    FENCED((byte) 4),
 
     /**
      * The state the broker is in when it is attempting to perform a controlled
