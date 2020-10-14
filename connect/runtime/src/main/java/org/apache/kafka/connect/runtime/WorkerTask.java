@@ -184,7 +184,7 @@ abstract class WorkerTask implements Runnable {
 
             execute();
         } catch (Throwable t) {
-            log.error("{} Task threw an uncaught and unrecoverable exception, task is being killed and will not recover until manually restarted", this, t);
+            log.error("{} Task threw an uncaught and unrecoverable exception. Task is being killed and will not recover until manually restarted", this, t);
             throw t;
         } finally {
             doClose();
