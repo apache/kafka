@@ -256,4 +256,9 @@
     <suppress checks="JavaNCSS"
               files="RequestResponseTest.java"/>
 
+    <!-- metadata -->
+    <suppress checks="JavaNCSS"
+              files="(LocalLogManager).java"/>
+    <suppress checks="MethodLength"
+              files="(LocalLogManager).java"/>
 </suppressions>

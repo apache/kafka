@@ -26,24 +26,23 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
-public class LocalQuorumsTestEnv implements AutoCloseable {
+public class QuorumControllerTestEnv implements AutoCloseable {
     private static final Logger log =
-        LoggerFactory.getLogger(LocalQuorumsTestEnv.class);
-
-    private final LocalLogManagerTestEnv logManagerTestEnv;
+        LoggerFactory.getLogger(QuorumControllerTestEnv.class);
 
     private final List<QuorumController> controllers;
 
-    public LocalQuorumsTestEnv(int numControllers,
-            Consumer<QuorumController.Builder> builderCallback) throws Exception {
-        this.logManagerTestEnv = new LocalLogManagerTestEnv(numControllers);
-        this.controllers = new ArrayList<>();
+    public QuorumControllerTestEnv(LocalLogManagerTestEnv logEnv,
+                                   Consumer<QuorumController.Builder> builderConsumer)
+                                   throws InterruptedException {
+        int numControllers = logEnv.logManagers().size();
+        this.controllers = new ArrayList<>(numControllers);
         try {
             for (int i = 0; i < numControllers; i++) {
                 QuorumController.Builder builder = new QuorumController.Builder(i);
-                builderCallback.accept(builder);
-                builder.setLogManager(logManagerTestEnv.logManagers().get(i));
-                controllers.add(builder.build());
+                builder.setLogManager(logEnv.logManagers().get(i));
+                builderConsumer.accept(builder);
+                this.controllers.add(builder.build());
             }
         } catch (Exception e) {
             close();
@@ -79,7 +78,9 @@ public class LocalQuorumsTestEnv implements AutoCloseable {
 
     @Override
     public void close() throws InterruptedException {
-        logManagerTestEnv.close();
+        for (QuorumController controller : controllers) {
+            controller.beginShutdown();
+        }
         for (QuorumController controller : controllers) {
             controller.close();
         }
