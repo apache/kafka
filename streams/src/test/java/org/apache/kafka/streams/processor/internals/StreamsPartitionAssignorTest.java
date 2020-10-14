@@ -2041,9 +2041,7 @@ public class StreamsPartitionAssignorTest {
 
         for (int i = 0; i < 127; i++) {
             partitionAssignor.subscriptionUserData(topics);
-            System.out.println("HERE " + partitionAssignor.uniqueField()[0]);
         }
-        System.out.println(partitionAssignor.uniqueField()[0]);
         assertEquals(127, partitionAssignor.uniqueField()[0]);
         partitionAssignor.subscriptionUserData(topics);
         assertEquals(-128, partitionAssignor.uniqueField()[0]);

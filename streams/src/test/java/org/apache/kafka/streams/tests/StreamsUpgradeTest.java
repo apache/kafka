@@ -154,6 +154,7 @@ public class StreamsUpgradeTest {
             handleRebalanceStart(topics);
             final byte[] uniqueField = new byte[1];
             if (usedSubscriptionMetadataVersion <= LATEST_SUPPORTED_VERSION) {
+                uniqueField[0]++;
                 return new SubscriptionInfo(
                     usedSubscriptionMetadataVersion,
                     LATEST_SUPPORTED_VERSION + 1,
