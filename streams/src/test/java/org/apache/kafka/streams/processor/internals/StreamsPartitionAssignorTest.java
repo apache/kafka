@@ -33,7 +33,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
@@ -41,7 +40,6 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.TopologyWrapper;
-import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
@@ -51,7 +49,6 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration;
-import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
 import org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
@@ -1181,89 +1178,6 @@ public class StreamsPartitionAssignorTest {
 
         // check if we created a task for all expected topicPartitions.
         assertThat(new HashSet<>(assignment.get(client).partitions()), equalTo(new HashSet<>(expectedAssignment)));
-    }
-
-    @Test
-    public void shouldReturnShutdownErrorCodeWhenCreatingRepartitionTopicsTimesOut() {
-        final StreamsBuilder streamsBuilder = new StreamsBuilder();
-        streamsBuilder.stream("topic1").repartition();
-
-        final String client = "client1";
-        builder = TopologyWrapper.getInternalTopologyBuilder(streamsBuilder.build());
-
-        createDefaultMockTaskManager();
-        EasyMock.replay(taskManager);
-        partitionAssignor.configure(configProps());
-        final MockInternalTopicManager mockInternalTopicManager =  new MockInternalTopicManager(
-            time,
-            new StreamsConfig(configProps()),
-            mockClientSupplier.restoreConsumer,
-            false
-        ) {
-            @Override
-            public Set<String> makeReady(final Map<String, InternalTopicConfig> topics) throws TaskAssignmentException {
-                throw new TimeoutException("KABOOM!");
-            }
-        };
-        partitionAssignor.setInternalTopicManager(mockInternalTopicManager);
-
-        subscriptions.put(client,
-            new Subscription(
-                singletonList("topic1"),
-                defaultSubscriptionInfo.encode()
-            )
-        );
-        final Map<String, Assignment> assignment =
-            partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
-
-        // check if we created a task for all expected topicPartitions.
-        assertThat(
-            AssignmentInfo.decode(assignment.get(client).userData()).errCode(),
-            equalTo(AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.code())
-        );
-    }
-
-    @Test
-    public void shouldReturnShutdownErrorCodeWhenCreatingChangelogTopicsTimesOut() {
-        final StreamsBuilder streamsBuilder = new StreamsBuilder();
-        streamsBuilder.table("topic1", Materialized.as("store"));
-
-        final String client = "client1";
-        builder = TopologyWrapper.getInternalTopologyBuilder(streamsBuilder.build());
-
-        createDefaultMockTaskManager();
-        EasyMock.replay(taskManager);
-        partitionAssignor.configure(configProps());
-        final MockInternalTopicManager mockInternalTopicManager =  new MockInternalTopicManager(
-            time,
-            new StreamsConfig(configProps()),
-            mockClientSupplier.restoreConsumer,
-            false
-        ) {
-            @Override
-            public Set<String> makeReady(final Map<String, InternalTopicConfig> topics) throws TaskAssignmentException {
-                if (topics.isEmpty()) {
-                    return emptySet();
-                }
-                throw new TimeoutException("KABOOM!");
-            }
-        };
-        partitionAssignor.setInternalTopicManager(mockInternalTopicManager);
-
-        subscriptions.put(client,
-            new Subscription(
-                singletonList("topic1"),
-                defaultSubscriptionInfo.encode()
-            )
-        );
-        final Map<String, Assignment> assignment =
-            partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
-
-        // check if we created a task for all expected topicPartitions.
-        assertThat(
-            AssignmentInfo.decode(assignment.get(client).userData()).errCode(),
-            equalTo(AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.code())
-        );
     }
 
     @Test
