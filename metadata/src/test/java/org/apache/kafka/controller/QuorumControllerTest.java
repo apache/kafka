@@ -17,7 +17,9 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.requests.ApiError;
+import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
@@ -25,11 +27,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.BROKER0;
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.CONFIGS;
-//import static org.apache.kafka.controller.ConfigurationControlManagerTest.MYTOPIC;
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.entry;
 import static org.junit.Assert.assertEquals;
 
@@ -38,7 +41,7 @@ public class QuorumControllerTest {
         LoggerFactory.getLogger(QuorumControllerTest.class);
 
     @Rule
-    final public Timeout globalTimeout = Timeout.seconds(40);
+    final public Timeout globalTimeout = Timeout.seconds(20);
 
     /**
      * Test creating a new QuorumController and closing it.
@@ -82,30 +85,33 @@ public class QuorumControllerTest {
                 BROKER0, Collections.emptyList())).get());
     }
 
-//    /**
-//     * Test that an incrementalAlterConfigs operation doesn't complete until the records
-//     * can be written to the metadata log.
-//     */
-//    @Test
-//    public void testDelayedConfigurationOperations() throws Throwable {
-//        try (LocalQuorumsTestEnv env = new LocalQuorumsTestEnv(1,
-//            env.controllers()
-//            builder -> builder.setConfigDefs(CONFIGS))) {
-//            assertEquals(Collections.singletonMap(BROKER0, ApiError.NONE),
-//                env.activeController().incrementalAlterConfigs(Collections.singletonMap(
-//                    BROKER0, Collections.singletonMap("baz", entry(SET, "123"))), true).get());
-//            assertEquals(Collections.singletonMap(BROKER0,
-//                new ResultOrError<>(Collections.emptyMap())),
-//                env.activeController().describeConfigs(Collections.singletonMap(
-//                    BROKER0, Collections.emptyList())).get());
-//            assertEquals(Collections.singletonMap(BROKER0, ApiError.NONE),
-//                env.activeController().incrementalAlterConfigs(Collections.singletonMap(
-//                    BROKER0, Collections.singletonMap("baz", entry(SET, "123"))), false).get());
-//            assertEquals(Collections.singletonMap(BROKER0, new ResultOrError<>(Collections.
-//                    singletonMap("baz", "123"))),
-//                env.activeController().describeConfigs(Collections.singletonMap(
-//                    BROKER0, Collections.emptyList())).get());
-//        }
-//
-//    }
+    /**
+     * Test that an incrementalAlterConfigs operation doesn't complete until the records
+     * can be written to the metadata log.
+     */
+    @Test
+    public void testDelayedConfigurationOperations() throws Throwable {
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1)) {
+            try (QuorumControllerTestEnv controlEnv =
+                     new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))) {
+                testDelayedConfigurationOperations(logEnv, controlEnv.activeController());
+            }
+        }
+    }
+
+    private void testDelayedConfigurationOperations(LocalLogManagerTestEnv logEnv,
+                                                    QuorumController controller)
+                                                    throws Throwable {
+        logEnv.logManagers().forEach(m -> m.setMaxAllowedOffset(0L));
+        CompletableFuture<Map<ConfigResource, ApiError>> future1 =
+            controller.incrementalAlterConfigs(Collections.singletonMap(
+                BROKER0, Collections.singletonMap("baz", entry(SET, "123"))), false);
+        Assert.assertFalse(future1.isDone());
+        assertEquals(Collections.singletonMap(BROKER0,
+            new ResultOrError<>(Collections.emptyMap())),
+            controller.describeConfigs(Collections.singletonMap(
+                BROKER0, Collections.emptyList())).get());
+        logEnv.logManagers().forEach(m -> m.setMaxAllowedOffset(1L));
+        assertEquals(Collections.singletonMap(BROKER0, ApiError.NONE), future1.get());
+    }
 }
