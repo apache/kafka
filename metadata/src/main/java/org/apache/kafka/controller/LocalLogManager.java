@@ -395,7 +395,7 @@ public final class LocalLogManager implements MetaLogManager {
                                     // Wait to be signalled before waking up.  The signal
                                     // may indicate that we should stop being the leader,
                                     // or that there are new writes to be done.
-                                    if (incomingWrites == null && shouldLead) {
+                                    if (toWrite.isEmpty() && incomingWrites == null && shouldLead) {
                                         wakeCond.await();
                                     }
                                     if (incomingWrites != null) {
@@ -465,8 +465,8 @@ public final class LocalLogManager implements MetaLogManager {
                             if (!toWrite.isEmpty()) {
                                 if (nextReadOffset + toWrite.size() > curMaxAllowedOffset) {
                                     log.trace("ScribeThread can't write the next batch " +
-                                        "of messages because it would exceed the " +
-                                        "maximum allowed offset.");
+                                        "of messages because the next offset would exceed " +
+                                        "{}.", curMaxAllowedOffset);
                                 } else {
                                     List<ApiMessage> written = new ArrayList<>();
                                     for (ApiMessageAndVersion message : toWrite) {
@@ -705,6 +705,7 @@ public final class LocalLogManager implements MetaLogManager {
         }
 
         void setMaxAllowedOffset(long maxAllowedOffset) {
+            log.info("setting maximum allowed offset to {}.", maxAllowedOffset);
             lock.lock();
             try {
                 this.maxAllowedOffset = maxAllowedOffset;
