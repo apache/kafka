@@ -22,10 +22,15 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.processor.internals.TaskManager;
 
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+
 public class ReferenceContainer {
     public Consumer<byte[], byte[]> mainConsumer;
     public Admin adminClient;
     public TaskManager taskManager;
     public StreamsMetadataState streamsMetadataState;
+    public final AtomicInteger assignmentErrorCode = new AtomicInteger();
+    public final AtomicLong nextScheduledRebalanceMs = new AtomicLong(Long.MAX_VALUE);
     public Time time;
 }

@@ -51,8 +51,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singletonList;
@@ -185,8 +183,6 @@ public class StreamsAssignmentScaleTest {
         referenceContainer.streamsMetadataState = EasyMock.createNiceMock(StreamsMetadataState.class);
         referenceContainer.time = new MockTime();
         configMap.put(InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
-        configMap.put(InternalConfig.ASSIGNMENT_ERROR_CODE, new AtomicInteger());
-        configMap.put(InternalConfig.NEXT_SCHEDULED_REBALANCE_MS, new AtomicLong(Long.MAX_VALUE));
         configMap.put(InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, taskAssignor.getName());
         configMap.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, numStandbys);
 

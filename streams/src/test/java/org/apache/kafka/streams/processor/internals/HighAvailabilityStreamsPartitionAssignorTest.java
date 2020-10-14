@@ -36,7 +36,6 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
-import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
 import org.apache.kafka.test.MockApiProcessorSupplier;
@@ -54,8 +53,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
@@ -113,24 +110,20 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
     private final StreamsMetadataState streamsMetadataState = EasyMock.createNiceMock(StreamsMetadataState.class);
     private final Map<String, Subscription> subscriptions = new HashMap<>();
 
-    private final AtomicInteger assignmentError = new AtomicInteger();
-    private final AtomicLong nextProbingRebalanceMs = new AtomicLong(Long.MAX_VALUE);
+    private ReferenceContainer referenceContainer;
     private final MockTime time = new MockTime();
 
     private Map<String, Object> configProps() {
         final Map<String, Object> configurationMap = new HashMap<>();
         configurationMap.put(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID);
         configurationMap.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, USER_END_POINT);
-        final ReferenceContainer referenceContainer = new ReferenceContainer();
+        referenceContainer = new ReferenceContainer();
         referenceContainer.mainConsumer = EasyMock.mock(Consumer.class);
         referenceContainer.adminClient = adminClient;
         referenceContainer.taskManager = taskManager;
         referenceContainer.streamsMetadataState = streamsMetadataState;
         referenceContainer.time = time;
         configurationMap.put(InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
-        configurationMap.put(InternalConfig.ASSIGNMENT_ERROR_CODE, assignmentError);
-        configurationMap.put(InternalConfig.NEXT_SCHEDULED_REBALANCE_MS, nextProbingRebalanceMs);
-        configurationMap.put(InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, HighAvailabilityTaskAssignor.class.getName());
         return configurationMap;
     }
 
@@ -291,7 +284,7 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         assertThat(firstConsumerActiveTasks, equalTo(new ArrayList<>(allTasks)));
         assertThat(newConsumerActiveTasks, empty());
 
-        assertThat(assignmentError.get(), equalTo(AssignorError.NONE.code()));
+        assertThat(referenceContainer.assignmentErrorCode.get(), equalTo(AssignorError.NONE.code()));
 
         final long nextScheduledRebalanceOnThisClient =
             AssignmentInfo.decode(assignments.get(firstConsumer).userData()).nextRebalanceMs();

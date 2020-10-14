@@ -360,10 +360,6 @@ public class StreamThread extends Thread {
         final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         final Map<String, Object> consumerConfigs = config.getMainConsumerConfigs(applicationId, getConsumerClientId(threadId), threadIdx);
         consumerConfigs.put(StreamsConfig.InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
-        final AtomicInteger assignmentErrorCode = new AtomicInteger();
-        consumerConfigs.put(StreamsConfig.InternalConfig.ASSIGNMENT_ERROR_CODE, assignmentErrorCode);
-        final AtomicLong nextScheduledRebalanceMs = new AtomicLong(Long.MAX_VALUE);
-        consumerConfigs.put(StreamsConfig.InternalConfig.NEXT_SCHEDULED_REBALANCE_MS, nextScheduledRebalanceMs);
 
         final String originalReset = (String) consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
         // If there are any overrides, we never fall through to the consumer, but only handle offset management ourselves.
@@ -389,8 +385,8 @@ public class StreamThread extends Thread {
             builder,
             threadId,
             logContext,
-            assignmentErrorCode,
-            nextScheduledRebalanceMs
+            referenceContainer.assignmentErrorCode,
+            referenceContainer.nextScheduledRebalanceMs
         );
 
         taskManager.setPartitionResetter(partitions -> streamThread.resetOffsets(partitions, null));

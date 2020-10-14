@@ -30,8 +30,6 @@ import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.slf4j.Logger;
 
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
@@ -87,43 +85,6 @@ public final class AssignorConfiguration {
                 taskAssignorClass = o;
             }
         }
-    }
-
-    public AtomicInteger assignmentErrorCode() {
-        final Object ai = internalConfigs.get(StreamsConfig.InternalConfig.ASSIGNMENT_ERROR_CODE);
-        if (ai == null) {
-            final KafkaException fatalException = new KafkaException("assignmentErrorCode is not specified");
-            log.error(fatalException.getMessage(), fatalException);
-            throw fatalException;
-        }
-
-        if (!(ai instanceof AtomicInteger)) {
-            final KafkaException fatalException = new KafkaException(
-                String.format("%s is not an instance of %s", ai.getClass().getName(), AtomicInteger.class.getName())
-            );
-            log.error(fatalException.getMessage(), fatalException);
-            throw fatalException;
-        }
-        return (AtomicInteger) ai;
-    }
-
-    public AtomicLong nextScheduledRebalanceMs() {
-        final Object al = internalConfigs.get(InternalConfig.NEXT_SCHEDULED_REBALANCE_MS);
-        if (al == null) {
-            final KafkaException fatalException = new KafkaException("nextProbingRebalanceMs is not specified");
-            log.error(fatalException.getMessage(), fatalException);
-            throw fatalException;
-        }
-
-        if (!(al instanceof AtomicLong)) {
-            final KafkaException fatalException = new KafkaException(
-                String.format("%s is not an instance of %s", al.getClass().getName(), AtomicLong.class.getName())
-            );
-            log.error(fatalException.getMessage(), fatalException);
-            throw fatalException;
-        }
-
-        return (AtomicLong) al;
     }
 
     public ReferenceContainer referenceContainer() {

@@ -202,9 +202,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final ReferenceContainer referenceContainer = assignorConfiguration.referenceContainer();
         taskManager = Objects.requireNonNull(referenceContainer.taskManager, "TaskManager was not specified");
         streamsMetadataState = Objects.requireNonNull(referenceContainer.streamsMetadataState, "StreamsMetadataState was not specified");
+        assignmentErrorCode = referenceContainer.assignmentErrorCode;
+        nextScheduledRebalanceMs = referenceContainer.nextScheduledRebalanceMs;
         time = Objects.requireNonNull(referenceContainer.time, "Time was not specified");
-        assignmentErrorCode = assignorConfiguration.assignmentErrorCode();
-        nextScheduledRebalanceMs = assignorConfiguration.nextScheduledRebalanceMs();
         assignmentConfigs = assignorConfiguration.assignmentConfigs();
         partitionGrouper = assignorConfiguration.partitionGrouper();
         userEndPoint = assignorConfiguration.userEndPoint();
