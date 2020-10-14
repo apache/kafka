@@ -40,30 +40,72 @@ public class QuorumControllerTest {
     @Rule
     final public Timeout globalTimeout = Timeout.seconds(40);
 
+    /**
+     * Test creating a new QuorumController and closing it.
+     */
     @Test
     public void testCreateAndClose() throws Throwable {
-        try (LocalQuorumsTestEnv env = new LocalQuorumsTestEnv(1, __ -> { })) {
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1)) {
+            try (QuorumControllerTestEnv controlEnv =
+                     new QuorumControllerTestEnv(logEnv, __ -> { })) {
+            }
         }
     }
 
+    /**
+     * Test setting some configuration values and reading them back.
+     */
     @Test
-    public void testWriteOperations() throws Throwable {
-        try (LocalQuorumsTestEnv env = new LocalQuorumsTestEnv(1,
-            builder -> builder.setConfigDefs(CONFIGS))) {
-            assertEquals(Collections.singletonMap(BROKER0, ApiError.NONE),
-                env.activeController().incrementalAlterConfigs(Collections.singletonMap(
-                    BROKER0, Collections.singletonMap("baz", entry(SET, "123"))), true).get());
-            assertEquals(Collections.singletonMap(BROKER0,
-                    new ResultOrError<>(Collections.emptyMap())),
-                env.activeController().describeConfigs(Collections.singletonMap(
-                    BROKER0, Collections.emptyList())).get());
-            assertEquals(Collections.singletonMap(BROKER0, ApiError.NONE),
-                env.activeController().incrementalAlterConfigs(Collections.singletonMap(
-                    BROKER0, Collections.singletonMap("baz", entry(SET, "123"))), false).get());
-            assertEquals(Collections.singletonMap(BROKER0, new ResultOrError<>(Collections.
-                    singletonMap("baz", "123"))),
-                env.activeController().describeConfigs(Collections.singletonMap(
-                    BROKER0, Collections.emptyList())).get());
+    public void testConfigurationOperations() throws Throwable {
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1)) {
+            try (QuorumControllerTestEnv controlEnv =
+                     new QuorumControllerTestEnv(logEnv, b -> b.setConfigDefs(CONFIGS))) {
+                testConfigurationOperations(controlEnv.activeController());
+            }
         }
     }
+
+    private void testConfigurationOperations(QuorumController controller) throws Throwable {
+        assertEquals(Collections.singletonMap(BROKER0, ApiError.NONE),
+            controller.incrementalAlterConfigs(Collections.singletonMap(
+                BROKER0, Collections.singletonMap("baz", entry(SET, "123"))), true).get());
+        assertEquals(Collections.singletonMap(BROKER0,
+            new ResultOrError<>(Collections.emptyMap())),
+            controller.describeConfigs(Collections.singletonMap(
+                BROKER0, Collections.emptyList())).get());
+        assertEquals(Collections.singletonMap(BROKER0, ApiError.NONE),
+            controller.incrementalAlterConfigs(Collections.singletonMap(
+                BROKER0, Collections.singletonMap("baz", entry(SET, "123"))), false).get());
+        assertEquals(Collections.singletonMap(BROKER0, new ResultOrError<>(Collections.
+                singletonMap("baz", "123"))),
+            controller.describeConfigs(Collections.singletonMap(
+                BROKER0, Collections.emptyList())).get());
+    }
+
+//    /**
+//     * Test that an incrementalAlterConfigs operation doesn't complete until the records
+//     * can be written to the metadata log.
+//     */
+//    @Test
+//    public void testDelayedConfigurationOperations() throws Throwable {
+//        try (LocalQuorumsTestEnv env = new LocalQuorumsTestEnv(1,
+//            env.controllers()
+//            builder -> builder.setConfigDefs(CONFIGS))) {
+//            assertEquals(Collections.singletonMap(BROKER0, ApiError.NONE),
+//                env.activeController().incrementalAlterConfigs(Collections.singletonMap(
+//                    BROKER0, Collections.singletonMap("baz", entry(SET, "123"))), true).get());
+//            assertEquals(Collections.singletonMap(BROKER0,
+//                new ResultOrError<>(Collections.emptyMap())),
+//                env.activeController().describeConfigs(Collections.singletonMap(
+//                    BROKER0, Collections.emptyList())).get());
+//            assertEquals(Collections.singletonMap(BROKER0, ApiError.NONE),
+//                env.activeController().incrementalAlterConfigs(Collections.singletonMap(
+//                    BROKER0, Collections.singletonMap("baz", entry(SET, "123"))), false).get());
+//            assertEquals(Collections.singletonMap(BROKER0, new ResultOrError<>(Collections.
+//                    singletonMap("baz", "123"))),
+//                env.activeController().describeConfigs(Collections.singletonMap(
+//                    BROKER0, Collections.emptyList())).get());
+//        }
+//
+//    }
 }
