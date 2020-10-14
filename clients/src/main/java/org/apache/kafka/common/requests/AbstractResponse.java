@@ -50,6 +50,11 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
         return RequestUtils.serialize(header.toStruct(), toStruct(version));
     }
 
+    /**
+     * The number of each type of error in the response, including {@link Errors#NONE} and top-level errors as well as
+     * more specificly scoped errors (such as topic or partition-level errors).
+     * @return A count of errors.
+     */
     public abstract Map<Errors, Integer> errorCounts();
 
     protected Map<Errors, Integer> errorCounts(Errors error) {
