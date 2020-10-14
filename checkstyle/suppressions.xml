@@ -144,7 +144,7 @@
 
     <!-- Streams -->
     <suppress checks="ClassFanOutComplexity"
-              files="(KafkaStreams|KStreamImpl|KTableImpl).java"/>
+              files="(KafkaStreams|KStreamImpl|KTableImpl|StreamsPartitionAssignor).java"/>
 
     <suppress checks="MethodLength"
               files="KTableImpl.java"/>

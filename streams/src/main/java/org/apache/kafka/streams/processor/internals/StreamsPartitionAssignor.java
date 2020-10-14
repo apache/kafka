@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.common.Cluster;
@@ -165,8 +167,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     private String userEndPoint;
     private AssignmentConfigs assignmentConfigs;
-    private AssignorConfiguration assignorConfiguration;
 
+    // for the main consumer, we need to use a supplier to break a cyclic setup dependency
+    private Supplier<Consumer<byte[], byte[]>> mainConsumerSupplier;
+    private Admin adminClient;
     private TaskManager taskManager;
     private StreamsMetadataState streamsMetadataState;
     @SuppressWarnings("deprecation")
@@ -193,13 +197,15 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      */
     @Override
     public void configure(final Map<String, ?> configs) {
-        assignorConfiguration = new AssignorConfiguration(configs);
+        final AssignorConfiguration assignorConfiguration = new AssignorConfiguration(configs);
 
         logPrefix = assignorConfiguration.logPrefix();
         log = new LogContext(logPrefix).logger(getClass());
         usedSubscriptionMetadataVersion = assignorConfiguration.configuredMetadataVersion(usedSubscriptionMetadataVersion);
 
         final ReferenceContainer referenceContainer = assignorConfiguration.referenceContainer();
+        mainConsumerSupplier = () -> Objects.requireNonNull(referenceContainer.mainConsumer, "Main consumer was not specified");
+        adminClient = Objects.requireNonNull(referenceContainer.adminClient, "Admin client was not specified");
         taskManager = Objects.requireNonNull(referenceContainer.taskManager, "TaskManager was not specified");
         streamsMetadataState = Objects.requireNonNull(referenceContainer.streamsMetadataState, "StreamsMetadataState was not specified");
         assignmentErrorCode = referenceContainer.assignmentErrorCode;
@@ -804,16 +810,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             // Make the listOffsets request first so it can  fetch the offsets for non-source changelogs
             // asynchronously while we use the blocking Consumer#committed call to fetch source-changelog offsets
             final KafkaFuture<Map<TopicPartition, ListOffsetsResultInfo>> endOffsetsFuture =
-                fetchEndOffsetsFuture(
-                    preexistingChangelogPartitions,
-                    Objects.requireNonNull(assignorConfiguration.referenceContainer().adminClient, "Admin client was not specified")
-                );
+                fetchEndOffsetsFuture(preexistingChangelogPartitions, adminClient);
 
             final Map<TopicPartition, Long> sourceChangelogEndOffsets =
-                fetchCommittedOffsets(
-                    preexistingSourceChangelogPartitions,
-                    Objects.requireNonNull(assignorConfiguration.referenceContainer().mainConsumer, "Main consumer was not specified")
-                );
+                fetchCommittedOffsets(preexistingSourceChangelogPartitions, mainConsumerSupplier.get());
 
             final Map<TopicPartition, ListOffsetsResultInfo> endOffsets = ClientUtils.getEndOffsets(endOffsetsFuture);
 
