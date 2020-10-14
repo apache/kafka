@@ -274,7 +274,7 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
         }
         Snapshot snapshot = snapshotRegistry.get(epoch);
         HashTier<T> tier = snapshot.data(SnapshottableHashTable.this);
-        if (tier == null) {
+        if (tier == null || tier.deltaTable == null) {
             return null;
         }
         result = tier.deltaTable.baseGet(key);
