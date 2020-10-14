@@ -81,12 +81,12 @@ class FeatureApis(var opts: FeatureCommandOptions) {
   private val downgradeOp = pad("[Downgrade]")
 
   // For testing only.
-  def setSupportedFeatures(newFeatures: Features[SupportedVersionRange]): Unit = {
+  private[admin] def setSupportedFeatures(newFeatures: Features[SupportedVersionRange]): Unit = {
     supportedFeatures = newFeatures
   }
 
   // For testing only.
-  def setOptions(newOpts: FeatureCommandOptions): Unit = {
+  private[admin] def setOptions(newOpts: FeatureCommandOptions): Unit = {
     opts = newOpts
   }
 
