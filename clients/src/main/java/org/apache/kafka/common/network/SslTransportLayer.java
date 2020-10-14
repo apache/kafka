@@ -449,8 +449,20 @@ public class SslTransportLayer implements TransportLayer {
                 state = sslEngine.getSession().getProtocol().equals("TLSv1.3") ? State.POST_HANDSHAKE : State.READY;
                 key.interestOps(key.interestOps() & ~SelectionKey.OP_WRITE);
                 SSLSession session = sslEngine.getSession();
+                Principal principal = peerPrincipal();
                 log.debug("SSL handshake completed successfully with peerHost '{}' peerPort {} peerPrincipal '{}' cipherSuite '{}'",
-                        session.getPeerHost(), session.getPeerPort(), peerPrincipal(), session.getCipherSuite());
+                        session.getPeerHost(), session.getPeerPort(), principal, session.getCipherSuite());
+
+                if (principal != KafkaPrincipal.ANONYMOUS
+                        && (!sslEngine.getNeedClientAuth() && !sslEngine.getWantClientAuth())) {
+                    log.warn("Client authentication provided principal [{}], but SSL engine does not require client authentication",
+                            principal);
+                }
+
+                if (principal == KafkaPrincipal.ANONYMOUS && sslEngine.getWantClientAuth()) {
+                    log.info("SSL engine prefers client authentication, but none was provided");
+                }
+
                 metadataRegistry.registerCipherInformation(
                     new CipherInformation(session.getCipherSuite(),  session.getProtocol()));
             }
