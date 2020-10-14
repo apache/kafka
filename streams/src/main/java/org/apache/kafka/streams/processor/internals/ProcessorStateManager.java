@@ -61,7 +61,14 @@ import static org.apache.kafka.streams.state.internals.OffsetCheckpoint.OFFSET_U
  * When checkpointing, if the offset is not null it would be written to the file.
  *
  * The manager is also responsible for restoring state stores via their registered restore callback,
- * which is used for both updating standby tasks as well as restoring active tasks.
+ * which is used for both updating standby tasks as well as restoring active tasks. The restoration is
+ * executed by the restore thread and hence this manager could be concurrently accessed by both threads for:
+ *
+ * 1. flushing / closing the state stores (by stream thread)
+ * 2. restoring the state stores (by restore thread)
+ * 3. manipulate the store map (write by stream thread, read by restore thread)
+ *
+ * hence the above access should be guarded for thread-safety.
  */
 public class ProcessorStateManager implements StateManager {
 
@@ -82,6 +89,8 @@ public class ProcessorStateManager implements StateManager {
         // applied to the store used for both restoration (active and standby tasks restored offset) and
         // normal processing that update stores (written offset); could be null (when initialized)
         //
+        // this field can be accessed by multi-threads (restore thread and stream thread)
+        //
         // the offset is updated in three ways:
         //   1. when loading from the checkpoint file, when the corresponding task has acquired the state
         //      directory lock and have registered all the state store; it is only one-time
@@ -89,7 +98,7 @@ public class ProcessorStateManager implements StateManager {
         //      update to the last restore record's offset
         //   3. when checkpointing with the given written offsets from record collector,
         //      update blindly with the given offset
-        private Long offset;
+        private volatile Long offset;
 
         // corrupted state store should not be included in checkpointing
         private boolean corrupted;
@@ -344,7 +353,7 @@ public class ProcessorStateManager implements StateManager {
     }
 
     @Override
-    public Map<TopicPartition, Long> changelogOffsets() {
+    public synchronized Map<TopicPartition, Long> changelogOffsets() {
         // return the current offsets for those logged stores
         final Map<TopicPartition, Long> changelogOffsets = new HashMap<>();
         for (final StateStoreMetadata storeMetadata : stores.values()) {
@@ -384,10 +393,14 @@ public class ProcessorStateManager implements StateManager {
     }
 
     // used by the changelog reader only
-    void restore(final StateStoreMetadata storeMetadata, final List<ConsumerRecord<byte[], byte[]>> restoreRecords) {
+    synchronized boolean restore(final StateStoreMetadata storeMetadata, final List<ConsumerRecord<byte[], byte[]>> restoreRecords) {
         if (!stores.containsValue(storeMetadata)) {
             throw new IllegalStateException("Restoring " + storeMetadata + " which is not registered in this state manager, " +
                 "this should not happen.");
+        }
+
+        if (!storeMetadata.store().isOpen()) {
+            return false;
         }
 
         if (!restoreRecords.isEmpty()) {
@@ -409,6 +422,8 @@ public class ProcessorStateManager implements StateManager {
 
             storeMetadata.setOffset(batchEndOffset);
         }
+
+        return true;
     }
 
     /**
@@ -417,7 +432,7 @@ public class ProcessorStateManager implements StateManager {
      *                          or flushing state store get IO errors; such error should cause the thread to die
      */
     @Override
-    public void flush() {
+    public synchronized void flush() {
         RuntimeException firstException = null;
         // attempting to flush the stores
         if (!stores.isEmpty()) {
@@ -491,7 +506,7 @@ public class ProcessorStateManager implements StateManager {
      * @throws ProcessorStateException if any error happens when closing the state stores
      */
     @Override
-    public void close() throws ProcessorStateException {
+    public synchronized void close() throws ProcessorStateException {
         log.debug("Closing its state manager and all the registered state stores: {}", stores);
 
         RuntimeException firstException = null;
@@ -524,42 +539,7 @@ public class ProcessorStateManager implements StateManager {
         }
     }
 
-    public void resetCorruptedStores() {
-        log.trace("Closing state manager for {} task {}", taskType, taskId);
-
-        RuntimeException firstException = null;
-        if (!stores.isEmpty()) {
-            for (final Map.Entry<String, StateStoreMetadata> entry : stores.entrySet()) {
-                if (entry.getValue().corrupted) {
-                    final StateStore store = entry.getValue().stateStore;
-                    log.debug("Flushing corrupted store {}", store.name());
-
-                    try {
-                        store.flush();
-                    } catch (final RuntimeException exception) {
-                        if (firstException == null) {
-                            // do NOT wrap the error if it is actually caused by Streams itself
-                            if (exception instanceof StreamsException)
-                                firstException = exception;
-                            else
-                                firstException = new ProcessorStateException(
-                                    format("%sFailed to flush corrupted state store %s", logPrefix, store.name()), exception);
-                        }
-                        log.error("Failed to flush corrupted state store {}: ", store.name(), exception);
-                    }
-
-                    // reset corrupted flag
-                    entry.getValue().corrupted = false;
-                }
-            }
-        }
-
-        if (firstException != null) {
-            throw firstException;
-        }
-    }
-
-    public void clear() {
+    public synchronized void clear() {
         stores.clear();
     }
 

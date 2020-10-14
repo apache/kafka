@@ -587,30 +587,34 @@ public class StoreChangelogReader implements ChangelogReader {
 
         if (numRecords != 0) {
             final List<ConsumerRecord<byte[], byte[]>> records = changelogMetadata.bufferedRecords.subList(0, numRecords);
-            stateManager.restore(storeMetadata, records);
+            final boolean restored = stateManager.restore(storeMetadata, records);
 
             // NOTE here we use removeRange of ArrayList in order to achieve efficiency with range shifting,
             // otherwise one-at-a-time removal or addition would be very costly; if all records are restored
-            // then we can further optimize to save the array-shift but just set array elements to null
+            // then we can further optimize to save the array-shift but just set array elements to null;
+            // no matter if the restoration succeeded or not, we can always clear those records since even when
+            // failed it means the state store is closed already and we do not need to keep them
             if (numRecords < changelogMetadata.bufferedRecords.size()) {
                 records.clear();
             } else {
                 changelogMetadata.bufferedRecords.clear();
             }
 
-            final Long currentOffset = storeMetadata.offset();
-            log.trace("Restored {} records from changelog {} to store {}, end offset is {}, current offset is {}",
-                partition, storeName, numRecords, recordEndOffset(changelogMetadata.restoreEndOffset), currentOffset);
+            if (restored) {
+                final Long currentOffset = storeMetadata.offset();
+                log.trace("Restored {} records from changelog {} to store {}, end offset is {}, current offset is {}",
+                        partition, storeName, numRecords, recordEndOffset(changelogMetadata.restoreEndOffset), currentOffset);
 
-            changelogMetadata.bufferedLimitIndex = 0;
-            changelogMetadata.totalRestored += numRecords;
+                changelogMetadata.bufferedLimitIndex = 0;
+                changelogMetadata.totalRestored += numRecords;
 
-            // do not trigger restore listener if we are processing standby tasks
-            if (changelogMetadata.stateManager.taskType() == Task.TaskType.ACTIVE) {
-                try {
-                    stateRestoreListener.onBatchRestored(partition, storeName, currentOffset, numRecords);
-                } catch (final Exception e) {
-                    throw new StreamsException("State restore listener failed on batch restored", e);
+                // do not trigger restore listener if we are processing standby tasks
+                if (changelogMetadata.stateManager.taskType() == Task.TaskType.ACTIVE) {
+                    try {
+                        stateRestoreListener.onBatchRestored(partition, storeName, currentOffset, numRecords);
+                    } catch (final Exception e) {
+                        throw new StreamsException("State restore listener failed on batch restored", e);
+                    }
                 }
             }
         }

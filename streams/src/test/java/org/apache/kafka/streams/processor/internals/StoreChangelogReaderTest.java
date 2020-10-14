@@ -143,14 +143,18 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
     public void setUp() {
         EasyMock.expect(stateManager.storeMetadata(tp)).andReturn(storeMetadata).anyTimes();
         EasyMock.expect(stateManager.taskType()).andReturn(type).anyTimes();
+        EasyMock.expect(stateManager.restore(EasyMock.anyObject(), EasyMock.anyObject())).andReturn(true).anyTimes();
         EasyMock.expect(activeStateManager.storeMetadata(tp)).andReturn(storeMetadata).anyTimes();
         EasyMock.expect(activeStateManager.taskType()).andReturn(ACTIVE).anyTimes();
+        EasyMock.expect(activeStateManager.restore(EasyMock.anyObject(), EasyMock.anyObject())).andReturn(true).anyTimes();
         EasyMock.expect(standbyStateManager.storeMetadata(tp)).andReturn(storeMetadata).anyTimes();
         EasyMock.expect(standbyStateManager.taskType()).andReturn(STANDBY).anyTimes();
+        EasyMock.expect(standbyStateManager.restore(EasyMock.anyObject(), EasyMock.anyObject())).andReturn(true).anyTimes();
 
         EasyMock.expect(storeMetadata.changelogPartition()).andReturn(tp).anyTimes();
         EasyMock.expect(storeMetadata.store()).andReturn(store).anyTimes();
         EasyMock.expect(store.name()).andReturn(storeName).anyTimes();
+        EasyMock.expect(store.isOpen()).andReturn(true).anyTimes();
     }
 
     @After

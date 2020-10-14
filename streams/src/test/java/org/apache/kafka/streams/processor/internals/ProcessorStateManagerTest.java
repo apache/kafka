@@ -140,6 +140,7 @@ public class ProcessorStateManagerTest {
         expect(storeMetadata.changelogPartition()).andReturn(persistentStorePartition).anyTimes();
         expect(storeMetadata.store()).andReturn(store).anyTimes();
         expect(store.name()).andReturn(persistentStoreName).anyTimes();
+        expect(store.isOpen()).andReturn(true).anyTimes();
         replay(storeMetadata, store);
     }
 
@@ -228,6 +229,7 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
 
         try {
+            persistentStore.init((StateStoreContext) context, persistentStore);
             stateMgr.registerStore(persistentStore, restoreCallback);
             final StateStoreMetadata storeMetadata = stateMgr.storeMetadata(persistentStorePartition);
             assertThat(storeMetadata, notNullValue());
@@ -248,6 +250,7 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
 
         try {
+            persistentStore.init((StateStoreContext) context, persistentStore);
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
             final StateStoreMetadata storeMetadata = stateMgr.storeMetadata(persistentStorePartition);
             assertThat(storeMetadata, notNullValue());
@@ -269,6 +272,7 @@ public class ProcessorStateManagerTest {
         final MockKeyValueStore store = getConverterStore();
 
         try {
+            store.init((StateStoreContext) context, persistentStore);
             stateMgr.registerStore(store, store.stateRestoreCallback);
             final StateStoreMetadata storeMetadata = stateMgr.storeMetadata(persistentStorePartition);
             assertThat(storeMetadata, notNullValue());
@@ -498,6 +502,7 @@ public class ProcessorStateManagerTest {
 
         final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
         try {
+            persistentStore.init((StateStoreContext) context, persistentStore);
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
             stateMgr.initializeStoreOffsetsFromCheckpoint(true);
 
@@ -528,6 +533,7 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
 
         try {
+            persistentStore.init((StateStoreContext) context, persistentStore);
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
             stateMgr.initializeStoreOffsetsFromCheckpoint(true);
 
@@ -732,6 +738,7 @@ public class ProcessorStateManagerTest {
     public void shouldThrowIfRestoreCallbackThrows() {
         final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
 
+        persistentStore.init((StateStoreContext) context, persistentStore);
         stateMgr.registerStore(persistentStore, (key, value) -> {
             throw new RuntimeException("KABOOM!");
         });
