@@ -68,12 +68,11 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
         List<LocalLogManager> newLogManagers = new ArrayList<>(numManagers);
         try {
             for (int nodeId = 0; nodeId < numManagers; nodeId++) {
-                String prefix = String.format("Manager%d", nodeId);
                 newLogManagers.add(new LocalLogManager(
-                    new LogContext(prefix + ": "),
+                    new LogContext(String.format("[LocalLogManager %d] ", nodeId)),
                     nodeId,
                     dir.getAbsolutePath(),
-                    prefix,
+                    String.format("LocalLogManager-%d_", nodeId),
                     50));
             }
         } catch (Throwable t) {
