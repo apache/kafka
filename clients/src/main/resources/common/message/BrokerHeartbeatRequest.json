@@ -14,7 +14,7 @@
 // limitations under the License.
 
 {
-  "apiKey": 58,
+  "apiKey": 59,
   "type": "request",
   "name": "BrokerHeartbeatRequest",
   "validVersions": "0",
@@ -25,32 +25,8 @@
     { "name": "BrokerId", "type": "int32", "versions": "0+",
       "about": "The broker ID." },
     { "name": "BrokerEpoch", "type": "int64", "versions": "0+", "default": "-1",
-      "about": "The broker epoch, or -1 if one has not yet been assigned." },
+      "about": "The broker epoch." },
     { "name": "CurrentMetadataOffset", "type": "int64", "versions": "0+",
-      "about": "The highest metadata offset which the broker has reached." },
-    { "name": "Listeners", "type": "[]Listener",
-      "about": "The listeners of this broker", "versions": "0+", "fields": [
-        { "name": "Name", "type": "string", "versions": "0+", "mapKey": true,
-          "about": "The name of the endpoint." },
-        { "name": "Host", "type": "string", "versions": "0+",
-          "about": "The hostname." },
-        { "name": "Port", "type": "int16", "versions": "0+",
-          "about": "The port." },
-        { "name": "SecurityProtocol", "type": "int16", "versions": "0+",
-          "about": "The security protocol." }
-      ]
-    },
-    { "name": "Features", "type": "[]Feature", "nullableVersions": "0+",
-      "about": "The features on this broker", "versions": "0+", "fields": [
-        { "name": "Name", "type": "string", "versions": "0+", "mapKey": true,
-          "about": "The feature name." },
-		{ "name": "MinSupportedVersion", "type": "int16", "versions": "0+",
-          "about": "The minimum supported feature level." },
-        { "name": "MaxSupportedVersion", "type": "int16", "versions": "0+",
-          "about": "The maximum supported feature level." }
-      ]
-    },
-    { "name": "Rack", "type": "string", "versions": "0+", "nullableVersions": "0+",
-      "about": "The rack which this broker is in." }
+      "about": "The highest metadata offset which the broker has reached." }
   ]
 }

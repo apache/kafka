@@ -14,9 +14,9 @@
 // limitations under the License.
 
 {
-  "apiKey": 59,
+  "apiKey": 58,
   "type": "response",
-  "name": "ControllerHeartbeatResponse",
+  "name": "BrokerRegistrationResponse",
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
@@ -24,7 +24,11 @@
       "about": "Duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
       "about": "The error code, or 0 if there was no error." },
-    { "name": "StartSnapshot", "type": "bool", "versions": "0+",
-      "about": "True if we should start creating a snapshot." }
+    { "name": "ActiveControllerId", "type": "int32", "versions": "0+",
+      "about": "The ID of the active controller, or -1 if the controller doesn't know." },
+    { "name": "BrokerEpoch", "type": "int64", "versions": "0+", "default": "-1",
+      "about": "The broker's assigned epoch, or -1 if none was assigned." },
+    { "name": "LeaseDurationMs", "type": "int64", "versions": "0+",
+      "about": "If BrokerEpoch is not -1, the number of milliseconds that we want the lease to last" }
   ]
 }
