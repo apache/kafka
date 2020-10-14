@@ -1162,6 +1162,13 @@ class Partition(val topicPartition: TopicPartition,
     localLog.fetchOffsetSnapshot
   }
 
+  def hasDivergingEpoch(currentLeaderEpoch: Optional[Integer],
+                        lastFetchedEpoch: Int,
+                        fetchOffset: Long): Boolean = {
+    val epochEndOffset = lastOffsetForLeaderEpoch(currentLeaderEpoch, lastFetchedEpoch, fetchOnlyFromLeader = false)
+    epochEndOffset.leaderEpoch < lastFetchedEpoch || epochEndOffset.endOffset < fetchOffset
+  }
+
   def legacyFetchOffsetsForTimestamp(timestamp: Long,
                                      maxNumOffsets: Int,
                                      isFromConsumer: Boolean,

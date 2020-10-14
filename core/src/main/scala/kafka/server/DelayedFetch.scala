@@ -27,12 +27,11 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 
 import scala.collection._
 
-case class FetchPartitionStatus(startOffsetMetadata: LogOffsetMetadata, fetchInfo: PartitionData, hasDivergingEpoch: Boolean) {
+case class FetchPartitionStatus(startOffsetMetadata: LogOffsetMetadata, fetchInfo: PartitionData) {
 
   override def toString: String = {
     "[startOffsetMetadata: " + startOffsetMetadata +
       ", fetchInfo: " + fetchInfo +
-      ", hasDivergingEpoch: " + hasDivergingEpoch +
       "]"
   }
 }
@@ -91,12 +90,6 @@ class DelayedFetch(delayMs: Long,
           if (fetchOffset != LogOffsetMetadata.UnknownOffsetMetadata) {
             val partition = replicaManager.getPartitionOrException(topicPartition)
 
-            // Case H: Return diverging epoch in response to trigger truncation
-            if (fetchStatus.hasDivergingEpoch) {
-              debug(s"Satisfying fetch $fetchMetadata since it has diverging epoch requiring truncation for partition $topicPartition.")
-              return forceComplete()
-            }
-
             val offsetSnapshot = partition.fetchOffsetSnapshot(fetchLeaderEpoch, fetchMetadata.fetchOnlyLeader)
 
             val endOffset = fetchMetadata.fetchIsolation match {
@@ -104,6 +97,7 @@ class DelayedFetch(delayMs: Long,
               case FetchHighWatermark => offsetSnapshot.highWatermark
               case FetchTxnCommitted => offsetSnapshot.lastStableOffset
             }
+
 
             // Go directly to the check for Case G if the message offsets are the same. If the log segment
             // has just rolled, then the high watermark offset will remain the same but be on the old segment,
@@ -125,6 +119,14 @@ class DelayedFetch(delayMs: Long,
                 val bytesAvailable = math.min(endOffset.positionDiff(fetchOffset), fetchStatus.fetchInfo.maxBytes)
                 if (!replicaManager.shouldLeaderThrottle(quota, partition, fetchMetadata.replicaId))
                   accumulatedSize += bytesAvailable
+              }
+            }
+
+            // Case H: If truncation has caused diverging epoch while this request was in purgatory, return to trigger truncation
+            fetchStatus.fetchInfo.lastFetchedEpoch.ifPresent { fetchEpoch =>
+              if (partition.hasDivergingEpoch(fetchLeaderEpoch, fetchEpoch, fetchStatus.fetchInfo.fetchOffset)) {
+                debug(s"Satisfying fetch $fetchMetadata since it has diverging epoch requiring truncation for partition $topicPartition.")
+                return forceComplete()
               }
             }
           }
