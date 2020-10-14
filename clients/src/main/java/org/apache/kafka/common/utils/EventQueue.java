@@ -116,20 +116,23 @@ public interface EventQueue extends AutoCloseable {
     /**
      * Asynchronously shut down the event queue with no unnecessary delay.
      * @see #beginShutdown(Event, TimeUnit, long)
+     *
+     * @param source                The source of the shutdown.
      */
-    default void beginShutdown() {
-        beginShutdown(new VoidEvent());
+    default void beginShutdown(String source) {
+        beginShutdown(source, new VoidEvent());
     }
 
     /**
      * Asynchronously shut down the event queue with no unnecessary delay.
      *
-     * @param cleanupEvent The mandatory event to invoke after all other events have
-     *                     been processed.
+     * @param source        The source of the shutdown.
+     * @param cleanupEvent  The mandatory event to invoke after all other events have
+     *                      been processed.
      * @see #beginShutdown(Event, TimeUnit, long)
      */
-    default void beginShutdown(Event cleanupEvent) {
-        beginShutdown(cleanupEvent, TimeUnit.SECONDS, 0);
+    default void beginShutdown(String source, Event cleanupEvent) {
+        beginShutdown(source, cleanupEvent, TimeUnit.SECONDS, 0);
     }
 
     /**
@@ -138,15 +141,16 @@ public interface EventQueue extends AutoCloseable {
      * No new events will be accepted, and the timeout will be initiated
      * for all existing events.
      *
+     * @param source        The source of the shutdown.
      * @param cleanupEvent  The mandatory event to invoke after all other events have
-     *                     been processed.
+     *                      been processed.
      * @param timeUnit      The time unit to use for the timeout.
      * @param timeSpan      The amount of time to use for the timeout.
      *                      Once the timeout elapses, any remaining queued
      *                      events will get a
      *                      @{org.apache.kafka.common.errors.TimeoutException}.
      */
-    void beginShutdown(Event cleanupEvent, TimeUnit timeUnit, long timeSpan);
+    void beginShutdown(String source, Event cleanupEvent, TimeUnit timeUnit, long timeSpan);
 
     /**
      * Synchronously close the event queue and wait for any threads to be joined.
