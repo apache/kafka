@@ -77,14 +77,21 @@ public class RetryWithToleranceOperator implements AutoCloseable {
     private final Time time;
     private ErrorHandlingMetrics errorHandlingMetrics;
 
-    protected ProcessingContext context = new ProcessingContext();
+    protected final ProcessingContext context;
 
     public RetryWithToleranceOperator(long errorRetryTimeout, long errorMaxDelayInMillis,
                                       ToleranceType toleranceType, Time time) {
+        this(errorRetryTimeout, errorMaxDelayInMillis, toleranceType, time, new ProcessingContext());
+    }
+
+    RetryWithToleranceOperator(long errorRetryTimeout, long errorMaxDelayInMillis,
+                               ToleranceType toleranceType, Time time,
+                               ProcessingContext context) {
         this.errorRetryTimeout = errorRetryTimeout;
         this.errorMaxDelayInMillis = errorMaxDelayInMillis;
         this.errorToleranceType = toleranceType;
         this.time = time;
+        this.context = context;
     }
 
     public synchronized Future<Void> executeFailed(Stage stage, Class<?> executingClass,
