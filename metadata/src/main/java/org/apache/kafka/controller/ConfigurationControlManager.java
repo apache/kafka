@@ -353,8 +353,8 @@ public class ConfigurationControlManager {
                         }
                     }
                 }
-                results.put(resource, new ResultOrError<>(foundConfigs));
             }
+            results.put(resource, new ResultOrError<>(foundConfigs));
         }
         return results;
     }
