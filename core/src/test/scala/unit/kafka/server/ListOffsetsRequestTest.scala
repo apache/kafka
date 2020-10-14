@@ -151,6 +151,30 @@ class ListOffsetsRequestTest extends BaseRequestTest {
       (partitionData.offset, partitionData.leaderEpoch)
     }
 
+    def fetchOffsetAndEpochForOldVersion(serverId: Int,
+                                         timestamp: Long): (Long, Int) = {
+      val targetTimes = List(new ListOffsetTopic()
+        .setName(topic)
+        .setPartitions(List(new ListOffsetPartition()
+          .setPartitionIndex(topicPartition.partition)
+          .setTimestamp(timestamp)).asJava)).asJava
+
+      val request = ListOffsetRequest.Builder
+        .forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
+        .setTargetTimes(targetTimes)
+        .build(4)
+
+      val response = sendRequest(serverId, request)
+      val partitionData = response.topics.asScala.find(_.name == topic).get
+        .partitions.asScala.find(_.partitionIndex == topicPartition.partition).get
+
+      (partitionData.offset, partitionData.leaderEpoch)
+    }
+
+    assertEquals((0L, 0), fetchOffsetAndEpochForOldVersion(firstLeaderId, 0L))
+    assertEquals((0L, 0), fetchOffsetAndEpochForOldVersion(firstLeaderId, ListOffsetRequest.EARLIEST_TIMESTAMP))
+    assertEquals((10L, 0), fetchOffsetAndEpochForOldVersion(firstLeaderId, ListOffsetRequest.LATEST_TIMESTAMP))
+
     assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, 0L))
     assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetRequest.EARLIEST_TIMESTAMP))
     assertEquals((10L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetRequest.LATEST_TIMESTAMP))
@@ -161,11 +185,49 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, topicPartition, servers)
 
     // No changes to written data
+    assertEquals((0L, 0), fetchOffsetAndEpochForOldVersion(secondLeaderId, 0L))
+    assertEquals((0L, 0), fetchOffsetAndEpochForOldVersion(secondLeaderId, ListOffsetRequest.EARLIEST_TIMESTAMP))
+
     assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, 0L))
     assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, ListOffsetRequest.EARLIEST_TIMESTAMP))
 
     // The latest offset reflects the updated epoch
+    assertEquals((10L, secondLeaderEpoch), fetchOffsetAndEpochForOldVersion(secondLeaderId, ListOffsetRequest.LATEST_TIMESTAMP))
     assertEquals((10L, secondLeaderEpoch), fetchOffsetAndEpoch(secondLeaderId, ListOffsetRequest.LATEST_TIMESTAMP))
+  }
+
+  @Test
+  def testResponseDefaultLeaderEpochForLowerVersion(): Unit = {
+    val topic = "topic"
+    val topicPartition = new TopicPartition(topic, 0)
+    val partitionToLeader = TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 3, servers)
+    val firstLeaderId = partitionToLeader(topicPartition.partition)
+
+    TestUtils.generateAndProduceMessages(servers, topic, 10)
+
+    def fetchOffsetAndEpoch(serverId: Int,
+                            timestamp: Long): (Long, Int) = {
+      val targetTimes = List(new ListOffsetTopic()
+        .setName(topic)
+        .setPartitions(List(new ListOffsetPartition()
+          .setPartitionIndex(topicPartition.partition)
+          .setTimestamp(timestamp)).asJava)).asJava
+
+      val request = ListOffsetRequest.Builder
+        .forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
+        .setTargetTimes(targetTimes)
+        .build(3)
+
+      val response = sendRequest(serverId, request)
+      val partitionData = response.topics.asScala.find(_.name == topic).get
+        .partitions.asScala.find(_.partitionIndex == topicPartition.partition).get
+
+      (partitionData.offset, partitionData.leaderEpoch)
+    }
+
+    assertEquals((0L, -1), fetchOffsetAndEpoch(firstLeaderId, 0L))
+    assertEquals((0L, -1), fetchOffsetAndEpoch(firstLeaderId, ListOffsetRequest.EARLIEST_TIMESTAMP))
+    assertEquals((10L, -1), fetchOffsetAndEpoch(firstLeaderId, ListOffsetRequest.LATEST_TIMESTAMP))
   }
 
   private def assertResponseError(error: Errors, brokerId: Int, request: ListOffsetRequest): Unit = {
