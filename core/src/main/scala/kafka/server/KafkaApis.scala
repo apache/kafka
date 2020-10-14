@@ -1313,9 +1313,12 @@ class KafkaApis(val requestChannel: RequestChannel,
     val topicMetadata =
       if (authorizedTopics.isEmpty)
         Seq.empty[MetadataResponseTopic]
-      else
-        getTopicMetadata(metadataRequest.allowAutoTopicCreation, authorizedTopics, request.context.listenerName,
+      else {
+        // If this request is to get metadata for all topics, auto topic creation should not be allowed
+        val allowAutoTopicCreation = (!metadataRequest.isAllTopics) && metadataRequest.allowAutoTopicCreation
+        getTopicMetadata(allowAutoTopicCreation, authorizedTopics, request.context.listenerName,
           errorUnavailableEndpoints, errorUnavailableListeners)
+      }
 
     var clusterAuthorizedOperations = Int.MinValue
     if (request.header.apiVersion >= 8) {
