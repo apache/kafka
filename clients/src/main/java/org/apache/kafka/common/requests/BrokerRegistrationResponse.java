@@ -17,7 +17,7 @@
 
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.message.ControllerHeartbeatResponseData;
+import org.apache.kafka.common.message.BrokerRegistrationResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -26,18 +26,18 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
-public class ControllerHeartbeatResponse extends AbstractResponse {
-    private final ControllerHeartbeatResponseData data;
+public class BrokerRegistrationResponse extends AbstractResponse {
+    private final BrokerRegistrationResponseData data;
 
-    public ControllerHeartbeatResponse(Struct struct, short version) {
-        this.data = new ControllerHeartbeatResponseData(struct, version);
-    }
-
-    public ControllerHeartbeatResponse(ControllerHeartbeatResponseData data) {
+    public BrokerRegistrationResponse(BrokerRegistrationResponseData data) {
         this.data = data;
     }
 
-    public ControllerHeartbeatResponseData data() {
+    public BrokerRegistrationResponse(Struct struct, short version) {
+        this.data = new BrokerRegistrationResponseData(struct, version);
+    }
+
+    public BrokerRegistrationResponseData data() {
         return data;
     }
 
@@ -60,9 +60,9 @@ public class ControllerHeartbeatResponse extends AbstractResponse {
         return data.toStruct(version);
     }
 
-    public static DescribeConfigsResponse parse(ByteBuffer buffer, short version) {
-        return new DescribeConfigsResponse(
-            ApiKeys.CONTROLLER_HEARTBEAT.parseResponse(version, buffer), version);
+    public static BrokerRegistrationResponse parse(ByteBuffer buffer, short version) {
+        return new BrokerRegistrationResponse(
+            ApiKeys.BROKER_REGISTRATION.parseResponse(version, buffer), version);
     }
 
     @Override

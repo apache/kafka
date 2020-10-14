@@ -194,8 +194,10 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.BEGIN_QUORUM_EPOCH => requestChannel.closeConnection(request, util.Collections.emptyMap())
         case ApiKeys.END_QUORUM_EPOCH => requestChannel.closeConnection(request, util.Collections.emptyMap())
         case ApiKeys.DESCRIBE_QUORUM => requestChannel.closeConnection(request, util.Collections.emptyMap())
+
+        // Handle requests that should have been sent to the KIP-500 controller.
+        case ApiKeys.BROKER_REGISTRATION => handleBrokerRegistration(request)
         case ApiKeys.BROKER_HEARTBEAT => handleBrokerHeartbeat(request)
-        case ApiKeys.CONTROLLER_HEARTBEAT => handleControllerHeartbeat(request)
       }
     } catch {
       case e: FatalExitError => throw e
@@ -3144,32 +3146,18 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  def handleBrokerHeartbeat(request: RequestChannel.Request): Unit = {
-    val brokerHeartbeatRequest = request.body[BrokerHeartbeatRequest]
-
-    if (apisUtils.authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
-      apisUtils.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        brokerHeartbeatRequest.getErrorResponse(requestThrottleMs,
-          Errors.UNSUPPORTED_VERSION.exception))
-    } else {
-      apisUtils.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        brokerHeartbeatRequest.getErrorResponse(requestThrottleMs,
-          Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
-    }
+  def handleBrokerRegistration(request: RequestChannel.Request): Unit = {
+    val registrationRequest = request.body[BrokerRegistrationRequest]
+    apisUtils.sendResponseMaybeThrottle(request, requestThrottleMs =>
+      registrationRequest.getErrorResponse(requestThrottleMs,
+        Errors.NOT_CONTROLLER.exception))
   }
 
-  def handleControllerHeartbeat(request: RequestChannel.Request): Unit = {
-    val controllerHeartbeatRequest = request.body[ControllerHeartbeatRequest]
-
-    if (apisUtils.authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
-      apisUtils.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        controllerHeartbeatRequest.getErrorResponse(requestThrottleMs,
-          Errors.UNSUPPORTED_VERSION.exception))
-    } else {
-      apisUtils.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        controllerHeartbeatRequest.getErrorResponse(requestThrottleMs,
-          Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
-    }
+  def handleBrokerHeartbeat(request: RequestChannel.Request): Unit = {
+    val heartbeatRequest = request.body[BrokerHeartbeatRequest]
+    apisUtils.sendResponseMaybeThrottle(request, requestThrottleMs =>
+      heartbeatRequest.getErrorResponse(requestThrottleMs,
+        Errors.NOT_CONTROLLER.exception))
   }
 
   // private package for testing
