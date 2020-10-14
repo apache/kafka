@@ -111,7 +111,11 @@ public class BatchBuilder<T> {
         }
 
         long offset = nextOffset++;
-        int recordSizeInBytes = writeRecord(offset, record, serdeContext);
+        int recordSizeInBytes = writeRecord(
+            offset,
+            record,
+            serdeContext
+        );
         unflushedBytes += recordSizeInBytes;
         records.add(record);
         return offset;
@@ -266,7 +270,7 @@ public class BatchBuilder<T> {
         return MemoryRecords.readableRecords(buffer.slice());
     }
 
-    private int writeRecord(
+    public int writeRecord(
         long offset,
         T payload,
         Object serdeContext
@@ -302,5 +306,4 @@ public class BatchBuilder<T> {
         recordOutput.writeVarint(0);
         return ByteUtils.sizeOfVarint(sizeInBytes) + sizeInBytes;
     }
-
 }

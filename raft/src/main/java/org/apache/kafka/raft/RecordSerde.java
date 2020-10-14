@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.protocol.Writable;
 
 public interface RecordSerde<T> {
@@ -40,7 +41,6 @@ public interface RecordSerde<T> {
      */
     int recordSize(T data, Object context);
 
-
     /**
      * Write the record to the output stream.
      *
@@ -49,4 +49,13 @@ public interface RecordSerde<T> {
      * @param out the output stream to write the record to
      */
     void write(T data, Object context, Writable out);
+
+    /**
+     * Read a record from a {@link Readable} input.
+     *
+     * @param input the input stream to deserialize
+     * @param size the size of the record in bytes
+     * @return the deserialized record
+     */
+    T read(Readable input, int size);
 }

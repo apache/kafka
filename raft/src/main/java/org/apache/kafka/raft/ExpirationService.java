@@ -16,11 +16,17 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.KafkaException;
+import java.util.concurrent.CompletableFuture;
 
-public class LogTruncationException extends KafkaException {
-
-    public LogTruncationException(String message) {
-        super(message);
-    }
+public interface ExpirationService {
+    /**
+     * Get a new completable future which will automatically expire with a
+     * {@link org.apache.kafka.common.errors.TimeoutException} after the provided
+     * timeout passes if it is not completed before then through some other means.
+     *
+     * @param timeoutMs the duration in milliseconds before the future is completed exceptionally
+     * @param <T> arbitrary future type (the service must set no expectation on the this type)
+     * @return the completable future
+     */
+    <T> CompletableFuture<T> await(long timeoutMs);
 }

@@ -26,6 +26,7 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.Random;
 import java.util.Set;
 
@@ -939,6 +940,37 @@ public class QuorumStateTest {
 
         state.transitionToFollower(state.epoch() + 1, otherNodeId);
         assertTrue(state.hasRemoteLeader());
+    }
+
+    @Test
+    public void testHighWatermarkRetained() throws IOException {
+        int otherNodeId = 1;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        QuorumState state = initializeEmptyState(voters);
+        state.transitionToFollower(5, otherNodeId);
+
+        FollowerState followerState = state.followerStateOrThrow();
+        followerState.updateHighWatermark(OptionalLong.of(10L));
+
+        Optional<LogOffsetMetadata> highWatermark = Optional.of(new LogOffsetMetadata(10L));
+        assertEquals(highWatermark, state.highWatermark());
+
+        state.transitionToUnattached(6);
+        assertEquals(highWatermark, state.highWatermark());
+
+        state.transitionToVoted(7, otherNodeId);
+        assertEquals(highWatermark, state.highWatermark());
+
+        state.transitionToCandidate();
+        assertEquals(highWatermark, state.highWatermark());
+
+        CandidateState candidateState = state.candidateStateOrThrow();
+        candidateState.recordGrantedVote(otherNodeId);
+        assertTrue(candidateState.isVoteGranted());
+
+        state.transitionToLeader(10L);
+        assertEquals(Optional.empty(), state.highWatermark());
     }
 
     private QuorumState initializeEmptyState(Set<Integer> voters) throws IOException {
