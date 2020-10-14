@@ -361,18 +361,39 @@ public class RetryWithToleranceOperatorTest {
         RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(0,
                 ERRORS_RETRY_MAX_DELAY_DEFAULT, ALL, SYSTEM, new ProcessingContext() {
             private AtomicInteger count = new AtomicInteger();
+            private AtomicInteger attempt = new AtomicInteger();
 
+            @Override
             public void error(Throwable error) {
                 if (count.getAndIncrement() > 0) {
-                    failed.compareAndSet(null, new AssertionError("Concurrent call to error"));
+                    failed.compareAndSet(null, new AssertionError("Concurrent call to error()"));
                 }
                 super.error(error);
             }
+
+            @Override
             public Future<Void> report() {
                 if (count.getAndSet(0) > 1) {
-                    failed.compareAndSet(null, new AssertionError("Concurrent call to error in report"));
+                    failed.compareAndSet(null, new AssertionError("Concurrent call to error() in report()"));
                 }
+
                 return super.report();
+            }
+
+            @Override
+            public void currentContext(Stage stage, Class<?> klass) {
+                this.attempt.set(0);
+                super.currentContext(stage, klass);
+            }
+
+            @Override
+            public void attempt(int attempt) {
+                if (!this.attempt.compareAndSet(attempt - 1, attempt)) {
+                    failed.compareAndSet(null, new AssertionError(
+                            "Concurrent call to attempt(): Attempts should increase monotonically " +
+                                    "within the scope of a given currentContext()"));
+                }
+                super.attempt(attempt);
             }
         });
         retryWithToleranceOperator.metrics(errorHandlingMetrics);
@@ -391,8 +412,13 @@ public class RetryWithToleranceOperatorTest {
                                     break;
                                 }
                                 try {
-                                    retryWithToleranceOperator.executeFailed(Stage.TASK_PUT,
-                                            SinkTask.class, consumerRecord, new Throwable()).get();
+                                    if (id < numThreads / 2) {
+                                        retryWithToleranceOperator.executeFailed(Stage.TASK_PUT,
+                                                SinkTask.class, consumerRecord, new Throwable()).get();
+                                    } else {
+                                        retryWithToleranceOperator.execute(() -> { return null; }, Stage.TRANSFORMATION,
+                                                SinkTask.class);
+                                    }
                                 } catch (Exception e) {
                                     failed.compareAndSet(null, e);
                                 }
