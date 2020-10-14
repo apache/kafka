@@ -46,8 +46,9 @@ class ReplicaAlterLogDirsThreadTest {
   private val t1p1 = new TopicPartition("topic1", 1)
   private val failedPartitions = new FailedPartitions
 
-  private def offsetAndEpoch(fetchOffset: Long, leaderEpoch: Int = 1): OffsetAndEpoch = {
-    OffsetAndEpoch(offset = fetchOffset, leaderEpoch = leaderEpoch)
+  private def initialFetchState(fetchOffset: Long, leaderEpoch: Int = 1): InitialFetchState = {
+    InitialFetchState(leader = new BrokerEndPoint(0, "localhost", 9092),
+      initOffset = fetchOffset, currentLeaderEpoch = leaderEpoch, lastFetchedEpoch = None)
   }
 
   @Test
@@ -70,7 +71,7 @@ class ReplicaAlterLogDirsThreadTest {
       quota = quotaManager,
       brokerTopicStats = new BrokerTopicStats)
 
-    val addedPartitions = thread.addPartitions(Map(t1p0 -> offsetAndEpoch(0L)))
+    val addedPartitions = thread.addPartitions(Map(t1p0 -> initialFetchState(0L)))
     assertEquals(Set.empty, addedPartitions)
     assertEquals(0, thread.partitionCount)
     assertEquals(None, thread.fetchState(t1p0))
@@ -131,7 +132,7 @@ class ReplicaAlterLogDirsThreadTest {
       brokerTopicStats = new BrokerTopicStats)
 
     // Initially we add the partition with an older epoch which results in an error
-    thread.addPartitions(Map(t1p0 -> offsetAndEpoch(fetchOffset = 0L, leaderEpoch - 1)))
+    thread.addPartitions(Map(t1p0 -> initialFetchState(fetchOffset = 0L, leaderEpoch - 1)))
     assertTrue(thread.fetchState(t1p0).isDefined)
     assertEquals(1, thread.partitionCount)
 
@@ -142,7 +143,7 @@ class ReplicaAlterLogDirsThreadTest {
     assertEquals(0, thread.partitionCount)
 
     // Next we update the epoch and assert that we can continue
-    thread.addPartitions(Map(t1p0 -> offsetAndEpoch(fetchOffset = 0L, leaderEpoch)))
+    thread.addPartitions(Map(t1p0 -> initialFetchState(fetchOffset = 0L, leaderEpoch)))
     assertEquals(Some(leaderEpoch), thread.fetchState(t1p0).map(_.currentLeaderEpoch))
     assertEquals(1, thread.partitionCount)
 
@@ -221,7 +222,7 @@ class ReplicaAlterLogDirsThreadTest {
       quota = quotaManager,
       brokerTopicStats = new BrokerTopicStats)
 
-    thread.addPartitions(Map(t1p0 -> offsetAndEpoch(fetchOffset = 0L, leaderEpoch)))
+    thread.addPartitions(Map(t1p0 -> initialFetchState(fetchOffset = 0L, leaderEpoch)))
     assertTrue(thread.fetchState(t1p0).isDefined)
     assertEquals(1, thread.partitionCount)
 
@@ -421,7 +422,7 @@ class ReplicaAlterLogDirsThreadTest {
       replicaMgr = replicaManager,
       quota = quotaManager,
       brokerTopicStats = null)
-    thread.addPartitions(Map(t1p0 -> offsetAndEpoch(0L), t1p1 -> offsetAndEpoch(0L)))
+    thread.addPartitions(Map(t1p0 -> initialFetchState(0L), t1p1 -> initialFetchState(0L)))
 
     //Run it
     thread.doWork()
@@ -494,7 +495,7 @@ class ReplicaAlterLogDirsThreadTest {
       replicaMgr = replicaManager,
       quota = quotaManager,
       brokerTopicStats = null)
-    thread.addPartitions(Map(t1p0 -> offsetAndEpoch(0L)))
+    thread.addPartitions(Map(t1p0 -> initialFetchState(0L)))
 
     // First run will result in another offset for leader epoch request
     thread.doWork()
@@ -549,7 +550,7 @@ class ReplicaAlterLogDirsThreadTest {
       replicaMgr = replicaManager,
       quota = quotaManager,
       brokerTopicStats = null)
-    thread.addPartitions(Map(t1p0 -> offsetAndEpoch(initialFetchOffset)))
+    thread.addPartitions(Map(t1p0 -> initialFetchState(initialFetchOffset)))
 
     //Run it
     thread.doWork()
@@ -624,7 +625,7 @@ class ReplicaAlterLogDirsThreadTest {
       replicaMgr = replicaManager,
       quota = quotaManager,
       brokerTopicStats = null)
-    thread.addPartitions(Map(t1p0 -> offsetAndEpoch(0L)))
+    thread.addPartitions(Map(t1p0 -> initialFetchState(0L)))
 
     // Run thread 3 times (exactly number of times we mock exception for getReplicaOrException)
     (0 to 2).foreach { _ =>
@@ -685,7 +686,7 @@ class ReplicaAlterLogDirsThreadTest {
       replicaMgr = replicaManager,
       quota = quotaManager,
       brokerTopicStats = null)
-    thread.addPartitions(Map(t1p0 -> offsetAndEpoch(0L)))
+    thread.addPartitions(Map(t1p0 -> initialFetchState(0L)))
 
     // loop few times
     (0 to 3).foreach { _ =>
@@ -726,8 +727,8 @@ class ReplicaAlterLogDirsThreadTest {
       quota = quotaManager,
       brokerTopicStats = null)
     thread.addPartitions(Map(
-      t1p0 -> offsetAndEpoch(0L, leaderEpoch),
-      t1p1 -> offsetAndEpoch(0L, leaderEpoch)))
+      t1p0 -> initialFetchState(0L, leaderEpoch),
+      t1p1 -> initialFetchState(0L, leaderEpoch)))
 
     val ResultWithPartitions(fetchRequestOpt, partitionsWithError) = thread.buildFetch(Map(
       t1p0 -> PartitionFetchState(150, None, leaderEpoch, None, state = Fetching, lastFetchedEpoch = None),
@@ -777,8 +778,8 @@ class ReplicaAlterLogDirsThreadTest {
       quota = quotaManager,
       brokerTopicStats = null)
     thread.addPartitions(Map(
-      t1p0 -> offsetAndEpoch(0L, leaderEpoch),
-      t1p1 -> offsetAndEpoch(0L, leaderEpoch)))
+      t1p0 -> initialFetchState(0L, leaderEpoch),
+      t1p1 -> initialFetchState(0L, leaderEpoch)))
 
     // one partition is ready and one is truncating
     val ResultWithPartitions(fetchRequestOpt, partitionsWithError) = thread.buildFetch(Map(
