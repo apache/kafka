@@ -32,7 +32,6 @@ import java.util.Set;
 
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertEquals;
@@ -604,7 +603,7 @@ public class ImplicitLinkedHashCollectionTest {
         ImplicitLinkedHashCollection<TestElement> coll = new ImplicitLinkedHashCollection<>();
         List<TestElement> elements  = new ArrayList<>();
         for (int i = 0; i < 100; i++) {
-            TestElement element  = new TestElement(i, i); //random.nextInt(0x7fff) << 16 | i, i);
+            TestElement element  = new TestElement(i, i);
             elements.add(element);
             coll.add(element);
         }
@@ -616,7 +615,7 @@ public class ImplicitLinkedHashCollectionTest {
         }
         assertEquals(50, coll.size());
         for (int i = 50; i < 100; i++) {
-            assertNotNull(coll.find(elements.get(i)));
+            assertEquals(new TestElement(i, i), coll.find(elements.get(i)));
         }
     }
 }
