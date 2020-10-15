@@ -409,9 +409,9 @@ class WorkerSourceTask extends WorkerTask {
     // RegexRouter) topic creation can not be batched for multiple topics
     private void maybeCreateTopic(String topic) {
         if (!topicCreation.isTopicCreationRequired(topic)) {
-            log.trace("The topic creation setting is disabled or the topic name {} is already in the topic cache." +
-                "If the topic doesn't exist, we'll rely on the auto.create.topics.enable setting in broker side " +
-                "to see if the topic can be auto created or not", topic);
+            log.trace("Topic creation by the connector is disabled or the topic {} was previously created." +
+                "If auto.create.topics.enable is enabled on the broker, " +
+                "the topic will be created with default settings", topic);
             return;
         }
         log.info("The task will send records to topic '{}' for the first time. Checking "
