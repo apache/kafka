@@ -1037,6 +1037,7 @@ class GroupCoordinator(val brokerId: Int,
 
     val knownStaticMember = group.get(newMemberId)
     group.updateMember(knownStaticMember, protocols, responseCallback)
+    val oldProtocols = knownStaticMember.supportedProtocols
 
     group.currentState match {
       case Stable =>
@@ -1047,10 +1048,22 @@ class GroupCoordinator(val brokerId: Int,
           info(s"Static member which joins during Stable stage and doesn't affect selectProtocol will not trigger rebalance.")
           val groupAssignment: Map[String, Array[Byte]] = group.allMemberMetadata.map(member => member.memberId -> member.assignment).toMap
           groupManager.storeGroup(group, groupAssignment, error => {
-            group.inLock {
-              if (error != Errors.NONE) {
-                warn(s"Failed to persist metadata for group ${group.groupId}: ${error.message}")
-              }
+            if (error != Errors.NONE) {
+              warn(s"Failed to persist metadata for group ${group.groupId}: ${error.message}")
+
+              // Failed to persist member.id of the given static member, revert the update of the static member in the group.
+              group.updateMember(knownStaticMember, oldProtocols, null)
+              val oldMember = group.replaceGroupInstance(newMemberId, oldMemberId, groupInstanceId)
+              completeAndScheduleNextHeartbeatExpiration(group, oldMember)
+              responseCallback(JoinGroupResult(
+                List.empty,
+                memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID,
+                generationId = group.generationId,
+                protocolType = group.protocolType,
+                protocolName = group.protocolName,
+                leaderId = currentLeader,
+                error = error
+              ))
             }
           })
           group.maybeInvokeJoinCallback(member, JoinGroupResult(
