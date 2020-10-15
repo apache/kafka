@@ -1007,6 +1007,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val correlationId = request.header.correlationId
     val clientId = request.header.clientId
     val offsetRequest = request.body[ListOffsetRequest]
+    val version = request.header.apiVersion
 
     def buildErrorResponse(e: Errors, partition: ListOffsetPartition): ListOffsetPartitionResponse = {
       new ListOffsetPartitionResponse()
@@ -1055,7 +1056,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                   .setErrorCode(Errors.NONE.code)
                   .setTimestamp(found.timestamp)
                   .setOffset(found.offset)
-                if (found.leaderEpoch.isPresent)
+                if (found.leaderEpoch.isPresent && version >= 4)
                   partitionResponse.setLeaderEpoch(found.leaderEpoch.get)
                 partitionResponse
               case None =>
