@@ -908,7 +908,7 @@ class GroupCoordinator(val brokerId: Int,
    * @param offsetTopicPartitionId The partition we are now leading
    */
   def onElection(offsetTopicPartitionId: Int): Unit = {
-    info(s"Becoming the group coordinator for partition $offsetTopicPartitionId")
+    info(s"Electing as the group coordinator for partition $offsetTopicPartitionId")
     groupManager.scheduleLoadGroupAndOffsets(offsetTopicPartitionId, onGroupLoaded)
   }
 
@@ -918,7 +918,7 @@ class GroupCoordinator(val brokerId: Int,
    * @param offsetTopicPartitionId The partition we are no longer leading
    */
   def onResignation(offsetTopicPartitionId: Int): Unit = {
-    info(s"Resigning the group coordinator for partition $offsetTopicPartitionId")
+    info(s"Resigning as the group coordinator for partition $offsetTopicPartitionId")
     groupManager.removeGroupsForPartition(offsetTopicPartitionId, onGroupUnloaded)
   }
 
