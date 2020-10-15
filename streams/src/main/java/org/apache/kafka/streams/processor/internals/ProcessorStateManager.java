@@ -199,7 +199,7 @@ public class ProcessorStateManager implements StateManager {
         log.debug("Created state store manager for task {}", taskId);
     }
 
-    void registerStateStores(final List<StateStore> allStores, final InternalProcessorContext processorContext) {
+    synchronized void registerStateStores(final List<StateStore> allStores, final InternalProcessorContext processorContext) {
         processorContext.uninitialize();
         for (final StateStore store : allStores) {
             if (!stores.containsKey(store.name())) {
@@ -383,7 +383,7 @@ public class ProcessorStateManager implements StateManager {
     }
 
     // used by the changelog reader only
-    StateStoreMetadata storeMetadata(final TopicPartition partition) {
+    synchronized StateStoreMetadata storeMetadata(final TopicPartition partition) {
         for (final StateStoreMetadata storeMetadata : stores.values()) {
             if (partition.equals(storeMetadata.changelogPartition)) {
                 return storeMetadata;
@@ -461,7 +461,7 @@ public class ProcessorStateManager implements StateManager {
         }
     }
 
-    public void flushCache() {
+    public synchronized void flushCache() {
         RuntimeException firstException = null;
         // attempting to flush the stores
         if (!stores.isEmpty()) {
@@ -579,7 +579,7 @@ public class ProcessorStateManager implements StateManager {
     }
 
     @Override
-    public void checkpoint() {
+    public synchronized void checkpoint() {
         // checkpoint those stores that are only logged and persistent to the checkpoint file
         final Map<TopicPartition, Long> checkpointingOffsets = new HashMap<>();
         for (final StateStoreMetadata storeMetadata : stores.values()) {
@@ -618,7 +618,7 @@ public class ProcessorStateManager implements StateManager {
         return changelogFor(storeName) != null;
     }
 
-    private StateStoreMetadata findStore(final TopicPartition changelogPartition) {
+    private synchronized StateStoreMetadata findStore(final TopicPartition changelogPartition) {
         final List<StateStoreMetadata> found = stores.values().stream()
             .filter(metadata -> changelogPartition.equals(metadata.changelogPartition))
             .collect(Collectors.toList());
