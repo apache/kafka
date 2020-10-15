@@ -164,10 +164,26 @@ object HostedPartition {
   final object Offline extends HostedPartition
 }
 
+case class IsrChangePropagationConfig(
+  // How often to check for ISR
+  checkIntervalMs: Long,
+
+  // Maximum time that an ISR change may be delayed before sending the notification
+  maxDelayMs: Long,
+
+  // Maximum time to await additional changes before sending the notification
+  lingerMs: Long
+)
+
 object ReplicaManager {
   val HighWatermarkFilename = "replication-offset-checkpoint"
-  val IsrChangePropagationBackoff = 5000L
-  val IsrChangePropagationInterval = 60000L
+
+  // This field is mutable to allow overriding change notification behavior in test cases
+  @volatile var DefaultIsrPropagationConfig: IsrChangePropagationConfig = IsrChangePropagationConfig(
+    checkIntervalMs = 2500,
+    lingerMs = 5000,
+    maxDelayMs = 60000,
+  )
 }
 
 class ReplicaManager(val config: KafkaConfig,
@@ -233,9 +249,10 @@ class ReplicaManager(val config: KafkaConfig,
   this.logIdent = s"[ReplicaManager broker=$localBrokerId] "
   private val stateChangeLogger = new StateChangeLogger(localBrokerId, inControllerContext = false, None)
 
+  private val isrChangeNotificationConfig = ReplicaManager.DefaultIsrPropagationConfig
   private val isrChangeSet: mutable.Set[TopicPartition] = new mutable.HashSet[TopicPartition]()
-  private val lastIsrChangeMs = new AtomicLong(System.currentTimeMillis())
-  private val lastIsrPropagationMs = new AtomicLong(System.currentTimeMillis())
+  private val lastIsrChangeMs = new AtomicLong(time.milliseconds())
+  private val lastIsrPropagationMs = new AtomicLong(time.milliseconds())
 
   private var logDirFailureHandler: LogDirFailureHandler = null
 
@@ -278,7 +295,7 @@ class ReplicaManager(val config: KafkaConfig,
   def recordIsrChange(topicPartition: TopicPartition): Unit = {
     isrChangeSet synchronized {
       isrChangeSet += topicPartition
-      lastIsrChangeMs.set(System.currentTimeMillis())
+      lastIsrChangeMs.set(time.milliseconds())
     }
   }
   /**
@@ -289,11 +306,11 @@ class ReplicaManager(val config: KafkaConfig,
    * other brokers when large amount of ISR change occurs.
    */
   def maybePropagateIsrChanges(): Unit = {
-    val now = System.currentTimeMillis()
+    val now = time.milliseconds()
     isrChangeSet synchronized {
       if (isrChangeSet.nonEmpty &&
-        (lastIsrChangeMs.get() + ReplicaManager.IsrChangePropagationBackoff < now ||
-          lastIsrPropagationMs.get() + ReplicaManager.IsrChangePropagationInterval < now)) {
+        (lastIsrChangeMs.get() + isrChangeNotificationConfig.lingerMs < now ||
+          lastIsrPropagationMs.get() + isrChangeNotificationConfig.maxDelayMs < now)) {
         zkClient.propagateIsrChanges(isrChangeSet)
         isrChangeSet.clear()
         lastIsrPropagationMs.set(now)
@@ -324,7 +341,8 @@ class ReplicaManager(val config: KafkaConfig,
     scheduler.schedule("isr-expiration", maybeShrinkIsr _, period = config.replicaLagTimeMaxMs / 2, unit = TimeUnit.MILLISECONDS)
     // If using AlterIsr, we don't need the znode ISR propagation
     if (config.interBrokerProtocolVersion < KAFKA_2_7_IV2) {
-      scheduler.schedule("isr-change-propagation", maybePropagateIsrChanges _, period = 2500L, unit = TimeUnit.MILLISECONDS)
+      scheduler.schedule("isr-change-propagation", maybePropagateIsrChanges _,
+        period = isrChangeNotificationConfig.checkIntervalMs, unit = TimeUnit.MILLISECONDS)
     } else {
       alterIsrManager.start()
     }

@@ -20,6 +20,8 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.errors.StreamsException;
 
+import java.util.Objects;
+
 /**
  * A data class representing an incoming record for processing in a {@link Processor}
  * or a record to forward to downstream processors via {@link ProcessorContext}.
@@ -161,5 +163,31 @@ public class Record<K, V> {
      */
     public Record<K, V> withHeaders(final Headers headers) {
         return new Record<>(key, value, timestamp, headers);
+    }
+
+    @Override
+    public String toString() {
+        return "Record{" +
+            "key=" + key +
+            ", value=" + value +
+            ", timestamp=" + timestamp +
+            ", headers=" + headers +
+            '}';
+    }
+
+    @Override
+    public boolean equals(final Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        final Record<?, ?> record = (Record<?, ?>) o;
+        return timestamp == record.timestamp &&
+            Objects.equals(key, record.key) &&
+            Objects.equals(value, record.value) &&
+            Objects.equals(headers, record.headers);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(key, value, timestamp, headers);
     }
 }
