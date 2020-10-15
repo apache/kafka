@@ -199,10 +199,8 @@ public class MirrorConnectorConfigTest {
 
     @Test
     public void testSourceAdminConfigWithSourcePrefix() {
-        Map<String, String> connectorProps = makeProps(
-                MirrorConnectorConfig.SOURCE_ADMIN_CLIENT_PREFIX +
-                        "connections.max.idle.ms", "10000"
-        );
+        String prefix = MirrorConnectorConfig.SOURCE_PREFIX + MirrorConnectorConfig.ADMIN_CLIENT_PREFIX;
+        Map<String, String> connectorProps = makeProps(prefix + "connections.max.idle.ms", "10000");
         MirrorConnectorConfig config = new MirrorConnectorConfig(connectorProps);
         Map<String, Object> connectorAdminProps = config.sourceAdminConfig();
         Map<String, Object> expectedAdminProps = new HashMap<>();
@@ -225,10 +223,8 @@ public class MirrorConnectorConfigTest {
 
     @Test
     public void testTargetAdminConfigWithSourcePrefix() {
-        Map<String, String> connectorProps = makeProps(
-                MirrorConnectorConfig.TARGET_ADMIN_CLIENT_PREFIX +
-                        "connections.max.idle.ms", "10000"
-        );
+        String prefix = MirrorConnectorConfig.TARGET_PREFIX + MirrorConnectorConfig.ADMIN_CLIENT_PREFIX;
+        Map<String, String> connectorProps = makeProps(prefix + "connections.max.idle.ms", "10000");
         MirrorConnectorConfig config = new MirrorConnectorConfig(connectorProps);
         Map<String, Object> connectorAdminProps = config.targetAdminConfig();
         Map<String, Object> expectedAdminProps = new HashMap<>();

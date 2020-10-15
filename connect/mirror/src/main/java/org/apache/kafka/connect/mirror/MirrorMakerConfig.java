@@ -186,13 +186,13 @@ public class MirrorMakerConfig extends AbstractConfig {
 
         Map<String, String> sourceClusterProps = clusterProps(sourceAndTarget.source());
         // attrs non prefixed with producer|consumer|admin
-        props.putAll(prefixForGeneralAttrs(SOURCE_CLUSTER_PREFIX, sourceClusterProps));
+        props.putAll(clusterConfigsWithPrefix(SOURCE_CLUSTER_PREFIX, sourceClusterProps));
         // attrs prefixed with producer|consumer|admin
-        props.putAll(prefixForProducerConsumerAdminAttrs(SOURCE_PREFIX, sourceClusterProps));
+        props.putAll(clientConfigsWithPrefix(SOURCE_PREFIX, sourceClusterProps));
 
         Map<String, String> targetClusterProps = clusterProps(sourceAndTarget.target());
-        props.putAll(prefixForGeneralAttrs(TARGET_CLUSTER_PREFIX, targetClusterProps));
-        props.putAll(prefixForProducerConsumerAdminAttrs(TARGET_PREFIX, targetClusterProps));
+        props.putAll(clusterConfigsWithPrefix(TARGET_CLUSTER_PREFIX, targetClusterProps));
+        props.putAll(clientConfigsWithPrefix(TARGET_PREFIX, targetClusterProps));
 
         props.putIfAbsent(NAME, connectorClass.getSimpleName());
         props.putIfAbsent(CONNECTOR_CLASS, connectorClass.getName());
@@ -256,13 +256,13 @@ public class MirrorMakerConfig extends AbstractConfig {
         return strings;
     }
 
-    static Map<String, String> prefixForGeneralAttrs(String prefix, Map<String, String> props) {
+    static Map<String, String> clusterConfigsWithPrefix(String prefix, Map<String, String> props) {
         return props.entrySet().stream()
                 .filter(x -> !x.getKey().matches("(^consumer.*|^producer.*|^admin.*)"))
                 .collect(Collectors.toMap(x -> prefix + x.getKey(), x -> x.getValue()));
     }
 
-    static Map<String, String> prefixForProducerConsumerAdminAttrs(String prefix, Map<String, String> props) {
+    static Map<String, String> clientConfigsWithPrefix(String prefix, Map<String, String> props) {
         return props.entrySet().stream()
                 .filter(x -> x.getKey().matches("(^consumer.*|^producer.*|^admin.*)"))
                 .collect(Collectors.toMap(x -> prefix + x.getKey(), x -> x.getValue()));
