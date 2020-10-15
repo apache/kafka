@@ -388,7 +388,8 @@ class TransactionCoordinator(brokerId: Int,
             if (txnMetadata.producerId != producerId)
               Left(Errors.INVALID_PRODUCER_ID_MAPPING)
             // Strict equality is enforced on the client side requests, as they shouldn't bump the producer epoch.
-            else if (isFromClient && producerEpoch != txnMetadata.producerEpoch || producerEpoch < txnMetadata.producerEpoch) {
+            else if ((isFromClient && producerEpoch != txnMetadata.producerEpoch) || producerEpoch < txnMetadata
+              .producerEpoch) {
               if (producerEpoch == txnMetadata.lastProducerEpoch) {
                 Left(Errors.TRANSACTION_TIMED_OUT)
               } else {
