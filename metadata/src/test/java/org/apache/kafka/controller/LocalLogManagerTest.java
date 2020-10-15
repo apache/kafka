@@ -22,9 +22,8 @@ import org.apache.kafka.common.protocol.ApiMessageAndVersion;
 import org.apache.kafka.controller.LocalLogManager.LeaderInfo;
 import org.apache.kafka.controller.LocalLogManager.LockRegistry;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,13 +39,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.apache.kafka.controller.MockMetaLogManagerListener.COMMIT;
 import static org.apache.kafka.controller.MockMetaLogManagerListener.LAST_COMMITTED_OFFSET;
 import static org.apache.kafka.controller.MockMetaLogManagerListener.SHUTDOWN;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
+@Timeout(value = 40)
 public class LocalLogManagerTest {
     private static final Logger log = LoggerFactory.getLogger(LocalLogManagerTest.class);
-
-    @Rule
-    final public Timeout globalTimeout = Timeout.seconds(40);
 
     /**
      * Test that when a bunch of threads race to take a lock registry lock, only one
@@ -151,8 +148,8 @@ public class LocalLogManagerTest {
                     next = env.waitForLeader();
                 }
                 long expectedNextEpoch = cur.epoch() + 1;
-                assertEquals("Expected next epoch to be " + expectedNextEpoch +
-                    ", but found  " + next, expectedNextEpoch, next.epoch());
+                assertEquals(expectedNextEpoch, next.epoch(), "Expected next epoch to be " + expectedNextEpoch +
+                    ", but found  " + next);
                 cur = next;
             } while (cur.nodeId() == first.nodeId());
             env.close();

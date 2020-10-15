@@ -24,10 +24,6 @@ import org.apache.kafka.common.protocol.ApiMessageAndVersion;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.timeline.SnapshotRegistry;
-import org.junit.Assert;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
 
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.Arrays;
@@ -36,6 +32,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.APPEND;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.DELETE;
@@ -44,11 +42,12 @@ import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
 import static org.apache.kafka.common.config.ConfigResource.Type.BROKER_LOGGER;
 import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
 import static org.apache.kafka.common.config.ConfigResource.Type.UNKNOWN;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Timeout(value = 40)
 public class ConfigurationControlManagerTest {
-    @Rule
-    final public Timeout globalTimeout = Timeout.seconds(40);
 
     static final Map<ConfigResource.Type, ConfigDef> CONFIGS = new HashMap<>();
 
@@ -153,11 +152,11 @@ public class ConfigurationControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(0);
         ConfigurationControlManager manager =
             new ConfigurationControlManager(snapshotRegistry, CONFIGS);
-        Assert.assertTrue(manager.isSplittable(BROKER, "foo.bar"));
-        Assert.assertFalse(manager.isSplittable(BROKER, "baz"));
-        Assert.assertFalse(manager.isSplittable(BROKER, "foo.baz.quux"));
-        Assert.assertFalse(manager.isSplittable(TOPIC, "baz"));
-        Assert.assertTrue(manager.isSplittable(TOPIC, "abc"));
+        assertTrue(manager.isSplittable(BROKER, "foo.bar"));
+        assertFalse(manager.isSplittable(BROKER, "baz"));
+        assertFalse(manager.isSplittable(BROKER, "foo.baz.quux"));
+        assertFalse(manager.isSplittable(TOPIC, "baz"));
+        assertTrue(manager.isSplittable(TOPIC, "abc"));
     }
 
     @Test
@@ -165,10 +164,10 @@ public class ConfigurationControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(0);
         ConfigurationControlManager manager =
             new ConfigurationControlManager(snapshotRegistry, CONFIGS);
-        Assert.assertEquals("1", manager.getConfigValueDefault(BROKER, "foo.bar"));
-        Assert.assertEquals(null, manager.getConfigValueDefault(BROKER, "foo.baz.quux"));
-        Assert.assertEquals(null, manager.getConfigValueDefault(TOPIC, "abc"));
-        Assert.assertEquals("true", manager.getConfigValueDefault(TOPIC, "ghi"));
+        assertEquals("1", manager.getConfigValueDefault(BROKER, "foo.bar"));
+        assertEquals(null, manager.getConfigValueDefault(BROKER, "foo.baz.quux"));
+        assertEquals(null, manager.getConfigValueDefault(TOPIC, "abc"));
+        assertEquals("true", manager.getConfigValueDefault(TOPIC, "ghi"));
     }
 
     @Test

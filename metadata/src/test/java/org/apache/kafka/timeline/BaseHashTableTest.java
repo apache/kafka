@@ -17,23 +17,22 @@
 
 package org.apache.kafka.timeline;
 
-import org.junit.Assert;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.HashSet;
 import java.util.Random;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
+@Timeout(value = 40)
 public class BaseHashTableTest {
-    @Rule
-    final public Timeout globalTimeout = Timeout.seconds(40);
 
     @Test
     public void testEmptyTable() {
         BaseHashTable<Integer> table = new BaseHashTable<>(0);
-        Assert.assertEquals(0, table.baseSize());
-        Assert.assertEquals(null, table.baseGet(Integer.valueOf(1)));
+        assertEquals(0, table.baseSize());
+        assertEquals(null, table.baseGet(Integer.valueOf(1)));
     }
 
     @Test
@@ -44,8 +43,8 @@ public class BaseHashTableTest {
             HashSet<Integer> slotsReturned = new HashSet<>();
             while (slotsReturned.size() < numSlots) {
                 int slot = BaseHashTable.findSlot(random.nextInt(), numSlots);
-                Assert.assertTrue(slot >= 0);
-                Assert.assertTrue(slot < numSlots);
+                assertTrue(slot >= 0);
+                assertTrue(slot < numSlots);
                 slotsReturned.add(slot);
             }
         }
@@ -58,18 +57,18 @@ public class BaseHashTableTest {
         Integer two = Integer.valueOf(2);
         Integer three = Integer.valueOf(3);
         Integer four = Integer.valueOf(4);
-        Assert.assertEquals(null, table.baseAddOrReplace(one));
-        Assert.assertEquals(null, table.baseAddOrReplace(two));
-        Assert.assertEquals(null, table.baseAddOrReplace(three));
-        Assert.assertEquals(3, table.baseSize());
-        Assert.assertEquals(one, table.baseGet(one));
-        Assert.assertEquals(two, table.baseGet(two));
-        Assert.assertEquals(three, table.baseGet(three));
-        Assert.assertEquals(null, table.baseGet(four));
-        Assert.assertEquals(one, table.baseRemove(one));
-        Assert.assertEquals(2, table.baseSize());
-        Assert.assertEquals(null, table.baseGet(one));
-        Assert.assertEquals(2, table.baseSize());
+        assertEquals(null, table.baseAddOrReplace(one));
+        assertEquals(null, table.baseAddOrReplace(two));
+        assertEquals(null, table.baseAddOrReplace(three));
+        assertEquals(3, table.baseSize());
+        assertEquals(one, table.baseGet(one));
+        assertEquals(two, table.baseGet(two));
+        assertEquals(three, table.baseGet(three));
+        assertEquals(null, table.baseGet(four));
+        assertEquals(one, table.baseRemove(one));
+        assertEquals(2, table.baseSize());
+        assertEquals(null, table.baseGet(one));
+        assertEquals(2, table.baseSize());
     }
 
     static class Foo {
@@ -91,21 +90,21 @@ public class BaseHashTableTest {
         Foo three = new Foo();
         Foo four = new Foo();
         BaseHashTable<Foo> table = new BaseHashTable<>(20);
-        Assert.assertEquals(null, table.baseAddOrReplace(one));
-        Assert.assertEquals(null, table.baseAddOrReplace(two));
-        Assert.assertEquals(null, table.baseAddOrReplace(three));
-        Assert.assertEquals(3, table.baseSize());
-        Assert.assertEquals(one, table.baseGet(one));
-        Assert.assertEquals(two, table.baseGet(two));
-        Assert.assertEquals(three, table.baseGet(three));
-        Assert.assertEquals(null, table.baseGet(four));
-        Assert.assertEquals(one, table.baseRemove(one));
-        Assert.assertEquals(three, table.baseRemove(three));
-        Assert.assertEquals(1, table.baseSize());
-        Assert.assertEquals(null, table.baseGet(four));
-        Assert.assertEquals(two, table.baseGet(two));
-        Assert.assertEquals(two, table.baseRemove(two));
-        Assert.assertEquals(0, table.baseSize());
+        assertEquals(null, table.baseAddOrReplace(one));
+        assertEquals(null, table.baseAddOrReplace(two));
+        assertEquals(null, table.baseAddOrReplace(three));
+        assertEquals(3, table.baseSize());
+        assertEquals(one, table.baseGet(one));
+        assertEquals(two, table.baseGet(two));
+        assertEquals(three, table.baseGet(three));
+        assertEquals(null, table.baseGet(four));
+        assertEquals(one, table.baseRemove(one));
+        assertEquals(three, table.baseRemove(three));
+        assertEquals(1, table.baseSize());
+        assertEquals(null, table.baseGet(four));
+        assertEquals(two, table.baseGet(two));
+        assertEquals(two, table.baseRemove(two));
+        assertEquals(0, table.baseSize());
     }
 
     @Test
@@ -113,13 +112,13 @@ public class BaseHashTableTest {
         BaseHashTable<Integer> table = new BaseHashTable<>(0);
 
         for (int i = 0; i < 4096; i++) {
-            Assert.assertEquals(i, table.baseSize());
-            Assert.assertEquals(null, table.baseAddOrReplace(Integer.valueOf(i)));
+            assertEquals(i, table.baseSize());
+            assertEquals(null, table.baseAddOrReplace(Integer.valueOf(i)));
         }
 
         for (int i = 0; i < 4096; i++) {
-            Assert.assertEquals(4096 - i, table.baseSize());
-            Assert.assertEquals(Integer.valueOf(i), table.baseRemove(Integer.valueOf(i)));
+            assertEquals(4096 - i, table.baseSize());
+            assertEquals(Integer.valueOf(i), table.baseRemove(Integer.valueOf(i)));
         }
     }
 }

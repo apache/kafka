@@ -17,23 +17,22 @@
 
 package org.apache.kafka.timeline;
 
-import org.junit.Assert;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
+@Timeout(value = 40)
 public class SnapshotRegistryTest {
-    @Rule
-    final public Timeout globalTimeout = Timeout.seconds(40);
 
     @Test
     public void testEmptyRegistry() {
         SnapshotRegistry registry = new SnapshotRegistry(0);
-        Assert.assertThrows(RuntimeException.class, () -> registry.get(0));
+        assertThrows(RuntimeException.class, () -> registry.get(0));
         assertIteratorContains(registry.snapshots());
     }
 
@@ -48,18 +47,18 @@ public class SnapshotRegistryTest {
             Snapshot snapshot = iter.next();
             actual.add(snapshot);
         }
-        Assert.assertEquals(expected, actual);
+        assertEquals(expected, actual);
     }
 
     @Test
     public void testCreateSnapshots() {
         SnapshotRegistry registry = new SnapshotRegistry(0);
         Snapshot snapshot123 = registry.createSnapshot(123);
-        Assert.assertEquals(snapshot123, registry.get(123));
-        Assert.assertThrows(RuntimeException.class, () -> registry.get(456));
+        assertEquals(snapshot123, registry.get(123));
+        assertThrows(RuntimeException.class, () -> registry.get(456));
         assertIteratorContains(registry.snapshots(), snapshot123);
-        Assert.assertEquals("Can't create a new snapshot at epoch 1 because the current " +
-            "epoch is 124", Assert.assertThrows(RuntimeException.class,
+        assertEquals("Can't create a new snapshot at epoch 1 because the current " +
+            "epoch is 124", assertThrows(RuntimeException.class,
                 () -> registry.createSnapshot(1)).getMessage());
         Snapshot snapshot456 = registry.createSnapshot(456);
         assertIteratorContains(registry.snapshots(), snapshot123, snapshot456);

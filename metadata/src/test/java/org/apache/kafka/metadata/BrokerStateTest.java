@@ -17,29 +17,27 @@
 
 package org.apache.kafka.metadata;
 
-import org.junit.Assert;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@Timeout(value = 40)
 public class BrokerStateTest {
     private static final Logger log = LoggerFactory.getLogger(BrokerStateTest.class);
-
-    @Rule
-    final public Timeout globalTimeout = Timeout.seconds(40);
 
     @Test
     public void testFromValue() {
         for (BrokerState state : BrokerState.values()) {
             BrokerState state2 = BrokerState.fromValue(state.value());
-            Assert.assertEquals(state, state2);
+            assertEquals(state, state2);
         }
     }
 
     @Test
     public void testUnknownValues() {
-        Assert.assertEquals(BrokerState.UNKNOWN, BrokerState.fromValue((byte) 126));
+        assertEquals(BrokerState.UNKNOWN, BrokerState.fromValue((byte) 126));
     }
 }
