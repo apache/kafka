@@ -93,7 +93,7 @@ public class PlainSaslServer implements SaslServer {
             throw new SaslAuthenticationException("Authentication failed: username not specified");
         }
         if (password.isEmpty()) {
-            throw new SaslAuthenticationException("Authentication failed: password not specified");
+            throw new SaslAuthenticationException(String.format("Authentication failed: password not specified for user %s", username));
         }
 
         NameCallback nameCallback = new NameCallback("username", username);
@@ -101,12 +101,12 @@ public class PlainSaslServer implements SaslServer {
         try {
             callbackHandler.handle(new Callback[]{nameCallback, authenticateCallback});
         } catch (Throwable e) {
-            throw new SaslAuthenticationException("Authentication failed: credentials for user could not be verified", e);
+            throw new SaslAuthenticationException(String.format("Authentication failed: credentials for user %s could not be verified", username), e);
         }
         if (!authenticateCallback.authenticated())
-            throw new SaslAuthenticationException("Authentication failed: Invalid username or password");
+            throw new SaslAuthenticationException(String.format("Authentication failed: Invalid username %s or password", username));
         if (!authorizationIdFromClient.isEmpty() && !authorizationIdFromClient.equals(username))
-            throw new SaslAuthenticationException("Authentication failed: Client requested an authorization id that is different from username");
+            throw new SaslAuthenticationException(String.format("Authentication failed: Client requested an authorization id that is different from username %s", username));
 
         this.authorizationId = username;
 
