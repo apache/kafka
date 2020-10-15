@@ -464,6 +464,12 @@ public final class QuorumController implements Controller {
     private final ConfigurationControlManager configurationControlManager;
 
     /**
+     * An object which stores the controller's view of the cluster.
+     * This must be accessed only by the event queue thread.
+     */
+    private final ClusterControlManager clusterControlManager;
+
+    /**
      * The interface that we use to mutate the Raft log.
      */
     private final MetaLogManager logManager;
@@ -501,6 +507,8 @@ public final class QuorumController implements Controller {
         this.purgatory = new ControllerPurgatory();
         this.configurationControlManager =
             new ConfigurationControlManager(snapshotRegistry, configDefs);
+        this.clusterControlManager =
+            new ClusterControlManager(snapshotRegistry);
         this.logManager = logManager;
         this.metaLogListener = new MetaLogListener();
         this.curClaimEpoch = -1L;
