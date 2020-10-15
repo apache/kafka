@@ -211,8 +211,8 @@ class FetchSessionTest {
     }
 
     val request1 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-    request1.put(tp0, new FetchRequest.PartitionData(0, 0, 100, Optional.empty, Optional.empty))
-    request1.put(tp1, new FetchRequest.PartitionData(10, 0, 100, Optional.of(1), Optional.empty))
+    request1.put(tp0, new FetchRequest.PartitionData(0, 0, 100, Optional.empty[Integer], Optional.empty[Integer]))
+    request1.put(tp1, new FetchRequest.PartitionData(10, 0, 100, Optional.of(1), Optional.empty[Integer]))
     request1.put(tp2, new FetchRequest.PartitionData(10, 0, 100, Optional.of(2), Optional.of(1)))
 
     val context1 = fetchManager.newContext(JFetchMetadata.INITIAL, request1, EMPTY_PART_LIST, false)
@@ -239,7 +239,7 @@ class FetchSessionTest {
     // Now verify we can change the leader epoch and the context is updated
     val request3 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
     request3.put(tp0, new FetchRequest.PartitionData(0, 0, 100, Optional.of(6), Optional.of(5)))
-    request3.put(tp1, new FetchRequest.PartitionData(10, 0, 100, Optional.empty, Optional.empty))
+    request3.put(tp1, new FetchRequest.PartitionData(10, 0, 100, Optional.empty[Integer], Optional.empty[Integer]))
     request3.put(tp2, new FetchRequest.PartitionData(10, 0, 100, Optional.of(3), Optional.of(3)))
 
     val context3 = fetchManager.newContext(new JFetchMetadata(sessionId, 2), request3, EMPTY_PART_LIST, false)
