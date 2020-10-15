@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
@@ -41,8 +42,9 @@ public abstract class AbstractTask implements Task {
     private long deadlineMs = NO_DEADLINE;
 
     protected Set<TopicPartition> inputPartitions;
-    protected Logger log;
-    protected String logPrefix;
+    protected final Logger log;
+    protected final LogContext logContext;
+    protected final String logPrefix;
 
     /**
      * If the checkpoint has not been loaded from the file yet (null), then we should not overwrite the checkpoint;
@@ -63,13 +65,20 @@ public abstract class AbstractTask implements Task {
                  final StateDirectory stateDirectory,
                  final ProcessorStateManager stateMgr,
                  final Set<TopicPartition> inputPartitions,
-                 final long taskTimeoutMs) {
+                 final long taskTimeoutMs,
+                 final String logPrefix,
+                 final Class<? extends AbstractTask> clazz) {
         this.id = id;
         this.stateMgr = stateMgr;
         this.topology = topology;
         this.inputPartitions = inputPartitions;
         this.stateDirectory = stateDirectory;
         this.taskTimeoutMs = taskTimeoutMs;
+
+        final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
+        this.logPrefix = threadIdPrefix + String.format("%s [%s] ", logPrefix, id);
+        this.logContext = new LogContext(logPrefix);
+        this.log = logContext.logger(clazz);
     }
 
     /**

@@ -20,7 +20,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -61,15 +60,19 @@ public class StandbyTask extends AbstractTask implements Task {
                 final StateDirectory stateDirectory,
                 final ThreadCache cache,
                 final InternalProcessorContext processorContext) {
-        super(id, topology, stateDirectory, stateMgr, partitions, config.getLong(StreamsConfig.TASK_TIMEOUT_MS_CONFIG));
+        super(
+            id,
+            topology,
+            stateDirectory,
+            stateMgr,
+            partitions,
+            config.getLong(StreamsConfig.TASK_TIMEOUT_MS_CONFIG),
+            "standby-task",
+            StandbyTask.class
+        );
         this.processorContext = processorContext;
         this.streamsMetrics = streamsMetrics;
         processorContext.transitionToStandby(cache);
-
-        final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
-        logPrefix = threadIdPrefix + String.format("%s [%s] ", "standby-task", id);
-        final LogContext logContext = new LogContext(logPrefix);
-        log = logContext.logger(getClass());
 
         closeTaskSensor = ThreadMetrics.closeTaskSensor(Thread.currentThread().getName(), streamsMetrics);
         eosEnabled = StreamThread.eosEnabled(config);

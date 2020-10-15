@@ -116,16 +116,20 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                       final ProcessorStateManager stateMgr,
                       final RecordCollector recordCollector,
                       final InternalProcessorContext processorContext) {
-        super(id, topology, stateDirectory, stateMgr, partitions, config.getLong(StreamsConfig.TASK_TIMEOUT_MS_CONFIG));
+        super(
+            id,
+            topology,
+            stateDirectory,
+            stateMgr,
+            partitions,
+            config.getLong(StreamsConfig.TASK_TIMEOUT_MS_CONFIG),
+            "task",
+            StreamTask.class
+        );
         this.mainConsumer = mainConsumer;
 
         this.processorContext = processorContext;
         processorContext.transitionToActive(this, recordCollector, cache);
-
-        final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
-        logPrefix = threadIdPrefix + String.format("%s [%s] ", "task", id);
-        final LogContext logContext = new LogContext(logPrefix);
-        log = logContext.logger(getClass());
 
         this.time = time;
         this.recordCollector = recordCollector;
