@@ -84,6 +84,7 @@ class KafkaController(val config: KafkaConfig,
   @volatile private var brokerInfo = initialBrokerInfo
   @volatile private var _brokerEpoch = initialBrokerEpoch
 
+  private val isAlterIsrEnabled = config.interBrokerProtocolVersion >= KAFKA_2_7_IV2
   private val stateChangeLogger = new StateChangeLogger(config.brokerId, inControllerContext = true, None)
   val controllerContext = new ControllerContext
   var controllerChannelManager = new ControllerChannelManager(controllerContext, config, time, metrics,
@@ -789,8 +790,10 @@ class KafkaController(val config: KafkaConfig,
         stopRemovedReplicasOfReassignedPartition(topicPartition, unneededReplicas)
     }
 
-    val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(eventManager, topicPartition)
-    zkClient.registerZNodeChangeHandler(reassignIsrChangeHandler)
+    if (!isAlterIsrEnabled) {
+      val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(eventManager, topicPartition)
+      zkClient.registerZNodeChangeHandler(reassignIsrChangeHandler)
+    }
 
     controllerContext.partitionsBeingReassigned.add(topicPartition)
   }
@@ -1089,17 +1092,21 @@ class KafkaController(val config: KafkaConfig,
   }
 
   private def unregisterPartitionReassignmentIsrChangeHandlers(): Unit = {
-    controllerContext.partitionsBeingReassigned.foreach { tp =>
-      val path = TopicPartitionStateZNode.path(tp)
-      zkClient.unregisterZNodeChangeHandler(path)
+    if (!isAlterIsrEnabled) {
+      controllerContext.partitionsBeingReassigned.foreach { tp =>
+        val path = TopicPartitionStateZNode.path(tp)
+        zkClient.unregisterZNodeChangeHandler(path)
+      }
     }
   }
 
   private def removePartitionFromReassigningPartitions(topicPartition: TopicPartition,
                                                        assignment: ReplicaAssignment): Unit = {
     if (controllerContext.partitionsBeingReassigned.contains(topicPartition)) {
-      val path = TopicPartitionStateZNode.path(topicPartition)
-      zkClient.unregisterZNodeChangeHandler(path)
+      if (!isAlterIsrEnabled) {
+        val path = TopicPartitionStateZNode.path(topicPartition)
+        zkClient.unregisterZNodeChangeHandler(path)
+      }
       maybeRemoveFromZkReassignment((tp, replicas) => tp == topicPartition && replicas == assignment.replicas)
       controllerContext.partitionsBeingReassigned.remove(topicPartition)
     } else {
@@ -1830,13 +1837,17 @@ class KafkaController(val config: KafkaConfig,
     if (!isActive) return
 
     if (controllerContext.partitionsBeingReassigned.contains(topicPartition)) {
-      val reassignment = controllerContext.partitionFullReplicaAssignment(topicPartition)
-      if (isReassignmentComplete(topicPartition, reassignment)) {
-        // resume the partition reassignment process
-        info(s"Target replicas ${reassignment.targetReplicas} have all caught up with the leader for " +
-          s"reassigning partition $topicPartition")
-        onPartitionReassignment(topicPartition, reassignment)
-      }
+      maybeCompleteReassignment(topicPartition)
+    }
+  }
+
+  private def maybeCompleteReassignment(topicPartition: TopicPartition): Unit = {
+    val reassignment = controllerContext.partitionFullReplicaAssignment(topicPartition)
+    if (isReassignmentComplete(topicPartition, reassignment)) {
+      // resume the partition reassignment process
+      info(s"Target replicas ${reassignment.targetReplicas} have all caught up with the leader for " +
+        s"reassigning partition $topicPartition")
+      onPartitionReassignment(topicPartition, reassignment)
     }
   }
 
@@ -2073,6 +2084,16 @@ class KafkaController(val config: KafkaConfig,
       if (partitions.nonEmpty) {
         updateLeaderAndIsrCache(partitions)
         processUpdateNotifications(partitions)
+
+        // During a partial upgrade, the controller may be on an IBP which assumes
+        // ISR changes through the `AlterIsr` API while some brokers are on an older
+        // IBP which assumes notification through Zookeeper. In this case, since the
+        // controller will not have registered watches for reassigning partitions, we
+        // can still rely on the batch ISR change notification path in order to
+        // complete the reassignment.
+        partitions.filter(controllerContext.partitionsBeingReassigned.contains).foreach { topicPartition =>
+          maybeCompleteReassignment(topicPartition)
+        }
       }
     } finally {
       // delete the notifications
@@ -2227,7 +2248,8 @@ class KafkaController(val config: KafkaConfig,
     eventManager.put(AlterIsrReceived(alterIsrRequest.brokerId, alterIsrRequest.brokerEpoch, isrsToAlter, responseCallback))
   }
 
-  private def processAlterIsr(brokerId: Int, brokerEpoch: Long, isrsToAlter: Map[TopicPartition, LeaderAndIsr],
+  private def processAlterIsr(brokerId: Int, brokerEpoch: Long,
+                              isrsToAlter: Map[TopicPartition, LeaderAndIsr],
                               callback: AlterIsrCallback): Unit = {
 
     // Handle a few short-circuits
@@ -2315,6 +2337,19 @@ class KafkaController(val config: KafkaConfig,
     }
 
     callback.apply(response)
+
+    // After we have returned the result of the `AlterIsr` request, we should check whether
+    // there are any reassignments which can be completed by a successful ISR expansion.
+    response.left.foreach { alterIsrResponses =>
+      alterIsrResponses.forKeyValue { (topicPartition, partitionResponse) =>
+        if (controllerContext.partitionsBeingReassigned.contains(topicPartition)) {
+          val isSuccessfulUpdate = partitionResponse.isRight
+          if (isSuccessfulUpdate) {
+            maybeCompleteReassignment(topicPartition)
+          }
+        }
+      }
+    }
   }
 
   private def processControllerChange(): Unit = {

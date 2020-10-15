@@ -91,19 +91,25 @@ public class FollowerState implements EpochState {
         fetchTimer.reset(timeoutMs);
     }
 
-    public void updateHighWatermark(OptionalLong highWatermark) {
+    public boolean updateHighWatermark(OptionalLong highWatermark) {
         if (!highWatermark.isPresent() && this.highWatermark.isPresent())
             throw new IllegalArgumentException("Attempt to overwrite current high watermark " + this.highWatermark +
                 " with unknown value");
-        this.highWatermark.ifPresent(previousHighWatermark -> {
+
+        if (this.highWatermark.isPresent()) {
+            long previousHighWatermark = this.highWatermark.getAsLong();
             long updatedHighWatermark = highWatermark.getAsLong();
+
             if (updatedHighWatermark < 0)
                 throw new IllegalArgumentException("Illegal negative high watermark update");
-            if (previousHighWatermark > highWatermark.getAsLong())
+            if (previousHighWatermark > updatedHighWatermark)
                 throw new IllegalArgumentException("Non-monotonic update of high watermark attempted");
-        });
+            if (previousHighWatermark == updatedHighWatermark)
+                return false;
+        }
 
         this.highWatermark = highWatermark;
+        return true;
     }
 
     @Override

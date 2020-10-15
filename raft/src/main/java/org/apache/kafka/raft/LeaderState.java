@@ -17,7 +17,6 @@
 package org.apache.kafka.raft;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -112,14 +111,6 @@ public class LeaderState implements EpochState {
             }
         }
         return false;
-    }
-
-    private OptionalLong quorumMajorityFetchTimestamp() {
-        // Find the latest timestamp which is fetched by a majority of replicas (the leader counts)
-        ArrayList<ReplicaState> followersByDescendingFetchTimestamp = new ArrayList<>(this.voterReplicaStates.values());
-        followersByDescendingFetchTimestamp.sort(FETCH_TIMESTAMP_COMPARATOR);
-        int indexOfTimestamp = voterReplicaStates.size() / 2;
-        return followersByDescendingFetchTimestamp.get(indexOfTimestamp).lastFetchTimestamp;
     }
 
     /**
@@ -271,18 +262,6 @@ public class LeaderState implements EpochState {
             this.hasEndorsedLeader = hasEndorsedLeader;
         }
     }
-
-    private static final Comparator<ReplicaState> FETCH_TIMESTAMP_COMPARATOR = (state, that) -> {
-        if (state.lastFetchTimestamp.equals(that.lastFetchTimestamp))
-            return Integer.compare(state.nodeId, that.nodeId);
-        else if (!state.lastFetchTimestamp.isPresent())
-            return 1;
-        else if (!that.lastFetchTimestamp.isPresent())
-            return -1;
-        else
-            return Long.compare(that.lastFetchTimestamp.getAsLong(), state.lastFetchTimestamp.getAsLong());
-    };
-
 
     @Override
     public String toString() {

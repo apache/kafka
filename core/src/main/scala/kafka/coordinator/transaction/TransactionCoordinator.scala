@@ -311,6 +311,7 @@ class TransactionCoordinator(brokerId: Int,
    * @param coordinatorEpoch The partition coordinator (or leader) epoch from the received LeaderAndIsr request
    */
   def onElection(txnTopicPartitionId: Int, coordinatorEpoch: Int): Unit = {
+    info(s"Elected as the txn coordinator for partition $txnTopicPartitionId at epoch $coordinatorEpoch")
     // The operations performed during immigration must be resilient to any previous errors we saw or partial state we
     // left off during the unloading phase. Ensure we remove all associated state for this partition before we continue
     // loading it.
@@ -329,6 +330,7 @@ class TransactionCoordinator(brokerId: Int,
    *                         are resigning after receiving a StopReplica request from the controller
    */
   def onResignation(txnTopicPartitionId: Int, coordinatorEpoch: Option[Int]): Unit = {
+    info(s"Resigned as the txn coordinator for partition $txnTopicPartitionId at epoch $coordinatorEpoch")
     coordinatorEpoch match {
       case Some(epoch) =>
         txnManager.removeTransactionsForTxnTopicPartition(txnTopicPartitionId, epoch)
