@@ -39,7 +39,10 @@ public abstract class AbstractTask implements Task {
 
     private Task.State state = CREATED;
     private long deadlineMs = NO_DEADLINE;
+
     protected Set<TopicPartition> inputPartitions;
+    protected Logger log;
+    protected String logPrefix;
 
     /**
      * If the checkpoint has not been loaded from the file yet (null), then we should not overwrite the checkpoint;
@@ -147,12 +150,9 @@ public abstract class AbstractTask implements Task {
         topology.updateSourceTopics(nodeToSourceTopics);
     }
 
-    /**
-     * @throws TimeoutException if {@code currentWallClockMs > task-timeout-deadline}
-     */
-    void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
-                                     final Exception cause,
-                                     final Logger log) {
+    @Override
+    public void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
+                                            final Exception cause) {
         if (deadlineMs == NO_DEADLINE) {
             deadlineMs = currentWallClockMs + taskTimeoutMs;
         } else if (currentWallClockMs > deadlineMs) {
@@ -187,7 +187,8 @@ public abstract class AbstractTask implements Task {
 
     }
 
-    void clearTaskTimeout(final Logger log) {
+    @Override
+    public void clearTaskTimeout() {
         if (deadlineMs != NO_DEADLINE) {
             log.debug("Clearing task timeout.");
             deadlineMs = NO_DEADLINE;

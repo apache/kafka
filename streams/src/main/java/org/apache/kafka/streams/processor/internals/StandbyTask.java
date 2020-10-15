@@ -29,7 +29,6 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.ThreadCache;
-import org.slf4j.Logger;
 
 import java.util.Collections;
 import java.util.Map;
@@ -39,8 +38,6 @@ import java.util.Set;
  * A StandbyTask
  */
 public class StandbyTask extends AbstractTask implements Task {
-    private final Logger log;
-    private final String logPrefix;
     private final Sensor closeTaskSensor;
     private final boolean eosEnabled;
     private final InternalProcessorContext processorContext;
@@ -284,17 +281,6 @@ public class StandbyTask extends AbstractTask implements Task {
     @Override
     public void addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
         throw new IllegalStateException("Attempted to add records to task " + id() + " for invalid input partition " + partition);
-    }
-
-    @Override
-    public void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
-                                            final Exception cause) {
-        maybeInitTaskTimeoutOrThrow(currentWallClockMs, cause, log);
-    }
-
-    @Override
-    public void clearTaskTimeout() {
-        clearTaskTimeout(log);
     }
 
     InternalProcessorContext processorContext() {

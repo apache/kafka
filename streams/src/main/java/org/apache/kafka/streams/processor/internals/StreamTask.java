@@ -44,7 +44,6 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.V
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.ThreadCache;
-import org.slf4j.Logger;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -72,8 +71,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     static final byte LATEST_MAGIC_BYTE = 1;
 
     private final Time time;
-    private final Logger log;
-    private final String logPrefix;
     private final Consumer<byte[], byte[]> mainConsumer;
 
     // we want to abstract eos logic out of StreamTask, however
@@ -1012,17 +1009,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     @Override
     public boolean commitRequested() {
         return commitRequested;
-    }
-
-    @Override
-    public void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
-                                            final Exception cause) {
-        maybeInitTaskTimeoutOrThrow(currentWallClockMs, cause, log);
-    }
-
-    @Override
-    public void clearTaskTimeout() {
-        clearTaskTimeout(log);
     }
 
     static String encodeTimestamp(final long partitionTime) {
