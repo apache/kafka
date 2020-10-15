@@ -78,7 +78,7 @@ class CachedPartition(val topic: String,
                       var leaderEpoch: Optional[Integer],
                       var fetcherLogStartOffset: Long,
                       var localLogStartOffset: Long,
-                      var lastFetchedEpoch: Optional[Integer] = Optional.empty[Integer])
+                      var lastFetchedEpoch: Optional[Integer])
     extends ImplicitLinkedHashCollection.Element {
 
   var cachedNext: Int = ImplicitLinkedHashCollection.INVALID_INDEX
@@ -90,7 +90,7 @@ class CachedPartition(val topic: String,
   override def setPrev(prev: Int): Unit = this.cachedPrev = prev
 
   def this(topic: String, partition: Int) =
-    this(topic, partition, -1, -1, -1, Optional.empty(), -1, -1)
+    this(topic, partition, -1, -1, -1, Optional.empty(), -1, -1, Optional.empty[Integer])
 
   def this(part: TopicPartition) =
     this(part.topic, part.partition)

@@ -25,7 +25,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{FencedLeaderEpochException, NotLeaderOrFollowerException}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
-import org.apache.kafka.common.requests.FetchRequest
+import org.apache.kafka.common.requests.{EpochEndOffset, FetchRequest}
 import org.easymock.{EasyMock, EasyMockSupport}
 import org.junit.Test
 import org.junit.Assert._
@@ -155,7 +155,8 @@ class DelayedFetchTest extends EasyMockSupport {
       currentLeaderEpoch,
       fetchOnlyFromLeader = true))
       .andReturn(LogOffsetSnapshot(0L, endOffsetMetadata, endOffsetMetadata, endOffsetMetadata))
-    EasyMock.expect(partition.hasDivergingEpoch(currentLeaderEpoch, lastFetchedEpoch.get, fetchOffset)).andReturn(true)
+    EasyMock.expect(partition.lastOffsetForLeaderEpoch(currentLeaderEpoch, lastFetchedEpoch.get, fetchOnlyFromLeader = false))
+      .andReturn(new EpochEndOffset(Errors.NONE, lastFetchedEpoch.get, fetchOffset - 1))
     EasyMock.expect(replicaManager.isAddingReplica(EasyMock.anyObject(), EasyMock.anyInt())).andReturn(false)
     expectReadFromReplica(replicaId, topicPartition, fetchStatus.fetchInfo, Errors.NONE)
     replayAll()

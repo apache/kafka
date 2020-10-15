@@ -22,6 +22,7 @@ import java.util.concurrent.TimeUnit
 import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors._
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.replica.ClientMetadata
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 
@@ -89,7 +90,6 @@ class DelayedFetch(delayMs: Long,
         try {
           if (fetchOffset != LogOffsetMetadata.UnknownOffsetMetadata) {
             val partition = replicaManager.getPartitionOrException(topicPartition)
-
             val offsetSnapshot = partition.fetchOffsetSnapshot(fetchLeaderEpoch, fetchMetadata.fetchOnlyLeader)
 
             val endOffset = fetchMetadata.fetchIsolation match {
@@ -97,7 +97,6 @@ class DelayedFetch(delayMs: Long,
               case FetchHighWatermark => offsetSnapshot.highWatermark
               case FetchTxnCommitted => offsetSnapshot.lastStableOffset
             }
-
 
             // Go directly to the check for Case G if the message offsets are the same. If the log segment
             // has just rolled, then the high watermark offset will remain the same but be on the old segment,
@@ -124,8 +123,13 @@ class DelayedFetch(delayMs: Long,
 
             // Case H: If truncation has caused diverging epoch while this request was in purgatory, return to trigger truncation
             fetchStatus.fetchInfo.lastFetchedEpoch.ifPresent { fetchEpoch =>
-              if (partition.hasDivergingEpoch(fetchLeaderEpoch, fetchEpoch, fetchStatus.fetchInfo.fetchOffset)) {
-                debug(s"Satisfying fetch $fetchMetadata since it has diverging epoch requiring truncation for partition $topicPartition.")
+              val epochEndOffset = partition.lastOffsetForLeaderEpoch(fetchLeaderEpoch, fetchEpoch, fetchOnlyFromLeader = false)
+              if (epochEndOffset.error != Errors.NONE || epochEndOffset.hasUndefinedEpochOrOffset) {
+                debug(s"Could not obtain last offset for leader epoch for partition $topicPartition, epochEndOffset=$epochEndOffset.")
+                return forceComplete()
+              } else if (epochEndOffset.leaderEpoch < fetchEpoch || epochEndOffset.endOffset < fetchStatus.fetchInfo.fetchOffset) {
+                debug(s"Satisfying fetch $fetchMetadata since it has diverging epoch requiring truncation for partition " +
+                  s"$topicPartition epochEndOffset=$epochEndOffset fetchEpoch=$fetchEpoch fetchOffset=${fetchStatus.fetchInfo.fetchOffset}.")
                 return forceComplete()
               }
             }
