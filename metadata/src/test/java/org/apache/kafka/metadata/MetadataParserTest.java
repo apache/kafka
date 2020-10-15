@@ -22,9 +22,8 @@ import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,16 +31,14 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Timeout(value = 40)
 public class MetadataParserTest {
     private static final Logger log =
         LoggerFactory.getLogger(MetadataParserTest.class);
-
-    @Rule
-    final public Timeout globalTimeout = Timeout.seconds(40);
 
     /**
      * Test some serialization / deserialization round trips.
@@ -152,7 +149,7 @@ public class MetadataParserTest {
     }
 
     private static void assertStartsWith(String prefix, String str) {
-        assertTrue("Expected string '" + str + "' to start with '" + prefix + "'",
-            str.startsWith(prefix));
+        assertTrue(str.startsWith(prefix),
+            "Expected string '" + str + "' to start with '" + prefix + "'");
     }
 }

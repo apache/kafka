@@ -19,10 +19,8 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.requests.ApiError;
-import org.junit.Assert;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,14 +32,13 @@ import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.BROKER0;
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.CONFIGS;
 import static org.apache.kafka.controller.ConfigurationControlManagerTest.entry;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
+@Timeout(value = 40)
 public class QuorumControllerTest {
     private static final Logger log =
         LoggerFactory.getLogger(QuorumControllerTest.class);
-
-    @Rule
-    final public Timeout globalTimeout = Timeout.seconds(20);
 
     /**
      * Test creating a new QuorumController and closing it.
@@ -106,7 +103,7 @@ public class QuorumControllerTest {
         CompletableFuture<Map<ConfigResource, ApiError>> future1 =
             controller.incrementalAlterConfigs(Collections.singletonMap(
                 BROKER0, Collections.singletonMap("baz", entry(SET, "123"))), false);
-        Assert.assertFalse(future1.isDone());
+        assertFalse(future1.isDone());
         assertEquals(Collections.singletonMap(BROKER0,
             new ResultOrError<>(Collections.emptyMap())),
             controller.describeConfigs(Collections.singletonMap(

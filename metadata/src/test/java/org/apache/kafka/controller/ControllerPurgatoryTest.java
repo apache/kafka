@@ -17,22 +17,19 @@
 
 package org.apache.kafka.controller;
 
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
-
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Timeout(value = 40)
 public class ControllerPurgatoryTest {
-    @Rule
-    final public Timeout globalTimeout = Timeout.seconds(40);
 
     static class SampleDeferredEvent implements DeferredEvent {
         private final CompletableFuture<Void> future = new CompletableFuture<>();

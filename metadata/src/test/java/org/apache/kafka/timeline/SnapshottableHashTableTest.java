@@ -17,25 +17,22 @@
 
 package org.apache.kafka.timeline;
 
-import org.junit.Assert;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
-
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
+@Timeout(value = 40)
 public class SnapshottableHashTableTest {
-    @Rule
-    final public Timeout globalTimeout = Timeout.seconds(40);
 
     /**
      * The class of test elements.
@@ -121,9 +118,8 @@ public class SnapshottableHashTableTest {
         assertEquals(1, table.snapshottableSize(0));
         assertEquals(3, table.snapshottableSize(1));
         registry.deleteSnapshot(0);
-        Assert.assertEquals("No snapshot for epoch 0",
-            Assert.assertThrows(RuntimeException.class, () ->
-                table.snapshottableSize(0)).getMessage());
+        assertEquals(assertThrows(RuntimeException.class, () ->
+                table.snapshottableSize(0)).getMessage(), "No snapshot for epoch 0");
         registry.deleteSnapshot(1);
         assertEquals(0, table.snapshottableSize(Long.MAX_VALUE));
     }
