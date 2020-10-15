@@ -345,7 +345,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final Map<TopicPartition, PartitionInfo> allRepartitionTopicPartitions;
         try {
             allRepartitionTopicPartitions = prepareRepartitionTopics(topicGroups, metadata);
-        } catch (final TaskAssignmentException | TimeoutException e) {
+        } catch (final TaskAssignmentException e) {
             return new GroupAssignment(
                 errorAssignment(clientMetadataMap,
                     AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.code())
@@ -376,7 +376,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final boolean probingRebalanceNeeded;
         try {
             probingRebalanceNeeded = assignTasksToClients(fullMetadata, allSourceTopics, topicGroups, clientMetadataMap, partitionsForTask, statefulTasks);
-        } catch (final TaskAssignmentException | TimeoutException e) {
+        } catch (final TaskAssignmentException e) {
             return new GroupAssignment(
                 errorAssignment(clientMetadataMap,
                     AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.code())
