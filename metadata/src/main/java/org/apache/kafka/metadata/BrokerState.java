@@ -17,6 +17,8 @@
 
 package org.apache.kafka.metadata;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -26,6 +28,7 @@ import java.util.Map;
  * The numeric values used here are part of Kafka's public API.  They appear in metrics,
  * and are also sent over the wire in some cases.
  */
+@InterfaceStability.Evolving
 public enum BrokerState {
     /**
      * The state the broker is in when it first starts up, and hasn't acquired a
