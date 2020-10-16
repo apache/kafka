@@ -75,7 +75,7 @@ class UpdateFeaturesException(message: String) extends RuntimeException(message)
  */
 class FeatureApis(private var opts: FeatureCommandOptions) {
   private var supportedFeatures = BrokerFeatures.createDefault().supportedFeatures
-  private var adminClient = createAdminClient(opts.commandConfig)
+  private var adminClient = FeatureApis.createAdminClient(opts)
 
   private def pad(op: String): String = {
     f"$op%11s"
@@ -94,15 +94,8 @@ class FeatureApis(private var opts: FeatureCommandOptions) {
   // For testing only.
   private[admin] def setOptions(newOpts: FeatureCommandOptions): Unit = {
     adminClient.close()
-    adminClient = createAdminClient(newOpts.commandConfig)
+    adminClient = FeatureApis.createAdminClient(newOpts)
     opts = newOpts
-  }
-
-  private def createAdminClient(props: Properties): Admin = {
-    val newProps = new Properties()
-    newProps.putAll(props)
-    newProps.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.bootstrapServers)
-    Admin.create(newProps)
   }
 
   private def describeFeatures(sendRequestToController: Boolean): FeatureMetadata = {
@@ -402,5 +395,14 @@ class FeatureCommandOptions(args: Array[String]) extends CommandDefaultOptions(a
         parser,
         "Command can contain --from-controller option only when --describe action is provided.")
     }
+  }
+}
+
+object FeatureApis {
+  private def createAdminClient(opts: FeatureCommandOptions): Admin = {
+    val props = new Properties()
+    props.putAll(opts.commandConfig)
+    props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.bootstrapServers)
+    Admin.create(props)
   }
 }
