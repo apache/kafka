@@ -31,15 +31,18 @@ import java.util.stream.Collectors;
  */
 public class BrokerRegistration {
     private final int id;
+    private final long epoch;
     private final Map<String, Endpoint> listeners;
     private final Map<String, VersionRange> supportedFeatures;
     private final String rack;
 
     public BrokerRegistration(int id,
+                              long epoch,
                               List<Endpoint> listeners,
                               Map<String, VersionRange> supportedFeatures,
                               String rack) {
         this.id = id;
+        this.epoch = epoch;
         Map<String, Endpoint> listenersMap = new HashMap<>();
         for (Endpoint endpoint : listeners) {
             listenersMap.put(endpoint.listenerName().get(), endpoint);
@@ -52,6 +55,10 @@ public class BrokerRegistration {
 
     public int id() {
         return id;
+    }
+
+    public long epoch() {
+        return epoch;
     }
 
     public Map<String, Endpoint> listeners() {
@@ -68,7 +75,7 @@ public class BrokerRegistration {
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, listeners, supportedFeatures, rack);
+        return Objects.hash(id, epoch, listeners, supportedFeatures, rack);
     }
 
     @Override
@@ -76,6 +83,7 @@ public class BrokerRegistration {
         if (!(o instanceof BrokerRegistration)) return false;
         BrokerRegistration other = (BrokerRegistration) o;
         return other.id == id &&
+            other.epoch == epoch &&
             other.listeners.equals(listeners) &&
             other.supportedFeatures.equals(supportedFeatures) &&
             Objects.equals(other.rack, rack);
@@ -85,6 +93,7 @@ public class BrokerRegistration {
     public String toString() {
         StringBuilder bld = new StringBuilder();
         bld.append("BrokerRegistration(id=").append(id);
+        bld.append(", epoch=").append(epoch);
         bld.append(", listeners=[").append(
             listeners.keySet().stream().sorted().
                 map(n -> listeners.get(n).toString()).

@@ -17,12 +17,30 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.timeline.SnapshotRegistry;
+import org.apache.kafka.timeline.TimelineHashMap;
+
+import java.util.HashMap;
 
 public class ClusterControlManager {
+    static class BrokerSoftState {
+        //private long lastHeartbeatNs;
+    }
+
     private final SnapshotRegistry snapshotRegistry;
+
+    private final TimelineHashMap<Integer, BrokerRegistration> brokerRegistrations;
+
+    private final HashMap<Integer, BrokerSoftState> brokerSoftStates;
 
     ClusterControlManager(SnapshotRegistry snapshotRegistry) {
         this.snapshotRegistry = snapshotRegistry;
+        this.brokerRegistrations = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.brokerSoftStates = new HashMap<>();
     }
+
+    // registerBroker
+
+    // processBrokerHeartbeat
 }

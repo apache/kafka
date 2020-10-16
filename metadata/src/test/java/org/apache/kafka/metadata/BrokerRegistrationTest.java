@@ -36,13 +36,13 @@ public class BrokerRegistrationTest {
     final public Timeout globalTimeout = Timeout.seconds(40);
 
     private static final List<BrokerRegistration> REGISTRATIONS = Arrays.asList(
-        new BrokerRegistration(0, Arrays.asList(new Endpoint("INTERNAL",
+        new BrokerRegistration(0, 0, Arrays.asList(new Endpoint("INTERNAL",
             SecurityProtocol.PLAINTEXT, "localhost", 9090)),
             Collections.singletonMap("foo", new VersionRange((short) 1, (short) 2)), null),
-        new BrokerRegistration(1, Arrays.asList(new Endpoint("INTERNAL",
+        new BrokerRegistration(1, 0, Arrays.asList(new Endpoint("INTERNAL",
             SecurityProtocol.PLAINTEXT, "localhost", 9091)),
             Collections.singletonMap("foo", new VersionRange((short) 1, (short) 2)), null),
-        new BrokerRegistration(2, Arrays.asList(new Endpoint("INTERNAL",
+        new BrokerRegistration(2, 0, Arrays.asList(new Endpoint("INTERNAL",
             SecurityProtocol.PLAINTEXT, "localhost", 9092)),
             Collections.singletonMap("foo", new VersionRange((short) 2, (short) 3)), null));
 
@@ -66,7 +66,7 @@ public class BrokerRegistrationTest {
 
     @Test
     public void testToString() {
-        assertEquals("BrokerRegistration(id=1, listeners=[Endpoint(" +
+        assertEquals("BrokerRegistration(id=1, epoch=0, listeners=[Endpoint(" +
             "listenerName='INTERNAL', securityProtocol=PLAINTEXT, " +
             "host='localhost', port=9091)], supportedFeatures={foo: 1-2})",
             REGISTRATIONS.get(1).toString());
