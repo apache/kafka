@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.time.Duration;
-
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -27,6 +25,7 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
@@ -44,6 +43,7 @@ import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -51,8 +51,8 @@ import java.util.List;
 import java.util.function.Consumer;
 
 import static java.util.Arrays.asList;
-import static org.apache.kafka.streams.processor.internals.ProcessorContextImpl.BYTES_KEY_SERIALIZER;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextImpl.BYTEARRAY_VALUE_SERIALIZER;
+import static org.apache.kafka.streams.processor.internals.ProcessorContextImpl.BYTES_KEY_SERIALIZER;
 import static org.easymock.EasyMock.anyLong;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.anyString;
@@ -150,13 +150,21 @@ public class ProcessorContextImplTest {
         ((InternalProcessorContext) context).transitionToActive(task, null, null);
         EasyMock.expect(task.recordCollector()).andStubReturn(recordCollector);
 
-        context.setCurrentNode(new ProcessorNode<String, Long, Object, Object>("fake", null,
-            new HashSet<>(asList(
-                "LocalKeyValueStore",
-                "LocalTimestampedKeyValueStore",
-                "LocalWindowStore",
-                "LocalTimestampedWindowStore",
-                "LocalSessionStore"))));
+        context.setCurrentNode(
+            new ProcessorNode<>(
+                "fake",
+                (org.apache.kafka.streams.processor.api.Processor<String, Long, Object, Object>) null,
+                new HashSet<>(
+                    asList(
+                        "LocalKeyValueStore",
+                        "LocalTimestampedKeyValueStore",
+                        "LocalWindowStore",
+                        "LocalTimestampedWindowStore",
+                        "LocalSessionStore"
+                    )
+                )
+            )
+        );
     }
 
     private ProcessorContextImpl getStandbyContext() {
@@ -760,7 +768,7 @@ public class ProcessorContextImplTest {
         assertTrue(store.persistent());
         assertTrue(store.isOpen());
 
-        checkThrowsUnsupportedOperation(() -> store.init(null, null), "init()");
+        checkThrowsUnsupportedOperation(() -> store.init((StateStoreContext) null, null), "init()");
         checkThrowsUnsupportedOperation(store::close, "close()");
     }
 

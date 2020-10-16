@@ -17,10 +17,10 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
+import org.apache.kafka.streams.processor.api.Record;
 
 public class SinkNode<KIn, VIn, KOut, VOut> extends ProcessorNode<KIn, VIn, KOut, VOut> {
 
@@ -76,19 +76,27 @@ public class SinkNode<KIn, VIn, KOut, VOut> extends ProcessorNode<KIn, VIn, KOut
         }
     }
 
-
     @Override
-    public void process(final KIn key, final VIn value) {
+    public void process(final Record<KIn, VIn> record) {
         final RecordCollector collector = ((RecordCollector.Supplier) context).recordCollector();
 
-        final long timestamp = context.timestamp();
-        if (timestamp < 0) {
-            throw new StreamsException("Invalid (negative) timestamp of " + timestamp + " for output record <" + key + ":" + value + ">.");
-        }
+        final KIn key = record.key();
+        final VIn value = record.value();
 
-        final String topic = topicExtractor.extract(key, value, this.context.recordContext());
+        final long timestamp = record.timestamp();
 
-        collector.send(topic, key, value, context.headers(), timestamp, keySerializer, valSerializer, partitioner);
+        final ProcessorRecordContext contextForExtraction =
+            new ProcessorRecordContext(
+                timestamp,
+                context.offset(),
+                context.partition(),
+                context.topic(),
+                record.headers()
+            );
+
+        final String topic = topicExtractor.extract(key, value, contextForExtraction);
+
+        collector.send(topic, key, value, record.headers(), timestamp, keySerializer, valSerializer, partitioner);
     }
 
     /**

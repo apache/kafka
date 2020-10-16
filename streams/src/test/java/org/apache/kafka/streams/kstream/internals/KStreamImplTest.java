@@ -1504,7 +1504,7 @@ public class KStreamImplTest {
                 driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             inputTopic.pipeInput("a", "b");
         }
-        assertThat(processorSupplier.theCapturedProcessor().processed, equalTo(Collections.singletonList(new KeyValueTimestamp<>("a", "b", 0))));
+        assertThat(processorSupplier.theCapturedProcessor().processed(), equalTo(Collections.singletonList(new KeyValueTimestamp<>("a", "b", 0))));
     }
 
     @Test
@@ -1519,7 +1519,7 @@ public class KStreamImplTest {
                 driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             inputTopic.pipeInput("a", "b");
         }
-        assertThat(processorSupplier.theCapturedProcessor().processed, equalTo(Collections.singletonList(new KeyValueTimestamp<>("a", "b", 0))));
+        assertThat(processorSupplier.theCapturedProcessor().processed(), equalTo(Collections.singletonList(new KeyValueTimestamp<>("a", "b", 0))));
     }
 
     @Test
@@ -1535,7 +1535,7 @@ public class KStreamImplTest {
                 driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             inputTopic.pipeInput("e", "f");
         }
-        assertThat(processorSupplier.theCapturedProcessor().processed, equalTo(Collections.singletonList(new KeyValueTimestamp<>("e", "f", 0))));
+        assertThat(processorSupplier.theCapturedProcessor().processed(), equalTo(Collections.singletonList(new KeyValueTimestamp<>("e", "f", 0))));
     }
 
     @Test
@@ -1556,9 +1556,9 @@ public class KStreamImplTest {
             inputTopic.pipeInput("b", "v1");
         }
         final List<MockProcessor<String, String>> mockProcessors = processorSupplier.capturedProcessors(2);
-        assertThat(mockProcessors.get(0).processed, equalTo(asList(new KeyValueTimestamp<>("a", "v1", 0),
+        assertThat(mockProcessors.get(0).processed(), equalTo(asList(new KeyValueTimestamp<>("a", "v1", 0),
             new KeyValueTimestamp<>("a", "v2", 0))));
-        assertThat(mockProcessors.get(1).processed, equalTo(Collections.singletonList(new KeyValueTimestamp<>("b", "v1", 0))));
+        assertThat(mockProcessors.get(1).processed(), equalTo(Collections.singletonList(new KeyValueTimestamp<>("b", "v1", 0))));
     }
 
     @SuppressWarnings("deprecation") // specifically testing the deprecated variant
@@ -1665,7 +1665,7 @@ public class KStreamImplTest {
         assertEquals(asList(new KeyValueTimestamp<>("A", "aa", 0),
             new KeyValueTimestamp<>("B", "bb", 0),
             new KeyValueTimestamp<>("C", "cc", 0),
-            new KeyValueTimestamp<>("D", "dd", 0)), processorSupplier.theCapturedProcessor().processed);
+            new KeyValueTimestamp<>("D", "dd", 0)), processorSupplier.theCapturedProcessor().processed());
     }
 
     @Test
@@ -1711,7 +1711,7 @@ public class KStreamImplTest {
             new KeyValueTimestamp<>("F", "ff", 7),
             new KeyValueTimestamp<>("G", "gg", 4),
             new KeyValueTimestamp<>("H", "hh", 6)),
-            processorSupplier.theCapturedProcessor().processed);
+            processorSupplier.theCapturedProcessor().processed());
     }
 
     @Test
@@ -1744,7 +1744,7 @@ public class KStreamImplTest {
             new KeyValueTimestamp<>("C", "cc", 10),
             new KeyValueTimestamp<>("D", "dd", 8),
             new KeyValueTimestamp<>("E", "ee", 3)),
-            processorSupplier.theCapturedProcessor().processed);
+            processorSupplier.theCapturedProcessor().processed());
     }
 
     @Test
@@ -1782,7 +1782,7 @@ public class KStreamImplTest {
             new KeyValueTimestamp<>("C", "cc", 10),
             new KeyValueTimestamp<>("D", "dd", 8),
             new KeyValueTimestamp<>("E", "ee", 3)),
-            processorSupplier.theCapturedProcessor().processed);
+            processorSupplier.theCapturedProcessor().processed());
     }
 
     @Test

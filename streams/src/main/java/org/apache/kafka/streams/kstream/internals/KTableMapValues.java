@@ -23,6 +23,8 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
+import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
+
 
 class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
     private final KTableImpl<K, ?, V> parent;
@@ -66,9 +68,17 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
     }
 
     @Override
-    public void enableSendingOldValues() {
-        parent.enableSendingOldValues();
-        sendOldValues = true;
+    public boolean enableSendingOldValues(final boolean forceMaterialization) {
+        if (queryableName != null) {
+            sendOldValues = true;
+            return true;
+        }
+
+        if (parent.enableSendingOldValues(forceMaterialization)) {
+            sendOldValues = true;
+        }
+
+        return sendOldValues;
     }
 
     private V1 computeValue(final K key, final V value) {
@@ -115,7 +125,7 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
         @Override
         public void process(final K key, final Change<V> change) {
             final V1 newValue = computeValue(key, change.newValue);
-            final V1 oldValue = sendOldValues ? computeValue(key, change.oldValue) : null;
+            final V1 oldValue = computeOldValue(key, change);
 
             if (queryableName != null) {
                 store.put(key, ValueAndTimestamp.make(newValue, context().timestamp()));
@@ -123,6 +133,16 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
             } else {
                 context().forward(key, new Change<>(newValue, oldValue));
             }
+        }
+
+        private V1 computeOldValue(final K key, final Change<V> change) {
+            if (!sendOldValues) {
+                return null;
+            }
+
+            return queryableName != null
+                ? getValueOrNull(store.get(key))
+                : computeValue(key, change.oldValue);
         }
     }
 

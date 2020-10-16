@@ -52,40 +52,79 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class SensorTest {
+
+    private static final MetricConfig INFO_CONFIG = new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO);
+    private static final MetricConfig DEBUG_CONFIG = new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG);
+    private static final MetricConfig TRACE_CONFIG = new MetricConfig().recordLevel(Sensor.RecordingLevel.TRACE);
+
     @Test
     public void testRecordLevelEnum() {
         Sensor.RecordingLevel configLevel = Sensor.RecordingLevel.INFO;
         assertTrue(Sensor.RecordingLevel.INFO.shouldRecord(configLevel.id));
         assertFalse(Sensor.RecordingLevel.DEBUG.shouldRecord(configLevel.id));
+        assertFalse(Sensor.RecordingLevel.TRACE.shouldRecord(configLevel.id));
 
         configLevel = Sensor.RecordingLevel.DEBUG;
         assertTrue(Sensor.RecordingLevel.INFO.shouldRecord(configLevel.id));
         assertTrue(Sensor.RecordingLevel.DEBUG.shouldRecord(configLevel.id));
+        assertFalse(Sensor.RecordingLevel.TRACE.shouldRecord(configLevel.id));
+
+        configLevel = Sensor.RecordingLevel.TRACE;
+        assertTrue(Sensor.RecordingLevel.INFO.shouldRecord(configLevel.id));
+        assertTrue(Sensor.RecordingLevel.DEBUG.shouldRecord(configLevel.id));
+        assertTrue(Sensor.RecordingLevel.TRACE.shouldRecord(configLevel.id));
 
         assertEquals(Sensor.RecordingLevel.valueOf(Sensor.RecordingLevel.DEBUG.toString()),
             Sensor.RecordingLevel.DEBUG);
         assertEquals(Sensor.RecordingLevel.valueOf(Sensor.RecordingLevel.INFO.toString()),
             Sensor.RecordingLevel.INFO);
+        assertEquals(Sensor.RecordingLevel.valueOf(Sensor.RecordingLevel.TRACE.toString()),
+            Sensor.RecordingLevel.TRACE);
     }
 
     @Test
-    public void testShouldRecord() {
-        MetricConfig debugConfig = new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG);
-        MetricConfig infoConfig = new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO);
-
-        Sensor infoSensor = new Sensor(null, "infoSensor", null, debugConfig, new SystemTime(),
+    public void testShouldRecordForInfoLevelSensor() {
+        Sensor infoSensor = new Sensor(null, "infoSensor", null, INFO_CONFIG, new SystemTime(),
             0, Sensor.RecordingLevel.INFO);
         assertTrue(infoSensor.shouldRecord());
-        infoSensor = new Sensor(null, "infoSensor", null, debugConfig, new SystemTime(),
-            0, Sensor.RecordingLevel.DEBUG);
+
+        infoSensor = new Sensor(null, "infoSensor", null, DEBUG_CONFIG, new SystemTime(),
+            0, Sensor.RecordingLevel.INFO);
         assertTrue(infoSensor.shouldRecord());
 
-        Sensor debugSensor = new Sensor(null, "debugSensor", null, infoConfig, new SystemTime(),
+        infoSensor = new Sensor(null, "infoSensor", null, TRACE_CONFIG, new SystemTime(),
             0, Sensor.RecordingLevel.INFO);
-        assertTrue(debugSensor.shouldRecord());
-        debugSensor = new Sensor(null, "debugSensor", null, infoConfig, new SystemTime(),
+        assertTrue(infoSensor.shouldRecord());
+    }
+
+    @Test
+    public void testShouldRecordForDebugLevelSensor() {
+        Sensor debugSensor = new Sensor(null, "debugSensor", null, INFO_CONFIG, new SystemTime(),
             0, Sensor.RecordingLevel.DEBUG);
         assertFalse(debugSensor.shouldRecord());
+
+        debugSensor = new Sensor(null, "debugSensor", null, DEBUG_CONFIG, new SystemTime(),
+             0, Sensor.RecordingLevel.DEBUG);
+        assertTrue(debugSensor.shouldRecord());
+
+        debugSensor = new Sensor(null, "debugSensor", null, TRACE_CONFIG, new SystemTime(),
+             0, Sensor.RecordingLevel.DEBUG);
+        assertTrue(debugSensor.shouldRecord());
+    }
+
+    @Test
+    public void testShouldRecordForTraceLevelSensor() {
+        Sensor traceSensor = new Sensor(null, "traceSensor", null, INFO_CONFIG, new SystemTime(),
+             0, Sensor.RecordingLevel.TRACE);
+        assertFalse(traceSensor.shouldRecord());
+
+        traceSensor = new Sensor(null, "traceSensor", null, DEBUG_CONFIG, new SystemTime(),
+             0, Sensor.RecordingLevel.TRACE);
+        assertFalse(traceSensor.shouldRecord());
+
+        traceSensor = new Sensor(null, "traceSensor", null, TRACE_CONFIG, new SystemTime(),
+             0, Sensor.RecordingLevel.TRACE);
+        assertTrue(traceSensor.shouldRecord());
     }
 
     @Test
@@ -297,9 +336,39 @@ public class SensorTest {
         Mockito.verify(stat1).record(stat1Config, 10, 1);
         Mockito.verify(stat2).record(stat2Config, 10, 1);
 
-        Mockito.when(stat1.measure(stat1Config, 2)).thenReturn(2.0);
-        Mockito.when(stat2.measure(stat2Config, 2)).thenReturn(2.0);
         sensor.checkQuotas(2);
+        Mockito.verify(stat1).measure(stat1Config, 2);
+        Mockito.verify(stat2).measure(stat2Config, 2);
+
+        metrics.close();
+    }
+
+    @Test
+    public void testUpdatingMetricConfigIsReflectedInTheSensor() {
+        final Time time = new MockTime(0, System.currentTimeMillis(), 0);
+        final Metrics metrics = new Metrics(time);
+        final Sensor sensor = metrics.sensor("sensor");
+
+        final MeasurableStat stat = Mockito.mock(MeasurableStat.class);
+        final MetricName statName = metrics.metricName("stat", "test-group");
+        final MetricConfig statConfig = new MetricConfig().quota(Quota.upperBound(5));
+        sensor.add(statName, stat, statConfig);
+
+        sensor.record(10, 1);
+        Mockito.verify(stat).record(statConfig, 10, 1);
+
+        sensor.checkQuotas(2);
+        Mockito.verify(stat).measure(statConfig, 2);
+
+        // Update the config of the KafkaMetric
+        final MetricConfig newConfig = new MetricConfig().quota(Quota.upperBound(10));
+        metrics.metric(statName).config(newConfig);
+
+        sensor.record(10, 3);
+        Mockito.verify(stat).record(newConfig, 10, 3);
+
+        sensor.checkQuotas(4);
+        Mockito.verify(stat).measure(newConfig, 4);
 
         metrics.close();
     }

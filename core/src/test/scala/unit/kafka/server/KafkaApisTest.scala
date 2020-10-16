@@ -50,6 +50,7 @@ import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfig
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
+import org.apache.kafka.common.message.ListOffsetRequestData.{ListOffsetPartition, ListOffsetTopic}
 import org.apache.kafka.common.message.OffsetDeleteRequestData.{OffsetDeleteRequestPartition, OffsetDeleteRequestTopic, OffsetDeleteRequestTopicCollection}
 import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
@@ -114,6 +115,8 @@ class KafkaApisTest {
 
   def createKafkaApis(interBrokerProtocolVersion: ApiVersion = ApiVersion.latestVersion,
                       authorizer: Option[Authorizer] = None): KafkaApis = {
+    val brokerFeatures = BrokerFeatures.createDefault()
+    val cache = new FinalizedFeatureCache(brokerFeatures)
     val properties = TestUtils.createBrokerConfig(brokerId, "zk")
     properties.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerProtocolVersion.toString)
     properties.put(KafkaConfig.LogMessageFormatVersionProp, interBrokerProtocolVersion.toString)
@@ -134,8 +137,9 @@ class KafkaApisTest {
       brokerTopicStats,
       clusterId,
       time,
-      null
-    )
+      null,
+      brokerFeatures,
+      cache)
   }
 
   @Test
@@ -1210,19 +1214,25 @@ class KafkaApisTest {
     val capturedResponse = expectNoThrottling()
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel)
 
-    val targetTimes = Map(tp -> new ListOffsetRequest.PartitionData(ListOffsetRequest.EARLIEST_TIMESTAMP,
-      currentLeaderEpoch))
+    val targetTimes = List(new ListOffsetTopic()
+      .setName(tp.topic)
+      .setPartitions(List(new ListOffsetPartition()
+        .setPartitionIndex(tp.partition)
+        .setTimestamp(ListOffsetRequest.EARLIEST_TIMESTAMP)
+        .setCurrentLeaderEpoch(currentLeaderEpoch.get)).asJava)).asJava
     val listOffsetRequest = ListOffsetRequest.Builder.forConsumer(true, isolationLevel)
-      .setTargetTimes(targetTimes.asJava).build()
+      .setTargetTimes(targetTimes).build()
     val request = buildRequest(listOffsetRequest)
     createKafkaApis().handleListOffsetRequest(request)
 
     val response = readResponse(ApiKeys.LIST_OFFSETS, listOffsetRequest, capturedResponse)
       .asInstanceOf[ListOffsetResponse]
-    assertTrue(response.responseData.containsKey(tp))
+    val partitionDataOptional = response.topics.asScala.find(_.name == tp.topic).get
+      .partitions.asScala.find(_.partitionIndex == tp.partition)
+    assertTrue(partitionDataOptional.isDefined)
 
-    val partitionData = response.responseData.get(tp)
-    assertEquals(error, partitionData.error)
+    val partitionData = partitionDataOptional.get
+    assertEquals(error.code, partitionData.errorCode)
     assertEquals(ListOffsetResponse.UNKNOWN_OFFSET, partitionData.offset)
     assertEquals(ListOffsetResponse.UNKNOWN_TIMESTAMP, partitionData.timestamp)
   }
@@ -1283,7 +1293,7 @@ class KafkaApisTest {
         val records = MemoryRecords.withRecords(CompressionType.NONE,
           new SimpleRecord(timestamp, "foo".getBytes(StandardCharsets.UTF_8)))
         callback(Seq(tp -> FetchPartitionData(Errors.NONE, hw, 0, records,
-          None, None, Option.empty, isReassignmentFetch = false)))
+          None, None, None, Option.empty, isReassignmentFetch = false)))
       }
     })
 
@@ -1862,7 +1872,8 @@ class KafkaApisTest {
     expectLastCall[Unit].andAnswer(new IAnswer[Unit] {
       def answer: Unit = {
         val callback = getCurrentArguments.apply(7).asInstanceOf[Seq[(TopicPartition, FetchPartitionData)] => Unit]
-        callback(Seq(tp0 -> FetchPartitionData(Errors.NONE, hw, 0, records, None, None, Option.empty, isReassignmentFetch = isReassigning)))
+        callback(Seq(tp0 -> FetchPartitionData(Errors.NONE, hw, 0, records,
+          None, None, None, Option.empty, isReassignmentFetch = isReassigning)))
       }
     })
 
@@ -2213,18 +2224,23 @@ class KafkaApisTest {
     val capturedResponse = expectNoThrottling()
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel)
 
-    val targetTimes = Map(tp -> new ListOffsetRequest.PartitionData(ListOffsetRequest.LATEST_TIMESTAMP,
-      currentLeaderEpoch))
+    val targetTimes = List(new ListOffsetTopic()
+      .setName(tp.topic)
+      .setPartitions(List(new ListOffsetPartition()
+        .setPartitionIndex(tp.partition)
+        .setTimestamp(ListOffsetRequest.LATEST_TIMESTAMP)).asJava)).asJava
     val listOffsetRequest = ListOffsetRequest.Builder.forConsumer(true, isolationLevel)
-      .setTargetTimes(targetTimes.asJava).build()
+      .setTargetTimes(targetTimes).build()
     val request = buildRequest(listOffsetRequest)
     createKafkaApis().handleListOffsetRequest(request)
 
     val response = readResponse(ApiKeys.LIST_OFFSETS, listOffsetRequest, capturedResponse).asInstanceOf[ListOffsetResponse]
-    assertTrue(response.responseData.containsKey(tp))
+    val partitionDataOptional = response.topics.asScala.find(_.name == tp.topic).get
+      .partitions.asScala.find(_.partitionIndex == tp.partition)
+    assertTrue(partitionDataOptional.isDefined)
 
-    val partitionData = response.responseData.get(tp)
-    assertEquals(Errors.NONE, partitionData.error)
+    val partitionData = partitionDataOptional.get
+    assertEquals(Errors.NONE.code, partitionData.errorCode)
     assertEquals(latestOffset, partitionData.offset)
     assertEquals(ListOffsetResponse.UNKNOWN_TIMESTAMP, partitionData.timestamp)
   }

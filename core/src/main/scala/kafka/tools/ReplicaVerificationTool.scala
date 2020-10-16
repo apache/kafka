@@ -27,7 +27,7 @@ import java.util.{Date, Optional, Properties}
 
 import joptsimple.OptionParser
 import kafka.api._
-import kafka.utils.Whitelist
+import kafka.utils.IncludeList
 import kafka.utils._
 import org.apache.kafka.clients._
 import org.apache.kafka.clients.admin.{Admin, ListTopicsOptions, TopicDescription}
@@ -121,7 +121,7 @@ object ReplicaVerificationTool extends Logging {
     CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt)
 
     val regex = options.valueOf(topicWhiteListOpt)
-    val topicWhiteListFiler = new Whitelist(regex)
+    val topicWhiteListFiler = new IncludeList(regex)
 
     try Pattern.compile(regex)
     catch {
