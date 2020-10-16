@@ -279,9 +279,18 @@ public final class LocalLogManager implements MetaLogManager {
         }
 
         void renounce(long epoch) {
-            if (claimedEpoch == epoch) {
-                this.interrupt();
+            long curClaimedEpoch = claimedEpoch;
+            while (epoch > curClaimedEpoch) {
+                try {
+                    Thread.sleep(1);
+                } catch (InterruptedException e) {
+                    break;
+                }
+                curClaimedEpoch = claimedEpoch;
             }
+            log.info("Interrupting LeadershipClaimerThread in order to " +
+                "renounce epoch {}", curClaimedEpoch);
+            this.interrupt();
         }
 
         void beginShutdown() {
