@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.Topology.AutoOffsetReset;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
@@ -69,6 +70,19 @@ public class StreamSourceNode<K, V> extends StreamsGraphNode {
 
     public Serde<V> valueSerde() {
         return consumedInternal.valueSerde();
+    }
+
+    // We "merge" source nodes into a single node under the hood if a user tries to read in a source topic multiple times
+    public void merge(final StreamSourceNode<?, ?> other) {
+        final AutoOffsetReset resetPolicy = consumedInternal.offsetResetPolicy();
+        if (resetPolicy != null && !resetPolicy.equals(other.consumedInternal().offsetResetPolicy())) {
+            throw new IllegalStateException("Can't configure different offset reset policies on the same input topic");
+        }
+        for (final StreamsGraphNode otherChild : other.children()) {
+            // Move children from other to this, these calls take care of resetting the child's parents to this
+            other.removeChild(otherChild);
+            addChild(otherChild);
+        }
     }
 
     @Override

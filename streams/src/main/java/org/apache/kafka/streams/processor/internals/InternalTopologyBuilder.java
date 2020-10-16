@@ -114,6 +114,8 @@ public class InternalTopologyBuilder {
 
     private final Set<Pattern> latestResetPatterns = new HashSet<>();
 
+    private final Set<Pattern> allPatterns = new HashSet<>();
+
     private final QuickUnion<String> nodeGrouper = new QuickUnion<>();
 
     // Used to capture subscribed topics via Patterns discovered during the partition assignment process.
@@ -410,19 +412,14 @@ public class InternalTopologyBuilder {
             }
         }
 
-        for (final Pattern otherPattern : earliestResetPatterns) {
-            if (topicPattern.pattern().contains(otherPattern.pattern()) || otherPattern.pattern().contains(topicPattern.pattern())) {
-                throw new TopologyException("Pattern " + topicPattern + " will overlap with another pattern " + otherPattern + " already been registered by another source");
-            }
-        }
-
-        for (final Pattern otherPattern : latestResetPatterns) {
+        for (final Pattern otherPattern : allPatterns) {
             if (topicPattern.pattern().contains(otherPattern.pattern()) || otherPattern.pattern().contains(topicPattern.pattern())) {
                 throw new TopologyException("Pattern " + topicPattern + " will overlap with another pattern " + otherPattern + " already been registered by another source");
             }
         }
 
         maybeAddToResetList(earliestResetPatterns, latestResetPatterns, offsetReset, topicPattern);
+        allPatterns.add(topicPattern);
 
         nodeFactories.put(name, new SourceNodeFactory<>(name, null, topicPattern, timestampExtractor, keyDeserializer, valDeserializer));
         nodeToSourcePatterns.put(name, topicPattern);
@@ -523,7 +520,7 @@ public class InternalTopologyBuilder {
                                     final String... processorNames) {
         Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
         final StateStoreFactory<?> stateFactory = stateFactories.get(storeBuilder.name());
-        if (!allowOverride && stateFactory != null && stateFactory.builder != storeBuilder) {
+        if (!allowOverride && stateFactory != null && !stateFactory.builder.equals(storeBuilder)) {
             throw new TopologyException("A different StateStore has already been added with the name " + storeBuilder.name());
         }
         if (globalStateBuilders.containsKey(storeBuilder.name())) {

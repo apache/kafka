@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams;
 
+import java.util.regex.Pattern;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -894,6 +895,22 @@ public class StreamsBuilderTest {
             STREAM_OPERATION_NAME + "-source",
             STREAM_OPERATION_NAME);
     }
+
+    @Test
+    public void shouldAllowReadingFromSameTopic() {
+        builder.stream("topic");
+        builder.stream("topic");
+        builder.build();
+    }
+
+    @Test
+    public void shouldAllowSubscribingToSamePattern() {
+        builder.stream(Pattern.compile("some-regex"));
+        builder.stream(Pattern.compile("some-regex"));
+        builder.build();
+    }
+
+
 
     private static void assertNamesForOperation(final ProcessorTopology topology, final String... expected) {
         final List<ProcessorNode<?, ?, ?, ?>> processors = topology.processors();
