@@ -73,14 +73,9 @@ class UpdateFeaturesException(message: String) extends RuntimeException(message)
  *
  * @param opts the CLI options
  */
-class FeatureApis(var opts: FeatureCommandOptions) {
+class FeatureApis(private var opts: FeatureCommandOptions) {
   private var supportedFeatures = BrokerFeatures.createDefault().supportedFeatures
-  private val adminClient = {
-    val props = new Properties()
-    props.putAll(opts.commandConfig)
-    props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.bootstrapServers)
-    Admin.create(props)
-  }
+  private var adminClient = createAdminClient(opts.commandConfig)
 
   private def pad(op: String): String = {
     f"$op%11s"
@@ -98,7 +93,16 @@ class FeatureApis(var opts: FeatureCommandOptions) {
 
   // For testing only.
   private[admin] def setOptions(newOpts: FeatureCommandOptions): Unit = {
+    adminClient.close()
+    adminClient = createAdminClient(newOpts.commandConfig)
     opts = newOpts
+  }
+
+  private def createAdminClient(props: Properties): Admin = {
+    val newProps = new Properties()
+    newProps.putAll(props)
+    newProps.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.bootstrapServers)
+    Admin.create(newProps)
   }
 
   private def describeFeatures(sendRequestToController: Boolean): FeatureMetadata = {
