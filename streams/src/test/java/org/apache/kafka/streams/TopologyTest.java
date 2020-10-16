@@ -382,6 +382,7 @@ public class TopologyTest {
         }
     }
 
+    @Deprecated // testing old PAPI
     @Test(expected = TopologyException.class)
     public void shouldNotAllowToAddGlobalStoreWithSourceNameEqualsProcessorName() {
         EasyMock.expect(globalStoreBuilder.name()).andReturn("anyName").anyTimes();
@@ -1227,6 +1228,7 @@ public class TopologyTest {
         return expectedSinkNode;
     }
 
+    @Deprecated // testing old PAPI
     private void addGlobalStoreToTopologyAndExpectedDescription(final String globalStoreName,
                                                                 final String sourceName,
                                                                 final String globalTopicName,
