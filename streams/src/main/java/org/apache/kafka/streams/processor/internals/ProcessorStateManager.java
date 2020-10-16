@@ -400,6 +400,7 @@ public class ProcessorStateManager implements StateManager {
         }
 
         if (!storeMetadata.store().isOpen()) {
+            log.info("Skipping restoring {} with {} changelog records since it is already closed", storeMetadata.stateStore.name(), restoreRecords.size());
             return false;
         }
 
@@ -421,6 +422,8 @@ public class ProcessorStateManager implements StateManager {
             }
 
             storeMetadata.setOffset(batchEndOffset);
+
+            log.info("Restored {} with {} changelog records", storeMetadata.stateStore.name(), restoreRecords.size());
         }
 
         return true;
