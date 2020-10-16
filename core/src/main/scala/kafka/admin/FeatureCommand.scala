@@ -63,7 +63,8 @@ object FeatureCommand {
 class UpdateFeaturesException(message: String) extends RuntimeException(message)
 
 /**
- * A class that provides necessary APIs to bridge the Admin client feature APIs with the CLI tool.
+ * A class that provides necessary APIs to bridge feature APIs provided by the the Admin client with
+ * the requirements of the CLI tool.
  *
  * @param opts the CLI options
  */
