@@ -69,7 +69,12 @@ class UpdateFeaturesException(message: String) extends RuntimeException(message)
  */
 class FeatureApis(var opts: FeatureCommandOptions) {
   private var supportedFeatures = BrokerFeatures.createDefault().supportedFeatures
-  private val adminClient = createAdminClient(opts.commandConfig)
+  private val adminClient = {
+    val props = new Properties()
+    props.putAll(opts.commandConfig)
+    props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.bootstrapServers)
+    Admin.create(props)
+  }
 
   private def pad(op: String): String = {
     f"$op%11s"
@@ -251,7 +256,7 @@ class FeatureApis(var opts: FeatureCommandOptions) {
       println("Expected feature updates:" + ListMap(
         updates
           .toSeq
-          .sortBy{ case(feature, _) => feature} :_*)
+          .sortBy { case(feature, _) => feature} :_*)
           .map { case(_, (updateStr, _)) => updateStr}
           .mkString("\n"))
     } else {
@@ -299,13 +304,6 @@ class FeatureApis(var opts: FeatureCommandOptions) {
 
   def close(): Unit = {
     adminClient.close()
-  }
-
-  private def createAdminClient(commandConfig: Properties): Admin = {
-    val props = new Properties()
-    props.putAll(commandConfig)
-    props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.bootstrapServers)
-    Admin.create(props)
   }
 }
 
