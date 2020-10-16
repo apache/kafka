@@ -79,7 +79,7 @@ public class StringConverter implements Converter, HeaderConverter {
         try {
             return serializer.serialize(topic, value == null ? null : value.toString());
         } catch (SerializationException e) {
-            throw new DataException("Failed to serialize to a string: ", e);
+            throw new DataException(this.getClass() + " Failed to serialize to a string: ", e);
         }
     }
 
@@ -88,7 +88,7 @@ public class StringConverter implements Converter, HeaderConverter {
         try {
             return new SchemaAndValue(Schema.OPTIONAL_STRING_SCHEMA, deserializer.deserialize(topic, value));
         } catch (SerializationException e) {
-            throw new DataException("Failed to deserialize string: ", e);
+            throw new DataException(this.getClass() + " Failed to deserialize string: ", e);
         }
     }
 

@@ -36,6 +36,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.Utils.UncheckedCloseable;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Headers;
@@ -531,9 +532,12 @@ class WorkerSinkTask extends WorkerTask {
         try {
             return keyConverter.toConnectData(msg.topic(), msg.headers(), msg.key());
         } catch (Exception e) {
-            log.error("{} Error converting message key in topic '{}' partition {} at offset {} and timestamp {}: {}",
-                    this, msg.topic(), msg.partition(), msg.offset(), msg.timestamp(), e.getMessage(), e);
-            throw e;
+            String errorMessage = "Error while deserializing the key for record in topic %s, partition %s, timestamp %s, and at offset %s. " +
+                    "Check the key.converter and key.converter.* settings in the connector configuration, " +
+                    "and ensure that the converter matches the converter/serializer used by the application that produced this record. " +
+                    "Underlying converter error: %s";
+            log.error(String.format(errorMessage, msg.topic(), msg.partition(), msg.timestamp(), msg.offset(), e.getMessage()), e);
+            throw new DataException(String.format(errorMessage, msg.topic(), msg.partition(), msg.offset(), msg.timestamp(), e.getMessage()), e);
         }
     }
 
@@ -541,9 +545,12 @@ class WorkerSinkTask extends WorkerTask {
         try {
             return valueConverter.toConnectData(msg.topic(), msg.headers(), msg.value());
         } catch (Exception e) {
-            log.error("{} Error converting message value in topic '{}' partition {} at offset {} and timestamp {}: {}",
-                    this, msg.topic(), msg.partition(), msg.offset(), msg.timestamp(), e.getMessage(), e);
-            throw e;
+            String errorMessage = "Error while deserializing the value for record in topic %s, partition %s, timestamp %s, and at offset %s. " +
+                    "Check the value.converter and value.converter.* settings in the connector configuration, " +
+                    "and ensure that the converter matches the converter/serializer used by the application that produced this record. " +
+                    "Underlying converter error: %s";
+            log.error(String.format(errorMessage, msg.topic(), msg.partition(), msg.timestamp(), msg.offset(), e.getMessage()), e);
+            throw new DataException(String.format(errorMessage, msg.topic(), msg.partition(), msg.offset(), msg.timestamp(), e.getMessage()), e);
         }
     }
 

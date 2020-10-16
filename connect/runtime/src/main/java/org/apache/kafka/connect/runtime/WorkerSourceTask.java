@@ -308,10 +308,10 @@ class WorkerSourceTask extends WorkerTask {
 
         RecordHeaders headers = retryWithToleranceOperator.execute(() -> convertHeaderFor(record), Stage.HEADER_CONVERTER, headerConverter.getClass());
 
-        byte[] key = retryWithToleranceOperator.execute(() -> keyConverter.fromConnectData(record.topic(), headers, record.keySchema(), record.key()),
+        byte[] key = retryWithToleranceOperator.execute(() -> convertKey(record, headers),
                 Stage.KEY_CONVERTER, keyConverter.getClass());
 
-        byte[] value = retryWithToleranceOperator.execute(() -> valueConverter.fromConnectData(record.topic(), headers, record.valueSchema(), record.value()),
+        byte[] value = retryWithToleranceOperator.execute(() -> convertValue(record, headers),
                 Stage.VALUE_CONVERTER, valueConverter.getClass());
 
         if (retryWithToleranceOperator.failed()) {
@@ -600,6 +600,30 @@ class WorkerSourceTask extends WorkerTask {
         outstandingMessages = outstandingMessagesBacklog;
         outstandingMessagesBacklog = temp;
         flushing = false;
+    }
+
+    private byte[] convertKey(SourceRecord record, RecordHeaders headers) {
+        try {
+            return keyConverter.fromConnectData(record.topic(), headers, record.keySchema(), record.key());
+        } catch (Exception e) {
+            String errorMessage = "%s Error while serializing the key for a source record to topic: %s. Check the key.converter and key.converter.* " +
+                    "settings in the connector configuration, or in the worker configuration if the connector is inheriting the connector configuration. " +
+                    "Underlying converter error: %s";
+            log.error(String.format(errorMessage, this, record.topic(), e.getMessage()), e);
+            throw new RetriableException(String.format(errorMessage, this, record.topic(), e.getMessage()), e);
+        }
+    }
+
+    private byte[] convertValue(SourceRecord record, RecordHeaders headers) {
+        try {
+            return valueConverter.fromConnectData(record.topic(), headers, record.valueSchema(), record.value());
+        } catch (Exception e) {
+            String errorMessage = "%s Error while serializing the value for a source record to topic: %s. Check the value.converter and value.converter.* " +
+                    "settings in the connector configuration, or in the worker configuration if the connector is inheriting the connector configuration. " +
+                    "Underlying converter error: %s";
+            log.error(String.format(errorMessage, this, record.topic(), e.getMessage()), e);
+            throw new RetriableException(String.format(errorMessage, this, record.topic(), e.getMessage()), e);
+        }
     }
 
     @Override
