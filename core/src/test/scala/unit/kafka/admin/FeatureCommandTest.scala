@@ -227,7 +227,6 @@ class FeatureCommandTest extends BaseRequestTest {
       val expected =
         "      [Add]\tFeature: feature_1\tExistingFinalizedMaxVersion: -" +
         "\tNewFinalizedMaxVersion: 4\tResult: FAILED due to" +
-        " java.util.concurrent.ExecutionException:" +
         " org.apache.kafka.common.errors.InvalidRequestException: Could not apply finalized" +
         " feature update because brokers were found to have incompatible versions for the" +
         " feature.\n" +
@@ -235,7 +234,6 @@ class FeatureCommandTest extends BaseRequestTest {
         "\tNewFinalizedMaxVersion: 5\tResult: OK\n" +
         "      [Add]\tFeature: feature_3\tExistingFinalizedMaxVersion: -" +
         "\tNewFinalizedMaxVersion: 3\tResult: FAILED due to" +
-        " java.util.concurrent.ExecutionException:" +
         " org.apache.kafka.common.errors.InvalidRequestException: Could not apply finalized" +
         " feature update because the provided feature is not supported.\n"
       assertEquals(expected, output)

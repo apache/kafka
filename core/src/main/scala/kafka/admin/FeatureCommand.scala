@@ -23,13 +23,14 @@ import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.{Admin, DescribeFeaturesOptions, FeatureMetadata, FeatureUpdate, UpdateFeaturesOptions}
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
 import org.apache.kafka.common.utils.Utils
-
 import java.util.Properties
+
 import scala.collection.Seq
 import scala.collection.immutable.ListMap
 import scala.jdk.CollectionConverters._
-
 import joptsimple.OptionSpec
+
+import scala.concurrent.ExecutionException
 
 object FeatureCommand {
 
@@ -45,6 +46,10 @@ object FeatureCommand {
         opts.parser.printHelpOn(System.err)
         exitCode = 1
       case _: UpdateFeaturesException =>
+        exitCode = 1
+      case e: ExecutionException =>
+        val cause = if (e.getCause == null) e else e.getCause
+        printException(cause)
         exitCode = 1
       case e: Throwable =>
         printException(e)
@@ -280,7 +285,11 @@ class FeatureApis(var opts: FeatureCommandOptions) {
             println(updateStr + "\tResult: OK")
             0
           } catch {
-            case e: Exception =>
+            case e: ExecutionException =>
+              val cause = if (e.getCause == null) e else e.getCause
+              println(updateStr + "\tResult: FAILED due to " + cause)
+              1
+            case e: Throwable =>
               println(updateStr + "\tResult: FAILED due to " + e)
               1
           }
