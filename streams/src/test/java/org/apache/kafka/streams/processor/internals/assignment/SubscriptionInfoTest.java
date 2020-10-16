@@ -59,7 +59,7 @@ public class SubscriptionInfoTest {
     );
 
     private final static String IGNORED_USER_ENDPOINT = "ignoredUserEndpoint:80";
-    private static final byte[] IGNORED_UNIQUE_FIELD = new byte[1];
+    private static final byte IGNORED_UNIQUE_FIELD = (byte) 0;
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowForUnknownVersion1() {

@@ -56,7 +56,7 @@
     {
       "name": "uniqueField",
       "versions": "8+",
-      "type": "bytes"
+      "type": "int8"
     }
   ],
   "commonStructs": [

@@ -25,7 +25,6 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaClientSupplier;
@@ -152,9 +151,9 @@ public class StreamsUpgradeTest {
             // 3. Task ids of valid local states on the client's state directory.
             final TaskManager taskManager = taskManager();
             handleRebalanceStart(topics);
-            final byte[] uniqueField = new byte[1];
+            byte uniqueField = 0;
             if (usedSubscriptionMetadataVersion <= LATEST_SUPPORTED_VERSION) {
-                uniqueField[0]++;
+                uniqueField++;
                 return new SubscriptionInfo(
                     usedSubscriptionMetadataVersion,
                     LATEST_SUPPORTED_VERSION + 1,
@@ -261,7 +260,7 @@ public class StreamsUpgradeTest {
                                 info.processId(),
                                 info.userEndPoint(),
                                 taskManager().getTaskOffsetSums(),
-                                Bytes.EMPTY)
+                                (byte) 0)
                                 .encode(),
                             subscription.ownedPartitions()
                         ));

@@ -82,7 +82,7 @@ public class SubscriptionInfo {
                             final UUID processId,
                             final String userEndPoint,
                             final Map<TaskId, Long> taskOffsetSums,
-                            final byte[] uniqueField) {
+                            final byte uniqueField) {
         validateVersions(version, latestSupportedVersion);
         final SubscriptionInfoData data = new SubscriptionInfoData();
         data.setVersion(version);

@@ -182,7 +182,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private AssignmentListener assignmentListener;
 
     private Supplier<TaskAssignor> taskAssignorSupplier;
-    private byte[] uniqueField;
+    private byte uniqueField;
 
     /**
      * We need to have the PartitionAssignor and its StreamThread to be mutually accessible since the former needs
@@ -213,7 +213,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         rebalanceProtocol = assignorConfiguration.rebalanceProtocol();
         taskAssignorSupplier = assignorConfiguration::taskAssignor;
         assignmentListener = assignorConfiguration.assignmentListener();
-        uniqueField = new byte[1];
+        uniqueField = 0;
     }
 
     @Override
@@ -239,7 +239,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         // 3. Unique Field to ensure a rebalance when a thread rejoins by forcing the user data to be different
 
         handleRebalanceStart(topics);
-        uniqueField[0]++;
+        uniqueField++;
 
         return new SubscriptionInfo(
             usedSubscriptionMetadataVersion,
@@ -1590,7 +1590,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         return taskManager;
     }
 
-    protected byte[] uniqueField() {
+    protected byte uniqueField() {
         return uniqueField;
     }
 

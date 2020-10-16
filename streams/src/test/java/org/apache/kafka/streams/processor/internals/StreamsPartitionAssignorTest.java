@@ -36,7 +36,6 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -188,7 +187,7 @@ public class StreamsPartitionAssignorTest {
     private final AtomicInteger assignmentError = new AtomicInteger();
     private final AtomicLong nextScheduledRebalanceMs = new AtomicLong(Long.MAX_VALUE);
     private final MockTime time = new MockTime();
-    private final byte[] uniqueField = {1};
+    private final byte uniqueField = 1;
 
     private Map<String, Object> configProps() {
         final Map<String, Object> configurationMap = new HashMap<>();
@@ -2023,13 +2022,13 @@ public class StreamsPartitionAssignorTest {
         configureDefaultPartitionAssignor();
         final Set<String> topics = mkSet("input");
 
-        assertEquals(1, partitionAssignor.uniqueField().length);
-        assertEquals(0, partitionAssignor.uniqueField()[0]);
+        //assertEquals(1, partitionAssignor.uniqueField().length);
+        assertEquals(0, partitionAssignor.uniqueField());
         partitionAssignor.subscriptionUserData(topics);
-        assertEquals(1, partitionAssignor.uniqueField()[0]);
+        assertEquals(1, partitionAssignor.uniqueField());
         partitionAssignor.subscriptionUserData(topics);
-        assertEquals(2, partitionAssignor.uniqueField()[0]);
-        assertEquals(1, partitionAssignor.uniqueField().length);
+        assertEquals(2, partitionAssignor.uniqueField());
+        //assertEquals(1, partitionAssignor.uniqueField().length);
 
     }
 
@@ -2042,9 +2041,9 @@ public class StreamsPartitionAssignorTest {
         for (int i = 0; i < 127; i++) {
             partitionAssignor.subscriptionUserData(topics);
         }
-        assertEquals(127, partitionAssignor.uniqueField()[0]);
+        assertEquals(127, partitionAssignor.uniqueField());
         partitionAssignor.subscriptionUserData(topics);
-        assertEquals(-128, partitionAssignor.uniqueField()[0]);
+        assertEquals(-128, partitionAssignor.uniqueField());
     }
 
     private static ByteBuffer encodeFutureSubscription() {
@@ -2163,7 +2162,7 @@ public class StreamsPartitionAssignorTest {
                                                            final Set<TaskId> prevTasks,
                                                            final Set<TaskId> standbyTasks) {
         return new SubscriptionInfo(
-            version, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks), Bytes.EMPTY);
+            version, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks), (byte) 0);
     }
 
     // Stub offset sums for when we only care about the prev/standby task sets, not the actual offsets
