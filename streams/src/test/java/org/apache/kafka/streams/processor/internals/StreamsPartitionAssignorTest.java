@@ -2022,13 +2022,11 @@ public class StreamsPartitionAssignorTest {
         configureDefaultPartitionAssignor();
         final Set<String> topics = mkSet("input");
 
-        //assertEquals(1, partitionAssignor.uniqueField().length);
         assertEquals(0, partitionAssignor.uniqueField());
         partitionAssignor.subscriptionUserData(topics);
         assertEquals(1, partitionAssignor.uniqueField());
         partitionAssignor.subscriptionUserData(topics);
         assertEquals(2, partitionAssignor.uniqueField());
-        //assertEquals(1, partitionAssignor.uniqueField().length);
 
     }
 
