@@ -37,10 +37,9 @@ class FeatureCommandTest extends BaseRequestTest {
     props.put(KafkaConfig.InterBrokerProtocolVersionProp, KAFKA_2_7_IV0.toString)
   }
 
-  private def defaultSupportedFeatures(): Features[SupportedVersionRange] = {
+  private val defaultSupportedFeatures: Features[SupportedVersionRange] =
     Features.supportedFeatures(Utils.mkMap(Utils.mkEntry("feature_1", new SupportedVersionRange(1, 3)),
                                            Utils.mkEntry("feature_2", new SupportedVersionRange(1, 5))))
-  }
 
   private def updateSupportedFeatures(features: Features[SupportedVersionRange],
                                       targetServers: Set[KafkaServer]): Unit = {
@@ -76,9 +75,9 @@ class FeatureCommandTest extends BaseRequestTest {
    */
   @Test
   def testDescribeFeaturesSuccess(): Unit = {
-    updateSupportedFeaturesInAllBrokers(defaultSupportedFeatures())
+    updateSupportedFeaturesInAllBrokers(defaultSupportedFeatures)
     val featureApis = new FeatureApis(new FeatureCommandOptions(Array("--bootstrap-server", brokerList, "--describe", "--from-controller")))
-    featureApis.setSupportedFeatures(defaultSupportedFeatures())
+    featureApis.setSupportedFeatures(defaultSupportedFeatures)
     try {
       val initialDescribeOutput = TestUtils.grabConsoleOutput(featureApis.describeFeatures())
       val expectedInitialDescribeOutput =
@@ -121,8 +120,8 @@ class FeatureCommandTest extends BaseRequestTest {
       // - Upgrade existing feature_1 to maxVersionLevel: 3.
       // - Upgrade non-existing feature_2 to maxVersionLevel: 5.
       // - Verify results.
-      updateSupportedFeaturesInAllBrokers(defaultSupportedFeatures())
-      featureApis.setSupportedFeatures(defaultSupportedFeatures())
+      updateSupportedFeaturesInAllBrokers(defaultSupportedFeatures)
+      featureApis.setSupportedFeatures(defaultSupportedFeatures)
       output = TestUtils.grabConsoleOutput(featureApis.upgradeAllFeatures())
       expected =
         "  [Upgrade]\tFeature: feature_1\tExistingFinalizedMaxVersion: 2\tNewFinalizedMaxVersion: 3\tResult: OK\n" +
@@ -156,8 +155,8 @@ class FeatureCommandTest extends BaseRequestTest {
       // - Update the supported features across all brokers.
       // - Upgrade non-existing feature_1 to maxVersionLevel: 3.
       // - Upgrade non-existing feature_2 to maxVersionLevel: 5.
-      updateSupportedFeaturesInAllBrokers(defaultSupportedFeatures())
-      featureApis.setSupportedFeatures(defaultSupportedFeatures())
+      updateSupportedFeaturesInAllBrokers(defaultSupportedFeatures)
+      featureApis.setSupportedFeatures(defaultSupportedFeatures)
       featureApis.upgradeAllFeatures()
 
       // Step (2):
@@ -203,7 +202,7 @@ class FeatureCommandTest extends BaseRequestTest {
     val featureApis = new FeatureApis(upgradeOpts)
     try {
       // Step (1): Update the supported features across all brokers.
-      updateSupportedFeaturesInAllBrokers(defaultSupportedFeatures())
+      updateSupportedFeaturesInAllBrokers(defaultSupportedFeatures)
 
       // Step (2):
       // - Intentionally setup the FeatureApis object such that it contains incompatible target
@@ -228,6 +227,7 @@ class FeatureCommandTest extends BaseRequestTest {
       val expected =
         "      [Add]\tFeature: feature_1\tExistingFinalizedMaxVersion: -" +
         "\tNewFinalizedMaxVersion: 4\tResult: FAILED due to" +
+        " java.util.concurrent.ExecutionException:" +
         " org.apache.kafka.common.errors.InvalidRequestException: Could not apply finalized" +
         " feature update because brokers were found to have incompatible versions for the" +
         " feature.\n" +
@@ -235,6 +235,7 @@ class FeatureCommandTest extends BaseRequestTest {
         "\tNewFinalizedMaxVersion: 5\tResult: OK\n" +
         "      [Add]\tFeature: feature_3\tExistingFinalizedMaxVersion: -" +
         "\tNewFinalizedMaxVersion: 3\tResult: FAILED due to" +
+        " java.util.concurrent.ExecutionException:" +
         " org.apache.kafka.common.errors.InvalidRequestException: Could not apply finalized" +
         " feature update because the provided feature is not supported.\n"
       assertEquals(expected, output)

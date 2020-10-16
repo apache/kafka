@@ -69,7 +69,7 @@ class UpdateFeaturesException(message: String) extends RuntimeException(message)
  */
 class FeatureApis(var opts: FeatureCommandOptions) {
   private var supportedFeatures = BrokerFeatures.createDefault().supportedFeatures
-  private val adminClient = createAdminClient()
+  private val adminClient = createAdminClient(opts.commandConfig)
 
   private def pad(op: String): String = {
     f"$op%11s"
@@ -166,7 +166,7 @@ class FeatureApis(var opts: FeatureCommandOptions) {
             s"\tFeature: $feature" +
             s"\tExistingFinalizedMaxVersion: -" +
             s"\tNewFinalizedMaxVersion: ${targetVersionRange.max}"
-          (feature, (updateStr, new FeatureUpdate(targetVersionRange.max, false)))
+          (feature, Some((updateStr, new FeatureUpdate(targetVersionRange.max, false))))
         } else {
           if (targetVersionRange.max > existingVersionRange.maxVersionLevel) {
             val updateStr =
@@ -174,12 +174,16 @@ class FeatureApis(var opts: FeatureCommandOptions) {
               s"\tFeature: $feature" +
               s"\tExistingFinalizedMaxVersion: ${existingVersionRange.maxVersionLevel}" +
               s"\tNewFinalizedMaxVersion: ${targetVersionRange.max}"
-            (feature, (updateStr, new FeatureUpdate(targetVersionRange.max, false)))
+            (feature, Some((updateStr, new FeatureUpdate(targetVersionRange.max, false))))
           } else {
-            (feature, null)
+            (feature, Option.empty)
           }
         }
-    }.filter{ case(_, updateInfo) => updateInfo != null}.toMap
+    }.filter {
+      case(_, updateInfo) => updateInfo.isDefined
+    }.map {
+      case(feature, updateInfo) => (feature, updateInfo.get)
+    }.toMap
 
     if (updates.nonEmpty) {
       maybeApplyFeatureUpdates(updates)
@@ -210,7 +214,7 @@ class FeatureApis(var opts: FeatureCommandOptions) {
             s"\tFeature: $feature" +
             s"\tExistingFinalizedMaxVersion: ${existingVersionRange.maxVersionLevel}" +
             s"\tNewFinalizedMaxVersion: -"
-          (feature, (updateStr, new FeatureUpdate(0, true)))
+          (feature, Some(updateStr, new FeatureUpdate(0, true)))
         } else {
           if (targetVersionRange.max < existingVersionRange.maxVersionLevel) {
             val updateStr =
@@ -218,12 +222,16 @@ class FeatureApis(var opts: FeatureCommandOptions) {
               s"\tFeature: $feature" +
               s"\tExistingFinalizedMaxVersion: ${existingVersionRange.maxVersionLevel}" +
               s"\tNewFinalizedMaxVersion: ${targetVersionRange.max}"
-            (feature, (updateStr, new FeatureUpdate(targetVersionRange.max, true)))
+            (feature, Some(updateStr, new FeatureUpdate(targetVersionRange.max, true)))
           } else {
-            (feature, null)
+            (feature, Option.empty)
           }
         }
-    }.filter{ case(_, updateInfo) => updateInfo != null}.toMap
+    }.filter {
+      case(_, updateInfo) => updateInfo.isDefined
+    }.map {
+      case(feature, updateInfo) => (feature, updateInfo.get)
+    }.toMap
 
     if (updates.nonEmpty) {
       maybeApplyFeatureUpdates(updates)
@@ -240,15 +248,25 @@ class FeatureApis(var opts: FeatureCommandOptions) {
    */
   private def maybeApplyFeatureUpdates(updates: Map[String, (String, FeatureUpdate)]): Unit = {
     if (opts.hasDryRunOption) {
-      println("Expected feature updates:")
-      println(ListMap(updates.toSeq.sortBy(_._1):_*)
-                .map { case(_, (updateStr, _)) => updateStr}
-                .mkString("\n"))
+      println("Expected feature updates:" + ListMap(
+        updates
+          .toSeq
+          .sortBy{ case(feature, _) => feature} :_*)
+          .map { case(_, (updateStr, _)) => updateStr}
+          .mkString("\n"))
     } else {
       val result = adminClient.updateFeatures(
-        updates.map { case(feature, (_, update)) => (feature, update)}.asJava,
+        updates
+          .map { case(feature, (_, update)) => (feature, update)}
+          .asJava,
         new UpdateFeaturesOptions())
-      val failures = ListMap(result.values.asScala.toSeq.sortBy(_._1):_*).map {
+      val resultSortedByFeature = ListMap(
+        result
+          .values
+          .asScala
+          .toSeq
+          .sortBy { case(feature, _) => feature} :_*)
+      val failures = resultSortedByFeature.map {
         case (feature, updateFuture) =>
           val (updateStr, _) = updates(feature)
           try {
@@ -257,7 +275,7 @@ class FeatureApis(var opts: FeatureCommandOptions) {
             0
           } catch {
             case e: Exception =>
-              println(updateStr + "\tResult: FAILED due to " + e.getMessage)
+              println(updateStr + "\tResult: FAILED due to " + e)
               1
           }
       }.sum
@@ -283,19 +301,29 @@ class FeatureApis(var opts: FeatureCommandOptions) {
     adminClient.close()
   }
 
-  private def createAdminClient(): Admin = {
+  private def createAdminClient(commandConfig: Properties): Admin = {
     val props = new Properties()
+    props.putAll(commandConfig)
     props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.bootstrapServers)
     Admin.create(props)
   }
 }
 
 class FeatureCommandOptions(args: Array[String]) extends CommandDefaultOptions(args) {
-  private val bootstrapServerOpt =
-    parser.accepts("bootstrap-server", "REQUIRED: The Kafka server(s) to connect to.")
+  private val bootstrapServerOpt = parser.accepts(
+      "bootstrap-server",
+      "REQUIRED: A comma-separated list of host:port pairs to use for establishing the connection" +
+      " to the Kafka cluster.")
       .withRequiredArg
       .describedAs("server to connect to")
       .ofType(classOf[String])
+  private val commandConfigOpt = parser.accepts(
+    "command-config",
+    "Property file containing configs to be passed to Admin Client." +
+    " This is used with --bootstrap-server option when required.")
+    .withOptionalArg
+    .describedAs("command config property file")
+    .ofType(classOf[String])
   private val describeOpt = parser.accepts(
     "describe",
     "Describe supported and finalized features. By default, the features are described from a" +
@@ -333,6 +361,13 @@ class FeatureCommandOptions(args: Array[String]) extends CommandDefaultOptions(a
   def hasUpgradeAllOption: Boolean = has(upgradeAllOpt)
 
   def hasDowngradeAllOption: Boolean = has(downgradeAllOpt)
+
+  def commandConfig: Properties = {
+    if (has(commandConfigOpt))
+      Utils.loadProps(options.valueOf(commandConfigOpt))
+    else
+      new Properties()
+  }
 
   def bootstrapServers: String = options.valueOf(bootstrapServerOpt)
 
