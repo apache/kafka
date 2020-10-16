@@ -66,7 +66,7 @@ public abstract class AbstractTask implements Task {
                  final ProcessorStateManager stateMgr,
                  final Set<TopicPartition> inputPartitions,
                  final long taskTimeoutMs,
-                 final String logPrefix,
+                 final String taskType,
                  final Class<? extends AbstractTask> clazz) {
         this.id = id;
         this.stateMgr = stateMgr;
@@ -76,9 +76,9 @@ public abstract class AbstractTask implements Task {
         this.taskTimeoutMs = taskTimeoutMs;
 
         final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
-        this.logPrefix = threadIdPrefix + String.format("%s [%s] ", logPrefix, id);
-        this.logContext = new LogContext(logPrefix);
-        this.log = logContext.logger(clazz);
+        logPrefix = threadIdPrefix + String.format("%s [%s] ", taskType, id);
+        logContext = new LogContext(logPrefix);
+        log = logContext.logger(clazz);
     }
 
     /**
