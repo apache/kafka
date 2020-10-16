@@ -140,14 +140,14 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
       assertEquals(Set(Errors.NONE), errors.values.toSet)
 
       // Metric must be there with the correct config
-      verifyQuotaMetric(principal.getName, ControllerMutationRate)
+      waitQuotaMetric(principal.getName, ControllerMutationRate)
 
       // Update quota
       defineUserQuota(ThrottledPrincipal.getName, Some(ControllerMutationRate * 2))
       waitUserQuota(ThrottledPrincipal.getName, ControllerMutationRate * 2)
 
       // Metric must be there with the updated config
-      verifyQuotaMetric(principal.getName, ControllerMutationRate * 2)
+      waitQuotaMetric(principal.getName, ControllerMutationRate * 2)
     }
   }
 
@@ -381,16 +381,18 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     Option(servers.head.metrics.metric(metricName))
   }
 
-  private def verifyQuotaMetric(user: String, expectedQuota: Double): Unit = {
-    quotaMetric(user) match {
-      case Some(metric) =>
-        val config = metric.config()
-        assertEquals(expectedQuota, config.quota().bound(), 0.1)
-        assertEquals(ControllerQuotaSamples, config.samples())
-        assertEquals(ControllerQuotaWindowSizeSeconds * 1000, config.timeWindowMs())
+  private def waitQuotaMetric(user: String, expectedQuota: Double): Unit = {
+    TestUtils.retry(200) {
+      quotaMetric(user) match {
+        case Some(metric) =>
+          val config = metric.config()
+          assertEquals(expectedQuota, config.quota().bound(), 0.1)
+          assertEquals(ControllerQuotaSamples, config.samples())
+          assertEquals(ControllerQuotaWindowSizeSeconds * 1000, config.timeWindowMs())
 
-      case None =>
-        fail(s"Quota metric of $user is not defined")
+        case None =>
+          fail(s"Quota metric of $user is not defined")
+      }
     }
   }
 
