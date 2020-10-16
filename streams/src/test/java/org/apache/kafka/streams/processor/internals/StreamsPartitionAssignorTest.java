@@ -33,7 +33,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
@@ -41,7 +40,6 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.TopologyWrapper;
-import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
@@ -51,10 +49,10 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration;
-import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
 import org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
 import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
@@ -80,8 +78,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import static java.time.Duration.ofMillis;
@@ -114,6 +110,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getInfo;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.mock;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -184,20 +181,19 @@ public class StreamsPartitionAssignorTest {
     private final Map<String, Subscription> subscriptions = new HashMap<>();
     private final Class<? extends TaskAssignor> taskAssignor;
 
-    private final AtomicInteger assignmentError = new AtomicInteger();
-    private final AtomicLong nextScheduledRebalanceMs = new AtomicLong(Long.MAX_VALUE);
+    private final ReferenceContainer referenceContainer = new ReferenceContainer();
     private final MockTime time = new MockTime();
 
     private Map<String, Object> configProps() {
         final Map<String, Object> configurationMap = new HashMap<>();
         configurationMap.put(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID);
         configurationMap.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, USER_END_POINT);
-        configurationMap.put(InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR, taskManager);
-        configurationMap.put(InternalConfig.STREAMS_METADATA_STATE_FOR_PARTITION_ASSIGNOR, streamsMetadataState);
-        configurationMap.put(InternalConfig.STREAMS_ADMIN_CLIENT, adminClient);
-        configurationMap.put(InternalConfig.ASSIGNMENT_ERROR_CODE, assignmentError);
-        configurationMap.put(InternalConfig.NEXT_SCHEDULED_REBALANCE_MS, nextScheduledRebalanceMs);
-        configurationMap.put(InternalConfig.TIME, time);
+        referenceContainer.mainConsumer = mock(Consumer.class);
+        referenceContainer.adminClient = adminClient != null ? adminClient : mock(Admin.class);
+        referenceContainer.taskManager = taskManager;
+        referenceContainer.streamsMetadataState = streamsMetadataState;
+        referenceContainer.time = time;
+        configurationMap.put(InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
         configurationMap.put(InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, taskAssignor.getName());
         return configurationMap;
     }
@@ -1184,89 +1180,6 @@ public class StreamsPartitionAssignorTest {
     }
 
     @Test
-    public void shouldReturnShutdownErrorCodeWhenCreatingRepartitionTopicsTimesOut() {
-        final StreamsBuilder streamsBuilder = new StreamsBuilder();
-        streamsBuilder.stream("topic1").repartition();
-
-        final String client = "client1";
-        builder = TopologyWrapper.getInternalTopologyBuilder(streamsBuilder.build());
-
-        createDefaultMockTaskManager();
-        EasyMock.replay(taskManager);
-        partitionAssignor.configure(configProps());
-        final MockInternalTopicManager mockInternalTopicManager =  new MockInternalTopicManager(
-            time,
-            new StreamsConfig(configProps()),
-            mockClientSupplier.restoreConsumer,
-            false
-        ) {
-            @Override
-            public Set<String> makeReady(final Map<String, InternalTopicConfig> topics) throws TaskAssignmentException {
-                throw new TimeoutException("KABOOM!");
-            }
-        };
-        partitionAssignor.setInternalTopicManager(mockInternalTopicManager);
-
-        subscriptions.put(client,
-            new Subscription(
-                singletonList("topic1"),
-                defaultSubscriptionInfo.encode()
-            )
-        );
-        final Map<String, Assignment> assignment =
-            partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
-
-        // check if we created a task for all expected topicPartitions.
-        assertThat(
-            AssignmentInfo.decode(assignment.get(client).userData()).errCode(),
-            equalTo(AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.code())
-        );
-    }
-
-    @Test
-    public void shouldReturnShutdownErrorCodeWhenCreatingChangelogTopicsTimesOut() {
-        final StreamsBuilder streamsBuilder = new StreamsBuilder();
-        streamsBuilder.table("topic1", Materialized.as("store"));
-
-        final String client = "client1";
-        builder = TopologyWrapper.getInternalTopologyBuilder(streamsBuilder.build());
-
-        createDefaultMockTaskManager();
-        EasyMock.replay(taskManager);
-        partitionAssignor.configure(configProps());
-        final MockInternalTopicManager mockInternalTopicManager =  new MockInternalTopicManager(
-            time,
-            new StreamsConfig(configProps()),
-            mockClientSupplier.restoreConsumer,
-            false
-        ) {
-            @Override
-            public Set<String> makeReady(final Map<String, InternalTopicConfig> topics) throws TaskAssignmentException {
-                if (topics.isEmpty()) {
-                    return emptySet();
-                }
-                throw new TimeoutException("KABOOM!");
-            }
-        };
-        partitionAssignor.setInternalTopicManager(mockInternalTopicManager);
-
-        subscriptions.put(client,
-            new Subscription(
-                singletonList("topic1"),
-                defaultSubscriptionInfo.encode()
-            )
-        );
-        final Map<String, Assignment> assignment =
-            partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
-
-        // check if we created a task for all expected topicPartitions.
-        assertThat(
-            AssignmentInfo.decode(assignment.get(client).userData()).errCode(),
-            equalTo(AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.code())
-        );
-    }
-
-    @Test
     public void shouldAddUserDefinedEndPointToSubscription() {
         builder.addSource(null, "source", null, null, null, "input");
         builder.addProcessor("processor", new MockApiProcessorSupplier<>(), "source");
@@ -1427,11 +1340,11 @@ public class StreamsPartitionAssignorTest {
 
         partitionAssignor.onAssignment(createAssignment(oldHostState), null);
 
-        assertThat(nextScheduledRebalanceMs.get(), is(0L));
+        assertThat(referenceContainer.nextScheduledRebalanceMs.get(), is(0L));
 
         partitionAssignor.onAssignment(createAssignment(newHostState), null);
 
-        assertThat(nextScheduledRebalanceMs.get(), is(Long.MAX_VALUE));
+        assertThat(referenceContainer.nextScheduledRebalanceMs.get(), is(Long.MAX_VALUE));
     }
 
     @Test
@@ -1469,7 +1382,7 @@ public class StreamsPartitionAssignorTest {
 
         partitionAssignor.onAssignment(assignment.get(CONSUMER_2), null);
 
-        assertThat(nextScheduledRebalanceMs.get(), is(0L));
+        assertThat(referenceContainer.nextScheduledRebalanceMs.get(), is(0L));
     }
 
     @Test
@@ -1519,59 +1432,30 @@ public class StreamsPartitionAssignorTest {
     }
 
     @Test
-    public void shouldThrowKafkaExceptionIfTaskMangerNotConfigured() {
+    public void shouldThrowKafkaExceptionIfReferenceContainerNotConfigured() {
         final Map<String, Object> config = configProps();
-        config.remove(InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR);
+        config.remove(InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR);
 
-        try {
-            partitionAssignor.configure(config);
-            fail("Should have thrown KafkaException");
-        } catch (final KafkaException expected) {
-            assertThat(expected.getMessage(), equalTo("TaskManager is not specified"));
-        }
+        final KafkaException expected = assertThrows(
+            KafkaException.class,
+            () -> partitionAssignor.configure(config)
+        );
+        assertThat(expected.getMessage(), equalTo("ReferenceContainer is not specified"));
     }
 
     @Test
-    public void shouldThrowKafkaExceptionIfTaskMangerConfigIsNotTaskManagerInstance() {
+    public void shouldThrowKafkaExceptionIfReferenceContainerConfigIsNotTaskManagerInstance() {
         final Map<String, Object> config = configProps();
-        config.put(InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR, "i am not a task manager");
+        config.put(InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, "i am not a reference container");
 
-        try {
-            partitionAssignor.configure(config);
-            fail("Should have thrown KafkaException");
-        } catch (final KafkaException expected) {
-            assertThat(expected.getMessage(),
-                       equalTo("java.lang.String is not an instance of org.apache.kafka.streams.processor.internals.TaskManager"));
-        }
-    }
-
-    @Test
-    public void shouldThrowKafkaExceptionAssignmentErrorCodeNotConfigured() {
-        createDefaultMockTaskManager();
-        final Map<String, Object> config = configProps();
-        config.remove(InternalConfig.ASSIGNMENT_ERROR_CODE);
-
-        try {
-            partitionAssignor.configure(config);
-            fail("Should have thrown KafkaException");
-        } catch (final KafkaException expected) {
-            assertThat(expected.getMessage(), equalTo("assignmentErrorCode is not specified"));
-        }
-    }
-
-    @Test
-    public void shouldThrowKafkaExceptionIfVersionProbingFlagConfigIsNotAtomicInteger() {
-        createDefaultMockTaskManager();
-        final Map<String, Object> config = configProps();
-        config.put(InternalConfig.ASSIGNMENT_ERROR_CODE, "i am not an AtomicInteger");
-
-        try {
-            partitionAssignor.configure(config);
-            fail("Should have thrown KafkaException");
-        } catch (final KafkaException expected) {
-            assertThat(expected.getMessage(),
-                       equalTo("java.lang.String is not an instance of java.util.concurrent.atomic.AtomicInteger"));
-        }
+        final KafkaException expected = assertThrows(
+            KafkaException.class,
+            () -> partitionAssignor.configure(config)
+        );
+        assertThat(
+            expected.getMessage(),
+            equalTo("java.lang.String is not an instance of org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer")
+        );
     }
 
     @Test
@@ -1841,17 +1725,6 @@ public class StreamsPartitionAssignorTest {
     }
 
     @Test
-    public void shouldGetNextProbingRebalanceMs() {
-        nextScheduledRebalanceMs.set(5 * 60 * 1000L);
-
-        createDefaultMockTaskManager();
-        final Map<String, Object> props = configProps();
-        final AssignorConfiguration assignorConfiguration = new AssignorConfiguration(props);
-
-        assertThat(assignorConfiguration.nextScheduledRebalanceMs().get(), equalTo(5 * 60 * 1000L));
-    }
-
-    @Test
     public void shouldGetTime() {
         time.setCurrentTimeMs(Long.MAX_VALUE);
 
@@ -1859,7 +1732,7 @@ public class StreamsPartitionAssignorTest {
         final Map<String, Object> props = configProps();
         final AssignorConfiguration assignorConfiguration = new AssignorConfiguration(props);
 
-        assertThat(assignorConfiguration.time().milliseconds(), equalTo(Long.MAX_VALUE));
+        assertThat(assignorConfiguration.referenceContainer().time.milliseconds(), equalTo(Long.MAX_VALUE));
     }
 
     @Test
@@ -2002,7 +1875,6 @@ public class StreamsPartitionAssignorTest {
         final Consumer<byte[], byte[]> consumerClient = EasyMock.createMock(Consumer.class);
 
         createDefaultMockTaskManager();
-        EasyMock.expect(taskManager.mainConsumer()).andStubReturn(consumerClient);
         configurePartitionAssignorWith(singletonMap(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE));
         overwriteInternalTopicManagerWithMock(false);
 

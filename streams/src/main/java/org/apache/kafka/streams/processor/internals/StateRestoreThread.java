@@ -168,8 +168,9 @@ public class StateRestoreThread extends Thread {
         if (!isRunning.get())
             return;
 
-        // a task being recycled maybe in both closed and initialized tasks,
-        // and hence we should process the closed ones first and then initialized ones
+        // in each iteration hence we should update the changelog reader by unregistering closed tasks first,
+        // then registering newly created ones; this is because when a task is recycled / revived it would be treated
+        // as a closed-then-created tasks
         final List<TaskItem> items = new ArrayList<>();
         taskItemQueue.drainTo(items);
 

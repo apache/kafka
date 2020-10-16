@@ -502,8 +502,8 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             String configName = configValue.name();
             configValueMap.put(configName, configValue);
             if (!configKeys.containsKey(configName)) {
-                configValue.addErrorMessage("Configuration is not defined: " + configName);
                 configInfoList.add(new ConfigInfo(null, convertConfigValue(configValue, null)));
+                errorCount += configValue.errorMessages().size();
             }
         }
 
