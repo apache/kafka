@@ -2692,7 +2692,7 @@ public class TaskManagerTest {
                          final Set<TopicPartition> partitions,
                          final boolean active,
                          final ProcessorStateManager processorStateManager) {
-            super(id, null, null, processorStateManager, partitions, 0L);
+            super(id, null, null, processorStateManager, partitions, 0L, "test-task", StateMachineTask.class);
             this.active = active;
         }
 
