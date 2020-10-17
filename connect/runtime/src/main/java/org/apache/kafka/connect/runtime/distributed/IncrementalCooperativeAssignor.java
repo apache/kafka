@@ -597,7 +597,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         for (WorkerLoad existing : existingWorkers) {
             Iterator<ConnectorTaskId> tasks = existing.tasks().iterator();
             numToRevoke = existing.tasksSize() - ceilTasks;
-            log.debug("revoke number of tasks per worker {}", numToRevoke);
+            log.debug("Tasks on worker {} is higher than ceiling, so revoking {} tasks", existing, numToRevoke);
             for (int i = existing.tasksSize(); i > floorTasks && numToRevoke > 0; --i, --numToRevoke) {
                 ConnectorsAndTasks resources = revoking.computeIfAbsent(
                     existing.worker(),
