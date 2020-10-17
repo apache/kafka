@@ -51,6 +51,11 @@ public class DefaultReplicationPolicy implements ReplicationPolicy, Configurable
     }
 
     @Override
+    public String restoreSourceTopic(String sourceClusterAlias, String topic) {
+        return topic.substring(sourceClusterAlias.length() + separator.length());
+    }
+    
+    @Override
     public String topicSource(String topic) {
         String[] parts = separatorPattern.split(topic);
         if (parts.length < 2) {

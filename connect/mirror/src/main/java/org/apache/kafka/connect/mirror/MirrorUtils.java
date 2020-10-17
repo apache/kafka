@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.TopicPartition;
@@ -26,6 +28,7 @@ import org.apache.kafka.connect.util.TopicAdmin;
 
 import java.util.Arrays;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Collections;
@@ -112,5 +115,10 @@ final class MirrorUtils {
 
     static void createSinglePartitionCompactedTopic(String topicName, short replicationFactor, Map<String, Object> adminProps) {
         createCompactedTopic(topicName, (short) 1, replicationFactor, adminProps);
+    }
+    
+    static Map<TopicPartition, OffsetAndMetadata> listConsumerGroupOffset(Admin adminClient, String group)
+            throws InterruptedException, ExecutionException {
+        return adminClient.listConsumerGroupOffsets(group).partitionsToOffsetAndMetadata().get();
     }
 }

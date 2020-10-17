@@ -72,6 +72,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
     protected static final String EMIT_HEARTBEATS = "emit.heartbeats";
     protected static final String EMIT_CHECKPOINTS = "emit.checkpoints";
     protected static final String SYNC_GROUP_OFFSETS = "sync.group.offsets";
+    protected static final String TRANSACTION_PRODUCER = "transaction.producer";
 
     public static final String ENABLED = "enabled";
     private static final String ENABLED_DOC = "Whether to replicate source->target.";
@@ -204,7 +205,15 @@ public class MirrorConnectorConfig extends AbstractConfig {
     protected static final String PRODUCER_CLIENT_PREFIX = "producer.";
     protected static final String CONSUMER_CLIENT_PREFIX = "consumer.";
     protected static final String ADMIN_CLIENT_PREFIX = "admin.";
+    
+    public static final String CONNECTOR_CONSUMER_GROUP = "connector.consumer.group";
+    private static final String CONNECTOR_CONSUMER_GROUP_DOC = "consumer group id of MirrorSinkConnector";
+    public static final String CONNECTOR_CONSUMER_GROUP_DEFAULT = "connect-MirrorSinkConnector";
 
+    public static final String TRANSACTION_PRODUCER_ENABLED = TRANSACTION_PRODUCER + ENABLED_SUFFIX;
+    private static final String TRANSACTION_PRODUCER_ENABLED_DOC = "Whether to enable trnsactional producer in MirrorSinkTask.";
+    public static final boolean TRANSACTION_PRODUCER_ENABLED_DEFAULT = false;
+    
     public MirrorConnectorConfig(Map<String, String> props) {
         this(CONNECTOR_CONFIG_DEF, props);
     }
@@ -235,6 +244,14 @@ public class MirrorConnectorConfig extends AbstractConfig {
         props.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
         props.putAll(originalsWithPrefix(PRODUCER_CLIENT_PREFIX));
         props.putAll(originalsWithPrefix(SOURCE_PREFIX + PRODUCER_CLIENT_PREFIX));
+        return props;
+    }
+    
+    Map<String, Object> targetProducerConfig() {
+        Map<String, Object> props = new HashMap<>();
+        props.putAll(originalsWithPrefix(TARGET_CLUSTER_PREFIX));
+        props.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
+        props.putAll(originalsWithPrefix(PRODUCER_CLIENT_PREFIX));
         return props;
     }
 
@@ -422,6 +439,14 @@ public class MirrorConnectorConfig extends AbstractConfig {
             // negative interval to disable
             return Duration.ofMillis(-1);
         }
+    }
+
+    boolean transactionalProducer() {
+        return getBoolean(TRANSACTION_PRODUCER_ENABLED);
+    }
+    
+    String connectorConsumerGroup() {
+        return getString(CONNECTOR_CONSUMER_GROUP);
     }
 
     protected static final ConfigDef CONNECTOR_CONFIG_DEF = ConnectorConfig.configDef()
@@ -640,6 +665,18 @@ public class MirrorConnectorConfig extends AbstractConfig {
                     CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
                     ConfigDef.Importance.MEDIUM,
                     CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+            .define(
+                    TRANSACTION_PRODUCER_ENABLED,
+                    ConfigDef.Type.BOOLEAN,
+                    TRANSACTION_PRODUCER_ENABLED_DEFAULT,
+                    ConfigDef.Importance.HIGH,
+                    TRANSACTION_PRODUCER_ENABLED_DOC)
+            .define(
+                    CONNECTOR_CONSUMER_GROUP,
+                    ConfigDef.Type.STRING,
+                    CONNECTOR_CONSUMER_GROUP_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    CONNECTOR_CONSUMER_GROUP_DOC)
             .withClientSslSupport()
             .withClientSaslSupport();
 }
