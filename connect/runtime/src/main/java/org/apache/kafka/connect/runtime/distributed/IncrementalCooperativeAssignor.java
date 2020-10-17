@@ -259,7 +259,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         // Do not revoke resources for re-assignment while a delayed rebalance is active
         // Also we do not revoke in two consecutive rebalances by the same leader
         canRevoke = delay == 0 && canRevoke;
-        log.debug("Connector and task to revoke assgn post lb calculation: {}", toRevoke);
+        log.debug("Connector and task to revoke assignment post load balancer calculation: {}", toRevoke);
         // Compute the connectors-and-tasks to be revoked for load balancing without taking into
         // account the deleted ones.
         log.debug("Can leader revoke tasks in this assignment? {} (delay: {})", canRevoke, delay);
