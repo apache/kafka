@@ -161,13 +161,7 @@ public class StateRestoreThread extends Thread {
         }
     }
 
-    // Visible for testing
-    void runOnce() {
-        waitIfAllChangelogsCompleted();
-
-        if (!isRunning.get())
-            return;
-
+    private void updateChangelogReader() {
         // in each iteration hence we should update the changelog reader by unregistering closed tasks first,
         // then registering newly created ones; this is because when a task is recycled / revived it would be treated
         // as a closed-then-created tasks
@@ -199,7 +193,9 @@ public class StateRestoreThread extends Thread {
             }
         }
         items.clear();
+    }
 
+    private void restoreStoresFromChangelogs() {
         // try to restore some changelogs
         final long startMs = time.milliseconds();
         try {
@@ -229,6 +225,21 @@ public class StateRestoreThread extends Thread {
         } catch (final TimeoutException e) {
             log.info("Encountered timeout when restoring states, will retry in the next loop");
         }
+    }
+
+    // Visible for testing
+    void runOnce() {
+        waitIfAllChangelogsCompleted();
+
+        if (!isRunning.get())
+            return;
+
+        // first update the changelog reader (un)registering changelogs for (closed) created
+        // tasks, this must be done in each iteration so that we can stop fetching for those closed tasks asap
+        updateChangelogReader();
+
+        // try to restore some changelogs
+        restoreStoresFromChangelogs();
 
         // finally update completed changelogs
         completedChangelogs.set(changelogReader.completedChangelogs());
