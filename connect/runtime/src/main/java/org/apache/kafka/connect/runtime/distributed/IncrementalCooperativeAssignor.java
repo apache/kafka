@@ -577,9 +577,8 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
 
         log.debug("Previous rounded down (floor) average number of tasks per worker {}", totalActiveTasksNum / existingWorkersNum);
         int floorTasks = totalActiveTasksNum / totalWorkersNum;
-        log.debug("New rounded down (floor) average number of tasks per worker {}", floorTasks);
         int ceilTasks = (int) Math.ceil((float) totalActiveTasksNum / totalWorkersNum);
-        log.debug("New rounded down (ceil) average number of tasks per worker {}", ceilTasks);
+        log.debug("New average number of tasks per worker: floor={}, ceiling={}", floorTasks, ceilTasks);
 
         int numToRevoke = floorConnectors;
         for (WorkerLoad existing : existingWorkers) {
