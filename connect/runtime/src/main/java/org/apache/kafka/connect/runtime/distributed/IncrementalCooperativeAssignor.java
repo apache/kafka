@@ -462,7 +462,6 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                     WorkerLoad worker = candidateWorkerIterator.next();
                     log.debug("Assigning connector id {} to member {}", connector, worker.worker());
                     worker.assign(connector);
-                    log.debug("Assigned connector id {} to member {}", connector, worker.worker());
                 }
                 candidateWorkerIterator = candidateWorkerLoad.iterator();
                 for (ConnectorTaskId task : lostAssignments.tasks()) {
