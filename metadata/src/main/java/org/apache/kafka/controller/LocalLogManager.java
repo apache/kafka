@@ -723,6 +723,15 @@ public final class LocalLogManager implements MetaLogManager {
                 lock.unlock();
             }
         }
+
+        LeaderInfo leaderInfo() {
+            lock.lock();
+            try {
+                return new LeaderInfo(leaderInfo.nodeId, leaderInfo.epoch);
+            } finally {
+                lock.unlock();
+            }
+        }
     }
 
     class WatcherThread extends KafkaThread {
@@ -824,6 +833,11 @@ public final class LocalLogManager implements MetaLogManager {
     @Override
     public void beginShutdown() {
         leadershipClaimerThread.beginShutdown();
+    }
+
+    @Override
+    public int activeNode() {
+        return scribeThread.leaderInfo().nodeId;
     }
 
     int nodeId() {
