@@ -105,6 +105,12 @@ public interface MetaLogManager extends AutoCloseable {
     void beginShutdown();
 
     /**
+     * Returns the current active node, or -1 if there is none.  The active node may
+     * change immediately after this function is called, of course.
+     */
+    int activeNode();
+
+    /**
      * Blocks until we have shut down and freed all resources.  It is not necessary to
      * call beginShutdown before calling this function.
      */

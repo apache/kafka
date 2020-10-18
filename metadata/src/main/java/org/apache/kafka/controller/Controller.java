@@ -20,8 +20,12 @@ package org.apache.kafka.controller;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.common.requests.BrokerRegistrationRequest;
+import org.apache.kafka.controller.ClusterControlManager.HeartbeatReply;
+import org.apache.kafka.controller.ClusterControlManager.RegistrationReply;
 
 import java.util.Collection;
 import java.util.Map;
@@ -29,7 +33,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 public interface Controller extends AutoCloseable {
-    /**
+        /**
      * Change partition ISRs.
      *
      * @param brokerId      The ID of the broker making the change.
@@ -40,6 +44,18 @@ public interface Controller extends AutoCloseable {
      */
     CompletableFuture<Map<TopicPartition, Errors>>
         alterIsr(int brokerId, long brokerEpoch, Map<TopicPartition, LeaderAndIsr> changes);
+
+    /**
+     * Describe the current configuration of various resources.
+     *
+     * @param resources     A map from resources to the collection of config keys that we
+     *                      want to describe for each.  If the collection is empty, then
+     *                      all configuration keys will be described.
+     *
+     * @return
+     */
+    CompletableFuture<Map<ConfigResource, ResultOrError<Map<String, String>>>>
+        describeConfigs(Map<ConfigResource, Collection<String>> resources);
 
     /**
      * Elect new partition leaders.
@@ -78,16 +94,23 @@ public interface Controller extends AutoCloseable {
         Map<ConfigResource, Map<String, String>> newConfigs, boolean validateOnly);
 
     /**
-     * Describe the current configuration of various resources.
+     * Process a heartbeat from a broker.
      *
-     * @param resources     A map from resources to the collection of config keys that we
-     *                      want to describe for each.  If the collection is empty, then
-     *                      all configuration keys will be described.
+     * @param request      The broker heartbeat request.
      *
-     * @return
+     * @return              A future yielding a heartbeat reply.
      */
-    CompletableFuture<Map<ConfigResource, ResultOrError<Map<String, String>>>>
-        describeConfigs(Map<ConfigResource, Collection<String>> resources);
+    CompletableFuture<HeartbeatReply> processBrokerHeartbeat(
+        BrokerHeartbeatRequestData request);
+
+    /**
+     * Attempt to register the given broker.
+     *
+     * @param request      The registration request.
+     *
+     * @return              A future yielding a registration reply.
+     */
+    CompletableFuture<RegistrationReply> registerBroker(BrokerRegistrationRequest request);
 
     /**
      * Begin shutting down, but don't block.  You must still call close to clean up all
