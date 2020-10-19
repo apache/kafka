@@ -17,15 +17,13 @@
 package kafka.controller
 
 import java.util.Properties
-import java.util.UUID
 
-import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, KAFKA_0_10_2_IV0, KAFKA_0_9_0, KAFKA_1_0_IV0, KAFKA_2_2_IV0, KAFKA_2_4_IV0, KAFKA_2_4_IV1, KAFKA_2_6_IV0, KAFKA_2_7_IV0, LeaderAndIsr}
+import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, KAFKA_0_10_2_IV0, KAFKA_0_9_0, KAFKA_1_0_IV0, KAFKA_2_2_IV0, KAFKA_2_4_IV0, KAFKA_2_4_IV1, KAFKA_2_6_IV0, KAFKA_2_7_IV2, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.{LeaderAndIsrResponseData, StopReplicaResponseData, UpdateMetadataResponseData}
-import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicError
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState
 import org.apache.kafka.common.message.StopReplicaResponseData.StopReplicaPartitionError
@@ -82,9 +80,6 @@ class ControllerChannelManagerTest {
       leaderAndIsrRequest.partitionStates.asScala.map(p => new TopicPartition(p.topicName, p.partitionIndex) -> p.leader).toMap)
     assertEquals(partitions.map { case (k, v) => (k, v.isr) },
       leaderAndIsrRequest.partitionStates.asScala.map(p => new TopicPartition(p.topicName, p.partitionIndex) -> p.isr.asScala).toMap)
-    val topicIds = leaderAndIsrRequest.topicIds();
-    val topicNames = topicIds.asScala.map{ case (k,v) => (v, k)}
-
 
     applyLeaderAndIsrResponseCallbacks(Errors.NONE, batch.sentRequests(2).toList)
     assertEquals(1, batch.sentEvents.size)
@@ -92,10 +87,7 @@ class ControllerChannelManagerTest {
     val LeaderAndIsrResponseReceived(leaderAndIsrResponse, brokerId) = batch.sentEvents.head
     assertEquals(2, brokerId)
     assertEquals(partitions.keySet,
-      leaderAndIsrResponse.topics.asScala.map(t => t.partitionErrors.asScala.map(p =>
-        new TopicPartition(topicNames.get(t.topicID).get, p.partitionIndex))).flatMap(f => f).toSet)
-    leaderAndIsrResponse.topics.forEach(topic =>
-      assertEquals(topicIds.get(topicNames.get(topic.topicID).get), topic.topicID))
+      leaderAndIsrResponse.partitions.asScala.map(p => new TopicPartition(p.topicName, p.partitionIndex)).toSet)
   }
 
   @Test
@@ -164,14 +156,12 @@ class ControllerChannelManagerTest {
     testLeaderAndIsrRequestFollowsInterBrokerProtocolVersion(ApiVersion.latestVersion, ApiKeys.LEADER_AND_ISR.latestVersion)
 
     for (apiVersion <- ApiVersion.allVersions) {
-      val leaderAndIsrRequestVersion: Short = {
-        if (apiVersion >= KAFKA_2_7_IV0) 5
-        else if (apiVersion >= KAFKA_2_4_IV1) 4
+      val leaderAndIsrRequestVersion: Short =
+        if (apiVersion >= KAFKA_2_4_IV1) 4
         else if (apiVersion >= KAFKA_2_4_IV0) 3
         else if (apiVersion >= KAFKA_2_2_IV0) 2
         else if (apiVersion >= KAFKA_1_0_IV0) 1
         else 0
-      }
 
       testLeaderAndIsrRequestFollowsInterBrokerProtocolVersion(apiVersion, leaderAndIsrRequestVersion)
     }
@@ -344,7 +334,8 @@ class ControllerChannelManagerTest {
 
     for (apiVersion <- ApiVersion.allVersions) {
       val updateMetadataRequestVersion: Short =
-        if (apiVersion >= KAFKA_2_4_IV1) 6
+        if (apiVersion >= KAFKA_2_7_IV2) 7
+        else if (apiVersion >= KAFKA_2_4_IV1) 6
         else if (apiVersion >= KAFKA_2_2_IV0) 5
         else if (apiVersion >= KAFKA_1_0_IV0) 4
         else if (apiVersion >= KAFKA_0_10_2_IV0) 3
@@ -828,18 +819,15 @@ class ControllerChannelManagerTest {
   private def applyLeaderAndIsrResponseCallbacks(error: Errors, sentRequests: List[SentRequest]): Unit = {
     sentRequests.filter(_.request.apiKey == ApiKeys.LEADER_AND_ISR).filter(_.responseCallback != null).foreach { sentRequest =>
       val leaderAndIsrRequest = sentRequest.request.build().asInstanceOf[LeaderAndIsrRequest]
-      val topicIds = leaderAndIsrRequest.topicIds()
-      val topicErrors = leaderAndIsrRequest.data.topicStates().asScala.map(t =>
-        new LeaderAndIsrTopicError()
-          .setTopicID(topicIds.get(t.topicName))
-          .setPartitionErrors(t.partitionStates().asScala.map(p =>
-            new LeaderAndIsrPartitionError()
-              .setPartitionIndex(p.partitionIndex())
-              .setErrorCode(error.code)).asJava))
+      val partitionErrors = leaderAndIsrRequest.partitionStates.asScala.map(p =>
+        new LeaderAndIsrPartitionError()
+          .setTopicName(p.topicName)
+          .setPartitionIndex(p.partitionIndex)
+          .setErrorCode(error.code))
       val leaderAndIsrResponse = new LeaderAndIsrResponse(
         new LeaderAndIsrResponseData()
           .setErrorCode(error.code)
-          .setTopics(topicErrors.asJava))
+          .setPartitionErrors(partitionErrors.toBuffer.asJava))
       sentRequest.responseCallback(leaderAndIsrResponse)
     }
   }
@@ -874,10 +862,6 @@ class ControllerChannelManagerTest {
     }.toMap
 
     context.setLiveBrokers(brokerEpochs)
-
-    for (topic <- topics) {
-      context.addTopicId(topic, UUID.randomUUID())
-    }
 
     // Simple round-robin replica assignment
     var leaderIndex = 0

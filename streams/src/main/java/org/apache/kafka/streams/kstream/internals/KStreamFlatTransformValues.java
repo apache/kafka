@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
+import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -44,10 +45,9 @@ public class KStreamFlatTransformValues<KIn, VIn, VOut> implements ProcessorSupp
         return valueTransformerSupplier.stores();
     }
 
-    public static class KStreamFlatTransformValuesProcessor<KIn, VIn, VOut> implements Processor<KIn, VIn> {
+    public static class KStreamFlatTransformValuesProcessor<KIn, VIn, VOut> extends AbstractProcessor<KIn, VIn> {
 
         private final ValueTransformerWithKey<KIn, VIn, Iterable<VOut>> valueTransformer;
-        private ProcessorContext context;
 
         KStreamFlatTransformValuesProcessor(final ValueTransformerWithKey<KIn, VIn, Iterable<VOut>> valueTransformer) {
             this.valueTransformer = valueTransformer;
@@ -55,8 +55,8 @@ public class KStreamFlatTransformValues<KIn, VIn, VOut> implements ProcessorSupp
 
         @Override
         public void init(final ProcessorContext context) {
+            super.init(context);
             valueTransformer.init(new ForwardingDisabledProcessorContext(context));
-            this.context = context;
         }
 
         @Override
@@ -71,6 +71,7 @@ public class KStreamFlatTransformValues<KIn, VIn, VOut> implements ProcessorSupp
 
         @Override
         public void close() {
+            super.close();
             valueTransformer.close();
         }
     }

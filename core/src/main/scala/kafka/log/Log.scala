@@ -319,6 +319,11 @@ class Log(@volatile private var _dir: File,
     // from scratch.
     if (!producerStateManager.isEmpty)
       throw new IllegalStateException("Producer state must be empty during log initialization")
+
+    // Reload all snapshots into the ProducerStateManager cache, the intermediate ProducerStateManager used
+    // during log recovery may have deleted some files without the Log.producerStateManager instance witnessing the
+    // deletion.
+    producerStateManager.removeStraySnapshots(segments.values().asScala.map(_.baseOffset).toSeq)
     loadProducerState(logEndOffset, reloadFromCleanShutdown = hasCleanShutdownFile)
 
     // Recover topic ID if present
@@ -376,6 +381,20 @@ class Log(@volatile private var _dir: File,
     else
       hw
     updateHighWatermarkMetadata(LogOffsetMetadata(newHighWatermark))
+    newHighWatermark
+  }
+
+  def updateHighWatermarkOffsetMetadata(hw: LogOffsetMetadata): Long = {
+    val newHighWatermark = if (hw.messageOffset < logStartOffset) {
+      updateHighWatermarkMetadata(LogOffsetMetadata(logStartOffset))
+      logStartOffset
+    } else if (hw.messageOffset > logEndOffset) {
+      updateHighWatermarkMetadata(logEndOffsetMetadata)
+      logEndOffset
+    } else {
+      updateHighWatermarkMetadata(hw)
+      hw.messageOffset
+    }
     newHighWatermark
   }
 
@@ -1016,12 +1035,11 @@ class Log(@volatile private var _dir: File,
           _dir = renamedDir
           _parentDir = renamedDir.getParent
           logSegments.foreach(_.updateParentDir(renamedDir))
-          producerStateManager.logDir = dir
+          producerStateManager.updateParentDir(dir)
           // re-initialize leader epoch cache so that LeaderEpochCheckpointFile.checkpoint can correctly reference
           // the checkpoint file in renamed log directory
           initializeLeaderEpochCache()
-          if (!partitionMetadataFile.isEmpty && !partitionMetadataFile.get.notExists() &&
-            partitionMetadataFile.get.isEmpty()) {
+          if (!partitionMetadataFile.isEmpty && !partitionMetadataFile.get.isEmpty()) {
             val partitionMetadata = partitionMetadataFile.get.read()
             initializePartitionMetadata()
             partitionMetadataFile.get.write(partitionMetadata.topicId)
@@ -1325,7 +1343,7 @@ class Log(@volatile private var _dir: File,
           updateLogStartOffset(newLogStartOffset)
           info(s"Incremented log start offset to $newLogStartOffset due to $reason")
           leaderEpochCache.foreach(_.truncateFromStart(logStartOffset))
-          producerStateManager.truncateHead(newLogStartOffset)
+          producerStateManager.onLogStartOffsetIncremented(newLogStartOffset)
           maybeIncrementFirstUnstableOffset()
         }
       }
@@ -1517,7 +1535,8 @@ class Log(@volatile private var _dir: File,
            isolation: FetchIsolation,
            minOneMessage: Boolean): FetchDataInfo = {
     maybeHandleIOException(s"Exception while reading from $topicPartition in dir ${dir.getParent}") {
-      trace(s"Reading $maxLength bytes from offset $startOffset of length $size bytes")
+      trace(s"Reading maximum $maxLength bytes at offset $startOffset from log with " +
+        s"total length $size bytes")
 
       val includeAbortedTxns = isolation == FetchTxnCommitted
 
@@ -2028,39 +2047,6 @@ class Log(@volatile private var _dir: File,
     }
   }
 
-  /**
-   * Cleanup old producer snapshots after the recovery point is checkpointed. It is useful to retain
-   * the snapshots from the recent segments in case we need to truncate and rebuild the producer state.
-   * Otherwise, we would always need to rebuild from the earliest segment.
-   *
-   * More specifically:
-   *
-   * 1. We always retain the producer snapshot from the last two segments. This solves the common case
-   * of truncating to an offset within the active segment, and the rarer case of truncating to the previous segment.
-   *
-   * 2. We only delete snapshots for offsets less than the recovery point. The recovery point is checkpointed
-   * periodically and it can be behind after a hard shutdown. Since recovery starts from the recovery point, the logic
-   * of rebuilding the producer snapshots in one pass and without loading older segments is simpler if we always
-   * have a producer snapshot for all segments being recovered.
-   *
-   * Return the minimum snapshots offset that was retained.
-   */
-  def deleteSnapshotsAfterRecoveryPointCheckpoint(): Long = {
-    val minOffsetToRetain = minSnapshotsOffsetToRetain
-    producerStateManager.deleteSnapshotsBefore(minOffsetToRetain)
-    minOffsetToRetain
-  }
-
-  // Visible for testing, see `deleteSnapshotsAfterRecoveryPointCheckpoint()` for details
-  private[log] def minSnapshotsOffsetToRetain: Long = {
-    lock synchronized {
-      val twoSegmentsMinOffset = lowerSegment(activeSegment.baseOffset).getOrElse(activeSegment).baseOffset
-      // Prefer segment base offset
-      val recoveryPointOffset = lowerSegment(recoveryPoint).map(_.baseOffset).getOrElse(recoveryPoint)
-      math.min(recoveryPointOffset, twoSegmentsMinOffset)
-    }
-  }
-
   private def lowerSegment(offset: Long): Option[LogSegment] =
     Option(segments.lowerEntry(offset)).map(_.getValue)
 
@@ -2108,7 +2094,7 @@ class Log(@volatile private var _dir: File,
    * @param targetOffset The offset to truncate to, an upper bound on all offsets in the log after truncation is complete.
    * @return True iff targetOffset < logEndOffset
    */
-  private[log] def truncateTo(targetOffset: Long): Boolean = {
+  private[kafka] def truncateTo(targetOffset: Long): Boolean = {
     maybeHandleIOException(s"Error while truncating log to offset $targetOffset for $topicPartition in dir ${dir.getParent}") {
       if (targetOffset < 0)
         throw new IllegalArgumentException(s"Cannot truncate partition $topicPartition to a negative offset (%d).".format(targetOffset))
@@ -2275,13 +2261,17 @@ class Log(@volatile private var _dir: File,
    *
    * @throws IOException if the file can't be renamed and still exists
    */
-  private def deleteSegmentFiles(segments: Iterable[LogSegment], asyncDelete: Boolean): Unit = {
+  private def deleteSegmentFiles(segments: Iterable[LogSegment], asyncDelete: Boolean, deleteProducerStateSnapshots: Boolean = true): Unit = {
     segments.foreach(_.changeFileSuffixes("", Log.DeletedFileSuffix))
 
     def deleteSegments(): Unit = {
       info(s"Deleting segment files ${segments.mkString(",")}")
       maybeHandleIOException(s"Error while deleting segments for $topicPartition in dir ${dir.getParent}") {
-        segments.foreach(_.deleteIfExists())
+        segments.foreach { segment =>
+          segment.deleteIfExists()
+          if (deleteProducerStateSnapshots)
+            producerStateManager.removeAndDeleteSnapshot(segment.baseOffset)
+        }
       }
     }
 
@@ -2337,14 +2327,15 @@ class Log(@volatile private var _dir: File,
       if (!isRecoveredSwapFile)
         sortedNewSegments.reverse.foreach(_.changeFileSuffixes(Log.CleanedFileSuffix, Log.SwapFileSuffix))
       sortedNewSegments.reverse.foreach(addSegment(_))
+      val newSegmentBaseOffsets = sortedNewSegments.map(_.baseOffset).toSet
 
       // delete the old files
       for (seg <- sortedOldSegments) {
         // remove the index entry
         if (seg.baseOffset != sortedNewSegments.head.baseOffset)
           segments.remove(seg.baseOffset)
-        // delete segment files
-        deleteSegmentFiles(List(seg), asyncDelete = true)
+        // delete segment files, but do not delete producer state for segment objects which are being replaced.
+        deleteSegmentFiles(List(seg), asyncDelete = true, deleteProducerStateSnapshots = !newSegmentBaseOffsets.contains(seg.baseOffset))
       }
       // okay we are safe now, remove the swap suffix
       sortedNewSegments.foreach(_.changeFileSuffixes(Log.SwapFileSuffix, ""))
@@ -2456,7 +2447,7 @@ class Log(@volatile private var _dir: File,
 
       // replace old segment with new ones
       info(s"Replacing overflowed segment $segment with split segments $newSegments")
-      replaceSegments(newSegments.toList, List(segment), isRecoveredSwapFile = false)
+      replaceSegments(newSegments.toList, List(segment))
       newSegments.toList
     } catch {
       case e: Exception =>

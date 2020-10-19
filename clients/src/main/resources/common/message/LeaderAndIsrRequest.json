@@ -47,7 +47,7 @@
       { "name": "TopicName", "type": "string", "versions": "2+", "entityType": "topicName",
         "about": "The topic name." },
       { "name": "TopicID", "type": "uuid", "versions": "5+",
-        "about": "The unique topicId." },
+        "about": "The unique topic ID." },
       { "name": "PartitionStates", "type": "[]LeaderAndIsrPartitionState", "versions": "2+",
         "about": "The state of each partition" }
     ]},

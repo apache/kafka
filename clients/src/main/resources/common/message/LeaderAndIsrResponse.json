@@ -25,7 +25,7 @@
   //
   // Version 4 is the first flexible version.
   //
-  // Version 5 removes TopicName and replaces it with TopicID. It also puts topics at a higher level.
+  // Version 5 removes TopicName and replaces it with TopicID and and reorganizes the partitions by topic.
   "validVersions": "0-5",
   "flexibleVersions": "4+",
   "fields": [

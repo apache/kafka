@@ -135,10 +135,6 @@ class PartitionMetadataFile(val file: File,
     }
   }
 
-  def notExists(): Boolean = {
-    !file.exists()
-  }
-
   def isEmpty(): Boolean = {
     file.length() == 0
   }

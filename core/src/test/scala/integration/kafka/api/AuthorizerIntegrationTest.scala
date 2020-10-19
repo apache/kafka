@@ -16,7 +16,7 @@ import java.time.Duration
 import java.util
 import java.util.concurrent.ExecutionException
 import java.util.regex.Pattern
-import java.util.{Collections, Optional, Properties, UUID}
+import java.util.{Collections, Optional, Properties}
 
 import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService}
 import kafka.log.LogConfig
@@ -42,6 +42,7 @@ import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{Alter
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
+import org.apache.kafka.common.message.ListOffsetRequestData.{ListOffsetPartition, ListOffsetTopic}
 import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
 import org.apache.kafka.common.message.{AlterPartitionReassignmentsRequestData, AlterReplicaLogDirsRequestData, ControlledShutdownRequestData, CreateAclsRequestData, CreatePartitionsRequestData, CreateTopicsRequestData, DeleteAclsRequestData, DeleteGroupsRequestData, DeleteRecordsRequestData, DeleteTopicsRequestData, DescribeConfigsRequestData, DescribeGroupsRequestData, DescribeLogDirsRequestData, FindCoordinatorRequestData, HeartbeatRequestData, IncrementalAlterConfigsRequestData, JoinGroupRequestData, ListPartitionReassignmentsRequestData, OffsetCommitRequestData, SyncGroupRequestData}
@@ -53,7 +54,7 @@ import org.apache.kafka.common.resource.PatternType.LITERAL
 import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourcePatternFilter, ResourceType}
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder, SecurityProtocol}
-import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicPartition, requests}
+import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicPartition, requests, UUID}
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
@@ -96,8 +97,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   val brokerId: Integer = 0
   val topic = "topic"
-  val topicId =  UUID.randomUUID()
-  val topicNames = Collections.singletonMap(topicId, topic)
   val topicPattern = "topic.*"
   val transactionalId = "transactional.id"
   val producerId = 83392L
@@ -105,6 +104,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   val correlationId = 0
   val clientId = "client-Id"
   val tp = new TopicPartition(topic, part)
+  val topicIds = Collections.singletonMap(topic, UUID.randomUUID())
   val logDir = "logDir"
   val group = "my-group"
   val protocolType = "consumer"
@@ -157,7 +157,14 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.METADATA -> ((resp: requests.MetadataResponse) => resp.errors.asScala.find(_._1 == topic).getOrElse(("test", Errors.NONE))._2),
     ApiKeys.PRODUCE -> ((resp: requests.ProduceResponse) => resp.responses.asScala.find(_._1 == tp).get._2.error),
     ApiKeys.FETCH -> ((resp: requests.FetchResponse[Records]) => resp.responseData.asScala.find(_._1 == tp).get._2.error),
-    ApiKeys.LIST_OFFSETS -> ((resp: requests.ListOffsetResponse) => resp.responseData.asScala.find(_._1 == tp).get._2.error),
+    ApiKeys.LIST_OFFSETS -> ((resp: requests.ListOffsetResponse) => {
+      Errors.forCode(
+        resp.data
+          .topics.asScala.find(_.name == topic).get
+          .partitions.asScala.find(_.partitionIndex == part).get
+          .errorCode
+      )
+    }),
     ApiKeys.OFFSET_COMMIT -> ((resp: requests.OffsetCommitResponse) => Errors.forCode(
       resp.data().topics().get(0).partitions().get(0).errorCode())),
     ApiKeys.OFFSET_FETCH -> ((resp: requests.OffsetFetchResponse) => resp.error),
@@ -166,15 +173,13 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.JOIN_GROUP -> ((resp: JoinGroupResponse) => resp.error),
     ApiKeys.SYNC_GROUP -> ((resp: SyncGroupResponse) => Errors.forCode(resp.data.errorCode())),
     ApiKeys.DESCRIBE_GROUPS -> ((resp: DescribeGroupsResponse) => {
-      val errorCode = resp.data().groups().asScala.find(g => group.equals(g.groupId())).head.errorCode()
-      Errors.forCode(errorCode)
+      Errors.forCode(resp.data.groups.asScala.find(g => group == g.groupId).head.errorCode)
     }),
     ApiKeys.HEARTBEAT -> ((resp: HeartbeatResponse) => resp.error),
     ApiKeys.LEAVE_GROUP -> ((resp: LeaveGroupResponse) => resp.error),
     ApiKeys.DELETE_GROUPS -> ((resp: DeleteGroupsResponse) => resp.get(group)),
     ApiKeys.LEADER_AND_ISR -> ((resp: requests.LeaderAndIsrResponse) => Errors.forCode(
-      resp.topics.asScala.find(t => topicNames.get(t.topicID) == tp.topic).get.partitionErrors.asScala.find(
-        p => p.partitionIndex == tp.partition).get.errorCode)),
+      resp.partitions.asScala.find(p => p.topicName == tp.topic && p.partitionIndex == tp.partition).get.errorCode)),
     ApiKeys.STOP_REPLICA -> ((resp: requests.StopReplicaResponse) => Errors.forCode(
       resp.partitionErrors.asScala.find(pe => pe.topicName == tp.topic && pe.partitionIndex == tp.partition).get.errorCode)),
     ApiKeys.CONTROLLED_SHUTDOWN -> ((resp: requests.ControlledShutdownResponse) => resp.error),
@@ -215,9 +220,9 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.OFFSET_DELETE -> ((resp: OffsetDeleteResponse) => {
       Errors.forCode(
         resp.data
-          .topics().asScala.find(_.name() == topic).get
-          .partitions().asScala.find(_.partitionIndex() == part).get
-          .errorCode()
+          .topics.asScala.find(_.name == topic).get
+          .partitions.asScala.find(_.partitionIndex == part).get
+          .errorCode
       )
     })
   )
@@ -307,7 +312,13 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def createListOffsetsRequest = {
     requests.ListOffsetRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED).setTargetTimes(
-      Map(tp -> new ListOffsetRequest.PartitionData(0L, Optional.of[Integer](27))).asJava).
+      List(new ListOffsetTopic()
+        .setName(tp.topic)
+        .setPartitions(List(new ListOffsetPartition()
+          .setPartitionIndex(tp.partition)
+          .setTimestamp(0L)
+          .setCurrentLeaderEpoch(27)).asJava)).asJava
+      ).
       build()
   }
 
@@ -346,7 +357,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
         .setSecurityProtocol(securityProtocol.id)
         .setListener(ListenerName.forSecurityProtocol(securityProtocol).value)).asJava)).asJava
     val version = ApiKeys.UPDATE_METADATA.latestVersion
-    new requests.UpdateMetadataRequest.Builder(version, brokerId, Int.MaxValue, Long.MaxValue, partitionStates, brokers).build()
+    new requests.UpdateMetadataRequest.Builder(version, brokerId, Int.MaxValue, Long.MaxValue, partitionStates, topicIds, brokers).build()
   }
 
   private def createJoinGroupRequest = {
@@ -446,7 +457,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
         .setZkVersion(2)
         .setReplicas(Seq(brokerId).asJava)
         .setIsNew(false)).asJava,
-      Collections.singletonMap(tp.topic, topicId),
       Set(new Node(brokerId, "localhost", 0)).asJava).build()
   }
 

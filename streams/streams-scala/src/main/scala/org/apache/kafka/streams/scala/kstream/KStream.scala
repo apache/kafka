@@ -208,7 +208,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * Materialize this stream to a topic and creates a new [[KStream]] from the topic using the `Produced` instance for
    * configuration of the `Serde key serde`, `Serde value serde`, and `StreamPartitioner`
    * <p>
-   * The user can either supply the `Produced` instance as an implicit in scope or she can also provide implicit
+   * The user can either supply the `Produced` instance as an implicit in scope or they can also provide implicit
    * key and value serdes that will be converted to a `Produced` instance implicitly.
    * <p>
    * {{{
@@ -250,7 +250,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * "&lt;name&gt;" is either provided via `Repartitioned#as(String)` or an internally
    * generated name, and "-repartition" is a fixed suffix.
    * <p>
-   * The user can either supply the `Repartitioned` instance as an implicit in scope or she can also provide implicit
+   * The user can either supply the `Repartitioned` instance as an implicit in scope or they can also provide implicit
    * key and value serdes that will be converted to a `Repartitioned` instance implicitly.
    * <p>
    * {{{
@@ -283,7 +283,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * Materialize this stream to a topic using the `Produced` instance for
    * configuration of the `Serde key serde`, `Serde value serde`, and `StreamPartitioner`
    * <p>
-   * The user can either supply the `Produced` instance as an implicit in scope or she can also provide implicit
+   * The user can either supply the `Produced` instance as an implicit in scope or they can also provide implicit
    * key and value serdes that will be converted to a `Produced` instance implicitly.
    * <p>
    * {{{
@@ -315,7 +315,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * configuration of the `Serde key serde`, `Serde value serde`, and `StreamPartitioner`.
    * The topic names for each record to send to is dynamically determined based on the given mapper.
    * <p>
-   * The user can either supply the `Produced` instance as an implicit in scope or she can also provide implicit
+   * The user can either supply the `Produced` instance as an implicit in scope or they can also provide implicit
    * key and value serdes that will be converted to a `Produced` instance implicitly.
    * <p>
    * {{{
@@ -494,7 +494,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
   /**
    * Group the records by their current key into a [[KGroupedStream]]
    * <p>
-   * The user can either supply the `Grouped` instance as an implicit in scope or she can also provide an implicit
+   * The user can either supply the `Grouped` instance as an implicit in scope or they can also provide an implicit
    * serdes that will be converted to a `Grouped` instance implicitly.
    * <p>
    * {{{
@@ -528,7 +528,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * Group the records of this [[KStream]] on a new key that is selected using the provided key transformation function
    * and the `Grouped` instance.
    * <p>
-   * The user can either supply the `Grouped` instance as an implicit in scope or she can also provide an implicit
+   * The user can either supply the `Grouped` instance as an implicit in scope or they can also provide an implicit
    * serdes that will be converted to a `Grouped` instance implicitly.
    * <p>
    * {{{

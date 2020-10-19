@@ -183,7 +183,7 @@ class TopicCommandWithZKClientTest extends ZooKeeperTestHarness with Logging wit
   }
 
   @Test
-  def testListTopicsWithWhitelist(): Unit = {
+  def testListTopicsWithIncludeList(): Unit = {
     val brokers = List(0, 1, 2)
     TestUtils.createBrokersInZk(zkClient, brokers)
 

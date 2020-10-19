@@ -39,26 +39,24 @@ public class WrappingStoreProviderTest {
 
     private WrappingStoreProvider wrappingStoreProvider;
 
+    private final int numStateStorePartitions = 2;
+
     @Before
     public void before() {
         final StateStoreProviderStub stubProviderOne = new StateStoreProviderStub(false);
         final StateStoreProviderStub stubProviderTwo = new StateStoreProviderStub(false);
 
-
-        stubProviderOne.addStore("kv", Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore("kv"),
-                Serdes.serdeFrom(String.class),
-                Serdes.serdeFrom(String.class))
-                .build());
-        stubProviderOne.addStore("window", new NoOpWindowStore());
-        stubProviderTwo.addStore("kv", Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore("kv"),
-                Serdes.serdeFrom(String.class),
-                Serdes.serdeFrom(String.class))
-                .build());
-        stubProviderTwo.addStore("window", new NoOpWindowStore());
-        wrappingStoreProvider = new WrappingStoreProvider(
-            Arrays.asList(stubProviderOne, stubProviderTwo),
-            StoreQueryParameters.fromNameAndType("kv", QueryableStoreTypes.keyValueStore())
-        );
+        for (int partition = 0; partition < numStateStorePartitions; partition++) {
+            stubProviderOne.addStore("kv", partition, Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore("kv"),
+                    Serdes.serdeFrom(String.class),
+                    Serdes.serdeFrom(String.class))
+                    .build());
+            stubProviderOne.addStore("window", partition, new NoOpWindowStore());
+            wrappingStoreProvider = new WrappingStoreProvider(
+                    Arrays.asList(stubProviderOne, stubProviderTwo),
+                    StoreQueryParameters.fromNameAndType("kv", QueryableStoreTypes.keyValueStore())
+            );
+        }
     }
 
     @Test
@@ -81,5 +79,21 @@ public class WrappingStoreProviderTest {
     public void shouldThrowInvalidStoreExceptionIfNoStoreOfTypeFound() {
         wrappingStoreProvider.setStoreQueryParameters(StoreQueryParameters.fromNameAndType("doesn't exist", QueryableStoreTypes.<String, String>keyValueStore()));
         wrappingStoreProvider.stores("doesn't exist", QueryableStoreTypes.<String, String>keyValueStore());
+    }
+
+    @Test
+    public void shouldReturnAllStoreWhenQueryWithoutPartition() {
+        wrappingStoreProvider.setStoreQueryParameters(StoreQueryParameters.fromNameAndType("kv", QueryableStoreTypes.<String, String>keyValueStore()));
+        final List<ReadOnlyKeyValueStore<String, String>> results =
+                wrappingStoreProvider.stores("kv", QueryableStoreTypes.<String, String>keyValueStore());
+        assertEquals(numStateStorePartitions, results.size());
+    }
+
+    @Test
+    public void shouldReturnSingleStoreWhenQueryWithPartition() {
+        wrappingStoreProvider.setStoreQueryParameters(StoreQueryParameters.fromNameAndType("kv", QueryableStoreTypes.<String, String>keyValueStore()).withPartition(numStateStorePartitions - 1));
+        final List<ReadOnlyKeyValueStore<String, String>> results =
+                wrappingStoreProvider.stores("kv", QueryableStoreTypes.<String, String>keyValueStore());
+        assertEquals(1, results.size());
     }
 }

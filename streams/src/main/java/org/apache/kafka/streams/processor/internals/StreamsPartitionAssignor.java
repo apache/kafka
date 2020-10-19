@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.common.Cluster;
@@ -43,6 +44,7 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
 import org.apache.kafka.streams.processor.internals.assignment.CopartitionedTopicsEnforcer;
 import org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
 import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
@@ -60,6 +62,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.PriorityQueue;
 import java.util.Queue;
@@ -165,6 +168,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private String userEndPoint;
     private AssignmentConfigs assignmentConfigs;
 
+    // for the main consumer, we need to use a supplier to break a cyclic setup dependency
+    private Supplier<Consumer<byte[], byte[]>> mainConsumerSupplier;
+    private Admin adminClient;
     private TaskManager taskManager;
     private StreamsMetadataState streamsMetadataState;
     @SuppressWarnings("deprecation")
@@ -175,13 +181,13 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     protected int usedSubscriptionMetadataVersion = LATEST_SUPPORTED_VERSION;
 
-    private Admin adminClient;
     private InternalTopicManager internalTopicManager;
     private CopartitionedTopicsEnforcer copartitionedTopicsEnforcer;
     private RebalanceProtocol rebalanceProtocol;
     private AssignmentListener assignmentListener;
 
     private Supplier<TaskAssignor> taskAssignorSupplier;
+    private byte uniqueField;
 
     /**
      * We need to have the PartitionAssignor and its StreamThread to be mutually accessible since the former needs
@@ -196,22 +202,25 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         logPrefix = assignorConfiguration.logPrefix();
         log = new LogContext(logPrefix).logger(getClass());
-        usedSubscriptionMetadataVersion = assignorConfiguration
-            .configuredMetadataVersion(usedSubscriptionMetadataVersion);
-        taskManager = assignorConfiguration.taskManager();
-        streamsMetadataState = assignorConfiguration.streamsMetadataState();
-        assignmentErrorCode = assignorConfiguration.assignmentErrorCode();
-        nextScheduledRebalanceMs = assignorConfiguration.nextScheduledRebalanceMs();
-        time = assignorConfiguration.time();
+        usedSubscriptionMetadataVersion = assignorConfiguration.configuredMetadataVersion(usedSubscriptionMetadataVersion);
+
+        final ReferenceContainer referenceContainer = assignorConfiguration.referenceContainer();
+        mainConsumerSupplier = () -> Objects.requireNonNull(referenceContainer.mainConsumer, "Main consumer was not specified");
+        adminClient = Objects.requireNonNull(referenceContainer.adminClient, "Admin client was not specified");
+        taskManager = Objects.requireNonNull(referenceContainer.taskManager, "TaskManager was not specified");
+        streamsMetadataState = Objects.requireNonNull(referenceContainer.streamsMetadataState, "StreamsMetadataState was not specified");
+        assignmentErrorCode = referenceContainer.assignmentErrorCode;
+        nextScheduledRebalanceMs = referenceContainer.nextScheduledRebalanceMs;
+        time = Objects.requireNonNull(referenceContainer.time, "Time was not specified");
         assignmentConfigs = assignorConfiguration.assignmentConfigs();
         partitionGrouper = assignorConfiguration.partitionGrouper();
         userEndPoint = assignorConfiguration.userEndPoint();
-        adminClient = assignorConfiguration.adminClient();
         internalTopicManager = assignorConfiguration.internalTopicManager();
         copartitionedTopicsEnforcer = assignorConfiguration.copartitionedTopicsEnforcer();
         rebalanceProtocol = assignorConfiguration.rebalanceProtocol();
         taskAssignorSupplier = assignorConfiguration::taskAssignor;
         assignmentListener = assignorConfiguration.assignmentListener();
+        uniqueField = 0;
     }
 
     @Override
@@ -234,15 +243,18 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         // Adds the following information to subscription
         // 1. Client UUID (a unique id assigned to an instance of KafkaStreams)
         // 2. Map from task id to its overall lag
+        // 3. Unique Field to ensure a rebalance when a thread rejoins by forcing the user data to be different
 
         handleRebalanceStart(topics);
+        uniqueField++;
 
         return new SubscriptionInfo(
             usedSubscriptionMetadataVersion,
             LATEST_SUPPORTED_VERSION,
             taskManager.processId(),
             userEndPoint,
-            taskManager.getTaskOffsetSums())
+            taskManager.getTaskOffsetSums(),
+            uniqueField)
                 .encode();
     }
 
@@ -345,7 +357,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final Map<TopicPartition, PartitionInfo> allRepartitionTopicPartitions;
         try {
             allRepartitionTopicPartitions = prepareRepartitionTopics(topicGroups, metadata);
-        } catch (final TaskAssignmentException | TimeoutException e) {
+        } catch (final TaskAssignmentException e) {
             return new GroupAssignment(
                 errorAssignment(clientMetadataMap,
                     AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.code())
@@ -376,7 +388,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final boolean probingRebalanceNeeded;
         try {
             probingRebalanceNeeded = assignTasksToClients(fullMetadata, allSourceTopics, topicGroups, clientMetadataMap, partitionsForTask, statefulTasks);
-        } catch (final TaskAssignmentException | TimeoutException e) {
+        } catch (final TaskAssignmentException e) {
             return new GroupAssignment(
                 errorAssignment(clientMetadataMap,
                     AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.code())
@@ -462,8 +474,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final Map<String, InternalTopicConfig> repartitionTopicMetadata = new HashMap<>();
         for (final TopicsInfo topicsInfo : topicGroups.values()) {
             for (final String topic : topicsInfo.sourceTopics) {
-                if (!topicsInfo.repartitionSourceTopics.containsKey(topic) &&
-                        !metadata.topics().contains(topic)) {
+                if (!topicsInfo.repartitionSourceTopics.containsKey(topic) && !metadata.topics().contains(topic)) {
                     log.error("Source topic {} is missing/unknown during rebalance, please make sure all source topics " +
                                   "have been pre-created before starting the Streams application. Returning error {}",
                                   topic, AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.name());
@@ -807,7 +818,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 fetchEndOffsetsFuture(preexistingChangelogPartitions, adminClient);
 
             final Map<TopicPartition, Long> sourceChangelogEndOffsets =
-                fetchCommittedOffsets(preexistingSourceChangelogPartitions, taskManager.mainConsumer());
+                fetchCommittedOffsets(preexistingSourceChangelogPartitions, mainConsumerSupplier.get());
 
             final Map<TopicPartition, ListOffsetsResultInfo> endOffsets = ClientUtils.getEndOffsets(endOffsetsFuture);
 
@@ -1059,14 +1070,14 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
             if (!activeTasksRemovedPendingRevokation.isEmpty()) {
                 // TODO: once KAFKA-10078 is resolved we can leave it to the client to trigger this rebalance
-                log.info("Requesting {} followup rebalance be scheduled immediately due to tasks changing ownership.", consumer);
+                log.info("Requesting followup rebalance be scheduled immediately by {} due to tasks changing ownership.", consumer);
                 info.setNextRebalanceTime(0L);
                 followupRebalanceRequiredForRevokedTasks = true;
                 // Don't bother to schedule a probing rebalance if an immediate one is already scheduled
                 shouldEncodeProbingRebalance = false;
             } else if (shouldEncodeProbingRebalance) {
                 final long nextRebalanceTimeMs = time.milliseconds() + probingRebalanceIntervalMs();
-                log.info("Requesting {} followup rebalance be scheduled for {} ms to probe for caught-up replica tasks.",
+                log.info("Requesting followup rebalance be scheduled by {} for {} ms to probe for caught-up replica tasks.",
                         consumer, nextRebalanceTimeMs);
                 info.setNextRebalanceTime(nextRebalanceTimeMs);
                 shouldEncodeProbingRebalance = false;
@@ -1428,6 +1439,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 encodedNextScheduledRebalanceMs = Long.MAX_VALUE;
                 break;
             case 7:
+            case 8:
                 validateActiveTaskEncoding(partitions, info, logPrefix);
 
                 activeTasks = getActiveTasks(partitions, info);
@@ -1583,6 +1595,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     protected TaskManager taskManager() {
         return taskManager;
+    }
+
+    protected byte uniqueField() {
+        return uniqueField;
     }
 
     protected void handleRebalanceStart(final Set<String> topics) {

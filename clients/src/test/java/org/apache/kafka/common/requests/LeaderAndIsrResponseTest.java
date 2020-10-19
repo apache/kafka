@@ -71,7 +71,8 @@ public class LeaderAndIsrResponseTest {
 
     @Test
     public void testErrorCountsWithTopLevelError() {
-        List<LeaderAndIsrTopicError> topics = createTopics(asList(Errors.NONE, Errors.NOT_LEADER_OR_FOLLOWER));
+        UUID id = UUID.randomUUID();
+        List<LeaderAndIsrTopicError> topics = createTopic(id, asList(Errors.NONE, Errors.NOT_LEADER_OR_FOLLOWER));
         LeaderAndIsrResponse response = new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
             .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
             .setTopics(topics));
@@ -80,7 +81,8 @@ public class LeaderAndIsrResponseTest {
 
     @Test
     public void testErrorCountsNoTopLevelError() {
-        List<LeaderAndIsrTopicError> topics = createTopics(asList(Errors.NONE, Errors.CLUSTER_AUTHORIZATION_FAILED));
+        UUID id = UUID.randomUUID();
+        List<LeaderAndIsrTopicError> topics = createTopic(id, asList(Errors.NONE, Errors.CLUSTER_AUTHORIZATION_FAILED));
         LeaderAndIsrResponse response = new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
             .setErrorCode(Errors.NONE.code())
             .setTopics(topics));
@@ -92,20 +94,22 @@ public class LeaderAndIsrResponseTest {
 
     @Test
     public void testToString() {
-        List<LeaderAndIsrTopicError> topics = createTopics(asList(Errors.NONE, Errors.CLUSTER_AUTHORIZATION_FAILED));
+        UUID id = UUID.randomUUID();
+        List<LeaderAndIsrTopicError> topics = createTopic(id, asList(Errors.NONE, Errors.CLUSTER_AUTHORIZATION_FAILED));
         LeaderAndIsrResponse response = new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
             .setErrorCode(Errors.NONE.code())
             .setTopics(topics));
         String responseStr = response.toString();
         assertTrue(responseStr.contains(LeaderAndIsrResponse.class.getSimpleName()));
         assertTrue(responseStr.contains(topics.toString()));
+        assertTrue(responseStr.contains(id.toString()));
         assertTrue(responseStr.contains("errorCode=" + Errors.NONE.code()));
     }
 
-    private List<LeaderAndIsrTopicError> createTopics(List<Errors> errors) {
+    private List<LeaderAndIsrTopicError> createTopic(UUID id, List<Errors> errors) {
         List<LeaderAndIsrTopicError> topics = new ArrayList<>();
         LeaderAndIsrTopicError topic = new LeaderAndIsrTopicError();
-        topic.setTopicID(UUID.randomUUID());
+        topic.setTopicID(id);
         List<LeaderAndIsrPartitionError> partitions = new ArrayList<>();
         int partitionIndex = 0;
         for (Errors error : errors) {

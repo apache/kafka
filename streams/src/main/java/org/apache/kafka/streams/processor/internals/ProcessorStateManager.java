@@ -26,6 +26,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -197,7 +198,7 @@ public class ProcessorStateManager implements StateManager {
             if (stores.containsKey(store.name())) {
                 maybeRegisterStoreWithChangelogReader(store.name());
             } else {
-                store.init(processorContext, store);
+                store.init((StateStoreContext) processorContext, store);
             }
             log.trace("Registered state store {}", store.name());
         }
@@ -602,7 +603,11 @@ public class ProcessorStateManager implements StateManager {
         try {
             checkpointFile.write(checkpointingOffsets);
         } catch (final IOException e) {
-            log.warn("Failed to write offset checkpoint file to [{}]", checkpointFile, e);
+            log.warn("Failed to write offset checkpoint file to [{}]." +
+                " This may occur if OS cleaned the state.dir in case when it located in /tmp directory." +
+                " This may also occur due to running multiple instances on the same machine using the same state dir." +
+                " Changing the location of state.dir may resolve the problem.",
+                checkpointFile, e);
         }
     }
 
@@ -661,5 +666,11 @@ public class ProcessorStateManager implements StateManager {
 
     public String changelogFor(final String storeName) {
         return storeToChangelogTopic.get(storeName);
+    }
+
+    public void deleteCheckPointFileIfEOSEnabled() throws IOException {
+        if (eosEnabled) {
+            checkpointFile.delete();
+        }
     }
 }

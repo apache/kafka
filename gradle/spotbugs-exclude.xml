@@ -110,6 +110,12 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
+        <!-- Suppression for the equals() for extension methods. -->
+        <Class name="kafka.utils.Implicits$MapExtensionMethods"/>
+        <Bug pattern="EQ_UNUSUAL"/>
+    </Match>
+
+    <Match>
         <!-- Add a suppression for auto-generated calls to instanceof in kafka.utils.Json -->
         <Source name="Json.scala"/>
         <Package name="kafka.utils"/>

@@ -16,8 +16,16 @@
  */
 package org.apache.kafka.common.protocol;
 
+import org.apache.kafka.common.message.AddOffsetsToTxnRequestData;
+import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData;
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData;
+import org.apache.kafka.common.message.AlterClientQuotasRequestData;
+import org.apache.kafka.common.message.AlterClientQuotasResponseData;
+import org.apache.kafka.common.message.AlterConfigsRequestData;
+import org.apache.kafka.common.message.AlterConfigsResponseData;
+import org.apache.kafka.common.message.AlterIsrRequestData;
+import org.apache.kafka.common.message.AlterIsrResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData;
@@ -25,14 +33,10 @@ import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.ApiMessageType;
-import org.apache.kafka.common.message.AddOffsetsToTxnRequestData;
-import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
 import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
-import org.apache.kafka.common.message.AlterClientQuotasRequestData;
-import org.apache.kafka.common.message.AlterClientQuotasResponseData;
-import org.apache.kafka.common.message.AlterConfigsRequestData;
-import org.apache.kafka.common.message.AlterConfigsResponseData;
+import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
+import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.ControlledShutdownRequestData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData;
 import org.apache.kafka.common.message.CreateAclsRequestData;
@@ -63,10 +67,14 @@ import org.apache.kafka.common.message.DescribeGroupsRequestData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.DescribeLogDirsRequestData;
 import org.apache.kafka.common.message.DescribeLogDirsResponseData;
+import org.apache.kafka.common.message.DescribeQuorumRequestData;
+import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.ElectLeadersRequestData;
 import org.apache.kafka.common.message.ElectLeadersResponseData;
+import org.apache.kafka.common.message.EndQuorumEpochRequestData;
+import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.EndTxnRequestData;
 import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.message.ExpireDelegationTokenRequestData;
@@ -89,6 +97,8 @@ import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.common.message.ListOffsetRequestData;
+import org.apache.kafka.common.message.ListOffsetResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.MetadataRequestData;
@@ -109,10 +119,14 @@ import org.apache.kafka.common.message.StopReplicaRequestData;
 import org.apache.kafka.common.message.StopReplicaResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
-import org.apache.kafka.common.message.UpdateMetadataRequestData;
-import org.apache.kafka.common.message.UpdateMetadataResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
+import org.apache.kafka.common.message.UpdateFeaturesRequestData;
+import org.apache.kafka.common.message.UpdateFeaturesResponseData;
+import org.apache.kafka.common.message.UpdateMetadataRequestData;
+import org.apache.kafka.common.message.UpdateMetadataResponseData;
+import org.apache.kafka.common.message.VoteRequestData;
+import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.message.WriteTxnMarkersRequestData;
 import org.apache.kafka.common.message.WriteTxnMarkersResponseData;
 import org.apache.kafka.common.protocol.types.Schema;
@@ -120,15 +134,16 @@ import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.requests.ListOffsetRequest;
-import org.apache.kafka.common.requests.ListOffsetResponse;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.protocol.types.Type.BYTES;
 import static org.apache.kafka.common.protocol.types.Type.COMPACT_BYTES;
@@ -142,7 +157,7 @@ import static org.apache.kafka.common.protocol.types.Type.RECORDS;
 public enum ApiKeys {
     PRODUCE(0, "Produce", ProduceRequest.schemaVersions(), ProduceResponse.schemaVersions()),
     FETCH(1, "Fetch", FetchRequestData.SCHEMAS, FetchResponseData.SCHEMAS),
-    LIST_OFFSETS(2, "ListOffsets", ListOffsetRequest.schemaVersions(), ListOffsetResponse.schemaVersions()),
+    LIST_OFFSETS(2, "ListOffsets", ListOffsetRequestData.SCHEMAS, ListOffsetResponseData.SCHEMAS),
     METADATA(3, "Metadata", MetadataRequestData.SCHEMAS, MetadataResponseData.SCHEMAS),
     LEADER_AND_ISR(4, "LeaderAndIsr", true, LeaderAndIsrRequestData.SCHEMAS, LeaderAndIsrResponseData.SCHEMAS),
     STOP_REPLICA(5, "StopReplica", true, StopReplicaRequestData.SCHEMAS, StopReplicaResponseData.SCHEMAS),
@@ -225,7 +240,18 @@ public enum ApiKeys {
     DESCRIBE_USER_SCRAM_CREDENTIALS(50, "DescribeUserScramCredentials", DescribeUserScramCredentialsRequestData.SCHEMAS,
             DescribeUserScramCredentialsResponseData.SCHEMAS),
     ALTER_USER_SCRAM_CREDENTIALS(51, "AlterUserScramCredentials", AlterUserScramCredentialsRequestData.SCHEMAS,
-            AlterUserScramCredentialsResponseData.SCHEMAS);
+            AlterUserScramCredentialsResponseData.SCHEMAS),
+    VOTE(52, "Vote", true, false,
+        VoteRequestData.SCHEMAS, VoteResponseData.SCHEMAS),
+    BEGIN_QUORUM_EPOCH(53, "BeginQuorumEpoch", true, false,
+        BeginQuorumEpochRequestData.SCHEMAS, BeginQuorumEpochResponseData.SCHEMAS),
+    END_QUORUM_EPOCH(54, "EndQuorumEpoch", true, false,
+        EndQuorumEpochRequestData.SCHEMAS, EndQuorumEpochResponseData.SCHEMAS),
+    DESCRIBE_QUORUM(55, "DescribeQuorum", true, false,
+        DescribeQuorumRequestData.SCHEMAS, DescribeQuorumResponseData.SCHEMAS),
+    ALTER_ISR(56, "AlterIsr", AlterIsrRequestData.SCHEMAS, AlterIsrResponseData.SCHEMAS),
+    UPDATE_FEATURES(57, "UpdateFeatures",
+        UpdateFeaturesRequestData.SCHEMAS, UpdateFeaturesResponseData.SCHEMAS);
 
     private static final ApiKeys[] ID_TO_TYPE;
     private static final int MIN_API_KEY = 0;
@@ -254,6 +280,9 @@ public enum ApiKeys {
     /** indicates the minimum required inter broker magic required to support the API */
     public final byte minRequiredInterBrokerMagic;
 
+    /** indicates whether the API is enabled and should be exposed in ApiVersions **/
+    public final boolean isEnabled;
+
     public final Schema[] requestSchemas;
     public final Schema[] responseSchemas;
     public final boolean requiresDelayedAllocation;
@@ -266,14 +295,31 @@ public enum ApiKeys {
         this(id, name, clusterAction, RecordBatch.MAGIC_VALUE_V0, requestSchemas, responseSchemas);
     }
 
+    ApiKeys(int id, String name, boolean clusterAction, boolean isEnabled, Schema[] requestSchemas, Schema[] responseSchemas) {
+        this(id, name, clusterAction, RecordBatch.MAGIC_VALUE_V0, isEnabled, requestSchemas, responseSchemas);
+    }
+
     ApiKeys(int id, String name, boolean clusterAction, byte minRequiredInterBrokerMagic,
             Schema[] requestSchemas, Schema[] responseSchemas) {
+        this(id, name, clusterAction, minRequiredInterBrokerMagic, true, requestSchemas, responseSchemas);
+    }
+
+    ApiKeys(
+        int id,
+        String name,
+        boolean clusterAction,
+        byte minRequiredInterBrokerMagic,
+        boolean isEnabled,
+        Schema[] requestSchemas,
+        Schema[] responseSchemas
+    ) {
         if (id < 0)
             throw new IllegalArgumentException("id must not be negative, id: " + id);
         this.id = (short) id;
         this.name = name;
         this.clusterAction = clusterAction;
         this.minRequiredInterBrokerMagic = minRequiredInterBrokerMagic;
+        this.isEnabled = isEnabled;
 
         if (requestSchemas.length != responseSchemas.length)
             throw new IllegalStateException(requestSchemas.length + " request versions for api " + name
@@ -371,7 +417,7 @@ public enum ApiKeys {
         b.append("<th>Name</th>\n");
         b.append("<th>Key</th>\n");
         b.append("</tr>");
-        for (ApiKeys key : ApiKeys.values()) {
+        for (ApiKeys key : ApiKeys.enabledApis()) {
             b.append("<tr>\n");
             b.append("<td>");
             b.append("<a href=\"#The_Messages_" + key.name + "\">" + key.name + "</a>");
@@ -401,6 +447,12 @@ public enum ApiKeys {
         };
         schema.walk(detector);
         return hasBuffer.get();
+    }
+
+    public static List<ApiKeys> enabledApis() {
+        return Arrays.stream(values())
+            .filter(api -> api.isEnabled)
+            .collect(Collectors.toList());
     }
 
 }

@@ -121,12 +121,10 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
     }
 
     private final LeaderAndIsrRequestData data;
-    private final short version;
 
     LeaderAndIsrRequest(LeaderAndIsrRequestData data, short version) {
         super(ApiKeys.LEADER_AND_ISR, version);
         this.data = data;
-        this.version = version;
         // Do this from the constructor to make it thread-safe (even though it's only needed when some methods are called)
         normalize();
     }
@@ -157,7 +155,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
         Errors error = Errors.forException(e);
         responseData.setErrorCode(error.code());
 
-        if (version < 5) {
+        if (version() < 5) {
             List<LeaderAndIsrPartitionError> partitions = new ArrayList<>();
             for (LeaderAndIsrPartitionState partition : partitionStates()) {
                 partitions.add(new LeaderAndIsrPartitionError()

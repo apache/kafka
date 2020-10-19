@@ -327,10 +327,12 @@ class DynamicBrokerConfigTest {
     EasyMock.replay(kafkaServer)
 
     props.put(KafkaConfig.ListenersProp, "PLAINTEXT://hostname:9092,SASL_PLAINTEXT://hostname:9093")
-    val newConfig = KafkaConfig(props)
+    new DynamicListenerConfig(kafkaServer).validateReconfiguration(KafkaConfig(props))
 
+    // it is illegal to update non-reconfiguable configs of existent listeners
+    props.put("listener.name.plaintext.you.should.not.pass", "failure")
     val dynamicListenerConfig = new DynamicListenerConfig(kafkaServer)
-    dynamicListenerConfig.validateReconfiguration(newConfig)
+    assertThrows(classOf[ConfigException], () => dynamicListenerConfig.validateReconfiguration(KafkaConfig(props)))
   }
 
   @Test
