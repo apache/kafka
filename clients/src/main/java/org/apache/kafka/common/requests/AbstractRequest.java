@@ -261,7 +261,7 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return new AlterIsrRequest(new AlterIsrRequestData(struct, apiVersion), apiVersion);
             case UPDATE_FEATURES:
                 return new UpdateFeaturesRequest(struct, apiVersion);
-           case BROKER_REGISTRATION:
+            case BROKER_REGISTRATION:
                 return new BrokerRegistrationRequest(struct, apiVersion);
             case BROKER_HEARTBEAT:
                 return new BrokerHeartbeatRequest(struct, apiVersion);
