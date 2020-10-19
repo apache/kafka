@@ -629,7 +629,7 @@ public class Sender implements Runnable {
                         batch.topicPartition);
                 } else {
                     log.warn("Received invalid metadata error in produce request on partition {} due to {}. Going " +
-                            "to request metadata update now", batch.topicPartition, error.exception().toString());
+                            "to request metadata update now", batch.topicPartition, error.exception(response.errorMessage).toString());
                 }
                 metadata.requestUpdate();
             }
