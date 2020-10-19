@@ -186,6 +186,7 @@ public class StreamsPartitionAssignorTest {
     private final AtomicInteger assignmentError = new AtomicInteger();
     private final AtomicLong nextScheduledRebalanceMs = new AtomicLong(Long.MAX_VALUE);
     private final MockTime time = new MockTime();
+    private final byte uniqueField = 1;
 
     private Map<String, Object> configProps() {
         final Map<String, Object> configurationMap = new HashMap<>();
@@ -509,7 +510,7 @@ public class StreamsPartitionAssignorTest {
         Collections.sort(subscription.topics());
         assertEquals(asList("topic1", "topic2"), subscription.topics());
 
-        final SubscriptionInfo info = getInfo(UUID_1, prevTasks, standbyTasks);
+        final SubscriptionInfo info = getInfo(UUID_1, prevTasks, standbyTasks, uniqueField);
         assertEquals(info, SubscriptionInfo.decode(subscription.userData()));
     }
 
@@ -535,7 +536,7 @@ public class StreamsPartitionAssignorTest {
         Collections.sort(subscription.topics());
         assertEquals(asList("topic1", "topic2"), subscription.topics());
 
-        final SubscriptionInfo info = getInfo(UUID_1, prevTasks, standbyTasks);
+        final SubscriptionInfo info = getInfo(UUID_1, prevTasks, standbyTasks, uniqueField);
         assertEquals(info, SubscriptionInfo.decode(subscription.userData()));
     }
 
@@ -1958,6 +1959,34 @@ public class StreamsPartitionAssignorTest {
         EasyMock.verify(consumerClient);
     }
 
+    @Test
+    public void testUniqueField() {
+        createDefaultMockTaskManager();
+        configureDefaultPartitionAssignor();
+        final Set<String> topics = mkSet("input");
+
+        assertEquals(0, partitionAssignor.uniqueField());
+        partitionAssignor.subscriptionUserData(topics);
+        assertEquals(1, partitionAssignor.uniqueField());
+        partitionAssignor.subscriptionUserData(topics);
+        assertEquals(2, partitionAssignor.uniqueField());
+
+    }
+
+    @Test
+    public void testUniqueFieldOverflow() {
+        createDefaultMockTaskManager();
+        configureDefaultPartitionAssignor();
+        final Set<String> topics = mkSet("input");
+
+        for (int i = 0; i < 127; i++) {
+            partitionAssignor.subscriptionUserData(topics);
+        }
+        assertEquals(127, partitionAssignor.uniqueField());
+        partitionAssignor.subscriptionUserData(topics);
+        assertEquals(-128, partitionAssignor.uniqueField());
+    }
+
     private static ByteBuffer encodeFutureSubscription() {
         final ByteBuffer buf = ByteBuffer.allocate(4 /* used version */ + 4 /* supported version */);
         buf.putInt(LATEST_SUPPORTED_VERSION + 1);
@@ -2073,7 +2102,15 @@ public class StreamsPartitionAssignorTest {
                                             final Set<TaskId> prevTasks,
                                             final Set<TaskId> standbyTasks) {
         return new SubscriptionInfo(
-            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks));
+            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks), (byte) 0);
+    }
+
+    private static SubscriptionInfo getInfo(final UUID processId,
+                                            final Set<TaskId> prevTasks,
+                                            final Set<TaskId> standbyTasks,
+                                            final byte uniqueField) {
+        return new SubscriptionInfo(
+            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks), uniqueField);
     }
 
     private static SubscriptionInfo getInfo(final UUID processId,
@@ -2081,7 +2118,16 @@ public class StreamsPartitionAssignorTest {
                                             final Set<TaskId> standbyTasks,
                                             final String userEndPoint) {
         return new SubscriptionInfo(
-            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, userEndPoint, getTaskOffsetSums(prevTasks, standbyTasks));
+            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, userEndPoint, getTaskOffsetSums(prevTasks, standbyTasks), (byte) 0);
+    }
+
+    private static SubscriptionInfo getInfo(final UUID processId,
+                                            final Set<TaskId> prevTasks,
+                                            final Set<TaskId> standbyTasks,
+                                            final String userEndPoint,
+                                            final byte uniqueField) {
+        return new SubscriptionInfo(
+            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, userEndPoint, getTaskOffsetSums(prevTasks, standbyTasks), uniqueField);
     }
 
     private static SubscriptionInfo getInfoForOlderVersion(final int version,
@@ -2089,7 +2135,7 @@ public class StreamsPartitionAssignorTest {
                                                            final Set<TaskId> prevTasks,
                                                            final Set<TaskId> standbyTasks) {
         return new SubscriptionInfo(
-            version, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks));
+            version, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks), (byte) 0);
     }
 
     // Stub offset sums for when we only care about the prev/standby task sets, not the actual offsets
