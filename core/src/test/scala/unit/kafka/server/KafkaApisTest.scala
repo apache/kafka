@@ -121,7 +121,6 @@ class KafkaApisTest {
     properties.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerProtocolVersion.toString)
     properties.put(KafkaConfig.LogMessageFormatVersionProp, interBrokerProtocolVersion.toString)
     new KafkaApis(requestChannel,
-      new ApisUtils(requestChannel, authorizer, quotas, time),
       replicaManager,
       adminManager,
       groupCoordinator,
