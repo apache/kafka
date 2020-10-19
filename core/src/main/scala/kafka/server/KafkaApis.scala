@@ -96,7 +96,7 @@ import kafka.coordinator.group.GroupOverview
  */
 class KafkaApis(val requestChannel: RequestChannel,
                 val replicaManager: ReplicaManager,
-                val adminManager: AdminManager,
+                val adminManager: LegacyAdminManager,
                 val groupCoordinator: GroupCoordinator,
                 val txnCoordinator: TransactionCoordinator,
                 val controller: KafkaController,
