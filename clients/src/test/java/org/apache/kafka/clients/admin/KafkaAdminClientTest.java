@@ -4935,26 +4935,16 @@ public class KafkaAdminClientTest {
 
     @Test
     public void testShouldRefreshCoordinator() {
-        Map<Errors, Integer> errors = new HashMap<>();
-        AbstractResponse response = new AbstractResponse() {
-            @Override
-            public Map<Errors, Integer> errorCounts() {
-                return errors;
-            }
-            @Override
-            protected Struct toStruct(short version) {
-                return null;
-            }
-        };
+        Map<Errors, Integer> errorCounts = new HashMap<>();
 
-        assertFalse(ConsumerGroupOperationContext.shouldRefreshCoordinator(response));
+        assertFalse(ConsumerGroupOperationContext.shouldRefreshCoordinator(errorCounts));
 
-        errors.put(Errors.COORDINATOR_LOAD_IN_PROGRESS, 1);
-        assertTrue(ConsumerGroupOperationContext.shouldRefreshCoordinator(response));
+        errorCounts.put(Errors.COORDINATOR_LOAD_IN_PROGRESS, 1);
+        assertTrue(ConsumerGroupOperationContext.shouldRefreshCoordinator(errorCounts));
 
-        errors.clear();
-        errors.put(Errors.COORDINATOR_NOT_AVAILABLE, 1);
-        assertTrue(ConsumerGroupOperationContext.shouldRefreshCoordinator(response));
+        errorCounts.clear();
+        errorCounts.put(Errors.COORDINATOR_NOT_AVAILABLE, 1);
+        assertTrue(ConsumerGroupOperationContext.shouldRefreshCoordinator(errorCounts));
     }
 
     private DescribeLogDirsResponse prepareDescribeLogDirsResponse(Errors error, String logDir) {
