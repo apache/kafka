@@ -46,7 +46,7 @@ object ConfigEntityName {
 }
 
 /**
- * This class initiates and carries out config changes for all entities defined in ConfigType.
+ * When using ZooKeeper, this class initiates and carries out config changes for all entities defined in ConfigType.
  *
  * It works as follows.
  *
@@ -58,7 +58,7 @@ object ConfigEntityName {
  *
  * To avoid watching all topics for changes instead we have a notification path
  *   /config/changes
- * The DynamicConfigManager has a child watch on this path.
+ * The LegacyDynamicConfigManager has a child watch on this path.
  *
  * To update a config we first update the config properties. Then we create a new sequential
  * znode under the change path which contains the name of the entityType and entityName that was updated, say
@@ -83,10 +83,10 @@ object ConfigEntityName {
  * on startup where a change might be missed between the initial config load and registering for change notifications.
  *
  */
-class DynamicConfigManager(private val zkClient: KafkaZkClient,
-                           private val configHandlers: Map[String, ConfigHandler],
-                           private val changeExpirationMs: Long = 15*60*1000,
-                           private val time: Time = Time.SYSTEM) extends Logging {
+class LegacyDynamicConfigManager(private val zkClient: KafkaZkClient,
+                                 private val configHandlers: Map[String, ConfigHandler],
+                                 private val changeExpirationMs: Long = 15*60*1000,
+                                 private val time: Time = Time.SYSTEM) extends Logging {
   val adminZkClient = new AdminZkClient(zkClient)
 
   object ConfigChangedNotificationHandler extends NotificationHandler {
