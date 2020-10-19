@@ -723,12 +723,18 @@ abstract class AbstractFetcherThread(name: String,
     Option(partitionStates.stateValue(topicPartition))
   }
 
+  /**
+   * Returns current fetch state for each partition assigned to this thread. This is used to reassign
+   * partitions when thread pool is resized. We return `lastFetchedEpoch=None` to ensure we go through
+   * the truncation path to simplify the code path where this thread makes progress after this method
+   * before the thread is shutdown.
+   */
   private[server] def partitionsAndOffsets: Map[TopicPartition, InitialFetchState] = inLock(partitionMapLock) {
     partitionStates.partitionStateMap.asScala.map { case (topicPartition, currentFetchState) =>
       val initialFetchState = InitialFetchState(sourceBroker,
         currentLeaderEpoch = currentFetchState.currentLeaderEpoch,
         initOffset = currentFetchState.fetchOffset,
-        currentFetchState.lastFetchedEpoch)
+        lastFetchedEpoch = None)
       topicPartition -> initialFetchState
     }
   }
