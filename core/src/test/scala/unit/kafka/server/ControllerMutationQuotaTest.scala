@@ -41,6 +41,7 @@ import org.apache.kafka.common.requests.DeleteTopicsResponse
 import org.apache.kafka.common.security.auth.AuthenticationContext
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder
+import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
@@ -382,7 +383,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
   }
 
   private def waitQuotaMetric(user: String, expectedQuota: Double): Unit = {
-    TestUtils.retry(200) {
+    TestUtils.retry(JTestUtils.DEFAULT_MAX_WAIT_MS) {
       quotaMetric(user) match {
         case Some(metric) =>
           val config = metric.config()
