@@ -948,7 +948,7 @@ public class Fetcher<K, V> implements Closeable {
                 if (client.isUnavailable(leader)) {
                     client.maybeThrowAuthFailure(leader);
 
-                    // The connection has failed and we need to await the blackout period before we can
+                    // The connection has failed and we need to await the backoff period before we can
                     // try again. No need to request a metadata update since the disconnect will have
                     // done so already.
                     log.debug("Leader {} for partition {} is unavailable for fetching offset until reconnect backoff expires",
@@ -1173,7 +1173,7 @@ public class Fetcher<K, V> implements Closeable {
             if (client.isUnavailable(node)) {
                 client.maybeThrowAuthFailure(node);
 
-                // If we try to send during the reconnect blackout window, then the request is just
+                // If we try to send during the reconnect backoff window, then the request is just
                 // going to be failed anyway before being sent, so skip the send for now
                 log.trace("Skipping fetch for partition {} because node {} is awaiting reconnect backoff", partition, node);
             } else if (this.nodesWithPendingFetchRequests.contains(node.id())) {

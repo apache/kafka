@@ -70,6 +70,8 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
                 sslPrincipalMapper = SslPrincipalMapper.fromRules(sslPrincipalMappingRules);
             this.sslFactory = new SslFactory(mode, null, isInterBrokerListener);
             this.sslFactory.configure(this.configs);
+        } catch (KafkaException e) {
+            throw e;
         } catch (Exception e) {
             throw new KafkaException(e);
         }

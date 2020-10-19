@@ -401,9 +401,10 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         stateStores.put(store.name(), store);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public StateStore getStateStore(final String name) {
-        return stateStores.get(name);
+    public <S extends StateStore> S getStateStore(final String name) {
+        return (S) stateStores.get(name);
     }
 
     @Override

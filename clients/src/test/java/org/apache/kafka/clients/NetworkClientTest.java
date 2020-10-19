@@ -934,7 +934,7 @@ public class NetworkClientTest {
             client.connectionFailed(node));
         assertFalse(client.canConnect(node, time.milliseconds()));
 
-        // ensure disconnect does not reset blackout period if already disconnected
+        // ensure disconnect does not reset backoff period if already disconnected
         time.sleep(reconnectBackoffMaxMsTest);
         assertTrue(client.canConnect(node, time.milliseconds()));
         client.disconnect(node.idString());

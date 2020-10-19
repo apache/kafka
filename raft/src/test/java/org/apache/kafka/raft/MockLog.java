@@ -43,10 +43,11 @@ import java.util.stream.Collectors;
 public class MockLog implements ReplicatedLog {
     private final List<EpochStartOffset> epochStartOffsets = new ArrayList<>();
     private final List<LogBatch> log = new ArrayList<>();
+    private final TopicPartition topicPartition;
 
     private UUID nextId = UUID.randomUUID();
-    private LogOffsetMetadata highWatermark = new LogOffsetMetadata(0L, Optional.of(new MockOffsetMetadata(nextId)));
-    private final TopicPartition topicPartition;
+    private LogOffsetMetadata highWatermark = new LogOffsetMetadata(0L, Optional.empty());
+    private long lastFlushedOffset = 0L;
 
     public MockLog(TopicPartition topicPartition) {
         this.topicPartition = topicPartition;
@@ -238,6 +239,25 @@ public class MockLog implements ReplicatedLog {
             lastOffset = entries.get(entries.size() - 1).offset;
         }
         return new LogAppendInfo(baseOffset, lastOffset);
+    }
+
+    @Override
+    public void flush() {
+        lastFlushedOffset = endOffset().offset;
+    }
+
+    @Override
+    public long lastFlushedOffset() {
+        return lastFlushedOffset;
+    }
+
+    /**
+     * Reopening the log causes all unflushed data to be lost.
+     */
+    public void reopen() {
+        log.removeIf(batch -> batch.firstOffset() >= lastFlushedOffset);
+        epochStartOffsets.removeIf(epochStartOffset -> epochStartOffset.startOffset >= lastFlushedOffset);
+        highWatermark = new LogOffsetMetadata(0L, Optional.empty());
     }
 
     public List<LogBatch> readBatches(long startOffset, OptionalLong maxOffsetOpt) {
@@ -436,10 +456,4 @@ public class MockLog implements ReplicatedLog {
         }
     }
 
-    public void clear() {
-        epochStartOffsets.clear();
-        log.clear();
-        highWatermark = new LogOffsetMetadata(0L);
-    }
 }
-
