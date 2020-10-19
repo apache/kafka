@@ -206,8 +206,11 @@ public interface Task {
         return false;
     }
 
+    /**
+     * @throws TimeoutException if {@code currentWallClockMs > task-timeout-deadline}
+     */
     void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
-                                     final TimeoutException timeoutException) throws StreamsException;
+                                     final Exception cause);
 
     void clearTaskTimeout();
 }
