@@ -465,7 +465,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
                     GROUPS_DOC) 
             .define(
                     GROUPS_EXCLUDE,
-                        ConfigDef.Type.LIST,
+                    ConfigDef.Type.LIST,
                     GROUPS_EXCLUDE_DEFAULT,
                         ConfigDef.Importance.HIGH,
                     GROUPS_EXCLUDE_DOC)
