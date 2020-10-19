@@ -76,12 +76,11 @@ public final class ConsumerGroupOperationContext<T, O extends AbstractOptions<O>
     }
 
     public static boolean hasCoordinatorMoved(AbstractResponse response) {
-        return response.errorCounts().keySet()
-                .stream()
-                .anyMatch(error -> error == Errors.NOT_COORDINATOR);
+        return response.errorCounts().containsKey(Errors.NOT_COORDINATOR);
     }
 
-    public static boolean shouldRefreshCoordinator(Errors error) {
-        return error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.COORDINATOR_NOT_AVAILABLE;
+    public static boolean shouldRefreshCoordinator(AbstractResponse response) {
+        return response.errorCounts().containsKey(Errors.COORDINATOR_LOAD_IN_PROGRESS) ||
+                response.errorCounts().containsKey(Errors.COORDINATOR_NOT_AVAILABLE);
     }
 }
