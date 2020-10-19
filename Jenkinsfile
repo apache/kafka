@@ -102,7 +102,7 @@ pipeline {
           agent { label 'ubuntu' }
           tools {
             jdk 'jdk_1.8_latest'
-            maven 'Maven 3.6.3'
+            maven 'maven_3_latest'
           }
           options {
             timeout(time: 8, unit: 'HOURS') 
