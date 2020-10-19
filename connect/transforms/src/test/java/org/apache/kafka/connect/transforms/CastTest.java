@@ -427,8 +427,8 @@ public class CastTest {
 
         Schema arraySchema = SchemaBuilder.array(Schema.INT8_SCHEMA).build();
         Schema supportedTypesSchema = SchemaBuilder.struct()
-        		.field("array", arraySchema)
-        		.build();
+                .field("array", arraySchema)
+                .build();
 
         List<Byte> array = Arrays.asList((byte) 1, (byte) 2);
 
@@ -486,7 +486,7 @@ public class CastTest {
 
         //Compare simple string against result after removing any spaces (just in case of variations in deepToString)
         assertEquals("[" + arrayMember1.toString().replaceAll("\\s+","") + "," + arrayMember2.toString().replaceAll("\\s+","") + "]",
-        		((Struct) transformed.value()).get("array").toString().replaceAll("\\s+",""));
+                ((Struct) transformed.value()).get("array").toString().replaceAll("\\s+",""));
 
         Schema transformedSchema = ((Struct) transformed.value()).schema();
         assertEquals(Schema.STRING_SCHEMA.type(), transformedSchema.field("array").schema().type());
@@ -534,7 +534,7 @@ public class CastTest {
 
         //Compare simple string against result after removing any spaces (just in case of variations in deepToString)
         assertEquals("[{\"name\":\"Member 1\",\"value\":15,\"boolean\":true},{\"name\":\"Member 2\",\"value\":800,\"boolean\":false}]",
-        		((Struct) transformed.value()).get("array").toString());
+                ((Struct) transformed.value()).get("array").toString());
 
         Schema transformedSchema = ((Struct) transformed.value()).schema();
         assertEquals(Schema.STRING_SCHEMA.type(), transformedSchema.field("array").schema().type());
@@ -547,8 +547,8 @@ public class CastTest {
 
         Schema mapSchema = SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.INT32_SCHEMA).build();
         Schema supportedTypesSchema = SchemaBuilder.struct()
-        		.field("map", mapSchema)
-        		.build();
+                .field("map", mapSchema)
+                .build();
 
         Map<String, Object> map = new LinkedHashMap<String, Object>();
         map.put("key1", 1);
@@ -655,7 +655,7 @@ public class CastTest {
 
         //Compare JSON string of map with result
         assertEquals("{\"key1\":{\"name\":\"Member 1\",\"value\":15,\"boolean\":true},\"key2\":{\"name\":\"Member 2\",\"value\":800,\"boolean\":false}}", 
-        		((Struct) transformed.value()).get("map").toString());
+                ((Struct) transformed.value()).get("map").toString());
 
         Schema transformedSchema = ((Struct) transformed.value()).schema();
         assertEquals(Schema.STRING_SCHEMA.type(), transformedSchema.field("map").schema().type());
@@ -760,65 +760,65 @@ public class CastTest {
     }
 
     @SuppressWarnings("unchecked")
-	@Test
-	public void castFieldsWithSchemaRecursive() {
-	    Map<String, Object> config = new HashMap<>();
-	    config.put(Cast.ConfigName.SPEC, "int8:int16,int32:int64,float64:boolean,boolean:int8,string:int32,bigdecimal:string,optional:int32,arraystring:string,mapstring:string,structstring:string");
-	    config.put(Cast.ConfigName.RECURSIVE, true);
-	    xformValue.configure(config);
+    @Test
+    public void castFieldsWithSchemaRecursive() {
+        Map<String, Object> config = new HashMap<>();
+        config.put(Cast.ConfigName.SPEC, "int8:int16,int32:int64,float64:boolean,boolean:int8,string:int32,bigdecimal:string,optional:int32,arraystring:string,mapstring:string,structstring:string");
+        config.put(Cast.ConfigName.RECURSIVE, true);
+        xformValue.configure(config);
 
-	    // Schema
+        // Schema
 
-	    final Schema schema = SchemaBuilder.struct()
-	    	    .field("int8", Schema.INT8_SCHEMA)
-	    	    .field("int32", SchemaBuilder.int32().defaultValue(2).build())
-	    	    // Default value here ensures we correctly convert default values
-	    	    .field("float64", SchemaBuilder.float64().defaultValue(-1.125).build())
-	    	    .field("boolean", Schema.BOOLEAN_SCHEMA)
-	    	    .field("string", Schema.STRING_SCHEMA)
-	    	    .field("bigdecimal", Decimal.schema(new BigDecimal(42).scale()))
-	    	    .field("optional", Schema.OPTIONAL_FLOAT32_SCHEMA)
-	            .build();
+        final Schema schema = SchemaBuilder.struct()
+                .field("int8", Schema.INT8_SCHEMA)
+                .field("int32", SchemaBuilder.int32().defaultValue(2).build())
+                // Default value here ensures we correctly convert default values
+                .field("float64", SchemaBuilder.float64().defaultValue(-1.125).build())
+                .field("boolean", Schema.BOOLEAN_SCHEMA)
+                .field("string", Schema.STRING_SCHEMA)
+                .field("bigdecimal", Decimal.schema(new BigDecimal(42).scale()))
+                .field("optional", Schema.OPTIONAL_FLOAT32_SCHEMA)
+                .build();
 
-	    final Schema arraySchema = SchemaBuilder.array(schema);
+        final Schema arraySchema = SchemaBuilder.array(schema);
 
-	    final Schema parentASchema = SchemaBuilder.struct()
-	    	    .field("string", Schema.STRING_SCHEMA)
-	            .field("array", arraySchema)
-	            .field("arraystring", arraySchema)
-	    	    .field("struct", schema)
-	    	    .field("structstring", schema)
-	            .build();
+        final Schema parentASchema = SchemaBuilder.struct()
+                .field("string", Schema.STRING_SCHEMA)
+                .field("array", arraySchema)
+                .field("arraystring", arraySchema)
+                .field("struct", schema)
+                .field("structstring", schema)
+                .build();
 
-	    final Schema mapSchema = SchemaBuilder.map(Schema.STRING_SCHEMA, parentASchema);
+        final Schema mapSchema = SchemaBuilder.map(Schema.STRING_SCHEMA, parentASchema);
 
-	    final Schema parentBSchema = SchemaBuilder.struct()
-	            .field("array", arraySchema)
-	            .field("arraystring", arraySchema)
-	    	    .field("struct", parentASchema)
-	    	    .field("structstring", parentASchema)
-	    	    .field("map", mapSchema)
-	    	    .field("mapstring", mapSchema)
-	            .build();
+        final Schema parentBSchema = SchemaBuilder.struct()
+                .field("array", arraySchema)
+                .field("arraystring", arraySchema)
+                .field("struct", parentASchema)
+                .field("structstring", parentASchema)
+                .field("map", mapSchema)
+                .field("mapstring", mapSchema)
+                .build();
 
-	    // Value
+        // Value
 
-	    final Struct struct1 = new Struct(schema)
-	    	    .put("int8", (byte) 8)
-	    	    .put("int32", 32)
-	    	    .put("float64", -64.)
-	    	    .put("boolean", true)
-	    	    .put("string", "42")
-	    	    .put("bigdecimal", new BigDecimal(42));
+        final Struct struct1 = new Struct(schema)
+                .put("int8", (byte) 8)
+                .put("int32", 32)
+                .put("float64", -64.)
+                .put("boolean", true)
+                .put("string", "42")
+                .put("bigdecimal", new BigDecimal(42));
         // optional field intentionally omitted
 
-	    final Struct struct2 = new Struct(schema)
-	    	    .put("int8", (byte) 8)
-	    	    .put("int32", 32)
-	    	    .put("float64", -64.)
-	    	    .put("boolean", true)
-	    	    .put("string", "42")
-	    	    .put("bigdecimal", new BigDecimal(42));
+        final Struct struct2 = new Struct(schema)
+                .put("int8", (byte) 8)
+                .put("int32", 32)
+                .put("float64", -64.)
+                .put("boolean", true)
+                .put("string", "42")
+                .put("bigdecimal", new BigDecimal(42));
         // optional field intentionally omitted
 
         final List<Object> array = new ArrayList<Object>();
@@ -826,30 +826,30 @@ public class CastTest {
         array.add(struct2);
 
         final Struct parentAValue = new Struct(parentASchema)
-	    	    .put("string", "42")
-	    	    .put("array", array)
-	    	    .put("arraystring", array)
-			    .put("struct", struct1)
-			    .put("structstring", struct2);
+                .put("string", "42")
+                .put("array", array)
+                .put("arraystring", array)
+                .put("struct", struct1)
+                .put("structstring", struct2);
 
         final Map<String, Object> map = new HashMap<>();
-		map.put("key1", parentAValue);
-		map.put("key2", parentAValue);
+        map.put("key1", parentAValue);
+        map.put("key2", parentAValue);
 
         final Struct parentBValue = new Struct(parentBSchema)
-	    	    .put("array", array)
-	    	    .put("arraystring", array)
-			    .put("struct", parentAValue)
-			    .put("structstring", parentAValue)
-			    .put("map", map)
-			    .put("mapstring", map);
+                .put("array", array)
+                .put("arraystring", array)
+                .put("struct", parentAValue)
+                .put("structstring", parentAValue)
+                .put("map", map)
+                .put("mapstring", map);
 
         // Create and transform record
 
-	    SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
-	    		parentBSchema, parentBValue));
+        SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
+                parentBSchema, parentBValue));
 
-	    // Assert results
+        // Assert results
 
         final Struct updatedB = (Struct) transformed.value();
         assertEquals(6, updatedB.schema().fields().size());
@@ -858,75 +858,75 @@ public class CastTest {
         assertEquals(2, updatedB_array.size());
 
         final Struct updatedB_array_0 = (Struct) updatedB_array.get(0);
-	    assertEquals((short) 8, updatedB_array_0.get("int8"));
-	    assertEquals((long) 32, updatedB_array_0.get("int32"));
-	    assertEquals(2L, updatedB_array_0.schema().field("int32").schema().defaultValue());
-	    assertEquals(true, updatedB_array_0.get("float64"));
-	    assertEquals(true, updatedB_array_0.schema().field("float64").schema().defaultValue());
-	    assertEquals((byte) 1, updatedB_array_0.get("boolean"));
-	    assertEquals(42, updatedB_array_0.get("string"));
-	    assertEquals("42", updatedB_array_0.get("bigdecimal"));
-	    assertNull(updatedB_array_0.get("optional"));
+        assertEquals((short) 8, updatedB_array_0.get("int8"));
+        assertEquals((long) 32, updatedB_array_0.get("int32"));
+        assertEquals(2L, updatedB_array_0.schema().field("int32").schema().defaultValue());
+        assertEquals(true, updatedB_array_0.get("float64"));
+        assertEquals(true, updatedB_array_0.schema().field("float64").schema().defaultValue());
+        assertEquals((byte) 1, updatedB_array_0.get("boolean"));
+        assertEquals(42, updatedB_array_0.get("string"));
+        assertEquals("42", updatedB_array_0.get("bigdecimal"));
+        assertNull(updatedB_array_0.get("optional"));
 
         final Struct updatedB_array_1 = (Struct) updatedB_array.get(1);
-	    assertEquals((short) 8, updatedB_array_1.get("int8"));
-	    assertEquals((long) 32, updatedB_array_1.get("int32"));
-	    assertEquals(2L, updatedB_array_1.schema().field("int32").schema().defaultValue());
-	    assertEquals(true, updatedB_array_1.get("float64"));
-	    assertEquals(true, updatedB_array_1.schema().field("float64").schema().defaultValue());
-	    assertEquals((byte) 1, updatedB_array_1.get("boolean"));
-	    assertEquals(42, updatedB_array_1.get("string"));
-	    assertEquals("42", updatedB_array_1.get("bigdecimal"));
-	    assertNull(updatedB_array_1.get("optional"));
+        assertEquals((short) 8, updatedB_array_1.get("int8"));
+        assertEquals((long) 32, updatedB_array_1.get("int32"));
+        assertEquals(2L, updatedB_array_1.schema().field("int32").schema().defaultValue());
+        assertEquals(true, updatedB_array_1.get("float64"));
+        assertEquals(true, updatedB_array_1.schema().field("float64").schema().defaultValue());
+        assertEquals((byte) 1, updatedB_array_1.get("boolean"));
+        assertEquals(42, updatedB_array_1.get("string"));
+        assertEquals("42", updatedB_array_1.get("bigdecimal"));
+        assertNull(updatedB_array_1.get("optional"));
 
-	    // arraystring should match toString() of array
+        // arraystring should match toString() of array
         assertEquals(array.toString(), updatedB.get("arraystring"));
 
         // B->struct should be of type A and have child fields converted as configured
         // B->A should have string, array, arraystring, struct, structstring
         final Struct updatedB_updatedA = (Struct) updatedB.get("struct");
-	    assertEquals(42, updatedB_updatedA.get("string"));
+        assertEquals(42, updatedB_updatedA.get("string"));
 
-	    // B->A->array should have 2 items converted from struct1 and struct2
+        // B->A->array should have 2 items converted from struct1 and struct2
         final List<Object> updatedB_updatedA_array = (List<Object>) updatedB_updatedA.get("array");
         assertEquals(2, updatedB_updatedA_array.size());
 
         final Struct updatedB_updatedA_array_0 = (Struct) updatedB_updatedA_array.get(0);
-	    assertEquals((short) 8, updatedB_updatedA_array_0.get("int8"));
-	    assertEquals((long) 32, updatedB_updatedA_array_0.get("int32"));
-	    assertEquals(2L, updatedB_updatedA_array_0.schema().field("int32").schema().defaultValue());
-	    assertEquals(true, updatedB_updatedA_array_0.get("float64"));
-	    assertEquals(true, updatedB_updatedA_array_0.schema().field("float64").schema().defaultValue());
-	    assertEquals((byte) 1, updatedB_updatedA_array_0.get("boolean"));
-	    assertEquals(42, updatedB_updatedA_array_0.get("string"));
-	    assertEquals("42", updatedB_updatedA_array_0.get("bigdecimal"));
-	    assertNull(updatedB_updatedA_array_0.get("optional"));
+        assertEquals((short) 8, updatedB_updatedA_array_0.get("int8"));
+        assertEquals((long) 32, updatedB_updatedA_array_0.get("int32"));
+        assertEquals(2L, updatedB_updatedA_array_0.schema().field("int32").schema().defaultValue());
+        assertEquals(true, updatedB_updatedA_array_0.get("float64"));
+        assertEquals(true, updatedB_updatedA_array_0.schema().field("float64").schema().defaultValue());
+        assertEquals((byte) 1, updatedB_updatedA_array_0.get("boolean"));
+        assertEquals(42, updatedB_updatedA_array_0.get("string"));
+        assertEquals("42", updatedB_updatedA_array_0.get("bigdecimal"));
+        assertNull(updatedB_updatedA_array_0.get("optional"));
 
         final Struct updatedB_updatedA_array_1 = (Struct) updatedB_updatedA_array.get(1);
-	    assertEquals((short) 8, updatedB_updatedA_array_1.get("int8"));
-	    assertEquals((long) 32, updatedB_updatedA_array_1.get("int32"));
-	    assertEquals(2L, updatedB_updatedA_array_1.schema().field("int32").schema().defaultValue());
-	    assertEquals(true, updatedB_updatedA_array_1.get("float64"));
-	    assertEquals(true, updatedB_updatedA_array_1.schema().field("float64").schema().defaultValue());
-	    assertEquals((byte) 1, updatedB_updatedA_array_1.get("boolean"));
-	    assertEquals(42, updatedB_updatedA_array_1.get("string"));
-	    assertEquals("42", updatedB_updatedA_array_1.get("bigdecimal"));
-	    assertNull(updatedB_updatedA_array_1.get("optional"));
+        assertEquals((short) 8, updatedB_updatedA_array_1.get("int8"));
+        assertEquals((long) 32, updatedB_updatedA_array_1.get("int32"));
+        assertEquals(2L, updatedB_updatedA_array_1.schema().field("int32").schema().defaultValue());
+        assertEquals(true, updatedB_updatedA_array_1.get("float64"));
+        assertEquals(true, updatedB_updatedA_array_1.schema().field("float64").schema().defaultValue());
+        assertEquals((byte) 1, updatedB_updatedA_array_1.get("boolean"));
+        assertEquals(42, updatedB_updatedA_array_1.get("string"));
+        assertEquals("42", updatedB_updatedA_array_1.get("bigdecimal"));
+        assertNull(updatedB_updatedA_array_1.get("optional"));
 
-	    // B->A->arraystring should match toString() of array
+        // B->A->arraystring should match toString() of array
         assertEquals(array.toString(), updatedB_updatedA.get("arraystring"));
 
-	    // B->A->struct should be a converted version of struct1
-	    final Struct updatedB_updatedA_struct = (Struct) updatedB_updatedA.get("struct");
-	    assertEquals((short) 8, updatedB_updatedA_struct.get("int8"));
-	    assertEquals((long) 32, updatedB_updatedA_struct.get("int32"));
-	    assertEquals(2L, updatedB_updatedA_struct.schema().field("int32").schema().defaultValue());
-	    assertEquals(true, updatedB_updatedA_struct.get("float64"));
-	    assertEquals(true, updatedB_updatedA_struct.schema().field("float64").schema().defaultValue());
-	    assertEquals((byte) 1, updatedB_updatedA_struct.get("boolean"));
-	    assertEquals(42, updatedB_updatedA_struct.get("string"));
-	    assertEquals("42", updatedB_updatedA_struct.get("bigdecimal"));
-	    assertNull(updatedB_updatedA_struct.get("optional"));
+        // B->A->struct should be a converted version of struct1
+        final Struct updatedB_updatedA_struct = (Struct) updatedB_updatedA.get("struct");
+        assertEquals((short) 8, updatedB_updatedA_struct.get("int8"));
+        assertEquals((long) 32, updatedB_updatedA_struct.get("int32"));
+        assertEquals(2L, updatedB_updatedA_struct.schema().field("int32").schema().defaultValue());
+        assertEquals(true, updatedB_updatedA_struct.get("float64"));
+        assertEquals(true, updatedB_updatedA_struct.schema().field("float64").schema().defaultValue());
+        assertEquals((byte) 1, updatedB_updatedA_struct.get("boolean"));
+        assertEquals(42, updatedB_updatedA_struct.get("string"));
+        assertEquals("42", updatedB_updatedA_struct.get("bigdecimal"));
+        assertNull(updatedB_updatedA_struct.get("optional"));
 
         // B->A->structstring should match toString() of struct1
         assertEquals(struct2.toString(), updatedB_updatedA.get("structstring"));
@@ -940,147 +940,147 @@ public class CastTest {
 
         // Assert the entire structure and values of key1
         final Struct updatedB_map_key1 = (Struct) updatedB_map.get("key1");
-	    assertEquals(42, updatedB_map_key1.get("string"));
+        assertEquals(42, updatedB_map_key1.get("string"));
 
-	    // key1 array should have 2 items converted from struct1 and struct2
+        // key1 array should have 2 items converted from struct1 and struct2
         final List<Object> updatedB_map_key1_array = (List<Object>) updatedB_map_key1.get("array");
         assertEquals(2, updatedB_map_key1_array.size());
 
         final Struct updatedB_map_key1_array_0 = (Struct) updatedB_map_key1_array.get(0);
-	    assertEquals((short) 8, updatedB_map_key1_array_0.get("int8"));
-	    assertEquals((long) 32, updatedB_map_key1_array_0.get("int32"));
-	    assertEquals(2L, updatedB_map_key1_array_0.schema().field("int32").schema().defaultValue());
-	    assertEquals(true, updatedB_map_key1_array_0.get("float64"));
-	    assertEquals(true, updatedB_map_key1_array_0.schema().field("float64").schema().defaultValue());
-	    assertEquals((byte) 1, updatedB_map_key1_array_0.get("boolean"));
-	    assertEquals(42, updatedB_map_key1_array_0.get("string"));
-	    assertEquals("42", updatedB_map_key1_array_0.get("bigdecimal"));
-	    assertNull(updatedB_map_key1_array_0.get("optional"));
+        assertEquals((short) 8, updatedB_map_key1_array_0.get("int8"));
+        assertEquals((long) 32, updatedB_map_key1_array_0.get("int32"));
+        assertEquals(2L, updatedB_map_key1_array_0.schema().field("int32").schema().defaultValue());
+        assertEquals(true, updatedB_map_key1_array_0.get("float64"));
+        assertEquals(true, updatedB_map_key1_array_0.schema().field("float64").schema().defaultValue());
+        assertEquals((byte) 1, updatedB_map_key1_array_0.get("boolean"));
+        assertEquals(42, updatedB_map_key1_array_0.get("string"));
+        assertEquals("42", updatedB_map_key1_array_0.get("bigdecimal"));
+        assertNull(updatedB_map_key1_array_0.get("optional"));
 
         final Struct updatedB_map_key1_array_1 = (Struct) updatedB_map_key1_array.get(1);
-	    assertEquals((short) 8, updatedB_map_key1_array_1.get("int8"));
-	    assertEquals((long) 32, updatedB_map_key1_array_1.get("int32"));
-	    assertEquals(2L, updatedB_map_key1_array_1.schema().field("int32").schema().defaultValue());
-	    assertEquals(true, updatedB_map_key1_array_1.get("float64"));
-	    assertEquals(true, updatedB_map_key1_array_1.schema().field("float64").schema().defaultValue());
-	    assertEquals((byte) 1, updatedB_map_key1_array_1.get("boolean"));
-	    assertEquals(42, updatedB_map_key1_array_1.get("string"));
-	    assertEquals("42", updatedB_map_key1_array_1.get("bigdecimal"));
-	    assertNull(updatedB_map_key1_array_1.get("optional"));
+        assertEquals((short) 8, updatedB_map_key1_array_1.get("int8"));
+        assertEquals((long) 32, updatedB_map_key1_array_1.get("int32"));
+        assertEquals(2L, updatedB_map_key1_array_1.schema().field("int32").schema().defaultValue());
+        assertEquals(true, updatedB_map_key1_array_1.get("float64"));
+        assertEquals(true, updatedB_map_key1_array_1.schema().field("float64").schema().defaultValue());
+        assertEquals((byte) 1, updatedB_map_key1_array_1.get("boolean"));
+        assertEquals(42, updatedB_map_key1_array_1.get("string"));
+        assertEquals("42", updatedB_map_key1_array_1.get("bigdecimal"));
+        assertNull(updatedB_map_key1_array_1.get("optional"));
 
-	    // key1 arraystring should match toString() of array
+        // key1 arraystring should match toString() of array
         assertEquals(array.toString(), updatedB_map_key1.get("arraystring"));
 
-	    // key1 struct should be a converted version of struct1
-	    final Struct updatedB_map_key1_struct = (Struct) updatedB_map_key1.get("struct");
-	    assertEquals((short) 8, updatedB_map_key1_struct.get("int8"));
-	    assertEquals((long) 32, updatedB_map_key1_struct.get("int32"));
-	    assertEquals(2L, updatedB_map_key1_struct.schema().field("int32").schema().defaultValue());
-	    assertEquals(true, updatedB_map_key1_struct.get("float64"));
-	    assertEquals(true, updatedB_map_key1_struct.schema().field("float64").schema().defaultValue());
-	    assertEquals((byte) 1, updatedB_map_key1_struct.get("boolean"));
-	    assertEquals(42, updatedB_map_key1_struct.get("string"));
-	    assertEquals("42", updatedB_map_key1_struct.get("bigdecimal"));
-	    assertNull(updatedB_map_key1_struct.get("optional"));
+        // key1 struct should be a converted version of struct1
+        final Struct updatedB_map_key1_struct = (Struct) updatedB_map_key1.get("struct");
+        assertEquals((short) 8, updatedB_map_key1_struct.get("int8"));
+        assertEquals((long) 32, updatedB_map_key1_struct.get("int32"));
+        assertEquals(2L, updatedB_map_key1_struct.schema().field("int32").schema().defaultValue());
+        assertEquals(true, updatedB_map_key1_struct.get("float64"));
+        assertEquals(true, updatedB_map_key1_struct.schema().field("float64").schema().defaultValue());
+        assertEquals((byte) 1, updatedB_map_key1_struct.get("boolean"));
+        assertEquals(42, updatedB_map_key1_struct.get("string"));
+        assertEquals("42", updatedB_map_key1_struct.get("bigdecimal"));
+        assertNull(updatedB_map_key1_struct.get("optional"));
 
         // key1 structstring should match toString() of struct1
         assertEquals(struct2.toString(), updatedB_map_key1.get("structstring"));
 
         // And then repeat all of the above for key1, but now for key2
         final Struct updatedB_map_key2 = (Struct) updatedB_map.get("key2");
-	    assertEquals(42, updatedB_map_key2.get("string"));
+        assertEquals(42, updatedB_map_key2.get("string"));
 
-	    // key2 array should have 2 items converted from struct1 and struct2
+        // key2 array should have 2 items converted from struct1 and struct2
         final List<Object> updatedB_map_key2_array = (List<Object>) updatedB_map_key2.get("array");
         assertEquals(2, updatedB_map_key2_array.size());
 
         final Struct updatedB_map_key2_array_0 = (Struct) updatedB_map_key2_array.get(0);
-	    assertEquals((short) 8, updatedB_map_key2_array_0.get("int8"));
-	    assertEquals((long) 32, updatedB_map_key2_array_0.get("int32"));
-	    assertEquals(2L, updatedB_map_key2_array_0.schema().field("int32").schema().defaultValue());
-	    assertEquals(true, updatedB_map_key2_array_0.get("float64"));
-	    assertEquals(true, updatedB_map_key2_array_0.schema().field("float64").schema().defaultValue());
-	    assertEquals((byte) 1, updatedB_map_key2_array_0.get("boolean"));
-	    assertEquals(42, updatedB_map_key2_array_0.get("string"));
-	    assertEquals("42", updatedB_map_key2_array_0.get("bigdecimal"));
-	    assertNull(updatedB_map_key2_array_0.get("optional"));
+        assertEquals((short) 8, updatedB_map_key2_array_0.get("int8"));
+        assertEquals((long) 32, updatedB_map_key2_array_0.get("int32"));
+        assertEquals(2L, updatedB_map_key2_array_0.schema().field("int32").schema().defaultValue());
+        assertEquals(true, updatedB_map_key2_array_0.get("float64"));
+        assertEquals(true, updatedB_map_key2_array_0.schema().field("float64").schema().defaultValue());
+        assertEquals((byte) 1, updatedB_map_key2_array_0.get("boolean"));
+        assertEquals(42, updatedB_map_key2_array_0.get("string"));
+        assertEquals("42", updatedB_map_key2_array_0.get("bigdecimal"));
+        assertNull(updatedB_map_key2_array_0.get("optional"));
 
         final Struct updatedB_map_key2_array_1 = (Struct) updatedB_map_key2_array.get(1);
-	    assertEquals((short) 8, updatedB_map_key2_array_1.get("int8"));
-	    assertEquals((long) 32, updatedB_map_key2_array_1.get("int32"));
-	    assertEquals(2L, updatedB_map_key2_array_1.schema().field("int32").schema().defaultValue());
-	    assertEquals(true, updatedB_map_key2_array_1.get("float64"));
-	    assertEquals(true, updatedB_map_key2_array_1.schema().field("float64").schema().defaultValue());
-	    assertEquals((byte) 1, updatedB_map_key2_array_1.get("boolean"));
-	    assertEquals(42, updatedB_map_key2_array_1.get("string"));
-	    assertEquals("42", updatedB_map_key2_array_1.get("bigdecimal"));
-	    assertNull(updatedB_map_key2_array_1.get("optional"));
+        assertEquals((short) 8, updatedB_map_key2_array_1.get("int8"));
+        assertEquals((long) 32, updatedB_map_key2_array_1.get("int32"));
+        assertEquals(2L, updatedB_map_key2_array_1.schema().field("int32").schema().defaultValue());
+        assertEquals(true, updatedB_map_key2_array_1.get("float64"));
+        assertEquals(true, updatedB_map_key2_array_1.schema().field("float64").schema().defaultValue());
+        assertEquals((byte) 1, updatedB_map_key2_array_1.get("boolean"));
+        assertEquals(42, updatedB_map_key2_array_1.get("string"));
+        assertEquals("42", updatedB_map_key2_array_1.get("bigdecimal"));
+        assertNull(updatedB_map_key2_array_1.get("optional"));
 
-	    // key2 arraystring should match toString() of array
+        // key2 arraystring should match toString() of array
         assertEquals(array.toString(), updatedB_map_key2.get("arraystring"));
 
-	    // key2 struct should be a converted version of struct1
-	    final Struct updatedB_map_key2_struct = (Struct) updatedB_map_key2.get("struct");
-	    assertEquals((short) 8, updatedB_map_key2_struct.get("int8"));
-	    assertEquals((long) 32, updatedB_map_key2_struct.get("int32"));
-	    assertEquals(2L, updatedB_map_key2_struct.schema().field("int32").schema().defaultValue());
-	    assertEquals(true, updatedB_map_key2_struct.get("float64"));
-	    assertEquals(true, updatedB_map_key2_struct.schema().field("float64").schema().defaultValue());
-	    assertEquals((byte) 1, updatedB_map_key2_struct.get("boolean"));
-	    assertEquals(42, updatedB_map_key2_struct.get("string"));
-	    assertEquals("42", updatedB_map_key2_struct.get("bigdecimal"));
-	    assertNull(updatedB_map_key2_struct.get("optional"));
+        // key2 struct should be a converted version of struct1
+        final Struct updatedB_map_key2_struct = (Struct) updatedB_map_key2.get("struct");
+        assertEquals((short) 8, updatedB_map_key2_struct.get("int8"));
+        assertEquals((long) 32, updatedB_map_key2_struct.get("int32"));
+        assertEquals(2L, updatedB_map_key2_struct.schema().field("int32").schema().defaultValue());
+        assertEquals(true, updatedB_map_key2_struct.get("float64"));
+        assertEquals(true, updatedB_map_key2_struct.schema().field("float64").schema().defaultValue());
+        assertEquals((byte) 1, updatedB_map_key2_struct.get("boolean"));
+        assertEquals(42, updatedB_map_key2_struct.get("string"));
+        assertEquals("42", updatedB_map_key2_struct.get("bigdecimal"));
+        assertNull(updatedB_map_key2_struct.get("optional"));
 
         // key2 structstring should match toString() of struct1
         assertEquals(struct2.toString(), updatedB_map_key2.get("structstring"));
 
         // B->mapstring should match toString() of map
         assertEquals(map.toString(), updatedB.get("mapstring"));
-	}
+    }
 
     @SuppressWarnings("unchecked")
-	@Test
-	public void castFieldsSchemalessRecursive() {
+    @Test
+    public void castFieldsSchemalessRecursive() {
         Map<String, Object> config = new HashMap<>();
-	    config.put(Cast.ConfigName.SPEC, "boolean:int8,int32:string,string:int32,childstring:string,parentstring:string,arraystring:string");
-	    config.put(Cast.ConfigName.RECURSIVE, true);
-	    xformValue.configure(config);
+        config.put(Cast.ConfigName.SPEC, "boolean:int8,int32:string,string:int32,childstring:string,parentstring:string,arraystring:string");
+        config.put(Cast.ConfigName.RECURSIVE, true);
+        xformValue.configure(config);
 
 
-	    // Build and fill child
-	    Map<String, Object> child = new HashMap<String, Object>();
-	    child.put("boolean", true);
-	    child.put("int32", 42);
-	    child.put("string", "42");
+        // Build and fill child
+        Map<String, Object> child = new HashMap<String, Object>();
+        child.put("boolean", true);
+        child.put("int32", 42);
+        child.put("string", "42");
 
-	    List<Object> array = new ArrayList<Object>();
-	    array.add(child);
+        List<Object> array = new ArrayList<Object>();
+        array.add(child);
 
-	    // Build and fill parentA
-	    Map<String, Object> parentA = new HashMap<String, Object>();
-	    parentA.put("boolean", true);
-	    parentA.put("int32", 42);
-	    parentA.put("string", "42");
-	    parentA.put("child", child);
-	    parentA.put("childstring", child);
-	    parentA.put("array", array);
-	    parentA.put("arraystring", array);
+        // Build and fill parentA
+        Map<String, Object> parentA = new HashMap<String, Object>();
+        parentA.put("boolean", true);
+        parentA.put("int32", 42);
+        parentA.put("string", "42");
+        parentA.put("child", child);
+        parentA.put("childstring", child);
+        parentA.put("array", array);
+        parentA.put("arraystring", array);
 
-	    // Build and fill parentB
-	    Map<String, Object> parentB = new HashMap<String, Object>();
-	    parentB.put("boolean", true);
-	    parentB.put("int32", 42);
-	    parentB.put("string", "42");
-	    parentB.put("parent", parentA);
-	    parentB.put("parentstring", parentA);
-
-
-	    // Transform the record
-	    SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
-	    		null, parentB));
+        // Build and fill parentB
+        Map<String, Object> parentB = new HashMap<String, Object>();
+        parentB.put("boolean", true);
+        parentB.put("int32", 42);
+        parentB.put("string", "42");
+        parentB.put("parent", parentA);
+        parentB.put("parentstring", parentA);
 
 
-	    // Assert the results
+        // Transform the record
+        SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
+                null, parentB));
+
+
+        // Assert the results
         assertNull(transformed.valueSchema());
 
         Map<String, Object> updatedB = (Map<String, Object>) transformed.value();
@@ -1116,6 +1116,6 @@ public class CastTest {
         assertEquals(array.toString(), updatedA.get("arraystring"));
 
         assertEquals(parentA.toString(), updatedB.get("parentstring"));
-	}
+    }
 
 }

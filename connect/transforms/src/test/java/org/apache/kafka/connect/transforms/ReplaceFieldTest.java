@@ -171,7 +171,7 @@ public class ReplaceFieldTest {
     }
 
     @SuppressWarnings("unchecked")
-	@Test
+    @Test
     public void schemalessRecursive() {
         final Map<String, Object> props = new HashMap<>();
         props.put(ReplaceField.ConfigName.EXCLUDE, "dont");
@@ -237,80 +237,80 @@ public class ReplaceFieldTest {
         assertEquals("etc", updatedParentA_array_1.get("etc"));
     }
 
-	@SuppressWarnings("unchecked")
-	@Test
-	public void withSchemaRecursive() {
-	    final Map<String, Object> props = new HashMap<>();
-	    props.put(ReplaceField.ConfigName.INCLUDE, "abc,foo,do,array,map");
-	    props.put(ReplaceField.ConfigName.RENAME, "abc:xyz,foo:bar");
+    @SuppressWarnings("unchecked")
+    @Test
+    public void withSchemaRecursive() {
+        final Map<String, Object> props = new HashMap<>();
+        props.put(ReplaceField.ConfigName.INCLUDE, "abc,foo,do,array,map");
+        props.put(ReplaceField.ConfigName.RENAME, "abc:xyz,foo:bar");
         props.put(ReplaceField.ConfigName.RECURSIVE, true);
 
-	    xform.configure(props);
+        xform.configure(props);
 
-	    // Schema
+        // Schema
 
-	    final Schema schema = SchemaBuilder.struct()
-	            .field("dont", Schema.STRING_SCHEMA)
-	            .field("abc", Schema.INT32_SCHEMA)
-	            .field("foo", Schema.BOOLEAN_SCHEMA)
-	            .field("etc", Schema.STRING_SCHEMA)
-	            .build();
+        final Schema schema = SchemaBuilder.struct()
+                .field("dont", Schema.STRING_SCHEMA)
+                .field("abc", Schema.INT32_SCHEMA)
+                .field("foo", Schema.BOOLEAN_SCHEMA)
+                .field("etc", Schema.STRING_SCHEMA)
+                .build();
 
-	    final Schema arraySchema = SchemaBuilder.array(schema);
+        final Schema arraySchema = SchemaBuilder.array(schema);
 
-	    final Schema parentASchema = SchemaBuilder.struct()
-	            .field("abc", Schema.INT32_SCHEMA)
-	            .field("foo", Schema.BOOLEAN_SCHEMA)
-	            .field("etc", Schema.STRING_SCHEMA)
-	            .field("dont", schema)
-	            .field("do", schema)
-	            .field("array", arraySchema)
-	            .build();
+        final Schema parentASchema = SchemaBuilder.struct()
+                .field("abc", Schema.INT32_SCHEMA)
+                .field("foo", Schema.BOOLEAN_SCHEMA)
+                .field("etc", Schema.STRING_SCHEMA)
+                .field("dont", schema)
+                .field("do", schema)
+                .field("array", arraySchema)
+                .build();
 
-	    final Schema mapSchema = SchemaBuilder.map(Schema.STRING_SCHEMA, parentASchema);
+        final Schema mapSchema = SchemaBuilder.map(Schema.STRING_SCHEMA, parentASchema);
 
-	    final Schema parentBSchema = SchemaBuilder.struct()
-	            .field("dont", parentASchema)
-	            .field("do", parentASchema)
-	            .field("array", arraySchema)
-	            .field("map", mapSchema)
-	            .build();
+        final Schema parentBSchema = SchemaBuilder.struct()
+                .field("dont", parentASchema)
+                .field("do", parentASchema)
+                .field("array", arraySchema)
+                .field("map", mapSchema)
+                .build();
 
-	    // Value
+        // Value
 
-	    final Struct value1 = new Struct(schema)
-			    .put("dont", "whatever")
-			    .put("abc", 42)
-			    .put("foo", true)
-			    .put("etc", "etc");
+        final Struct value1 = new Struct(schema)
+                .put("dont", "whatever")
+                .put("abc", 42)
+                .put("foo", true)
+                .put("etc", "etc");
 
-	    final Struct value2 = new Struct(schema)
-			    .put("dont", "whatever")
-			    .put("abc", 42)
-			    .put("foo", true)
-			    .put("etc", "etc");
+        final Struct value2 = new Struct(schema)
+                .put("dont", "whatever")
+                .put("abc", 42)
+                .put("foo", true)
+                .put("etc", "etc");
 
         final List<Object> array = new ArrayList<Object>();
         array.add(value1);
         array.add(value2);
 
         final Struct parentAValue = new Struct(parentASchema)
-			    .put("abc", 42)
-			    .put("foo", true)
-			    .put("etc", "etc")
-			    .put("dont", value1)
-			    .put("do", value2)
-			    .put("array", array);
+                .put("abc", 42)
+                .put("foo", true)
+                .put("etc", "etc")
+                .put("dont", value1)
+                .put("do", value2)
+                .put("array", array);
 
         final Map<String, Object> map = new HashMap<>();
         map.put("dont", parentAValue);
         map.put("do", parentAValue);
 
         final Struct parentBValue = new Struct(parentBSchema)
-			    .put("dont", parentAValue)
-			    .put("do", parentAValue)
-			    .put("array", array)
-			    .put("map", map);
+                .put("dont", parentAValue)
+                .put("do", parentAValue)
+                .put("array", array)
+                .put("map", map);
 
         // Create and transform record
 
@@ -373,6 +373,6 @@ public class ReplaceFieldTest {
         assertEquals(2, updatedMap_do_array_1.schema().fields().size());
         assertEquals(42, updatedMap_do_array_1.get("xyz"));
         assertEquals(true, updatedMap_do_array_1.get("bar"));
-	}
+    }
 
 }

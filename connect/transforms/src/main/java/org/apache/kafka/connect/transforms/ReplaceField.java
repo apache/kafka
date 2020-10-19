@@ -64,7 +64,7 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
     }
 
     public static interface ConfigDefault {
-    	boolean RECURSIVE = false;
+        boolean RECURSIVE = false;
     }
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
@@ -88,9 +88,10 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
                     return "list of colon-delimited pairs, e.g. <code>foo:bar,abc:xyz</code>";
                 }
             }, ConfigDef.Importance.MEDIUM, "Field rename mappings.")
-    		.define(ConfigName.RECURSIVE, ConfigDef.Type.BOOLEAN, ConfigDefault.RECURSIVE, ConfigDef.Importance.MEDIUM, 
-    				"Boolean which indicates if the ReplaceField should recursively replace child fields of nested complex types, "
-    						+ "if any nested children fields exist with the same names as given in the configuration.");
+            .define(ConfigName.RECURSIVE, ConfigDef.Type.BOOLEAN, ConfigDefault.RECURSIVE, ConfigDef.Importance.MEDIUM, 
+                    "Boolean which indicates if the ReplaceField should recursively replace child fields of nested complex types, "
+                    + "if any nested children fields exist with the same names as given in the configuration.");
+                            
 
     private static final String PURPOSE = "field replacement";
 
@@ -139,31 +140,31 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
     }
 
     boolean filter(String fieldName) {
-    	if (exclude.contains(fieldName)) {
-    		log.debug("Excluded field '{}' will be removed.", fieldName);
-    		return false;
-    	}
-    	else if (include.contains(fieldName)) {
-    		log.debug("Included field '{}' will be added.", fieldName);
-    		return true;
-    	}
-    	else if (include.isEmpty()) {
-    		return true;
-    	}
-    	else {
-    		log.debug("Field '{}' will be removed (missing from the include list or otherwise incompatible configuration).", fieldName);
-    		return false;
-    	}
+        if (exclude.contains(fieldName)) {
+            log.debug("Excluded field '{}' will be removed.", fieldName);
+            return false;
+        }
+        else if (include.contains(fieldName)) {
+            log.debug("Included field '{}' will be added.", fieldName);
+            return true;
+        }
+        else if (include.isEmpty()) {
+            return true;
+        }
+        else {
+            log.debug("Field '{}' will be removed (missing from the include list or otherwise incompatible configuration).", fieldName);
+            return false;
+        }
     }
 
     String renamed(String fieldName) {
         final String mapping = renames.get(fieldName);
         if (mapping == null) {
-        	return fieldName;
+            return fieldName;
         }
         else {
-        	log.debug("Renamed field '{}' to '{}'.", fieldName, mapping);
-        	return mapping;
+            log.debug("Renamed field '{}' to '{}'.", fieldName, mapping);
+            return mapping;
         }
     }
 
@@ -187,9 +188,9 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
         final Map<String, Object> value = requireMap(operatingValue(record), PURPOSE);
 
         Map<Object, Object> valueToConvert = new HashMap<>(value);
-		final Map<Object, Object> updatedValue = buildUpdatedMapValue(valueToConvert);
+        final Map<Object, Object> updatedValue = buildUpdatedMapValue(valueToConvert);
 
-		return newRecord(record, null, updatedValue);
+        return newRecord(record, null, updatedValue);
     }
 
     private R applyWithSchema(R record) {
@@ -219,33 +220,33 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
         return updatedSchema;
     }
 
-	/***
-	 * Method which recursively builds nested {@link SchemaBuilder}s based on the {@link ReplaceField} configuration. 
-	 * Each child schema is also added to the <code>schemaUpdateCache</code> and can be fetched afterwards instead 
-	 * of being built again.
-	 * @param schema
-	 * @return {@link SchemaBuilder} which can be used to build the final {@link Schema}
-	 */
+    /***
+     * Method which recursively builds nested {@link SchemaBuilder}s based on the {@link ReplaceField} configuration. 
+     * Each child schema is also added to the <code>schemaUpdateCache</code> and can be fetched afterwards instead 
+     * of being built again.
+     * @param schema
+     * @return {@link SchemaBuilder} which can be used to build the final {@link Schema}
+     */
     private SchemaBuilder buildUpdatedSchema(Schema schema) {
 
-    	// Perform different logic for different types of parent schemas.
+        // Perform different logic for different types of parent schemas.
 
         if (schema.type() == Schema.Type.STRUCT) {
-        	SchemaBuilder builder = SchemaUtil.copySchemaBasics(schema, SchemaBuilder.struct());
+            SchemaBuilder builder = SchemaUtil.copySchemaBasics(schema, SchemaBuilder.struct());
 
-        	for (Field field : schema.fields()) {
-    	        if (filter(field.name())) {
-    	        	if (isRecursive && 
-    	        			(field.schema().type() == Schema.Type.STRUCT 
-    	        			|| field.schema().type() == Schema.Type.ARRAY 
-    	        			|| field.schema().type() == Schema.Type.MAP)
-    	        			) { 
-    	        		Schema updatedChildSchema = getOrBuildUpdatedSchema(field.schema());
-    	        		builder.field(renamed(field.name()), updatedChildSchema);
-    	        	}
-    	        	else // This is where all non-parent Schema fields should be added (is not recursive, or we are at the bottom of a recursion) 
-    	        		builder.field(renamed(field.name()), field.schema());
-    	        }
+            for (Field field : schema.fields()) {
+                if (filter(field.name())) {
+                    if (isRecursive && 
+                            (field.schema().type() == Schema.Type.STRUCT 
+                            || field.schema().type() == Schema.Type.ARRAY 
+                            || field.schema().type() == Schema.Type.MAP)
+                            ) { 
+                        Schema updatedChildSchema = getOrBuildUpdatedSchema(field.schema());
+                        builder.field(renamed(field.name()), updatedChildSchema);
+                    }
+                    else // This is where all non-parent Schema fields should be added (is not recursive, or we are at the bottom of a recursion) 
+                        builder.field(renamed(field.name()), field.schema());
+                }
             }
 
             return builder;
@@ -253,54 +254,54 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
 
         else if (isRecursive && schema.type() == Schema.Type.ARRAY) {
 
-        	// For complex types, just go one level lower to more detail and then return a new Array schema with the updated child value schema
-        	if (schema.valueSchema().type() == Schema.Type.STRUCT 
-					|| schema.valueSchema().type() == Schema.Type.ARRAY 
-					|| schema.valueSchema().type() == Schema.Type.MAP) {
-        		Schema updatedChildSchema = getOrBuildUpdatedSchema(schema.valueSchema());
-        		return SchemaUtil.copySchemaBasics(schema, SchemaBuilder.array(updatedChildSchema));
-        	}
+            // For complex types, just go one level lower to more detail and then return a new Array schema with the updated child value schema
+            if (schema.valueSchema().type() == Schema.Type.STRUCT 
+                    || schema.valueSchema().type() == Schema.Type.ARRAY 
+                    || schema.valueSchema().type() == Schema.Type.MAP) {
+                Schema updatedChildSchema = getOrBuildUpdatedSchema(schema.valueSchema());
+                return SchemaUtil.copySchemaBasics(schema, SchemaBuilder.array(updatedChildSchema));
+            }
 
-        	else // Otherwise we will just assume to pass it along since the Array itself was already allowed by an upstream filter()
-				return SchemaUtil.copySchemaBasics(schema, SchemaBuilder.array(schema.valueSchema()));
+            else // Otherwise we will just assume to pass it along since the Array itself was already allowed by an upstream filter()
+                return SchemaUtil.copySchemaBasics(schema, SchemaBuilder.array(schema.valueSchema()));
 
         }
         else if (isRecursive && schema.type() == Schema.Type.MAP) {
 
-        	// For complex type values, just go one level lower to more detail and then return a new Map schema with the updated child value schema
-        	if (schema.valueSchema().type() == Schema.Type.STRUCT 
-					|| schema.valueSchema().type() == Schema.Type.ARRAY 
-					|| schema.valueSchema().type() == Schema.Type.MAP) {
-        		Schema updatedChildSchema = getOrBuildUpdatedSchema(schema.valueSchema());
-        		return SchemaUtil.copySchemaBasics(schema, SchemaBuilder.map(schema.keySchema(), updatedChildSchema));
-        	}
+            // For complex type values, just go one level lower to more detail and then return a new Map schema with the updated child value schema
+            if (schema.valueSchema().type() == Schema.Type.STRUCT 
+                    || schema.valueSchema().type() == Schema.Type.ARRAY 
+                    || schema.valueSchema().type() == Schema.Type.MAP) {
+                Schema updatedChildSchema = getOrBuildUpdatedSchema(schema.valueSchema());
+                return SchemaUtil.copySchemaBasics(schema, SchemaBuilder.map(schema.keySchema(), updatedChildSchema));
+            }
 
-        	// Otherwise, if the Map key is a string, then we will also perform ReplaceField based on the key names within the Map fields
-        	else if (schema.keySchema().type() == Schema.Type.STRING) {
+            // Otherwise, if the Map key is a string, then we will also perform ReplaceField based on the key names within the Map fields
+            else if (schema.keySchema().type() == Schema.Type.STRING) {
 
-        		SchemaBuilder childBuilder = SchemaUtil.copySchemaBasics(schema.valueSchema());
+                SchemaBuilder childBuilder = SchemaUtil.copySchemaBasics(schema.valueSchema());
 
-            	for (Field field : schema.valueSchema().fields()) {
-            		String fieldName = field.name();
+                for (Field field : schema.valueSchema().fields()) {
+                    String fieldName = field.name();
 
-            		if (filter(fieldName)) {
+                    if (filter(fieldName)) {
 
-            			if (schema.valueSchema().type() == Schema.Type.STRUCT 
-            					|| schema.valueSchema().type() == Schema.Type.ARRAY 
-            					|| schema.valueSchema().type() == Schema.Type.MAP) {
-        	        		Schema updatedChildSchema = getOrBuildUpdatedSchema(field.schema());
-        	        		childBuilder.field(renamed(field.name()), updatedChildSchema);
-            			}
+                        if (schema.valueSchema().type() == Schema.Type.STRUCT 
+                                || schema.valueSchema().type() == Schema.Type.ARRAY 
+                                || schema.valueSchema().type() == Schema.Type.MAP) {
+                            Schema updatedChildSchema = getOrBuildUpdatedSchema(field.schema());
+                            childBuilder.field(renamed(field.name()), updatedChildSchema);
+                        }
 
-            			else
-		        			childBuilder.field(renamed(fieldName), field.schema());
-            		}
-            	}
+                        else
+                            childBuilder.field(renamed(fieldName), field.schema());
+                    }
+                }
 
-        		return SchemaUtil.copySchemaBasics(schema, SchemaBuilder.map(schema.keySchema(), childBuilder.build()));
-        	}
-        	else // And in the last-case scenario (not a complex value and not a String key type) then we will just assume to pass it along since the Map itself was already allowed by an upstream filter()
-        		return SchemaUtil.copySchemaBasics(schema, SchemaBuilder.map(schema.keySchema(), schema.valueSchema()));
+                return SchemaUtil.copySchemaBasics(schema, SchemaBuilder.map(schema.keySchema(), childBuilder.build()));
+            }
+            else // And in the last-case scenario (not a complex value and not a String key type) then we will just assume to pass it along since the Map itself was already allowed by an upstream filter()
+                return SchemaUtil.copySchemaBasics(schema, SchemaBuilder.map(schema.keySchema(), schema.valueSchema()));
         }
 
         else
@@ -309,128 +310,128 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
     }
 
     @SuppressWarnings("unchecked")
-	private Object buildUpdatedSchemaValue(Object value, Schema updatedSchema) {
+    private Object buildUpdatedSchemaValue(Object value, Schema updatedSchema) {
 
-    	if (value == null)
-    		return null;
+        if (value == null)
+            return null;
 
-    	if (updatedSchema.type() == Schema.Type.STRUCT) {
-    		Struct struct = (Struct) value;
-        	Struct updatedStruct = new Struct(updatedSchema);
+        if (updatedSchema.type() == Schema.Type.STRUCT) {
+            Struct struct = (Struct) value;
+            Struct updatedStruct = new Struct(updatedSchema);
 
             for (Field field : struct.schema().fields()) {
-    	        if (filter(field.name())) {
-    	        	if (isRecursive && 
-    	        			(field.schema().type() == Schema.Type.STRUCT 
-    	        			|| field.schema().type() == Schema.Type.ARRAY 
-    	        			|| field.schema().type() == Schema.Type.MAP)
-    	        			) {
-    	        		Schema updatedChildSchema = getOrBuildUpdatedSchema(field.schema());
-    	        		Object updatedChildValue = buildUpdatedSchemaValue(struct.get(field), updatedChildSchema);
-    	        		updatedStruct.put(updatedSchema.field(renamed(field.name())), updatedChildValue);
-    	        	}
-    	        	else // This is where most non-parent Value fields should be added (Struct fields that match the filter(), and either we are not using recursion or we are at the bottom of any nested Struct)
-    	        		updatedStruct.put(updatedSchema.field(renamed(field.name())), struct.get(field));
-    	        }
+                if (filter(field.name())) {
+                    if (isRecursive && 
+                            (field.schema().type() == Schema.Type.STRUCT 
+                            || field.schema().type() == Schema.Type.ARRAY 
+                            || field.schema().type() == Schema.Type.MAP)
+                            ) {
+                        Schema updatedChildSchema = getOrBuildUpdatedSchema(field.schema());
+                        Object updatedChildValue = buildUpdatedSchemaValue(struct.get(field), updatedChildSchema);
+                        updatedStruct.put(updatedSchema.field(renamed(field.name())), updatedChildValue);
+                    }
+                    else // This is where most non-parent Value fields should be added (Struct fields that match the filter(), and either we are not using recursion or we are at the bottom of any nested Struct)
+                        updatedStruct.put(updatedSchema.field(renamed(field.name())), struct.get(field));
+                }
             }
             return updatedStruct;
         }
 
-    	else if (isRecursive && updatedSchema.type() == Schema.Type.ARRAY) {
+        else if (isRecursive && updatedSchema.type() == Schema.Type.ARRAY) {
             return buildUpdatedArrayValue((List<Object>) value);
         }
 
         else if (isRecursive && updatedSchema.type() == Schema.Type.MAP) {
-        	return buildUpdatedMapValue((Map<Object, Object>) value);
-    	}
+            return buildUpdatedMapValue((Map<Object, Object>) value);
+        }
 
         else
             throw new DataException(updatedSchema.type().toString() + " is not a supported schema type for the ReplaceField transformation.");
     }
 
     @SuppressWarnings("unchecked")
-	private List<Object> buildUpdatedArrayValue(List<Object> array) {
-    	List<Object> updatedArray = new ArrayList<Object>(array.size());
-    	for (Object arrayElement : array) {
-    		if (isRecursive && arrayElement instanceof Struct) {
-	    		Struct struct = (Struct) arrayElement;
-				Schema updatedSchema = getOrBuildUpdatedSchema(struct.schema()); 
-				Object updatedStruct = buildUpdatedSchemaValue(struct, updatedSchema);
-				updatedArray.add(updatedStruct);
-    		}
-    		else if (isRecursive && arrayElement instanceof List<?>) {
-    			updatedArray.add(buildUpdatedArrayValue((List<Object>) arrayElement));
-    		}
-    		else if (isRecursive && arrayElement instanceof Map<?,?>) {
-    			updatedArray.add(buildUpdatedMapValue((Map<Object, Object>) arrayElement));
-    		}
-    		else
-    			updatedArray.add(arrayElement);
-    	}
-    	return updatedArray;
+    private List<Object> buildUpdatedArrayValue(List<Object> array) {
+        List<Object> updatedArray = new ArrayList<Object>(array.size());
+        for (Object arrayElement : array) {
+            if (isRecursive && arrayElement instanceof Struct) {
+                Struct struct = (Struct) arrayElement;
+                Schema updatedSchema = getOrBuildUpdatedSchema(struct.schema()); 
+                Object updatedStruct = buildUpdatedSchemaValue(struct, updatedSchema);
+                updatedArray.add(updatedStruct);
+            }
+            else if (isRecursive && arrayElement instanceof List<?>) {
+                updatedArray.add(buildUpdatedArrayValue((List<Object>) arrayElement));
+            }
+            else if (isRecursive && arrayElement instanceof Map<?,?>) {
+                updatedArray.add(buildUpdatedMapValue((Map<Object, Object>) arrayElement));
+            }
+            else
+                updatedArray.add(arrayElement);
+        }
+        return updatedArray;
     }
 
     @SuppressWarnings("unchecked")
-	private Map<Object, Object> buildUpdatedMapValue(Map<Object, Object> map) {
-    	Map<Object, Object> updatedMap = new HashMap<>(map.size());
+    private Map<Object, Object> buildUpdatedMapValue(Map<Object, Object> map) {
+        Map<Object, Object> updatedMap = new HashMap<>(map.size());
 
-    	for (Map.Entry<Object, Object> mapEntry : map.entrySet()) {
-    		Object mapEntryValue = mapEntry.getValue();
+        for (Map.Entry<Object, Object> mapEntry : map.entrySet()) {
+            Object mapEntryValue = mapEntry.getValue();
 
-        	// If the Map key is a string, then we will also perform ReplaceField based on the key names within the Map fields
-        	if (mapEntry.getKey() instanceof String) {
-        		String mapEntryKey = mapEntry.getKey().toString();
+            // If the Map key is a string, then we will also perform ReplaceField based on the key names within the Map fields
+            if (mapEntry.getKey() instanceof String) {
+                String mapEntryKey = mapEntry.getKey().toString();
 
-        		if (filter(mapEntryKey)) {
+                if (filter(mapEntryKey)) {
 
-        			if (isRecursive && mapEntryValue instanceof Struct) {
-        	    		Struct struct = (Struct) mapEntry.getValue();
-        				Schema updatedSchema = getOrBuildUpdatedSchema(struct.schema()); 
-        				Object updatedStruct = buildUpdatedSchemaValue(struct, updatedSchema);
-        				updatedMap.put(renamed(mapEntryKey), updatedStruct);
-        			}
+                    if (isRecursive && mapEntryValue instanceof Struct) {
+                        Struct struct = (Struct) mapEntry.getValue();
+                        Schema updatedSchema = getOrBuildUpdatedSchema(struct.schema()); 
+                        Object updatedStruct = buildUpdatedSchemaValue(struct, updatedSchema);
+                        updatedMap.put(renamed(mapEntryKey), updatedStruct);
+                    }
 
-        			else if (isRecursive && mapEntryValue instanceof List<?>) {
-        				updatedMap.put(renamed(mapEntryKey), buildUpdatedArrayValue((List<Object>) mapEntryValue));
-        			}
+                    else if (isRecursive && mapEntryValue instanceof List<?>) {
+                        updatedMap.put(renamed(mapEntryKey), buildUpdatedArrayValue((List<Object>) mapEntryValue));
+                    }
 
-        			else if (isRecursive && mapEntryValue instanceof Map<?,?>) {
-        				updatedMap.put(renamed(mapEntryKey), buildUpdatedMapValue((Map<Object, Object>) mapEntryValue));
-        			}
+                    else if (isRecursive && mapEntryValue instanceof Map<?,?>) {
+                        updatedMap.put(renamed(mapEntryKey), buildUpdatedMapValue((Map<Object, Object>) mapEntryValue));
+                    }
 
-        			else // This is not a complex type that we can drill down. Send it through because we already know that this entry's parent map was allowed from filter()
-        				updatedMap.put(renamed(mapEntryKey), mapEntry.getValue());
-        		}
+                    else // This is not a complex type that we can drill down. Send it through because we already know that this entry's parent map was allowed from filter()
+                        updatedMap.put(renamed(mapEntryKey), mapEntry.getValue());
+                }
 
-        	}
+            }
 
-        	// Otherwise the key is not a string, and we cannot do a filter() check on the Map keys. So go ahead with passing it through since 
-        	//  an upstream filter() allowed us to be here.
+            // Otherwise the key is not a string, and we cannot do a filter() check on the Map keys. So go ahead with passing it through since 
+            //  an upstream filter() allowed us to be here.
 
-        	// However, if the map value is another complex type, then we can go one level deeper into the value to continue performing ReplaceField 
-        	//  logic on the children.
+            // However, if the map value is another complex type, then we can go one level deeper into the value to continue performing ReplaceField 
+            //  logic on the children.
 
-        	// The logic is the same above, except we cannot check against the filter() or rename the keys
-        	else if (isRecursive && mapEntryValue instanceof Struct) {
-	    		Struct struct = (Struct) mapEntry.getValue();
-				Schema updatedSchema = getOrBuildUpdatedSchema(struct.schema()); 
-				Object updatedStruct = buildUpdatedSchemaValue(struct, updatedSchema);
-				updatedMap.put(mapEntry.getKey(), updatedStruct);
-			}
+            // The logic is the same above, except we cannot check against the filter() or rename the keys
+            else if (isRecursive && mapEntryValue instanceof Struct) {
+                Struct struct = (Struct) mapEntry.getValue();
+                Schema updatedSchema = getOrBuildUpdatedSchema(struct.schema()); 
+                Object updatedStruct = buildUpdatedSchemaValue(struct, updatedSchema);
+                updatedMap.put(mapEntry.getKey(), updatedStruct);
+            }
 
-			else if (isRecursive && mapEntryValue instanceof List<?>) {
-				updatedMap.put(mapEntry.getKey(), buildUpdatedArrayValue((List<Object>) mapEntryValue));
-			}
+            else if (isRecursive && mapEntryValue instanceof List<?>) {
+                updatedMap.put(mapEntry.getKey(), buildUpdatedArrayValue((List<Object>) mapEntryValue));
+            }
 
-			else if (isRecursive && mapEntryValue instanceof Map<?,?>) {
-				updatedMap.put(mapEntry.getKey(), buildUpdatedMapValue((Map<Object, Object>) mapEntryValue));
-			}
+            else if (isRecursive && mapEntryValue instanceof Map<?,?>) {
+                updatedMap.put(mapEntry.getKey(), buildUpdatedMapValue((Map<Object, Object>) mapEntryValue));
+            }
 
-			else // This is not a complex type that we can drill down. Send it through because we already know that this entry's parent map was allowed from filter()
-				updatedMap.put(mapEntry.getKey(), mapEntry.getValue());
-    	}
+            else // This is not a complex type that we can drill down. Send it through because we already know that this entry's parent map was allowed from filter()
+                updatedMap.put(mapEntry.getKey(), mapEntry.getValue());
+        }
 
-    	return updatedMap;
+        return updatedMap;
     }
 
     @Override
