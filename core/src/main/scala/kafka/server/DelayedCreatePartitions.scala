@@ -47,7 +47,7 @@ object CreatePartitionsMetadata {
   */
 class DelayedCreatePartitions(delayMs: Long,
                               createMetadata: Seq[CreatePartitionsMetadata],
-                              adminManager: AdminManager,
+                              adminManager: LegacyAdminManager,
                               responseCallback: Map[String, ApiError] => Unit)
   extends DelayedOperation(delayMs) {
 

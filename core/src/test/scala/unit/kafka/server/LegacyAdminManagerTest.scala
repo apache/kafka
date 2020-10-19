@@ -33,7 +33,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNotEquals
 import java.util.Properties
 
-class AdminManagerTest {
+class LegacyAdminManagerTest {
 
   private val zkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
   private val metrics = new Metrics()
@@ -46,9 +46,9 @@ class AdminManagerTest {
     metrics.close()
   }
 
-  def createAdminManager(): AdminManager = {
+  def createAdminManager(): LegacyAdminManager = {
     val props = TestUtils.createBrokerConfig(brokerId, "zk")
-    new AdminManager(KafkaConfig.fromProps(props), metrics, metadataCache, zkClient)
+    new LegacyAdminManager(KafkaConfig.fromProps(props), metrics, metadataCache, zkClient)
   }
 
   @Test
