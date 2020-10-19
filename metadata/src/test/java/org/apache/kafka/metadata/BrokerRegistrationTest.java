@@ -19,9 +19,8 @@ package org.apache.kafka.metadata;
 
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -31,10 +30,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Timeout(value = 40)
 public class BrokerRegistrationTest {
-    @Rule
-    final public Timeout globalTimeout = Timeout.seconds(40);
-
     private static final List<BrokerRegistration> REGISTRATIONS = Arrays.asList(
         new BrokerRegistration(0, 0, Arrays.asList(new Endpoint("INTERNAL",
             SecurityProtocol.PLAINTEXT, "localhost", 9090)),

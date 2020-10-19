@@ -992,8 +992,7 @@ project(':metadata') {
     compile libs.jacksonDatabind
     compile libs.jacksonJDK8Datatypes
     compileOnly libs.log4j
-    testCompile libs.junitJupiterApi
-    testCompile libs.junitVintageEngine
+    testCompile libs.junitJupiter
     testCompile libs.hamcrest
     testCompile libs.slf4jlog4j
     testCompile project(':clients').sourceSets.test.output // for org.apache.kafka.test.IntegrationTest

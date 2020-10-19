@@ -17,18 +17,14 @@
 
 package org.apache.kafka.metadata;
 
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
-
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Timeout(value = 40)
 public class VersionRangeTest {
-    @Rule
-    final public Timeout globalTimeout = Timeout.seconds(40);
-
     @SuppressWarnings("unchecked")
     private static VersionRange v(int a, int b) {
         assertTrue(a <= Short.MAX_VALUE);
