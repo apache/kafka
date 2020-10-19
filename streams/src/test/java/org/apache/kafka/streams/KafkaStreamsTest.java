@@ -937,6 +937,7 @@ public class KafkaStreamsTest {
     }
 
     @SuppressWarnings("unchecked")
+    @Deprecated // testing old PAPI
     private Topology getStatefulTopology(final String inputTopic,
                                          final String outputTopic,
                                          final String globalTopicName,
