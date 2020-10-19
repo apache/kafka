@@ -477,7 +477,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
                     "Deprecated. Use " + GROUPS_EXCLUDE + " instead.")
             .define(
                     CONFIG_PROPERTIES_EXCLUDE,
-                        ConfigDef.Type.LIST,
+                    ConfigDef.Type.LIST,
                     CONFIG_PROPERTIES_EXCLUDE_DEFAULT,
                         ConfigDef.Importance.HIGH,
                     CONFIG_PROPERTIES_EXCLUDE_DOC)
