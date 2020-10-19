@@ -61,6 +61,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.singleton;
+import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
 /**
@@ -202,7 +203,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      * @throws StreamsException fatal error, should close the thread
      */
     @Override
-    public void initializeIfNeeded() {
+    public boolean initializeIfNeeded() {
         if (state() == State.CREATED) {
             recordCollector.initialize();
 
@@ -216,17 +217,25 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             transitionTo(State.RESTORING);
 
             log.info("Initialized");
+
+            return true;
         }
+
+        return false;
     }
 
     /**
      * @throws TimeoutException if fetching committed offsets timed out
      */
     @Override
-    public void completeRestoration() {
+    public boolean completeRestorationIfPossible() {
         switch (state()) {
+            case CREATED:
+            case SUSPENDED:
+                return false;
+
             case RUNNING:
-                return;
+                return true;
 
             case RESTORING:
                 initializeMetadata();
@@ -238,10 +247,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
                 log.info("Restored and ready to run");
 
-                break;
+                return true;
 
-            case CREATED:
-            case SUSPENDED:
             case CLOSED:
                 throw new IllegalStateException("Illegal state " + state() + " while completing restoration for active task " + id);
 
@@ -512,7 +519,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         removeAllSensors();
         switch (state()) {
             case SUSPENDED:
-                stateMgr.recycle();
                 recordCollector.closeClean();
 
                 break;

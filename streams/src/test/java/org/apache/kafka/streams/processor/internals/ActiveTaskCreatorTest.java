@@ -65,8 +65,6 @@ public class ActiveTaskCreatorTest {
     private InternalTopologyBuilder builder;
     @Mock(type = MockType.NICE)
     private StateDirectory stateDirectory;
-    @Mock(type = MockType.NICE)
-    private ChangelogReader changeLogReader;
 
     private final MockClientSupplier mockClientSupplier = new MockClientSupplier();
     private final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), "clientId", StreamsConfig.METRICS_LATEST, new MockTime());
@@ -459,8 +457,7 @@ public class ActiveTaskCreatorTest {
             new StreamsConfig(properties),
             streamsMetrics,
             stateDirectory,
-            changeLogReader,
-            new ThreadCache(new LogContext(), 0L, streamsMetrics),
+                new ThreadCache(new LogContext(), 0L, streamsMetrics),
             new MockTime(),
             mockClientSupplier,
             "clientId-StreamThread-0",

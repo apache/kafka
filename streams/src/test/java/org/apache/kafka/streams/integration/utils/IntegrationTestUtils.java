@@ -249,14 +249,23 @@ public class IntegrationTestUtils {
                 producer.initTransactions();
                 producer.beginTransaction();
             }
+            final LinkedList<Future<RecordMetadata>> futures = new LinkedList<>();
             for (final KeyValue<K, V> record : records) {
-                producer.send(new ProducerRecord<>(topic, null, time.milliseconds(), record.key, record.value, headers));
+                futures.add(producer.send(new ProducerRecord<>(topic, null, time.milliseconds(), record.key, record.value, headers)));
                 time.sleep(1L);
             }
             if (enableTransactions) {
                 producer.commitTransaction();
             } else {
                 producer.flush();
+            }
+
+            for (final Future<RecordMetadata> future : futures) {
+                try {
+                    future.get();
+                } catch (final InterruptedException | ExecutionException e) {
+                    throw new RuntimeException(e);
+                }
             }
         }
     }
@@ -314,11 +323,22 @@ public class IntegrationTestUtils {
                 producer.initTransactions();
                 producer.beginTransaction();
             }
+            final LinkedList<Future<RecordMetadata>> futures = new LinkedList<>();
             for (final KeyValue<K, V> record : records) {
-                producer.send(new ProducerRecord<>(topic, null, timestamp, record.key, record.value, headers));
+                futures.add(producer.send(new ProducerRecord<>(topic, null, timestamp, record.key, record.value, headers)));
             }
             if (enableTransactions) {
                 producer.commitTransaction();
+            } else {
+                producer.flush();
+            }
+
+            for (final Future<RecordMetadata> future : futures) {
+                try {
+                    future.get();
+                } catch (final InterruptedException | ExecutionException e) {
+                    throw new RuntimeException(e);
+                }
             }
         }
     }

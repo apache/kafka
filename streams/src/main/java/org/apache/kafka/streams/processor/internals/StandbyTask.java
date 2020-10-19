@@ -36,6 +36,8 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
+
 /**
  * A StandbyTask
  */
@@ -88,7 +90,7 @@ public class StandbyTask extends AbstractTask implements Task {
      * @throws StreamsException fatal error, should close the thread
      */
     @Override
-    public void initializeIfNeeded() {
+    public boolean initializeIfNeeded() {
         if (state() == State.CREATED) {
             StateManagerUtil.registerStateStores(log, logPrefix, topology, stateMgr, stateDirectory, processorContext);
 
@@ -105,13 +107,17 @@ public class StandbyTask extends AbstractTask implements Task {
             processorContext.initialize();
 
             log.info("Initialized");
+
+            return true;
         } else if (state() == State.RESTORING) {
             throw new IllegalStateException("Illegal state " + state() + " while initializing standby task " + id);
         }
+
+        return false;
     }
 
     @Override
-    public void completeRestoration() {
+    public boolean completeRestorationIfPossible() {
         throw new IllegalStateException("Standby task " + id + " should never be completing restoration");
     }
 
@@ -220,12 +226,11 @@ public class StandbyTask extends AbstractTask implements Task {
 
     @Override
     public void closeCleanAndRecycleState() {
-        streamsMetrics.removeAllTaskLevelSensors(Thread.currentThread().getName(), id.toString());
-        if (state() == State.SUSPENDED) {
-            stateMgr.recycle();
-        } else {
-            throw new IllegalStateException("Illegal state " + state() + " while closing standby task " + id);
+        if (state() != State.SUSPENDED) {
+            throw new IllegalStateException("Illegal state " + state() + " while closing-and-recycling standby task " + id);
         }
+
+        streamsMetrics.removeAllTaskLevelSensors(Thread.currentThread().getName(), id.toString());
 
         closeTaskSensor.record();
         transitionTo(State.CLOSED);

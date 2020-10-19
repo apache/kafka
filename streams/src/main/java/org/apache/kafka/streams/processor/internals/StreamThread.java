@@ -275,10 +275,10 @@ public class StreamThread extends Thread {
     private volatile ThreadMetadata threadMetadata;
     private StreamThread.StateListener stateListener;
 
-    private final ChangelogReader changelogReader;
-    private final ConsumerRebalanceListener rebalanceListener;
+    private final StateRestoreThread restoreThread;
     private final Consumer<byte[], byte[]> mainConsumer;
     private final Consumer<byte[], byte[]> restoreConsumer;
+    private final ConsumerRebalanceListener rebalanceListener;
     private final Admin adminClient;
     private final InternalTopologyBuilder builder;
 
@@ -310,15 +310,6 @@ public class StreamThread extends Thread {
         final Map<String, Object> restoreConsumerConfigs = config.getRestoreConsumerConfigs(getRestoreConsumerClientId(threadId));
         final Consumer<byte[], byte[]> restoreConsumer = clientSupplier.getRestoreConsumer(restoreConsumerConfigs);
 
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(
-            time,
-            config,
-            logContext,
-            adminClient,
-            restoreConsumer,
-            userStateRestoreListener
-        );
-
         final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
 
         final ActiveTaskCreator activeTaskCreator = new ActiveTaskCreator(
@@ -326,7 +317,6 @@ public class StreamThread extends Thread {
             config,
             streamsMetrics,
             stateDirectory,
-            changelogReader,
             cache,
             time,
             clientSupplier,
@@ -339,12 +329,10 @@ public class StreamThread extends Thread {
             config,
             streamsMetrics,
             stateDirectory,
-            changelogReader,
             threadId,
             log
         );
         final TaskManager taskManager = new TaskManager(
-            changelogReader,
             processId,
             logPrefix,
             activeTaskCreator,
@@ -368,7 +356,6 @@ public class StreamThread extends Thread {
         }
 
         final Consumer<byte[], byte[]> mainConsumer = clientSupplier.getConsumer(consumerConfigs);
-        changelogReader.setMainConsumer(mainConsumer);
         taskManager.setMainConsumer(mainConsumer);
         referenceContainer.mainConsumer = mainConsumer;
 
@@ -378,7 +365,7 @@ public class StreamThread extends Thread {
             adminClient,
             mainConsumer,
             restoreConsumer,
-            changelogReader,
+            userStateRestoreListener,
             originalReset,
             taskManager,
             streamsMetrics,
@@ -429,7 +416,7 @@ public class StreamThread extends Thread {
                         final Admin adminClient,
                         final Consumer<byte[], byte[]> mainConsumer,
                         final Consumer<byte[], byte[]> restoreConsumer,
-                        final ChangelogReader changelogReader,
+                        final StateRestoreListener userStateRestoreListener,
                         final String originalReset,
                         final TaskManager taskManager,
                         final StreamsMetricsImpl streamsMetrics,
@@ -475,7 +462,6 @@ public class StreamThread extends Thread {
         this.taskManager = taskManager;
         this.restoreConsumer = restoreConsumer;
         this.mainConsumer = mainConsumer;
-        this.changelogReader = changelogReader;
         this.originalReset = originalReset;
         this.nextProbingRebalanceMs = nextProbingRebalanceMs;
 
@@ -486,6 +472,9 @@ public class StreamThread extends Thread {
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
 
         this.numIterations = 1;
+
+        final String restoreThreadId = threadId.replaceAll("StreamThread", "RestoreThread");
+        this.restoreThread = new StateRestoreThread(time, config, restoreThreadId, adminClient, config.getString(StreamsConfig.APPLICATION_ID_CONFIG), restoreConsumer, userStateRestoreListener);
     }
 
     @SuppressWarnings("deprecation")
@@ -508,6 +497,9 @@ public class StreamThread extends Thread {
             log.info("StreamThread already shutdown. Not running");
             return;
         }
+
+        restoreThread.start();
+
         boolean cleanRun = false;
         try {
             runLoop();
@@ -623,16 +615,42 @@ public class StreamThread extends Thread {
             return;
         }
 
-        initializeAndRestorePhase();
+        // we need to first add any closed revoked/corrupted/recycled tasks and then add the initialized tasks to update the changelogs of revived/recycled tasks
+        restoreThread.addClosedTasks(taskManager.drainRemovedTasks());
 
-        // TODO: we should record the restore latency and its relative time spent ratio after
-        //       we figure out how to move this method out of the stream thread
-        advanceNowAndComputeLatency();
+        // try to initialize created tasks that are either newly assigned, recycled, or revived from corrupted tasks
+        final List<Task> initializedTasks = taskManager.tryInitializeNewTasks();
+        if (!initializedTasks.isEmpty()) {
+            log.info("Initialized new tasks {} under state {}, will start restoring them",
+                    initializedTasks.stream().map(Task::id).collect(Collectors.toList()), state);
+
+            restoreThread.addInitializedTasks(initializedTasks);
+        }
+
+        // try complete restoration if there are any restoring tasks
+        taskManager.tryToCompleteRestoration(restoreThread.completedChangelogs());
+
+        if (state == State.PARTITIONS_ASSIGNED && taskManager.allTasksRunning()) {
+            // it is possible that we have no assigned tasks in which case we would still transit state
+            setState(State.RUNNING);
+
+            log.info("All tasks are now running");
+        }
+
+        // check if restore thread has encountered TaskCorrupted exception; if yes
+        // rethrow it to trigger the handling logic
+        final RuntimeException e = restoreThread.pollNextExceptionIfAny();
+        if (e != null) {
+            throw e;
+        }
 
         int totalProcessed = 0;
         long totalCommitLatency = 0L;
         long totalProcessLatency = 0L;
         long totalPunctuateLatency = 0L;
+
+        // TODO KAFKA-10577: we should allow active tasks processing even if we are not yet in RUNNING
+        //                   after restoration is moved to the other thread
         if (state == State.RUNNING) {
             /*
              * Within an iteration, after processing up to N (N initialized as 1 upon start up) records for each applicable tasks, check the current time:
@@ -712,38 +730,6 @@ public class StreamThread extends Thread {
         punctuateRatioSensor.record((double) totalPunctuateLatency / runOnceLatency, now);
         pollRatioSensor.record((double) pollLatency / runOnceLatency, now);
         commitRatioSensor.record((double) totalCommitLatency / runOnceLatency, now);
-    }
-
-    private void initializeAndRestorePhase() {
-        // only try to initialize the assigned tasks
-        // if the state is still in PARTITION_ASSIGNED after the poll call
-        final State stateSnapshot = state;
-        if (stateSnapshot == State.PARTITIONS_ASSIGNED
-            || stateSnapshot == State.RUNNING && taskManager.needsInitializationOrRestoration()) {
-
-            log.debug("State is {}; initializing tasks if necessary", stateSnapshot);
-
-            // transit to restore active is idempotent so we can call it multiple times
-            changelogReader.enforceRestoreActive();
-
-            if (taskManager.tryToCompleteRestoration()) {
-                changelogReader.transitToUpdateStandby();
-
-                setState(State.RUNNING);
-            }
-
-            if (log.isDebugEnabled()) {
-                log.debug("Initialization call done. State is {}", state);
-            }
-        }
-
-        if (log.isDebugEnabled()) {
-            log.debug("Idempotently invoking restoration logic in state {}", state);
-        }
-        // we can always let changelog reader try restoring in order to initialize the changelogs;
-        // if there's no active restoring or standby updating it would not try to fetch any data
-        changelogReader.restore();
-        log.debug("Idempotent restore call done. Thread state has not changed.");
     }
 
     private long pollPhase() {
@@ -946,14 +932,14 @@ public class StreamThread extends Thread {
         log.info("Shutting down");
 
         try {
+            restoreThread.shutdown(10_000L);
+        } catch (final Throwable e) {
+            log.error("Failed to close restore thread due to the following error:", e);
+        }
+        try {
             taskManager.shutdown(cleanRun);
         } catch (final Throwable e) {
             log.error("Failed to close task manager due to the following error:", e);
-        }
-        try {
-            changelogReader.clear();
-        } catch (final Throwable e) {
-            log.error("Failed to close changelog reader due to the following error:", e);
         }
         try {
             mainConsumer.close();
@@ -1091,5 +1077,9 @@ public class StreamThread extends Thread {
 
     Admin adminClient() {
         return adminClient;
+    }
+
+    StateRestoreThread restoreThread() {
+        return restoreThread;
     }
 }

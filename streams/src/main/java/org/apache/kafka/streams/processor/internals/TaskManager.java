@@ -69,19 +69,21 @@ public class TaskManager {
     // activeTasks needs to be concurrent as it can be accessed
     // by QueryableState
     private final Logger log;
-    private final ChangelogReader changelogReader;
     private final UUID processId;
     private final String logPrefix;
-    private final ActiveTaskCreator activeTaskCreator;
-    private final StandbyTaskCreator standbyTaskCreator;
-    private final InternalTopologyBuilder builder;
     private final Admin adminClient;
     private final StateDirectory stateDirectory;
+    private final InternalTopologyBuilder builder;
+    private final ActiveTaskCreator activeTaskCreator;
+    private final StandbyTaskCreator standbyTaskCreator;
     private final StreamThread.ProcessingMode processingMode;
 
     private final Map<TaskId, Task> tasks = new TreeMap<>();
+
     // materializing this relationship because the lookup is on the hot path
     private final Map<TopicPartition, Task> partitionToTask = new HashMap<>();
+
+    private List<Task> removedTasks = new LinkedList<>();
 
     private Consumer<byte[], byte[]> mainConsumer;
 
@@ -93,8 +95,7 @@ public class TaskManager {
     private final Set<TaskId> lockedTaskDirectories = new HashSet<>();
     private java.util.function.Consumer<Set<TopicPartition>> resetter;
 
-    TaskManager(final ChangelogReader changelogReader,
-                final UUID processId,
+    TaskManager(final UUID processId,
                 final String logPrefix,
                 final ActiveTaskCreator activeTaskCreator,
                 final StandbyTaskCreator standbyTaskCreator,
@@ -102,7 +103,6 @@ public class TaskManager {
                 final Admin adminClient,
                 final StateDirectory stateDirectory,
                 final StreamThread.ProcessingMode processingMode) {
-        this.changelogReader = changelogReader;
         this.processId = processId;
         this.logPrefix = logPrefix;
         this.activeTaskCreator = activeTaskCreator;
@@ -196,20 +196,24 @@ public class TaskManager {
             }
             task.closeDirty();
 
+            removedTasks.add(task);
+
+            task.revive();
+
             // For active tasks pause their input partitions so we won't poll any more records
             // for this task until it has been re-initialized;
-            // Note, closeDirty already clears the partitiongroup for the task.
+            // Note, closeDirty already clears the partition-group for the task.
             if (task.isActive()) {
                 final Set<TopicPartition> currentAssignment = mainConsumer.assignment();
                 final Set<TopicPartition> taskInputPartitions = task.inputPartitions();
                 final Set<TopicPartition> assignedToPauseAndReset =
                     intersection(HashSet::new, currentAssignment, taskInputPartitions);
                 if (!assignedToPauseAndReset.equals(taskInputPartitions)) {
-                    log.warn(
-                        "Expected the current consumer assignment {} to contain the input partitions {}. " +
-                            "Will proceed to recover.",
+                    log.warn("Expected the current consumer assignment {} to contain the input partitions {} for task {}. " +
+                        "Will proceed to recover.",
                         currentAssignment,
-                        taskInputPartitions
+                        taskInputPartitions,
+                        task.id()
                     );
                 }
 
@@ -225,7 +229,6 @@ public class TaskManager {
                 // throws if anything has no configured reset policy
                 resetter.accept(assignedToPauseAndReset);
             }
-            task.revive();
         }
     }
 
@@ -362,8 +365,7 @@ public class TaskManager {
         for (final Task task : tasksToCloseClean) {
             try {
                 completeTaskCloseClean(task);
-                cleanUpTaskProducer(task, taskCloseExceptions);
-                tasks.remove(task.id());
+                removeTask(task, taskCloseExceptions);
             } catch (final RuntimeException e) {
                 final String uncleanMessage = String.format(
                         "Failed to close task %s cleanly. Attempting to close remaining tasks before re-throwing:",
@@ -381,12 +383,11 @@ public class TaskManager {
                 if (task.isActive()) {
                     final Set<TopicPartition> partitions = standbyTasksToCreate.remove(task.id());
                     newTask = standbyTaskCreator.createStandbyTaskFromActive((StreamTask) task, partitions);
-                    cleanUpTaskProducer(task, taskCloseExceptions);
                 } else {
                     final Set<TopicPartition> partitions = activeTasksToCreate.remove(task.id());
                     newTask = activeTaskCreator.createActiveTaskFromStandby((StandbyTask) task, partitions, mainConsumer);
                 }
-                tasks.remove(task.id());
+                removeTask(task, taskCloseExceptions);
                 addNewTask(newTask);
             } catch (final RuntimeException e) {
                 final String uncleanMessage = String.format("Failed to recycle task %s cleanly. Attempting to close remaining tasks before re-throwing:", task.id());
@@ -399,21 +400,7 @@ public class TaskManager {
         // for tasks that cannot be cleanly closed or recycled, close them dirty
         for (final Task task : tasksToCloseDirty) {
             closeTaskDirty(task);
-            cleanUpTaskProducer(task, taskCloseExceptions);
-            tasks.remove(task.id());
-        }
-    }
-
-    private void cleanUpTaskProducer(final Task task,
-                                     final Map<TaskId, RuntimeException> taskCloseExceptions) {
-        if (task.isActive()) {
-            try {
-                activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
-            } catch (final RuntimeException e) {
-                final String uncleanMessage = String.format("Failed to close task %s cleanly. Attempting to close remaining tasks before re-throwing:", task.id());
-                log.error(uncleanMessage, e);
-                taskCloseExceptions.putIfAbsent(task.id(), e);
-            }
+            removeTask(task, taskCloseExceptions);
         }
     }
 
@@ -432,6 +419,13 @@ public class TaskManager {
         task.resume();
     }
 
+    boolean allTasksRunning() {
+        return tasks().values().stream().noneMatch(task ->
+                task.state() == Task.State.RESTORING ||
+                task.state() == Task.State.CREATED ||
+                task.state() == Task.State.SUSPENDED);
+    }
+
     private void addNewTask(final Task task) {
         final Task previous = tasks.put(task.id(), task);
         if (previous != null) {
@@ -443,60 +437,94 @@ public class TaskManager {
         }
     }
 
-    /**
-     * Tries to initialize any new or still-uninitialized tasks, then checks if they can/have completed restoration.
-     *
-     * @throws IllegalStateException If store gets registered after initialized is already finished
-     * @throws StreamsException if the store's change log does not contain the partition
-     * @return {@code true} if all tasks are fully restored
-     */
-    boolean tryToCompleteRestoration() {
-        boolean allRunning = true;
+    private void removeTask(final Task task,
+                            final Map<TaskId, RuntimeException> taskCloseExceptions) {
+        // first clean up the task producer if it is an active task
+        if (task.isActive()) {
+            try {
+                activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
+            } catch (final RuntimeException e) {
+                final String uncleanMessage = String.format("Failed to close task %s cleanly. " +
+                        "Attempting to close remaining tasks before re-throwing:", task.id());
+                log.error(uncleanMessage, e);
+                taskCloseExceptions.putIfAbsent(task.id(), e);
+            }
+        }
 
-        final List<Task> activeTasks = new LinkedList<>();
+        tasks.remove(task.id());
+        removedTasks.add(task);
+    }
+
+    /**
+     * Tries to initialize any newly assigned tasks, so that they can be restored by the restoration threads
+     */
+    public List<Task> tryInitializeNewTasks() {
+        final List<Task> initializedTasks = new LinkedList<>();
         for (final Task task : tasks.values()) {
             try {
-                task.initializeIfNeeded();
+                if (task.initializeIfNeeded()) {
+                    initializedTasks.add(task);
+                }
             } catch (final LockException | TimeoutException e) {
                 // it is possible that if there are multiple threads within the instance that one thread
                 // trying to grab the task from the other, while the other has not released the lock since
                 // it did not participate in the rebalance. In this case we can just retry in the next iteration
                 log.debug("Could not initialize {} due to the following exception; will retry", task.id(), e);
-                allRunning = false;
-            }
-
-            if (task.isActive()) {
-                activeTasks.add(task);
             }
         }
 
-        if (allRunning && !activeTasks.isEmpty()) {
+        return initializedTasks;
+    }
 
-            final Set<TopicPartition> restored = changelogReader.completedChangelogs();
+    public List<Task> drainRemovedTasks() {
+        final List<Task> drainedList = removedTasks;
+        removedTasks = new LinkedList<>();
 
-            for (final Task task : activeTasks) {
-                if (restored.containsAll(task.changelogPartitions())) {
-                    try {
-                        task.completeRestoration();
-                    } catch (final TimeoutException e) {
-                        log.debug("Could not complete restoration for {} due to {}; will retry", task.id(), e);
+        return drainedList;
+    }
 
-                        allRunning = false;
+    /**
+     * Checks if any restoring tasks have completed restoration.
+     *
+     * @throws IllegalStateException If store gets registered after initialized is already finished
+     * @throws StreamsException if the store's change log does not contain the partition
+     * @return {@code true} if all tasks are fully restored; this is only for testing
+     */
+    boolean tryToCompleteRestoration(final Set<TopicPartition> restoredChangelogs) {
+        boolean allActiveTasksRestored = true;
+        for (final Task task : activeTaskIterable()) {
+            if (task.state() == Task.State.RUNNING)
+                continue;
+
+            if (restoredChangelogs.containsAll(task.changelogPartitions())) {
+                try {
+                    if (!task.completeRestorationIfPossible()) {
+                        log.debug("Could not complete restoration for {} since it was not restoring", task.id());
+
+                        allActiveTasksRestored = false;
                     }
-                } else {
-                    // we found a restoring task that isn't done restoring, which is evidence that
-                    // not all tasks are running
-                    allRunning = false;
+                } catch (final TimeoutException e) {
+                    log.debug("Could not complete restoration for {} due to {}; will retry", task.id(), e);
+
+                    allActiveTasksRestored = false;
                 }
+            } else {
+                // we found a restoring task that isn't done restoring, which is evidence that
+                // not all tasks are running
+                log.debug("Task {} has not completed restoration, will check next time", task.id());
+
+                allActiveTasksRestored = false;
             }
         }
 
-        if (allRunning) {
+        if (allActiveTasksRestored) {
             // we can call resume multiple times since it is idempotent.
+            // TODO: we should allow some restored active tasks to be processed even if
+            //       others are still restoring
             mainConsumer.resume(mainConsumer.assignment());
         }
 
-        return allRunning;
+        return allActiveTasksRestored;
     }
 
     /**
@@ -621,6 +649,7 @@ public class TaskManager {
             if (task.isActive()) {
                 closeTaskDirty(task);
                 iterator.remove();
+                removedTasks.add(task);
 
                 try {
                     activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
@@ -804,8 +833,9 @@ public class TaskManager {
             e -> log.warn("Ignoring an exception while closing thread producer.", e)
         );
 
+        // when shutting down the task manager we do not need to update the removed tasks in order to
+        // communicate with the restore thread any more since we are going to shutdown the thread as well
         tasks.clear();
-
 
         // this should be called after closing all tasks, to make sure we unlock the task dir for tasks that may
         // have still been in CREATED at the time of shutdown, since Task#close will not do so
@@ -1037,9 +1067,9 @@ public class TaskManager {
     }
 
     private void commitOffsetsOrTransaction(final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> offsetsPerTask) {
-        log.info("Committing task offsets {}", offsetsPerTask);
-
         if (!offsetsPerTask.isEmpty()) {
+            log.info("Committing task offsets {}", offsetsPerTask);
+
             if (processingMode == EXACTLY_ONCE_ALPHA) {
                 for (final Map.Entry<TaskId, Map<TopicPartition, OffsetAndMetadata>> taskToCommit : offsetsPerTask.entrySet()) {
                     activeTaskCreator.streamsProducerForTask(taskToCommit.getKey())
@@ -1218,10 +1248,6 @@ public class TaskManager {
         executeAndMaybeSwallow(clean, runnable, e -> {
             throw e; },
             e -> log.debug("Ignoring error in unclean {}", name));
-    }
-
-    boolean needsInitializationOrRestoration() {
-        return tasks().values().stream().anyMatch(Task::needsInitializationOrRestoration);
     }
 
     public void setPartitionResetter(final java.util.function.Consumer<Set<TopicPartition>> resetter) {

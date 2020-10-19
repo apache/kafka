@@ -34,7 +34,7 @@ public class ListConsumerGroupOffsetsResult {
 
     final KafkaFuture<Map<TopicPartition, OffsetAndMetadata>> future;
 
-    ListConsumerGroupOffsetsResult(KafkaFuture<Map<TopicPartition, OffsetAndMetadata>> future) {
+    public ListConsumerGroupOffsetsResult(KafkaFuture<Map<TopicPartition, OffsetAndMetadata>> future) {
         this.future = future;
     }
 

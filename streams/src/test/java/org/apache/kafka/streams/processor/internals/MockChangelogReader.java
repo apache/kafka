@@ -17,16 +17,14 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 
 public class MockChangelogReader implements ChangelogReader {
     private final Set<TopicPartition> restoringPartitions = new HashSet<>();
-    private Map<TopicPartition, Long> restoredOffsets = Collections.emptyMap();
 
     public boolean isPartitionRegistered(final TopicPartition partition) {
         return restoringPartitions.contains(partition);
@@ -38,23 +36,24 @@ public class MockChangelogReader implements ChangelogReader {
     }
 
     @Override
-    public void restore() {
-        // do nothing
+    public int restore() {
+        return 0;
     }
 
     @Override
-    public void enforceRestoreActive() {
-        // do nothing
-    }
-
-    @Override
-    public void transitToUpdateStandby() {
-        // do nothing
+    public Set<TopicPartition> allChangelogs() {
+        // assuming all restoring partitions are completed
+        return restoringPartitions;
     }
 
     @Override
     public Set<TopicPartition> completedChangelogs() {
         // assuming all restoring partitions are completed
+        return restoringPartitions;
+    }
+
+    @Override
+    public Set<TopicPartition> changelogsForTask(final TaskId id) {
         return restoringPartitions;
     }
 
@@ -66,14 +65,10 @@ public class MockChangelogReader implements ChangelogReader {
     @Override
     public void unregister(final Collection<TopicPartition> partitions) {
         restoringPartitions.removeAll(partitions);
-
-        for (final TopicPartition partition : partitions) {
-            restoredOffsets.remove(partition);
-        }
     }
 
     @Override
     public boolean isEmpty() {
-        return restoredOffsets.isEmpty() && restoringPartitions.isEmpty();
+        return restoringPartitions.isEmpty();
     }
 }

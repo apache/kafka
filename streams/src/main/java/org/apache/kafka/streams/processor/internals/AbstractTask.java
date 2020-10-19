@@ -55,12 +55,12 @@ public abstract class AbstractTask implements Task {
     protected final ProcessorStateManager stateMgr;
     private final long taskTimeoutMs;
 
-    AbstractTask(final TaskId id,
-                 final ProcessorTopology topology,
-                 final StateDirectory stateDirectory,
-                 final ProcessorStateManager stateMgr,
-                 final Set<TopicPartition> inputPartitions,
-                 final long taskTimeoutMs) {
+    public AbstractTask(final TaskId id,
+                        final ProcessorTopology topology,
+                        final StateDirectory stateDirectory,
+                        final ProcessorStateManager stateMgr,
+                        final Set<TopicPartition> inputPartitions,
+                        final long taskTimeoutMs) {
         this.id = id;
         this.stateMgr = stateMgr;
         this.topology = topology;
@@ -85,7 +85,6 @@ public abstract class AbstractTask implements Task {
             offsetSnapshotSinceLastFlush = new HashMap<>(offsetSnapshot);
         }
     }
-
 
     @Override
     public TaskId id() {
@@ -113,6 +112,11 @@ public abstract class AbstractTask implements Task {
     }
 
     @Override
+    public ProcessorStateManager stateManager() {
+        return stateMgr;
+    }
+
+    @Override
     public boolean isClosed() {
         return state() == State.CLOSED;
     }
@@ -125,13 +129,16 @@ public abstract class AbstractTask implements Task {
     @Override
     public void revive() {
         if (state == CLOSED) {
+            // clear all the stores since they should be re-registered
+            stateMgr.clear();
+
             transitionTo(CREATED);
         } else {
             throw new IllegalStateException("Illegal state " + state() + " while reviving task " + id);
         }
     }
 
-    final void transitionTo(final Task.State newState) {
+    public final void transitionTo(final Task.State newState) {
         final State oldState = state();
 
         if (oldState.isValidTransition(newState)) {

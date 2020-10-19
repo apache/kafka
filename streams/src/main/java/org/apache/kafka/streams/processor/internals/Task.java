@@ -114,12 +114,12 @@ public interface Task {
      * @throws LockException could happen when multi-threads within the single instance, could retry
      * @throws StreamsException fatal error, should close the thread
      */
-    void initializeIfNeeded();
+    boolean initializeIfNeeded();
 
     /**
      * @throws StreamsException fatal error, should close the thread
      */
-    void completeRestoration();
+    boolean completeRestorationIfPossible();
 
     void addRecords(TopicPartition partition, Iterable<ConsumerRecord<byte[], byte[]>> records);
 
@@ -166,6 +166,8 @@ public interface Task {
     void revive();
 
     StateStore getStore(final String name);
+
+    ProcessorStateManager stateManager();
 
     Set<TopicPartition> inputPartitions();
 

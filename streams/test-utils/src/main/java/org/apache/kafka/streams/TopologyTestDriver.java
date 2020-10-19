@@ -49,7 +49,6 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.ChangelogRegister;
 import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.GlobalProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.GlobalStateManager;
@@ -466,8 +465,7 @@ public class TopologyTestDriver implements Closeable {
                 StreamsConfig.EXACTLY_ONCE.equals(streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)),
                 logContext,
                 stateDirectory,
-                new MockChangelogRegister(),
-                processorTopology.storeToChangelogTopic(),
+                    processorTopology.storeToChangelogTopic(),
                 new HashSet<>(partitionsByInputTopic.values())
             );
             final RecordCollector recordCollector = new RecordCollectorImpl(
@@ -501,7 +499,7 @@ public class TopologyTestDriver implements Closeable {
                 context
             );
             task.initializeIfNeeded();
-            task.completeRestoration();
+            task.completeRestorationIfPossible();
             task.processorContext().setRecordContext(null);
         } else {
             task = null;
@@ -1183,20 +1181,6 @@ public class TopologyTestDriver implements Closeable {
             producer.close();
         }
         stateDirectory.clean();
-    }
-
-    static class MockChangelogRegister implements ChangelogRegister {
-        private final Set<TopicPartition> restoringPartitions = new HashSet<>();
-
-        @Override
-        public void register(final TopicPartition partition, final ProcessorStateManager stateManager) {
-            restoringPartitions.add(partition);
-        }
-
-        @Override
-        public void unregister(final Collection<TopicPartition> partitions) {
-            restoringPartitions.removeAll(partitions);
-        }
     }
 
     static class MockTime implements Time {
