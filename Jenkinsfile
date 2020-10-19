@@ -122,7 +122,7 @@ pipeline {
         stage('JDK 11') {
           agent { label 'ubuntu' }
           tools {
-            jdk 'jdk_latest_11'
+            jdk 'jdk_11_latest'
           }
           options {
             timeout(time: 8, unit: 'HOURS') 
