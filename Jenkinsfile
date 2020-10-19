@@ -101,7 +101,7 @@ pipeline {
         stage('JDK 8') {
           agent { label 'ubuntu' }
           tools {
-            jdk 'JDK 1.8 (latest)'
+            jdk 'jdk_1.8_latest'
             maven 'Maven 3.6.3'
           }
           options {
@@ -122,7 +122,7 @@ pipeline {
         stage('JDK 11') {
           agent { label 'ubuntu' }
           tools {
-            jdk 'JDK 11 (latest)'
+            jdk 'jdk_latest_11'
           }
           options {
             timeout(time: 8, unit: 'HOURS') 
@@ -142,7 +142,7 @@ pipeline {
         stage('JDK 15') {
           agent { label 'ubuntu' }
           tools {
-            jdk 'JDK 15 (latest)'
+            jdk 'jdk_15_latest'
           }
           options {
             timeout(time: 8, unit: 'HOURS') 
