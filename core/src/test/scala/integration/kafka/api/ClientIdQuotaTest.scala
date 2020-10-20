@@ -14,7 +14,7 @@
 
 package kafka.api
 
-import kafka.server.{KafkaConfig, KafkaServer}
+import kafka.server.{KafkaConfig, LegacyBroker}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.Before
 
@@ -30,7 +30,7 @@ class ClientIdQuotaTest extends BaseQuotaTest {
     super.setUp()
   }
 
-  override def createQuotaTestClients(topic: String, leaderNode: KafkaServer): QuotaTestClients = {
+  override def createQuotaTestClients(topic: String, leaderNode: LegacyBroker): QuotaTestClients = {
     val producer = createProducer()
     val consumer = createConsumer()
     val adminClient = createAdminClient()

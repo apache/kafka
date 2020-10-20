@@ -64,7 +64,7 @@ class RequestQuotaTest extends BaseRequestTest {
   private val smallQuotaProducerClientId = "small-quota-producer-client"
   private val smallQuotaConsumerClientId = "small-quota-consumer-client"
   private val brokerId: Integer = 0
-  private var leaderNode: KafkaServer = _
+  private var leaderNode: LegacyBroker = _
 
   // Run tests concurrently since a throttle could be up to 1 second because quota percentage allocated is very low
   case class Task(apiKey: ApiKeys, future: Future[_])

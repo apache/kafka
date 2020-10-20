@@ -38,7 +38,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
   var config1: KafkaConfig = null
   var config2: KafkaConfig = null
   var config3: KafkaConfig = null
-  var servers: Seq[KafkaServer] = Seq()
+  var servers: Seq[LegacyBroker] = Seq()
   val brokerMetaPropsFile = "meta.properties"
 
   @Before
@@ -172,7 +172,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
   def testInconsistentClusterIdFromZookeeperAndFromMetaProps() = {
     forgeBrokerMetadata(config1.logDirs, config1.brokerId, "aclusterid")
 
-    val server = new KafkaServer(config1, threadNamePrefix = Option(this.getClass.getName))
+    val server = new LegacyBroker(config1, threadNamePrefix = Option(this.getClass.getName))
 
     // Startup fails
     assertThrows[InconsistentClusterIdException] {
@@ -198,7 +198,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
     props.setProperty("log.dir", logDirs)
     val config = KafkaConfig.fromProps(props)
 
-    val server = new KafkaServer(config, threadNamePrefix = Option(this.getClass.getName))
+    val server = new LegacyBroker(config, threadNamePrefix = Option(this.getClass.getName))
 
     // Startup fails
     assertThrows[InconsistentBrokerMetadataException] {

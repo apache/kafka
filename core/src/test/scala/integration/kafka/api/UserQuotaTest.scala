@@ -16,7 +16,7 @@ package kafka.api
 
 import java.io.File
 
-import kafka.server.{KafkaConfig, KafkaServer}
+import kafka.server.{KafkaConfig, LegacyBroker}
 import kafka.utils.JaasTestUtils
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.junit.{After, Before}
@@ -51,7 +51,7 @@ class UserQuotaTest extends BaseQuotaTest with SaslSetup {
     closeSasl()
   }
 
-  override def createQuotaTestClients(topic: String, leaderNode: KafkaServer): QuotaTestClients = {
+  override def createQuotaTestClients(topic: String, leaderNode: LegacyBroker): QuotaTestClients = {
     val producer = createProducer()
     val consumer = createConsumer()
     val adminClient = createAdminClient()

@@ -23,7 +23,7 @@ import java.nio.file.{Files, StandardOpenOption}
 
 import javax.imageio.ImageIO
 import kafka.admin.ReassignPartitionsCommand
-import kafka.server.{KafkaConfig, KafkaServer, QuotaType}
+import kafka.server.{KafkaConfig, LegacyBroker, QuotaType}
 import kafka.utils.TestUtils._
 import kafka.utils.{Exit, Logging, TestUtils}
 import kafka.zk.{ReassignPartitionsZNode, ZooKeeperTestHarness}
@@ -100,7 +100,7 @@ object ReplicationQuotasTestRig {
     val topicName = "my-topic"
     var experimentName = "unset"
     val partitionId = 0
-    var servers: Seq[KafkaServer] = null
+    var servers: Seq[LegacyBroker] = null
     val leaderRates = mutable.Map[Int, Array[Double]]()
     val followerRates = mutable.Map[Int, Array[Double]]()
     var adminClient: Admin = null
@@ -279,7 +279,7 @@ object ReplicationQuotasTestRig {
       }
     }
 
-    private def measuredRate(broker: KafkaServer, repType: QuotaType): Double = {
+    private def measuredRate(broker: LegacyBroker, repType: QuotaType): Double = {
       val metricName = broker.metrics.metricName("byte-rate", repType.toString)
       if (broker.metrics.metrics.asScala.contains(metricName))
         broker.metrics.metrics.asScala(metricName).metricValue.asInstanceOf[Double]

@@ -35,7 +35,7 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
   var props2: Properties = null
   var config2: KafkaConfig = null
   val brokerMetaPropsFile = "meta.properties"
-  var servers: Seq[KafkaServer] = Seq()
+  var servers: Seq[LegacyBroker] = Seq()
 
   @Before
   override def setUp(): Unit = {
@@ -54,7 +54,7 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
 
   @Test
   def testAutoGenerateBrokerId(): Unit = {
-    var server1 = new KafkaServer(config1, threadNamePrefix = Option(this.getClass.getName))
+    var server1 = new LegacyBroker(config1, threadNamePrefix = Option(this.getClass.getName))
     server1.startup()
     server1.shutdown()
     assertTrue(verifyBrokerMetadata(config1.logDirs, 1001))
@@ -69,10 +69,10 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
   @Test
   def testUserConfigAndGeneratedBrokerId(): Unit = {
     // start the server with broker.id as part of config
-    val server1 = new KafkaServer(config1, threadNamePrefix = Option(this.getClass.getName))
-    val server2 = new KafkaServer(config2, threadNamePrefix = Option(this.getClass.getName))
+    val server1 = new LegacyBroker(config1, threadNamePrefix = Option(this.getClass.getName))
+    val server2 = new LegacyBroker(config2, threadNamePrefix = Option(this.getClass.getName))
     val props3 = TestUtils.createBrokerConfig(-1, zkConnect)
-    val server3 = new KafkaServer(KafkaConfig.fromProps(props3), threadNamePrefix = Option(this.getClass.getName))
+    val server3 = new LegacyBroker(KafkaConfig.fromProps(props3), threadNamePrefix = Option(this.getClass.getName))
     server1.startup()
     assertEquals(server1.config.brokerId, 1001)
     server2.startup()
@@ -109,7 +109,7 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
     "," + TestUtils.tempDir().getAbsolutePath
     props1.setProperty("log.dir", logDirs)
     config1 = KafkaConfig.fromProps(props1)
-    var server1 = new KafkaServer(config1, threadNamePrefix = Option(this.getClass.getName))
+    var server1 = new LegacyBroker(config1, threadNamePrefix = Option(this.getClass.getName))
     server1.startup()
     servers = Seq(server1)
     server1.shutdown()
@@ -118,7 +118,7 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
     val newLogDirs = props1.getProperty("log.dir") + "," + TestUtils.tempDir().getAbsolutePath
     props1.setProperty("log.dir", newLogDirs)
     config1 = KafkaConfig.fromProps(props1)
-    server1 = new KafkaServer(config1, threadNamePrefix = Option(this.getClass.getName))
+    server1 = new LegacyBroker(config1, threadNamePrefix = Option(this.getClass.getName))
     server1.startup()
     servers = Seq(server1)
     server1.shutdown()
@@ -129,11 +129,11 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
   @Test
   def testConsistentBrokerIdFromUserConfigAndMetaProps(): Unit = {
     // check if configured brokerId and stored brokerId are equal or throw InconsistentBrokerException
-    var server1 = new KafkaServer(config1, threadNamePrefix = Option(this.getClass.getName)) //auto generate broker Id
+    var server1 = new LegacyBroker(config1, threadNamePrefix = Option(this.getClass.getName)) //auto generate broker Id
     server1.startup()
     servers = Seq(server1)
     server1.shutdown()
-    server1 = new KafkaServer(config2, threadNamePrefix = Option(this.getClass.getName)) // user specified broker id
+    server1 = new LegacyBroker(config2, threadNamePrefix = Option(this.getClass.getName)) // user specified broker id
     try {
       server1.startup()
     } catch {
@@ -153,7 +153,7 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
     // Start a server that collides on the broker id
     val propsB = TestUtils.createBrokerConfig(1, zkConnect)
     val configB = KafkaConfig.fromProps(propsB)
-    val serverB = new KafkaServer(configB, threadNamePrefix = Option(this.getClass.getName))
+    val serverB = new LegacyBroker(configB, threadNamePrefix = Option(this.getClass.getName))
     intercept[NodeExistsException] {
       serverB.startup()
     }

@@ -233,7 +233,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
       createProducer(), createConsumer(), adminClient)
   }
 
-  case class GroupedUser(user: String, userGroup: String, topic: String, leaderNode: KafkaServer,
+  case class GroupedUser(user: String, userGroup: String, topic: String, leaderNode: LegacyBroker,
                          producerClientId: String, consumerClientId: String,
                          override val producer: KafkaProducer[Array[Byte], Array[Byte]],
                          override val consumer: KafkaConsumer[Array[Byte], Array[Byte]],

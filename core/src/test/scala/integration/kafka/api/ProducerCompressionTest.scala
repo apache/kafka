@@ -26,7 +26,7 @@ import org.junit.runners.Parameterized.Parameters
 import org.junit.{After, Before, Test}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.junit.Assert._
-import kafka.server.{KafkaConfig, KafkaServer}
+import kafka.server.{KafkaConfig, LegacyBroker}
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
@@ -39,7 +39,7 @@ class ProducerCompressionTest(compression: String) extends ZooKeeperTestHarness 
   private val topic = "topic"
   private val numRecords = 2000
 
-  private var server: KafkaServer = null
+  private var server: LegacyBroker = null
 
   @Before
   override def setUp(): Unit = {

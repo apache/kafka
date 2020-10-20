@@ -49,8 +49,8 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
   val partitionId = 0
   val topicPartition = new TopicPartition(topic, partitionId)
 
-  var server1: KafkaServer = null
-  var server2: KafkaServer = null
+  var server1: LegacyBroker = null
+  var server2: LegacyBroker = null
 
   def configProps1 = configs.head
   def configProps2 = configs.last
@@ -60,7 +60,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
   var producer: KafkaProducer[Integer, String] = null
   def hwFile1 = new OffsetCheckpointFile(new File(configProps1.logDirs.head, ReplicaManager.HighWatermarkFilename))
   def hwFile2 = new OffsetCheckpointFile(new File(configProps2.logDirs.head, ReplicaManager.HighWatermarkFilename))
-  var servers = Seq.empty[KafkaServer]
+  var servers = Seq.empty[LegacyBroker]
 
   // Some tests restart the brokers then produce more data. But since test brokers use random ports, we need
   // to use a new producer that knows the new ports

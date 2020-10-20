@@ -22,7 +22,7 @@ import java.util.Properties
 import javax.management.InstanceAlreadyExistsException
 import kafka.admin.AclCommand.AclCommandOptions
 import kafka.security.authorizer.{AclAuthorizer, AclEntry}
-import kafka.server.{KafkaConfig, KafkaServer}
+import kafka.server.{KafkaConfig, LegacyBroker}
 import kafka.utils.{Exit, LogCaptureAppender, Logging, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.acl.{AccessControlEntry, AclOperation, AclPermissionType}
@@ -42,7 +42,7 @@ import org.scalatest.Assertions.intercept
 
 class AclCommandTest extends ZooKeeperTestHarness with Logging {
 
-  var servers: Seq[KafkaServer] = Seq()
+  var servers: Seq[LegacyBroker] = Seq()
 
   private val principal: KafkaPrincipal = SecurityUtils.parseKafkaPrincipal("User:test2")
   private val Users = Set(SecurityUtils.parseKafkaPrincipal("User:CN=writeuser,OU=Unknown,O=Unknown,L=Unknown,ST=Unknown,C=Unknown"),

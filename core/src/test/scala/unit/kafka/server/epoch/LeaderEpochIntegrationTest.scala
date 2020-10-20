@@ -19,7 +19,7 @@ package kafka.server.epoch
 import java.util.Optional
 
 import kafka.server.KafkaConfig._
-import kafka.server.{BlockingSend, KafkaServer, ReplicaFetcherBlockingSend}
+import kafka.server.{BlockingSend, LegacyBroker, ReplicaFetcherBlockingSend}
 import kafka.utils.TestUtils._
 import kafka.utils.{Logging, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
@@ -40,7 +40,7 @@ import scala.collection.Map
 import scala.collection.mutable.ListBuffer
 
 class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
-  var brokers: ListBuffer[KafkaServer] = ListBuffer()
+  var brokers: ListBuffer[LegacyBroker] = ListBuffer()
   val topic1 = "foo"
   val topic2 = "bar"
   val t1p0 = new TopicPartition(topic1, 0)
@@ -224,7 +224,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     assertEquals(-1, fetcher.leaderOffsetsFor(epoch5)(t1p0).endOffset())
   }
 
-  private def sender(from: KafkaServer, to: KafkaServer): BlockingSend = {
+  private def sender(from: LegacyBroker, to: LegacyBroker): BlockingSend = {
     val endPoint = from.metadataCache.getAliveBrokers.find(_.id == to.config.brokerId).get.brokerEndPoint(from.config.interBrokerListenerName)
     new ReplicaFetcherBlockingSend(endPoint, from.config, new Metrics(), new SystemTime(), 42, "TestFetcher", new LogContext())
   }
@@ -235,7 +235,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     }, "Epoch didn't change")
   }
 
-  private  def messagesHaveLeaderEpoch(broker: KafkaServer, expectedLeaderEpoch: Int, minOffset: Int): Boolean = {
+  private  def messagesHaveLeaderEpoch(broker: LegacyBroker, expectedLeaderEpoch: Int, minOffset: Int): Boolean = {
     var result = true
     for (topic <- List(topic1, topic2)) {
       val tp = new TopicPartition(topic, 0)

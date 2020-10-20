@@ -28,7 +28,7 @@ import kafka.log.{Log, LogConfig, LogManager}
 import kafka.network.SocketServer
 import kafka.raft.{KafkaMetadataLog, KafkaNetworkChannel, TimingWheelExpirationService}
 import kafka.security.CredentialProvider
-import kafka.server.{BrokerTopicStats, KafkaConfig, KafkaRequestHandlerPool, KafkaServer, LogDirFailureChannel}
+import kafka.server.{BrokerTopicStats, KafkaBroker, KafkaConfig, KafkaRequestHandlerPool, LogDirFailureChannel}
 import kafka.utils.timer.SystemTimer
 import kafka.utils.{CommandDefaultOptions, CommandLineUtils, CoreUtils, Exit, KafkaScheduler, Logging, ShutdownableThread}
 import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ManualMetadataUpdater, NetworkClient}
@@ -173,7 +173,7 @@ class TestRaftServer(
       throw new ConfigException("There must be exactly one configured log dir")
     }
 
-    val defaultProps = KafkaServer.copyKafkaConfigToLog(config)
+    val defaultProps = KafkaBroker.copyKafkaConfigToLog(config)
     LogConfig.validateValues(defaultProps)
     val defaultLogConfig = LogConfig(defaultProps)
 

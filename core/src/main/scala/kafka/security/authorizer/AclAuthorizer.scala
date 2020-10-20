@@ -23,7 +23,7 @@ import com.typesafe.scalalogging.Logger
 import kafka.api.KAFKA_2_0_IV1
 import kafka.security.authorizer.AclAuthorizer.{AclSeqs, ResourceOrdering, VersionedAcls}
 import kafka.security.authorizer.AclEntry.ResourceSeparator
-import kafka.server.{KafkaConfig, KafkaServer}
+import kafka.server.{KafkaConfig, LegacyBroker}
 import kafka.utils._
 import kafka.utils.Implicits._
 import kafka.zk._
@@ -104,7 +104,7 @@ object AclAuthorizer {
     else {
       // start with the base config from the Kafka configuration
       // be sure to force creation since the zkSslClientEnable property in the kafkaConfig could be false
-      val zkClientConfig = KafkaServer.zkClientConfigFromKafkaConfig(kafkaConfig, true)
+      val zkClientConfig = LegacyBroker.zkClientConfigFromKafkaConfig(kafkaConfig, true)
       // add in any prefixed overlays
       KafkaConfig.ZkSslConfigToSystemPropertyMap.foreach{ case (kafkaProp, sysProp) => {
         val prefixedValue = configMap.get(AclAuthorizer.configPrefix + kafkaProp)

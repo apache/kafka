@@ -43,7 +43,7 @@ import scala.jdk.CollectionConverters._
 
 /*
  * Implements an enumeration for the modes enabled here:
- * zk only, kafka only, both, custom KafkaServer.
+ * zk only, kafka only, both, custom LegacyBroker.
  */
 sealed trait SaslSetupMode
 case object ZkSasl extends SaslSetupMode

@@ -22,8 +22,6 @@ import java.util.Properties
 import kafka.metrics.KafkaMetricsReporter
 import kafka.utils.{Exit, Logging, VerifiableProperties}
 
-import scala.collection.Seq
-
 object KafkaServerStartable {
   def fromProps(serverProps: Properties): KafkaServerStartable = {
     fromProps(serverProps, None)
@@ -31,12 +29,12 @@ object KafkaServerStartable {
 
   def fromProps(serverProps: Properties, threadNamePrefix: Option[String]): KafkaServerStartable = {
     val reporters = KafkaMetricsReporter.startReporters(new VerifiableProperties(serverProps))
-    new KafkaServerStartable(KafkaConfig.fromProps(serverProps, false), reporters, threadNamePrefix)
+    new KafkaServerStartable(KafkaConfig.fromProps(serverProps, false), reporters.toSeq, threadNamePrefix)
   }
 }
 
 class KafkaServerStartable(val staticServerConfig: KafkaConfig, reporters: Seq[KafkaMetricsReporter], threadNamePrefix: Option[String] = None) extends Logging {
-  private val server = new KafkaServer(staticServerConfig, kafkaMetricsReporters = reporters, threadNamePrefix = threadNamePrefix)
+  private val server = new LegacyBroker(staticServerConfig, kafkaMetricsReporters = reporters, threadNamePrefix = threadNamePrefix)
 
   def this(serverConfig: KafkaConfig) = this(serverConfig, Seq.empty)
 
@@ -44,7 +42,7 @@ class KafkaServerStartable(val staticServerConfig: KafkaConfig, reporters: Seq[K
     try server.startup()
     catch {
       case _: Throwable =>
-        // KafkaServer.startup() calls shutdown() in case of exceptions, so we invoke `exit` to set the status code
+        // LegacyBroker.startup() calls shutdown() in case of exceptions, so we invoke `exit` to set the status code
         fatal("Exiting Kafka.")
         Exit.exit(1)
     }

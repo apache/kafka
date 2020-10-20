@@ -23,7 +23,7 @@ import java.nio.file.Path
 
 import kafka.common.AdminCommandFailedException
 import kafka.server.KafkaConfig
-import kafka.server.KafkaServer
+import kafka.server.LegacyBroker
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
@@ -43,7 +43,7 @@ import scala.concurrent.duration._
 final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
   import LeaderElectionCommandTest._
 
-  var servers = Seq.empty[KafkaServer]
+  var servers = Seq.empty[LegacyBroker]
   val broker1 = 0
   val broker2 = 1
   val broker3 = 2
@@ -306,7 +306,7 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
 }
 
 object LeaderElectionCommandTest {
-  def createConfig(servers: Seq[KafkaServer]): Map[String, Object] = {
+  def createConfig(servers: Seq[LegacyBroker]): Map[String, Object] = {
     Map(
       AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers(servers),
       AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG -> "20000",
@@ -314,7 +314,7 @@ object LeaderElectionCommandTest {
     )
   }
 
-  def bootstrapServers(servers: Seq[KafkaServer]): String = {
+  def bootstrapServers(servers: Seq[LegacyBroker]): String = {
     TestUtils.bootstrapServers(servers, new ListenerName("PLAINTEXT"))
   }
 

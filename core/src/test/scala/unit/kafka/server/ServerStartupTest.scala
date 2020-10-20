@@ -27,7 +27,7 @@ import org.junit.{After, Test}
 
 class ServerStartupTest extends ZooKeeperTestHarness {
 
-  private var server: KafkaServer = null
+  private var server: LegacyBroker = null
 
   @After
   override def tearDown(): Unit = {
@@ -115,7 +115,7 @@ class ServerStartupTest extends ZooKeeperTestHarness {
       }
     }
 
-    class MockKafkaServer(override val config: KafkaConfig, override val brokerState: BrokerState = mockBrokerState) extends KafkaServer(config) {}
+    class MockKafkaServer(override val config: KafkaConfig, override val brokerState: BrokerState = mockBrokerState) extends LegacyBroker(config) {}
 
     val props = TestUtils.createBrokerConfig(brokerId, zkConnect)
     server = new MockKafkaServer(KafkaConfig.fromProps(props))

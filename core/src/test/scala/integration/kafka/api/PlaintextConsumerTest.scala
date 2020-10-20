@@ -36,7 +36,7 @@ import org.scalatest.Assertions.intercept
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.Buffer
 import kafka.server.QuotaType
-import kafka.server.KafkaServer
+import kafka.server.LegacyBroker
 
 import scala.collection.mutable
 
@@ -1596,7 +1596,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer.seek(tp, 0)
     consumeAndVerifyRecords(consumer = consumer, numRecords = numRecords, startingOffset = 0)
 
-    def assertNoMetric(broker: KafkaServer, name: String, quotaType: QuotaType, clientId: String): Unit = {
+    def assertNoMetric(broker: LegacyBroker, name: String, quotaType: QuotaType, clientId: String): Unit = {
         val metricName = broker.metrics.metricName("throttle-time",
                                   quotaType.toString,
                                   "",
@@ -1614,7 +1614,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     servers.foreach(assertNoMetric(_, "request-time", QuotaType.Request, consumerClientId))
     servers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Request, consumerClientId))
 
-    def assertNoExemptRequestMetric(broker: KafkaServer): Unit = {
+    def assertNoExemptRequestMetric(broker: LegacyBroker): Unit = {
         val metricName = broker.metrics.metricName("exempt-request-time", QuotaType.Request.toString, "")
         assertNull("Metric should not have been created " + metricName, broker.metrics.metric(metricName))
     }

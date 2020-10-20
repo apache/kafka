@@ -693,7 +693,7 @@ class Log(@volatile private var _dir: File,
    * @throws LogSegmentOffsetOverflowException if the swap file contains messages that cause the log segment offset to
    *                                           overflow. Note that this is currently a fatal exception as we do not have
    *                                           a way to deal with it. The exception is propagated all the way up to
-   *                                           KafkaServer#startup which will cause the broker to shut down if we are in
+   *                                           KafkaBroker#startup which will cause the broker to shut down if we are in
    *                                           this situation. This is expected to be an extremely rare scenario in practice,
    *                                           and manual intervention might be required to get out of it.
    */
