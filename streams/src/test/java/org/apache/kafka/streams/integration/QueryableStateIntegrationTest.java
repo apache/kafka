@@ -83,7 +83,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -118,7 +117,6 @@ import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
 
 @Category({IntegrationTest.class})
 public class QueryableStateIntegrationTest {
@@ -1178,17 +1176,6 @@ public class QueryableStateIntegrationTest {
             return Collections.singleton(KeyValue.pair(key, next.value));
         }
         return Collections.emptySet();
-    }
-
-    private Map<String, Long> fetchMap(final ReadOnlyWindowStore<String, Long> store,
-                                       final String key) {
-        final WindowStoreIterator<Long> fetch =
-            store.fetch(key, ofEpochMilli(0), ofEpochMilli(System.currentTimeMillis()));
-        if (fetch.hasNext()) {
-            final KeyValue<Long, Long> next = fetch.next();
-            return Collections.singletonMap(key, next.value);
-        }
-        return Collections.emptyMap();
     }
 
     /**
