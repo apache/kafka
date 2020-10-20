@@ -98,10 +98,11 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
 
     val producer = createProducer(brokerList = brokerList)
     try {
-      producer.send(new ProducerRecord(topic, 0, System.currentTimeMillis() - 1001, "key".getBytes, "value".getBytes)).get()
-      fail("Should throw CorruptedRecordException")
-    } catch {
-      case e: ExecutionException => assertTrue(e.getCause.isInstanceOf[InvalidTimestampException])
+      val e = intercept[ExecutionException] {
+        producer.send(new ProducerRecord(topic, 0, System.currentTimeMillis() - 1001, "key".getBytes, "value".getBytes)).get()
+      }.getCause
+      assertTrue(e.isInstanceOf[InvalidTimestampException])
+      assertEquals("One or more records have been rejected due to invalid timestamp", e.getMessage)
     } finally {
       producer.close()
     }
@@ -109,10 +110,11 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     // Test compressed messages.
     val compressedProducer = createProducer(brokerList = brokerList, compressionType = "gzip")
     try {
-      compressedProducer.send(new ProducerRecord(topic, 0, System.currentTimeMillis() - 1001, "key".getBytes, "value".getBytes)).get()
-      fail("Should throw CorruptedRecordException")
-    } catch {
-      case e: ExecutionException => assertTrue(e.getCause.isInstanceOf[InvalidTimestampException])
+      val e = intercept[ExecutionException] {
+        compressedProducer.send(new ProducerRecord(topic, 0, System.currentTimeMillis() - 1001, "key".getBytes, "value".getBytes)).get()
+      }.getCause
+      assertTrue(e.isInstanceOf[InvalidTimestampException])
+      assertEquals("One or more records have been rejected due to invalid timestamp", e.getMessage)
     } finally {
       compressedProducer.close()
     }
