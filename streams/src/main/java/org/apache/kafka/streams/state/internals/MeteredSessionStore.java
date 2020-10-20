@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -111,7 +112,7 @@ public class MeteredSessionStore<K, V>
         e2eLatencySensor = StateStoreMetrics.e2ELatencySensor(taskId, metricsScope, name(), streamsMetrics);
     }
 
-    @SuppressWarnings("unchecked")
+
     private void initStoreSerde(final ProcessorContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
@@ -119,12 +120,11 @@ public class MeteredSessionStore<K, V>
             changelogTopic != null ?
                 changelogTopic :
                 ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName),
-            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-            valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde
+                WrappingNullableUtils.prepareKeySerde(keySerde, context.keySerde(), context.valueSerde()),
+                WrappingNullableUtils.prepareValueSerde(valueSerde, context.keySerde(), context.valueSerde())
         );
     }
 
-    @SuppressWarnings("unchecked")
     private void initStoreSerde(final StateStoreContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
@@ -132,8 +132,8 @@ public class MeteredSessionStore<K, V>
             changelogTopic != null ?
                 changelogTopic :
                 ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName),
-            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-            valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde
+                WrappingNullableUtils.prepareKeySerde(keySerde, context.keySerde(), context.valueSerde()),
+                WrappingNullableUtils.prepareValueSerde(valueSerde, context.keySerde(), context.valueSerde())
         );
     }
 
