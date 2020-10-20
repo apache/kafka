@@ -49,11 +49,11 @@ public class MeteredTimestampedKeyValueStore<K, V>
 
     @SuppressWarnings("unchecked")
     @Override
-    protected Serde<ValueAndTimestamp<V>> prepareValueSerde(final Serde<ValueAndTimestamp<V>> valueSerde, final Serde<?> contextKeySerde, final Serde<?> contextValueSerde) {
+    protected Serde<ValueAndTimestamp<V>> prepareValueSerdeForStore(final Serde<ValueAndTimestamp<V>> valueSerde, final Serde<?> contextKeySerde, final Serde<?> contextValueSerde) {
         if (valueSerde == null) {
             return new ValueAndTimestampSerde<>((Serde<V>) contextValueSerde);
         } else {
-            return super.prepareValueSerde(valueSerde, contextKeySerde, contextValueSerde);
+            return super.prepareValueSerdeForStore(valueSerde, contextKeySerde, contextValueSerde);
         }
     }
 

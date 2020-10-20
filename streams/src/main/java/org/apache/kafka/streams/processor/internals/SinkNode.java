@@ -17,10 +17,12 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.api.Record;
+
+import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareKeySerializer;
+import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareValueSerializer;
 
 public class SinkNode<KIn, VIn, KOut, VOut> extends ProcessorNode<KIn, VIn, KOut, VOut> {
 
@@ -58,8 +60,8 @@ public class SinkNode<KIn, VIn, KOut, VOut> extends ProcessorNode<KIn, VIn, KOut
         this.context = context;
         final Serializer<?> contextKeySerializer = ProcessorContextUtils.getKeySerializer(context);
         final Serializer<?> contextValueSerializer = ProcessorContextUtils.getValueSerializer(context);
-        this.keySerializer = WrappingNullableUtils.prepareKeySerializer(this.keySerializer, contextKeySerializer, contextValueSerializer);
-        valSerializer = WrappingNullableUtils.prepareValueSerializer(valSerializer, contextKeySerializer, contextValueSerializer);
+        keySerializer = prepareKeySerializer(keySerializer, contextKeySerializer, contextValueSerializer);
+        valSerializer = prepareValueSerializer(valSerializer, contextKeySerializer, contextValueSerializer);
     }
 
     @Override

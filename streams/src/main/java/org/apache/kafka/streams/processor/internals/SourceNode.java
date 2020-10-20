@@ -19,10 +19,12 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
+
+import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareKeyDeserializer;
+import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareValueDeserializer;
 
 public class SourceNode<KIn, VIn, KOut, VOut> extends ProcessorNode<KIn, VIn, KOut, VOut> {
 
@@ -74,8 +76,8 @@ public class SourceNode<KIn, VIn, KOut, VOut> extends ProcessorNode<KIn, VIn, KO
 
         final Deserializer<?> contextKeyDeserializer = ProcessorContextUtils.getKeyDeserializer(context);
         final Deserializer<?> contextValueDeserializer = ProcessorContextUtils.getValueDeserializer(context);
-        this.keyDeserializer = WrappingNullableUtils.prepareKeyDeserializer(this.keyDeserializer, contextKeyDeserializer, contextValueDeserializer);
-        this.valDeserializer = WrappingNullableUtils.prepareValueDeserializer(this.valDeserializer, contextKeyDeserializer, contextValueDeserializer);
+        keyDeserializer = prepareKeyDeserializer(keyDeserializer, contextKeyDeserializer, contextValueDeserializer);
+        valDeserializer = prepareValueDeserializer(valDeserializer, contextKeyDeserializer, contextValueDeserializer);
     }
 
 

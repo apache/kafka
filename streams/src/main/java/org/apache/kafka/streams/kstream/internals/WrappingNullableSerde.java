@@ -21,16 +21,46 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 
-public interface WrappingNullableSerde<T, InnerK, InnerV> extends Serde<T> {
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    default void setIfUnset(final Serde<InnerK> defaultKeySerde, final Serde<InnerV> defaultValueSerde) {
-        final Serializer<T> serializer = this.serializer();
-        if (serializer instanceof WrappingNullableSerializer) {
-            ((WrappingNullableSerializer) serializer).setIfUnset(defaultKeySerde != null ? defaultKeySerde.serializer() : null, defaultValueSerde != null ? defaultValueSerde.serializer() : null);
-        }
-        final Deserializer<T> deserializer = this.deserializer();
-        if (deserializer instanceof WrappingNullableDeserializer) {
-            ((WrappingNullableDeserializer) deserializer).setIfUnset(defaultKeySerde != null ? defaultKeySerde.deserializer() : null, defaultValueSerde != null ? defaultValueSerde.deserializer() : null);
-        }
+import java.util.Map;
+import java.util.Objects;
+
+public abstract class WrappingNullableSerde<T, InnerK, InnerV> implements Serde<T> {
+    private final WrappingNullableSerializer<T, InnerK, InnerV> serializer;
+    private final WrappingNullableDeserializer<T, InnerK, InnerV> deserializer;
+
+    protected WrappingNullableSerde(final WrappingNullableSerializer<T, InnerK, InnerV> serializer,
+                                    final WrappingNullableDeserializer<T, InnerK, InnerV> deserializer) {
+        this.serializer = serializer;
+        this.deserializer = deserializer;
+    }
+
+    @Override
+    public Serializer<T> serializer() {
+        return serializer;
+    }
+
+    @Override
+    public Deserializer<T> deserializer() {
+        return deserializer;
+    }
+
+    @Override
+    public void configure(final Map<String, ?> configs,
+                          final boolean isKey) {
+        serializer.configure(configs, isKey);
+        deserializer.configure(configs, isKey);
+    }
+
+    @Override
+    public void close() {
+        serializer.close();
+        deserializer.close();
+    }
+
+    public void setIfUnset(final Serde<InnerK> defaultKeySerde, final Serde<InnerV> defaultValueSerde) {
+        Objects.requireNonNull(defaultKeySerde);
+        Objects.requireNonNull(defaultValueSerde);
+        serializer.setIfUnset(defaultKeySerde.serializer(), defaultValueSerde.serializer());
+        deserializer.setIfUnset(defaultKeySerde.deserializer(), defaultValueSerde.deserializer());
     }
 }

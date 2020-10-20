@@ -21,12 +21,13 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 
 /**
- * A utility class to easier handle the initialization of serdes
+ * If a component's serdes are Wrapping serdes, then they require a little extra setup
+ * to be fully initialized at run time.
  */
 public class WrappingNullableUtils {
 
     @SuppressWarnings({"rawtypes", "unchecked"})
-    private static <T> Deserializer<T> prepareDeserializer(final Deserializer<T> specificDeserializer, final Deserializer<?> contextKeyDeserializer, final Deserializer<?> contextValueDeserializer, final boolean isKey) {
+    public static <T> Deserializer<T> prepareDeserializer(final Deserializer<T> specificDeserializer, final Deserializer<?> contextKeyDeserializer, final Deserializer<?> contextValueDeserializer, final boolean isKey) {
         Deserializer<T> deserializerToUse = specificDeserializer;
         if (deserializerToUse == null) {
             deserializerToUse = (Deserializer<T>) (isKey ? contextKeyDeserializer : contextValueDeserializer);
@@ -37,7 +38,7 @@ public class WrappingNullableUtils {
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
-    private static <T> Serializer<T> prepareSerializer(final Serializer<T> specificSerializer, final Serializer<?> contextKeySerializer, final Serializer<?> contextValueSerializer, final boolean isKey) {
+    public static <T> Serializer<T> prepareSerializer(final Serializer<T> specificSerializer, final Serializer<?> contextKeySerializer, final Serializer<?> contextValueSerializer, final boolean isKey) {
         Serializer<T> serializerToUse = specificSerializer;
         if (serializerToUse == null) {
             serializerToUse = (Serializer<T>) (isKey ? contextKeySerializer : contextValueSerializer);
@@ -81,4 +82,5 @@ public class WrappingNullableUtils {
     public static <V> Serde<V> prepareValueSerde(final Serde<V> specificSerde, final Serde<?> keySerde, final Serde<?> valueSerde) {
         return prepareSerde(specificSerde, keySerde, valueSerde, false);
     }
+
 }
