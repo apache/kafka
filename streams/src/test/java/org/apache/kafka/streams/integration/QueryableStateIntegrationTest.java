@@ -1186,7 +1186,6 @@ public class QueryableStateIntegrationTest {
         private final List<String> inputValues;
         private final int numIterations;
         private int currIteration = 0;
-        boolean shutdown = false;
 
         ProducerRunnable(final String topic,
                          final List<String> inputValues,
@@ -1204,10 +1203,6 @@ public class QueryableStateIntegrationTest {
             return currIteration;
         }
 
-        synchronized void shutdown() {
-            shutdown = true;
-        }
-
         @Override
         public void run() {
             final Properties producerConfig = new Properties();
@@ -1219,7 +1214,7 @@ public class QueryableStateIntegrationTest {
             try (final KafkaProducer<String, String> producer =
                      new KafkaProducer<>(producerConfig, new StringSerializer(), new StringSerializer())) {
 
-                while (getCurrIteration() < numIterations && !shutdown) {
+                while (getCurrIteration() < numIterations) {
                     for (final String value : inputValues) {
                         producer.send(new ProducerRecord<>(topic, value));
                     }
