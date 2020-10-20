@@ -57,12 +57,12 @@ import org.apache.kafka.common.requests.LeaveGroupResponse;
  *     preferred over multiple calls to the same method.
  *     <li>The operation methods execute asynchronously.
  *     <li>Each {@code xxx} operation method returns an {@code XxxResult} class with methods which expose
- *     {@link org.apache.kafka.common.KafkaFuture KafkaFutures}
- *     for accessing the result(s) of the operation.
+ *     {@link org.apache.kafka.common.KafkaFuture} for accessing the result(s) of the operation.
  *     <li>Typically an {@code all()} method is provided for getting the overall success/failure of the batch and a
  *     {@code values()} method provided access to each item in a request batch.
  *     Other methods may also be provided.
  *     <li>For synchronous behaviour use {@link org.apache.kafka.common.KafkaFuture#get}
+ * </ul>
  * <p>
  * Here is a simple example of using an Admin client instance to create a new topic:
  * <pre>
@@ -80,11 +80,12 @@ import org.apache.kafka.common.requests.LeaveGroupResponse;
  *       .configs(Collections.singletonMap(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)));
  *
  *   // Call values() to get the result for a specific topic
- *   KafkaFuture future = result.values().get(topicName);
+ *   KafkaFuture<Void> future = result.values().get(topicName);
  *
  *   // Call get() to block until the topic creation is complete or has failed
  *   // if creation failed the ExecutionException wraps the underlying cause.
  *   future.get();
+ * }
  * }
  * </pre>
  *
@@ -102,7 +103,7 @@ import org.apache.kafka.common.requests.LeaveGroupResponse;
  * fewest outstanding requests.
  * <p>
  * The client will transparently retry certain errors which are usually transient.
- * For example if the request for {@code createTopics()} got sent to a node which was not the controller
+ * For example if the request for {@code createTopics()} get sent to a node which was not the controller
  * the metadata would be refreshed and the request re-sent to the controller.
  *
  * <h3>Broker Compatibility</h3>
