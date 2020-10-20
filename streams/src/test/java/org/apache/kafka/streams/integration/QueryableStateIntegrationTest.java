@@ -1153,53 +1153,6 @@ public class QueryableStateIntegrationTest {
         assertThat(countState, equalTo(expectedCount));
     }
 
-    /**
-     * Verify that the new count is greater than or equal to the previous count.
-     * Note: this method changes the values in expectedWindowState and expectedCount
-     *
-     * @param keys                  All the keys we ever expect to find
-     * @param expectedWindowedCount Expected windowed count
-     * @param expectedCount         Expected count
-     * @param windowStore           Window Store
-     * @param keyValueStore         Key-value store
-     */
-    private void verifyGreaterOrEqual(final String[] keys,
-                                      final Map<String, Long> expectedWindowedCount,
-                                      final Map<String, Long> expectedCount,
-                                      final ReadOnlyWindowStore<String, Long> windowStore,
-                                      final ReadOnlyKeyValueStore<String, Long> keyValueStore) {
-        final Map<String, Long> windowState = new HashMap<>();
-        final Map<String, Long> countState = new HashMap<>();
-
-        for (final String key : keys) {
-            final Map<String, Long> map = fetchMap(windowStore, key);
-            windowState.putAll(map);
-            final Long value = keyValueStore.get(key);
-            if (value != null) {
-                countState.put(key, value);
-            }
-        }
-
-        for (final Map.Entry<String, Long> actualWindowStateEntry : windowState.entrySet()) {
-            if (expectedWindowedCount.containsKey(actualWindowStateEntry.getKey())) {
-                final Long expectedValue = expectedWindowedCount.get(actualWindowStateEntry.getKey());
-                assertTrue(actualWindowStateEntry.getValue() >= expectedValue);
-            }
-            // return this for next round of comparisons
-            expectedWindowedCount.put(actualWindowStateEntry.getKey(), actualWindowStateEntry.getValue());
-        }
-
-        for (final Map.Entry<String, Long> actualCountStateEntry : countState.entrySet()) {
-            if (expectedCount.containsKey(actualCountStateEntry.getKey())) {
-                final Long expectedValue = expectedCount.get(actualCountStateEntry.getKey());
-                assertTrue(actualCountStateEntry.getValue() >= expectedValue);
-            }
-            // return this for next round of comparisons
-            expectedCount.put(actualCountStateEntry.getKey(), actualCountStateEntry.getValue());
-        }
-
-    }
-
     private void waitUntilAtLeastNumRecordProcessed(final String topic,
                                                     final int numRecs) throws Exception {
         final long timeout = DEFAULT_TIMEOUT_MS;
