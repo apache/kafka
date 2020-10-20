@@ -25,12 +25,11 @@ import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Objects;
 
-import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareSerializer;
+import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.initNullableSerializer;
 
 public class ValueAndTimestampSerializer<V> implements WrappingNullableSerializer<ValueAndTimestamp<V>, Void, V> {
     public final Serializer<V> valueSerializer;
     private final Serializer<Long> timestampSerializer;
-    private boolean isKey;
 
     ValueAndTimestampSerializer(final Serializer<V> valueSerializer) {
         Objects.requireNonNull(valueSerializer);
@@ -63,7 +62,6 @@ public class ValueAndTimestampSerializer<V> implements WrappingNullableSerialize
                           final boolean isKey) {
         valueSerializer.configure(configs, isKey);
         timestampSerializer.configure(configs, isKey);
-        this.isKey = isKey;
     }
 
     @Override
@@ -125,11 +123,10 @@ public class ValueAndTimestampSerializer<V> implements WrappingNullableSerialize
         return true;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public void setIfUnset(final Serializer<Void> defaultKeySerializer, final Serializer<V> defaultValueSerializer) {
         // ValueAndTimestampSerializer never wraps a null serializer (or configure would throw),
         // but it may wrap a serializer that itself wraps a null serializer.
-        prepareSerializer(valueSerializer, defaultKeySerializer, defaultValueSerializer, isKey);
+        initNullableSerializer(valueSerializer, defaultKeySerializer, defaultValueSerializer);
     }
 }

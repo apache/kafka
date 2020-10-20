@@ -26,24 +26,23 @@ import org.apache.kafka.common.serialization.Serializer;
  */
 public class WrappingNullableUtils {
 
-    @SuppressWarnings({"rawtypes", "unchecked"})
-    public static <T> Deserializer<T> prepareDeserializer(final Deserializer<T> specificDeserializer, final Deserializer<?> contextKeyDeserializer, final Deserializer<?> contextValueDeserializer, final boolean isKey) {
+    @SuppressWarnings("unchecked")
+    private static <T> Deserializer<T> prepareDeserializer(final Deserializer<T> specificDeserializer, final Deserializer<?> contextKeyDeserializer, final Deserializer<?> contextValueDeserializer, final boolean isKey) {
         Deserializer<T> deserializerToUse = specificDeserializer;
         if (deserializerToUse == null) {
             deserializerToUse = (Deserializer<T>) (isKey ? contextKeyDeserializer : contextValueDeserializer);
-        } else if (deserializerToUse instanceof WrappingNullableDeserializer) {
-            ((WrappingNullableDeserializer) deserializerToUse).setIfUnset(contextKeyDeserializer, contextValueDeserializer);
+        } else {
+            initNullableDeserializer(deserializerToUse, contextKeyDeserializer, contextValueDeserializer);
         }
         return deserializerToUse;
     }
-
-    @SuppressWarnings({"rawtypes", "unchecked"})
-    public static <T> Serializer<T> prepareSerializer(final Serializer<T> specificSerializer, final Serializer<?> contextKeySerializer, final Serializer<?> contextValueSerializer, final boolean isKey) {
+    @SuppressWarnings("unchecked")
+    private static <T> Serializer<T> prepareSerializer(final Serializer<T> specificSerializer, final Serializer<?> contextKeySerializer, final Serializer<?> contextValueSerializer, final boolean isKey) {
         Serializer<T> serializerToUse = specificSerializer;
         if (serializerToUse == null) {
             serializerToUse = (Serializer<T>) (isKey ? contextKeySerializer : contextValueSerializer);
-        } else if (serializerToUse instanceof WrappingNullableSerializer) {
-            ((WrappingNullableSerializer) serializerToUse).setIfUnset(contextKeySerializer, contextValueSerializer);
+        } else {
+            initNullableSerializer(serializerToUse, contextKeySerializer, contextValueSerializer);
         }
         return serializerToUse;
     }
@@ -81,6 +80,18 @@ public class WrappingNullableUtils {
 
     public static <V> Serde<V> prepareValueSerde(final Serde<V> specificSerde, final Serde<?> keySerde, final Serde<?> valueSerde) {
         return prepareSerde(specificSerde, keySerde, valueSerde, false);
+    }
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public static <T> void initNullableSerializer(final Serializer<T> specificSerializer, final Serializer<?> contextKeySerializer, final Serializer<?> contextValueSerializer) {
+        if (specificSerializer instanceof WrappingNullableSerializer) {
+            ((WrappingNullableSerializer) specificSerializer).setIfUnset(contextKeySerializer, contextValueSerializer);
+        }
+    }
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public static <T> void initNullableDeserializer(final Deserializer<T> specificDeserializer, final Deserializer<?> contextKeyDeserializer, final Deserializer<?> contextValueDeserializer) {
+        if (specificDeserializer instanceof WrappingNullableDeserializer) {
+            ((WrappingNullableDeserializer) specificDeserializer).setIfUnset(contextKeyDeserializer, contextValueDeserializer);
+        }
     }
 
 }

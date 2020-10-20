@@ -25,14 +25,13 @@ import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Objects;
 
-import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareDeserializer;
+import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.initNullableDeserializer;
 
 class ValueAndTimestampDeserializer<V> implements WrappingNullableDeserializer<ValueAndTimestamp<V>, Void, V> {
     private final static LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
 
     public final Deserializer<V> valueDeserializer;
     private final Deserializer<Long> timestampDeserializer;
-    private boolean isKey;
 
     ValueAndTimestampDeserializer(final Deserializer<V> valueDeserializer) {
         Objects.requireNonNull(valueDeserializer);
@@ -45,7 +44,6 @@ class ValueAndTimestampDeserializer<V> implements WrappingNullableDeserializer<V
                           final boolean isKey) {
         valueDeserializer.configure(configs, isKey);
         timestampDeserializer.configure(configs, isKey);
-        this.isKey = isKey;
     }
 
     @Override
@@ -86,11 +84,10 @@ class ValueAndTimestampDeserializer<V> implements WrappingNullableDeserializer<V
         return LONG_DESERIALIZER.deserialize(null, rawTimestamp(rawValueAndTimestamp));
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public void setIfUnset(final Deserializer<Void> defaultKeyDeserializer, final Deserializer<V> defaultValueDeserializer) {
         // ValueAndTimestampDeserializer never wraps a null deserializer (or configure would throw),
         // but it may wrap a deserializer that itself wraps a null deserializer.
-        prepareDeserializer(valueDeserializer, defaultKeyDeserializer, defaultValueDeserializer, isKey);
+        initNullableDeserializer(valueDeserializer, defaultKeyDeserializer, defaultValueDeserializer);
     }
 }

@@ -30,6 +30,8 @@ public abstract class WrappingNullableSerde<T, InnerK, InnerV> implements Serde<
 
     protected WrappingNullableSerde(final WrappingNullableSerializer<T, InnerK, InnerV> serializer,
                                     final WrappingNullableDeserializer<T, InnerK, InnerV> deserializer) {
+        Objects.requireNonNull(serializer, "serializer can't be null");
+        Objects.requireNonNull(deserializer, "deserializer can't be null");
         this.serializer = serializer;
         this.deserializer = deserializer;
     }
