@@ -20,72 +20,80 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Importance;
+import org.apache.kafka.common.utils.ConfigUtils;
 
 import java.util.Map;
 import java.util.regex.Pattern;
 
-/** Uses a whitelist and blacklist. */
+/** Uses an include and exclude pattern. */
 public class DefaultTopicFilter implements TopicFilter {
     
-    public static final String TOPICS_WHITELIST_CONFIG = "topics";
-    private static final String TOPICS_WHITELIST_DOC = "List of topics and/or regexes to replicate.";
-    public static final String TOPICS_WHITELIST_DEFAULT = ".*";
+    public static final String TOPICS_INCLUDE_CONFIG = "topics";
+    private static final String TOPICS_INCLUDE_DOC = "List of topics and/or regexes to replicate.";
+    public static final String TOPICS_INCLUDE_DEFAULT = ".*";
 
-    public static final String TOPICS_BLACKLIST_CONFIG = "topics.blacklist";
-    private static final String TOPICS_BLACKLIST_DOC = "List of topics and/or regexes that should not be replicated.";
-    public static final String TOPICS_BLACKLIST_DEFAULT = ".*[\\-\\.]internal, .*\\.replica, __.*";
+    public static final String TOPICS_EXCLUDE_CONFIG = "topics.exclude";
+    public static final String TOPICS_EXCLUDE_CONFIG_ALIAS = "topics.blacklist";
+    private static final String TOPICS_EXCLUDE_DOC = "List of topics and/or regexes that should not be replicated.";
+    public static final String TOPICS_EXCLUDE_DEFAULT = ".*[\\-\\.]internal, .*\\.replica, __.*";
 
-    private Pattern whitelistPattern;
-    private Pattern blacklistPattern;
+    private Pattern includePattern;
+    private Pattern excludePattern;
 
     @Override
     public void configure(Map<String, ?> props) {
         TopicFilterConfig config = new TopicFilterConfig(props);
-        whitelistPattern = config.whitelistPattern();
-        blacklistPattern = config.blacklistPattern();
+        includePattern = config.includePattern();
+        excludePattern = config.excludePattern();
     }
 
     @Override
     public void close() {
     }
 
-    private boolean whitelisted(String topic) {
-        return whitelistPattern != null && whitelistPattern.matcher(topic).matches();
+    private boolean included(String topic) {
+        return includePattern != null && includePattern.matcher(topic).matches();
     }
 
-    private boolean blacklisted(String topic) {
-        return blacklistPattern != null && blacklistPattern.matcher(topic).matches();
+    private boolean excluded(String topic) {
+        return excludePattern != null && excludePattern.matcher(topic).matches();
     }
 
     @Override
     public boolean shouldReplicateTopic(String topic) {
-        return whitelisted(topic) && !blacklisted(topic);
+        return included(topic) && !excluded(topic);
     }
 
     static class TopicFilterConfig extends AbstractConfig {
 
         static final ConfigDef DEF = new ConfigDef()
-            .define(TOPICS_WHITELIST_CONFIG,
-                Type.LIST,
-                TOPICS_WHITELIST_DEFAULT,
-                Importance.HIGH,
-                TOPICS_WHITELIST_DOC) 
-            .define(TOPICS_BLACKLIST_CONFIG,
-                Type.LIST,
-                TOPICS_BLACKLIST_DEFAULT,
-                Importance.HIGH,
-                TOPICS_BLACKLIST_DOC);
+            .define(TOPICS_INCLUDE_CONFIG,
+                    Type.LIST,
+                    TOPICS_INCLUDE_DEFAULT,
+                    Importance.HIGH,
+                    TOPICS_INCLUDE_DOC)
+            .define(TOPICS_EXCLUDE_CONFIG,
+                    Type.LIST,
+                    TOPICS_EXCLUDE_DEFAULT,
+                    Importance.HIGH,
+                    TOPICS_EXCLUDE_DOC)
+            .define(TOPICS_EXCLUDE_CONFIG_ALIAS,
+                    Type.LIST,
+                    null,
+                    Importance.HIGH,
+                    "Deprecated. Use " + TOPICS_EXCLUDE_CONFIG + " instead.");
 
-        TopicFilterConfig(Map<?, ?> props) {
-            super(DEF, props, false);
+        TopicFilterConfig(Map<String, ?> props) {
+            super(DEF, ConfigUtils.translateDeprecatedConfigs(props, new String[][]{
+                {TOPICS_EXCLUDE_CONFIG, TOPICS_EXCLUDE_CONFIG_ALIAS}}), false);
         }
 
-        Pattern whitelistPattern() {
-            return MirrorUtils.compilePatternList(getList(TOPICS_WHITELIST_CONFIG));
+        Pattern includePattern() {
+            return MirrorUtils.compilePatternList(getList(TOPICS_INCLUDE_CONFIG));
         }
 
-        Pattern blacklistPattern() {
-            return MirrorUtils.compilePatternList(getList(TOPICS_BLACKLIST_CONFIG));
+        Pattern excludePattern() {
+            return MirrorUtils.compilePatternList(getList(TOPICS_EXCLUDE_CONFIG));
         }
     }
 }
