@@ -779,7 +779,11 @@ public class TaskManager {
             // we call this function only to flush the case if necessary
             // before suspending and closing the topology
             task.prepareCommit();
+        } catch (final RuntimeException swallow) {
+            log.error("Error flushing caches of dirty task {} ", task.id(), swallow);
+        }
 
+        try {
             task.suspend();
         } catch (final RuntimeException swallow) {
             log.error("Error suspending dirty task {} ", task.id(), swallow);
