@@ -36,6 +36,7 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
+import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareKeySerde;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
 public class MeteredWindowStore<K, V>
@@ -104,10 +105,6 @@ public class MeteredWindowStore<K, V>
         // register and possibly restore the state from the logs
         maybeMeasureLatency(() -> super.init(context, root), time, restoreSensor);
     }
-    protected Serde<K> prepareKeySerde(final Serde<K> keySerde, final Serde<?> contextKeySerde, final Serde<?> contextValueSerde) {
-        return WrappingNullableUtils.prepareKeySerde(keySerde, contextKeySerde, contextValueSerde);
-    }
-
     protected Serde<V> prepareValueSerde(final Serde<V> valueSerde, final Serde<?> contextKeySerde, final Serde<?> contextValueSerde) {
         return WrappingNullableUtils.prepareValueSerde(valueSerde, contextKeySerde, contextValueSerde);
     }
@@ -120,7 +117,7 @@ public class MeteredWindowStore<K, V>
     }
 
     @Deprecated
-    void initStoreSerde(final ProcessorContext context) {
+    private void initStoreSerde(final ProcessorContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
         serdes = new StateSerdes<>(
@@ -131,7 +128,7 @@ public class MeteredWindowStore<K, V>
             prepareValueSerde(valueSerde, context.keySerde(), context.valueSerde()));
     }
 
-    void initStoreSerde(final StateStoreContext context) {
+    private void initStoreSerde(final StateStoreContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
         serdes = new StateSerdes<>(

@@ -51,6 +51,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.quietlyCleanStateAfterTest;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.junit.Assert.assertEquals;
 
@@ -118,6 +119,8 @@ public class KTableKTableForeignKeyJoinDistributedTest {
     public void after() {
         client1.close();
         client2.close();
+        quietlyCleanStateAfterTest(CLUSTER, client1);
+        quietlyCleanStateAfterTest(CLUSTER, client2);
     }
 
     public Properties getStreamsConfiguration() {
