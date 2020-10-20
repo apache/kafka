@@ -120,12 +120,12 @@ public class ClientUtils {
             // those which do not have a committed offset would default to 0
             committedOffsets = consumer.committed(partitions).entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue() == null ? 0L : e.getValue().offset()));
-        } catch (final TimeoutException e) {
-            LOG.warn("The committed offsets request timed out, try increasing the consumer client's default.api.timeout.ms", e);
-            throw e;
-        } catch (final KafkaException e) {
-            LOG.warn("The committed offsets request failed.", e);
-            throw new StreamsException(String.format("Failed to retrieve end offsets for %s", partitions), e);
+        } catch (final TimeoutException timeoutException) {
+            LOG.warn("The committed offsets request timed out, try increasing the consumer client's default.api.timeout.ms", timeoutException);
+            throw timeoutException;
+        } catch (final KafkaException fatal) {
+            LOG.warn("The committed offsets request failed.", fatal);
+            throw new StreamsException(String.format("Failed to retrieve end offsets for %s", partitions), fatal);
         }
 
         return committedOffsets;

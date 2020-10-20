@@ -16,10 +16,21 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-public final class StreamsAssignmentProtocolVersions {
-    public static final int UNKNOWN = -1;
-    public static final int EARLIEST_PROBEABLE_VERSION = 3;
-    public static final int LATEST_SUPPORTED_VERSION = 8;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
+import org.apache.kafka.streams.processor.internals.TaskManager;
 
-    private StreamsAssignmentProtocolVersions() {}
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+
+public class ReferenceContainer {
+    public Consumer<byte[], byte[]> mainConsumer;
+    public Admin adminClient;
+    public TaskManager taskManager;
+    public StreamsMetadataState streamsMetadataState;
+    public final AtomicInteger assignmentErrorCode = new AtomicInteger();
+    public final AtomicLong nextScheduledRebalanceMs = new AtomicLong(Long.MAX_VALUE);
+    public Time time;
 }

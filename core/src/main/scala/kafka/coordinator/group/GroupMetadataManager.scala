@@ -544,6 +544,7 @@ class GroupMetadataManager(brokerId: Int,
   private[group] def loadGroupsAndOffsets(topicPartition: TopicPartition, onGroupLoaded: GroupMetadata => Unit, startTimeMs: java.lang.Long): Unit = {
     try {
       val schedulerTimeMs = time.milliseconds() - startTimeMs
+      debug(s"Started loading offsets and group metadata from $topicPartition")
       doLoadGroupsAndOffsets(topicPartition, onGroupLoaded)
       val endTimeMs = time.milliseconds()
       val totalLoadingTimeMs = endTimeMs - startTimeMs
@@ -759,6 +760,7 @@ class GroupMetadataManager(brokerId: Int,
       var numOffsetsRemoved = 0
       var numGroupsRemoved = 0
 
+      debug(s"Started unloading offsets and group metadata for $topicPartition")
       inLock(partitionLock) {
         // we need to guard the group removal in cache in the loading partition lock
         // to prevent coordinator's check-and-get-group race condition

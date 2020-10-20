@@ -655,8 +655,10 @@ public class Topology {
      * and process
      * @return itself
      * @throws TopologyException if parent processor is not added yet, or if this processor's name is equal to the parent's name
+     * @deprecated Since 2.7.0 Use {@link this#addProcessor(String, ProcessorSupplier, String...)} instead.
      */
     @SuppressWarnings("rawtypes")
+    @Deprecated
     public synchronized Topology addProcessor(final String name,
                                               final org.apache.kafka.streams.processor.ProcessorSupplier supplier,
                                               final String... parentNames) {
@@ -740,7 +742,9 @@ public class Topology {
      * @param stateUpdateSupplier   the instance of {@link org.apache.kafka.streams.processor.ProcessorSupplier}
      * @return itself
      * @throws TopologyException if the processor of state is already registered
+     * @deprecated Since 2.7.0. Use {@link this#addGlobalStore(StoreBuilder, String, Deserializer, Deserializer, String, String, ProcessorSupplier)} instead.
      */
+    @Deprecated
     public synchronized <K, V> Topology addGlobalStore(final StoreBuilder<?> storeBuilder,
                                                        final String sourceName,
                                                        final Deserializer<K> keyDeserializer,
@@ -784,7 +788,9 @@ public class Topology {
      * @param stateUpdateSupplier   the instance of {@link org.apache.kafka.streams.processor.ProcessorSupplier}
      * @return itself
      * @throws TopologyException if the processor of state is already registered
+     * @deprecated Since 2.7.0. Use {@link this#addGlobalStore(StoreBuilder, String, TimestampExtractor, Deserializer, Deserializer, String, String, ProcessorSupplier)} instead.
      */
+    @Deprecated
     public synchronized <K, V> Topology addGlobalStore(final StoreBuilder<?> storeBuilder,
                                                        final String sourceName,
                                                        final TimestampExtractor timestampExtractor,

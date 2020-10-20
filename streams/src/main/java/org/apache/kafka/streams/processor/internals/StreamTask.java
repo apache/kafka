@@ -44,7 +44,6 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.V
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.ThreadCache;
-import org.slf4j.Logger;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -72,8 +71,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     static final byte LATEST_MAGIC_BYTE = 1;
 
     private final Time time;
-    private final Logger log;
-    private final String logPrefix;
     private final Consumer<byte[], byte[]> mainConsumer;
 
     // we want to abstract eos logic out of StreamTask, however
@@ -119,16 +116,20 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                       final ProcessorStateManager stateMgr,
                       final RecordCollector recordCollector,
                       final InternalProcessorContext processorContext) {
-        super(id, topology, stateDirectory, stateMgr, partitions, config.getLong(StreamsConfig.TASK_TIMEOUT_MS_CONFIG));
+        super(
+            id,
+            topology,
+            stateDirectory,
+            stateMgr,
+            partitions,
+            config.getLong(StreamsConfig.TASK_TIMEOUT_MS_CONFIG),
+            "task",
+            StreamTask.class
+        );
         this.mainConsumer = mainConsumer;
 
         this.processorContext = processorContext;
         processorContext.transitionToActive(this, recordCollector, cache);
-
-        final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
-        logPrefix = threadIdPrefix + String.format("%s [%s] ", "task", id);
-        final LogContext logContext = new LogContext(logPrefix);
-        log = logContext.logger(getClass());
 
         this.time = time;
         this.recordCollector = recordCollector;
@@ -1012,17 +1013,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     @Override
     public boolean commitRequested() {
         return commitRequested;
-    }
-
-    @Override
-    public void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
-                                            final TimeoutException timeoutException) throws StreamsException {
-        maybeInitTaskTimeoutOrThrow(currentWallClockMs, timeoutException, log);
-    }
-
-    @Override
-    public void clearTaskTimeout() {
-        clearTaskTimeout(log);
     }
 
     static String encodeTimestamp(final long partitionTime) {

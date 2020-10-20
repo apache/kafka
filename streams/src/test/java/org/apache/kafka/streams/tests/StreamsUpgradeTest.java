@@ -138,7 +138,7 @@ public class StreamsUpgradeTest {
                 usedSubscriptionMetadataVersionPeek = new AtomicInteger();
             }
             configs.remove("test.future.metadata");
-            nextScheduledRebalanceMs = new AssignorConfiguration(configs).nextScheduledRebalanceMs();
+            nextScheduledRebalanceMs = new AssignorConfiguration(configs).referenceContainer().nextScheduledRebalanceMs;
 
             super.configure(configs);
         }
@@ -151,14 +151,16 @@ public class StreamsUpgradeTest {
             // 3. Task ids of valid local states on the client's state directory.
             final TaskManager taskManager = taskManager();
             handleRebalanceStart(topics);
-
+            byte uniqueField = 0;
             if (usedSubscriptionMetadataVersion <= LATEST_SUPPORTED_VERSION) {
+                uniqueField++;
                 return new SubscriptionInfo(
                     usedSubscriptionMetadataVersion,
                     LATEST_SUPPORTED_VERSION + 1,
                     taskManager.processId(),
                     userEndPoint(),
-                    taskManager.getTaskOffsetSums()
+                    taskManager.getTaskOffsetSums(),
+                    uniqueField
                 ).encode();
             } else {
                 return new FutureSubscriptionInfo(
@@ -257,7 +259,8 @@ public class StreamsUpgradeTest {
                                 LATEST_SUPPORTED_VERSION,
                                 info.processId(),
                                 info.userEndPoint(),
-                                taskManager().getTaskOffsetSums())
+                                taskManager().getTaskOffsetSums(),
+                                (byte) 0)
                                 .encode(),
                             subscription.ownedPartitions()
                         ));
