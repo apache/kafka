@@ -1064,22 +1064,23 @@ class GroupCoordinator(val brokerId: Int,
                 leaderId = currentLeader,
                 error = error
               ))
+            } else {
+              group.maybeInvokeJoinCallback(member, JoinGroupResult(
+                members = List.empty,
+                memberId = newMemberId,
+                generationId = group.generationId,
+                protocolType = group.protocolType,
+                protocolName = group.protocolName,
+                // We want to avoid current leader performing trivial assignment while the group
+                // is in stable stage, because the new assignment in leader's next sync call
+                // won't be broadcast by a stable group. This could be guaranteed by
+                // always returning the old leader id so that the current leader won't assume itself
+                // as a leader based on the returned message, since the new member.id won't match
+                // returned leader id, therefore no assignment will be performed.
+                leaderId = currentLeader,
+                error = Errors.NONE))
             }
           })
-          group.maybeInvokeJoinCallback(member, JoinGroupResult(
-            members = List.empty,
-            memberId = newMemberId,
-            generationId = group.generationId,
-            protocolType = group.protocolType,
-            protocolName = group.protocolName,
-            // We want to avoid current leader performing trivial assignment while the group
-            // is in stable stage, because the new assignment in leader's next sync call
-            // won't be broadcast by a stable group. This could be guaranteed by
-            // always returning the old leader id so that the current leader won't assume itself
-            // as a leader based on the returned message, since the new member.id won't match
-            // returned leader id, therefore no assignment will be performed.
-            leaderId = currentLeader,
-            error = Errors.NONE))
         } else {
           maybePrepareRebalance(group, s"Group's selectedProtocol will change because static member ${member.memberId} with instance id $groupInstanceId joined with change of protocol")
         }
