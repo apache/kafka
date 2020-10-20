@@ -322,7 +322,7 @@ class DynamicBrokerConfigTest {
   def testDynamicListenerConfig(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 9092)
     val oldConfig =  KafkaConfig.fromProps(props)
-    val kafkaServer: KafkaServer = EasyMock.createMock(classOf[kafka.server.KafkaServer])
+    val kafkaServer: LegacyBroker = EasyMock.createMock(classOf[kafka.server.LegacyBroker])
     EasyMock.expect(kafkaServer.config).andReturn(oldConfig).anyTimes()
     EasyMock.replay(kafkaServer)
 
@@ -339,7 +339,7 @@ class DynamicBrokerConfigTest {
   def testAuthorizerConfig(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 9092)
     val oldConfig =  KafkaConfig.fromProps(props)
-    val kafkaServer: KafkaServer = EasyMock.createMock(classOf[kafka.server.KafkaServer])
+    val kafkaServer: LegacyBroker = EasyMock.createMock(classOf[kafka.server.LegacyBroker])
 
     class TestAuthorizer extends Authorizer with Reconfigurable {
       @volatile var superUsers = ""

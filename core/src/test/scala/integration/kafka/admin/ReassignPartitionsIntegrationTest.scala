@@ -22,7 +22,7 @@ import java.util.{Collections, HashMap, List}
 
 import kafka.admin.ReassignPartitionsCommand._
 import kafka.api.KAFKA_2_7_IV1
-import kafka.server.{IsrChangePropagationConfig, KafkaConfig, KafkaServer, ReplicaManager}
+import kafka.server.{IsrChangePropagationConfig, KafkaConfig, LegacyBroker, ReplicaManager}
 import kafka.utils.Implicits._
 import kafka.utils.TestUtils
 import kafka.zk.{KafkaZkClient, ZooKeeperTestHarness}
@@ -672,7 +672,7 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
         config
     }.toBuffer
 
-    var servers = new mutable.ArrayBuffer[KafkaServer]
+    var servers = new mutable.ArrayBuffer[LegacyBroker]
 
     var brokerList: String = null
 

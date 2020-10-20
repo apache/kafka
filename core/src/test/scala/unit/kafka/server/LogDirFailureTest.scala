@@ -75,7 +75,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
       throw new IllegalArgumentException
     }
 
-    var server: KafkaServer = null
+    var server: LegacyBroker = null
     try {
       val props = TestUtils.createBrokerConfig(brokerCount, zkConnect, logDirCount = 3)
       props.put(KafkaConfig.InterBrokerProtocolVersionProp, "0.11.0")

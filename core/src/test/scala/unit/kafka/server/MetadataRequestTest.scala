@@ -307,7 +307,7 @@ class MetadataRequestTest extends BaseRequestTest {
 
   @Test
   def testIsrAfterBrokerShutDownAndJoinsBack(): Unit = {
-    def checkIsr(servers: Seq[KafkaServer], topic: String): Unit = {
+    def checkIsr(servers: Seq[LegacyBroker], topic: String): Unit = {
       val activeBrokers = servers.filter(_.brokerState.currentState != NotRunning.state)
       val expectedIsr = activeBrokers.map(_.config.brokerId).toSet
 
@@ -341,7 +341,7 @@ class MetadataRequestTest extends BaseRequestTest {
 
   @Test
   def testAliveBrokersWithNoTopics(): Unit = {
-    def checkMetadata(servers: Seq[KafkaServer], expectedBrokersCount: Int): Unit = {
+    def checkMetadata(servers: Seq[LegacyBroker], expectedBrokersCount: Int): Unit = {
       var controllerMetadataResponse: Option[MetadataResponse] = None
       TestUtils.waitUntilTrue(() => {
         val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build,

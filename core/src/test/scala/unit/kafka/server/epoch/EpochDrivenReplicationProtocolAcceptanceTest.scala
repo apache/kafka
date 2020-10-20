@@ -23,7 +23,7 @@ import java.util.Properties
 import kafka.api.ApiVersion
 import kafka.log.Log
 import kafka.server.KafkaConfig._
-import kafka.server.{KafkaConfig, KafkaServer}
+import kafka.server.{KafkaConfig, LegacyBroker}
 import kafka.tools.DumpLogSegments
 import kafka.utils.{CoreUtils, Logging, TestUtils}
 import kafka.utils.TestUtils._
@@ -55,7 +55,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
   val topic = "topic1"
   val msg = new Array[Byte](1000)
   val msgBigger = new Array[Byte](10000)
-  var brokers: Seq[KafkaServer] = null
+  var brokers: Seq[LegacyBroker] = null
   var producer: KafkaProducer[Array[Byte], Array[Byte]] = null
   var consumer: KafkaConsumer[Array[Byte], Array[Byte]] = null
 
@@ -366,7 +366,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     waitForLogsToMatch(brokers(0), brokers(1))
     printSegments()
 
-    def crcSeq(broker: KafkaServer, partition: Int = 0): Seq[Long] = {
+    def crcSeq(broker: LegacyBroker, partition: Int = 0): Seq[Long] = {
       val batches = getLog(broker, partition).activeSegment.read(0, Integer.MAX_VALUE)
         .records.batches().asScala.toSeq
       batches.map(_.checksum)
@@ -375,13 +375,13 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
                crcSeq(brokers(0)) == crcSeq(brokers(1)))
   }
 
-  private def log(leader: KafkaServer, follower: KafkaServer): Unit = {
+  private def log(leader: LegacyBroker, follower: LegacyBroker): Unit = {
     info(s"Bounce complete for follower ${follower.config.brokerId}")
     info(s"Leader: leo${leader.config.brokerId}: " + getLog(leader, 0).logEndOffset + " cache: " + epochCache(leader).epochEntries)
     info(s"Follower: leo${follower.config.brokerId}: " + getLog(follower, 0).logEndOffset + " cache: " + epochCache(follower).epochEntries)
   }
 
-  private def waitForLogsToMatch(b1: KafkaServer, b2: KafkaServer, partition: Int = 0): Unit = {
+  private def waitForLogsToMatch(b1: LegacyBroker, b2: LegacyBroker, partition: Int = 0): Unit = {
     TestUtils.waitUntilTrue(() => {getLog(b1, partition).logEndOffset == getLog(b2, partition).logEndOffset}, "Logs didn't match.")
   }
 
@@ -403,7 +403,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     consumer
   }
 
-  private def deleteMessagesFromLogFile(bytes: Long, broker: KafkaServer, partitionId: Int): Unit = {
+  private def deleteMessagesFromLogFile(bytes: Long, broker: LegacyBroker, partitionId: Int): Unit = {
     val logFile = getLogFile(broker, partitionId)
     val writable = new RandomAccessFile(logFile, "rwd")
     writable.setLength(logFile.length() - bytes)
@@ -418,26 +418,26 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
       compressionType = "snappy")
   }
 
-  private def getLogFile(broker: KafkaServer, partition: Int): File = {
+  private def getLogFile(broker: LegacyBroker, partition: Int): File = {
     val log: Log = getLog(broker, partition)
     log.flush()
     log.dir.listFiles.filter(_.getName.endsWith(".log"))(0)
   }
 
-  private def getLog(broker: KafkaServer, partition: Int): Log = {
+  private def getLog(broker: LegacyBroker, partition: Int): Log = {
     broker.logManager.getLog(new TopicPartition(topic, partition)).orNull
   }
 
-  private def bounce(follower: KafkaServer): Unit = {
+  private def bounce(follower: LegacyBroker): Unit = {
     follower.shutdown()
     follower.startup()
     producer.close()
     producer = createProducer //TODO not sure why we need to recreate the producer, but it doesn't reconnect if we don't
   }
 
-  private def epochCache(broker: KafkaServer): LeaderEpochFileCache = getLog(broker, 0).leaderEpochCache.get
+  private def epochCache(broker: LegacyBroker): LeaderEpochFileCache = getLog(broker, 0).leaderEpochCache.get
 
-  private def latestRecord(leader: KafkaServer, offset: Int = -1, partition: Int = 0): RecordBatch = {
+  private def latestRecord(leader: LegacyBroker, offset: Int = -1, partition: Int = 0): RecordBatch = {
     getLog(leader, partition).activeSegment.read(0, Integer.MAX_VALUE)
       .records.batches().asScala.toSeq.last
   }
@@ -452,19 +452,19 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     TestUtils.createProducer(getBrokerListStrFromServers(brokers), acks = -1)
   }
 
-  private def leader: KafkaServer = {
+  private def leader: LegacyBroker = {
     assertEquals(2, brokers.size)
     val leaderId = zkClient.getLeaderForPartition(new TopicPartition(topic, 0)).get
     brokers.filter(_.config.brokerId == leaderId).head
   }
 
-  private def follower: KafkaServer = {
+  private def follower: LegacyBroker = {
     assertEquals(2, brokers.size)
     val leader = zkClient.getLeaderForPartition(new TopicPartition(topic, 0)).get
     brokers.filter(_.config.brokerId != leader).head
   }
 
-  private def createBroker(id: Int, enableUncleanLeaderElection: Boolean = false): KafkaServer = {
+  private def createBroker(id: Int, enableUncleanLeaderElection: Boolean = false): LegacyBroker = {
     val config = createBrokerConfig(id, zkConnect)
     config.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, apiVersion.version)
     config.setProperty(KafkaConfig.LogMessageFormatVersionProp, apiVersion.version)

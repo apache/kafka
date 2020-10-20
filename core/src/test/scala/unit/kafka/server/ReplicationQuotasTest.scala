@@ -46,7 +46,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
   def percentError(percent: Int, value: Long): Long = Math.round(value * percent / 100.0)
 
   val msg100KB = new Array[Byte](100000)
-  var brokers: Seq[KafkaServer] = null
+  var brokers: Seq[LegacyBroker] = null
   val topic = "topic1"
   var producer: KafkaProducer[Array[Byte], Array[Byte]] = null
 
@@ -222,7 +222,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     }, s"Offsets did not match for partition $partitionId on broker $brokerId", 60000)
   }
 
-  private def brokerFor(id: Int): KafkaServer = brokers.filter(_.config.brokerId == id).head
+  private def brokerFor(id: Int): LegacyBroker = brokers.filter(_.config.brokerId == id).head
 
   def createBrokers(brokerIds: Seq[Int]): Unit = {
     brokerIds.foreach { id =>
@@ -234,7 +234,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     brokers.map(brokerFor).map(measuredRate(_, replicationType)).sum / brokers.length
   }
 
-  private def measuredRate(broker: KafkaServer, repType: QuotaType): Double = {
+  private def measuredRate(broker: LegacyBroker, repType: QuotaType): Double = {
     val metricName = broker.metrics.metricName("byte-rate", repType.toString)
     broker.metrics.metrics.asScala(metricName).metricValue.asInstanceOf[Double]
   }

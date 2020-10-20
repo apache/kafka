@@ -245,7 +245,7 @@ class LogOffsetTest extends BaseRequestTest {
     log.legacyFetchOffsetsBefore(System.currentTimeMillis, 100)
   }
 
-  private def server: KafkaServer = servers.head
+  private def server: LegacyBroker = servers.head
 
   private def sendListOffsetsRequest(request: ListOffsetRequest): ListOffsetResponse = {
     connectAndReceive[ListOffsetResponse](request)

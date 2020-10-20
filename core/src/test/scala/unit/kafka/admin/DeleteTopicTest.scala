@@ -24,7 +24,7 @@ import scala.collection.Seq
 import kafka.log.Log
 import kafka.zk.{TopicPartitionZNode, ZooKeeperTestHarness}
 import kafka.utils.TestUtils
-import kafka.server.{KafkaConfig, KafkaServer}
+import kafka.server.{KafkaConfig, LegacyBroker}
 import org.junit.Assert._
 import org.junit.{After, Test}
 import kafka.common.TopicAlreadyMarkedForDeletionException
@@ -37,7 +37,7 @@ import scala.jdk.CollectionConverters._
 
 class DeleteTopicTest extends ZooKeeperTestHarness {
 
-  var servers: Seq[KafkaServer] = Seq()
+  var servers: Seq[LegacyBroker] = Seq()
 
   val expectedReplicaAssignment = Map(0 -> List(0, 1, 2))
   val expectedReplicaFullAssignment = expectedReplicaAssignment.map { case (k, v) =>
@@ -170,7 +170,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     }
   }
 
-  private def getController() : (KafkaServer, Int) = {
+  private def getController() : (LegacyBroker, Int) = {
     val controllerId = zkClient.getControllerId.getOrElse(fail("Controller doesn't exist"))
     val controller = servers.find(s => s.config.brokerId == controllerId).get
     (controller, controllerId)
@@ -390,13 +390,13 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
   }
 
-  private def createTestTopicAndCluster(topic: String, deleteTopicEnabled: Boolean = true, replicaAssignment: Map[Int, List[Int]] = expectedReplicaAssignment): Seq[KafkaServer] = {
+  private def createTestTopicAndCluster(topic: String, deleteTopicEnabled: Boolean = true, replicaAssignment: Map[Int, List[Int]] = expectedReplicaAssignment): Seq[LegacyBroker] = {
     val brokerConfigs = TestUtils.createBrokerConfigs(3, zkConnect, enableControlledShutdown = false)
     brokerConfigs.foreach(_.setProperty("delete.topic.enable", deleteTopicEnabled.toString))
     createTestTopicAndCluster(topic, brokerConfigs, replicaAssignment)
   }
 
-  private def createTestTopicAndCluster(topic: String, brokerConfigs: Seq[Properties], replicaAssignment: Map[Int, List[Int]]): Seq[KafkaServer] = {
+  private def createTestTopicAndCluster(topic: String, brokerConfigs: Seq[Properties], replicaAssignment: Map[Int, List[Int]]): Seq[LegacyBroker] = {
     val topicPartition = new TopicPartition(topic, 0)
     // create brokers
     val servers = brokerConfigs.map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))

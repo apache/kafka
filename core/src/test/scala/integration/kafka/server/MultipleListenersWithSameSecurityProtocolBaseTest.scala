@@ -54,7 +54,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends ZooKeep
   import MultipleListenersWithSameSecurityProtocolBaseTest._
 
   private val trustStoreFile = File.createTempFile("truststore", ".jks")
-  private val servers = new ArrayBuffer[KafkaServer]
+  private val servers = new ArrayBuffer[LegacyBroker]
   private val producers = mutable.Map[ClientMetadata, KafkaProducer[Array[Byte], Array[Byte]]]()
   private val consumers = mutable.Map[ClientMetadata, KafkaConsumer[Array[Byte], Array[Byte]]]()
 

@@ -58,7 +58,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
   }
 
   private def updateSupportedFeatures(
-    features: Features[SupportedVersionRange], targetServers: Set[KafkaServer]): Unit = {
+    features: Features[SupportedVersionRange], targetServers: Set[LegacyBroker]): Unit = {
     targetServers.foreach(s => {
       s.brokerFeatures.setSupportedFeatures(features)
       s.zkClient.updateBrokerInfo(s.createBrokerInfo)
@@ -82,7 +82,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
   }
 
   private def updateSupportedFeaturesInAllBrokers(features: Features[SupportedVersionRange]): Unit = {
-    updateSupportedFeatures(features, Set[KafkaServer]() ++ servers)
+    updateSupportedFeatures(features, Set[LegacyBroker]() ++ servers)
   }
 
   private def updateFeatureZNode(features: Features[FinalizedVersionRange]): Int = {
@@ -315,8 +315,8 @@ class UpdateFeaturesTest extends BaseRequestTest {
     // We setup the supported features on the broker such that 1/3 of the brokers does not
     // support an expected feature version, while 2/3 brokers support the expected feature
     // version.
-    val brokersWithVersionIncompatibility = Set[KafkaServer](nonControllerServers.head)
-    val versionCompatibleBrokers = Set[KafkaServer](nonControllerServers(1), controller)
+    val brokersWithVersionIncompatibility = Set[LegacyBroker](nonControllerServers.head)
+    val versionCompatibleBrokers = Set[LegacyBroker](nonControllerServers(1), controller)
 
     val supportedFeatures = Features.supportedFeatures(Utils.mkMap(Utils.mkEntry(featureName, supportedVersionRange)))
     updateSupportedFeatures(supportedFeatures, versionCompatibleBrokers)
@@ -526,8 +526,8 @@ class UpdateFeaturesTest extends BaseRequestTest {
     // We setup the supported features on the broker such that 1/3 of the brokers does not
     // support an expected feature version, while 2/3 brokers support the expected feature
     // version.
-    val brokersWithVersionIncompatibility = Set[KafkaServer](nonControllerServers.head)
-    val versionCompatibleBrokers = Set[KafkaServer](nonControllerServers(1), controller)
+    val brokersWithVersionIncompatibility = Set[LegacyBroker](nonControllerServers.head)
+    val versionCompatibleBrokers = Set[LegacyBroker](nonControllerServers(1), controller)
 
     val supportedFeatures = Features.supportedFeatures(
       Utils.mkMap(

@@ -34,7 +34,7 @@ class ServerMetricsTest {
     for (recordingLevel <- recordingLevels) {
       props.put(KafkaConfig.MetricRecordingLevelProp, recordingLevel.name)
       val config = KafkaConfig.fromProps(props)
-      val metricConfig = KafkaServer.metricConfig(config)
+      val metricConfig = KafkaBroker.metricConfig(config)
       assertEquals(recordingLevel, metricConfig.recordLevel)
     }
 
@@ -42,7 +42,7 @@ class ServerMetricsTest {
       intercept[IllegalArgumentException] {
         props.put(KafkaConfig.MetricRecordingLevelProp, illegalName)
         val config = KafkaConfig.fromProps(props)
-        KafkaServer.metricConfig(config)
+        KafkaBroker.metricConfig(config)
       }
     }
 

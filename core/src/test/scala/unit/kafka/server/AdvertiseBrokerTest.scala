@@ -26,7 +26,7 @@ import org.junit.{After, Test}
 import scala.collection.mutable.ArrayBuffer
 
 class AdvertiseBrokerTest extends ZooKeeperTestHarness {
-  val servers = ArrayBuffer[KafkaServer]()
+  val servers = ArrayBuffer[LegacyBroker]()
 
   val brokerId = 0
 

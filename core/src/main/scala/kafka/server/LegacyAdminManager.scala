@@ -116,7 +116,7 @@ class LegacyAdminManager(val config: KafkaConfig,
                                               configs: Properties,
                                               assignments: Map[Int, Seq[Int]]): Unit = {
     metadataAndConfigs.get(topicName).foreach { result =>
-      val logConfig = LogConfig.fromProps(KafkaServer.copyKafkaConfigToLog(config), configs)
+      val logConfig = LogConfig.fromProps(KafkaBroker.copyKafkaConfigToLog(config), configs)
       val createEntry = createTopicConfigEntry(logConfig, configs, includeSynonyms = false, includeDocumentation = false)(_, _)
       val topicConfigs = logConfig.values.asScala.map { case (k, v) =>
         val entry = createEntry(k, v)
@@ -410,7 +410,7 @@ class LegacyAdminManager(val config: KafkaConfig,
             if (metadataCache.contains(topic)) {
               // Consider optimizing this by caching the configs or retrieving them from the `Log` when possible
               val topicProps = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
-              val logConfig = LogConfig.fromProps(KafkaServer.copyKafkaConfigToLog(config), topicProps)
+              val logConfig = LogConfig.fromProps(KafkaBroker.copyKafkaConfigToLog(config), topicProps)
               createResponseConfig(allConfigs(logConfig), createTopicConfigEntry(logConfig, topicProps, includeSynonyms, includeDocumentation))
             } else {
               new DescribeConfigsResponseData.DescribeConfigsResult().setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)

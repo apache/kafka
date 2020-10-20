@@ -21,7 +21,7 @@ import java.util.{Collections, HashMap, Properties}
 import com.yammer.metrics.core.{Histogram, Meter}
 import kafka.api.QuotaTestClients._
 import kafka.metrics.KafkaYammerMetrics
-import kafka.server.{ClientQuotaManager, ClientQuotaManagerConfig, DynamicConfig, KafkaConfig, KafkaServer, QuotaType}
+import kafka.server.{ClientQuotaManager, ClientQuotaManagerConfig, DynamicConfig, KafkaConfig, LegacyBroker, QuotaType}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
@@ -46,7 +46,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
 
   protected def producerClientId = "QuotasTestProducer-1"
   protected def consumerClientId = "QuotasTestConsumer-1"
-  protected def createQuotaTestClients(topic: String, leaderNode: KafkaServer): QuotaTestClients
+  protected def createQuotaTestClients(topic: String, leaderNode: LegacyBroker): QuotaTestClients
 
   this.serverConfig.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false")
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "2")
@@ -70,8 +70,8 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
   val defaultRequestQuota: Double = Long.MaxValue.toDouble
 
   val topic1 = "topic-1"
-  var leaderNode: KafkaServer = _
-  var followerNode: KafkaServer = _
+  var leaderNode: LegacyBroker = _
+  var followerNode: LegacyBroker = _
   var quotaTestClients: QuotaTestClients = _
 
   @Before
@@ -190,7 +190,7 @@ object QuotaTestClients {
 }
 
 abstract class QuotaTestClients(topic: String,
-                                leaderNode: KafkaServer,
+                                leaderNode: LegacyBroker,
                                 producerClientId: String,
                                 consumerClientId: String,
                                 val producer: KafkaProducer[Array[Byte], Array[Byte]],
@@ -367,7 +367,7 @@ abstract class QuotaTestClients(topic: String,
     adminClient.alterClientQuotas(quotaAlterations.asJava).all().get()
   }
 
-  def waitForQuotaUpdate(producerQuota: Long, consumerQuota: Long, requestQuota: Double, server: KafkaServer = leaderNode): Unit = {
+  def waitForQuotaUpdate(producerQuota: Long, consumerQuota: Long, requestQuota: Double, server: LegacyBroker = leaderNode): Unit = {
     TestUtils.retry(10000) {
       val quotaManagers = server.dataPlaneRequestProcessor.quotas
       val overrideProducerQuota = quota(quotaManagers.produce, userPrincipal, producerClientId)

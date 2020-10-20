@@ -21,7 +21,7 @@ import java.util.Properties
 
 import joptsimple.OptionParser
 import kafka.utils.Implicits._
-import kafka.server.{KafkaServer, KafkaServerStartable}
+import kafka.server.KafkaServerStartable
 import kafka.utils.{CommandLineUtils, Exit, Logging}
 import org.apache.kafka.common.utils.{Java, LoggingSignalHandler, OperatingSystem, Utils}
 
@@ -41,7 +41,7 @@ object Kafka extends Logging {
     optionParser.accepts("version", "Print version information and exit.")
 
     if (args.length == 0 || args.contains("--help")) {
-      CommandLineUtils.printUsageAndDie(optionParser, "USAGE: java [options] %s server.properties [--override property=value]*".format(classOf[KafkaServer].getSimpleName()))
+      CommandLineUtils.printUsageAndDie(optionParser, "USAGE: java [options] Kafka server.properties [--override property=value]*")
     }
 
     if (args.contains("--version")) {

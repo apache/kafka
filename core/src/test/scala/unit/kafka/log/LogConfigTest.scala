@@ -19,7 +19,7 @@ package kafka.log
 
 import java.util.{Collections, Properties}
 
-import kafka.server.{KafkaConfig, KafkaServer, ThrottledReplicaListValidator}
+import kafka.server.{KafkaConfig, KafkaBroker, ThrottledReplicaListValidator}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM
 import org.apache.kafka.common.config.ConfigDef.Type.INT
@@ -56,7 +56,7 @@ class LogConfigTest {
     kafkaProps.put(KafkaConfig.LogRetentionTimeHoursProp, "2")
 
     val kafkaConfig = KafkaConfig.fromProps(kafkaProps)
-    val logProps = KafkaServer.copyKafkaConfigToLog(kafkaConfig)
+    val logProps = KafkaBroker.copyKafkaConfigToLog(kafkaConfig)
     assertEquals(2 * millisInHour, logProps.get(LogConfig.SegmentMsProp))
     assertEquals(2 * millisInHour, logProps.get(LogConfig.SegmentJitterMsProp))
     assertEquals(2 * millisInHour, logProps.get(LogConfig.RetentionMsProp))

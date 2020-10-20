@@ -27,7 +27,7 @@ import java.{time, util}
 
 import kafka.log.LogConfig
 import kafka.security.authorizer.AclEntry
-import kafka.server.{Defaults, DynamicConfig, KafkaConfig, KafkaServer}
+import kafka.server.{Defaults, DynamicConfig, KafkaConfig, LegacyBroker}
 import kafka.utils.TestUtils._
 import kafka.utils.{Log4jController, TestUtils}
 import kafka.zk.KafkaZkClient
@@ -2351,7 +2351,7 @@ object PlaintextAdminIntegrationTest {
   }
 
   @nowarn("cat=deprecation")
-  def checkInvalidAlterConfigs(zkClient: KafkaZkClient, servers: Seq[KafkaServer], client: Admin): Unit = {
+  def checkInvalidAlterConfigs(zkClient: KafkaZkClient, servers: Seq[LegacyBroker], client: Admin): Unit = {
     // Create topics
     val topic1 = "invalid-alter-configs-topic-1"
     val topicResource1 = new ConfigResource(ConfigResource.Type.TOPIC, topic1)

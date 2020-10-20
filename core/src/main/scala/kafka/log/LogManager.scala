@@ -1174,7 +1174,7 @@ object LogManager {
             time: Time,
             brokerTopicStats: BrokerTopicStats,
             logDirFailureChannel: LogDirFailureChannel): LogManager = {
-    val defaultProps = KafkaServer.copyKafkaConfigToLog(config)
+    val defaultProps = KafkaBroker.copyKafkaConfigToLog(config)
 
     LogConfig.validateValues(defaultProps)
     val defaultLogConfig = LogConfig(defaultProps)

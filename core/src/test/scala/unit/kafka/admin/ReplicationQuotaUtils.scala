@@ -13,7 +13,7 @@
 package kafka.admin
 
 import kafka.log.LogConfig
-import kafka.server.{ConfigType, DynamicConfig, KafkaServer}
+import kafka.server.{ConfigType, DynamicConfig, LegacyBroker}
 import kafka.utils.TestUtils
 import kafka.zk.AdminZkClient
 
@@ -21,7 +21,7 @@ import scala.collection.Seq
 
 object ReplicationQuotaUtils {
 
-  def checkThrottleConfigRemovedFromZK(adminZkClient: AdminZkClient, topic: String, servers: Seq[KafkaServer]): Unit = {
+  def checkThrottleConfigRemovedFromZK(adminZkClient: AdminZkClient, topic: String, servers: Seq[LegacyBroker]): Unit = {
     TestUtils.waitUntilTrue(() => {
       val hasRateProp = servers.forall { server =>
         val brokerConfig = adminZkClient.fetchEntityConfig(ConfigType.Broker, server.config.brokerId.toString)
@@ -35,7 +35,7 @@ object ReplicationQuotaUtils {
     }, "Throttle limit/replicas was not unset")
   }
 
-  def checkThrottleConfigAddedToZK(adminZkClient: AdminZkClient, expectedThrottleRate: Long, servers: Seq[KafkaServer], topic: String, throttledLeaders: Set[String], throttledFollowers: Set[String]): Unit = {
+  def checkThrottleConfigAddedToZK(adminZkClient: AdminZkClient, expectedThrottleRate: Long, servers: Seq[LegacyBroker], topic: String, throttledLeaders: Set[String], throttledFollowers: Set[String]): Unit = {
     TestUtils.waitUntilTrue(() => {
       //Check for limit in ZK
       val brokerConfigAvailable = servers.forall { server =>

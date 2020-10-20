@@ -71,7 +71,7 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
   extends AbstractConfig(LogConfig.configDef, props, false) {
   /**
    * Important note: Any configuration parameter that is passed along from KafkaConfig to LogConfig
-   * should also go in [[kafka.server.KafkaServer.copyKafkaConfigToLog]].
+   * should also go in [[kafka.server.KafkaBroker.copyKafkaConfigToLog]].
    */
   val segmentSize = getInt(LogConfig.SegmentBytesProp)
   val segmentMs = getLong(LogConfig.SegmentMsProp)

@@ -49,7 +49,7 @@ class KafkaServerTest extends ZooKeeperTestHarness {
     val props = new Properties
     props.put(KafkaConfig.ZkConnectProp, zkConnect) // required, otherwise we would leave it out
     props.put(KafkaConfig.ZkSslClientEnableProp, "false")
-    assertEquals(None, KafkaServer.zkClientConfigFromKafkaConfig(KafkaConfig.fromProps(props)))
+    assertEquals(None, LegacyBroker.zkClientConfigFromKafkaConfig(KafkaConfig.fromProps(props)))
   }
 
   @Test
@@ -64,7 +64,7 @@ class KafkaServerTest extends ZooKeeperTestHarness {
       case _ => someValue
     }
     KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.foreach(kafkaProp => props.put(kafkaProp, kafkaConfigValueToSet(kafkaProp)))
-    val zkClientConfig: Option[ZKClientConfig] = KafkaServer.zkClientConfigFromKafkaConfig(KafkaConfig.fromProps(props))
+    val zkClientConfig: Option[ZKClientConfig] = LegacyBroker.zkClientConfigFromKafkaConfig(KafkaConfig.fromProps(props))
     // now check to make sure the values were set correctly
     def zkClientValueToExpect(kafkaProp: String) : String = kafkaProp match {
       case KafkaConfig.ZkSslClientEnableProp | KafkaConfig.ZkSslCrlEnableProp | KafkaConfig.ZkSslOcspEnableProp => "true"
@@ -89,7 +89,7 @@ class KafkaServerTest extends ZooKeeperTestHarness {
       case _ => someValue
     }
     KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.foreach(kafkaProp => props.put(kafkaProp, kafkaConfigValueToSet(kafkaProp)))
-    val zkClientConfig: Option[ZKClientConfig] = KafkaServer.zkClientConfigFromKafkaConfig(KafkaConfig.fromProps(props))
+    val zkClientConfig: Option[ZKClientConfig] = LegacyBroker.zkClientConfigFromKafkaConfig(KafkaConfig.fromProps(props))
     // now check to make sure the values were set correctly
     def zkClientValueToExpect(kafkaProp: String) : String = kafkaProp match {
       case KafkaConfig.ZkSslClientEnableProp => "true"
@@ -102,7 +102,7 @@ class KafkaServerTest extends ZooKeeperTestHarness {
       assertEquals(zkClientValueToExpect(kafkaProp), zkClientConfig.get.getProperty(KafkaConfig.ZkSslConfigToSystemPropertyMap(kafkaProp))))
   }
 
-  def createServer(nodeId: Int, hostName: String, port: Int): KafkaServer = {
+  def createServer(nodeId: Int, hostName: String, port: Int): LegacyBroker = {
     val props = TestUtils.createBrokerConfig(nodeId, zkConnect)
     props.put(KafkaConfig.AdvertisedListenersProp, s"PLAINTEXT://$hostName:$port")
     val kafkaConfig = KafkaConfig.fromProps(props)

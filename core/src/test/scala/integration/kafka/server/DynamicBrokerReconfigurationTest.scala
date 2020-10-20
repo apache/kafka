@@ -79,7 +79,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
 
   import DynamicBrokerReconfigurationTest._
 
-  private val servers = new ArrayBuffer[KafkaServer]
+  private val servers = new ArrayBuffer[LegacyBroker]
   private val numServers = 3
   private val numPartitions = 10
   private val producers = new ArrayBuffer[KafkaProducer[String, String]]
@@ -581,7 +581,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     }
 
     // Verify that configs of existing logs have been updated
-    val newLogConfig = LogConfig(KafkaServer.copyKafkaConfigToLog(servers.head.config))
+    val newLogConfig = LogConfig(KafkaBroker.copyKafkaConfigToLog(servers.head.config))
     TestUtils.waitUntilTrue(() => servers.head.logManager.currentDefaultConfig == newLogConfig,
       "Config not updated in LogManager")
 
@@ -945,7 +945,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     val invalidHost = "192.168.0.1"
     alterAdvertisedListener(adminClient, externalAdminClient, "localhost", invalidHost)
 
-    def validateEndpointsInZooKeeper(server: KafkaServer, endpointMatcher: String => Boolean): Unit = {
+    def validateEndpointsInZooKeeper(server: LegacyBroker, endpointMatcher: String => Boolean): Unit = {
       val brokerInfo = zkClient.getBroker(server.config.brokerId)
       assertTrue("Broker not registered", brokerInfo.nonEmpty)
       val endpoints = brokerInfo.get.endPoints.toString
@@ -1084,7 +1084,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     assertTrue("Did not find partitions with no leader", partitions.exists(_.leader == null))
   }
 
-  private def addListener(servers: Seq[KafkaServer], listenerName: String, securityProtocol: SecurityProtocol,
+  private def addListener(servers: Seq[LegacyBroker], listenerName: String, securityProtocol: SecurityProtocol,
                           saslMechanisms: Seq[String]): Unit = {
     val config = servers.head.config
     val existingListenerCount = config.listeners.size
@@ -1229,11 +1229,11 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     verifyProduceConsume(producer, consumer, numRecords = 10, topic)
   }
 
-  private def hasListenerMetric(server: KafkaServer, listenerName: String): Boolean = {
+  private def hasListenerMetric(server: LegacyBroker, listenerName: String): Boolean = {
     server.socketServer.metrics.metrics.keySet.asScala.exists(_.tags.get("listener") == listenerName)
   }
 
-  private def fetchBrokerConfigsFromZooKeeper(server: KafkaServer): Properties = {
+  private def fetchBrokerConfigsFromZooKeeper(server: LegacyBroker): Properties = {
     val props = adminZkClient.fetchEntityConfig(ConfigType.Broker, server.config.brokerId.toString)
     server.config.dynamicConfig.fromPersistentProps(props, perBrokerConfig = true)
   }
@@ -1292,7 +1292,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     }, "Did not fail authentication with invalid config")
   }
 
-  private def describeConfig(adminClient: Admin, servers: Seq[KafkaServer] = this.servers): Config = {
+  private def describeConfig(adminClient: Admin, servers: Seq[LegacyBroker] = this.servers): Config = {
     val configResources = servers.map { server =>
       new ConfigResource(ConfigResource.Type.BROKER, server.config.brokerId.toString)
     }
@@ -1389,7 +1389,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   }
 
   @nowarn("cat=deprecation")
-  private def alterConfigsOnServer(server: KafkaServer, props: Properties): Unit = {
+  private def alterConfigsOnServer(server: LegacyBroker, props: Properties): Unit = {
     val configEntries = props.asScala.map { case (k, v) => new ConfigEntry(k, v) }.toList.asJava
     val newConfig = new Config(configEntries)
     val configs = Map(new ConfigResource(ConfigResource.Type.BROKER, server.config.brokerId.toString) -> newConfig).asJava
@@ -1398,7 +1398,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   }
 
   @nowarn("cat=deprecation")
-  private def alterConfigs(servers: Seq[KafkaServer], adminClient: Admin, props: Properties,
+  private def alterConfigs(servers: Seq[LegacyBroker], adminClient: Admin, props: Properties,
                    perBrokerConfig: Boolean): AlterConfigsResult = {
     val configEntries = props.asScala.map { case (k, v) => new ConfigEntry(k, v) }.toList.asJava
     val newConfig = new Config(configEntries)
@@ -1488,7 +1488,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     servers.foreach { server => waitForConfigOnServer(server, propName, propValue, maxWaitMs) }
   }
 
-  private def waitForConfigOnServer(server: KafkaServer, propName: String, propValue: String, maxWaitMs: Long = 10000): Unit = {
+  private def waitForConfigOnServer(server: LegacyBroker, propName: String, propValue: String, maxWaitMs: Long = 10000): Unit = {
     TestUtils.retry(maxWaitMs) {
       assertEquals(propValue, server.config.originals.get(propName))
     }

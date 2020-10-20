@@ -18,7 +18,7 @@ package org.apache.kafka.streams.integration.utils;
 
 import kafka.server.ConfigType;
 import kafka.server.KafkaConfig$;
-import kafka.server.KafkaServer;
+import kafka.server.LegacyBroker;
 import kafka.utils.MockTime;
 import kafka.zk.EmbeddedZookeeper;
 import org.apache.kafka.clients.admin.Admin;
@@ -331,8 +331,8 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         }
     }
 
-    private List<KafkaServer> brokers() {
-        final List<KafkaServer> servers = new ArrayList<>();
+    private List<LegacyBroker> brokers() {
+        final List<LegacyBroker> servers = new ArrayList<>();
         for (final KafkaEmbedded broker : brokers) {
             servers.add(broker.kafkaServer());
         }

@@ -19,7 +19,7 @@ package org.apache.kafka.connect.util.clusters;
 import kafka.server.BrokerState;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaConfig$;
-import kafka.server.KafkaServer;
+import kafka.server.LegacyBroker;
 import kafka.server.RunningAsBroker;
 import kafka.utils.CoreUtils;
 import kafka.utils.TestUtils;
@@ -88,7 +88,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     private static final long DEFAULT_PRODUCE_SEND_DURATION_MS = TimeUnit.SECONDS.toMillis(120); 
 
     // Kafka Config
-    private final KafkaServer[] brokers;
+    private final LegacyBroker[] brokers;
     private final Properties brokerConfig;
     private final Time time = new MockTime();
     private final int[] currentBrokerPorts;
@@ -100,7 +100,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
 
     public EmbeddedKafkaCluster(final int numBrokers,
                                 final Properties brokerConfig) {
-        brokers = new KafkaServer[numBrokers];
+        brokers = new LegacyBroker[numBrokers];
         currentBrokerPorts = new int[numBrokers];
         currentBrokerLogDirs = new String[numBrokers];
         this.brokerConfig = brokerConfig;
@@ -182,7 +182,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
             throw new RuntimeException("Could not shutdown producer", e);
         }
 
-        for (KafkaServer broker : brokers) {
+        for (LegacyBroker broker : brokers) {
             try {
                 broker.shutdown();
             } catch (Throwable t) {
@@ -193,7 +193,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         }
 
         if (deleteLogDirs) {
-            for (KafkaServer broker : brokers) {
+            for (LegacyBroker broker : brokers) {
                 try {
                     log.info("Cleaning up kafka log dirs at {}", broker.config().logDirs());
                     CoreUtils.delete(broker.config().logDirs());
@@ -240,7 +240,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
                 .collect(Collectors.joining(","));
     }
 
-    public String address(KafkaServer server) {
+    public String address(LegacyBroker server) {
         return server.config().hostName() + ":" + server.boundPort(listenerName);
     }
 
@@ -251,26 +251,26 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     /**
      * Get the brokers that have a {@link RunningAsBroker} state.
      *
-     * @return the list of {@link KafkaServer} instances that are running;
+     * @return the list of {@link LegacyBroker} instances that are running;
      *         never null but  possibly empty
      */
-    public Set<KafkaServer> runningBrokers() {
+    public Set<LegacyBroker> runningBrokers() {
         return brokersInState(state -> state.currentState() == RunningAsBroker.state());
     }
 
     /**
      * Get the brokers whose state match the given predicate.
      *
-     * @return the list of {@link KafkaServer} instances with states that match the predicate;
+     * @return the list of {@link LegacyBroker} instances with states that match the predicate;
      *         never null but  possibly empty
      */
-    public Set<KafkaServer> brokersInState(Predicate<BrokerState> desiredState) {
+    public Set<LegacyBroker> brokersInState(Predicate<BrokerState> desiredState) {
         return Arrays.stream(brokers)
                      .filter(b -> hasState(b, desiredState))
                      .collect(Collectors.toSet());
     }
 
-    protected boolean hasState(KafkaServer server, Predicate<BrokerState> desiredState) {
+    protected boolean hasState(LegacyBroker server, Predicate<BrokerState> desiredState) {
         try {
             return desiredState.test(server.brokerState());
         } catch (Throwable e) {

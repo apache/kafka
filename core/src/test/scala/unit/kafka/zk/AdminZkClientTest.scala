@@ -23,7 +23,7 @@ import kafka.controller.ReplicaAssignment
 import kafka.log._
 import kafka.server.DynamicConfig.Broker._
 import kafka.server.KafkaConfig._
-import kafka.server.{ConfigType, KafkaConfig, KafkaServer}
+import kafka.server.{ConfigType, KafkaConfig, LegacyBroker}
 import kafka.utils.CoreUtils._
 import kafka.utils.TestUtils._
 import kafka.utils.{Logging, TestUtils}
@@ -43,7 +43,7 @@ import scala.collection.{Map, Seq, immutable}
 
 class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
-  var servers: Seq[KafkaServer] = Seq()
+  var servers: Seq[LegacyBroker] = Seq()
 
   @After
   override def tearDown(): Unit = {

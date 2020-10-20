@@ -40,7 +40,7 @@ import org.apache.kafka.common.utils.Time
  */
 abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
   var instanceConfigs: Seq[KafkaConfig] = null
-  var servers: Buffer[KafkaServer] = new ArrayBuffer
+  var servers: Buffer[LegacyBroker] = new ArrayBuffer
   var brokerList: String = null
   var alive: Array[Boolean] = null
 
@@ -75,9 +75,9 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
     instanceConfigs
   }
 
-  def serverForId(id: Int): Option[KafkaServer] = servers.find(s => s.config.brokerId == id)
+  def serverForId(id: Int): Option[LegacyBroker] = servers.find(s => s.config.brokerId == id)
 
-  def boundPort(server: KafkaServer): Int = server.boundPort(listenerName)
+  def boundPort(server: LegacyBroker): Int = server.boundPort(listenerName)
 
   protected def securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT
   protected def listenerName: ListenerName = ListenerName.forSecurityProtocol(securityProtocol)
