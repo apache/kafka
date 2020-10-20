@@ -181,12 +181,12 @@ public interface CogroupedKStream<K, VOut> {
      * <p>
      * To query the local {@link ReadOnlyKeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
-     * <pre>
+     * <pre>{@code
      * KafkaStreams streams = ... // some aggregation on value type double
      * String queryableStoreName = "storeName" // the store name should be the name of the store as defined by the Materialized instance
-     * ReadOnlyKeyValueStore&gt;K, ValueAndTimestamp&gt;VOut&lt;&lt; localStore = streams.store(queryableStoreName, QueryableStoreTypes.&gt;K, ValueAndTimestamp&gt;VOut&lt;&lt; timestampedKeyValueStore());
+     * ReadOnlyKeyValueStore<K, ValueAndTimestamp<VOut>> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, ValueAndTimestamp<VOut>> timestampedKeyValueStore());
      * K key = "some-key";
-     * ValueAndTimestamp&gt;VOut&lt; aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
+     * ValueAndTimestamp<VOut> aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to query
      * the value of the key on a parallel running instance of your Kafka Streams application.
@@ -233,12 +233,12 @@ public interface CogroupedKStream<K, VOut> {
      * <p>
      * To query the local {@link org.apache.kafka.streams.state.ReadOnlyKeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
-     * <pre>
+     * <pre>{@code
      * KafkaStreams streams = ... // some aggregation on value type double
      * String queryableStoreName = "storeName" // the store name should be the name of the store as defined by the Materialized instance
-     * ReadOnlyKeyValueStore&gt;K, ValueAndTimestamp&gt;VOut&lt;&lt; localStore = streams.store(queryableStoreName, QueryableStoreTypes.&gt;K, ValueAndTimestamp&gt;VOut&lt;&lt; timestampedKeyValueStore());
+     * ReadOnlyKeyValueStore<K, ValueAndTimestamp<VOut>> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, ValueAndTimestamp<VOut>> timestampedKeyValueStore());
      * K key = "some-key";
-     * ValueAndTimestamp&gt;VOut&lt; aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
+     * ValueAndTimestamp<VOut> aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to query
      * the value of the key on a parallel running instance of your Kafka Streams application.
