@@ -655,7 +655,7 @@ public class Topology {
      * and process
      * @return itself
      * @throws TopologyException if parent processor is not added yet, or if this processor's name is equal to the parent's name
-     * @deprecated Since 2.7.0 Use {@link this#addProcessor(String, ProcessorSupplier, String...)} instead.
+     * @deprecated Since 2.7.0 Use {@link #addProcessor(String, ProcessorSupplier, String...)} instead.
      */
     @SuppressWarnings("rawtypes")
     @Deprecated
@@ -742,7 +742,7 @@ public class Topology {
      * @param stateUpdateSupplier   the instance of {@link org.apache.kafka.streams.processor.ProcessorSupplier}
      * @return itself
      * @throws TopologyException if the processor of state is already registered
-     * @deprecated Since 2.7.0. Use {@link this#addGlobalStore(StoreBuilder, String, Deserializer, Deserializer, String, String, ProcessorSupplier)} instead.
+     * @deprecated Since 2.7.0. Use {@link #addGlobalStore(StoreBuilder, String, Deserializer, Deserializer, String, String, ProcessorSupplier)} instead.
      */
     @Deprecated
     public synchronized <K, V> Topology addGlobalStore(final StoreBuilder<?> storeBuilder,
@@ -788,7 +788,7 @@ public class Topology {
      * @param stateUpdateSupplier   the instance of {@link org.apache.kafka.streams.processor.ProcessorSupplier}
      * @return itself
      * @throws TopologyException if the processor of state is already registered
-     * @deprecated Since 2.7.0. Use {@link this#addGlobalStore(StoreBuilder, String, TimestampExtractor, Deserializer, Deserializer, String, String, ProcessorSupplier)} instead.
+     * @deprecated Since 2.7.0. Use {@link #addGlobalStore(StoreBuilder, String, TimestampExtractor, Deserializer, Deserializer, String, String, ProcessorSupplier)} instead.
      */
     @Deprecated
     public synchronized <K, V> Topology addGlobalStore(final StoreBuilder<?> storeBuilder,
