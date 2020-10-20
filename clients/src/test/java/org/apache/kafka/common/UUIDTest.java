@@ -57,4 +57,14 @@ public class UUIDTest {
 
         assertEquals(UUID.fromString(zeroIdString), UUID.ZERO_UUID);
     }
+
+    @Test
+    public void testRandomUUID() {
+        UUID randomID = UUID.randomUUID();
+        // reservedSentinel is based on the value of SENTINEL_ID_INTERNAL in UUID.
+        UUID reservedSentinel = new UUID(0L, 1L);
+
+        assertNotEquals(randomID, UUID.ZERO_UUID);
+        assertNotEquals(randomID, reservedSentinel);
+    }
 }

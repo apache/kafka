@@ -331,14 +331,14 @@ public abstract class Type {
     public static final DocumentedType UUID = new DocumentedType() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
-            final org.apache.kafka.common.UUID uuid = (org.apache.kafka.common.UUID) o;
+            final UUID uuid = (UUID) o;
             buffer.putLong(uuid.getMostSignificantBits());
             buffer.putLong(uuid.getLeastSignificantBits());
         }
 
         @Override
         public Object read(ByteBuffer buffer) {
-            return new org.apache.kafka.common.UUID(buffer.getLong(), buffer.getLong());
+            return new UUID(buffer.getLong(), buffer.getLong());
         }
 
         @Override
