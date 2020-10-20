@@ -22,10 +22,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
@@ -50,11 +47,13 @@ public class MeteredTimestampedKeyValueStore<K, V>
     }
 
     @SuppressWarnings("unchecked")
-    void initStoreSerde(final ProcessorContext context) {
-        serdes = new StateSerdes<>(
-            ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
-            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-            valueSerde == null ? new ValueAndTimestampSerde<>((Serde<V>) context.valueSerde()) : valueSerde);
+    @Override
+    protected Serde<ValueAndTimestamp<V>> prepareValueSerdeForStore(final Serde<ValueAndTimestamp<V>> valueSerde, final Serde<?> contextKeySerde, final Serde<?> contextValueSerde) {
+        if (valueSerde == null) {
+            return new ValueAndTimestampSerde<>((Serde<V>) contextValueSerde);
+        } else {
+            return super.prepareValueSerdeForStore(valueSerde, contextKeySerde, contextValueSerde);
+        }
     }
 
     public RawAndDeserializedValue<V> getWithBinary(final K key) {

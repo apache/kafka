@@ -18,13 +18,16 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Objects;
 
-public class ValueAndTimestampSerializer<V> implements Serializer<ValueAndTimestamp<V>> {
+import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.initNullableSerializer;
+
+public class ValueAndTimestampSerializer<V> implements WrappingNullableSerializer<ValueAndTimestamp<V>, Void, V> {
     public final Serializer<V> valueSerializer;
     private final Serializer<Long> timestampSerializer;
 
@@ -54,7 +57,7 @@ public class ValueAndTimestampSerializer<V> implements Serializer<ValueAndTimest
     /**
      * @param left  the serialized byte array of the old record in state store
      * @param right the serialized byte array of the new record being processed
-     * @return true if the two serialized values are the same (excluding timestamp) or 
+     * @return true if the two serialized values are the same (excluding timestamp) or
      *              if the timestamp of right is less than left (indicating out of order record)
      *         false otherwise
      */
@@ -124,5 +127,12 @@ public class ValueAndTimestampSerializer<V> implements Serializer<ValueAndTimest
     public void close() {
         valueSerializer.close();
         timestampSerializer.close();
+    }
+
+    @Override
+    public void setIfUnset(final Serializer<Void> defaultKeySerializer, final Serializer<V> defaultValueSerializer) {
+        // ValueAndTimestampSerializer never wraps a null serializer (or configure would throw),
+        // but it may wrap a serializer that itself wraps a null serializer.
+        initNullableSerializer(valueSerializer, defaultKeySerializer, defaultValueSerializer);
     }
 }
