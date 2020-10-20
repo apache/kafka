@@ -51,6 +51,9 @@ import org.apache.kafka.common.requests.LeaveGroupResponse;
  * This client was introduced in 0.11.0.0 and the API is still evolving. We will try to evolve the API in a compatible
  * manner, but we reserve the right to make breaking changes in minor releases, if necessary. We will update the
  * {@code InterfaceStability} annotation and this notice once the API is considered stable.
+ * <p>
+ * Instances returned from the {@code create} methods of this interface are guaranteed to be thread safe.
+ * </p>
  */
 @InterfaceStability.Evolving
 public interface Admin extends AutoCloseable {

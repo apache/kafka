@@ -208,8 +208,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
                 throw new IllegalStateException();
             }
             Element nextElement = indexToElement(head, elements, lastReturned.next());
-            removeFromList(head, elements, nextElement.prev());
-            size--;
+            ImplicitLinkedHashCollection.this.removeElementAtSlot(nextElement.prev());
             if (lastReturned == cur) {
                 // If the element we are removing was cur, set cur to cur->next.
                 cur = nextElement;

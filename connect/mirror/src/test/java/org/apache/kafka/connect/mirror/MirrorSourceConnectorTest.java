@@ -186,7 +186,7 @@ public class MirrorSourceConnectorTest {
         connector.initialize(mock(ConnectorContext.class));
         connector = spy(connector);
 
-        List<TopicPartition> sourceTopicPartitions = Arrays.asList(new TopicPartition("topic", 0));
+        List<TopicPartition> sourceTopicPartitions = Collections.singletonList(new TopicPartition("topic", 0));
         doReturn(sourceTopicPartitions).when(connector).findSourceTopicPartitions();
         doReturn(Collections.emptyList()).when(connector).findTargetTopicPartitions();
         doNothing().when(connector).createTopicPartitions(any(), any(), any());
@@ -205,11 +205,38 @@ public class MirrorSourceConnectorTest {
                 eq(expectedNewTopics),
                 eq(Collections.emptyMap()));
 
-        List<TopicPartition> targetTopicPartitions = Arrays.asList(new TopicPartition("source.topic", 0));
+        List<TopicPartition> targetTopicPartitions = Collections.singletonList(new TopicPartition("source.topic", 0));
         doReturn(targetTopicPartitions).when(connector).findTargetTopicPartitions();
         connector.refreshTopicPartitions();
 
         // once target topic is created, refreshTopicPartitions() will NOT call computeAndCreateTopicPartitions() again
         verify(connector, times(2)).computeAndCreateTopicPartitions();
+    }
+
+    @Test
+    public void testRefreshTopicPartitionsTopicOnTargetFirst() throws Exception {
+        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+                new DefaultReplicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter());
+        connector.initialize(mock(ConnectorContext.class));
+        connector = spy(connector);
+
+        List<TopicPartition> sourceTopicPartitions = Collections.emptyList();
+        List<TopicPartition> targetTopicPartitions = Collections.singletonList(new TopicPartition("source.topic", 0));
+        doReturn(sourceTopicPartitions).when(connector).findSourceTopicPartitions();
+        doReturn(targetTopicPartitions).when(connector).findTargetTopicPartitions();
+        doNothing().when(connector).createTopicPartitions(any(), any(), any());
+
+        // partitions appearing on the target cluster should not cause reconfiguration
+        connector.refreshTopicPartitions();
+        connector.refreshTopicPartitions();
+        verify(connector, times(0)).computeAndCreateTopicPartitions();
+
+        sourceTopicPartitions = Collections.singletonList(new TopicPartition("topic", 0));
+        doReturn(sourceTopicPartitions).when(connector).findSourceTopicPartitions();
+
+        // when partitions are added to the source cluster, reconfiguration is triggered
+        connector.refreshTopicPartitions();
+        verify(connector, times(1)).computeAndCreateTopicPartitions();
+
     }
 }

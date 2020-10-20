@@ -60,11 +60,11 @@ object RequestChannel extends Logging {
     val sanitizedUser: String = Sanitizer.sanitize(principal.getName)
   }
 
-  class Metrics {
+  class Metrics(allowDisabledApis: Boolean = false) {
 
     private val metricsMap = mutable.Map[String, RequestMetrics]()
 
-    (ApiKeys.enabledApis.asScala.toSeq.map(_.name) ++
+    (ApiKeys.values.toSeq.filter(_.isEnabled || allowDisabledApis).map(_.name) ++
         Seq(RequestMetrics.consumerFetchMetricName, RequestMetrics.followFetchMetricName)).foreach { name =>
       metricsMap.put(name, new RequestMetrics(name))
     }
@@ -311,10 +311,11 @@ object RequestChannel extends Logging {
 }
 
 class RequestChannel(val queueSize: Int,
-                     val metricNamePrefix : String,
-                     time: Time) extends KafkaMetricsGroup {
+                     val metricNamePrefix: String,
+                     time: Time,
+                     allowDisabledApis: Boolean = false) extends KafkaMetricsGroup {
   import RequestChannel._
-  val metrics = new RequestChannel.Metrics
+  val metrics = new RequestChannel.Metrics(allowDisabledApis)
   private val requestQueue = new ArrayBlockingQueue[BaseRequest](queueSize)
   private val processors = new ConcurrentHashMap[Int, Processor]()
   val requestQueueSizeMetricName = metricNamePrefix.concat(RequestQueueSizeMetric)

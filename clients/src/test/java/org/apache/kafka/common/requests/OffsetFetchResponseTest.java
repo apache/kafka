@@ -159,14 +159,15 @@ public class OffsetFetchResponseTest {
 
     @Test
     public void testNullableMetadata() {
+        PartitionData pd = new PartitionData(
+            offset,
+            leaderEpochOne,
+            null,
+            Errors.UNKNOWN_TOPIC_OR_PARTITION);
+        // test PartitionData.equals with null metadata
+        assertEquals(pd, pd);
         partitionDataMap.clear();
-        partitionDataMap.put(new TopicPartition(topicOne, partitionOne),
-                             new PartitionData(
-                                 offset,
-                                 leaderEpochOne,
-                                 null,
-                                 Errors.UNKNOWN_TOPIC_OR_PARTITION)
-        );
+        partitionDataMap.put(new TopicPartition(topicOne, partitionOne), pd);
 
         OffsetFetchResponse response = new OffsetFetchResponse(throttleTimeMs, Errors.GROUP_AUTHORIZATION_FAILED, partitionDataMap);
         OffsetFetchResponseData expectedData =

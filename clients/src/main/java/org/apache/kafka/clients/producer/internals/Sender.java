@@ -616,7 +616,7 @@ public class Sender implements Runnable {
                 else if (error == Errors.CLUSTER_AUTHORIZATION_FAILED)
                     exception = new ClusterAuthorizationException("The producer is not authorized to do idempotent sends");
                 else
-                    exception = error.exception();
+                    exception = error.exception(response.errorMessage);
                 // tell the user the result of their request. We only adjust sequence numbers if the batch didn't exhaust
                 // its retries -- if it did, we don't know whether the sequence number was accepted or not, and
                 // thus it is not safe to reassign the sequence.
@@ -629,7 +629,7 @@ public class Sender implements Runnable {
                         batch.topicPartition);
                 } else {
                     log.warn("Received invalid metadata error in produce request on partition {} due to {}. Going " +
-                            "to request metadata update now", batch.topicPartition, error.exception().toString());
+                            "to request metadata update now", batch.topicPartition, error.exception(response.errorMessage).toString());
                 }
                 metadata.requestUpdate();
             }

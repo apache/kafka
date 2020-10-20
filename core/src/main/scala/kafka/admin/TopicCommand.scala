@@ -216,7 +216,7 @@ object TopicCommand extends Logging {
     def alterTopic(opts: TopicCommandOptions): Unit
     def describeTopic(opts: TopicCommandOptions): Unit
     def deleteTopic(opts: TopicCommandOptions): Unit
-    def getTopics(topicWhitelist: Option[String], excludeInternalTopics: Boolean = false): Seq[String]
+    def getTopics(topicIncludelist: Option[String], excludeInternalTopics: Boolean = false): Seq[String]
   }
 
   object AdminClientTopicService {
@@ -359,13 +359,13 @@ object TopicCommand extends Logging {
         .all().get()
     }
 
-    override def getTopics(topicWhitelist: Option[String], excludeInternalTopics: Boolean = false): Seq[String] = {
+    override def getTopics(topicIncludelist: Option[String], excludeInternalTopics: Boolean = false): Seq[String] = {
       val allTopics = if (excludeInternalTopics) {
         adminClient.listTopics()
       } else {
         adminClient.listTopics(new ListTopicsOptions().listInternal(true))
       }
-      doGetTopics(allTopics.names().get().asScala.toSeq.sorted, topicWhitelist, excludeInternalTopics)
+      doGetTopics(allTopics.names().get().asScala.toSeq.sorted, topicIncludelist, excludeInternalTopics)
     }
 
     override def close(): Unit = adminClient.close()
@@ -515,9 +515,9 @@ object TopicCommand extends Logging {
       }
     }
 
-    override def getTopics(topicWhitelist: Option[String], excludeInternalTopics: Boolean = false): Seq[String] = {
+    override def getTopics(topicIncludelist: Option[String], excludeInternalTopics: Boolean = false): Seq[String] = {
       val allTopics = zkClient.getAllTopicsInCluster().toSeq.sorted
-      doGetTopics(allTopics, topicWhitelist, excludeInternalTopics)
+      doGetTopics(allTopics, topicIncludelist, excludeInternalTopics)
     }
 
     override def close(): Unit = zkClient.close()
@@ -540,9 +540,9 @@ object TopicCommand extends Logging {
     }
   }
 
-  private def doGetTopics(allTopics: Seq[String], topicWhitelist: Option[String], excludeInternalTopics: Boolean): Seq[String] = {
-    if (topicWhitelist.isDefined) {
-      val topicsFilter = Whitelist(topicWhitelist.get)
+  private def doGetTopics(allTopics: Seq[String], topicIncludeList: Option[String], excludeInternalTopics: Boolean): Seq[String] = {
+    if (topicIncludeList.isDefined) {
+      val topicsFilter = IncludeList(topicIncludeList.get)
       allTopics.filter(topicsFilter.isTopicAllowed(_, excludeInternalTopics))
     } else
     allTopics.filterNot(Topic.isInternal(_) && excludeInternalTopics)

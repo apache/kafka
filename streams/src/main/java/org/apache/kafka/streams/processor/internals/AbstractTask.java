@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
@@ -39,7 +40,11 @@ public abstract class AbstractTask implements Task {
 
     private Task.State state = CREATED;
     private long deadlineMs = NO_DEADLINE;
+
     protected Set<TopicPartition> inputPartitions;
+    protected final Logger log;
+    protected final LogContext logContext;
+    protected final String logPrefix;
 
     /**
      * If the checkpoint has not been loaded from the file yet (null), then we should not overwrite the checkpoint;
@@ -60,13 +65,20 @@ public abstract class AbstractTask implements Task {
                  final StateDirectory stateDirectory,
                  final ProcessorStateManager stateMgr,
                  final Set<TopicPartition> inputPartitions,
-                 final long taskTimeoutMs) {
+                 final long taskTimeoutMs,
+                 final String taskType,
+                 final Class<? extends AbstractTask> clazz) {
         this.id = id;
         this.stateMgr = stateMgr;
         this.topology = topology;
         this.inputPartitions = inputPartitions;
         this.stateDirectory = stateDirectory;
         this.taskTimeoutMs = taskTimeoutMs;
+
+        final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
+        logPrefix = threadIdPrefix + String.format("%s [%s] ", taskType, id);
+        logContext = new LogContext(logPrefix);
+        log = logContext.logger(clazz);
     }
 
     /**
@@ -147,9 +159,9 @@ public abstract class AbstractTask implements Task {
         topology.updateSourceTopics(nodeToSourceTopics);
     }
 
-    void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
-                                     final TimeoutException timeoutException,
-                                     final Logger log) throws StreamsException {
+    @Override
+    public void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
+                                            final Exception cause) {
         if (deadlineMs == NO_DEADLINE) {
             deadlineMs = currentWallClockMs + taskTimeoutMs;
         } else if (currentWallClockMs > deadlineMs) {
@@ -160,18 +172,20 @@ public abstract class AbstractTask implements Task {
                 StreamsConfig.TASK_TIMEOUT_MS_CONFIG
             );
 
-            if (timeoutException != null) {
-                throw new TimeoutException(errorMessage, timeoutException);
+            if (cause != null) {
+                throw new TimeoutException(errorMessage, cause);
             } else {
                 throw new TimeoutException(errorMessage);
             }
         }
 
-        if (timeoutException != null) {
+        if (cause != null) {
             log.debug(
-                "Timeout exception. Remaining time to deadline {}; retrying.",
-                deadlineMs - currentWallClockMs,
-                timeoutException
+                String.format(
+                    "Task did not make progress. Remaining time to deadline %d; retrying.",
+                    deadlineMs - currentWallClockMs
+                ),
+                cause
             );
         } else {
             log.debug(
@@ -182,7 +196,8 @@ public abstract class AbstractTask implements Task {
 
     }
 
-    void clearTaskTimeout(final Logger log) {
+    @Override
+    public void clearTaskTimeout() {
         if (deadlineMs != NO_DEADLINE) {
             log.debug("Clearing task timeout.");
             deadlineMs = NO_DEADLINE;

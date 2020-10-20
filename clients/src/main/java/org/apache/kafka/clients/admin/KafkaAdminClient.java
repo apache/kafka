@@ -287,6 +287,9 @@ import static org.apache.kafka.common.utils.Utils.closeQuietly;
  * The default implementation of {@link Admin}. An instance of this class is created by invoking one of the
  * {@code create()} methods in {@code AdminClient}. Users should not refer to this class directly.
  *
+ * <p>
+ * This class is thread-safe.
+ * </p>
  * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
@@ -3624,7 +3627,7 @@ public class KafkaAdminClient extends AdminClient {
                             for (ReassignablePartitionResponse partition : topicResponse.partitions()) {
                                 errors.put(
                                         new TopicPartition(topicName, partition.partitionIndex()),
-                                        new ApiError(topLevelError, topLevelError.message()).exception()
+                                        new ApiError(topLevelError, response.data().errorMessage()).exception()
                                 );
                                 receivedResponsesCount += 1;
                             }
