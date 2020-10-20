@@ -17,8 +17,11 @@
 
 package kafka.server
 
-import kafka.metrics.KafkaMetricsReporter
+import java.util
+
+import kafka.metrics.{KafkaMetricsReporter, KafkaYammerMetrics}
 import kafka.utils.Logging
+import org.apache.kafka.common.metrics.{JmxReporter, MetricsReporter}
 import org.apache.kafka.common.utils.Time
 
 import scala.jdk.CollectionConverters._
@@ -49,17 +52,36 @@ object KafkaServerManager {
           throw new RuntimeException("Unknown process role " + role)
       })
     }
-    new KafkaServerManager(legacyBroker, kip500Broker, controller)
+    new KafkaServerManager(config, legacyBroker, kip500Broker, controller)
   }
 }
 
 /**
  * Manages a set of servers within the Kafka process.
  */
-class KafkaServerManager(val legacyBroker: Option[LegacyBroker],
+class KafkaServerManager(val config: KafkaConfig,
+                         val legacyBroker: Option[LegacyBroker],
                          val kip500Broker: Option[Kip500Broker],
                          val controller: Option[Kip500Controller]) extends Logging {
+  private def legacyMode(): Boolean = legacyBroker.isDefined
+
+  private def configureMetrics(): Unit = {
+    KafkaYammerMetrics.INSTANCE.configure(config.originals)
+    val jmxReporter = new JmxReporter()
+    jmxReporter.configure(config.originals)
+    val reporters = new util.ArrayList[MetricsReporter]
+    reporters.add(jmxReporter)
+    //val metricConfig =
+    KafkaBroker.metricConfig(config)
+//    val metricsContext = createKafkaMetricsContext()
+//    metrics = new Metrics(metricConfig, reporters, time, true, metricsContext)
+  }
+
   def startup(): Unit = {
+    if (!legacyMode()) {
+      // TODO: we can probably configure this here even in legacy mode... eventually.
+      configureMetrics()
+    }
     legacyBroker.foreach(_.startup())
     kip500Broker.foreach(_.startup())
   }
