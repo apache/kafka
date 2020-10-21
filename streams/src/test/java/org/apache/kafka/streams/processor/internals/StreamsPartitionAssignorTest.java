@@ -1904,7 +1904,7 @@ public class StreamsPartitionAssignorTest {
         );
         final Capture<Map<TopicPartition, OffsetSpec>> capturedChangelogs = EasyMock.newCapture();
 
-        expect(adminClient.listOffsets(EasyMock.capture(capturedChangelogs))).andStubReturn(result);
+        expect(adminClient.listOffsets(EasyMock.capture(capturedChangelogs))).andReturn(result).once();
         expect(result.all()).andReturn(allFuture);
 
         builder.addSource(null, "source1", null, null, null, "topic1");
@@ -1951,12 +1951,11 @@ public class StreamsPartitionAssignorTest {
                 defaultSubscriptionInfo.encode()
             ));
 
-        final Consumer<byte[], byte[]> consumerClient = EasyMock.createMock(Consumer.class);
-
         createDefaultMockTaskManager();
         configurePartitionAssignorWith(singletonMap(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE));
         overwriteInternalTopicManagerWithMock(false);
 
+        final Consumer<byte[], byte[]> consumerClient = referenceContainer.mainConsumer;
         EasyMock.expect(consumerClient.committed(EasyMock.eq(changelogs)))
             .andReturn(changelogs.stream().collect(Collectors.toMap(tp -> tp, tp -> new OffsetAndMetadata(Long.MAX_VALUE)))).once();
 
