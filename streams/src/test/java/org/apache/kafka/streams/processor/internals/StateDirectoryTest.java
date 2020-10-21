@@ -315,6 +315,7 @@ public class StateDirectoryTest {
         assertEquals(1, directory.listNonEmptyTaskDirectories().length);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
+            time.sleep(5000);
             directory.cleanRemovedTasks(0);
             assertTrue(dir.exists());
             assertEquals(1, directory.listAllTaskDirectories().length);
@@ -326,6 +327,7 @@ public class StateDirectoryTest {
         }
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
+            time.sleep(5000);
             directory.cleanRemovedTasks(0);
             assertTrue(dir.exists());
             assertEquals(1, directory.listAllTaskDirectories().length);
