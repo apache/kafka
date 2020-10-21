@@ -88,7 +88,7 @@ public final class SlidingWindows {
      * @param timeDifference the max time difference (inclusive) between two records in a window
      * @param grace the grace period to admit out-of-order events to a window
      * @return a new window definition
-     * @throws IllegalArgumentException if the specified window size is < 0 or grace < 0, or either can't be represented as {@code long milliseconds}
+     * @throws IllegalArgumentException if the specified window size is &lt; 0 or grace &lt; 0, or either can't be represented as {@code long milliseconds}
      */
     public static SlidingWindows withTimeDifferenceAndGrace(final Duration timeDifference, final Duration grace) throws IllegalArgumentException {
         final String msgPrefixSize = prepareMillisCheckFailMsgPrefix(timeDifference, "timeDifference");

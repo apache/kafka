@@ -386,6 +386,11 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                 }
                 repartitionNodeToBeReplaced.clearChildren();
 
+                // if replaced repartition node is part of any copartition group,
+                // we need to update it with the new node name so that co-partitioning won't break.
+                internalTopologyBuilder.maybeUpdateCopartitionSourceGroups(repartitionNodeToBeReplaced.nodeName(),
+                                                                           optimizedSingleRepartition.nodeName());
+
                 LOG.debug("Updated node {} children {}", optimizedSingleRepartition, optimizedSingleRepartition.children());
             }
 
