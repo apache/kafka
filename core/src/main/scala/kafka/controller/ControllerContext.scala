@@ -19,7 +19,7 @@ package kafka.controller
 
 import kafka.cluster.Broker
 import kafka.utils.Implicits._
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition,UUID}
 
 import scala.collection.{Map, Seq, Set, mutable}
 
@@ -83,6 +83,8 @@ class ControllerContext {
   var epochZkVersion: Int = KafkaController.InitialControllerEpochZkVersion
 
   val allTopics = mutable.Set.empty[String]
+  var topicIds = mutable.Map.empty[String, UUID]
+  var topicNames = mutable.Map.empty[UUID, String]
   val partitionAssignments = mutable.Map.empty[String, mutable.Map[Int, ReplicaAssignment]]
   private val partitionLeadershipInfo = mutable.Map.empty[TopicPartition, LeaderIsrAndControllerEpoch]
   val partitionsBeingReassigned = mutable.Set.empty[TopicPartition]
@@ -116,6 +118,8 @@ class ControllerContext {
 
   private def clearTopicsState(): Unit = {
     allTopics.clear()
+    topicIds.clear()
+    topicNames.clear()
     partitionAssignments.clear()
     partitionLeadershipInfo.clear()
     partitionsBeingReassigned.clear()
@@ -124,6 +128,23 @@ class ControllerContext {
     offlinePartitionCount = 0
     preferredReplicaImbalanceCount = 0
     replicaStates.clear()
+  }
+
+  def addTopicId(topic: String, id: UUID): Unit = {
+    topicIds.get(topic).foreach { existingId =>
+      if (!existingId.equals(id))
+        throw new IllegalStateException("topic ID map already contained ID for topic "
+          + topic + " and new ID " + id + " did not match existing ID "
+          + existingId)
+    }
+    topicIds.put(topic, id)
+    topicNames.get(id).foreach { existingName =>
+      if (!existingName.equals(topic))
+        throw new IllegalStateException("topic name map already contained id "
+          + id + " and new name " + topic + " did not match existing name "
+          + existingName)
+    }
+    topicNames.put(id, topic)
   }
 
   def partitionReplicaAssignment(topicPartition: TopicPartition): Seq[Int] = {
@@ -295,6 +316,10 @@ class ControllerContext {
     topicsToBeDeleted -= topic
     topicsWithDeletionStarted -= topic
     allTopics -= topic
+    if (topicIds.get(topic)!= None) {
+      topicNames.remove(topicIds.get(topic).get)
+      topicIds.remove(topic)
+    }
     partitionAssignments.remove(topic).foreach { assignments =>
       assignments.keys.foreach { partition =>
         partitionLeadershipInfo.remove(new TopicPartition(topic, partition))

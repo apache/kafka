@@ -25,7 +25,7 @@ import kafka.log.LogConfig
 import kafka.server.{ConfigEntityName, ConfigType, DynamicConfig}
 import kafka.utils._
 import kafka.utils.Implicits._
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, UUID}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.zookeeper.KeeperException.NodeExistsException
@@ -158,9 +158,11 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
       val assignment = replicaAssignment.map { case (partitionId, replicas) => (new TopicPartition(topic,partitionId), replicas) }.toMap
 
       if (!isUpdate) {
-        zkClient.createTopicAssignment(topic, assignment.map { case (k, v) => k -> v.replicas })
+        val topicId = UUID.randomUUID()
+        zkClient.createTopicAssignment(topic, Some(topicId), assignment.map { case (k, v) => k -> v.replicas })
       } else {
-        zkClient.setTopicAssignment(topic, assignment)
+        val topicIds = zkClient.getTopicIdsForTopics(Set(topic))
+        zkClient.setTopicAssignment(topic, topicIds.get(topic), assignment)
       }
       debug("Updated path %s with %s for replica assignment".format(TopicZNode.path(topic), assignment))
     } catch {
