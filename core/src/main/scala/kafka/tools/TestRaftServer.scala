@@ -469,7 +469,7 @@ object TestRaftServer extends Logging {
 
     private def printSummary(): Unit = {
       val latencies = latency.getSnapshot
-      println(String.format("Throughput (bytes/second): %.2f, Latency (ms): %.1f p50 %.1f p99 %.1f p999",
+      println("Throughput (bytes/second): %.2f, Latency (ms): %.1f p50 %.1f p99 %.1f p999".format(
         throughput.oneMinuteRate,
         latencies.getMedian,
         latencies.get99thPercentile,
