@@ -34,6 +34,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.RecordConverter;
@@ -147,7 +148,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             globalStoreNames.add(stateStore.name());
             final String sourceTopic = storeToChangelogTopic.get(stateStore.name());
             changelogTopics.add(sourceTopic);
-            stateStore.init(globalProcessorContext, stateStore);
+            stateStore.init((StateStoreContext) globalProcessorContext, stateStore);
         }
 
         // make sure each topic-partition from checkpointFileCache is associated with a global state store
@@ -445,7 +446,9 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         try {
             checkpointFile.write(filteredOffsets);
         } catch (final IOException e) {
-            log.warn("Failed to write offset checkpoint file to {} for global stores: {}", checkpointFile, e);
+            log.warn("Failed to write offset checkpoint file to {} for global stores: {}." +
+                " This may occur if OS cleaned the state.dir in case when it is located in the (default) /tmp/kafka-streams directory." +
+                " Changing the location of state.dir may resolve the problem", checkpointFile, e);
         }
     }
 

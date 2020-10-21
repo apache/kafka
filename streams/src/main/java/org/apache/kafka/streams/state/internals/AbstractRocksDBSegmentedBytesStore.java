@@ -225,6 +225,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         return name;
     }
 
+    @Deprecated
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {

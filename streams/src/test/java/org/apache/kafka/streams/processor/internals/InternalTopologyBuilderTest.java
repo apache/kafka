@@ -47,6 +47,9 @@ import java.util.regex.Pattern;
 
 import static java.time.Duration.ofSeconds;
 import static java.util.Arrays.asList;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
@@ -1110,6 +1113,11 @@ public class InternalTopologyBuilderTest {
             new MockApiProcessorSupplier<>()
         );
         builder.initializeSubscription();
+
+        builder.rewriteTopology(new StreamsConfig(mkProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "asdf"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "asdf")
+        ))));
 
         assertThat(builder.buildGlobalStateTopology().storeToChangelogTopic().get(globalStoreName), is(globalTopic));
     }

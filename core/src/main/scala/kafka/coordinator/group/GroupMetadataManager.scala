@@ -544,6 +544,7 @@ class GroupMetadataManager(brokerId: Int,
   private[group] def loadGroupsAndOffsets(topicPartition: TopicPartition, onGroupLoaded: GroupMetadata => Unit, startTimeMs: java.lang.Long): Unit = {
     try {
       val schedulerTimeMs = time.milliseconds() - startTimeMs
+      debug(s"Started loading offsets and group metadata from $topicPartition")
       doLoadGroupsAndOffsets(topicPartition, onGroupLoaded)
       val endTimeMs = time.milliseconds()
       val totalLoadingTimeMs = endTimeMs - startTimeMs
@@ -759,6 +760,7 @@ class GroupMetadataManager(brokerId: Int,
       var numOffsetsRemoved = 0
       var numGroupsRemoved = 0
 
+      debug(s"Started unloading offsets and group metadata for $topicPartition")
       inLock(partitionLock) {
         // we need to guard the group removal in cache in the loading partition lock
         // to prevent coordinator's check-and-get-group race condition
@@ -1169,11 +1171,13 @@ object GroupMetadataManager {
   /**
    * Generates the key for offset commit message for given (group, topic, partition)
    *
+   * @param groupId the ID of the group to generate the key
+   * @param topicPartition the TopicPartition to generate the key
    * @return key for offset commit message
    */
-  def offsetCommitKey(group: String, topicPartition: TopicPartition): Array[Byte] = {
+  def offsetCommitKey(groupId: String, topicPartition: TopicPartition): Array[Byte] = {
     val key = new Struct(CURRENT_OFFSET_KEY_SCHEMA)
-    key.set(OFFSET_KEY_GROUP_FIELD, group)
+    key.set(OFFSET_KEY_GROUP_FIELD, groupId)
     key.set(OFFSET_KEY_TOPIC_FIELD, topicPartition.topic)
     key.set(OFFSET_KEY_PARTITION_FIELD, topicPartition.partition)
 
@@ -1186,11 +1190,12 @@ object GroupMetadataManager {
   /**
    * Generates the key for group metadata message for given group
    *
+   * @param groupId the ID of the group to generate the key
    * @return key bytes for group metadata message
    */
-  def groupMetadataKey(group: String): Array[Byte] = {
+  def groupMetadataKey(groupId: String): Array[Byte] = {
     val key = new Struct(CURRENT_GROUP_KEY_SCHEMA)
-    key.set(GROUP_KEY_GROUP_FIELD, group)
+    key.set(GROUP_KEY_GROUP_FIELD, groupId)
 
     val byteBuffer = ByteBuffer.allocate(2 /* version */ + key.sizeOf)
     byteBuffer.putShort(CURRENT_GROUP_KEY_SCHEMA_VERSION)
@@ -1314,7 +1319,7 @@ object GroupMetadataManager {
    * Decodes the offset messages' key
    *
    * @param buffer input byte-buffer
-   * @return an GroupTopicPartition object
+   * @return an OffsetKey or GroupMetadataKey object from the message
    */
   def readMessageKey(buffer: ByteBuffer): BaseKey = {
     val version = buffer.getShort
@@ -1392,6 +1397,7 @@ object GroupMetadataManager {
   /**
    * Decodes the group metadata messages' payload and retrieves its member metadata from it
    *
+   * @param groupId The ID of the group to be read
    * @param buffer input byte-buffer
    * @param time the time instance to use
    * @return a group metadata object from the message

@@ -16,13 +16,48 @@
  */
 package org.apache.kafka.raft;
 
-import org.junit.Test;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Utils;
+import org.junit.jupiter.api.Test;
 
-public class VotedStateTest {
+import java.util.Set;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class VotedStateTest {
+
+    private final MockTime time = new MockTime();
 
     @Test
     public void testElectionTimeout() {
-        // TODO:
+        Set<Integer> voters = Utils.mkSet(1, 2, 3);
+        int epoch = 5;
+        int votedId = 1;
+        int electionTimeoutMs = 10000;
+
+        VotedState state = new VotedState(
+            time,
+            epoch,
+            votedId,
+            voters,
+            electionTimeoutMs
+        );
+
+        assertEquals(epoch, state.epoch());
+        assertEquals(votedId, state.votedId());
+        assertEquals(ElectionState.withVotedCandidate(epoch, votedId, voters), state.election());
+        assertEquals(electionTimeoutMs, state.remainingElectionTimeMs(time.milliseconds()));
+        assertFalse(state.hasElectionTimeoutExpired(time.milliseconds()));
+
+        time.sleep(5000);
+        assertEquals(electionTimeoutMs - 5000, state.remainingElectionTimeMs(time.milliseconds()));
+        assertFalse(state.hasElectionTimeoutExpired(time.milliseconds()));
+
+        time.sleep(5000);
+        assertEquals(0, state.remainingElectionTimeMs(time.milliseconds()));
+        assertTrue(state.hasElectionTimeoutExpired(time.milliseconds()));
     }
 
 }

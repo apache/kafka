@@ -35,10 +35,10 @@ import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
-import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -293,6 +293,7 @@ public class ProcessorTopologyTest {
         assertNull(store.get("key4"));
     }
 
+    @Deprecated // testing old PAPI
     @Test
     public void testDrivingConnectedStateStoreInDifferentProcessorsTopologyWithOldAPI() {
         final String storeName = "connectedStore";
@@ -355,6 +356,7 @@ public class ProcessorTopologyTest {
         assertNull(store.get("key4"));
     }
 
+    @Deprecated // testing old PAPI
     @Test
     public void shouldDriveGlobalStore() {
         final String storeName = "my-store";
@@ -621,6 +623,7 @@ public class ProcessorTopologyTest {
         return topology.getInternalBuilder("anyAppId").buildTopology();
     }
 
+    @Deprecated // testing old PAPI
     private ProcessorTopology createGlobalStoreTopology(final KeyValueBytesStoreSupplier storeSupplier) {
         final TopologyWrapper topology = new TopologyWrapper();
         final StoreBuilder<KeyValueStore<String, String>> storeBuilder =
@@ -682,6 +685,7 @@ public class ProcessorTopologyTest {
             .addSink("sink2", OUTPUT_TOPIC_2, constantPartitioner(partition), "child2");
     }
 
+    @Deprecated // testing old PAPI
     private Topology createMultiplexingTopology() {
         return topology
             .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
@@ -690,6 +694,7 @@ public class ProcessorTopologyTest {
             .addSink("sink2", OUTPUT_TOPIC_2, "processor");
     }
 
+    @Deprecated // testing old PAPI
     private Topology createMultiplexByNameTopology() {
         return topology
             .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
@@ -698,6 +703,7 @@ public class ProcessorTopologyTest {
             .addSink("sink1", OUTPUT_TOPIC_2, "processor");
     }
 
+    @Deprecated // testing old PAPI
     private Topology createStatefulTopology(final String storeName) {
         return topology
             .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
@@ -706,6 +712,7 @@ public class ProcessorTopologyTest {
             .addSink("counts", OUTPUT_TOPIC_1, "processor");
     }
 
+    @Deprecated // testing old PAPI
     private Topology createConnectedStateStoreTopology(final String storeName) {
         final StoreBuilder<KeyValueStore<String, String>> storeBuilder = Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore(storeName), Serdes.String(), Serdes.String());
         return topology
@@ -775,8 +782,8 @@ public class ProcessorTopologyTest {
         }
 
         @Override
-        public void process(final String key, final String value) {
-            context.forward(key, value);
+        public void process(final Record<String, String> record) {
+            context.forward(record);
         }
     }
 
@@ -792,8 +799,8 @@ public class ProcessorTopologyTest {
         }
 
         @Override
-        public void process(final String key, final String value) {
-            context.forward(key, value, To.all().withTimestamp(context.timestamp() + 10));
+        public void process(final Record<String, String> record) {
+            context.forward(record.withTimestamp(record.timestamp() + 10));
         }
     }
 
@@ -814,11 +821,11 @@ public class ProcessorTopologyTest {
         }
 
         @Override
-        public void process(final String key, final String value) {
-            context.forward(key, value);
-            context.forward(key, value, To.child(firstChild).withTimestamp(context.timestamp() + 5));
-            context.forward(key, value, To.child(secondChild));
-            context.forward(key, value, To.all().withTimestamp(context.timestamp() + 2));
+        public void process(final Record<String, String> record) {
+            context.forward(record);
+            context.forward(record.withTimestamp(record.timestamp() + 5), firstChild);
+            context.forward(record, secondChild);
+            context.forward(record.withTimestamp(record.timestamp() + 2));
         }
     }
 
@@ -831,9 +838,11 @@ public class ProcessorTopologyTest {
         }
 
         @Override
-        public void process(final String key, final String value) {
-            context.headers().add(HEADER);
-            context.forward(key, value);
+        public void process(final Record<String, String> record) {
+            // making a copy of headers for safety.
+            final Record<String, String> toForward = record.withHeaders(record.headers());
+            toForward.headers().add(HEADER);
+            context.forward(toForward);
         }
     }
 
@@ -850,8 +859,8 @@ public class ProcessorTopologyTest {
         }
 
         @Override
-        public void process(final String key, final String value) {
-            context.forward(key, value.split("@")[0]);
+        public void process(final Record<String, String> record) {
+            context.forward(record.withValue(record.value().split("@")[0]));
         }
     }
 
@@ -935,8 +944,8 @@ public class ProcessorTopologyTest {
         }
 
         @Override
-        public void process(final String key, final String value) {
-            store.put(key, value);
+        public void process(final Record<String, String> record) {
+            store.put(record.key(), record.value());
         }
     }
 

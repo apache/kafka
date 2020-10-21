@@ -27,9 +27,11 @@ import org.apache.kafka.raft.{LogAppendInfo, LogFetchInfo, LogOffsetMetadata, Is
 
 import scala.compat.java8.OptionConverters._
 
-class KafkaMetadataLog(log: Log,
-                       topicPartition: TopicPartition,
-                       maxFetchSizeInBytes: Int = 1024 * 1024) extends ReplicatedLog {
+class KafkaMetadataLog(
+  log: Log,
+  topicPartition: TopicPartition,
+  maxFetchSizeInBytes: Int = 1024 * 1024
+) extends ReplicatedLog {
 
   override def read(startOffset: Long, readIsolation: Isolation): LogFetchInfo = {
     val isolation = readIsolation match {
@@ -82,7 +84,6 @@ class KafkaMetadataLog(log: Log,
   }
 
   override def endOffsetForEpoch(leaderEpoch: Int): Optional[raft.OffsetAndEpoch] = {
-    // TODO: Does this handle empty log case (when epoch is None) as we expect?
     val endOffsetOpt = log.endOffsetForEpoch(leaderEpoch).map { offsetAndEpoch =>
       new raft.OffsetAndEpoch(offsetAndEpoch.offset, offsetAndEpoch.leaderEpoch)
     }
@@ -107,8 +108,8 @@ class KafkaMetadataLog(log: Log,
     log.truncateTo(offset)
   }
 
-  override def assignEpochStartOffset(epoch: Int, startOffset: Long): Unit = {
-    log.maybeAssignEpochStartOffset(epoch, startOffset)
+  override def initializeLeaderEpoch(epoch: Int): Unit = {
+    log.maybeAssignEpochStartOffset(epoch, log.logEndOffset)
   }
 
   override def updateHighWatermark(offsetMetadata: LogOffsetMetadata): Unit = {
@@ -123,6 +124,14 @@ class KafkaMetadataLog(log: Log,
         // FIXME: This API returns the new high watermark, which may be different from the passed offset
         log.updateHighWatermark(offsetMetadata.offset)
     }
+  }
+
+  override def flush(): Unit = {
+    log.flush()
+  }
+
+  override def lastFlushedOffset(): Long = {
+    log.recoveryPoint
   }
 
   /**

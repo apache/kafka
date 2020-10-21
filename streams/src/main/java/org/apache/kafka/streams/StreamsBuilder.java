@@ -51,6 +51,14 @@ import java.util.regex.Pattern;
 /**
  * {@code StreamsBuilder} provide the high-level Kafka Streams DSL to specify a Kafka Streams topology.
  *
+ * <p>
+ * It is a requirement that the processing logic ({@link Topology}) be defined in a deterministic way,
+ * as in, the order in which all operators are added must be predictable and the same across all application
+ * instances.
+ * Topologies are only identical if all operators are added in the same order.
+ * If different {@link KafkaStreams} instances of the same application build different topologies the result may be
+ * incompatible runtime code and unexpected results or errors
+ *
  * @see Topology
  * @see KStream
  * @see KTable
@@ -251,7 +259,7 @@ public class StreamsBuilder {
      * If this is not the case the returned {@link KTable} will be corrupted.
      * <p>
      * The resulting {@link KTable} will be materialized in a local {@link KeyValueStore} with an internal
-     * store name. Note that store name may not be queriable through Interactive Queries.
+     * store name. Note that store name may not be queryable through Interactive Queries.
      * An internal changelog topic is created by default. Because the source topic can
      * be used for recovery, you can avoid creating the changelog topic by setting
      * the {@code "topology.optimization"} to {@code "all"} in the {@link StreamsConfig}.
@@ -273,7 +281,7 @@ public class StreamsBuilder {
      * If this is not the case the returned {@link KTable} will be corrupted.
      * <p>
      * The resulting {@link KTable} will be materialized in a local {@link KeyValueStore} with an internal
-     * store name. Note that store name may not be queriable through Interactive Queries.
+     * store name. Note that store name may not be queryable through Interactive Queries.
      * An internal changelog topic is created by default. Because the source topic can
      * be used for recovery, you can avoid creating the changelog topic by setting
      * the {@code "topology.optimization"} to {@code "all"} in the {@link StreamsConfig}.
@@ -334,7 +342,7 @@ public class StreamsBuilder {
      * Input {@link KeyValue records} with {@code null} key will be dropped.
      * <p>
      * The resulting {@link GlobalKTable} will be materialized in a local {@link KeyValueStore} with an internal
-     * store name. Note that store name may not be queriable through Interactive Queries.
+     * store name. Note that store name may not be queryable through Interactive Queries.
      * No internal changelog topic is created since the original input topic can be used for recovery (cf.
      * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
      * <p>
@@ -365,7 +373,7 @@ public class StreamsBuilder {
      * Input {@link KeyValue records} with {@code null} key will be dropped.
      * <p>
      * The resulting {@link GlobalKTable} will be materialized in a local {@link KeyValueStore} with an internal
-     * store name. Note that store name may not be queriable through Interactive Queries.
+     * store name. Note that store name may not be queryable through Interactive Queries.
      * No internal changelog topic is created since the original input topic can be used for recovery (cf.
      * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
      * <p>

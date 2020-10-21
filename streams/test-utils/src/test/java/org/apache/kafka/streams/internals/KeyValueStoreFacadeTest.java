@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -53,9 +54,22 @@ public class KeyValueStoreFacadeTest {
         keyValueStoreFacade = new KeyValueStoreFacade<>(mockedKeyValueTimestampStore);
     }
 
+    @SuppressWarnings("deprecation") // test of deprecated method
+    @Test
+    public void shouldForwardDeprecatedInit() {
+        final ProcessorContext context = mock(ProcessorContext.class);
+        final StateStore store = mock(StateStore.class);
+        mockedKeyValueTimestampStore.init(context, store);
+        expectLastCall();
+        replay(mockedKeyValueTimestampStore);
+
+        keyValueStoreFacade.init(context, store);
+        verify(mockedKeyValueTimestampStore);
+    }
+
     @Test
     public void shouldForwardInit() {
-        final ProcessorContext context = mock(ProcessorContext.class);
+        final StateStoreContext context = mock(StateStoreContext.class);
         final StateStore store = mock(StateStore.class);
         mockedKeyValueTimestampStore.init(context, store);
         expectLastCall();

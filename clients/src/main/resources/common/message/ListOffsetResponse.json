@@ -48,7 +48,7 @@
           "about": "The timestamp associated with the returned offset." },
         { "name": "Offset", "type": "int64", "versions": "1+", "default": "-1", "ignorable": false,
           "about": "The returned offset." },
-        { "name": "LeaderEpoch", "type": "int32", "versions": "4+" }
+        { "name": "LeaderEpoch", "type": "int32", "versions": "4+", "default": "-1" }
       ]}
     ]}
   ]

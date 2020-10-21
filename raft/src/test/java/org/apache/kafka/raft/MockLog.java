@@ -43,10 +43,11 @@ import java.util.stream.Collectors;
 public class MockLog implements ReplicatedLog {
     private final List<EpochStartOffset> epochStartOffsets = new ArrayList<>();
     private final List<LogBatch> log = new ArrayList<>();
+    private final TopicPartition topicPartition;
 
     private UUID nextId = UUID.randomUUID();
-    private LogOffsetMetadata highWatermark = new LogOffsetMetadata(0L, Optional.of(new MockOffsetMetadata(nextId)));
-    private final TopicPartition topicPartition;
+    private LogOffsetMetadata highWatermark = new LogOffsetMetadata(0L, Optional.empty());
+    private long lastFlushedOffset = 0L;
 
     public MockLog(TopicPartition topicPartition) {
         this.topicPartition = topicPartition;
@@ -240,6 +241,25 @@ public class MockLog implements ReplicatedLog {
         return new LogAppendInfo(baseOffset, lastOffset);
     }
 
+    @Override
+    public void flush() {
+        lastFlushedOffset = endOffset().offset;
+    }
+
+    @Override
+    public long lastFlushedOffset() {
+        return lastFlushedOffset;
+    }
+
+    /**
+     * Reopening the log causes all unflushed data to be lost.
+     */
+    public void reopen() {
+        log.removeIf(batch -> batch.firstOffset() >= lastFlushedOffset);
+        epochStartOffsets.removeIf(epochStartOffset -> epochStartOffset.startOffset >= lastFlushedOffset);
+        highWatermark = new LogOffsetMetadata(0L, Optional.empty());
+    }
+
     public List<LogBatch> readBatches(long startOffset, OptionalLong maxOffsetOpt) {
         verifyOffsetInRange(startOffset);
 
@@ -310,10 +330,10 @@ public class MockLog implements ReplicatedLog {
     }
 
     @Override
-    public void assignEpochStartOffset(int epoch, long startOffset) {
-        if (startOffset != endOffset().offset)
-            throw new IllegalArgumentException(
-                "Can only assign epoch for the end offset " + endOffset().offset + ", but get offset " + startOffset);
+    public void initializeLeaderEpoch(int epoch) {
+        long startOffset = endOffset().offset;
+        epochStartOffsets.removeIf(epochStartOffset ->
+            epochStartOffset.startOffset >= startOffset || epochStartOffset.epoch >= epoch);
         epochStartOffsets.add(new EpochStartOffset(epoch, startOffset));
     }
 
@@ -436,10 +456,4 @@ public class MockLog implements ReplicatedLog {
         }
     }
 
-    public void clear() {
-        epochStartOffsets.clear();
-        log.clear();
-        highWatermark = new LogOffsetMetadata(0L);
-    }
 }
-

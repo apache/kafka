@@ -27,8 +27,8 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.utils.Utils;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -39,16 +39,16 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MockLogTest {
 
     private MockLog log;
     private final TopicPartition topicPartition = new TopicPartition("mock-topic", 0);
 
-    @Before
+    @BeforeEach
     public void setup() {
         log = new MockLog(topicPartition);
     }
@@ -141,13 +141,8 @@ public class MockLogTest {
 
     @Test
     public void testAssignEpochStartOffset() {
-        log.assignEpochStartOffset(2, 0);
+        log.initializeLeaderEpoch(2);
         assertEquals(2, log.lastFetchedEpoch());
-    }
-
-    @Test
-    public void testAssignEpochStartOffsetNotEqualToEndOffset() {
-        assertThrows(IllegalArgumentException.class, () -> log.assignEpochStartOffset(2, 1));
     }
 
     @Test
@@ -368,6 +363,37 @@ public class MockLogTest {
             Isolation.UNCOMMITTED));
         assertThrows(OffsetOutOfRangeException.class, () -> log.read(log.endOffset().offset + 1,
             Isolation.UNCOMMITTED));
+    }
+
+    @Test
+    public void testMonotonicEpochStartOffset() {
+        appendBatch(5, 1);
+        assertEquals(5L, log.endOffset().offset);
+
+        log.initializeLeaderEpoch(2);
+        assertEquals(Optional.of(new OffsetAndEpoch(5L, 1)), log.endOffsetForEpoch(1));
+        assertEquals(Optional.of(new OffsetAndEpoch(5L, 2)), log.endOffsetForEpoch(2));
+
+        // Initialize a new epoch at the same end offset. The epoch cache ensures
+        // that the start offset of each retained epoch increases monotonically.
+        log.initializeLeaderEpoch(3);
+        assertEquals(Optional.of(new OffsetAndEpoch(5L, 1)), log.endOffsetForEpoch(1));
+        assertEquals(Optional.of(new OffsetAndEpoch(5L, 1)), log.endOffsetForEpoch(2));
+        assertEquals(Optional.of(new OffsetAndEpoch(5L, 3)), log.endOffsetForEpoch(3));
+    }
+
+    @Test
+    public void testUnflushedRecordsLostAfterReopen() {
+        appendBatch(5, 1);
+        appendBatch(10, 2);
+        log.flush();
+
+        appendBatch(5, 3);
+        appendBatch(10, 4);
+        log.reopen();
+
+        assertEquals(15L, log.endOffset().offset);
+        assertEquals(2, log.lastFetchedEpoch());
     }
 
     private Optional<OffsetRange> readOffsets(long startOffset, Isolation isolation) {
