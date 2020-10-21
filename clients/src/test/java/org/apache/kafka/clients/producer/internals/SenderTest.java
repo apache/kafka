@@ -26,6 +26,7 @@ import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.TransactionAbortedException;
+import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -105,6 +106,7 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 import static org.mockito.AdditionalMatchers.geq;
@@ -559,12 +561,7 @@ public class SenderTest {
         client.respond(metadataUpdate);
         prepareFindCoordinatorResponse(Errors.NONE);
         prepareInitProducerResponse(Errors.NONE, producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
-        for (int i = 0; i < 5 && !transactionManager.hasProducerId(); i++)
-            sender.runOnce();
-
-        assertTrue(transactionManager.hasProducerId());
-        assertEquals(producerId, transactionManager.producerIdAndEpoch().producerId);
-        assertEquals((short) 0, transactionManager.producerIdAndEpoch().epoch);
+        waitForProducerId(transactionManager, producerIdAndEpoch);
     }
 
     /**
@@ -590,11 +587,37 @@ public class SenderTest {
         sender.runOnce();
         sender.runOnce();
         client.respond(initProducerIdResponse(producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, Errors.NONE));
+        waitForProducerId(transactionManager, producerIdAndEpoch);
+    }
+
+    /**
+     * Tests the code path where the target node to send FindCoordinator or InitProducerId
+     * is not ready.
+     */
+    @Test
+    public void testNodeNotReady() throws Exception {
+        final long producerId = 123456L;
+        time = new MockTime(10);
+        client = new MockClient(time, metadata);
+
+        TransactionManager transactionManager = new TransactionManager(new LogContext(), "testNodeNotReady",
+                60000, 100L, new ApiVersions(), false);
+        setupWithTransactionState(transactionManager, false, null, true);
+        ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId, (short) 0);
+        transactionManager.initializeTransactions();
         sender.runOnce();
 
-        assertTrue(transactionManager.hasProducerId());
-        assertEquals(producerId, transactionManager.producerIdAndEpoch().producerId);
-        assertEquals((short) 0, transactionManager.producerIdAndEpoch().epoch);
+        Node node = metadata.fetch().nodes().get(0);
+        client.delayReady(node, REQUEST_TIMEOUT + 20);
+        prepareFindCoordinatorResponse(Errors.NONE);
+        sender.runOnce();
+        sender.runOnce();
+        assertNotNull("Coordinator not found", transactionManager.coordinator(CoordinatorType.TRANSACTION));
+
+        client.throttle(node, REQUEST_TIMEOUT + 20);
+        prepareFindCoordinatorResponse(Errors.NONE);
+        prepareInitProducerResponse(Errors.NONE, producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
+        waitForProducerId(transactionManager, producerIdAndEpoch);
     }
 
     @Test
@@ -2767,5 +2790,13 @@ public class SenderTest {
         client.send(request, time.milliseconds());
         while (client.leastLoadedNode(time.milliseconds()) != null)
             client.poll(0, time.milliseconds());
+    }
+
+    private void waitForProducerId(TransactionManager transactionManager, ProducerIdAndEpoch producerIdAndEpoch) {
+        for (int i = 0; i < 5 && !transactionManager.hasProducerId(); i++)
+            sender.runOnce();
+
+        assertTrue(transactionManager.hasProducerId());
+        assertEquals(producerIdAndEpoch, transactionManager.producerIdAndEpoch());
     }
 }

@@ -449,7 +449,11 @@ public class Sender implements Runnable {
                     transactionManager.coordinator(coordinatorType) :
                     client.leastLoadedNode(time.milliseconds());
             if (targetNode != null) {
-                awaitNodeReady(targetNode, coordinatorType);
+                if (!awaitNodeReady(targetNode, coordinatorType)) {
+                    log.trace("Target node {} not ready within request timeout, will retry when node is ready.", targetNode);
+                    maybeFindCoordinatorAndRetry(nextRequestHandler);
+                    return true;
+                }
             } else if (coordinatorType != null) {
                 log.trace("Coordinator not known for {}, will retry {} after finding coordinator.", coordinatorType, requestBuilder.apiKey());
                 maybeFindCoordinatorAndRetry(nextRequestHandler);
@@ -523,15 +527,17 @@ public class Sender implements Runnable {
         return running;
     }
 
-    private void awaitNodeReady(Node node, FindCoordinatorRequest.CoordinatorType coordinatorType) throws IOException {
-        if (node != null && NetworkClientUtils.awaitReady(client, node, time, requestTimeoutMs)) {
+    private boolean awaitNodeReady(Node node, FindCoordinatorRequest.CoordinatorType coordinatorType) throws IOException {
+        if (NetworkClientUtils.awaitReady(client, node, time, requestTimeoutMs)) {
             if (coordinatorType == FindCoordinatorRequest.CoordinatorType.TRANSACTION) {
                 // Indicate to the transaction manager that the coordinator is ready, allowing it to check ApiVersions
                 // This allows us to bump transactional epochs even if the coordinator is temporarily unavailable at
                 // the time when the abortable error is handled
                 transactionManager.handleCoordinatorReady();
             }
+            return true;
         }
+        return false;
     }
 
     /**
