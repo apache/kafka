@@ -195,7 +195,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     )
 
     // create a topic assignment
-    zkClient.createTopicAssignment(topic1, topicIds.get(topic1), assignment)
+    zkClient.createTopicAssignment(topic1, topicIds.get(topic1).get, assignment)
 
     assertTrue(zkClient.topicExists(topic1))
 
@@ -212,7 +212,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
     val updatedAssignment = assignment - new TopicPartition(topic1, 2)
 
-    zkClient.setTopicAssignment(topic1, topicIds.get(topic1), updatedAssignment.map {
+    zkClient.setTopicAssignment(topic1, topicIds.get(topic1).get, updatedAssignment.map {
       case (k, v) => k -> ReplicaAssignment(v, List(), List()) })
     assertEquals(updatedAssignment.size, zkClient.getTopicPartitionCount(topic1).get)
 
@@ -222,7 +222,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
       new TopicPartition(topic2, 1) -> Seq(0, 1)
     )
 
-    zkClient.createTopicAssignment(topic2, topicIds.get(topic2), secondAssignment)
+    zkClient.createTopicAssignment(topic2, topicIds.get(topic2).get, secondAssignment)
 
     assertEquals(Set(topic1, topic2), zkClient.getAllTopicsInCluster())
   }
@@ -239,7 +239,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     // not interfere with the previous registered watcher
     assertTrue(zkClient.getAllTopicsInCluster(false).isEmpty)
 
-    zkClient.createTopicAssignment(topic1, topicIds.get(topic1), Map.empty)
+    zkClient.createTopicAssignment(topic1, topicIds.get(topic1).get, Map.empty)
 
     assertTrue("Failed to receive watch notification",
       latch.await(5, TimeUnit.SECONDS))
@@ -255,7 +255,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     // Listing all the topics and don't register the watch
     assertTrue(zkClient.getAllTopicsInCluster(false).isEmpty)
 
-    zkClient.createTopicAssignment(topic1, topicIds.get(topic1), Map.empty)
+    zkClient.createTopicAssignment(topic1, topicIds.get(topic1).get, Map.empty)
 
     assertFalse("Received watch notification",
       latch.await(100, TimeUnit.MILLISECONDS))
@@ -920,7 +920,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
   @Test
   def testTopicAssignments(): Unit = {
-    val topicId = Some(UUID.randomUUID())
+    val topicId = UUID.randomUUID()
     assertEquals(0, zkClient.getPartitionAssignmentForTopics(Set(topicPartition.topic())).size)
     zkClient.createTopicAssignment(topicPartition.topic(), topicId,
       Map(topicPartition -> Seq()))

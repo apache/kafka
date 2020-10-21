@@ -110,7 +110,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
 
     // Test that creates persistent nodes
     val topic1 = "topic1"
-    val topicId = Some(UUID.randomUUID())
+    val topicId = UUID.randomUUID()
     val assignment = Map(
       new TopicPartition(topic1, 0) -> Seq(0, 1),
       new TopicPartition(topic1, 1) -> Seq(0, 1),

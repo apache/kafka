@@ -159,10 +159,10 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
 
       if (!isUpdate) {
         val topicId = UUID.randomUUID()
-        zkClient.createTopicAssignment(topic, Some(topicId), assignment.map { case (k, v) => k -> v.replicas })
+        zkClient.createTopicAssignment(topic, topicId, assignment.map { case (k, v) => k -> v.replicas })
       } else {
         val topicIds = zkClient.getTopicIdsForTopics(Set(topic))
-        zkClient.setTopicAssignment(topic, topicIds.get(topic), assignment)
+        zkClient.setTopicAssignment(topic, topicIds.get(topic).get, assignment)
       }
       debug("Updated path %s with %s for replica assignment".format(TopicZNode.path(topic), assignment))
     } catch {
