@@ -36,6 +36,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.MockTime;
@@ -45,10 +46,12 @@ import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -131,7 +134,7 @@ public class StreamTaskTest {
     private final MockSourceNode<Integer, Integer, Integer, Integer> source2 = new MockSourceNode<>(intDeserializer, intDeserializer);
     private final MockSourceNode<Integer, Integer, ?, ?> source3 = new MockSourceNode<Integer, Integer, Object, Object>(intDeserializer, intDeserializer) {
         @Override
-        public void process(final Integer key, final Integer value) {
+        public void process(final Record<Integer, Integer> record) {
             throw new RuntimeException("KABOOM!");
         }
 
@@ -452,55 +455,97 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldRecordE2ELatencyOnProcessForSourceNodes() {
+    public void shouldRecordE2ELatencyOnSourceNodeAndTerminalNodes() {
         time = new MockTime(0L, 0L, 0L);
         metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
-        task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
 
-        final String sourceNode = source1.name();
+        // Create a processor that only forwards even keys to test the metrics at the source and terminal nodes
+        final MockSourceNode<Integer, Integer, Integer, Integer> evenKeyForwardingSourceNode = new MockSourceNode<Integer, Integer, Integer, Integer>(intDeserializer, intDeserializer) {
+            InternalProcessorContext context;
 
-        final Metric maxMetric = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), sourceNode, StreamsConfig.METRICS_LATEST);
+            @Override
+            public void init(final InternalProcessorContext context) {
+                this.context = context;
+                super.init(context);
+            }
 
-        // e2e latency = 100
-        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0L)));
-        task.process(100L);
+            @Override
+            public void process(final Record<Integer, Integer> record) {
+                if (record.key() % 2 == 0) {
+                    context.forward(record);
+                }
+            }
+        };
 
-        assertThat(maxMetric.metricValue(), equalTo(100.0));
-    }
+        task = createStatelessTaskWithForwardingTopology(evenKeyForwardingSourceNode);
+        task.initializeIfNeeded();
+        task.completeRestoration();
 
-    @Test
-    public void shouldRecordE2ELatencyMinAndMax() {
-        time = new MockTime(0L, 0L, 0L);
-        metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
-        task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
+        final String sourceNodeName = evenKeyForwardingSourceNode.name();
+        final String terminalNodeName = processorStreamTime.name();
 
-        final String sourceNode = source1.name();
+        final Metric sourceAvg = getProcessorMetric("record-e2e-latency", "%s-avg", task.id().toString(), sourceNodeName, StreamsConfig.METRICS_LATEST);
+        final Metric sourceMin = getProcessorMetric("record-e2e-latency", "%s-min", task.id().toString(), sourceNodeName, StreamsConfig.METRICS_LATEST);
+        final Metric sourceMax = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), sourceNodeName, StreamsConfig.METRICS_LATEST);
 
-        final Metric maxMetric = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), sourceNode, StreamsConfig.METRICS_LATEST);
-        final Metric minMetric = getProcessorMetric("record-e2e-latency", "%s-min", task.id().toString(), sourceNode, StreamsConfig.METRICS_LATEST);
-
-        assertThat(minMetric.metricValue(), equalTo(Double.NaN));
-        assertThat(maxMetric.metricValue(), equalTo(Double.NaN));
+        final Metric terminalAvg = getProcessorMetric("record-e2e-latency", "%s-avg", task.id().toString(), terminalNodeName, StreamsConfig.METRICS_LATEST);
+        final Metric terminalMin = getProcessorMetric("record-e2e-latency", "%s-min", task.id().toString(), terminalNodeName, StreamsConfig.METRICS_LATEST);
+        final Metric terminalMax = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), terminalNodeName, StreamsConfig.METRICS_LATEST);
 
         // e2e latency = 10
-        task.maybeRecordE2ELatency(0L, 10L, sourceNode);
-        assertThat(minMetric.metricValue(), equalTo(10.0));
-        assertThat(maxMetric.metricValue(), equalTo(10.0));
+        task.addRecords(partition1, singletonList(getConsumerRecord(0, 0L)));
+        task.process(10L);
+
+        assertThat(sourceAvg.metricValue(), equalTo(10.0));
+        assertThat(sourceMin.metricValue(), equalTo(10.0));
+        assertThat(sourceMax.metricValue(), equalTo(10.0));
+
+        // key 0: reaches terminal node
+        assertThat(terminalAvg.metricValue(), equalTo(10.0));
+        assertThat(terminalMin.metricValue(), equalTo(10.0));
+        assertThat(terminalMax.metricValue(), equalTo(10.0));
+
 
         // e2e latency = 15
-        task.maybeRecordE2ELatency(10L, 25L, sourceNode);
-        assertThat(minMetric.metricValue(), equalTo(10.0));
-        assertThat(maxMetric.metricValue(), equalTo(15.0));
+        task.addRecords(partition1, singletonList(getConsumerRecord(1, 0L)));
+        task.process(15L);
 
-        // e2e latency = 25
-        task.maybeRecordE2ELatency(5L, 30L, sourceNode);
-        assertThat(minMetric.metricValue(), equalTo(10.0));
-        assertThat(maxMetric.metricValue(), equalTo(25.0));
+        assertThat(sourceAvg.metricValue(), equalTo(12.5));
+        assertThat(sourceMin.metricValue(), equalTo(10.0));
+        assertThat(sourceMax.metricValue(), equalTo(15.0));
 
-        // e2e latency = 20
-        task.maybeRecordE2ELatency(35L, 40L, sourceNode);
-        assertThat(minMetric.metricValue(), equalTo(5.0));
-        assertThat(maxMetric.metricValue(), equalTo(25.0));
+        // key 1: stops at source, doesn't affect terminal node metrics
+        assertThat(terminalAvg.metricValue(), equalTo(10.0));
+        assertThat(terminalMin.metricValue(), equalTo(10.0));
+        assertThat(terminalMax.metricValue(), equalTo(10.0));
+
+
+        // e2e latency = 23
+        task.addRecords(partition1, singletonList(getConsumerRecord(2, 0L)));
+        task.process(23L);
+
+        assertThat(sourceAvg.metricValue(), equalTo(16.0));
+        assertThat(sourceMin.metricValue(), equalTo(10.0));
+        assertThat(sourceMax.metricValue(), equalTo(23.0));
+
+        // key 2: reaches terminal node
+        assertThat(terminalAvg.metricValue(), equalTo(16.5));
+        assertThat(terminalMin.metricValue(), equalTo(10.0));
+        assertThat(terminalMax.metricValue(), equalTo(23.0));
+
+
+        // e2e latency = 5
+        task.addRecords(partition1, singletonList(getConsumerRecord(3, 0L)));
+        task.process(5L);
+
+        assertThat(sourceAvg.metricValue(), equalTo(13.25));
+        assertThat(sourceMin.metricValue(), equalTo(5.0));
+        assertThat(sourceMax.metricValue(), equalTo(23.0));
+
+        // key 3: stops at source, doesn't affect terminal node metrics
+        assertThat(terminalAvg.metricValue(), equalTo(16.5));
+        assertThat(terminalMin.metricValue(), equalTo(10.0));
+        assertThat(terminalMax.metricValue(), equalTo(23.0));
     }
 
     @Test
@@ -827,7 +872,7 @@ public class StreamTaskTest {
         // st is now 30
         assertTrue(task.process(0L));
 
-        processorStreamTime.mockProcessor.scheduleCancellable.cancel();
+        processorStreamTime.mockProcessor.scheduleCancellable().cancel();
 
         assertFalse(task.maybePunctuateStreamTime());
 
@@ -842,7 +887,7 @@ public class StreamTaskTest {
         final long now = time.milliseconds();
         time.sleep(10);
         assertTrue(task.maybePunctuateSystemTime());
-        processorSystemTime.mockProcessor.scheduleCancellable.cancel();
+        processorSystemTime.mockProcessor.scheduleCancellable().cancel();
         time.sleep(10);
         assertFalse(task.maybePunctuateSystemTime());
         processorSystemTime.mockProcessor.checkAndClearPunctuateResult(PunctuationType.WALL_CLOCK_TIME, now + 10);
@@ -1182,6 +1227,20 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldNotShareHeadersBetweenPunctuateIterations() {
+        task = createStatelessTask(createConfig(false, "100"), StreamsConfig.METRICS_LATEST);
+        task.initializeIfNeeded();
+        task.completeRestoration();
+
+        task.punctuate(processorSystemTime, 1, PunctuationType.WALL_CLOCK_TIME, timestamp -> {
+            task.processorContext().headers().add("dummy", (byte[]) null);
+        });
+        task.punctuate(processorSystemTime, 1, PunctuationType.WALL_CLOCK_TIME, timestamp -> {
+            assertFalse(task.processorContext().headers().iterator().hasNext());
+        });
+    }
+
+    @Test
     public void shouldWrapKafkaExceptionWithStreamsExceptionWhenProcess() {
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();
         EasyMock.expect(stateManager.changelogOffsets()).andReturn(Collections.emptyMap()).anyTimes();
@@ -1280,10 +1339,10 @@ public class StreamTaskTest {
         task.completeRestoration();
 
         task.prepareCommit();
-        task.postCommit(true);  // should checkpoint
+        task.postCommit(true);   // should checkpoint
 
         task.prepareCommit();
-        task.postCommit(false); // should not checkpoint
+        task.postCommit(false);   // should not checkpoint
 
         EasyMock.verify(stateManager, recordCollector);
     }
@@ -1523,7 +1582,7 @@ public class StreamTaskTest {
         task.postCommit(true);
         EasyMock.verify(stateManager);
     }
-
+    
     @Test
     public void shouldNotCheckpointForSuspendedRunningTaskWithSmallProgress() {
         EasyMock.expect(stateManager.changelogOffsets())
@@ -1976,6 +2035,68 @@ public class StreamTaskTest {
         assertThat(task.state(), equalTo(SUSPENDED));
     }
 
+    @Test
+    public void shouldThrowTopologyExceptionIfTaskCreatedForUnknownTopic() {
+        final InternalProcessorContext context = new ProcessorContextImpl(
+                taskId,
+                createConfig(false, "100"),
+                stateManager,
+                streamsMetrics,
+                null
+        );
+        final StreamsMetricsImpl metrics = new StreamsMetricsImpl(this.metrics, "test", StreamsConfig.METRICS_LATEST, time);
+        EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet());
+        EasyMock.replay(stateManager);
+
+        // The processor topology is missing the topics
+        final ProcessorTopology topology = withSources(asList(), mkMap());
+
+        final TopologyException  exception = assertThrows(
+            TopologyException.class,
+            () -> new StreamTask(
+                taskId,
+                partitions,
+                topology,
+                consumer,
+                createConfig(false, "100"),
+                metrics,
+                stateDirectory,
+                cache,
+                time,
+                stateManager,
+                recordCollector,
+                context
+            )
+        );
+
+        assertThat(exception.getMessage(), equalTo("Invalid topology: " +
+                "Topic is unkown to the topology. This may happen if different KafkaStreams instances of the same " +
+                "application execute different Topologies. Note that Topologies are only identical if all operators " +
+                "are added in the same order."));
+    }
+
+    @Test
+    public void shouldInitTaskTimeoutAndEventuallyThrow() {
+        task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
+
+        task.maybeInitTaskTimeoutOrThrow(0L, null);
+        task.maybeInitTaskTimeoutOrThrow(Duration.ofMinutes(5).toMillis(), null);
+
+        assertThrows(
+            TimeoutException.class,
+            () -> task.maybeInitTaskTimeoutOrThrow(Duration.ofMinutes(5).plus(Duration.ofMillis(1L)).toMillis(), null)
+        );
+    }
+
+    @Test
+    public void shouldCLearTaskTimeout() {
+        task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
+
+        task.maybeInitTaskTimeoutOrThrow(0L, null);
+        task.clearTaskTimeout();
+        task.maybeInitTaskTimeoutOrThrow(Duration.ofMinutes(5).plus(Duration.ofMillis(1L)).toMillis(), null);
+    }
+
     private List<MetricName> getTaskMetrics() {
         return metrics.metrics().keySet().stream().filter(m -> m.tags().containsKey("task-id")).collect(Collectors.toList());
     }
@@ -2157,6 +2278,43 @@ public class StreamTaskTest {
             context);
     }
 
+    private StreamTask createStatelessTaskWithForwardingTopology(final SourceNode<Integer, Integer, Integer, Integer> sourceNode) {
+        final ProcessorTopology topology = withSources(
+            asList(sourceNode, processorStreamTime),
+            singletonMap(topic1, sourceNode)
+        );
+
+        sourceNode.addChild(processorStreamTime);
+
+        EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet());
+        EasyMock.expect(recordCollector.offsets()).andReturn(Collections.emptyMap()).anyTimes();
+        EasyMock.replay(stateManager, recordCollector);
+
+        final StreamsConfig config = createConfig(false, "0");
+
+        final InternalProcessorContext context = new ProcessorContextImpl(
+            taskId,
+            config,
+            stateManager,
+            streamsMetrics,
+            null
+        );
+
+        return new StreamTask(
+            taskId,
+            singleton(partition1),
+            topology,
+            consumer,
+            config,
+            new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST, time),
+            stateDirectory,
+            cache,
+            time,
+            stateManager,
+            recordCollector,
+            context);
+    }
+
     private ConsumerRecord<byte[], byte[]> getConsumerRecord(final TopicPartition topicPartition, final long offset) {
         return new ConsumerRecord<>(
             topicPartition.topic(),
@@ -2168,6 +2326,21 @@ public class StreamTaskTest {
             0,
             0,
             recordKey,
+            recordValue
+        );
+    }
+
+    private ConsumerRecord<byte[], byte[]> getConsumerRecord(final Integer key, final long offset) {
+        return new ConsumerRecord<>(
+            topic1,
+            1,
+            offset,
+            offset, // use the offset as the timestamp
+            TimestampType.CREATE_TIME,
+            0L,
+            0,
+            0,
+            new IntegerSerializer().serialize(topic1, key),
             recordValue
         );
     }

@@ -23,12 +23,14 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
+import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
+
 class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
     private final KTableImpl<K, ?, V> parent;
     private final Predicate<? super K, ? super V> predicate;
     private final boolean filterNot;
     private final String queryableName;
-    private boolean sendOldValues = false;
+    private boolean sendOldValues;
 
     KTableFilter(final KTableImpl<K, ?, V> parent,
                  final Predicate<? super K, ? super V> predicate,
@@ -38,6 +40,8 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
         this.predicate = predicate;
         this.filterNot = filterNot;
         this.queryableName = queryableName;
+        // If upstream is already materialized, enable sending old values to avoid sending unnecessary tombstones:
+        this.sendOldValues = parent.enableSendingOldValues(false);
     }
 
     @Override
@@ -46,9 +50,16 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
     }
 
     @Override
-    public void enableSendingOldValues() {
-        parent.enableSendingOldValues();
-        sendOldValues = true;
+    public boolean enableSendingOldValues(final boolean forceMaterialization) {
+        if (queryableName != null) {
+            sendOldValues = true;
+            return true;
+        }
+
+        if (parent.enableSendingOldValues(forceMaterialization)) {
+            sendOldValues = true;
+        }
+        return sendOldValues;
     }
 
     private V computeValue(final K key, final V value) {
@@ -96,7 +107,7 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
         @Override
         public void process(final K key, final Change<V> change) {
             final V newValue = computeValue(key, change.newValue);
-            final V oldValue = sendOldValues ? computeValue(key, change.oldValue) : null;
+            final V oldValue = computeOldValue(key, change);
 
             if (sendOldValues && oldValue == null && newValue == null) {
                 return; // unnecessary to forward here.
@@ -108,6 +119,16 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
             } else {
                 context().forward(key, new Change<>(newValue, oldValue));
             }
+        }
+
+        private V computeOldValue(final K key, final Change<V> change) {
+            if (!sendOldValues) {
+                return null;
+            }
+
+            return queryableName != null
+                ? getValueOrNull(store.get(key))
+                : computeValue(key, change.oldValue);
         }
     }
 
@@ -141,7 +162,6 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
             this.parentGetter = parentGetter;
         }
 
-        @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             parentGetter.init(context);

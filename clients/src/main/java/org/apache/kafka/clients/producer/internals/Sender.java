@@ -24,7 +24,6 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClientUtils;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -34,6 +33,7 @@ import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.TransactionAbortedException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -418,9 +418,12 @@ public class Sender implements Runnable {
 
         if (transactionManager.hasAbortableError() || transactionManager.isAborting()) {
             if (accumulator.hasIncomplete()) {
+                // Attempt to get the last error that caused this abort.
                 RuntimeException exception = transactionManager.lastError();
+                // If there was no error, but we are still aborting,
+                // then this is most likely a case where there was no fatal error.
                 if (exception == null) {
-                    exception = new KafkaException("Failing batch since transaction was aborted");
+                    exception = new TransactionAbortedException();
                 }
                 accumulator.abortUndrainedBatches(exception);
             }
@@ -451,8 +454,8 @@ public class Sender implements Runnable {
                 time.sleep(nextRequestHandler.retryBackoffMs());
 
             long currentTimeMs = time.milliseconds();
-            ClientRequest clientRequest = client.newClientRequest(
-                targetNode.idString(), requestBuilder, currentTimeMs, true, requestTimeoutMs, nextRequestHandler);
+            ClientRequest clientRequest = client.newClientRequest(targetNode.idString(), requestBuilder, currentTimeMs, true,
+                    requestTimeoutMs,  null, null, nextRequestHandler);
             log.debug("Sending transactional request {} to node {} with correlation ID {}", requestBuilder, targetNode, clientRequest.correlationId());
             client.send(clientRequest, currentTimeMs);
             transactionManager.setInFlightCorrelationId(clientRequest.correlationId());
@@ -613,7 +616,7 @@ public class Sender implements Runnable {
                 else if (error == Errors.CLUSTER_AUTHORIZATION_FAILED)
                     exception = new ClusterAuthorizationException("The producer is not authorized to do idempotent sends");
                 else
-                    exception = error.exception();
+                    exception = error.exception(response.errorMessage);
                 // tell the user the result of their request. We only adjust sequence numbers if the batch didn't exhaust
                 // its retries -- if it did, we don't know whether the sequence number was accepted or not, and
                 // thus it is not safe to reassign the sequence.
@@ -626,7 +629,7 @@ public class Sender implements Runnable {
                         batch.topicPartition);
                 } else {
                     log.warn("Received invalid metadata error in produce request on partition {} due to {}. Going " +
-                            "to request metadata update now", batch.topicPartition, error.exception().toString());
+                            "to request metadata update now", batch.topicPartition, error.exception(response.errorMessage).toString());
                 }
                 metadata.requestUpdate();
             }
@@ -744,7 +747,7 @@ public class Sender implements Runnable {
 
         String nodeId = Integer.toString(destination);
         ClientRequest clientRequest = client.newClientRequest(nodeId, requestBuilder, now, acks != 0,
-                requestTimeoutMs, callback);
+                requestTimeoutMs, null, null, callback);
         client.send(clientRequest, now);
         log.trace("Sent produce request to {}: {}", nodeId, requestBuilder);
     }

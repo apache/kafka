@@ -4,7 +4,7 @@ See our [web site](https://kafka.apache.org) for details on the project.
 
 You need to have [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
 
-We build and test Apache Kafka with Java 8, 11 and 14. We set the `release` parameter in javac and scalac
+We build and test Apache Kafka with Java 8, 11 and 15. We set the `release` parameter in javac and scalac
 to `8` to ensure the generated binaries are compatible with Java 8 or higher (independently of the Java version
 used for compilation).
 
@@ -85,7 +85,7 @@ fail due to code changes. You can just run:
     ./gradlew clean
 
 ### Running a task with one of the Scala versions available (2.12.x or 2.13.x) ###
-*Note that if building the jars with a version other than 2.12.x, you need to set the `SCALA_VERSION` variable or change it in `bin/kafka-run-class.sh` to run the quick start.*
+*Note that if building the jars with a version other than 2.13.x, you need to set the `SCALA_VERSION` variable or change it in `bin/kafka-run-class.sh` to run the quick start.*
 
 You can pass either the major version (eg 2.12) or the full version (eg 2.12.7):
 
@@ -206,6 +206,7 @@ The following options should be set with a `-P` switch, for example `./gradlew -
 * `commitId`: sets the build commit ID as .git/HEAD might not be correct if there are local commits added for build purposes.
 * `mavenUrl`: sets the URL of the maven deployment repository (`file://path/to/repo` can be used to point to a local repository).
 * `maxParallelForks`: limits the maximum number of processes for each task.
+* `ignoreFailures`: ignore test failures from junit
 * `showStandardStreams`: shows standard out and standard error of the test JVM(s) on the console.
 * `skipSigning`: skips signing of artifacts.
 * `testLoggingEvents`: unit test events to be logged, separated by comma. For example `./gradlew -PtestLoggingEvents=started,passed,skipped,failed test`.

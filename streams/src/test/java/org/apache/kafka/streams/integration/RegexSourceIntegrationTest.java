@@ -36,13 +36,12 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.test.IntegrationTest;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
-import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
@@ -276,13 +275,12 @@ public class RegexSourceIntegrationTest {
 
     @Test
     public void shouldAddStateStoreToRegexDefinedSource() throws Exception {
-        final ProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
         final StoreBuilder<KeyValueStore<Object, Object>> storeBuilder = new MockKeyValueStoreBuilder("testStateStore", false);
         final long thirtySecondTimeout = 30 * 1000;
 
         final TopologyWrapper topology = new TopologyWrapper();
         topology.addSource("ingest", Pattern.compile("topic-\\d+"));
-        topology.addProcessor("my-processor", processorSupplier, "ingest");
+        topology.addProcessor("my-processor", new MockApiProcessorSupplier<>(), "ingest");
         topology.addStateStore(storeBuilder, "my-processor");
 
         streams = new KafkaStreams(topology, streamsConfiguration);

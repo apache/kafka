@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -56,22 +57,23 @@ import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilderTest;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.streams.processor.ThreadMetadata;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
+import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
-import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -110,6 +112,7 @@ import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getSharedAdminClientId;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
+import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.mock;
@@ -496,6 +499,7 @@ public class StreamThreadTest {
         );
         
         final Consumer<byte[], byte[]> mockConsumer = EasyMock.createNiceMock(Consumer.class);
+        expect(mockConsumer.poll(anyObject())).andStubReturn(ConsumerRecords.empty());
         final EasyMockConsumerClientSupplier mockClientSupplier = new EasyMockConsumerClientSupplier(mockConsumer);
 
         mockClientSupplier.setCluster(createCluster());
@@ -552,22 +556,24 @@ public class StreamThreadTest {
         }
 
         AtomicLong nextRebalanceMs() {
-            return (AtomicLong) consumerConfigs.get(StreamsConfig.InternalConfig.NEXT_SCHEDULED_REBALANCE_MS);
+            return ((ReferenceContainer) consumerConfigs.get(
+                    StreamsConfig.InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR)
+                ).nextScheduledRebalanceMs;
         }
     }
 
     @Test
     public void shouldRespectNumIterationsInMainLoop() {
-        final MockProcessor<byte[], byte[]> mockProcessor = new MockProcessor<>(PunctuationType.WALL_CLOCK_TIME, 10L);
+        final MockApiProcessor<byte[], byte[], Object, Object> mockProcessor = new MockApiProcessor<>(PunctuationType.WALL_CLOCK_TIME, 10L);
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
         internalTopologyBuilder.addProcessor(
             "processor1",
-            (ProcessorSupplier<byte[], byte[]>) () -> mockProcessor,
+            (ProcessorSupplier<byte[], byte[], ?, ?>) () -> mockProcessor,
             "source1"
         );
         internalTopologyBuilder.addProcessor(
             "processor2",
-            (ProcessorSupplier<byte[], byte[]>) () -> new MockProcessor<>(PunctuationType.STREAM_TIME, 10L),
+            (ProcessorSupplier<byte[], byte[], ?, ?>) () -> new MockApiProcessor<>(PunctuationType.STREAM_TIME, 10L),
             "source1"
         );
 
@@ -959,7 +965,7 @@ public class StreamThreadTest {
 
         final ChangelogReader changelogReader = new MockChangelogReader() {
             @Override
-            public void restore() {
+            public void restore(final Map<TaskId, Task> tasks) {
                 consumer.addRecord(new ConsumerRecord<>(topic1, 1, 11, new byte[0], new byte[0]));
                 consumer.addRecord(new ConsumerRecord<>(topic1, 1, 12, new byte[1], new byte[0]));
 
@@ -1196,40 +1202,26 @@ public class StreamThreadTest {
         internalTopologyBuilder.addSource(null, "name", null, null, null, topic1);
         final AtomicBoolean shouldThrow = new AtomicBoolean(false);
         final AtomicBoolean processed = new AtomicBoolean(false);
-        internalTopologyBuilder.addProcessor("proc", new ProcessorSupplier<Object, Object>() {
-            @Override
-            public Processor<Object, Object> get() {
-                return new Processor<Object, Object>() {
-                    private ProcessorContext context;
-
-                    @Override
-                    public void init(final ProcessorContext context) {
-                        this.context = context;
+        internalTopologyBuilder.addProcessor(
+            "proc",
+            () -> new Processor<Object, Object, Object, Object>() {
+                @Override
+                public void process(final Record<Object, Object> record) {
+                    if (shouldThrow.get()) {
+                        throw new TaskCorruptedException(singletonMap(task1, new HashSet<>(singleton(storeChangelogTopicPartition))));
+                    } else {
+                        processed.set(true);
                     }
-
-                    @Override
-                    public void process(final Object key, final Object value) {
-                        if (shouldThrow.get()) {
-                            throw new TaskCorruptedException(singletonMap(task1, new HashSet<TopicPartition>(singleton(storeChangelogTopicPartition))));
-                        } else {
-                            processed.set(true);
-                        }
-                    }
-
-                    @Override
-                    public void close() {
-
-                    }
-                };
-            }
-        }, "name");
+                }
+            },
+            "name");
         internalTopologyBuilder.addStateStore(
-            Stores.keyValueStoreBuilder(
-                Stores.persistentKeyValueStore(storeName),
-                Serdes.String(),
-                Serdes.String()
-            ),
-            "proc"
+                Stores.keyValueStoreBuilder(
+                        Stores.persistentKeyValueStore(storeName),
+                        Serdes.String(),
+                        Serdes.String()
+                ),
+                "proc"
         );
 
         thread.setState(StreamThread.State.STARTING);
@@ -1247,12 +1239,12 @@ public class StreamThreadTest {
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.mainConsumer();
         mockConsumer.assign(assignedPartitions);
         mockConsumer.updateBeginningOffsets(mkMap(
-            mkEntry(t1p1, 0L)
+                mkEntry(t1p1, 0L)
         ));
 
         final MockConsumer<byte[], byte[]> restoreConsumer = (MockConsumer<byte[], byte[]>) thread.restoreConsumer();
         restoreConsumer.updateBeginningOffsets(mkMap(
-            mkEntry(storeChangelogTopicPartition, 0L)
+                mkEntry(storeChangelogTopicPartition, 0L)
         ));
         final MockAdminClient admin = (MockAdminClient) thread.adminClient();
         admin.updateEndOffsets(singletonMap(storeChangelogTopicPartition, 0L));
@@ -1528,7 +1520,7 @@ public class StreamThreadTest {
         standbyTasks.put(task3, Collections.singleton(t2p1));
 
         thread.taskManager().handleAssignment(emptyMap(), standbyTasks);
-        thread.taskManager().tryToCompleteRestoration();
+        thread.taskManager().tryToCompleteRestoration(mockTime.milliseconds());
 
         thread.rebalanceListener().onPartitionsAssigned(Collections.emptyList());
 
@@ -1596,19 +1588,20 @@ public class StreamThreadTest {
     public void shouldPunctuateActiveTask() {
         final List<Long> punctuatedStreamTime = new ArrayList<>();
         final List<Long> punctuatedWallClockTime = new ArrayList<>();
-        final ProcessorSupplier<Object, Object> punctuateProcessor = () -> new Processor<Object, Object>() {
-            @Override
-            public void init(final ProcessorContext context) {
-                context.schedule(Duration.ofMillis(100L), PunctuationType.STREAM_TIME, punctuatedStreamTime::add);
-                context.schedule(Duration.ofMillis(100L), PunctuationType.WALL_CLOCK_TIME, punctuatedWallClockTime::add);
-            }
+        final org.apache.kafka.streams.processor.ProcessorSupplier<Object, Object> punctuateProcessor =
+            () -> new org.apache.kafka.streams.processor.Processor<Object, Object>() {
+                @Override
+                public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
+                    context.schedule(Duration.ofMillis(100L), PunctuationType.STREAM_TIME, punctuatedStreamTime::add);
+                    context.schedule(Duration.ofMillis(100L), PunctuationType.WALL_CLOCK_TIME, punctuatedWallClockTime::add);
+                }
 
-            @Override
-            public void process(final Object key, final Object value) {}
+                @Override
+                public void process(final Object key, final Object value) {}
 
-            @Override
-            public void close() {}
-        };
+                @Override
+                public void close() {}
+            };
 
         internalStreamsBuilder.stream(Collections.singleton(topic1), consumed).process(punctuateProcessor);
         internalStreamsBuilder.buildAndOptimizeTopology();
@@ -2416,11 +2409,11 @@ public class StreamThreadTest {
     }
 
     private void setupInternalTopologyWithoutState() {
-        final MockProcessor<byte[], byte[]> mockProcessor = new MockProcessor<>();
+        final MockApiProcessor<byte[], byte[], Object, Object> mockProcessor = new MockApiProcessor<>();
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
         internalTopologyBuilder.addProcessor(
             "processor1",
-            (ProcessorSupplier<byte[], byte[]>) () -> mockProcessor,
+            (ProcessorSupplier<byte[], byte[], ?, ?>) () -> mockProcessor,
             "source1"
         );
     }

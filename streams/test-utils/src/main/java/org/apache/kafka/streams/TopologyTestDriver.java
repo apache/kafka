@@ -30,7 +30,6 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -59,7 +58,6 @@ import org.apache.kafka.streams.processor.internals.GlobalStateUpdateTask;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
-import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
@@ -444,13 +442,7 @@ public class TopologyTestDriver implements Closeable {
                 new LogAndContinueExceptionHandler()
             );
             globalStateTask.initialize();
-            globalProcessorContext.setRecordContext(new ProcessorRecordContext(
-                0L,
-                -1L,
-                -1,
-                ProcessorContextImpl.NONEXIST_TOPIC,
-                new RecordHeaders())
-            );
+            globalProcessorContext.setRecordContext(null);
         } else {
             globalStateManager = null;
             globalStateTask = null;
@@ -510,13 +502,7 @@ public class TopologyTestDriver implements Closeable {
             );
             task.initializeIfNeeded();
             task.completeRestoration();
-            task.processorContext().setRecordContext(new ProcessorRecordContext(
-                0L,
-                -1L,
-                -1,
-                ProcessorContextImpl.NONEXIST_TOPIC,
-                new RecordHeaders())
-            );
+            task.processorContext().setRecordContext(null);
         } else {
             task = null;
         }
@@ -804,10 +790,10 @@ public class TopologyTestDriver implements Closeable {
 
     private Queue<ProducerRecord<byte[], byte[]>> getRecordsQueue(final String topicName) {
         final Queue<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(topicName);
-        if (outputRecords == null) {
-            if (!processorTopology.sinkTopics().contains(topicName)) {
-                throw new IllegalArgumentException("Unknown topic: " + topicName);
-            }
+        if (outputRecords == null && !processorTopology.sinkTopics().contains(topicName)) {
+            log.warn("Unrecognized topic: {}, this can occur if dynamic routing is used and no output has been "
+                         + "sent to this topic yet. If not using a TopicNameExtractor, check that the output topic "
+                         + "is correct.", topicName);
         }
         return outputRecords;
     }

@@ -81,11 +81,13 @@ public class SubscriptionInfo {
                             final int latestSupportedVersion,
                             final UUID processId,
                             final String userEndPoint,
-                            final Map<TaskId, Long> taskOffsetSums) {
+                            final Map<TaskId, Long> taskOffsetSums,
+                            final byte uniqueField) {
         validateVersions(version, latestSupportedVersion);
         final SubscriptionInfoData data = new SubscriptionInfoData();
         data.setVersion(version);
-        data.setProcessId(processId);
+        data.setProcessId(new org.apache.kafka.common.UUID(processId.getMostSignificantBits(),
+                processId.getLeastSignificantBits()));
 
         if (version >= 2) {
             data.setUserEndPoint(userEndPoint == null
@@ -94,6 +96,9 @@ public class SubscriptionInfo {
         }
         if (version >= 3) {
             data.setLatestSupportedVersion(latestSupportedVersion);
+        }
+        if (version >= 8) {
+            data.setUniqueField(uniqueField);
         }
 
         this.data = data;
@@ -163,7 +168,7 @@ public class SubscriptionInfo {
     }
 
     public UUID processId() {
-        return data.processId();
+        return new UUID(data.processId().getMostSignificantBits(), data.processId().getLeastSignificantBits());
     }
 
     public Set<TaskId> prevTasks() {

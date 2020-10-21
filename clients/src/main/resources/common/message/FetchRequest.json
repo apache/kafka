@@ -43,10 +43,14 @@
   //
   // Version 10 indicates that we can use the ZStd compression algorithm, as
   // described in KIP-110.
+  // Version 12 adds flexible versions support as well as epoch validation through
+  // the `LastFetchedEpoch` field
   //
-  "validVersions": "0-11",
-  "flexibleVersions": "none",
+  "validVersions": "0-12",
+  "flexibleVersions": "12+",
   "fields": [
+    { "name": "ClusterId", "type": "string", "versions": "12+", "nullableVersions": "12+", "default": "null", "taggedVersions": "12+", "tag": 0,
+      "about": "The clusterId if known. This is used to validate metadata fetches prior to broker registration." },
     { "name": "ReplicaId", "type": "int32", "versions": "0+",
       "about": "The broker ID of the follower, of -1 if this request is from a consumer." },
     { "name": "MaxWaitMs", "type": "int32", "versions": "0+",
@@ -73,6 +77,8 @@
           "about": "The current leader epoch of the partition." },
         { "name": "FetchOffset", "type": "int64", "versions": "0+",
           "about": "The message offset." },
+        { "name": "LastFetchedEpoch", "type": "int32", "versions": "12+", "default": "-1", "ignorable": false,
+          "about": "The epoch of the last fetched record or -1 if there is none"},
         { "name": "LogStartOffset", "type": "int64", "versions": "5+", "default": "-1", "ignorable": true,
           "about": "The earliest available offset of the follower replica.  The field is only used when the request is sent by the follower."},
         { "name": "PartitionMaxBytes", "type": "int32", "versions": "0+",

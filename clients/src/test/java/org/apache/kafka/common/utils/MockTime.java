@@ -28,14 +28,14 @@ import java.util.function.Supplier;
  */
 public class MockTime implements Time {
 
-    interface MockTimeListener {
-        void tick();
+    public interface Listener {
+        void onTimeUpdated();
     }
 
     /**
      * Listeners which are waiting for time changes.
      */
-    private final CopyOnWriteArrayList<MockTimeListener> listeners = new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<Listener> listeners = new CopyOnWriteArrayList<>();
 
     private final long autoTickMs;
 
@@ -58,7 +58,7 @@ public class MockTime implements Time {
         this.autoTickMs = autoTickMs;
     }
 
-    public void addListener(MockTimeListener listener) {
+    public void addListener(Listener listener) {
         listeners.add(listener);
     }
 
@@ -88,7 +88,7 @@ public class MockTime implements Time {
 
     @Override
     public void waitObject(Object obj, Supplier<Boolean> condition, long deadlineMs) throws InterruptedException {
-        MockTimeListener listener = () -> {
+        Listener listener = () -> {
             synchronized (obj) {
                 obj.notify();
             }
@@ -119,8 +119,8 @@ public class MockTime implements Time {
     }
 
     private void tick() {
-        for (MockTimeListener listener : listeners) {
-            listener.tick();
+        for (Listener listener : listeners) {
+            listener.onTimeUpdated();
         }
     }
 }

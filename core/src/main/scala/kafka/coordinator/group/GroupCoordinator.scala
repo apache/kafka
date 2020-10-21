@@ -28,8 +28,8 @@ import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
-import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.Meter
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
@@ -287,7 +287,7 @@ class GroupCoordinator(val brokerId: Int,
 
           group.currentState match {
             case PreparingRebalance =>
-              updateMemberAndRebalance(group, member, protocols, responseCallback)
+              updateMemberAndRebalance(group, member, protocols, s"Member ${member.memberId} joining group during ${group.currentState}", responseCallback)
 
             case CompletingRebalance =>
               if (member.matches(protocols)) {
@@ -308,16 +308,18 @@ class GroupCoordinator(val brokerId: Int,
                   error = Errors.NONE))
               } else {
                 // member has changed metadata, so force a rebalance
-                updateMemberAndRebalance(group, member, protocols, responseCallback)
+                updateMemberAndRebalance(group, member, protocols, s"Updating metadata for member ${member.memberId} during ${group.currentState}", responseCallback)
               }
 
             case Stable =>
               val member = group.get(memberId)
-              if (group.isLeader(memberId) || !member.matches(protocols)) {
-                // force a rebalance if a member has changed metadata or if the leader sends JoinGroup.
-                // The latter allows the leader to trigger rebalances for changes affecting assignment
+              if (group.isLeader(memberId)) {
+                // force a rebalance if the leader sends JoinGroup;
+                // This allows the leader to trigger rebalances for changes affecting assignment
                 // which do not affect the member metadata (such as topic metadata changes for the consumer)
-                updateMemberAndRebalance(group, member, protocols, responseCallback)
+                updateMemberAndRebalance(group, member, protocols, s"leader ${member.memberId} re-joining group during ${group.currentState}", responseCallback)
+              } else if (!member.matches(protocols)) {
+                updateMemberAndRebalance(group, member, protocols, s"Updating metadata for member ${member.memberId} during ${group.currentState}", responseCallback)
               } else {
                 // for followers with no actual change to their metadata, just return group information
                 // for the current generation which will allow them to issue SyncGroup
@@ -639,7 +641,11 @@ class GroupCoordinator(val brokerId: Int,
               responseCallback(Errors.UNKNOWN_MEMBER_ID)
 
             case CompletingRebalance =>
-                responseCallback(Errors.REBALANCE_IN_PROGRESS)
+              // consumers may start sending heartbeat after join-group response, in which case
+              // we should treat them as normal hb request and reset the timer
+              val member = group.get(memberId)
+              completeAndScheduleNextHeartbeatExpiration(group, member)
+              responseCallback(Errors.NONE)
 
             case PreparingRebalance =>
                 val member = group.get(memberId)
@@ -902,6 +908,7 @@ class GroupCoordinator(val brokerId: Int,
    * @param offsetTopicPartitionId The partition we are now leading
    */
   def onElection(offsetTopicPartitionId: Int): Unit = {
+    info(s"Elected as the group coordinator for partition $offsetTopicPartitionId")
     groupManager.scheduleLoadGroupAndOffsets(offsetTopicPartitionId, onGroupLoaded)
   }
 
@@ -911,6 +918,7 @@ class GroupCoordinator(val brokerId: Int,
    * @param offsetTopicPartitionId The partition we are no longer leading
    */
   def onResignation(offsetTopicPartitionId: Int): Unit = {
+    info(s"Resigned as the group coordinator for partition $offsetTopicPartitionId")
     groupManager.removeGroupsForPartition(offsetTopicPartitionId, onGroupUnloaded)
   }
 
@@ -1100,9 +1108,10 @@ class GroupCoordinator(val brokerId: Int,
   private def updateMemberAndRebalance(group: GroupMetadata,
                                        member: MemberMetadata,
                                        protocols: List[(String, Array[Byte])],
+                                       reason: String,
                                        callback: JoinCallback): Unit = {
     group.updateMember(member, protocols, callback)
-    maybePrepareRebalance(group, s"Updating metadata for member ${member.memberId}")
+    maybePrepareRebalance(group, reason)
   }
 
   private def maybePrepareRebalance(group: GroupMetadata, reason: String): Unit = {

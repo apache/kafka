@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.message;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import org.apache.kafka.common.UUID;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
@@ -27,7 +29,6 @@ import org.junit.Test;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.UUID;
 import java.util.function.Consumer;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -69,7 +70,7 @@ public class SimpleExampleMessageTest {
     @Test
     public void shouldDefaultField() {
         final SimpleExampleMessageData out = new SimpleExampleMessageData();
-        assertEquals(UUID.fromString("00000000-0000-0000-0000-000000000000"), out.processId());
+        assertEquals(UUID.fromString("AAAAAAAAAAAAAAAAAAAAAA"), out.processId());
         assertEquals(ByteUtils.EMPTY_BUF, out.zeroCopyByteBuffer());
         assertEquals(ByteUtils.EMPTY_BUF, out.nullableZeroCopyByteBuffer());
     }
@@ -258,13 +259,13 @@ public class SimpleExampleMessageTest {
     public void testTaggedUuid() {
         testRoundTrip(new SimpleExampleMessageData(),
             message -> assertEquals(
-                UUID.fromString("212d5494-4a8b-4fdf-94b3-88b470beb367"),
+                UUID.fromString("212d54944a8b4fdf94b388b470beb367"),
                 message.taggedUuid()));
 
         testRoundTrip(new SimpleExampleMessageData().
-                setTaggedUuid(UUID.fromString("01234567-89ab-cdef-0123-456789abcdef")),
+                setTaggedUuid(UUID.fromString("0123456789abcdef0123456789abcdef")),
             message -> assertEquals(
-                UUID.fromString("01234567-89ab-cdef-0123-456789abcdef"),
+                UUID.fromString("0123456789abcdef0123456789abcdef"),
                 message.taggedUuid()));
     }
 
@@ -298,8 +299,7 @@ public class SimpleExampleMessageTest {
         SimpleExampleMessageData.MyStruct myStruct =
                 new SimpleExampleMessageData.MyStruct().setStructId(10);
         // Check serialization throws exception for unsupported version
-        testRoundTrip(new SimpleExampleMessageData().setMyStruct(myStruct),
-            __ -> { }, (short) 1);
+        testRoundTrip(new SimpleExampleMessageData().setMyStruct(myStruct), (short) 1);
     }
 
     /**
@@ -310,8 +310,8 @@ public class SimpleExampleMessageTest {
     @Test
     public void testMyTaggedStruct() {
         // Verify that we can set and retrieve a nullable struct object.
-        SimpleExampleMessageData.MyTaggedStruct myStruct =
-            new SimpleExampleMessageData.MyTaggedStruct().setStructId("abc");
+        SimpleExampleMessageData.TaggedStruct myStruct =
+            new SimpleExampleMessageData.TaggedStruct().setStructId("abc");
         testRoundTrip(new SimpleExampleMessageData().setMyTaggedStruct(myStruct),
             message -> assertEquals(myStruct, message.myTaggedStruct()), (short) 2);
 
@@ -320,6 +320,18 @@ public class SimpleExampleMessageTest {
             message -> assertEquals("abc", message.myString()), (short) 1);
         testRoundTrip(new SimpleExampleMessageData().setMyString("abc"),
             message -> assertEquals("abc", message.myString()), (short) 2);
+    }
+
+    @Test
+    public void testCommonStruct() {
+        SimpleExampleMessageData message = new SimpleExampleMessageData();
+        message.setMyCommonStruct(new SimpleExampleMessageData.TestCommonStruct()
+            .setFoo(1)
+            .setBar(2));
+        message.setMyOtherCommonStruct(new SimpleExampleMessageData.TestCommonStruct()
+            .setFoo(3)
+            .setBar(4));
+        testRoundTrip(message, (short) 2);
     }
 
     private ByteBuffer serialize(SimpleExampleMessageData message, short version) {
@@ -354,6 +366,10 @@ public class SimpleExampleMessageTest {
         return new SimpleExampleMessageData(struct, version);
     }
 
+    private void testRoundTrip(SimpleExampleMessageData message, short version) {
+        testRoundTrip(message, m -> { }, version);
+    }
+
     private void testRoundTrip(SimpleExampleMessageData message,
                                Consumer<SimpleExampleMessageData> validator) {
         testRoundTrip(message, validator, (short) 1);
@@ -376,5 +392,13 @@ public class SimpleExampleMessageTest {
         validator.accept(messageFromStruct);
         assertEquals(message, messageFromStruct);
         assertEquals(message.hashCode(), messageFromStruct.hashCode());
+
+        // Check JSON serialization
+        JsonNode serializedJson = SimpleExampleMessageDataJsonConverter.write(message, version);
+        SimpleExampleMessageData messageFromJson = SimpleExampleMessageDataJsonConverter.read(serializedJson, version);
+        validator.accept(messageFromJson);
+        assertEquals(message, messageFromJson);
+        assertEquals(message.hashCode(), messageFromJson.hashCode());
     }
+
 }

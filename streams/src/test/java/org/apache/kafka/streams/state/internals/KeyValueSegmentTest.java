@@ -46,7 +46,7 @@ import static org.junit.Assert.assertTrue;
 public class KeyValueSegmentTest {
 
     private final RocksDBMetricsRecorder metricsRecorder =
-        new RocksDBMetricsRecorder("metrics-scope", "thread-id", "store-name");
+        new RocksDBMetricsRecorder("metrics-scope", "store-name");
 
     @Before
     public void setUp() {
@@ -67,7 +67,7 @@ public class KeyValueSegmentTest {
         expect(mockContext.stateDir()).andReturn(directory);
         replay(mockContext);
 
-        segment.openDB(mockContext);
+        segment.openDB(mockContext.appConfigs(), mockContext.stateDir());
 
         assertTrue(new File(directoryPath, "window").exists());
         assertTrue(new File(directoryPath + File.separator + "window", "segment").exists());
