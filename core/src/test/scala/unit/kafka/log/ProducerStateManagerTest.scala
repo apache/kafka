@@ -834,6 +834,40 @@ class ProducerStateManagerTest {
     assertEquals(None, stateManager.lastEntry(producerId).get.currentTxnFirstOffset)
   }
 
+  @Test
+  def testRemoveStraySnapshotsKeepCleanShutdownSnapshot(): Unit = {
+    // Test that when stray snapshots are removed, the largest stray snapshot is kept around. This covers the case where
+    // the broker shutdown cleanly and emitted a snapshot file larger than the base offset of the active segment.
+
+    // Create 3 snapshot files at different offsets.
+    Log.producerSnapshotFile(logDir, 5).createNewFile() // not stray
+    Log.producerSnapshotFile(logDir, 2).createNewFile() // stray
+    Log.producerSnapshotFile(logDir, 42).createNewFile() // not stray
+
+    // claim that we only have one segment with a base offset of 5
+    stateManager.removeStraySnapshots(Seq(5))
+
+    // The snapshot file at offset 2 should be considered a stray, but the snapshot at 42 should be kept
+    // around because it is the largest snapshot.
+    assertEquals(Some(42), stateManager.latestSnapshotOffset)
+    assertEquals(Some(5), stateManager.oldestSnapshotOffset)
+    assertEquals(Seq(5, 42), ProducerStateManager.listSnapshotFiles(logDir).map(_.offset).sorted)
+  }
+
+  @Test
+  def testRemoveAllStraySnapshots(): Unit = {
+    // Test that when stray snapshots are removed, we remove only the stray snapshots below the largest segment base offset.
+    // Snapshots associated with an offset in the list of segment base offsets should remain.
+
+    // Create 3 snapshot files at different offsets.
+    Log.producerSnapshotFile(logDir, 5).createNewFile() // stray
+    Log.producerSnapshotFile(logDir, 2).createNewFile() // stray
+    Log.producerSnapshotFile(logDir, 42).createNewFile() // not stray
+
+    stateManager.removeStraySnapshots(Seq(42))
+    assertEquals(Seq(42), ProducerStateManager.listSnapshotFiles(logDir).map(_.offset).sorted)
+  }
+
   private def testLoadFromCorruptSnapshot(makeFileCorrupt: FileChannel => Unit): Unit = {
     val epoch = 0.toShort
     val producerId = 1L

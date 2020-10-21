@@ -215,7 +215,8 @@ public class KafkaRaftClientTest {
         long electionTimestamp = time.milliseconds();
 
         // Leader change record appended
-        assertEquals(1, log.endOffset().offset);
+        assertEquals(1L, log.endOffset().offset);
+        assertEquals(1L, log.lastFlushedOffset());
 
         // Send BeginQuorumEpoch to voters
         client.poll();
@@ -396,6 +397,7 @@ public class KafkaRaftClientTest {
         client.append(MemoryRecords.withRecords(CompressionType.NONE, records), AckMode.LEADER, Integer.MAX_VALUE);
         client.poll();
         assertEquals(3L, log.endOffset().offset);
+        assertEquals(3L, log.lastFlushedOffset());
         assertEquals(OptionalLong.of(1L), client.highWatermark());
 
         validateLocalRead(client, new OffsetAndEpoch(1L, epoch), Isolation.COMMITTED, new SimpleRecord[0]);
@@ -1779,6 +1781,7 @@ public class KafkaRaftClientTest {
 
         client.poll();
         assertEquals(2L, log.endOffset().offset);
+        assertEquals(2L, log.lastFlushedOffset());
     }
 
     @Test

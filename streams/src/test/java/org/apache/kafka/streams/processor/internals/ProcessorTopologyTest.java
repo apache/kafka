@@ -293,6 +293,7 @@ public class ProcessorTopologyTest {
         assertNull(store.get("key4"));
     }
 
+    @Deprecated // testing old PAPI
     @Test
     public void testDrivingConnectedStateStoreInDifferentProcessorsTopologyWithOldAPI() {
         final String storeName = "connectedStore";
@@ -355,6 +356,7 @@ public class ProcessorTopologyTest {
         assertNull(store.get("key4"));
     }
 
+    @Deprecated // testing old PAPI
     @Test
     public void shouldDriveGlobalStore() {
         final String storeName = "my-store";
@@ -621,6 +623,7 @@ public class ProcessorTopologyTest {
         return topology.getInternalBuilder("anyAppId").buildTopology();
     }
 
+    @Deprecated // testing old PAPI
     private ProcessorTopology createGlobalStoreTopology(final KeyValueBytesStoreSupplier storeSupplier) {
         final TopologyWrapper topology = new TopologyWrapper();
         final StoreBuilder<KeyValueStore<String, String>> storeBuilder =
@@ -682,6 +685,7 @@ public class ProcessorTopologyTest {
             .addSink("sink2", OUTPUT_TOPIC_2, constantPartitioner(partition), "child2");
     }
 
+    @Deprecated // testing old PAPI
     private Topology createMultiplexingTopology() {
         return topology
             .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
@@ -690,6 +694,7 @@ public class ProcessorTopologyTest {
             .addSink("sink2", OUTPUT_TOPIC_2, "processor");
     }
 
+    @Deprecated // testing old PAPI
     private Topology createMultiplexByNameTopology() {
         return topology
             .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
@@ -698,6 +703,7 @@ public class ProcessorTopologyTest {
             .addSink("sink1", OUTPUT_TOPIC_2, "processor");
     }
 
+    @Deprecated // testing old PAPI
     private Topology createStatefulTopology(final String storeName) {
         return topology
             .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
@@ -706,6 +712,7 @@ public class ProcessorTopologyTest {
             .addSink("counts", OUTPUT_TOPIC_1, "processor");
     }
 
+    @Deprecated // testing old PAPI
     private Topology createConnectedStateStoreTopology(final String storeName) {
         final StoreBuilder<KeyValueStore<String, String>> storeBuilder = Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore(storeName), Serdes.String(), Serdes.String());
         return topology

@@ -382,6 +382,20 @@ public class MockLogTest {
         assertEquals(Optional.of(new OffsetAndEpoch(5L, 3)), log.endOffsetForEpoch(3));
     }
 
+    @Test
+    public void testUnflushedRecordsLostAfterReopen() {
+        appendBatch(5, 1);
+        appendBatch(10, 2);
+        log.flush();
+
+        appendBatch(5, 3);
+        appendBatch(10, 4);
+        log.reopen();
+
+        assertEquals(15L, log.endOffset().offset);
+        assertEquals(2, log.lastFetchedEpoch());
+    }
+
     private Optional<OffsetRange> readOffsets(long startOffset, Isolation isolation) {
         Records records = log.read(startOffset, isolation).records;
         long firstReadOffset = -1L;
