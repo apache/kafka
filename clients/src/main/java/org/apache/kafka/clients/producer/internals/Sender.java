@@ -455,7 +455,8 @@ public class Sender implements Runnable {
                 maybeFindCoordinatorAndRetry(nextRequestHandler);
                 return true;
             } else {
-                log.trace("No nodes available to send requests, polling until a node is ready.");
+                log.trace("No nodes available to send requests, will poll and retry when until a node is ready.");
+                transactionManager.retry(nextRequestHandler);
                 client.poll(retryBackoffMs, time.milliseconds());
                 return true;
             }
