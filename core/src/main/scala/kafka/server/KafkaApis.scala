@@ -1314,10 +1314,17 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (authorizedTopics.isEmpty)
         Seq.empty[MetadataResponseTopic]
       else {
-        // If this request is to get metadata for all topics, auto topic creation should not be allowed
+        // KAFKA-10606: If this request is to get metadata for all topics, auto topic creation should not be allowed
+        // The special handling is necessary on broker side because allowAutoTopicCreation is hard coded to true
+        // for backward compatibility on client side.
         val allowAutoTopicCreation = (!metadataRequest.isAllTopics) && metadataRequest.allowAutoTopicCreation
-        getTopicMetadata(allowAutoTopicCreation, authorizedTopics, request.context.listenerName,
-          errorUnavailableEndpoints, errorUnavailableListeners)
+        getTopicMetadata(
+          allowAutoTopicCreation,
+          authorizedTopics,
+          request.context.listenerName,
+          errorUnavailableEndpoints,
+          errorUnavailableListeners
+        )
       }
 
     var clusterAuthorizedOperations = Int.MinValue
