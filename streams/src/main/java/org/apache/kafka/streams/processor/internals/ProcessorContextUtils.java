@@ -20,7 +20,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+
 
 /**
  * This class bridges the gap for components that _should_ be compatible with
@@ -32,33 +32,6 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 public final class ProcessorContextUtils {
 
     private ProcessorContextUtils() {}
-
-    /**
-     * Note that KIP-622 would move currentSystemTimeMs to ProcessorContext,
-     * removing the need for this method.
-     */
-    public static long getCurrentSystemTime(final ProcessorContext context) {
-        return context instanceof InternalProcessorContext
-            ? ((InternalProcessorContext) context).currentSystemTimeMs()
-            : System.currentTimeMillis();
-    }
-
-    /**
-     * Should be removed as part of KAFKA-10217
-     */
-    public static StreamsMetricsImpl getMetricsImpl(final ProcessorContext context) {
-        return (StreamsMetricsImpl) context.metrics();
-    }
-
-    public static InternalProcessorContext asInternalProcessorContext(final ProcessorContext context) {
-        if (context instanceof InternalProcessorContext) {
-            return (InternalProcessorContext) context;
-        } else {
-            throw new IllegalArgumentException(
-                "This component requires internal features of Kafka Streams and must be disabled for unit tests."
-            );
-        }
-    }
 
     public static Serializer<?> getKeySerializer(final ProcessorContext processorContext) {
         return getSerializer(processorContext, true);
