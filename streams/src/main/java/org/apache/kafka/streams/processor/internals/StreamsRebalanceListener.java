@@ -56,7 +56,7 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
             log.error("Received error code {}", AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA);
             throw new MissingSourceTopicException("One or more source topics were missing during rebalance");
         } else if (assignmentErrorCode.get() == AssignorError.VERSION_PROBING.code()) {
-            log.info("Received error code {}", AssignorError.VERSION_PROBING);
+            log.info("Received version probing code {}", AssignorError.VERSION_PROBING);
         }  else if (assignmentErrorCode.get() == AssignorError.ASSIGNMENT_ERROR.code()) {
             log.error("Received error code {}", AssignorError.ASSIGNMENT_ERROR);
             throw new TaskAssignmentException("Hit an unexpected exception during task assignment phase of rebalance");
