@@ -122,7 +122,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private final Time time;
     private final int electionBackoffMaxMs;
     private final int fetchMaxWaitMs;
-    private final int lingerMs;
+    private final int appendLingerMs;
     private final KafkaRaftMetrics kafkaRaftMetrics;
     private final NetworkChannel channel;
     private final ReplicatedLog log;
@@ -162,7 +162,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             raftConfig.retryBackoffMs(),
             raftConfig.requestTimeoutMs(),
             1000,
-            raftConfig.lingerMs(),
+            raftConfig.appendLingerMs(),
             logContext,
             new Random());
     }
@@ -182,7 +182,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         int retryBackoffMs,
         int requestTimeoutMs,
         int fetchMaxWaitMs,
-        int lingerMs,
+        int appendLingerMs,
         LogContext logContext,
         Random random
     ) {
@@ -196,7 +196,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         this.time = time;
         this.electionBackoffMaxMs = electionBackoffMaxMs;
         this.fetchMaxWaitMs = fetchMaxWaitMs;
-        this.lingerMs = lingerMs;
+        this.appendLingerMs = appendLingerMs;
         this.logger = logContext.logger(KafkaRaftClient.class);
         this.random = random;
         this.requestManager = new RequestManager(voterAddresses.keySet(), retryBackoffMs, requestTimeoutMs, random);
@@ -303,7 +303,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         accumulator = new BatchAccumulator<>(
             quorum.epoch(),
             log.endOffset().offset,
-            lingerMs,
+            appendLingerMs,
             MAX_BATCH_SIZE,
             memoryPool,
             time,

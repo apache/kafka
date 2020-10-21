@@ -55,7 +55,7 @@ public class RaftConfig extends AbstractConfig {
     private static final String QUORUM_ELECTION_BACKOFF_MAX_MS_DOC = "Maximum time in milliseconds before starting new elections. " +
         "This is used in the binary exponential backoff mechanism that helps prevent gridlocked elections";
 
-    public static final String QUORUM_LINGER_MS_CONFIG = QUORUM_PREFIX + "linger.ms";
+    public static final String QUORUM_LINGER_MS_CONFIG = QUORUM_PREFIX + "append.linger.ms";
     private static final String QUORUM_LINGER_MS_DOC = "The duration in milliseconds that the leader will " +
         "wait for writes to accumulate before flushing them to disk.";
 
@@ -173,7 +173,7 @@ public class RaftConfig extends AbstractConfig {
         return getInt(QUORUM_FETCH_TIMEOUT_MS_CONFIG);
     }
 
-    public int lingerMs() {
+    public int appendLingerMs() {
         return getInt(QUORUM_LINGER_MS_CONFIG);
     }
 
