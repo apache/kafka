@@ -57,6 +57,12 @@ public interface RaftClient<T> {
      * the log and eventually committed. However, it is guaranteed that if any of the
      * records become committed, then all of them will be.
      *
+     * If the provided current leader epoch does not match the current epoch, which
+     * is possible when the state machine has yet to observe the epoch change, then
+     * this method will return {@link Long#MAX_VALUE} to indicate an offset which is
+     * not possible to become committed. The state machine is expected to discard all
+     * uncommitted entries after observing an epoch change.
+     *
      * @param epoch the current leader epoch
      * @param records the list of records to append
      * @return the offset within the current epoch that the log entries will be appended,

@@ -330,7 +330,7 @@ class TestRaftServer(
         }
 
         val offset = client.scheduleAppend(latestLeaderAndEpoch.epoch, Collections.singletonList(payload))
-        if (offset == null || offset == Long.MaxValue) {
+        if (offset == null) {
           time.sleep(10)
         } else {
           pendingAppends.offer(PendingAppend(latestLeaderAndEpoch.epoch, offset, sendTimeMs))
