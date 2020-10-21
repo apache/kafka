@@ -30,7 +30,6 @@ import kafka.network.SocketServer
 import kafka.raft.{KafkaFuturePurgatory, KafkaMetadataLog, KafkaNetworkChannel}
 import kafka.security.CredentialProvider
 import kafka.server.{BrokerTopicStats, KafkaConfig, KafkaRequestHandlerPool, KafkaServer, LogDirFailureChannel}
-import kafka.tools.TestRaftServer.{ByteArraySerde, PendingAppend, ThroughputThrottler, WriteStats}
 import kafka.utils.timer.SystemTimer
 import kafka.utils.{CommandDefaultOptions, CommandLineUtils, CoreUtils, Exit, KafkaScheduler, Logging, ShutdownableThread}
 import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ManualMetadataUpdater, NetworkClient}
@@ -38,7 +37,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ChannelBuilders, NetworkReceive, Selectable, Selector}
-import org.apache.kafka.common.protocol.DataOutputStreamWritable
+import org.apache.kafka.common.protocol.Writable
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
@@ -57,6 +56,7 @@ class TestRaftServer(
   val throughput: Int,
   val recordSize: Int
 ) extends Logging {
+  import kafka.tools.TestRaftServer._
 
   private val partition = new TopicPartition("__cluster_metadata", 0)
   private val time = Time.SYSTEM
@@ -347,8 +347,8 @@ class TestRaftServer(
       for (record <- records.asScala) {
         val pendingAppend = pendingAppends.poll()
         if (pendingAppend.epoch != epoch || pendingAppend.offset!= offset) {
-          warn(s"Expected next commit at offset ${pendingAppend.offset}, " +
-            s"but received record at offset $offset")
+          throw new IllegalStateException(s"Committed record $record from `handleCommit` does not " +
+            s"match the next expected append $pendingAppend" )
         } else {
           val latencyMs = math.max(0, currentTimeMs - pendingAppend.appendTimeMs)
           stats.record(latencyMs, record.length, currentTimeMs)
@@ -396,7 +396,11 @@ object TestRaftServer extends Logging {
     epoch: Int,
     offset: Long,
     appendTimeMs: Long
-  )
+  ) {
+    override def toString: String = {
+      s"PendingAppend(epoch=$epoch, offset=$offset, appendTimeMs=$appendTimeMs)"
+    }
+  }
 
   private class ByteArraySerde extends RecordSerde[Array[Byte]] {
     override def newWriteContext(): AnyRef = null
@@ -405,7 +409,7 @@ object TestRaftServer extends Logging {
       data.length
     }
 
-    override def write(data: Array[Byte], context: Any, out: DataOutputStreamWritable): Unit = {
+    override def write(data: Array[Byte], context: Any, out: Writable): Unit = {
       out.writeByteArray(data)
     }
   }
