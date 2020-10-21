@@ -43,13 +43,14 @@ object AzPubSubAclCommand extends Logging {
 }
 
 class AzPubSubAdminClientService(opts: AzPubSubAclCommandOptions) extends AdminClientService(opts) {
+
   override def printAcls(filters: Set[ResourcePatternFilter], listPrincipals: Set[KafkaPrincipal], resourceToAcls: Map[ResourcePattern, Set[AccessControlEntry]]): Unit = {
     if (!opts.options.has(opts.outputAsProducerConsumerOpt)) {
       super.printAcls(filters, listPrincipals, resourceToAcls)
       return
     }
     if (listPrincipals.isEmpty) {
-      var producerConsumerAclMap = aclToProducerConsumerMapping(resourceToAcls);
+      val producerConsumerAclMap = aclToProducerConsumerMapping(resourceToAcls);
       outputAsJson(producerConsumerAclMap)
     }
     else {
