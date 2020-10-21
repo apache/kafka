@@ -61,7 +61,7 @@ import org.apache.kafka.common.requests.LeaveGroupResponse;
  *     <li>Typically an {@code all()} method is provided for getting the overall success/failure of the batch and a
  *     {@code values()} method provided access to each item in a request batch.
  *     Other methods may also be provided.
- *     <li>For synchronous behaviour use {@link org.apache.kafka.common.KafkaFuture#get}
+ *     <li>For synchronous behaviour use {@link org.apache.kafka.common.KafkaFuture#get()}
  * </ul>
  * <p>
  * Here is a simple example of using an Admin client instance to create a new topic:
@@ -519,7 +519,6 @@ public interface Admin extends AutoCloseable {
      *
      * @param replicaAssignment     The replicas with their log directory absolute path
      * @return                      The AlterReplicaLogDirsResult
-     * @throws InterruptedException Interrupted while joining I/O thread
      */
     default AlterReplicaLogDirsResult alterReplicaLogDirs(Map<TopicPartitionReplica, String> replicaAssignment) {
         return alterReplicaLogDirs(replicaAssignment, new AlterReplicaLogDirsOptions());
@@ -538,7 +537,6 @@ public interface Admin extends AutoCloseable {
      * @param replicaAssignment     The replicas with their log directory absolute path
      * @param options               The options to use when changing replica dir
      * @return                      The AlterReplicaLogDirsResult
-     * @throws InterruptedException Interrupted while joining I/O thread
      */
     AlterReplicaLogDirsResult alterReplicaLogDirs(Map<TopicPartitionReplica, String> replicaAssignment,
                                                   AlterReplicaLogDirsOptions options);
