@@ -22,6 +22,8 @@ object AzPubSubAclCommand extends Logging {
 
     val aclCommandService = new AzPubSubAdminClientService(opts)
 
+    var exitCode = 0
+
     try {
       if (opts.options.has(opts.addOpt))
         aclCommandService.addAcls()
@@ -33,8 +35,47 @@ object AzPubSubAclCommand extends Logging {
       case e: Throwable =>
         println(s"Error while executing ACL command: ${e.getMessage}")
         println(Utils.stackTrace(e))
-        Exit.exit(1)
+        exitCode = 1
+    } finally {
+      Exit.exit(exitCode)
     }
+  }
+}
+
+class AzPubSubAdminClientService(opts: AzPubSubAclCommandOptions) extends AdminClientService(opts) {
+  override def printAcls(filters: Set[ResourcePatternFilter], listPrincipals: Set[KafkaPrincipal], resourceToAcls: Map[ResourcePattern, Set[AccessControlEntry]]): Unit = {
+    if (!opts.options.has(opts.outputAsProducerConsumerOpt)) {
+      super.printAcls(filters, listPrincipals, resourceToAcls)
+      return
+    }
+    if (listPrincipals.isEmpty) {
+      var producerConsumerAclMap = aclToProducerConsumerMapping(resourceToAcls);
+      outputAsJson(producerConsumerAclMap)
+    }
+    else {
+      val allPrincipalsFilteredResourceToAcls = resourceToAcls.mapValues(acls =>
+        acls.filterNot(acl => listPrincipals.forall(
+          principal => !principal.toString.equals(acl.principal)))).filter(entry => entry._2.nonEmpty)
+      var producerConsumerAclMap = aclToProducerConsumerMapping(allPrincipalsFilteredResourceToAcls)
+      outputAsJson(producerConsumerAclMap)
+    }
+  }
+
+  def outputAsJson(filteredResourceToAcls: mutable.Map[ResourcePattern, mutable.Set[AzPubSubAccessControlEntry]]): Unit = {
+    val resourceList = mutable.Set[Any]()
+    for ((resource, acls) <- filteredResourceToAcls) {
+      resourceList.add(mutable.Map("acls" -> acls.map(x => mutable.Map("principal" -> x.principal(),
+        "host" -> x.host(),
+        "operation" -> x.operation().toString,
+        "aggregatedOperation" -> x.aggregatedOperation(),
+        "permissionType" -> x.permissionType().toString).asJava).asJava,
+        "resourceType" -> resource.resourceType().toString,
+        "name" -> resource.name(), "patternType" -> resource.patternType().toString
+      ).asJava)
+    }
+    val aclResponse = Json.encodeAsString(Map("resources" -> resourceList.asJava).asJava)
+    println("Received Acl information from Kafka")
+    println(aclResponse)
   }
 
   def GetProducerAclOperations(): Set[AclOperation] = {
@@ -127,45 +168,6 @@ object AzPubSubAclCommand extends Logging {
       }}
     })
     return producerConsumerGroupAclMap
-  }
-}
-
-class AzPubSubAdminClientService(opts: AzPubSubAclCommandOptions) extends AdminClientService(opts) {
-
-  override def printAcls(filters: Set[ResourcePatternFilter], listPrincipals: Set[KafkaPrincipal], resourceToAcls: Map[ResourcePattern, Set[AccessControlEntry]]): Unit = {
-    if (!opts.options.has(opts.outputAsProducerConsumerOpt)) {
-      super.printAcls(filters, listPrincipals, resourceToAcls)
-      return
-    }
-
-    if (listPrincipals.isEmpty) {
-      var producerConsumerAclMap = AzPubSubAclCommand.aclToProducerConsumerMapping(resourceToAcls);
-      outputAsJson(producerConsumerAclMap)
-    }
-    else {
-      val allPrincipalsFilteredResourceToAcls = resourceToAcls.mapValues(acls =>
-        acls.filterNot(acl => listPrincipals.forall(
-          principal => !principal.toString.equals(acl.principal)))).filter(entry => entry._2.nonEmpty)
-      var producerConsumerAclMap = AzPubSubAclCommand.aclToProducerConsumerMapping(allPrincipalsFilteredResourceToAcls)
-      outputAsJson(producerConsumerAclMap)
-    }
-  }
-
-  def outputAsJson(filteredResourceToAcls: mutable.Map[ResourcePattern, mutable.Set[AzPubSubAccessControlEntry]]): Unit = {
-    val resourceList = mutable.Set[Any]()
-    for ((resource, acls) <- filteredResourceToAcls) {
-      resourceList.add(mutable.Map("acls" -> acls.map(x => mutable.Map("principal" -> x.principal(),
-        "host" -> x.host(),
-        "operation" -> x.operation().toString,
-        "aggregatedOperation" -> x.aggregatedOperation(),
-        "permissionType" -> x.permissionType().toString).asJava).asJava,
-        "resourceType" -> resource.resourceType().toString,
-        "name" -> resource.name(), "patternType" -> resource.patternType().toString
-      ).asJava)
-    }
-    val aclResponse = Json.encodeAsString(Map("resources" -> resourceList.asJava).asJava)
-    println("Received Acl information from Kafka")
-    println(aclResponse)
   }
 }
 
