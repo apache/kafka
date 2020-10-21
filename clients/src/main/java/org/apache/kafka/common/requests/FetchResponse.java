@@ -32,6 +32,7 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MultiRecordsSend;
 
 import java.nio.ByteBuffer;
+import java.util.AbstractMap;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -374,6 +375,22 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         return responseMap;
     }
 
+    private static <T> List<Map.Entry<String, LinkedHashMap<Integer, T>>> batchByTopic(Iterator<Map.Entry<TopicPartition, T>> iter) {
+        List<Map.Entry<String, LinkedHashMap<Integer, T>>> topics = new ArrayList<>();
+        while (iter.hasNext()) {
+            Map.Entry<TopicPartition, T> topicEntry = iter.next();
+            String topic = topicEntry.getKey().topic();
+            int partition = topicEntry.getKey().partition();
+            T partitionData = topicEntry.getValue();
+            // keep the input order
+            // see https://github.com/apache/kafka/commit/d04b0998c043a6a430921585ffd4c42572a3bf5a
+            if (topics.isEmpty() || !topics.get(topics.size() - 1).getKey().equals(topic))
+                topics.add(new AbstractMap.SimpleEntry<>(topic, new LinkedHashMap<>()));
+            topics.get(topics.size() - 1).getValue().put(partition, partitionData);
+        }
+        return topics;
+    }
+
     private static <T extends BaseRecords> FetchResponseData toMessage(int throttleTimeMs, Errors error,
                                                                        Iterator<Map.Entry<TopicPartition, PartitionData<T>>> partIterator,
                                                                        int sessionId) {
@@ -383,17 +400,16 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         message.setSessionId(sessionId);
 
         List<FetchResponseData.FetchableTopicResponse> topicResponseList = new ArrayList<>();
-        List<FetchRequest.TopicAndPartitionData<PartitionData<T>>> topicsData =
-                FetchRequest.TopicAndPartitionData.batchByTopic(partIterator);
+        List<Map.Entry<String, LinkedHashMap<Integer, PartitionData<T>>>> topicsData = FetchResponse.batchByTopic(partIterator);
         topicsData.forEach(partitionDataTopicAndPartitionData -> {
             List<FetchResponseData.FetchablePartitionResponse> partitionResponses = new ArrayList<>();
-            partitionDataTopicAndPartitionData.partitions.forEach((partitionId, partitionData) -> {
+            partitionDataTopicAndPartitionData.getValue().forEach((partitionId, partitionData) -> {
                 // Since PartitionData alone doesn't know the partition ID, we set it here
                 partitionData.partitionResponse.setPartition(partitionId);
                 partitionResponses.add(partitionData.partitionResponse);
             });
             topicResponseList.add(new FetchResponseData.FetchableTopicResponse()
-                .setTopic(partitionDataTopicAndPartitionData.topic)
+                .setTopic(partitionDataTopicAndPartitionData.getKey())
                 .setPartitionResponses(partitionResponses));
         });
 
