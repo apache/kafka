@@ -192,7 +192,11 @@ public class TaskManager {
                 // this call is only used for active tasks to flush the cache before suspending and
                 // closing the topology
                 task.prepareCommit();
+            } catch (final RuntimeException swallow) {
+                log.error("Error flushing cache for corrupted task {} ", task.id(), swallow);
+            }
 
+            try {
                 task.suspend();
                 // we need to enforce a checkpoint that removes the corrupted partitions
                 task.postCommit(true);
