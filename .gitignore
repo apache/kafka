@@ -51,5 +51,7 @@ docs/generated/
 kafkatest.egg-info/
 systest/
 *.swp
+streams/src/generated
 clients/src/generated
 clients/src/generated-test
+raft/
