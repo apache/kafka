@@ -257,7 +257,7 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
 
         if (valueSchema.isOptional())
             builder.optional();
-        if (valueSchema.defaultValue() != null)
+        if (valueSchema.defaultValue() != null && SUPPORTED_CAST_OUTPUT_TYPES.contains(builder.type()))
             builder.defaultValue(castValueToType(valueSchema, valueSchema.defaultValue(), builder.type()));
 
         updatedSchema = builder.build();

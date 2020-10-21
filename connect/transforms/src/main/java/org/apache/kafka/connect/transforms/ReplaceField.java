@@ -236,16 +236,22 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
 
             for (Field field : schema.fields()) {
                 if (filter(field.name())) {
+                    String updatedName = renamed(field.name());
+
+                    // If field has already been added then skip adding it again. This will allow rename of multiple "can contain only one of" kind of fields into one common name.
+                    if (builder.field(updatedName) != null)
+                        continue;
+
                     if (isRecursive && 
                             (field.schema().type() == Schema.Type.STRUCT 
                             || field.schema().type() == Schema.Type.ARRAY 
                             || field.schema().type() == Schema.Type.MAP)
                             ) { 
                         Schema updatedChildSchema = getOrBuildUpdatedSchema(field.schema());
-                        builder.field(renamed(field.name()), updatedChildSchema);
+                        builder.field(updatedName, updatedChildSchema);
                     }
                     else // This is where all non-parent Schema fields should be added (is not recursive, or we are at the bottom of a recursion) 
-                        builder.field(renamed(field.name()), field.schema());
+                        builder.field(updatedName, field.schema());
                 }
             }
 
@@ -320,18 +326,31 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
             Struct updatedStruct = new Struct(updatedSchema);
 
             for (Field field : struct.schema().fields()) {
+                Object fieldValue = struct.get(field);
+
+                // If the value is empty, skip it. It will still be in the value Struct at the end if the field exists in the schema, 
+                //  but by doing this then this will allow rename of multiple "can contain only one of" kind of fields into one common name
+                if (fieldValue == null)
+                    continue;
+
                 if (filter(field.name())) {
+                    String updatedName = renamed(field.name());
+
+                    // If field value has already been added then throw an exception.
+                    if (updatedStruct.get(updatedName) != null)
+                        throw new DataException("Duplicate target field '" + updatedName + "' already exists in the transformed value.");
+
                     if (isRecursive && 
                             (field.schema().type() == Schema.Type.STRUCT 
                             || field.schema().type() == Schema.Type.ARRAY 
                             || field.schema().type() == Schema.Type.MAP)
                             ) {
                         Schema updatedChildSchema = getOrBuildUpdatedSchema(field.schema());
-                        Object updatedChildValue = buildUpdatedSchemaValue(struct.get(field), updatedChildSchema);
+                        Object updatedChildValue = buildUpdatedSchemaValue(fieldValue, updatedChildSchema);
                         updatedStruct.put(updatedSchema.field(renamed(field.name())), updatedChildValue);
                     }
                     else // This is where most non-parent Value fields should be added (Struct fields that match the filter(), and either we are not using recursion or we are at the bottom of any nested Struct)
-                        updatedStruct.put(updatedSchema.field(renamed(field.name())), struct.get(field));
+                        updatedStruct.put(updatedSchema.field(renamed(field.name())), fieldValue);
                 }
             }
             return updatedStruct;

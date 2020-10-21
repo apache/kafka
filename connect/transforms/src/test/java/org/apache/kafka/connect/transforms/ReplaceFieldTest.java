@@ -19,6 +19,7 @@ package org.apache.kafka.connect.transforms;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.After;
 import org.junit.Test;
@@ -373,6 +374,62 @@ public class ReplaceFieldTest {
         assertEquals(2, updatedMap_do_array_1.schema().fields().size());
         assertEquals(42, updatedMap_do_array_1.get("xyz"));
         assertEquals(true, updatedMap_do_array_1.get("bar"));
+    }
+
+    @Test
+    public void withSchemaRenameContainsOne() {
+        // This is a somewhat special case where if a schema has multiple optional fields, but a design rule that says 
+        //   each record "must contain exactly one of these fields," then you can use renames to consolidate all of these 
+        //   possible fields into one field as a result of the transformation.
+        // Note that if a value exists in more than one of the fields which have the same target rename, then the transformation will fail.
+        final Map<String, Object> props = new HashMap<>();
+        props.put(ReplaceField.ConfigName.RENAME, "value_one:value,value_two:value,value_three:value");
+
+        xform.configure(props);
+
+        final Schema schema = SchemaBuilder.struct()
+                .field("value_one", Schema.OPTIONAL_INT32_SCHEMA)
+                .field("value_two", Schema.OPTIONAL_INT32_SCHEMA)
+                .field("value_three", Schema.OPTIONAL_INT32_SCHEMA)
+                .build();
+
+        final Struct value = new Struct(schema)
+                .put("value_two", 42);
+
+        final SinkRecord record = new SinkRecord("test", 0, null, null, schema, value, 0);
+        final SinkRecord transformedRecord = xform.apply(record);
+
+        final Struct updatedValue = (Struct) transformedRecord.value();
+
+        assertEquals(1, updatedValue.schema().fields().size());
+        assertEquals(Integer.valueOf(42), updatedValue.getInt32("value"));
+    }
+
+    @Test(expected = DataException.class)
+    public void withSchemaRenameContainsOneMultipleValues() {
+        // This test is for the expected failure case of the above withSchemaRenameContainsOne (more than one value exists for the target rename).
+        final Map<String, Object> props = new HashMap<>();
+        props.put(ReplaceField.ConfigName.RENAME, "value_one:value,value_two:value,value_three:value");
+
+        xform.configure(props);
+
+        final Schema schema = SchemaBuilder.struct()
+                .field("value_one", Schema.OPTIONAL_INT32_SCHEMA)
+                .field("value_two", Schema.OPTIONAL_INT32_SCHEMA)
+                .field("value_three", Schema.OPTIONAL_INT32_SCHEMA)
+                .build();
+
+        final Struct value = new Struct(schema)
+                .put("value_two", 42)
+                .put("value_three", 15);
+
+        final SinkRecord record = new SinkRecord("test", 0, null, null, schema, value, 0);
+        final SinkRecord transformedRecord = xform.apply(record);
+
+        final Struct updatedValue = (Struct) transformedRecord.value();
+
+        assertEquals(1, updatedValue.schema().fields().size());
+        assertEquals(Integer.valueOf(42), updatedValue.getInt32("value"));
     }
 
 }
