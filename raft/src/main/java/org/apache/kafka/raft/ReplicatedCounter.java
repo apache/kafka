@@ -63,9 +63,11 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
         if (!isWritable())
             throw new KafkaException("Counter is not currently writable");
         uncommitted += 1;
-        long offset = client.scheduleAppend(currentLeaderAndEpoch.epoch, Collections.singletonList(uncommitted));
-        log.debug("Appended record {} with epoch {} at offset {}",
-            uncommitted, currentLeaderAndEpoch.epoch, offset);
+        Long offset = client.scheduleAppend(currentLeaderAndEpoch.epoch, Collections.singletonList(uncommitted));
+        if (offset != null) {
+            log.debug("Scheduled append of record {} with epoch {} at offset {}",
+                uncommitted, currentLeaderAndEpoch.epoch, offset);
+        }
     }
 
     @Override

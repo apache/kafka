@@ -240,8 +240,6 @@ public class BatchAccumulator<T> implements Closeable {
     /**
      * Get the number of batches including the one that is currently being
      * written to (if it exists).
-     *
-     * @return
      */
     public int count() {
         lock.lock();
