@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.test;
 
+import java.io.FileWriter;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Cluster;
@@ -63,12 +64,11 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static java.util.Arrays.asList;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Helper functions for writing unit tests
@@ -97,7 +97,7 @@ public class TestUtils {
     }
 
     public static Cluster clusterWith(int nodes) {
-        return clusterWith(nodes, new HashMap<String, Integer>());
+        return clusterWith(nodes, new HashMap<>());
     }
 
     public static Cluster clusterWith(final int nodes, final Map<String, Integer> topicPartitionCounts) {
@@ -119,17 +119,35 @@ public class TestUtils {
         return metadataUpdateWith("kafka-cluster", numNodes, topicPartitionCounts);
     }
 
+    public static MetadataResponse metadataUpdateWith(final int numNodes,
+                                                      final Map<String, Integer> topicPartitionCounts,
+                                                      final Function<TopicPartition, Integer> epochSupplier) {
+        return metadataUpdateWith("kafka-cluster", numNodes, Collections.emptyMap(),
+            topicPartitionCounts, epochSupplier, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion());
+    }
+
     public static MetadataResponse metadataUpdateWith(final String clusterId,
                                                       final int numNodes,
                                                       final Map<String, Integer> topicPartitionCounts) {
-        return metadataUpdateWith(clusterId, numNodes, Collections.emptyMap(), topicPartitionCounts, tp -> null, MetadataResponse.PartitionMetadata::new);
+        return metadataUpdateWith(clusterId, numNodes, Collections.emptyMap(),
+            topicPartitionCounts, tp -> null, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion());
     }
 
     public static MetadataResponse metadataUpdateWith(final String clusterId,
                                                       final int numNodes,
                                                       final Map<String, Errors> topicErrors,
                                                       final Map<String, Integer> topicPartitionCounts) {
-        return metadataUpdateWith(clusterId, numNodes, topicErrors, topicPartitionCounts, tp -> null, MetadataResponse.PartitionMetadata::new);
+        return metadataUpdateWith(clusterId, numNodes, topicErrors,
+            topicPartitionCounts, tp -> null, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion());
+    }
+
+    public static MetadataResponse metadataUpdateWith(final String clusterId,
+                                                      final int numNodes,
+                                                      final Map<String, Errors> topicErrors,
+                                                      final Map<String, Integer> topicPartitionCounts,
+                                                      final short responseVersion) {
+        return metadataUpdateWith(clusterId, numNodes, topicErrors,
+            topicPartitionCounts, tp -> null, MetadataResponse.PartitionMetadata::new, responseVersion);
     }
 
     public static MetadataResponse metadataUpdateWith(final String clusterId,
@@ -137,7 +155,8 @@ public class TestUtils {
                                                       final Map<String, Errors> topicErrors,
                                                       final Map<String, Integer> topicPartitionCounts,
                                                       final Function<TopicPartition, Integer> epochSupplier) {
-        return metadataUpdateWith(clusterId, numNodes, topicErrors, topicPartitionCounts, epochSupplier, MetadataResponse.PartitionMetadata::new);
+        return metadataUpdateWith(clusterId, numNodes, topicErrors,
+            topicPartitionCounts, epochSupplier, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion());
     }
 
     public static MetadataResponse metadataUpdateWith(final String clusterId,
@@ -145,7 +164,8 @@ public class TestUtils {
                                                       final Map<String, Errors> topicErrors,
                                                       final Map<String, Integer> topicPartitionCounts,
                                                       final Function<TopicPartition, Integer> epochSupplier,
-                                                      final PartitionMetadataSupplier partitionSupplier) {
+                                                      final PartitionMetadataSupplier partitionSupplier,
+                                                      final short responseVersion) {
         final List<Node> nodes = new ArrayList<>(numNodes);
         for (int i = 0; i < numNodes; i++)
             nodes.add(new Node(i, "localhost", 1969 + i));
@@ -175,7 +195,7 @@ public class TestUtils {
                     Topic.isInternal(topic), Collections.emptyList()));
         }
 
-        return MetadataResponse.prepareResponse(nodes, clusterId, 0, topicMetadata);
+        return MetadataResponse.prepareResponse(nodes, clusterId, 0, topicMetadata, responseVersion);
     }
 
     @FunctionalInterface
@@ -224,6 +244,19 @@ public class TestUtils {
     public static File tempFile() throws IOException {
         final File file = File.createTempFile("kafka", ".tmp");
         file.deleteOnExit();
+
+        return file;
+    }
+
+    /**
+     * Create a file with the given contents in the default temporary-file directory,
+     * using `kafka` as the prefix and `tmp` as the suffix to generate its name.
+     */
+    public static File tempFile(final String contents) throws IOException {
+        final File file = tempFile();
+        final FileWriter writer = new FileWriter(file);
+        writer.write(contents);
+        writer.close();
 
         return file;
     }
@@ -361,11 +394,11 @@ public class TestUtils {
      * avoid transient failures due to slow or overloaded machines.
      */
     public static void waitForCondition(final TestCondition testCondition, final long maxWaitMs, Supplier<String> conditionDetailsSupplier) throws InterruptedException {
-        String conditionDetailsSupplied = conditionDetailsSupplier != null ? conditionDetailsSupplier.get() : null;
-        String conditionDetails = conditionDetailsSupplied != null ? conditionDetailsSupplied : "";
         retryOnExceptionWithTimeout(maxWaitMs, () -> {
-            assertThat("Condition not met within timeout " + maxWaitMs + ". " + conditionDetails,
-                testCondition.conditionMet());
+            String conditionDetailsSupplied = conditionDetailsSupplier != null ? conditionDetailsSupplier.get() : null;
+            String conditionDetails = conditionDetailsSupplied != null ? conditionDetailsSupplied : "";
+            assertTrue(testCondition.conditionMet(),
+                "Condition not met within timeout " + maxWaitMs + ". " + conditionDetails);
         });
     }
 
@@ -520,8 +553,8 @@ public class TestUtils {
      */
     public static <T extends Throwable> T assertFutureThrows(Future<?> future, Class<T> exceptionCauseClass) {
         ExecutionException exception = assertThrows(ExecutionException.class, future::get);
-        assertTrue("Unexpected exception cause " + exception.getCause(),
-                exceptionCauseClass.isInstance(exception.getCause()));
+        assertTrue(exceptionCauseClass.isInstance(exception.getCause()),
+            "Unexpected exception cause " + exception.getCause());
         return exceptionCauseClass.cast(exception.getCause());
     }
 
@@ -532,9 +565,9 @@ public class TestUtils {
             fail("Expected a " + exceptionClass.getSimpleName() + " exception, but got success.");
         } catch (ExecutionException ee) {
             Throwable cause = ee.getCause();
-            assertEquals("Expected a " + exceptionClass.getSimpleName() + " exception, but got " +
-                    cause.getClass().getSimpleName(),
-                exceptionClass, cause.getClass());
+            assertEquals(exceptionClass, cause.getClass(),
+                "Expected a " + exceptionClass.getSimpleName() + " exception, but got " +
+                    cause.getClass().getSimpleName());
         }
     }
 

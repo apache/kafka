@@ -69,7 +69,7 @@ public interface ValueTransformer<V, VR> {
      * @throws IllegalStateException If store gets registered after initialization is already finished
      * @throws StreamsException if the store's change log does not contain the partition
      */
-    void init(final ProcessorContext<Void, Void> context);
+    void init(final ProcessorContext context);
 
     /**
      * Transform the given value to a new value.

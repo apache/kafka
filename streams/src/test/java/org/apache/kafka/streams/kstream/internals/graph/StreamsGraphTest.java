@@ -89,7 +89,7 @@ public class StreamsGraphTest {
         final Properties properties = new Properties();
         properties.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "test-application");
         properties.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
+        properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
 
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> inputStream = builder.stream("inputTopic");
@@ -118,7 +118,7 @@ public class StreamsGraphTest {
         final Properties properties = new Properties();
         properties.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "test-application");
         properties.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
+        properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
 
         final StreamsBuilder builder = new StreamsBuilder();
         initializer = () -> "";
@@ -194,9 +194,9 @@ public class StreamsGraphTest {
     }
 
     // no need to optimize as user has already performed the repartitioning manually
+    @Deprecated
     @Test
     public void shouldNotOptimizeWhenAThroughOperationIsDone() {
-
         final Topology attemptedOptimize = getTopologyWithThroughOperation(StreamsConfig.OPTIMIZE);
         final Topology noOptimziation = getTopologyWithThroughOperation(StreamsConfig.NO_OPTIMIZATION);
 
@@ -222,17 +222,27 @@ public class StreamsGraphTest {
             .to("output_topic");
 
         final Properties properties = new Properties();
-        properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
+        properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         final Topology topology = streamsBuilder.build(properties);
 
         assertEquals(expectedMergeOptimizedTopology, topology.describe().toString());
+    }
+
+    @Test
+    public void shouldNotOptimizeWhenRepartitionOperationIsDone() {
+        final Topology attemptedOptimize = getTopologyWithRepartitionOperation(StreamsConfig.OPTIMIZE);
+        final Topology noOptimziation = getTopologyWithRepartitionOperation(StreamsConfig.NO_OPTIMIZATION);
+
+        assertEquals(attemptedOptimize.describe().toString(), noOptimziation.describe().toString());
+        assertEquals(2, getCountOfRepartitionTopicsFound(attemptedOptimize.describe().toString()));
+        assertEquals(2, getCountOfRepartitionTopicsFound(noOptimziation.describe().toString()));
     }
 
     private Topology getTopologyWithChangingValuesAfterChangingKey(final String optimizeConfig) {
 
         final StreamsBuilder builder = new StreamsBuilder();
         final Properties properties = new Properties();
-        properties.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, optimizeConfig);
+        properties.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, optimizeConfig);
 
         final KStream<String, String> inputStream = builder.stream("input");
         final KStream<String, String> mappedKeyStream = inputStream.selectKey((k, v) -> k + v);
@@ -244,11 +254,12 @@ public class StreamsGraphTest {
 
     }
 
+    @Deprecated // specifically testing the deprecated variant
     private Topology getTopologyWithThroughOperation(final String optimizeConfig) {
 
         final StreamsBuilder builder = new StreamsBuilder();
         final Properties properties = new Properties();
-        properties.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, optimizeConfig);
+        properties.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, optimizeConfig);
 
         final KStream<String, String> inputStream = builder.stream("input");
         final KStream<String, String> mappedKeyStream = inputStream.selectKey((k, v) -> k + v).through("through-topic");
@@ -260,6 +271,31 @@ public class StreamsGraphTest {
 
     }
 
+    private Topology getTopologyWithRepartitionOperation(final String optimizeConfig) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final Properties properties = new Properties();
+        properties.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, optimizeConfig);
+
+        final KStream<String, String> inputStream = builder.<String, String>stream("input").selectKey((k, v) -> k + v);
+
+        inputStream
+            .repartition()
+            .groupByKey()
+            .count()
+            .toStream()
+            .to("output");
+
+        inputStream
+            .repartition()
+            .groupByKey()
+            .windowedBy(TimeWindows.of(ofMillis(5000)))
+            .count()
+            .toStream()
+            .to("windowed-output");
+
+        return builder.build(properties);
+    }
+
     private int getCountOfRepartitionTopicsFound(final String topologyString) {
         final Matcher matcher = repartitionTopicPattern.matcher(topologyString);
         final List<String> repartitionTopicsFound = new ArrayList<>();
@@ -269,7 +305,7 @@ public class StreamsGraphTest {
         return repartitionTopicsFound.size();
     }
 
-    private String expectedJoinedTopology = "Topologies:\n"
+    private final String expectedJoinedTopology = "Topologies:\n"
                                             + "   Sub-topology: 0\n"
                                             + "    Source: KSTREAM-SOURCE-0000000000 (topics: [topic])\n"
                                             + "      --> KSTREAM-WINDOWED-0000000002\n"
@@ -291,7 +327,7 @@ public class StreamsGraphTest {
                                             + "      --> none\n"
                                             + "      <-- KSTREAM-JOINTHIS-0000000004, KSTREAM-JOINOTHER-0000000005\n\n";
 
-    private String expectedJoinedFilteredTopology = "Topologies:\n"
+    private final String expectedJoinedFilteredTopology = "Topologies:\n"
                                                     + "   Sub-topology: 0\n"
                                                     + "    Source: KSTREAM-SOURCE-0000000000 (topics: [topic])\n"
                                                     + "      --> KSTREAM-WINDOWED-0000000002\n"
@@ -316,7 +352,7 @@ public class StreamsGraphTest {
                                                     + "      --> none\n"
                                                     + "      <-- KSTREAM-MERGE-0000000006\n\n";
 
-    private String expectedFullTopology = "Topologies:\n"
+    private final String expectedFullTopology = "Topologies:\n"
                                           + "   Sub-topology: 0\n"
                                           + "    Source: KSTREAM-SOURCE-0000000000 (topics: [topic])\n"
                                           + "      --> KSTREAM-WINDOWED-0000000002\n"
@@ -347,7 +383,7 @@ public class StreamsGraphTest {
                                           + "      <-- KSTREAM-MAPVALUES-0000000008\n\n";
 
 
-    private String expectedMergeOptimizedTopology = "Topologies:\n" +
+    private final String expectedMergeOptimizedTopology = "Topologies:\n" +
         "   Sub-topology: 0\n" +
         "    Source: KSTREAM-SOURCE-0000000000 (topics: [input_topic])\n" +
         "      --> KSTREAM-KEY-SELECT-0000000001\n" +

@@ -142,7 +142,7 @@ public class StreamsProducerTest {
         nonEosStreamsProducer =
             new StreamsProducer(
                 nonEosConfig,
-                "threadId",
+                "threadId-StreamThread-0",
                 mockClientSupplier,
                 null,
                 null,
@@ -155,7 +155,7 @@ public class StreamsProducerTest {
         eosAlphaStreamsProducer =
             new StreamsProducer(
                 eosAlphaConfig,
-                "threadId",
+                "threadId-StreamThread-0",
                 eosAlphaMockClientSupplier,
                 new TaskId(0, 0),
                 null,
@@ -169,7 +169,7 @@ public class StreamsProducerTest {
         eosBetaStreamsProducer =
             new StreamsProducer(
                 eosBetaConfig,
-                "threadId",
+                "threadId-StreamThread-0",
                 eosBetaMockClientSupplier,
                 null,
                 UUID.randomUUID(),
@@ -470,11 +470,11 @@ public class StreamsProducerTest {
         final UUID processId = UUID.randomUUID();
 
         final Map<String, Object> mockMap = mock(Map.class);
-        expect(mockMap.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "appId-" + processId)).andReturn(null);
+        expect(mockMap.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "appId-" + processId + "-0")).andReturn(null);
         expect(mockMap.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG)).andReturn("appId-" + processId);
 
         final StreamsConfig mockConfig = mock(StreamsConfig.class);
-        expect(mockConfig.getProducerConfigs("threadId-producer")).andReturn(mockMap);
+        expect(mockConfig.getProducerConfigs("threadId-StreamThread-0-producer")).andReturn(mockMap);
         expect(mockConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)).andReturn("appId");
         expect(mockConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)).andReturn(StreamsConfig.EXACTLY_ONCE_BETA).anyTimes();
 
@@ -482,7 +482,7 @@ public class StreamsProducerTest {
 
         new StreamsProducer(
             mockConfig,
-            "threadId",
+            "threadId-StreamThread-0",
             eosAlphaMockClientSupplier,
             null,
             processId,
@@ -605,7 +605,7 @@ public class StreamsProducerTest {
 
         final StreamsProducer streamsProducer = new StreamsProducer(
             eosBetaConfig,
-            "threadId",
+            "threadId-StreamThread-0",
             clientSupplier,
             null,
             UUID.randomUUID(),
@@ -737,7 +737,7 @@ public class StreamsProducerTest {
         final StreamsProducer streamsProducer =
             new StreamsProducer(
                 eosBetaConfig,
-                "threadId",
+                "threadId-StreamThread-0",
                 eosBetaMockClientSupplier,
                 null,
                 UUID.randomUUID(),
@@ -1076,7 +1076,7 @@ public class StreamsProducerTest {
     public void shouldResetTransactionInitializedOnResetProducer() {
         final StreamsProducer streamsProducer = new StreamsProducer(
             eosBetaConfig,
-            "threadId",
+            "threadId-StreamThread-0",
             clientSupplier,
             null,
             UUID.randomUUID(),

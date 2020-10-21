@@ -31,6 +31,7 @@ import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -63,20 +64,30 @@ public class MockAdminClient extends AdminClient {
         new HashMap<>();
     private final Map<TopicPartitionReplica, ReplicaLogDirInfo> replicaMoves =
         new HashMap<>();
+    private final Map<TopicPartition, Long> beginningOffsets;
+    private final Map<TopicPartition, Long> endOffsets;
     private final String clusterId;
     private final List<List<String>> brokerLogDirs;
     private final List<Map<String, String>> brokerConfigs;
 
     private Node controller;
     private int timeoutNextRequests = 0;
+    private final int defaultPartitions;
+    private final int defaultReplicationFactor;
 
     private Map<MetricName, Metric> mockMetrics = new HashMap<>();
+
+    public static Builder create() {
+        return new Builder();
+    }
 
     public static class Builder {
         private String clusterId = DEFAULT_CLUSTER_ID;
         private List<Node> brokers = new ArrayList<>();
         private Node controller = null;
         private List<List<String>> brokerLogDirs = new ArrayList<>();
+        private Short defaultPartitions;
+        private Integer defaultReplicationFactor;
 
         public Builder() {
             numBrokers(1);
@@ -116,32 +127,53 @@ public class MockAdminClient extends AdminClient {
             return this;
         }
 
+        public Builder defaultReplicationFactor(int defaultReplicationFactor) {
+            this.defaultReplicationFactor = defaultReplicationFactor;
+            return this;
+        }
+
+        public Builder defaultPartitions(short numPartitions) {
+            this.defaultPartitions = numPartitions;
+            return this;
+        }
+
         public MockAdminClient build() {
             return new MockAdminClient(brokers,
                 controller == null ? brokers.get(0) : controller,
                 clusterId,
+                defaultPartitions != null ? defaultPartitions.shortValue() : 1,
+                defaultReplicationFactor != null ? defaultReplicationFactor.shortValue() : Math.min(brokers.size(), 3),
                 brokerLogDirs);
         }
     }
 
-    public MockAdminClient(List<Node> brokers,
-                           Node controller) {
-        this(brokers, controller, DEFAULT_CLUSTER_ID,
+    public MockAdminClient() {
+        this(Collections.singletonList(Node.noNode()), Node.noNode());
+    }
+
+    public MockAdminClient(List<Node> brokers, Node controller) {
+        this(brokers, controller, DEFAULT_CLUSTER_ID, 1, brokers.size(),
             Collections.nCopies(brokers.size(), DEFAULT_LOG_DIRS));
     }
 
     private MockAdminClient(List<Node> brokers,
                             Node controller,
                             String clusterId,
+                            int defaultPartitions,
+                            int defaultReplicationFactor,
                             List<List<String>> brokerLogDirs) {
         this.brokers = brokers;
         controller(controller);
         this.clusterId = clusterId;
+        this.defaultPartitions = defaultPartitions;
+        this.defaultReplicationFactor = defaultReplicationFactor;
         this.brokerLogDirs = brokerLogDirs;
         this.brokerConfigs = new ArrayList<>();
         for (int i = 0; i < brokers.size(); i++) {
             this.brokerConfigs.add(new HashMap<>());
         }
+        this.beginningOffsets = new HashMap<>();
+        this.endOffsets = new HashMap<>();
     }
 
     synchronized public void controller(Node controller) {
@@ -239,10 +271,15 @@ public class MockAdminClient extends AdminClient {
                 continue;
             }
             int replicationFactor = newTopic.replicationFactor();
-            if (replicationFactor > brokers.size())
-                throw new IllegalArgumentException(
-                    String.format("NewTopic %s cannot have a replication factor of %d that is larger than the number of brokers %s",
-                        newTopic, replicationFactor, brokers));
+            if (replicationFactor == -1) {
+                replicationFactor = defaultReplicationFactor;
+            }
+            if (replicationFactor > brokers.size()) {
+                future.completeExceptionally(new InvalidReplicationFactorException(
+                        String.format("Replication factor: %d is larger than brokers: %d", newTopic.replicationFactor(), brokers.size())));
+                createTopicResult.put(topicName, future);
+                continue;
+            }
 
             List<Node> replicas = new ArrayList<>(replicationFactor);
             for (int i = 0; i < replicationFactor; ++i) {
@@ -250,6 +287,9 @@ public class MockAdminClient extends AdminClient {
             }
 
             int numberOfPartitions = newTopic.numPartitions();
+            if (numberOfPartitions == -1) {
+                numberOfPartitions = defaultPartitions;
+            }
             List<TopicPartitionInfo> partitions = new ArrayList<>(numberOfPartitions);
             // Partitions start off on the first log directory of each broker, for now.
             List<String> logDirs = new ArrayList<>(numberOfPartitions);
@@ -457,6 +497,19 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     synchronized public DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
+
+        if (timeoutNextRequests > 0) {
+            Map<ConfigResource, KafkaFuture<Config>> configs = new HashMap<>();
+            for (ConfigResource requestedResource : resources) {
+                KafkaFutureImpl<Config> future = new KafkaFutureImpl<>();
+                future.completeExceptionally(new TimeoutException());
+                configs.put(requestedResource, future);
+            }
+
+            --timeoutNextRequests;
+            return new DescribeConfigsResult(configs);
+        }
+
         Map<ConfigResource, KafkaFuture<Config>> results = new HashMap<>();
         for (ConfigResource resource : resources) {
             KafkaFutureImpl<Config> future = new KafkaFutureImpl<>();
@@ -473,7 +526,7 @@ public class MockAdminClient extends AdminClient {
     synchronized private Config getResourceDescription(ConfigResource resource) {
         switch (resource.type()) {
             case BROKER: {
-                int brokerId = Integer.valueOf(resource.name());
+                int brokerId = Integer.parseInt(resource.name());
                 if (brokerId >= brokerConfigs.size()) {
                     throw new InvalidRequestException("Broker " + resource.name() +
                         " not found.");
@@ -482,10 +535,13 @@ public class MockAdminClient extends AdminClient {
             }
             case TOPIC: {
                 TopicMetadata topicMetadata = allTopics.get(resource.name());
-                if (topicMetadata == null) {
-                    throw new UnknownTopicOrPartitionException();
+                if (topicMetadata != null && !topicMetadata.markedForDeletion) {
+                    if (topicMetadata.fetchesRemainingUntilVisible > 0)
+                        topicMetadata.fetchesRemainingUntilVisible = Math.max(0, topicMetadata.fetchesRemainingUntilVisible - 1);
+                    else return toConfigObject(topicMetadata.configs);
+
                 }
-                return toConfigObject(topicMetadata.configs);
+                throw new UnknownTopicOrPartitionException("Resource " + resource + " not found.");
             }
             default:
                 throw new UnsupportedOperationException("Not implemented yet");
@@ -740,7 +796,24 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     synchronized public ListOffsetsResult listOffsets(Map<TopicPartition, OffsetSpec> topicPartitionOffsets, ListOffsetsOptions options) {
-        throw new UnsupportedOperationException("Not implement yet");
+        Map<TopicPartition, KafkaFuture<ListOffsetsResult.ListOffsetsResultInfo>> futures = new HashMap<>();
+
+        for (Map.Entry<TopicPartition, OffsetSpec> entry : topicPartitionOffsets.entrySet()) {
+            TopicPartition tp = entry.getKey();
+            OffsetSpec spec = entry.getValue();
+            KafkaFutureImpl<ListOffsetsResult.ListOffsetsResultInfo> future = new KafkaFutureImpl<>();
+
+            if (spec instanceof OffsetSpec.TimestampSpec)
+                throw new UnsupportedOperationException("Not implement yet");
+            else if (spec instanceof OffsetSpec.EarliestSpec)
+                future.complete(new ListOffsetsResult.ListOffsetsResultInfo(beginningOffsets.get(tp), -1, Optional.empty()));
+            else
+                future.complete(new ListOffsetsResult.ListOffsetsResultInfo(endOffsets.get(tp), -1, Optional.empty()));
+
+            futures.put(tp, future);
+        }
+
+        return new ListOffsetsResult(futures);
     }
 
     @Override
@@ -754,7 +827,25 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
+    public DescribeUserScramCredentialsResult describeUserScramCredentials(List<String> users, DescribeUserScramCredentialsOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public AlterUserScramCredentialsResult alterUserScramCredentials(List<UserScramCredentialAlteration> alterations, AlterUserScramCredentialsOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
     synchronized public void close(Duration timeout) {}
+
+    public synchronized void updateBeginningOffsets(Map<TopicPartition, Long> newOffsets) {
+        beginningOffsets.putAll(newOffsets);
+    }
+
+    public synchronized void updateEndOffsets(final Map<TopicPartition, Long> newOffsets) {
+        endOffsets.putAll(newOffsets);
+    }
 
     private final static class TopicMetadata {
         final boolean isInternalTopic;

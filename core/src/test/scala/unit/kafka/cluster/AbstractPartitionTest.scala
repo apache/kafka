@@ -14,13 +14,12 @@
   * See the License for the specific language governing permissions and
   * limitations under the License.
   */
-package unit.kafka.cluster
+package kafka.cluster
 
 import java.io.File
 import java.util.Properties
 
 import kafka.api.ApiVersion
-import kafka.cluster.{DelayedOperations, Partition, PartitionStateStore}
 import kafka.log.{CleanerConfig, LogConfig, LogManager}
 import kafka.server.{Defaults, MetadataCache}
 import kafka.server.checkpoints.OffsetCheckpoints

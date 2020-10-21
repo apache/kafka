@@ -20,6 +20,8 @@ package kafka.log
 import java.io._
 import java.util.{Collections, Properties}
 
+import com.yammer.metrics.core.MetricName
+import kafka.metrics.KafkaYammerMetrics
 import kafka.server.{FetchDataInfo, FetchLogEnd}
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils._
@@ -33,6 +35,7 @@ import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{doAnswer, spy}
 
 import scala.collection.mutable
+import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Try}
 
 class LogManagerTest {
@@ -72,7 +75,7 @@ class LogManagerTest {
    */
   @Test
   def testCreateLog(): Unit = {
-    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), logConfig)
+    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), () => logConfig)
     assertEquals(1, logManager.liveLogDirs.size)
 
     val logFile = new File(logDir, name + "-0")
@@ -95,7 +98,7 @@ class LogManagerTest {
     logManager = createLogManager(dirs)
     logManager.startup()
 
-    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), logConfig, isNew = true)
+    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), () => logConfig, isNew = true)
     val logFile = new File(logDir, name + "-0")
     assertTrue(logFile.exists)
     log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
@@ -127,7 +130,7 @@ class LogManagerTest {
 
     // Request creating a new log.
     // LogManager should try using all configured log directories until one succeeds.
-    logManager.getOrCreateLog(new TopicPartition(name, 0), logConfig, isNew = true)
+    logManager.getOrCreateLog(new TopicPartition(name, 0), () => logConfig, isNew = true)
 
     // Verify that half the directories were considered broken,
     assertEquals(dirs.length / 2, brokenDirs.size)
@@ -156,7 +159,7 @@ class LogManagerTest {
    */
   @Test
   def testCleanupExpiredSegments(): Unit = {
-    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), logConfig)
+    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), () => logConfig)
     var offset = 0L
     for(_ <- 0 until 200) {
       val set = TestUtils.singletonRecords("test".getBytes())
@@ -207,7 +210,7 @@ class LogManagerTest {
     logManager.startup()
 
     // create a log
-    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), config)
+    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), () => config)
     var offset = 0L
 
     // add a bunch of messages that should be larger than the retentionSize
@@ -261,7 +264,7 @@ class LogManagerTest {
   private def testDoesntCleanLogs(policy: String): Unit = {
     val logProps = new Properties()
     logProps.put(LogConfig.CleanupPolicyProp, policy)
-    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), LogConfig.fromProps(logConfig.originals, logProps))
+    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), () => LogConfig.fromProps(logConfig.originals, logProps))
     var offset = 0L
     for (_ <- 0 until 200) {
       val set = TestUtils.singletonRecords("test".getBytes(), key="test".getBytes())
@@ -290,7 +293,7 @@ class LogManagerTest {
 
     logManager = createLogManager()
     logManager.startup()
-    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), config)
+    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), () => config)
     val lastFlush = log.lastFlushTime
     for (_ <- 0 until 200) {
       val set = TestUtils.singletonRecords("test".getBytes())
@@ -314,7 +317,7 @@ class LogManagerTest {
 
     // verify that logs are always assigned to the least loaded partition
     for(partition <- 0 until 20) {
-      logManager.getOrCreateLog(new TopicPartition("test", partition), logConfig)
+      logManager.getOrCreateLog(new TopicPartition("test", partition), () => logConfig)
       assertEquals("We should have created the right number of logs", partition + 1, logManager.allLogs.size)
       val counts = logManager.allLogs.groupBy(_.dir.getParent).values.map(_.size)
       assertTrue("Load should balance evenly", counts.max <= counts.min + 1)
@@ -365,7 +368,7 @@ class LogManagerTest {
   }
 
   private def verifyCheckpointRecovery(topicPartitions: Seq[TopicPartition], logManager: LogManager, logDir: File): Unit = {
-    val logs = topicPartitions.map(logManager.getOrCreateLog(_, logConfig))
+    val logs = topicPartitions.map(logManager.getOrCreateLog(_, () => logConfig))
     logs.foreach { log =>
       for (_ <- 0 until 50)
         log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
@@ -391,7 +394,7 @@ class LogManagerTest {
 
   @Test
   def testFileReferencesAfterAsyncDelete(): Unit = {
-    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), logConfig)
+    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), () => logConfig)
     val activeSegment = log.activeSegment
     val logName = activeSegment.log.file.getName
     val indexName = activeSegment.offsetIndex.file.getName
@@ -399,7 +402,7 @@ class LogManagerTest {
     val txnIndexName = activeSegment.txnIndex.file.getName
     val indexFilesOnDiskBeforeDelete = activeSegment.log.file.getParentFile.listFiles.filter(_.getName.endsWith("index"))
 
-    val removedLog = logManager.asyncDelete(new TopicPartition(name, 0))
+    val removedLog = logManager.asyncDelete(new TopicPartition(name, 0)).get
     val removedSegment = removedLog.activeSegment
     val indexFilesAfterDelete = Seq(removedSegment.lazyOffsetIndex.file, removedSegment.lazyTimeIndex.file,
       removedSegment.txnIndex.file)
@@ -428,7 +431,7 @@ class LogManagerTest {
   @Test
   def testCreateAndDeleteOverlyLongTopic(): Unit = {
     val invalidTopicName = String.join("", Collections.nCopies(253, "x"))
-    logManager.getOrCreateLog(new TopicPartition(invalidTopicName, 0), logConfig)
+    logManager.getOrCreateLog(new TopicPartition(invalidTopicName, 0), () => logConfig)
     logManager.asyncDelete(new TopicPartition(invalidTopicName, 0))
   }
 
@@ -441,14 +444,15 @@ class LogManagerTest {
       new TopicPartition("test-b", 0),
       new TopicPartition("test-b", 1))
 
-    val allLogs = tps.map(logManager.getOrCreateLog(_, logConfig))
+    val allLogs = tps.map(logManager.getOrCreateLog(_, () => logConfig))
     allLogs.foreach { log =>
       for (_ <- 0 until 50)
         log.appendAsLeader(TestUtils.singletonRecords("test".getBytes), leaderEpoch = 0)
       log.flush()
     }
 
-    logManager.checkpointRecoveryOffsetsAndCleanSnapshot(this.logDir, allLogs.filter(_.dir.getName.contains("test-a")))
+    logManager.checkpointRecoveryOffsetsAndCleanSnapshotsInDir(logDir,
+      allLogs.filter(_.dir.getName.contains("test-a")))
 
     val checkpoints = new OffsetCheckpointFile(new File(logDir, LogManager.RecoveryPointCheckpointFile)).read()
 
@@ -561,5 +565,77 @@ class LogManagerTest {
     logManager.brokerConfigUpdated()
     logManager.topicConfigUpdated("test-topic")
     assertTrue(logManager.partitionsInitializing.isEmpty)
+  }
+
+  @Test
+  def testMetricsExistWhenLogIsRecreatedBeforeDeletion(): Unit = {
+    val topicName = "metric-test"
+    def logMetrics: mutable.Set[MetricName] = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala.
+      filter(metric => metric.getType == "Log" && metric.getScope.contains(topicName))
+
+    val tp = new TopicPartition(topicName, 0)
+    val metricTag = s"topic=${tp.topic},partition=${tp.partition}"
+
+    def verifyMetrics(): Unit = {
+      assertEquals(LogMetricNames.allMetricNames.size, logMetrics.size)
+      logMetrics.foreach { metric =>
+        assertTrue(metric.getMBeanName.contains(metricTag))
+      }
+    }
+
+    // Create the Log and assert that the metrics are present
+    logManager.getOrCreateLog(tp, () => logConfig)
+    verifyMetrics()
+
+    // Trigger the deletion and assert that the metrics have been removed
+    val removedLog = logManager.asyncDelete(tp).get
+    assertTrue(logMetrics.isEmpty)
+
+    // Recreate the Log and assert that the metrics are present
+    logManager.getOrCreateLog(tp, () => logConfig)
+    verifyMetrics()
+
+    // Advance time past the file deletion delay and assert that the removed log has been deleted but the metrics
+    // are still present
+    time.sleep(logConfig.fileDeleteDelayMs + 1)
+    assertTrue(removedLog.logSegments.isEmpty)
+    verifyMetrics()
+  }
+
+  @Test
+  def testMetricsAreRemovedWhenMovingCurrentToFutureLog(): Unit = {
+    val dir1 = TestUtils.tempDir()
+    val dir2 = TestUtils.tempDir()
+    logManager = createLogManager(Seq(dir1, dir2))
+    logManager.startup()
+
+    val topicName = "future-log"
+    def logMetrics: mutable.Set[MetricName] = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala.
+      filter(metric => metric.getType == "Log" && metric.getScope.contains(topicName))
+
+    val tp = new TopicPartition(topicName, 0)
+    val metricTag = s"topic=${tp.topic},partition=${tp.partition}"
+
+    def verifyMetrics(logCount: Int): Unit = {
+      assertEquals(LogMetricNames.allMetricNames.size * logCount, logMetrics.size)
+      logMetrics.foreach { metric =>
+        assertTrue(metric.getMBeanName.contains(metricTag))
+      }
+    }
+
+    // Create the current and future logs and verify that metrics are present for both current and future logs
+    logManager.maybeUpdatePreferredLogDir(tp, dir1.getAbsolutePath)
+    logManager.getOrCreateLog(tp, () => logConfig)
+    logManager.maybeUpdatePreferredLogDir(tp, dir2.getAbsolutePath)
+    logManager.getOrCreateLog(tp, () => logConfig, isFuture = true)
+    verifyMetrics(2)
+
+    // Replace the current log with the future one and verify that only one set of metrics are present
+    logManager.replaceCurrentWithFutureLog(tp)
+    verifyMetrics(1)
+
+    // Trigger the deletion of the former current directory and verify that one set of metrics is still present
+    time.sleep(logConfig.fileDeleteDelayMs + 1)
+    verifyMetrics(1)
   }
 }

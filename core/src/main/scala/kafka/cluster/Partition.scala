@@ -26,11 +26,12 @@ import kafka.log._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
-import kafka.utils._
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
+import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
-import org.apache.kafka.common.{IsolationLevel, TopicPartition}
+import kafka.zookeeper.ZooKeeperClientException
 import org.apache.kafka.common.errors._
+import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.Errors._
@@ -39,9 +40,10 @@ import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 
-import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq}
+import scala.jdk.CollectionConverters._
 
 trait PartitionStateStore {
   def fetchTopicConfig(): Properties
@@ -98,23 +100,7 @@ class DelayedOperations(topicPartition: TopicPartition,
     deleteRecords.checkAndComplete(requestKey)
   }
 
-  def checkAndCompleteFetch(): Unit = {
-    fetch.checkAndComplete(TopicPartitionOperationKey(topicPartition))
-  }
-
-  def checkAndCompleteProduce(): Unit = {
-    produce.checkAndComplete(TopicPartitionOperationKey(topicPartition))
-  }
-
-  def checkAndCompleteDeleteRecords(): Unit = {
-    deleteRecords.checkAndComplete(TopicPartitionOperationKey(topicPartition))
-  }
-
   def numDelayedDelete: Int = deleteRecords.numDelayed
-
-  def numDelayedFetch: Int = fetch.numDelayed
-
-  def numDelayedProduce: Int = produce.numDelayed
 }
 
 object Partition extends KafkaMetricsGroup {
@@ -307,17 +293,21 @@ class Partition(val topicPartition: TopicPartition,
       LogConfig.fromProps(logManager.currentDefaultConfig.originals, props)
     }
 
-    logManager.initializingLog(topicPartition)
-    var maybeLog: Option[Log] = None
-    try {
-      val log = logManager.getOrCreateLog(topicPartition, fetchLogConfig, isNew, isFutureReplica)
+    def updateHighWatermark(log: Log) = {
       val checkpointHighWatermark = offsetCheckpoints.fetch(log.parentDir, topicPartition).getOrElse {
         info(s"No checkpointed highwatermark is found for partition $topicPartition")
         0L
       }
       val initialHighWatermark = log.updateHighWatermark(checkpointHighWatermark)
       info(s"Log loaded for partition $topicPartition with initial high watermark $initialHighWatermark")
+    }
+
+    logManager.initializingLog(topicPartition)
+    var maybeLog: Option[Log] = None
+    try {
+      val log = logManager.getOrCreateLog(topicPartition, () => fetchLogConfig, isNew, isFutureReplica)
       maybeLog = Some(log)
+      updateHighWatermark(log)
       log
     } finally {
       logManager.finishedInitializingLog(topicPartition, maybeLog, () => fetchLogConfig)
@@ -327,7 +317,7 @@ class Partition(val topicPartition: TopicPartition,
   def getReplica(replicaId: Int): Option[Replica] = Option(remoteReplicasMap.get(replicaId))
 
   private def getReplicaOrException(replicaId: Int): Replica = getReplica(replicaId).getOrElse{
-    throw new ReplicaNotAvailableException(s"Replica with id $replicaId is not available on broker $localBrokerId")
+    throw new NotLeaderOrFollowerException(s"Replica with id $replicaId is not available on broker $localBrokerId")
   }
 
   private def checkCurrentLeaderEpoch(remoteLeaderEpochOpt: Optional[Integer]): Errors = {
@@ -350,16 +340,13 @@ class Partition(val topicPartition: TopicPartition,
     checkCurrentLeaderEpoch(currentLeaderEpoch) match {
       case Errors.NONE =>
         if (requireLeader && !isLeader) {
-          Right(Errors.NOT_LEADER_FOR_PARTITION)
+          Right(Errors.NOT_LEADER_OR_FOLLOWER)
         } else {
           log match {
             case Some(partitionLog) =>
               Left(partitionLog)
             case _ =>
-              if (requireLeader)
-                Right(Errors.NOT_LEADER_FOR_PARTITION)
-              else
-                Right(Errors.REPLICA_NOT_AVAILABLE)
+              Right(Errors.NOT_LEADER_OR_FOLLOWER)
           }
         }
       case error =>
@@ -368,12 +355,12 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   def localLogOrException: Log = log.getOrElse {
-    throw new ReplicaNotAvailableException(s"Log for partition $topicPartition is not available " +
+    throw new NotLeaderOrFollowerException(s"Log for partition $topicPartition is not available " +
       s"on broker $localBrokerId")
   }
 
   def futureLocalLogOrException: Log = futureLog.getOrElse {
-    throw new ReplicaNotAvailableException(s"Future log for partition $topicPartition is not available " +
+    throw new NotLeaderOrFollowerException(s"Future log for partition $topicPartition is not available " +
       s"on broker $localBrokerId")
   }
 
@@ -455,6 +442,10 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
+  /**
+   * Delete the partition. Note that deleting the partition does not delete the underlying logs.
+   * The logs are deleted by the ReplicaManager after having deleted the partition.
+   */
   def delete(): Unit = {
     // need to hold the lock to prevent appendMessagesToLeader() from hitting I/O exceptions due to log being deleted
     inWriteLock(leaderIsrUpdateLock) {
@@ -466,9 +457,6 @@ class Partition(val topicPartition: TopicPartition,
       leaderReplicaIdOpt = None
       leaderEpochStartOffsetOpt = None
       Partition.removeMetrics(topicPartition)
-      logManager.asyncDelete(topicPartition)
-      if (logManager.getLog(topicPartition, isFuture = true).isDefined)
-        logManager.asyncDelete(topicPartition, isFuture = true)
     }
   }
 
@@ -495,14 +483,22 @@ class Partition(val topicPartition: TopicPartition,
         addingReplicas = addingReplicas,
         removingReplicas = removingReplicas
       )
-      createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints)
+      try {
+        createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints)
+      } catch {
+        case e: ZooKeeperClientException =>
+          stateChangeLogger.error(s"A ZooKeeper client exception has occurred and makeLeader will be skipping the " +
+            s"state change for the partition $topicPartition with leader epoch: $leaderEpoch ", e)
+
+          return false
+      }
 
       val leaderLog = localLogOrException
       val leaderEpochStartOffset = leaderLog.logEndOffset
       stateChangeLogger.info(s"Leader $topicPartition starts at leader epoch ${partitionState.leaderEpoch} from " +
         s"offset $leaderEpochStartOffset with high watermark ${leaderLog.highWatermark} " +
-        s"ISR ${isr.mkString(",")} addingReplicas ${addingReplicas.mkString(",")} removingReplicas ${removingReplicas.mkString(",")}." +
-        s"Previous leader epoch was $leaderEpoch.")
+        s"ISR ${isr.mkString("[", ",", "]")} addingReplicas ${addingReplicas.mkString("[", ",", "]")} " +
+        s"removingReplicas ${removingReplicas.mkString("[", ",", "]")}. Previous leader epoch was $leaderEpoch.")
 
       //We cache the leader epoch here, persisting it only if it's local (hence having a log dir)
       leaderEpoch = partitionState.leaderEpoch
@@ -533,8 +529,7 @@ class Partition(val topicPartition: TopicPartition,
             followerFetchOffsetMetadata = LogOffsetMetadata.UnknownOffsetMetadata,
             followerStartOffset = Log.UnknownOffset,
             followerFetchTimeMs = 0L,
-            leaderEndOffset = Log.UnknownOffset,
-            lastSentHighwatermark = 0L)
+            leaderEndOffset = Log.UnknownOffset)
         }
       }
       // we may need to increment high watermark since ISR could be down to 1
@@ -567,7 +562,15 @@ class Partition(val topicPartition: TopicPartition,
         addingReplicas = partitionState.addingReplicas.asScala.map(_.toInt),
         removingReplicas = partitionState.removingReplicas.asScala.map(_.toInt)
       )
-      createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints)
+      try {
+        createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints)
+      } catch {
+        case e: ZooKeeperClientException =>
+          stateChangeLogger.error(s"A ZooKeeper client exception has occurred. makeFollower will be skipping the " +
+            s"state change for the partition $topicPartition with leader epoch: $leaderEpoch.", e)
+
+          return false
+      }
 
       val followerLog = localLogOrException
       val leaderEpochEndOffset = followerLog.logEndOffset
@@ -590,7 +593,7 @@ class Partition(val topicPartition: TopicPartition,
 
   /**
    * Update the follower's state in the leader based on the last fetch request. See
-   * [[kafka.cluster.Replica#updateLogReadResult]] for details.
+   * [[Replica.updateFetchState()]] for details.
    *
    * @return true if the follower's fetch state was updated, false if the followerId is not recognized
    */
@@ -598,8 +601,7 @@ class Partition(val topicPartition: TopicPartition,
                                followerFetchOffsetMetadata: LogOffsetMetadata,
                                followerStartOffset: Long,
                                followerFetchTimeMs: Long,
-                               leaderEndOffset: Long,
-                               lastSentHighwatermark: Long): Boolean = {
+                               leaderEndOffset: Long): Boolean = {
     getReplica(followerId) match {
       case Some(followerReplica) =>
         // No need to calculate low watermark if there is no delayed DeleteRecordsRequest
@@ -609,8 +611,7 @@ class Partition(val topicPartition: TopicPartition,
           followerFetchOffsetMetadata,
           followerStartOffset,
           followerFetchTimeMs,
-          leaderEndOffset,
-          lastSentHighwatermark)
+          leaderEndOffset)
 
         val newLeaderLW = if (delayedOperations.numDelayedDelete > 0) lowWatermarkIfLeader else -1L
         // check if the LW of the partition has incremented
@@ -662,10 +663,13 @@ class Partition(val topicPartition: TopicPartition,
                              isr: Set[Int],
                              addingReplicas: Seq[Int],
                              removingReplicas: Seq[Int]): Unit = {
-    remoteReplicasMap.clear()
-    assignment
-      .filter(_ != localBrokerId)
-      .foreach(id => remoteReplicasMap.getAndMaybePut(id, new Replica(id, topicPartition)))
+    val newRemoteReplicas = assignment.filter(_ != localBrokerId)
+    val removedReplicas = remoteReplicasMap.keys.filter(!newRemoteReplicas.contains(_))
+
+    // due to code paths accessing remoteReplicasMap without a lock,
+    // first add the new replicas and then remove the old ones
+    newRemoteReplicas.foreach(id => remoteReplicasMap.getAndMaybePut(id, new Replica(id, topicPartition)))
+    remoteReplicasMap.removeAll(removedReplicas)
 
     if (addingReplicas.nonEmpty || removingReplicas.nonEmpty)
       assignmentState = OngoingReassignmentState(addingReplicas, removingReplicas, assignment)
@@ -759,7 +763,7 @@ class Partition(val topicPartition: TopicPartition,
         } else
           (false, Errors.NONE)
       case None =>
-        (false, Errors.NOT_LEADER_FOR_PARTITION)
+        (false, Errors.NOT_LEADER_OR_FOLLOWER)
     }
   }
 
@@ -821,7 +825,7 @@ class Partition(val topicPartition: TopicPartition,
    */
   def lowWatermarkIfLeader: Long = {
     if (!isLeader)
-      throw new NotLeaderForPartitionException(s"Leader not local for partition $topicPartition on broker $localBrokerId")
+      throw new NotLeaderOrFollowerException(s"Leader not local for partition $topicPartition on broker $localBrokerId")
 
     // lowWatermarkIfLeader may be called many times when a DeleteRecordsRequest is outstanding,
     // care has been taken to avoid generating unnecessary collections in this code
@@ -986,23 +990,16 @@ class Partition(val topicPartition: TopicPartition,
           (info, maybeIncrementLeaderHW(leaderLog))
 
         case None =>
-          throw new NotLeaderForPartitionException("Leader not local for partition %s on broker %d"
+          throw new NotLeaderOrFollowerException("Leader not local for partition %s on broker %d"
             .format(topicPartition, localBrokerId))
       }
     }
 
-    // some delayed operations may be unblocked after HW changed
-    if (leaderHWIncremented)
-      tryCompleteDelayedRequests()
-    else {
-      // probably unblock some follower fetch requests since log end offset has been updated
-      delayedOperations.checkAndCompleteFetch()
-    }
-
-    info
+    info.copy(leaderHwChange = if (leaderHWIncremented) LeaderHwChange.Increased else LeaderHwChange.Same)
   }
 
-  def readRecords(fetchOffset: Long,
+  def readRecords(lastFetchedEpoch: Optional[Integer],
+                  fetchOffset: Long,
                   currentLeaderEpoch: Optional[Integer],
                   maxBytes: Int,
                   fetchIsolation: FetchIsolation,
@@ -1017,10 +1014,44 @@ class Partition(val topicPartition: TopicPartition,
     val initialLogStartOffset = localLog.logStartOffset
     val initialLogEndOffset = localLog.logEndOffset
     val initialLastStableOffset = localLog.lastStableOffset
-    val fetchedData = localLog.read(fetchOffset, maxBytes, fetchIsolation, minOneMessage)
 
+    lastFetchedEpoch.ifPresent { fetchEpoch =>
+      val epochEndOffset = lastOffsetForLeaderEpoch(currentLeaderEpoch, fetchEpoch, fetchOnlyFromLeader = false)
+      if (epochEndOffset.error != Errors.NONE) {
+        throw epochEndOffset.error.exception()
+      }
+
+      if (epochEndOffset.hasUndefinedEpochOrOffset) {
+        throw new OffsetOutOfRangeException("Could not determine the end offset of the last fetched epoch " +
+          s"$lastFetchedEpoch from the request")
+      }
+
+      if (epochEndOffset.leaderEpoch < fetchEpoch || epochEndOffset.endOffset < fetchOffset) {
+        val emptyFetchData = FetchDataInfo(
+          fetchOffsetMetadata = LogOffsetMetadata(fetchOffset),
+          records = MemoryRecords.EMPTY,
+          firstEntryIncomplete = false,
+          abortedTransactions = None
+        )
+
+        val divergingEpoch = new FetchResponseData.EpochEndOffset()
+          .setEpoch(epochEndOffset.leaderEpoch)
+          .setEndOffset(epochEndOffset.endOffset)
+
+        return LogReadInfo(
+          fetchedData = emptyFetchData,
+          divergingEpoch = Some(divergingEpoch),
+          highWatermark = initialHighWatermark,
+          logStartOffset = initialLogStartOffset,
+          logEndOffset = initialLogEndOffset,
+          lastStableOffset = initialLastStableOffset)
+      }
+    }
+
+    val fetchedData = localLog.read(fetchOffset, maxBytes, fetchIsolation, minOneMessage)
     LogReadInfo(
       fetchedData = fetchedData,
+      divergingEpoch = None,
       highWatermark = initialHighWatermark,
       logStartOffset = initialLogStartOffset,
       logEndOffset = initialLogEndOffset,
@@ -1124,12 +1155,12 @@ class Partition(val topicPartition: TopicPartition,
         if (convertedOffset < 0)
           throw new OffsetOutOfRangeException(s"The offset $convertedOffset for partition $topicPartition is not valid")
 
-        leaderLog.maybeIncrementLogStartOffset(convertedOffset)
+        leaderLog.maybeIncrementLogStartOffset(convertedOffset, ClientRecordDeletion)
         LogDeleteRecordsResult(
           requestedOffset = convertedOffset,
           lowWatermark = lowWatermarkIfLeader)
       case None =>
-        throw new NotLeaderForPartitionException(s"Leader not local for partition $topicPartition on broker $localBrokerId")
+        throw new NotLeaderOrFollowerException(s"Leader not local for partition $topicPartition on broker $localBrokerId")
     }
   }
 

@@ -128,27 +128,33 @@
     </ul>
 
     <p>
-	Note, that the describe default behavior can be changed in the Processor API by assigning timestamps to output records explicitly when calling <code>#forward()</code>.
-    </p>
-
-    <h3><a id="streams_concepts_aggregations" href="#streams_concepts_aggregations">Aggregations</a></h3>
-    <p>
-        An <strong>aggregation</strong> operation takes one input stream or table, and yields a new table by combining multiple input records into a single output record. Examples of aggregations are computing counts or sum.
+        You can change the default behavior in the Processor API by assigning
+        timestamps to output records explicitly when calling <code>#forward()</code>.
     </p>
 
     <p>
-        In the <code>Kafka Streams DSL</code>, an input stream of an <code>aggregation</code> can be a KStream or a KTable, but the output stream will always be a KTable. This allows Kafka Streams to update an aggregate value upon the out-of-order arrival of further records after the value was produced and emitted. When such out-of-order arrival happens, the aggregating KStream or KTable emits a new aggregate value. Because the output is a KTable, the new value is considered to overwrite the old value with the same key in subsequent processing steps.
+        For aggregations and joins, timestamps are computed by using the
+        following rules. 
     </p>
 
-    <h3> <a id="streams_concepts_windowing" href="#streams_concepts_windowing">Windowing</a></h3>
     <p>
-        Windowing lets you control how to <em>group records that have the same key</em> for stateful operations such as <code>aggregations</code> or <code>joins</code> into so-called <em>windows</em>. Windows are tracked per record key.
+        <ul>
+            <li>For joins (stream-stream, table-table) that have left and right
+                input records, the timestamp of the output record is assigned
+                <code>max(left.ts, right.ts)</code>.</li>
+            <li>For stream-table joins, the output record is assigned the timestamp
+                from the stream record.</li>
+            <li>For aggregations, Kafka Streams also computes the <code>max</code>
+                timestamp over all records, per key, either globally (for non-windowed)
+                or per-window.</li>
+            <li>For stateless operations, the input record timestamp is passed through.
+                For <code>flatMap</code> and siblings that emit multiple records, all
+                output records inherit the timestamp from the corresponding input record.</li>
+        </ul>
     </p>
+    
     <p>
-        <code>Windowing operations</code> are available in the <code>Kafka Streams DSL</code>. When working with windows, you can specify a <strong>grace period</strong> for the window. This grace period controls how long Kafka Streams will wait for <strong>out-of-order</strong> data records for a given window. If a record arrives after the grace period of a window has passed, the record is discarded and will not be processed in that window. Specifically, a record is discarded if its timestamp dictates it belongs to a window, but the current stream time is greater than the end of the window plus the grace period.
-    </p>
-    <p>
-        Out-of-order records are always possible in the real world and should be properly accounted for in your applications. It depends on the effective <code>time semantics </code> how out-of-order records are handled. In the case of processing-time, the semantics are &quot;when the record is being processed&quot;, which means that the notion of out-of-order records is not applicable as, by definition, no record can be out-of-order. Hence, out-of-order records can only be considered as such for event-time. In both cases, Kafka Streams is able to properly handle out-of-order records.
+
     </p>
 
     <h3><a id="streams_concepts_duality" href="#streams-concepts-duality">Duality of Streams and Tables</a></h3>
@@ -170,13 +176,83 @@
       or to run <a id="streams-developer-guide-interactive-queries" href="/{{version}}/documentation/streams/developer-guide/interactive-queries#interactive-queries">interactive queries</a>
       against your application's latest processing results. And, beyond its internal usage, the Kafka Streams API
       also allows developers to exploit this duality in their own applications.
-  </p>
+    </p>
 
-  <p>
+    <p>
       Before we discuss concepts such as <a id="streams-developer-guide-dsl-aggregating" href="/{{version}}/documentation/streams/developer-guide/dsl-api#aggregating">aggregations</a>
       in Kafka Streams, we must first introduce <strong>tables</strong> in more detail, and talk about the aforementioned stream-table duality.
-      Essentially, this duality means that a stream can be viewed as a table, and a table can be viewed as a stream.
-  </p>
+      Essentially, this duality means that a stream can be viewed as a table, and a table can be viewed as a stream. Kafka's log compaction feature, for example, exploits this duality.
+    </p>
+
+    <p>
+        A simple form of a table is a collection of key-value pairs, also called a map or associative array. Such a table may look as follows:
+    </p>
+    <img class="centered" src="/{{version}}/images/streams-table-duality-01.png">
+
+    The <b>stream-table duality</b> describes the close relationship between
+    streams and tables.
+    <ul>
+        <li><b>Stream as Table</b>: A stream can be considered a changelog of a
+            table, where each data record in the stream captures a state change
+            of the table. A stream is thus a table in disguise, and it can be
+            easily turned into a "real" table by replaying the changelog from
+            beginning to end to reconstruct the table. Similarly, in a more
+            general analogy, aggregating data records in a stream - such as
+            computing the total number of pageviews by user from a stream of
+            pageview events - will return a table (here with the key and the
+            value being the user and its corresponding pageview count,
+            respectively).</li>
+        <li><b>Table as Stream</b>: A table can be considered a snapshot, at a
+            point in time, of the latest value for each key in a stream (a
+            stream's data records are key-value pairs). A table is thus a
+            stream in disguise, and it can be easily turned into a "real"
+            stream by iterating over each key-value entry in the table.</li>
+    </ul>
+
+    <p>
+        Let's illustrate this with an example. Imagine a table that tracks the
+        total number of pageviews by user (first column of diagram below). Over
+        time, whenever a new pageview event is processed, the state of the
+        table is updated accordingly. Here, the state changes between different
+        points in time - and different revisions of the table - can be
+        represented as a changelog stream (second column).
+    </p>
+    <img class="centered" src="/{{version}}/images/streams-table-duality-02.png" style="width:300px">
+
+    <p>
+        Interestingly, because of the stream-table duality, the same stream
+        can be used to reconstruct the original table (third column):
+    </p>
+    <img class="centered" src="/{{version}}/images/streams-table-duality-03.png" style="width:600px">
+
+    <p>
+        The same mechanism is used, for example, to replicate databases via
+        change data capture (CDC) and, within Kafka Streams, to replicate its
+        so-called state stores across machines for fault-tolerance. The stream-table
+        duality is such an important concept that Kafka Streams models it explicitly
+        via the <a href="#streams_kstream_ktable">KStream, KTable, and GlobalKTable</a>
+        interfaces.
+    </p>
+
+    <h3><a id="streams_concepts_aggregations" href="#streams_concepts_aggregations">Aggregations</a></h3>
+    <p>
+        An <strong>aggregation</strong> operation takes one input stream or table, and yields a new table by combining multiple input records into a single output record. Examples of aggregations are computing counts or sum.
+    </p>
+
+    <p>
+        In the <code>Kafka Streams DSL</code>, an input stream of an <code>aggregation</code> can be a KStream or a KTable, but the output stream will always be a KTable. This allows Kafka Streams to update an aggregate value upon the out-of-order arrival of further records after the value was produced and emitted. When such out-of-order arrival happens, the aggregating KStream or KTable emits a new aggregate value. Because the output is a KTable, the new value is considered to overwrite the old value with the same key in subsequent processing steps.
+    </p>
+
+    <h3> <a id="streams_concepts_windowing" href="#streams_concepts_windowing">Windowing</a></h3>
+    <p>
+        Windowing lets you control how to <em>group records that have the same key</em> for stateful operations such as <code>aggregations</code> or <code>joins</code> into so-called <em>windows</em>. Windows are tracked per record key.
+    </p>
+    <p>
+        <code>Windowing operations</code> are available in the <code>Kafka Streams DSL</code>. When working with windows, you can specify a <strong>grace period</strong> for the window. This grace period controls how long Kafka Streams will wait for <strong>out-of-order</strong> data records for a given window. If a record arrives after the grace period of a window has passed, the record is discarded and will not be processed in that window. Specifically, a record is discarded if its timestamp dictates it belongs to a window, but the current stream time is greater than the end of the window plus the grace period.
+    </p>
+    <p>
+        Out-of-order records are always possible in the real world and should be properly accounted for in your applications. It depends on the effective <code>time semantics </code> how out-of-order records are handled. In the case of processing-time, the semantics are &quot;when the record is being processed&quot;, which means that the notion of out-of-order records is not applicable as, by definition, no record can be out-of-order. Hence, out-of-order records can only be considered as such for event-time. In both cases, Kafka Streams is able to properly handle out-of-order records.
+    </p>
 
     <h3><a id="streams_state" href="#streams_state">States</a></h3>
 
@@ -206,17 +282,26 @@
         to the stream processing pipeline, known as the <a href="http://lambda-architecture.net/">Lambda Architecture</a>.
         Prior to 0.11.0.0, Kafka only provides at-least-once delivery guarantees and hence any stream processing systems that leverage it as the backend storage could not guarantee end-to-end exactly-once semantics.
         In fact, even for those stream processing systems that claim to support exactly-once processing, as long as they are reading from / writing to Kafka as the source / sink, their applications cannot actually guarantee that
-        no duplicates will be generated throughout the pipeline.
+        no duplicates will be generated throughout the pipeline.<br />
 
         Since the 0.11.0.0 release, Kafka has added support to allow its producers to send messages to different topic partitions in a <a href="https://kafka.apache.org/documentation/#semantics">transactional and idempotent manner</a>,
         and Kafka Streams has hence added the end-to-end exactly-once processing semantics by leveraging these features.
         More specifically, it guarantees that for any record read from the source Kafka topics, its processing results will be reflected exactly once in the output Kafka topic as well as in the state stores for stateful operations.
         Note the key difference between Kafka Streams end-to-end exactly-once guarantee with other stream processing frameworks' claimed guarantees is that Kafka Streams tightly integrates with the underlying Kafka storage system and ensure that
         commits on the input topic offsets, updates on the state stores, and writes to the output topics will be completed atomically instead of treating Kafka as an external system that may have side-effects.
-        To read more details on how this is done inside Kafka Streams, readers are recommended to read <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-129%3A+Streams+Exactly-Once+Semantics">KIP-129</a>.
+        For more information on how this is done inside Kafka Streams, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-129%3A+Streams+Exactly-Once+Semantics">KIP-129</a>.<br />
 
-        In order to achieve exactly-once semantics when running Kafka Streams applications, users can simply set the <code>processing.guarantee</code> config value to <b>exactly_once</b> (default value is <b>at_least_once</b>).
-        More details can be found in the <a href="/{{version}}/documentation#streamsconfigs"><b>Kafka Streams Configs</b></a> section.
+        As of the 2.6.0 release, Kafka Streams supports an improved implementation of exactly-once processing, named "exactly-once beta", 
+        which requires broker version 2.5.0 or newer.
+        This implementation is more efficient, because it reduces client and broker resource utilization, like client threads and used network connections, 
+        and it enables higher throughput and improved scalability.
+        For more information on how this is done inside the brokers and Kafka Streams, see 
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-447%3A+Producer+scalability+for+exactly+once+semantics">KIP-447</a>.<br />
+
+        To enable exactly-once semantics when running Kafka Streams applications,
+        set the <code>processing.guarantee</code> config value (default value is <b>at_least_once</b>)
+        to <b>exactly_once</b> (requires brokers version 0.11.0 or newer) or <b>exactly_once_beta</b> (requires brokers version 2.5 or newer).
+        For more information, see the <a href="/{{version}}/documentation/streams/developer-guide/config-streams.html">Kafka Streams Configs</a> section.
     </p>
 
     <h3><a id="streams_out_of_ordering" href="#streams_out_of_ordering">Out-of-Order Handling</a></h3>

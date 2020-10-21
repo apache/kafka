@@ -72,9 +72,10 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
 
     def set_authorizer_and_bounce(self, client_protocol, broker_protocol, authorizer_class_name = KafkaService.ACL_AUTHORIZER):
         self.kafka.authorizer_class_name = authorizer_class_name
-        self.acls.set_acls(client_protocol, self.kafka, self.topic, self.group)
-        self.acls.set_acls(broker_protocol, self.kafka, self.topic, self.group)
-        self.bounce()
+        # Force use of direct ZooKeeper access due to SecurityDisabledException: No Authorizer is configured on the broker.
+        self.acls.set_acls(client_protocol, self.kafka, self.topic, self.group, force_use_zk_connection=True)
+        self.acls.set_acls(broker_protocol, self.kafka, self.topic, self.group, force_use_zk_connection=True)
+        self.bounce() # enables the authorizer
 
     def open_secured_port(self, client_protocol):
         self.kafka.security_protocol = client_protocol
@@ -96,10 +97,15 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         self.set_authorizer_and_bounce(security_protocol, security_protocol, KafkaService.SIMPLE_AUTHORIZER)
 
     def add_separate_broker_listener(self, broker_security_protocol, broker_sasl_mechanism):
+        # Enable the new internal listener on all brokers first
+        self.kafka.open_port(self.kafka.INTERBROKER_LISTENER_NAME)
+        self.kafka.port_mappings[self.kafka.INTERBROKER_LISTENER_NAME].security_protocol = broker_security_protocol
+        self.kafka.client_sasl_mechanism = broker_sasl_mechanism
+        self.bounce()
+
+        # Update inter-broker listener after all brokers have been updated to enable the new listener
         self.kafka.setup_interbroker_listener(broker_security_protocol, True)
         self.kafka.interbroker_sasl_mechanism = broker_sasl_mechanism
-        # kafka opens interbroker port automatically in start() but not in bounce()
-        self.kafka.open_port(self.kafka.INTERBROKER_LISTENER_NAME)
         self.bounce()
 
     def remove_separate_broker_listener(self, client_security_protocol, client_sasl_mechanism):

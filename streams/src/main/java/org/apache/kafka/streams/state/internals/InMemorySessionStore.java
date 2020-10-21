@@ -16,15 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.NoSuchElementException;
-import java.util.Objects;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentNavigableMap;
-import java.util.concurrent.ConcurrentSkipListMap;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
@@ -41,6 +32,16 @@ import org.apache.kafka.streams.state.SessionStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentNavigableMap;
+import java.util.concurrent.ConcurrentSkipListMap;
+
 public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
     private static final Logger LOG = LoggerFactory.getLogger(InMemorySessionStore.class);
@@ -48,6 +49,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     private final String name;
     private final String metricScope;
     private Sensor expiredRecordSensor;
+    private InternalProcessorContext context;
     private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
     private final long retentionPeriod;
@@ -72,7 +74,9 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
-        final StreamsMetricsImpl metrics = ((InternalProcessorContext) context).metrics();
+        this.context = (InternalProcessorContext) context;
+
+        final StreamsMetricsImpl metrics = this.context.metrics();
         final String threadId = Thread.currentThread().getName();
         final String taskName = context.taskId().toString();
         expiredRecordSensor = TaskMetrics.droppedRecordsSensorOrExpiredWindowRecordDropSensor(
@@ -97,7 +101,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         observedStreamTime = Math.max(observedStreamTime, windowEndTimestamp);
 
         if (windowEndTimestamp <= observedStreamTime - retentionPeriod) {
-            expiredRecordSensor.record();
+            expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
             LOG.warn("Skipping record for expired segment.");
         } else {
             if (aggregate != null) {
@@ -152,7 +156,6 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         return null;
     }
 
-    @Deprecated
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final Bytes key,
                                                                   final long earliestSessionEndTime,
@@ -167,7 +170,6 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
                                    endTimeMap.tailMap(earliestSessionEndTime, true).entrySet().iterator());
     }
 
-    @Deprecated
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final Bytes keyFrom,
                                                                   final Bytes keyTo,
@@ -179,8 +181,9 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         removeExpiredSegments();
 
         if (keyFrom.compareTo(keyTo) > 0) {
-            LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
-                + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+            LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
+                "This may be due to range arguments set in the wrong order, " +
+                "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
                 "Note that the built-in numerical serdes do not follow this for negative numbers");
             return KeyValueIterators.emptyIterator();
         }
@@ -256,7 +259,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
                                                              final Bytes keyTo,
                                                              final long latestSessionStartTime,
                                                              final Iterator<Entry<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>>> endTimeIterator) {
-        final InMemorySessionStoreIterator iterator = new InMemorySessionStoreIterator(keyFrom, keyTo, latestSessionStartTime, endTimeIterator, it -> openIterators.remove(it));
+        final InMemorySessionStoreIterator iterator = new InMemorySessionStoreIterator(keyFrom, keyTo, latestSessionStartTime, endTimeIterator, openIterators::remove);
         openIterators.add(iterator);
         return iterator;
     }

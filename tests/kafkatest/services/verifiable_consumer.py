@@ -97,7 +97,7 @@ class ConsumerEventHandler(object):
                     if tp in self.position:
                         self.position[tp] = max_offset + 1
                     logger.warn(msg)
-            self.total_consumed += event["count"]
+        self.total_consumed += event["count"]
 
     def handle_partitions_revoked(self, event):
         self.revoked_count += 1

@@ -30,7 +30,7 @@ import javax.net.ssl.X509TrustManager
 import kafka.api._
 import kafka.cluster.{Broker, EndPoint}
 import kafka.log._
-import kafka.security.auth.{Acl, Authorizer => LegacyAuthorizer, Resource}
+import kafka.security.auth.{Acl, Resource, Authorizer => LegacyAuthorizer}
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpointFile
 import com.yammer.metrics.core.Meter
@@ -45,7 +45,7 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter}
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
+import org.apache.kafka.common.errors.{KafkaStorageException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.{ListenerName, Mode}
@@ -53,7 +53,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, IntegerSerializer, Serializer}
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.utils.Utils._
 import org.apache.kafka.common.{KafkaFuture, TopicPartition}
 import org.apache.kafka.server.authorizer.{Authorizer => JAuthorizer}
@@ -64,10 +64,10 @@ import org.apache.zookeeper.data.ACL
 import org.junit.Assert._
 import org.scalatest.Assertions.fail
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.collection.{Map, Seq, mutable}
-import scala.compat.java8.OptionConverters._
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{Await, ExecutionContext, Future}
 
@@ -95,6 +95,10 @@ object TestUtils extends Logging {
   private val transactionStatusKey = "transactionStatus"
   private val committedValue : Array[Byte] = "committed".getBytes(StandardCharsets.UTF_8)
   private val abortedValue : Array[Byte] = "aborted".getBytes(StandardCharsets.UTF_8)
+
+  sealed trait LogDirFailureType
+  case object Roll extends LogDirFailureType
+  case object Checkpoint extends LogDirFailureType
 
   /**
    * Create a temporary directory
@@ -468,14 +472,14 @@ object TestUtils extends Logging {
     var length = 0
     while(expected.hasNext && actual.hasNext) {
       length += 1
-      assertEquals(expected.next, actual.next)
+      assertEquals(expected.next(), actual.next())
     }
 
     // check if the expected iterator is longer
     if (expected.hasNext) {
       var length1 = length
       while (expected.hasNext) {
-        expected.next
+        expected.next()
         length1 += 1
       }
       assertFalse("Iterators have uneven length-- first has more: "+length1 + " > " + length, true)
@@ -485,7 +489,7 @@ object TestUtils extends Logging {
     if (actual.hasNext) {
       var length2 = length
       while (actual.hasNext) {
-        actual.next
+        actual.next()
         length2 += 1
       }
       assertFalse("Iterators have uneven length-- second has more: "+length2 + " > " + length, true)
@@ -499,8 +503,8 @@ object TestUtils extends Logging {
   def checkLength[T](s1: Iterator[T], expectedLength:Int): Unit = {
     var n = 0
     while (s1.hasNext) {
-      n+=1
-      s1.next
+      n += 1
+      s1.next()
     }
     assertEquals(expectedLength, n)
   }
@@ -525,7 +529,7 @@ object TestUtils extends Logging {
         while (true) {
           if (cur == null) {
             if (topIterator.hasNext)
-              cur = topIterator.next
+              cur = topIterator.next()
             else
               return false
           }
@@ -537,7 +541,7 @@ object TestUtils extends Logging {
         throw new RuntimeException("should not reach here")
       }
 
-      def next() : T = cur.next
+      def next() : T = cur.next()
     }
   }
 
@@ -581,6 +585,7 @@ object TestUtils extends Logging {
   /**
    * Create a (new) producer with a few pre-configured properties.
    */
+  @nowarn("cat=deprecation")
   def createProducer[K, V](brokerList: String,
                            acks: Int = -1,
                            maxBlockMs: Long = 60 * 1000L,
@@ -826,7 +831,7 @@ object TestUtils extends Logging {
   }
 
   /**
-    *  Wait until the given condition is true or throw an exception if the given wait time elapses.
+    * Wait until the given condition is true or throw an exception if the given wait time elapses.
     *
     * @param condition condition to check
     * @param msg error message
@@ -856,7 +861,7 @@ object TestUtils extends Logging {
     * This method is useful in cases where `waitUntilTrue` makes it awkward to provide good error messages.
     */
   def computeUntilTrue[T](compute: => T, waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS, pause: Long = 100L)(
-                    predicate: T => Boolean): (T, Boolean) = {
+                          predicate: T => Boolean): (T, Boolean) = {
     val startTime = System.currentTimeMillis()
     while (true) {
       val result = compute
@@ -1139,6 +1144,31 @@ object TestUtils extends Logging {
     ), "Failed to hard-delete the delete directory")
   }
 
+
+  def causeLogDirFailure(failureType: LogDirFailureType, leaderServer: KafkaServer, partition: TopicPartition): Unit = {
+    // Make log directory of the partition on the leader broker inaccessible by replacing it with a file
+    val localLog = leaderServer.replicaManager.localLogOrException(partition)
+    val logDir = localLog.dir.getParentFile
+    CoreUtils.swallow(Utils.delete(logDir), this)
+    logDir.createNewFile()
+    assertTrue(logDir.isFile)
+
+    if (failureType == Roll) {
+      try {
+        leaderServer.replicaManager.getLog(partition).get.roll()
+        fail("Log rolling should fail with KafkaStorageException")
+      } catch {
+        case e: KafkaStorageException => // This is expected
+      }
+    } else if (failureType == Checkpoint) {
+      leaderServer.replicaManager.checkpointHighWatermarks()
+    }
+
+    // Wait for ReplicaHighWatermarkCheckpoint to happen so that the log directory of the topic will be offline
+    TestUtils.waitUntilTrue(() => !leaderServer.logManager.isLogDirOnline(logDir.getAbsolutePath), "Expected log directory offline", 3000L)
+    assertTrue(leaderServer.replicaManager.localLog(partition).isEmpty)
+  }
+
   /**
    * Translate the given buffer into a string
    *
@@ -1173,7 +1203,7 @@ object TestUtils extends Logging {
       .build()
 
     val sslProps = new Properties()
-    sslConfigs.asScala.foreach { case (k, v) => sslProps.put(k, v) }
+    sslConfigs.forEach { (k, v) => sslProps.put(k, v) }
     sslProps
   }
 
@@ -1379,7 +1409,8 @@ object TestUtils extends Logging {
                                   batchSize: Int = 16384,
                                   transactionTimeoutMs: Long = 60000,
                                   maxBlockMs: Long = 60000,
-                                  deliveryTimeoutMs: Int = 120000) = {
+                                  deliveryTimeoutMs: Int = 120000,
+                                  requestTimeoutMs: Int = 30000): KafkaProducer[Array[Byte], Array[Byte]] = {
     val props = new Properties()
     props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromServers(servers))
     props.put(ProducerConfig.ACKS_CONFIG, "all")
@@ -1389,7 +1420,7 @@ object TestUtils extends Logging {
     props.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, transactionTimeoutMs.toString)
     props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, maxBlockMs.toString)
     props.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, deliveryTimeoutMs.toString)
-    props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, deliveryTimeoutMs.toString)
+    props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs.toString)
     new KafkaProducer[Array[Byte], Array[Byte]](props, new ByteArraySerializer, new ByteArraySerializer)
   }
 
@@ -1448,7 +1479,7 @@ object TestUtils extends Logging {
   // Collect the current positions for all partition in the consumers current assignment.
   def consumerPositions(consumer: KafkaConsumer[Array[Byte], Array[Byte]]) : Map[TopicPartition, OffsetAndMetadata]  = {
     val offsetsToCommit = new mutable.HashMap[TopicPartition, OffsetAndMetadata]()
-    consumer.assignment.asScala.foreach { topicPartition =>
+    consumer.assignment.forEach { topicPartition =>
       offsetsToCommit.put(topicPartition, new OffsetAndMetadata(consumer.position(topicPartition)))
     }
     offsetsToCommit.toMap
@@ -1457,7 +1488,7 @@ object TestUtils extends Logging {
   def resetToCommittedPositions(consumer: KafkaConsumer[Array[Byte], Array[Byte]]): Unit = {
     val committed = consumer.committed(consumer.assignment).asScala.filter(_._2 != null).map { case (k, v) => k -> v.offset }
 
-    consumer.assignment.asScala.foreach { topicPartition =>
+    consumer.assignment.forEach { topicPartition =>
       if (committed.contains(topicPartition))
         consumer.seek(topicPartition, committed(topicPartition))
       else
@@ -1622,11 +1653,8 @@ object TestUtils extends Logging {
   }
 
   def stringifyTopicPartitions(partitions: Set[TopicPartition]): String = {
-    Json.legacyEncodeAsString(
-      Map(
-        "partitions" -> partitions.map(tp => Map("topic" -> tp.topic, "partition" -> tp.partition))
-      )
-    )
+    Json.encodeAsString(Map("partitions" ->
+      partitions.map(tp => Map("topic" -> tp.topic, "partition" -> tp.partition).asJava).asJava).asJava)
   }
 
   def resource[R <: AutoCloseable, A](resource: R)(func: R => A): A = {
@@ -1720,7 +1748,7 @@ object TestUtils extends Logging {
     authorizer.createAcls(null, aclBindings.toList.asJava).asScala
       .map(_.toCompletableFuture.get)
       .foreach { result =>
-        result.exception.asScala.foreach { e => throw e }
+        result.exception.ifPresent { e => throw e }
       }
     val aclFilter = new AclBindingFilter(resource.toFilter, AccessControlEntryFilter.ANY)
     waitAndVerifyAcls(

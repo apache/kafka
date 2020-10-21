@@ -17,7 +17,7 @@
 
 package org.apache.kafka.streams.integration;
 
-
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serdes;
@@ -39,8 +39,10 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.TestName;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -49,30 +51,28 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
 
 @Category({IntegrationTest.class})
 public class KTableSourceTopicRestartIntegrationTest {
     private static final int NUM_BROKERS = 3;
     private static final String SOURCE_TOPIC = "source-topic";
+    private static final Properties PRODUCER_CONFIG = new Properties();
+    private static final Properties STREAMS_CONFIG = new Properties();
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+
     private final Time time = CLUSTER.time;
-    private KafkaStreams streamsOne;
     private final StreamsBuilder streamsBuilder = new StreamsBuilder();
     private final Map<String, String> readKeyValues = new ConcurrentHashMap<>();
 
-    private static final Properties PRODUCER_CONFIG = new Properties();
-    private static final Properties STREAMS_CONFIG = new Properties();
+    private String sourceTopic;
+    private KafkaStreams streams;
     private Map<String, String> expectedInitialResultsMap;
     private Map<String, String> expectedResultsWithDataWrittenDuringRestoreMap;
 
     @BeforeClass
-    public static void setUpBeforeAllTests() throws Exception {
-        CLUSTER.createTopic(SOURCE_TOPIC);
-
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, "ktable-restore-from-source");
+    public static void setUpBeforeAllTests() {
         STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         STREAMS_CONFIG.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         STREAMS_CONFIG.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
@@ -80,17 +80,26 @@ public class KTableSourceTopicRestartIntegrationTest {
         STREAMS_CONFIG.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         STREAMS_CONFIG.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 5);
         STREAMS_CONFIG.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, WallclockTimestampExtractor.class);
+        STREAMS_CONFIG.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000);
+        STREAMS_CONFIG.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 300);
 
         PRODUCER_CONFIG.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         PRODUCER_CONFIG.put(ProducerConfig.ACKS_CONFIG, "all");
         PRODUCER_CONFIG.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         PRODUCER_CONFIG.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-
     }
 
+    @Rule
+    public TestName testName = new TestName();
+
     @Before
-    public void before() {
-        final KTable<String, String> kTable = streamsBuilder.table(SOURCE_TOPIC, Materialized.as("store"));
+    public void before() throws Exception {
+        sourceTopic = SOURCE_TOPIC + "-" + testName.getMethodName();
+        CLUSTER.createTopic(sourceTopic);
+
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, IntegrationTestUtils.safeUniqueTestName(getClass(), testName));
+
+        final KTable<String, String> kTable = streamsBuilder.table(sourceTopic, Materialized.as("store"));
         kTable.toStream().foreach(readKeyValues::put);
 
         expectedInitialResultsMap = createExpectedResultsMap("a", "b", "c");
@@ -105,18 +114,18 @@ public class KTableSourceTopicRestartIntegrationTest {
     @Test
     public void shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEosDisabled() throws Exception {
         try {
-            streamsOne = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
-            streamsOne.start();
+            streams = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
+            streams.start();
 
             produceKeyValues("a", "b", "c");
 
             assertNumberValuesRead(readKeyValues, expectedInitialResultsMap, "Table did not read all values");
 
-            streamsOne.close();
-            streamsOne = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
+            streams.close();
+            streams = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
             // the state restore listener will append one record to the log
-            streamsOne.setGlobalStateRestoreListener(new UpdatingSourceTopicOnRestoreStartStateRestoreListener());
-            streamsOne.start();
+            streams.setGlobalStateRestoreListener(new UpdatingSourceTopicOnRestoreStartStateRestoreListener());
+            streams.start();
 
             produceKeyValues("f", "g", "h");
 
@@ -125,26 +134,36 @@ public class KTableSourceTopicRestartIntegrationTest {
                 expectedResultsWithDataWrittenDuringRestoreMap,
                 "Table did not get all values after restart");
         } finally {
-            streamsOne.close(Duration.ofSeconds(5));
+            streams.close(Duration.ofSeconds(5));
         }
     }
 
     @Test
-    public void shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEosEnabled() throws Exception {
+    public void shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEosAlphaEnabled() throws Exception {
+        STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+        shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEosEnabled();
+    }
+
+    @Test
+    public void shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEosBetaEnabled() throws Exception {
+        STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+        shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEosEnabled();
+    }
+
+    private void shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEosEnabled() throws Exception {
         try {
-            STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
-            streamsOne = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
-            streamsOne.start();
+            streams = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
+            streams.start();
 
             produceKeyValues("a", "b", "c");
 
             assertNumberValuesRead(readKeyValues, expectedInitialResultsMap, "Table did not read all values");
 
-            streamsOne.close();
-            streamsOne = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
+            streams.close();
+            streams = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
             // the state restore listener will append one record to the log
-            streamsOne.setGlobalStateRestoreListener(new UpdatingSourceTopicOnRestoreStartStateRestoreListener());
-            streamsOne.start();
+            streams.setGlobalStateRestoreListener(new UpdatingSourceTopicOnRestoreStartStateRestoreListener());
+            streams.start();
 
             produceKeyValues("f", "g", "h");
 
@@ -153,23 +172,23 @@ public class KTableSourceTopicRestartIntegrationTest {
                 expectedResultsWithDataWrittenDuringRestoreMap,
                 "Table did not get all values after restart");
         } finally {
-            streamsOne.close(Duration.ofSeconds(5));
+            streams.close(Duration.ofSeconds(5));
         }
     }
 
     @Test
     public void shouldRestoreAndProgressWhenTopicNotWrittenToDuringRestoration() throws Exception {
         try {
-            streamsOne = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
-            streamsOne.start();
+            streams = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
+            streams.start();
 
             produceKeyValues("a", "b", "c");
 
             assertNumberValuesRead(readKeyValues, expectedInitialResultsMap, "Table did not read all values");
 
-            streamsOne.close();
-            streamsOne = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
-            streamsOne.start();
+            streams.close();
+            streams = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
+            streams.start();
 
             produceKeyValues("f", "g", "h");
 
@@ -177,7 +196,7 @@ public class KTableSourceTopicRestartIntegrationTest {
 
             assertNumberValuesRead(readKeyValues, expectedValues, "Table did not get all values after restart");
         } finally {
-            streamsOne.close(Duration.ofSeconds(5));
+            streams.close(Duration.ofSeconds(5));
         }
     }
 
@@ -190,14 +209,14 @@ public class KTableSourceTopicRestartIntegrationTest {
             errorMessage);
     }
 
-    private void produceKeyValues(final String... keys) throws ExecutionException, InterruptedException {
+    private void produceKeyValues(final String... keys) {
         final List<KeyValue<String, String>> keyValueList = new ArrayList<>();
 
         for (final String key : keys) {
             keyValueList.add(new KeyValue<>(key, key + "1"));
         }
 
-        IntegrationTestUtils.produceKeyValuesSynchronously(SOURCE_TOPIC,
+        IntegrationTestUtils.produceKeyValuesSynchronously(sourceTopic,
                                                            keyValueList,
                                                            PRODUCER_CONFIG,
                                                            time);
@@ -218,11 +237,7 @@ public class KTableSourceTopicRestartIntegrationTest {
                                    final String storeName,
                                    final long startingOffset,
                                    final long endingOffset) {
-            try {
-                produceKeyValues("d");
-            } catch (final ExecutionException | InterruptedException e) {
-                throw new RuntimeException(e);
-            }
+            produceKeyValues("d");
         }
 
         @Override

@@ -23,9 +23,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
+import org.apache.kafka.clients.producer.BufferExhaustedException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Meter;
@@ -83,6 +83,12 @@ public class BufferPool {
         MetricName totalMetricName = metrics.metricName("bufferpool-wait-time-total",
                                                    metricGrpName,
                                                    "The total time an appender waits for space allocation.");
+
+        Sensor bufferExhaustedRecordSensor = metrics.sensor("buffer-exhausted-records");
+        MetricName bufferExhaustedRateMetricName = metrics.metricName("buffer-exhausted-rate", metricGrpName, "The average per-second number of record sends that are dropped due to buffer exhaustion");
+        MetricName bufferExhaustedTotalMetricName = metrics.metricName("buffer-exhausted-total", metricGrpName, "The total number of record sends that are dropped due to buffer exhaustion");
+        bufferExhaustedRecordSensor.add(new Meter(bufferExhaustedRateMetricName, bufferExhaustedTotalMetricName));
+
         this.waitTime.add(new Meter(TimeUnit.NANOSECONDS, rateMetricName, totalMetricName));
         this.closed = false;
     }
@@ -151,7 +157,8 @@ public class BufferPool {
                             throw new KafkaException("Producer closed while allocating memory");
 
                         if (waitingTimeElapsed) {
-                            throw new TimeoutException("Failed to allocate memory within the configured max blocking time " + maxTimeToBlockMs + " ms.");
+                            this.metrics.sensor("buffer-exhausted-records").record();
+                            throw new BufferExhaustedException("Failed to allocate memory within the configured max blocking time " + maxTimeToBlockMs + " ms.");
                         }
 
                         remainingTimeToBlockNs -= timeNs;

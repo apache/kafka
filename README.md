@@ -4,14 +4,16 @@ See our [web site](https://kafka.apache.org) for details on the project.
 
 You need to have [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
 
-Java 8 should be used for building in order to support both Java 8 and Java 11 at runtime.
+We build and test Apache Kafka with Java 8, 11 and 15. We set the `release` parameter in javac and scalac
+to `8` to ensure the generated binaries are compatible with Java 8 or higher (independently of the Java version
+used for compilation).
 
-Scala 2.12 is used by default, see below for how to use a different Scala version or all of the supported Scala versions.
+Scala 2.13 is used by default, see below for how to use a different Scala version or all of the supported Scala versions.
 
 ### Build a jar and run it ###
     ./gradlew jar
 
-Follow instructions in https://kafka.apache.org/documentation.html#quickstart
+Follow instructions in https://kafka.apache.org/quickstart
 
 ### Build source jar ###
     ./gradlew srcJar
@@ -58,11 +60,11 @@ See [Test Retry Gradle Plugin](https://github.com/gradle/test-retry-gradle-plugi
 ### Generating test coverage reports ###
 Generate coverage reports for the whole project:
 
-    ./gradlew reportCoverage
+    ./gradlew reportCoverage -PenableTestCoverage=true
 
 Generate coverage for a single module, i.e.: 
 
-    ./gradlew clients:reportCoverage
+    ./gradlew clients:reportCoverage -PenableTestCoverage=true
     
 ### Building a binary release gzipped tar ball ###
     ./gradlew clean releaseTarGz
@@ -73,11 +75,17 @@ The above command will fail if you haven't set up the signing key. To bypass sig
 
 The release file can be found inside `./core/build/distributions/`.
 
+### Building auto generated messages ###
+Sometimes it is only necessary to rebuild the RPC auto-generated message data when switching between branches, as they could
+fail due to code changes. You can just run:
+ 
+    ./gradlew processMessages processTestMessages
+
 ### Cleaning the build ###
     ./gradlew clean
 
 ### Running a task with one of the Scala versions available (2.12.x or 2.13.x) ###
-*Note that if building the jars with a version other than 2.12.x, you need to set the `SCALA_VERSION` variable or change it in `bin/kafka-run-class.sh` to run the quick start.*
+*Note that if building the jars with a version other than 2.13.x, you need to set the `SCALA_VERSION` variable or change it in `bin/kafka-run-class.sh` to run the quick start.*
 
 You can pass either the major version (eg 2.12) or the full version (eg 2.12.7):
 
@@ -87,17 +95,21 @@ You can pass either the major version (eg 2.12) or the full version (eg 2.12.7):
 
 ### Running a task with all the scala versions enabled by default ###
 
-Append `All` to the task name:
+Invoke the `gradlewAll` script followed by the task(s):
 
-    ./gradlew testAll
-    ./gradlew jarAll
-    ./gradlew releaseTarGzAll
+    ./gradlewAll test
+    ./gradlewAll jar
+    ./gradlewAll releaseTarGz
 
 ### Running a task for a specific project ###
 This is for `core`, `examples` and `clients`
 
     ./gradlew core:jar
     ./gradlew core:test
+
+Streams has multiple sub-projects, but you can run all the tests:
+
+    ./gradlew :streams:testAll
 
 ### Listing all gradle tasks ###
     ./gradlew tasks
@@ -113,7 +125,7 @@ build directory (`${project_dir}/bin`) clashes with Kafka's scripts directory an
 to avoid known issues with this configuration.
 
 ### Publishing the jar for all version of Scala and for all projects to maven ###
-    ./gradlew uploadArchivesAll
+    ./gradlewAll uploadArchives
 
 Please note for this to work you should create/update `${GRADLE_USER_HOME}/gradle.properties` (typically, `~/.gradle/gradle.properties`) and assign the following variables
 
@@ -155,7 +167,7 @@ Please note for this to work you should create/update user maven settings (typic
 
 
 ### Installing the jars to the local Maven repository ###
-    ./gradlew installAll
+    ./gradlewAll install
 
 ### Building the test jar ###
     ./gradlew testJar
@@ -194,12 +206,16 @@ The following options should be set with a `-P` switch, for example `./gradlew -
 * `commitId`: sets the build commit ID as .git/HEAD might not be correct if there are local commits added for build purposes.
 * `mavenUrl`: sets the URL of the maven deployment repository (`file://path/to/repo` can be used to point to a local repository).
 * `maxParallelForks`: limits the maximum number of processes for each task.
+* `ignoreFailures`: ignore test failures from junit
 * `showStandardStreams`: shows standard out and standard error of the test JVM(s) on the console.
 * `skipSigning`: skips signing of artifacts.
 * `testLoggingEvents`: unit test events to be logged, separated by comma. For example `./gradlew -PtestLoggingEvents=started,passed,skipped,failed test`.
 * `xmlSpotBugsReport`: enable XML reports for spotBugs. This also disables HTML reports as only one can be enabled at a time.
 * `maxTestRetries`: the maximum number of retries for a failing test case.
 * `maxTestRetryFailures`: maximum number of test failures before retrying is disabled for subsequent tests.
+* `enableTestCoverage`: enables test coverage plugins and tasks, including bytecode enhancement of classes required to track said
+coverage. Note that this introduces some overhead when running tests and hence why it's disabled by default (the overhead
+varies, but 15-20% is a reasonable estimate).
 
 ### Dependency Analysis ###
 

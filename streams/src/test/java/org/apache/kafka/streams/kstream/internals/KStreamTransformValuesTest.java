@@ -93,7 +93,7 @@ public class KStreamTransformValuesTest {
             new KeyValueTimestamp<>(100, 1110, 50),
             new KeyValueTimestamp<>(1000, 11110, 500)};
 
-        assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
+        assertArrayEquals(expected, supplier.theCapturedProcessor().processed().toArray());
     }
 
     @Test
@@ -135,7 +135,7 @@ public class KStreamTransformValuesTest {
             new KeyValueTimestamp<>(100, 1221, 50),
             new KeyValueTimestamp<>(1000, 12221, 500)};
 
-        assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
+        assertArrayEquals(expected, supplier.theCapturedProcessor().processed().toArray());
     }
 
     @SuppressWarnings("unchecked")

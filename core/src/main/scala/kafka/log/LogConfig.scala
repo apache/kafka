@@ -113,7 +113,7 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
 object LogConfig {
 
   def main(args: Array[String]): Unit = {
-    println(configDef.toHtml)
+    println(configDef.toHtml(4, (config: String) => "topicconfigs_" + config))
   }
 
   val SegmentBytesProp = TopicConfig.SEGMENT_BYTES_CONFIG
@@ -308,7 +308,7 @@ object LogConfig {
    */
   def fromProps(defaults: java.util.Map[_ <: Object, _ <: Object], overrides: Properties): LogConfig = {
     val props = new Properties()
-    defaults.asScala.foreach { case (k, v) => props.put(k, v) }
+    defaults.forEach { (k, v) => props.put(k, v) }
     props ++= overrides
     val overriddenKeys = overrides.keySet.asScala.map(_.asInstanceOf[String]).toSet
     new LogConfig(props, overriddenKeys)

@@ -17,13 +17,14 @@
 
 package kafka.server
 
+import org.apache.kafka.clients.admin.{ScramCredentialInfo, ScramMechanism, UserScramCredentialUpsertion}
 import org.apache.kafka.common.errors.{InvalidRequestException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.requests.{AlterClientQuotasRequest, AlterClientQuotasResponse, DescribeClientQuotasRequest, DescribeClientQuotasResponse}
 import org.junit.Assert._
 import org.junit.Test
-
+import java.util
 import java.util.concurrent.{ExecutionException, TimeUnit}
 
 import scala.jdk.CollectionConverters._
@@ -37,6 +38,7 @@ class ClientQuotasRequestTest extends BaseRequestTest {
 
   @Test
   def testAlterClientQuotasRequest(): Unit = {
+
     val entity = new ClientQuotaEntity(Map((ClientQuotaEntity.USER -> "user"), (ClientQuotaEntity.CLIENT_ID -> "client-id")).asJava)
 
     // Expect an empty configuration.
@@ -159,6 +161,29 @@ class ClientQuotasRequestTest extends BaseRequestTest {
     verifyDescribeEntityQuotas(entity, Map(
       (ProducerByteRateProp -> 20000.0),
       (RequestPercentageProp -> 23.45)
+    ))
+  }
+
+  @Test
+  def testClientQuotasForScramUsers(): Unit = {
+    val userName = "user"
+
+    val results = createAdminClient().alterUserScramCredentials(util.Arrays.asList(
+      new UserScramCredentialUpsertion(userName, new ScramCredentialInfo(ScramMechanism.SCRAM_SHA_256, 4096), "password")))
+    results.all.get
+
+    val entity = new ClientQuotaEntity(Map(ClientQuotaEntity.USER -> userName).asJava)
+
+    verifyDescribeEntityQuotas(entity, Map.empty)
+
+    alterEntityQuotas(entity, Map(
+      (ProducerByteRateProp -> Some(10000.0)),
+      (ConsumerByteRateProp -> Some(20000.0))
+    ), validateOnly = false)
+
+    verifyDescribeEntityQuotas(entity, Map(
+      (ProducerByteRateProp -> 10000.0),
+      (ConsumerByteRateProp -> 20000.0)
     ))
   }
 
@@ -380,6 +405,20 @@ class ClientQuotasRequestTest extends BaseRequestTest {
     verifyDescribeEntityQuotas(entity, Map(
       (ProducerByteRateProp -> 20000.0),
     ))
+  }
+
+  @Test
+  def testClientQuotasWithDefaultName(): Unit = {
+    // An entity using the name associated with the default entity name. The entity's name should be sanitized so
+    // that it does not conflict with the default entity name.
+    val entity = new ClientQuotaEntity(Map((ClientQuotaEntity.CLIENT_ID -> ConfigEntityName.Default)).asJava)
+    alterEntityQuotas(entity, Map((ProducerByteRateProp -> Some(20000.0))), validateOnly = false)
+    verifyDescribeEntityQuotas(entity, Map((ProducerByteRateProp -> 20000.0)))
+
+    // This should not match.
+    val result = describeClientQuotas(
+      ClientQuotaFilter.containsOnly(List(ClientQuotaFilterComponent.ofDefaultEntity(ClientQuotaEntity.CLIENT_ID)).asJava))
+    assert(result.isEmpty)
   }
 
   private def verifyDescribeEntityQuotas(entity: ClientQuotaEntity, quotas: Map[String, Double]) = {

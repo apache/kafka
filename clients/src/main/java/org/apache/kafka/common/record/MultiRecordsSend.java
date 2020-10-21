@@ -118,6 +118,15 @@ public class MultiRecordsSend implements Send {
         return recordConversionStats;
     }
 
+    @Override
+    public String toString() {
+        return "MultiRecordsSend(" +
+            "dest='" + dest + "'" +
+            ", size=" + size +
+            ", totalWritten=" + totalWritten +
+            ')';
+    }
+
     private void updateRecordConversionStats(Send completedSend) {
         // The underlying send might have accumulated statistics that need to be recorded. For example,
         // LazyDownConversionRecordsSend accumulates statistics related to the number of bytes down-converted, the amount

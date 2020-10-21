@@ -36,7 +36,7 @@ public class DeleteRecordsResponse extends AbstractResponse {
      *
      * OFFSET_OUT_OF_RANGE (1)
      * UNKNOWN_TOPIC_OR_PARTITION (3)
-     * NOT_LEADER_FOR_PARTITION (6)
+     * NOT_LEADER_OR_FOLLOWER (6)
      * REQUEST_TIMED_OUT (7)
      * UNKNOWN (-1)
      */
@@ -66,11 +66,11 @@ public class DeleteRecordsResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
-        for (DeleteRecordsResponseData.DeleteRecordsTopicResult topicResponses : data.topics()) {
-            for (DeleteRecordsResponseData.DeleteRecordsPartitionResult response : topicResponses.partitions()) {
-                updateErrorCounts(errorCounts, Errors.forCode(response.errorCode()));
-            }
-        }
+        data.topics().forEach(topicResponses ->
+            topicResponses.partitions().forEach(response ->
+                updateErrorCounts(errorCounts, Errors.forCode(response.errorCode()))
+            )
+        );
         return errorCounts;
     }
 

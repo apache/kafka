@@ -140,7 +140,7 @@ public class KStreamWindowAggregateTest {
                 new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(5, 15)),  "0+2+2+2+2+3",  13)
 
                 ),
-            supplier.theCapturedProcessor().processed
+            supplier.theCapturedProcessor().processed()
         );
     }
 
@@ -189,8 +189,8 @@ public class KStreamWindowAggregateTest {
                 new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)),  "0+1+1",  9),
                 new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)),  "0+1",  9)
             );
-            processors.get(1).checkAndClearProcessResult(new KeyValueTimestamp[0]);
-            processors.get(2).checkAndClearProcessResult(new KeyValueTimestamp[0]);
+            processors.get(1).checkAndClearProcessResult();
+            processors.get(2).checkAndClearProcessResult();
 
             inputTopic1.pipeInput("A", "1", 5L);
             inputTopic1.pipeInput("B", "2", 6L);
@@ -210,8 +210,8 @@ public class KStreamWindowAggregateTest {
                 new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(0, 10)),  "0+3+3",  9),
                 new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(5, 15)),  "0+3",  9)
             );
-            processors.get(1).checkAndClearProcessResult(new KeyValueTimestamp[0]);
-            processors.get(2).checkAndClearProcessResult(new KeyValueTimestamp[0]);
+            processors.get(1).checkAndClearProcessResult();
+            processors.get(2).checkAndClearProcessResult();
 
             inputTopic2.pipeInput("A", "a", 0L);
             inputTopic2.pipeInput("B", "b", 1L);
@@ -219,7 +219,7 @@ public class KStreamWindowAggregateTest {
             inputTopic2.pipeInput("D", "d", 20L);
             inputTopic2.pipeInput("A", "a", 20L);
 
-            processors.get(0).checkAndClearProcessResult(new KeyValueTimestamp[0]);
+            processors.get(0).checkAndClearProcessResult();
             processors.get(1).checkAndClearProcessResult(
                 new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)),  "0+a",  0),
                 new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(0, 10)),  "0+b",  1),
@@ -240,7 +240,7 @@ public class KStreamWindowAggregateTest {
             inputTopic2.pipeInput("D", "d", 18L);
             inputTopic2.pipeInput("A", "a", 21L);
 
-            processors.get(0).checkAndClearProcessResult(new KeyValueTimestamp[0]);
+            processors.get(0).checkAndClearProcessResult();
             processors.get(1).checkAndClearProcessResult(
                 new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)),  "0+a+a",  5),
                 new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)),  "0+a",  5),
@@ -288,13 +288,14 @@ public class KStreamWindowAggregateTest {
                 Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonicalized").withValueSerde(Serdes.String())
             );
 
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
         props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamWindowAggregate.class);
+             final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
             inputTopic.pipeInput(null, "1");
-            LogCaptureAppender.unregister(appender);
 
             if (StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion)) {
                 assertEquals(
@@ -333,10 +334,11 @@ public class KStreamWindowAggregateTest {
                .map((key, value) -> new KeyValue<>(key.toString(), value))
                .to("output");
 
-        LogCaptureAppender.setClassLoggerToDebug(KStreamWindowAggregate.class);
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
         props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamWindowAggregate.class);
+             final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+
             final TestInputTopic<String, String> inputTopic =
                     driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
             inputTopic.pipeInput("k", "100", 100L);
@@ -347,7 +349,6 @@ public class KStreamWindowAggregateTest {
             inputTopic.pipeInput("k", "4", 4L);
             inputTopic.pipeInput("k", "5", 5L);
             inputTopic.pipeInput("k", "6", 6L);
-            LogCaptureAppender.unregister(appender);
 
             assertLatenessMetrics(
                 driver,
@@ -370,10 +371,10 @@ public class KStreamWindowAggregateTest {
             final TestOutputTopic<String, String> outputTopic =
                     driver.createOutputTopic("output", new StringDeserializer(), new StringDeserializer());
 
-            assertThat(outputTopic.readRecord(), equalTo(new TestRecord<String, String>("[k@95/105]", "+100", null, 100L)));
-            assertThat(outputTopic.readRecord(), equalTo(new TestRecord<String, String>("[k@100/110]", "+100", null, 100L)));
-            assertThat(outputTopic.readRecord(), equalTo(new TestRecord<String, String>("[k@5/15]", "+5", null, 5L)));
-            assertThat(outputTopic.readRecord(), equalTo(new TestRecord<String, String>("[k@5/15]", "+5+6", null, 6L)));
+            assertThat(outputTopic.readRecord(), equalTo(new TestRecord<>("[k@95/105]", "+100", null, 100L)));
+            assertThat(outputTopic.readRecord(), equalTo(new TestRecord<>("[k@100/110]", "+100", null, 100L)));
+            assertThat(outputTopic.readRecord(), equalTo(new TestRecord<>("[k@5/15]", "+5", null, 5L)));
+            assertThat(outputTopic.readRecord(), equalTo(new TestRecord<>("[k@5/15]", "+5+6", null, 6L)));
             assertTrue(outputTopic.isEmpty());
         }
     }
@@ -404,10 +405,11 @@ public class KStreamWindowAggregateTest {
                .map((key, value) -> new KeyValue<>(key.toString(), value))
                .to("output");
 
-        LogCaptureAppender.setClassLoggerToDebug(KStreamWindowAggregate.class);
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
         props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamWindowAggregate.class);
+             final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+
             final TestInputTopic<String, String> inputTopic =
                     driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
             inputTopic.pipeInput("k", "100", 200L);
@@ -418,7 +420,6 @@ public class KStreamWindowAggregateTest {
             inputTopic.pipeInput("k", "4", 104L);
             inputTopic.pipeInput("k", "5", 105L);
             inputTopic.pipeInput("k", "6", 6L);
-            LogCaptureAppender.unregister(appender);
 
             assertLatenessMetrics(driver, builtInMetricsVersion, is(7.0), is(194.0), is(97.375));
 
@@ -434,7 +435,7 @@ public class KStreamWindowAggregateTest {
 
             final TestOutputTopic<String, String> outputTopic =
                     driver.createOutputTopic("output", new StringDeserializer(), new StringDeserializer());
-            assertThat(outputTopic.readRecord(), equalTo(new TestRecord<String, String>("[k@200/210]", "+100", null, 200L)));
+            assertThat(outputTopic.readRecord(), equalTo(new TestRecord<>("[k@200/210]", "+100", null, 200L)));
             assertTrue(outputTopic.isEmpty());
         }
     }

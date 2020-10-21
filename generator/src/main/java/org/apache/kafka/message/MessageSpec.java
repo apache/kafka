@@ -106,7 +106,17 @@ public final class MessageSpec {
         return flexibleVersions.toString();
     }
 
-    public String generatedClassName() {
-        return struct.name() + "Data";
+    public String dataClassName() {
+        switch (type) {
+            case HEADER:
+            case REQUEST:
+            case RESPONSE:
+                // We append the Data suffix to request/response/header classes to avoid
+                // collisions with existing objects. This can go away once the protocols
+                // have all been converted and we begin using the generated types directly.
+                return struct.name() + "Data";
+            default:
+                return struct.name();
+        }
     }
 }

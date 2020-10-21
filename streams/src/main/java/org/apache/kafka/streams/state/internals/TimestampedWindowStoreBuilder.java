@@ -29,11 +29,15 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Objects;
 
 public class TimestampedWindowStoreBuilder<K, V>
     extends AbstractStoreBuilder<K, ValueAndTimestamp<V>, TimestampedWindowStore<K, V>> {
+
+    private static final Logger LOG = LoggerFactory.getLogger(TimestampedWindowStoreBuilder.class);
 
     private final WindowBytesStoreSupplier storeSupplier;
 
@@ -56,6 +60,11 @@ public class TimestampedWindowStoreBuilder<K, V>
                 store = new InMemoryTimestampedWindowStoreMarker(store);
             }
         }
+        if (storeSupplier.retainDuplicates() && enableCaching) {
+            LOG.warn("Disabling caching for {} since store was configured to retain duplicates", storeSupplier.name());
+            enableCaching = false;
+        }
+
         return new MeteredTimestampedWindowStore<>(
             maybeWrapCaching(maybeWrapLogging(store)),
             storeSupplier.windowSize(),
@@ -133,13 +142,28 @@ public class TimestampedWindowStoreBuilder<K, V>
             return wrapped.fetch(key, timeFrom, timeTo);
         }
 
+        @Override
+        public WindowStoreIterator<byte[]> backwardFetch(final Bytes key,
+                                                         final long timeFrom,
+                                                         final long timeTo) {
+            return wrapped.backwardFetch(key, timeFrom, timeTo);
+        }
+
         @SuppressWarnings("deprecation")
         @Override
-        public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from,
-                                                               final Bytes to,
+        public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom,
+                                                               final Bytes keyTo,
                                                                final long timeFrom,
                                                                final long timeTo) {
-            return wrapped.fetch(from, to, timeFrom, timeTo);
+            return wrapped.fetch(keyFrom, keyTo, timeFrom, timeTo);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom,
+                                                                       final Bytes keyTo,
+                                                                       final long timeFrom,
+                                                                       final long timeTo) {
+            return wrapped.backwardFetch(keyFrom, keyTo, timeFrom, timeTo);
         }
 
         @SuppressWarnings("deprecation")
@@ -150,8 +174,19 @@ public class TimestampedWindowStoreBuilder<K, V>
         }
 
         @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetchAll(final long timeFrom,
+                                                                          final long timeTo) {
+            return wrapped.backwardFetchAll(timeFrom, timeTo);
+        }
+
+        @Override
         public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
             return wrapped.all();
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> backwardAll() {
+            return wrapped.backwardAll();
         }
 
         @Override
@@ -163,6 +198,7 @@ public class TimestampedWindowStoreBuilder<K, V>
         public void close() {
             wrapped.close();
         }
+
         @Override
         public boolean isOpen() {
             return wrapped.isOpen();

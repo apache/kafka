@@ -60,7 +60,7 @@ class HighwatermarkPersistenceTest {
 
     // create kafka scheduler
     val scheduler = new KafkaScheduler(2)
-    scheduler.startup
+    scheduler.startup()
     val metrics = new Metrics
     val time = new MockTime
     // create replica manager
@@ -75,7 +75,7 @@ class HighwatermarkPersistenceTest {
       val tp0 = new TopicPartition(topic, 0)
       val partition0 = replicaManager.createPartition(tp0)
       // create leader and follower replicas
-      val log0 = logManagers.head.getOrCreateLog(new TopicPartition(topic, 0), LogConfig())
+      val log0 = logManagers.head.getOrCreateLog(new TopicPartition(topic, 0), () => LogConfig())
       partition0.setLog(log0, isFutureLog = false)
 
       partition0.updateAssignmentAndIsr(
@@ -110,7 +110,7 @@ class HighwatermarkPersistenceTest {
     EasyMock.replay(zkClient)
     // create kafka scheduler
     val scheduler = new KafkaScheduler(2)
-    scheduler.startup
+    scheduler.startup()
     val metrics = new Metrics
     val time = new MockTime
     // create replica manager
@@ -125,7 +125,7 @@ class HighwatermarkPersistenceTest {
       val t1p0 = new TopicPartition(topic1, 0)
       val topic1Partition0 = replicaManager.createPartition(t1p0)
       // create leader log
-      val topic1Log0 = logManagers.head.getOrCreateLog(t1p0, LogConfig())
+      val topic1Log0 = logManagers.head.getOrCreateLog(t1p0, () => LogConfig())
       // create a local replica for topic1
       topic1Partition0.setLog(topic1Log0, isFutureLog = false)
       replicaManager.checkpointHighWatermarks()
@@ -142,7 +142,7 @@ class HighwatermarkPersistenceTest {
       val t2p0 = new TopicPartition(topic2, 0)
       val topic2Partition0 = replicaManager.createPartition(t2p0)
       // create leader log
-      val topic2Log0 = logManagers.head.getOrCreateLog(t2p0, LogConfig())
+      val topic2Log0 = logManagers.head.getOrCreateLog(t2p0, () => LogConfig())
       // create a local replica for topic2
       topic2Partition0.setLog(topic2Log0, isFutureLog = false)
       replicaManager.checkpointHighWatermarks()
@@ -178,7 +178,7 @@ class HighwatermarkPersistenceTest {
   }
 
   private def hwmFor(replicaManager: ReplicaManager, topic: String, partition: Int): Long = {
-    replicaManager.highWatermarkCheckpoints(new File(replicaManager.config.logDirs.head).getAbsolutePath).read.getOrElse(
+    replicaManager.highWatermarkCheckpoints(new File(replicaManager.config.logDirs.head).getAbsolutePath).read().getOrElse(
       new TopicPartition(topic, partition), 0L)
   }
 }

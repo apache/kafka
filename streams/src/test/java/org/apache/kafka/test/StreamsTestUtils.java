@@ -30,6 +30,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -63,8 +64,8 @@ public final class StreamsTestUtils {
         return props;
     }
 
-    public static Properties getStreamsConfig(final Serde keyDeserializer,
-                                              final Serde valueDeserializer) {
+    public static Properties getStreamsConfig(final Serde<?> keyDeserializer,
+                                              final Serde<?> valueDeserializer) {
         return getStreamsConfig(
                 UUID.randomUUID().toString(),
                 "localhost:9091",
@@ -106,7 +107,9 @@ public final class StreamsTestUtils {
         kafkaStreams.start();
         assertThat(
             "KafkaStreams did not transit to RUNNING state within " + timeoutMs + " milli seconds.",
-            countDownLatch.await(timeoutMs, TimeUnit.MILLISECONDS), equalTo(true));
+            countDownLatch.await(timeoutMs, TimeUnit.MILLISECONDS),
+            equalTo(true)
+        );
     }
 
     public static <K, V> List<KeyValue<K, V>> toList(final Iterator<KeyValue<K, V>> iterator) {
@@ -119,7 +122,7 @@ public final class StreamsTestUtils {
     }
 
     public static <K, V> Set<KeyValue<K, V>> toSet(final Iterator<KeyValue<K, V>> iterator) {
-        final Set<KeyValue<K, V>> results = new HashSet<>();
+        final Set<KeyValue<K, V>> results = new LinkedHashSet<>();
 
         while (iterator.hasNext()) {
             results.add(iterator.next());

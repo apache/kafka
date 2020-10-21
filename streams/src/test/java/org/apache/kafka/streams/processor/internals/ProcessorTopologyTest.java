@@ -33,18 +33,18 @@ import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.test.TestRecord;
-import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -53,8 +53,13 @@ import org.junit.Test;
 import java.io.File;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.Properties;
+import java.util.Set;
+import java.util.function.Supplier;
 
+import static java.util.Arrays.asList;
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -79,11 +84,10 @@ public class ProcessorTopologyTest {
     private static final Headers HEADERS = new RecordHeaders(new Header[]{HEADER});
 
     private final TopologyWrapper topology = new TopologyWrapper();
-    private final MockProcessorSupplier<?, ?> mockProcessorSupplier = new MockProcessorSupplier<>();
+    private final MockApiProcessorSupplier<?, ?, ?, ?> mockProcessorSupplier = new MockApiProcessorSupplier<>();
 
     private TopologyTestDriver driver;
     private final Properties props = new Properties();
-
 
     @Before
     public void setup() {
@@ -110,8 +114,8 @@ public class ProcessorTopologyTest {
     public void testTopologyMetadata() {
         topology.addSource("source-1", "topic-1");
         topology.addSource("source-2", "topic-2", "topic-3");
-        topology.addProcessor("processor-1", new MockProcessorSupplier<>(), "source-1");
-        topology.addProcessor("processor-2", new MockProcessorSupplier<>(), "source-1", "source-2");
+        topology.addProcessor("processor-1", new MockApiProcessorSupplier<>(), "source-1");
+        topology.addProcessor("processor-2", new MockApiProcessorSupplier<>(), "source-1", "source-2");
         topology.addSink("sink-1", "topic-3", "processor-1");
         topology.addSink("sink-2", "topic-4", "processor-1", "processor-2");
 
@@ -130,6 +134,42 @@ public class ProcessorTopologyTest {
         assertNotNull(processorTopology.source("topic-3"));
 
         assertEquals(processorTopology.source("topic-2"), processorTopology.source("topic-3"));
+    }
+
+    @Test
+    public void shouldGetTerminalNodes() {
+        topology.addSource("source-1", "topic-1");
+        topology.addSource("source-2", "topic-2", "topic-3");
+        topology.addProcessor("processor-1", new MockApiProcessorSupplier<>(), "source-1");
+        topology.addProcessor("processor-2", new MockApiProcessorSupplier<>(), "source-1", "source-2");
+        topology.addSink("sink-1", "topic-3", "processor-1");
+
+        final ProcessorTopology processorTopology = topology.getInternalBuilder("X").buildTopology();
+
+        assertThat(processorTopology.terminalNodes(), equalTo(mkSet("processor-2", "sink-1")));
+    }
+
+    @Test
+    public void shouldUpdateSourceTopicsWithNewMatchingTopic() {
+        topology.addSource("source-1", "topic-1");
+        final ProcessorTopology processorTopology = topology.getInternalBuilder("X").buildTopology();
+
+        assertNull(processorTopology.source("topic-2"));
+        processorTopology.updateSourceTopics(Collections.singletonMap("source-1", asList("topic-1", "topic-2")));
+
+        assertThat(processorTopology.source("topic-2").name(), equalTo("source-1"));
+    }
+
+    @Test
+    public void shouldUpdateSourceTopicsWithRemovedTopic() {
+        topology.addSource("source-1", "topic-1", "topic-2");
+        final ProcessorTopology processorTopology = topology.getInternalBuilder("X").buildTopology();
+
+        assertThat(processorTopology.source("topic-2").name(), equalTo("source-1"));
+
+        processorTopology.updateSourceTopics(Collections.singletonMap("source-1", Collections.singletonList("topic-1")));
+
+        assertNull(processorTopology.source("topic-2"));
     }
 
     @Test
@@ -234,6 +274,88 @@ public class ProcessorTopologyTest {
     }
 
     @Test
+    public void testDrivingConnectedStateStoreTopology() {
+        driver = new TopologyTestDriver(createConnectedStateStoreTopology("connectedStore"), props);
+        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
+        final TestOutputTopic<Integer, String> outputTopic1 =
+            driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.Integer().deserializer(), Serdes.String().deserializer());
+
+        inputTopic.pipeInput("key1", "value1");
+        inputTopic.pipeInput("key2", "value2");
+        inputTopic.pipeInput("key3", "value3");
+        inputTopic.pipeInput("key1", "value4");
+        assertTrue(outputTopic1.isEmpty());
+
+        final KeyValueStore<String, String> store = driver.getKeyValueStore("connectedStore");
+        assertEquals("value4", store.get("key1"));
+        assertEquals("value2", store.get("key2"));
+        assertEquals("value3", store.get("key3"));
+        assertNull(store.get("key4"));
+    }
+
+    @Test
+    public void testDrivingConnectedStateStoreInDifferentProcessorsTopologyWithOldAPI() {
+        final String storeName = "connectedStore";
+        final StoreBuilder<KeyValueStore<String, String>> storeBuilder =
+            Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore(storeName), Serdes.String(), Serdes.String());
+        topology
+            .addSource("source1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
+            .addSource("source2", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_2)
+            .addProcessor("processor1", defineWithStoresOldAPI(() -> new OldAPIStatefulProcessor(storeName), Collections.singleton(storeBuilder)), "source1")
+            .addProcessor("processor2", defineWithStoresOldAPI(() -> new OldAPIStatefulProcessor(storeName), Collections.singleton(storeBuilder)), "source2")
+            .addSink("counts", OUTPUT_TOPIC_1, "processor1", "processor2");
+
+        driver = new TopologyTestDriver(topology, props);
+
+        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
+        final TestOutputTopic<Integer, String> outputTopic1 =
+            driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.Integer().deserializer(), Serdes.String().deserializer());
+
+        inputTopic.pipeInput("key1", "value1");
+        inputTopic.pipeInput("key2", "value2");
+        inputTopic.pipeInput("key3", "value3");
+        inputTopic.pipeInput("key1", "value4");
+        assertTrue(outputTopic1.isEmpty());
+
+        final KeyValueStore<String, String> store = driver.getKeyValueStore("connectedStore");
+        assertEquals("value4", store.get("key1"));
+        assertEquals("value2", store.get("key2"));
+        assertEquals("value3", store.get("key3"));
+        assertNull(store.get("key4"));
+    }
+
+    @Test
+    public void testDrivingConnectedStateStoreInDifferentProcessorsTopology() {
+        final String storeName = "connectedStore";
+        final StoreBuilder<KeyValueStore<String, String>> storeBuilder =
+            Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore(storeName), Serdes.String(), Serdes.String());
+        topology
+            .addSource("source1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
+            .addSource("source2", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_2)
+            .addProcessor("processor1", defineWithStores(() -> new StatefulProcessor(storeName), Collections.singleton(storeBuilder)), "source1")
+            .addProcessor("processor2", defineWithStores(() -> new StatefulProcessor(storeName), Collections.singleton(storeBuilder)), "source2")
+            .addSink("counts", OUTPUT_TOPIC_1, "processor1", "processor2");
+
+        driver = new TopologyTestDriver(topology, props);
+
+        final TestInputTopic<String, String> inputTopic = driver.createInputTopic(INPUT_TOPIC_1, STRING_SERIALIZER, STRING_SERIALIZER);
+        final TestOutputTopic<Integer, String> outputTopic1 =
+            driver.createOutputTopic(OUTPUT_TOPIC_1, Serdes.Integer().deserializer(), Serdes.String().deserializer());
+
+        inputTopic.pipeInput("key1", "value1");
+        inputTopic.pipeInput("key2", "value2");
+        inputTopic.pipeInput("key3", "value3");
+        inputTopic.pipeInput("key1", "value4");
+        assertTrue(outputTopic1.isEmpty());
+
+        final KeyValueStore<String, String> store = driver.getKeyValueStore("connectedStore");
+        assertEquals("value4", store.get("key1"));
+        assertEquals("value2", store.get("key2"));
+        assertEquals("value3", store.get("key3"));
+        assertNull(store.get("key4"));
+    }
+
+    @Test
     public void shouldDriveGlobalStore() {
         final String storeName = "my-store";
         final String global = "global";
@@ -250,7 +372,7 @@ public class ProcessorTopologyTest {
             STRING_DESERIALIZER,
             topic,
             "processor",
-            define(new StatefulProcessor(storeName)));
+            define(new OldAPIStatefulProcessor(storeName)));
 
         driver = new TopologyTestDriver(topology, props);
         final TestInputTopic<String, String> inputTopic = driver.createInputTopic(topic, STRING_SERIALIZER, STRING_SERIALIZER);
@@ -494,7 +616,7 @@ public class ProcessorTopologyTest {
         final StoreBuilder<KeyValueStore<String, String>> storeBuilder =
                 Stores.keyValueStoreBuilder(storeSupplier, Serdes.String(), Serdes.String());
         topology.addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, "topic")
-                .addProcessor(processor, (ProcessorSupplier<String, String>) () -> new StatefulProcessor(storeSupplier.name()), "source")
+                .addProcessor(processor, () -> new StatefulProcessor(storeSupplier.name()), "source")
                 .addStateStore(storeBuilder, processor);
         return topology.getInternalBuilder("anyAppId").buildTopology();
     }
@@ -504,7 +626,7 @@ public class ProcessorTopologyTest {
         final StoreBuilder<KeyValueStore<String, String>> storeBuilder =
                 Stores.keyValueStoreBuilder(storeSupplier, Serdes.String(), Serdes.String()).withLoggingDisabled();
         topology.addGlobalStore(storeBuilder, "global", STRING_DESERIALIZER, STRING_DESERIALIZER, "topic", "processor",
-                define(new StatefulProcessor(storeSupplier.name())));
+                define(new OldAPIStatefulProcessor(storeSupplier.name())));
         return topology.getInternalBuilder("anyAppId").buildTopology();
     }
 
@@ -579,8 +701,16 @@ public class ProcessorTopologyTest {
     private Topology createStatefulTopology(final String storeName) {
         return topology
             .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-            .addProcessor("processor", define(new StatefulProcessor(storeName)), "source")
+            .addProcessor("processor", define(new OldAPIStatefulProcessor(storeName)), "source")
             .addStateStore(Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore(storeName), Serdes.String(), Serdes.String()), "processor")
+            .addSink("counts", OUTPUT_TOPIC_1, "processor");
+    }
+
+    private Topology createConnectedStateStoreTopology(final String storeName) {
+        final StoreBuilder<KeyValueStore<String, String>> storeBuilder = Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore(storeName), Serdes.String(), Serdes.String());
+        return topology
+            .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
+            .addProcessor("processor", defineWithStoresOldAPI(() -> new OldAPIStatefulProcessor(storeName), Collections.singleton(storeBuilder)), "source")
             .addSink("counts", OUTPUT_TOPIC_1, "processor");
     }
 
@@ -592,7 +722,7 @@ public class ProcessorTopologyTest {
 
         // use wrapper to get the internal topology builder to add internal topic
         final InternalTopologyBuilder internalTopologyBuilder = TopologyWrapper.getInternalTopologyBuilder(topology);
-        internalTopologyBuilder.addInternalTopic(THROUGH_TOPIC_1);
+        internalTopologyBuilder.addInternalTopic(THROUGH_TOPIC_1, InternalTopicProperties.empty());
 
         return topology;
     }
@@ -606,7 +736,7 @@ public class ProcessorTopologyTest {
 
         // use wrapper to get the internal topology builder to add internal topic
         final InternalTopologyBuilder internalTopologyBuilder = TopologyWrapper.getInternalTopologyBuilder(topology);
-        internalTopologyBuilder.addInternalTopic(THROUGH_TOPIC_1);
+        internalTopologyBuilder.addInternalTopic(THROUGH_TOPIC_1, InternalTopicProperties.empty());
 
         return topology;
     }
@@ -636,26 +766,41 @@ public class ProcessorTopologyTest {
     /**
      * A processor that simply forwards all messages to all children.
      */
-    protected static class ForwardingProcessor extends AbstractProcessor<String, String> {
+    protected static class ForwardingProcessor implements Processor<String, String, String, String> {
+        private ProcessorContext<String, String> context;
+
+        @Override
+        public void init(final ProcessorContext<String, String> context) {
+            this.context = context;
+        }
+
         @Override
         public void process(final String key, final String value) {
-            context().forward(key, value);
+            context.forward(key, value);
         }
     }
 
     /**
      * A processor that simply forwards all messages to all children with advanced timestamps.
      */
-    protected static class TimestampProcessor extends AbstractProcessor<String, String> {
+    protected static class TimestampProcessor implements Processor<String, String, String, String> {
+        private ProcessorContext<String, String> context;
+
+        @Override
+        public void init(final ProcessorContext<String, String> context) {
+            this.context = context;
+        }
+
         @Override
         public void process(final String key, final String value) {
-            context().forward(key, value, To.all().withTimestamp(context().timestamp() + 10));
+            context.forward(key, value, To.all().withTimestamp(context.timestamp() + 10));
         }
     }
 
-    protected static class FanOutTimestampProcessor extends AbstractProcessor<String, String> {
+    protected static class FanOutTimestampProcessor implements Processor<String, String, String, String> {
         private final String firstChild;
         private final String secondChild;
+        private ProcessorContext<String, String> context;
 
         FanOutTimestampProcessor(final String firstChild,
                                  final String secondChild) {
@@ -664,19 +809,31 @@ public class ProcessorTopologyTest {
         }
 
         @Override
+        public void init(final ProcessorContext<String, String> context) {
+            this.context = context;
+        }
+
+        @Override
         public void process(final String key, final String value) {
-            context().forward(key, value);
-            context().forward(key, value, To.child(firstChild).withTimestamp(context().timestamp() + 5));
-            context().forward(key, value, To.child(secondChild));
-            context().forward(key, value, To.all().withTimestamp(context().timestamp() + 2));
+            context.forward(key, value);
+            context.forward(key, value, To.child(firstChild).withTimestamp(context.timestamp() + 5));
+            context.forward(key, value, To.child(secondChild));
+            context.forward(key, value, To.all().withTimestamp(context.timestamp() + 2));
         }
     }
 
-    protected static class AddHeaderProcessor extends AbstractProcessor<String, String> {
+    protected static class AddHeaderProcessor implements Processor<String, String, String, String> {
+        private ProcessorContext<String, String> context;
+
+        @Override
+        public void init(final ProcessorContext<String, String> context) {
+            this.context = context;
+        }
+
         @Override
         public void process(final String key, final String value) {
-            context().headers().add(HEADER);
-            context().forward(key, value);
+            context.headers().add(HEADER);
+            context.forward(key, value);
         }
     }
 
@@ -684,10 +841,17 @@ public class ProcessorTopologyTest {
      * A processor that removes custom timestamp information from messages and forwards modified messages to each child.
      * A message contains custom timestamp information if the value is in ".*@[0-9]+" format.
      */
-    protected static class ValueTimestampProcessor extends AbstractProcessor<String, String> {
+    protected static class ValueTimestampProcessor implements Processor<String, String, String, String> {
+        private ProcessorContext<String, String> context;
+
+        @Override
+        public void init(final ProcessorContext<String, String> context) {
+            this.context = context;
+        }
+
         @Override
         public void process(final String key, final String value) {
-            context().forward(key, value.split("@")[0]);
+            context.forward(key, value.split("@")[0]);
         }
     }
 
@@ -725,7 +889,7 @@ public class ProcessorTopologyTest {
         @Override
         public void process(final String key, final String value) {
             for (int i = 0; i != numChildren; ++i) {
-                context().forward(key, value + "(" + (i + 1) + ")",  "sink" + i);
+                context().forward(key, value + "(" + (i + 1) + ")", "sink" + i);
             }
         }
     }
@@ -733,17 +897,17 @@ public class ProcessorTopologyTest {
     /**
      * A processor that stores each key-value pair in an in-memory key-value store registered with the context.
      */
-    protected static class StatefulProcessor extends AbstractProcessor<String, String> {
+    protected static class OldAPIStatefulProcessor extends AbstractProcessor<String, String> {
         private KeyValueStore<String, String> store;
         private final String storeName;
 
-        StatefulProcessor(final String storeName) {
+        OldAPIStatefulProcessor(final String storeName) {
             this.storeName = storeName;
         }
 
         @Override
         @SuppressWarnings("unchecked")
-        public void init(final ProcessorContext context) {
+        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
             super.init(context);
             store = (KeyValueStore<String, String>) context.getStateStore(storeName);
         }
@@ -754,8 +918,64 @@ public class ProcessorTopologyTest {
         }
     }
 
-    private <K, V> ProcessorSupplier<K, V> define(final Processor<K, V> processor) {
+    /**
+     * A processor that stores each key-value pair in an in-memory key-value store registered with the context.
+     */
+    protected static class StatefulProcessor implements Processor<String, String, Void, Void> {
+        private KeyValueStore<String, String> store;
+        private final String storeName;
+
+        StatefulProcessor(final String storeName) {
+            this.storeName = storeName;
+        }
+
+        @Override
+        public void init(final ProcessorContext<Void, Void> context) {
+            store = context.getStateStore(storeName);
+        }
+
+        @Override
+        public void process(final String key, final String value) {
+            store.put(key, value);
+        }
+    }
+
+    private <K, V> org.apache.kafka.streams.processor.ProcessorSupplier<K, V> define(final org.apache.kafka.streams.processor.Processor<K, V> processor) {
         return () -> processor;
+    }
+
+    private <KIn, VIn, KOut, VOut> ProcessorSupplier<KIn, VIn, KOut, VOut> define(final Processor<KIn, VIn, KOut, VOut> processor) {
+        return () -> processor;
+    }
+
+    private <K, V> org.apache.kafka.streams.processor.ProcessorSupplier<K, V> defineWithStoresOldAPI(final Supplier<org.apache.kafka.streams.processor.Processor<K, V>> supplier,
+                                                                                                     final Set<StoreBuilder<?>> stores) {
+        return new org.apache.kafka.streams.processor.ProcessorSupplier<K, V>() {
+            @Override
+            public org.apache.kafka.streams.processor.Processor<K, V> get() {
+                return supplier.get();
+            }
+
+            @Override
+            public Set<StoreBuilder<?>> stores() {
+                return stores;
+            }
+        };
+    }
+
+    private <KIn, VIn, KOut, VOut> ProcessorSupplier<KIn, VIn, KOut, VOut> defineWithStores(final Supplier<Processor<KIn, VIn, KOut, VOut>> supplier,
+                                                                                            final Set<StoreBuilder<?>> stores) {
+        return new ProcessorSupplier<KIn, VIn, KOut, VOut>() {
+            @Override
+            public Processor<KIn, VIn, KOut, VOut> get() {
+                return supplier.get();
+            }
+
+            @Override
+            public Set<StoreBuilder<?>> stores() {
+                return stores;
+            }
+        };
     }
 
     /**

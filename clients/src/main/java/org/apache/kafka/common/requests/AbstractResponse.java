@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -27,6 +28,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public abstract class AbstractResponse implements AbstractRequestResponse {
     public static final int DEFAULT_THROTTLE_TIME = 0;
@@ -57,6 +60,10 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
         return Collections.singletonMap(error, 1);
     }
 
+    protected Map<Errors, Integer> errorCounts(Stream<Errors> errors) {
+        return errors.collect(Collectors.groupingBy(e -> e, Collectors.summingInt(e -> 1)));
+    }
+
     protected Map<Errors, Integer> errorCounts(Collection<Errors> errors) {
         Map<Errors, Integer> errorCounts = new HashMap<>();
         for (Errors error : errors)
@@ -72,8 +79,8 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
     }
 
     protected void updateErrorCounts(Map<Errors, Integer> errorCounts, Errors error) {
-        Integer count = errorCounts.get(error);
-        errorCounts.put(error, count == null ? 1 : count + 1);
+        Integer count = errorCounts.getOrDefault(error, 0);
+        errorCounts.put(error, count + 1);
     }
 
     protected abstract Struct toStruct(short version);
@@ -83,7 +90,7 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
             case PRODUCE:
                 return new ProduceResponse(struct);
             case FETCH:
-                return FetchResponse.parse(struct);
+                return new FetchResponse<>(new FetchResponseData(struct, version));
             case LIST_OFFSETS:
                 return new ListOffsetResponse(struct);
             case METADATA:
@@ -129,9 +136,9 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
             case OFFSET_FOR_LEADER_EPOCH:
                 return new OffsetsForLeaderEpochResponse(struct);
             case ADD_PARTITIONS_TO_TXN:
-                return new AddPartitionsToTxnResponse(struct);
+                return new AddPartitionsToTxnResponse(struct, version);
             case ADD_OFFSETS_TO_TXN:
-                return new AddOffsetsToTxnResponse(struct);
+                return new AddOffsetsToTxnResponse(struct, version);
             case END_TXN:
                 return new EndTxnResponse(struct, version);
             case WRITE_TXN_MARKERS:
@@ -145,9 +152,9 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
             case DELETE_ACLS:
                 return new DeleteAclsResponse(struct, version);
             case DESCRIBE_CONFIGS:
-                return new DescribeConfigsResponse(struct);
+                return new DescribeConfigsResponse(struct, version);
             case ALTER_CONFIGS:
-                return new AlterConfigsResponse(struct);
+                return new AlterConfigsResponse(struct, version);
             case ALTER_REPLICA_LOG_DIRS:
                 return new AlterReplicaLogDirsResponse(struct);
             case DESCRIBE_LOG_DIRS:
@@ -180,6 +187,18 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return new DescribeClientQuotasResponse(struct, version);
             case ALTER_CLIENT_QUOTAS:
                 return new AlterClientQuotasResponse(struct, version);
+            case DESCRIBE_USER_SCRAM_CREDENTIALS:
+                return new DescribeUserScramCredentialsResponse(struct, version);
+            case ALTER_USER_SCRAM_CREDENTIALS:
+                return new AlterUserScramCredentialsResponse(struct, version);
+            case VOTE:
+                return new VoteResponse(struct, version);
+            case BEGIN_QUORUM_EPOCH:
+                return new BeginQuorumEpochResponse(struct, version);
+            case END_QUORUM_EPOCH:
+                return new EndQuorumEpochResponse(struct, version);
+            case DESCRIBE_QUORUM:
+                return new DescribeQuorumResponse(struct, version);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

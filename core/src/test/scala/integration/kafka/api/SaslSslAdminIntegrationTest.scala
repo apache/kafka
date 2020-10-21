@@ -30,6 +30,7 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{After, Assert, Before, Test}
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 import scala.compat.java8.OptionConverters._
@@ -46,6 +47,7 @@ abstract class AuthorizationAdmin {
 // Note: this test currently uses the deprecated SimpleAclAuthorizer to ensure we have test coverage
 // It must be replaced with the new AclAuthorizer when SimpleAclAuthorizer is removed
 class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetup {
+  @nowarn("cat=deprecation")
   val authorizationAdmin: AuthorizationAdmin = new LegacyAuthorizationAdmin
   this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
 
@@ -94,13 +96,13 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
 
   @Test
   def testAclOperations(): Unit = {
-    client = Admin.create(createConfig())
+    client = Admin.create(createConfig)
     val acl = new AclBinding(new ResourcePattern(ResourceType.TOPIC, "mytopic3", PatternType.LITERAL),
       new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW))
     assertEquals(7, getAcls(AclBindingFilter.ANY).size)
     val results = client.createAcls(List(acl2, acl3).asJava)
     assertEquals(Set(acl2, acl3), results.values.keySet().asScala)
-    results.values.values().asScala.foreach(value => value.get)
+    results.values.values.forEach(value => value.get)
     val aclUnknown = new AclBinding(new ResourcePattern(ResourceType.TOPIC, "mytopic3", PatternType.LITERAL),
       new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.UNKNOWN, AclPermissionType.ALLOW))
     val results2 = client.createAcls(List(aclUnknown).asJava)
@@ -115,7 +117,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
 
   @Test
   def testAclOperations2(): Unit = {
-    client = Admin.create(createConfig())
+    client = Admin.create(createConfig)
     val results = client.createAcls(List(acl2, acl2, transactionalIdAcl).asJava)
     assertEquals(Set(acl2, acl2, transactionalIdAcl), results.values.keySet.asScala)
     results.all.get()
@@ -141,7 +143,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
 
   @Test
   def testAclDescribe(): Unit = {
-    client = Admin.create(createConfig())
+    client = Admin.create(createConfig)
     ensureAcls(Set(anyAcl, acl2, fooAcl, prefixAcl))
 
     val allTopicAcls = new AclBindingFilter(new ResourcePatternFilter(ResourceType.TOPIC, null, PatternType.ANY), AccessControlEntryFilter.ANY)
@@ -168,7 +170,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
 
   @Test
   def testAclDelete(): Unit = {
-    client = Admin.create(createConfig())
+    client = Admin.create(createConfig)
     ensureAcls(Set(anyAcl, acl2, fooAcl, prefixAcl))
 
     val allTopicAcls = new AclBindingFilter(new ResourcePatternFilter(ResourceType.TOPIC, null, PatternType.MATCH), AccessControlEntryFilter.ANY)
@@ -218,7 +220,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
   //noinspection ScalaDeprecation - test explicitly covers clients using legacy / deprecated constructors
   @Test
   def testLegacyAclOpsNeverAffectOrReturnPrefixed(): Unit = {
-    client = Admin.create(createConfig())
+    client = Admin.create(createConfig)
     ensureAcls(Set(anyAcl, acl2, fooAcl, prefixAcl))  // <-- prefixed exists, but should never be returned.
 
     val allTopicAcls = new AclBindingFilter(new ResourcePatternFilter(ResourceType.TOPIC, null, PatternType.MATCH), AccessControlEntryFilter.ANY)
@@ -255,7 +257,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
 
   @Test
   def testAttemptToCreateInvalidAcls(): Unit = {
-    client = Admin.create(createConfig())
+    client = Admin.create(createConfig)
     val clusterAcl = new AclBinding(new ResourcePattern(ResourceType.CLUSTER, "foobar", PatternType.LITERAL),
       new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.READ, AclPermissionType.ALLOW))
     val emptyResourceNameAcl = new AclBinding(new ResourcePattern(ResourceType.TOPIC, "", PatternType.LITERAL),
@@ -266,7 +268,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     assertFutureExceptionTypeEquals(results.values.get(emptyResourceNameAcl), classOf[InvalidRequestException])
   }
 
-  override def configuredClusterPermissions(): Set[AclOperation] = {
+  override def configuredClusterPermissions: Set[AclOperation] = {
     Set(AclOperation.ALTER, AclOperation.CREATE, AclOperation.CLUSTER_ACTION, AclOperation.ALTER_CONFIGS,
       AclOperation.DESCRIBE, AclOperation.DESCRIBE_CONFIGS)
   }
@@ -354,7 +356,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
 
   @Test
   def testAclAuthorizationDenied(): Unit = {
-    client = Admin.create(createConfig())
+    client = Admin.create(createConfig)
 
     // Test that we cannot create or delete ACLs when ALTER is denied.
     authorizationAdmin.addClusterAcl(DENY, ALTER)
@@ -391,7 +393,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     val denyAcl = new AclBinding(new ResourcePattern(ResourceType.TOPIC, topic2, PatternType.LITERAL),
       new AccessControlEntry("User:*", "*", AclOperation.DESCRIBE_CONFIGS, AclPermissionType.DENY))
 
-    client = Admin.create(createConfig())
+    client = Admin.create(createConfig)
     client.createAcls(List(denyAcl).asJava, new CreateAclsOptions()).all().get()
 
     val topics = Seq(topic1, topic2)

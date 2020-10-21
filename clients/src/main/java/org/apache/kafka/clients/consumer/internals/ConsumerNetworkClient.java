@@ -95,6 +95,9 @@ public class ConsumerNetworkClient implements Closeable {
         this.requestTimeoutMs = requestTimeoutMs;
     }
 
+    public int defaultRequestTimeoutMs() {
+        return requestTimeoutMs;
+    }
 
     /**
      * Send a request with the default timeout. See {@link #send(Node, AbstractRequest.Builder, int)}.
@@ -124,7 +127,7 @@ public class ConsumerNetworkClient implements Closeable {
         long now = time.milliseconds();
         RequestFutureCompletionHandler completionHandler = new RequestFutureCompletionHandler();
         ClientRequest clientRequest = client.newClientRequest(node.idString(), requestBuilder, now, true,
-                requestTimeoutMs, completionHandler);
+            requestTimeoutMs, null, null, completionHandler);
         unsent.put(node, clientRequest);
 
         // wakeup the client in case it is blocking in poll so that we can send the queued request
@@ -429,8 +432,8 @@ public class ConsumerNetworkClient implements Closeable {
                     RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) request.callback();
                     AuthenticationException authenticationException = client.authenticationException(node);
                     handler.onComplete(new ClientResponse(request.makeHeader(request.requestBuilder().latestAllowedVersion()),
-                            request.callback(), request.destination(), request.createdTimeMs(), now, true,
-                            null, authenticationException, null));
+                        request.callback(), request.destination(), request.createdTimeMs(), now, true,
+                        null, authenticationException, null));
                 }
             }
         }
@@ -591,7 +594,7 @@ public class ConsumerNetworkClient implements Closeable {
                 future.raise(response.authenticationException());
             } else if (response.wasDisconnected()) {
                 log.debug("Cancelled request with header {} due to node {} being disconnected",
-                        response.requestHeader(), response.destination());
+                    response.requestHeader(), response.destination());
                 future.raise(DisconnectException.INSTANCE);
             } else if (response.versionMismatch() != null) {
                 future.raise(response.versionMismatch());

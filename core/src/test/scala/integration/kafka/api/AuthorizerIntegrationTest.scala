@@ -35,14 +35,16 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic.GROUP_METADATA_TOPIC_NAME
+import org.apache.kafka.common.message.AddOffsetsToTxnRequestData
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource, AlterableConfig, AlterableConfigCollection}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
+import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
-import org.apache.kafka.common.message.{AlterPartitionReassignmentsRequestData, ControlledShutdownRequestData, CreateAclsRequestData, CreatePartitionsRequestData, CreateTopicsRequestData, DeleteAclsRequestData, DeleteGroupsRequestData, DeleteRecordsRequestData, DeleteTopicsRequestData, DescribeGroupsRequestData, DescribeLogDirsRequestData, FindCoordinatorRequestData, HeartbeatRequestData, IncrementalAlterConfigsRequestData, JoinGroupRequestData, ListPartitionReassignmentsRequestData, OffsetCommitRequestData, SyncGroupRequestData}
+import org.apache.kafka.common.message.{AlterPartitionReassignmentsRequestData, AlterReplicaLogDirsRequestData, ControlledShutdownRequestData, CreateAclsRequestData, CreatePartitionsRequestData, CreateTopicsRequestData, DeleteAclsRequestData, DeleteGroupsRequestData, DeleteRecordsRequestData, DeleteTopicsRequestData, DescribeConfigsRequestData, DescribeGroupsRequestData, DescribeLogDirsRequestData, FindCoordinatorRequestData, HeartbeatRequestData, IncrementalAlterConfigsRequestData, JoinGroupRequestData, ListPartitionReassignmentsRequestData, OffsetCommitRequestData, SyncGroupRequestData}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, Records, SimpleRecord}
@@ -57,6 +59,7 @@ import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import org.scalatest.Assertions.intercept
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.collection.mutable.Buffer
@@ -178,21 +181,23 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       resp.data.topics.find(tp.topic).partitions.find(tp.partition).errorCode)),
     ApiKeys.OFFSET_FOR_LEADER_EPOCH -> ((resp: OffsetsForLeaderEpochResponse) => resp.responses.get(tp).error),
     ApiKeys.DESCRIBE_CONFIGS -> ((resp: DescribeConfigsResponse) =>
-      resp.configs.get(new ConfigResource(ConfigResource.Type.TOPIC, tp.topic)).error.error),
+      Errors.forCode(resp.resultMap.get(new ConfigResource(ConfigResource.Type.TOPIC, tp.topic)).errorCode)),
     ApiKeys.ALTER_CONFIGS -> ((resp: AlterConfigsResponse) =>
       resp.errors.get(new ConfigResource(ConfigResource.Type.TOPIC, tp.topic)).error),
     ApiKeys.INIT_PRODUCER_ID -> ((resp: InitProducerIdResponse) => resp.error),
     ApiKeys.WRITE_TXN_MARKERS -> ((resp: WriteTxnMarkersResponse) => resp.errors(producerId).get(tp)),
     ApiKeys.ADD_PARTITIONS_TO_TXN -> ((resp: AddPartitionsToTxnResponse) => resp.errors.get(tp)),
-    ApiKeys.ADD_OFFSETS_TO_TXN -> ((resp: AddOffsetsToTxnResponse) => resp.error),
+    ApiKeys.ADD_OFFSETS_TO_TXN -> ((resp: AddOffsetsToTxnResponse) => Errors.forCode(resp.data.errorCode)),
     ApiKeys.END_TXN -> ((resp: EndTxnResponse) => resp.error),
     ApiKeys.TXN_OFFSET_COMMIT -> ((resp: TxnOffsetCommitResponse) => resp.errors.get(tp)),
     ApiKeys.CREATE_ACLS -> ((resp: CreateAclsResponse) => Errors.forCode(resp.results.asScala.head.errorCode)),
     ApiKeys.DESCRIBE_ACLS -> ((resp: DescribeAclsResponse) => resp.error.error),
     ApiKeys.DELETE_ACLS -> ((resp: DeleteAclsResponse) => Errors.forCode(resp.filterResults.asScala.head.errorCode)),
-    ApiKeys.ALTER_REPLICA_LOG_DIRS -> ((resp: AlterReplicaLogDirsResponse) => resp.responses.get(tp)),
+    ApiKeys.ALTER_REPLICA_LOG_DIRS -> ((resp: AlterReplicaLogDirsResponse) => Errors.forCode(resp.data.results.asScala
+      .find(x => x.topicName == tp.topic).get.partitions.asScala
+      .find(p => p.partitionIndex == tp.partition).get.errorCode)),
     ApiKeys.DESCRIBE_LOG_DIRS -> ((resp: DescribeLogDirsResponse) =>
-      if (resp.logDirInfos.size() > 0) resp.logDirInfos.asScala.head._2.error else Errors.CLUSTER_AUTHORIZATION_FAILED),
+      if (resp.data.results.size() > 0) Errors.forCode(resp.data.results.get(0).errorCode) else Errors.CLUSTER_AUTHORIZATION_FAILED),
     ApiKeys.CREATE_PARTITIONS -> ((resp: CreatePartitionsResponse) => Errors.forCode(resp.data.results.asScala.head.errorCode())),
     ApiKeys.ELECT_LEADERS -> ((resp: ElectLeadersResponse) => Errors.forCode(resp.data().errorCode())),
     ApiKeys.INCREMENTAL_ALTER_CONFIGS -> ((resp: IncrementalAlterConfigsResponse) => {
@@ -405,7 +410,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val data = new CreatePartitionsRequestData()
       .setTimeoutMs(10000)
       .setValidateOnly(true)
-      .setTopics(Collections.singletonList(partitionTopic))
+    data.topics().add(partitionTopic)
     new CreatePartitionsRequest.Builder(data).build(0.toShort)
   }
 
@@ -442,8 +447,16 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def stopReplicaRequest: StopReplicaRequest = {
+    val topicStates = Seq(
+      new StopReplicaTopicState()
+        .setTopicName(tp.topic())
+        .setPartitionStates(Seq(new StopReplicaPartitionState()
+          .setPartitionIndex(tp.partition())
+          .setLeaderEpoch(LeaderAndIsr.initialLeaderEpoch + 2)
+          .setDeletePartition(true)).asJava)
+    ).asJava
     new StopReplicaRequest.Builder(ApiKeys.STOP_REPLICA.latestVersion, brokerId, Int.MaxValue,
-      Long.MaxValue, true, Set(tp).asJava).build()
+      Long.MaxValue, false, topicStates).build()
   }
 
   private def controlledShutdownRequest: ControlledShutdownRequest = {
@@ -478,7 +491,9 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
           .setOffset(0L)))))).build()
 
   private def describeConfigsRequest =
-    new DescribeConfigsRequest.Builder(Collections.singleton(new ConfigResource(ConfigResource.Type.TOPIC, tp.topic))).build()
+    new DescribeConfigsRequest.Builder(new DescribeConfigsRequestData().setResources(Collections.singletonList(
+      new DescribeConfigsRequestData.DescribeConfigsResource().setResourceType(ConfigResource.Type.TOPIC.id)
+        .setResourceName(tp.topic)))).build()
 
   private def alterConfigsRequest =
     new AlterConfigsRequest.Builder(
@@ -526,14 +541,29 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
         .setPermissionType(AclPermissionType.DENY.code)))
   ).build()
 
-  private def alterReplicaLogDirsRequest = new AlterReplicaLogDirsRequest.Builder(Collections.singletonMap(tp, logDir)).build()
+  private def alterReplicaLogDirsRequest = {
+    val dir = new AlterReplicaLogDirsRequestData.AlterReplicaLogDir()
+      .setPath(logDir)
+    dir.topics.add(new AlterReplicaLogDirsRequestData.AlterReplicaLogDirTopic()
+      .setName(tp.topic)
+      .setPartitions(Collections.singletonList(tp.partition)))
+    val data = new AlterReplicaLogDirsRequestData();
+    data.dirs.add(dir)
+    new AlterReplicaLogDirsRequest.Builder(data).build()
+  }
 
   private def describeLogDirsRequest = new DescribeLogDirsRequest.Builder(new DescribeLogDirsRequestData().setTopics(new DescribeLogDirsRequestData.DescribableLogDirTopicCollection(Collections.singleton(
     new DescribeLogDirsRequestData.DescribableLogDirTopic().setTopic(tp.topic).setPartitionIndex(Collections.singletonList(tp.partition))).iterator()))).build()
 
   private def addPartitionsToTxnRequest = new AddPartitionsToTxnRequest.Builder(transactionalId, 1, 1, Collections.singletonList(tp)).build()
 
-  private def addOffsetsToTxnRequest = new AddOffsetsToTxnRequest.Builder(transactionalId, 1, 1, group).build()
+  private def addOffsetsToTxnRequest = new AddOffsetsToTxnRequest.Builder(
+    new AddOffsetsToTxnRequestData()
+      .setTransactionalId(transactionalId)
+      .setProducerId(1)
+      .setProducerEpoch(1)
+      .setGroupId(group)
+  ).build()
 
   private def electLeadersRequest = new ElectLeadersRequest.Builder(
     ElectionType.PREFERRED,
@@ -933,6 +963,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     consumeRecords(consumer)
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testPatternSubscriptionWithNoTopicAccess(): Unit = {
     createTopic(topic)
@@ -969,6 +1000,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertEquals(Collections.singleton(topic), e.unauthorizedTopics())
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testPatternSubscriptionWithTopicAndGroupRead(): Unit = {
     createTopic(topic)
@@ -1000,6 +1032,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertTrue(consumer.assignment().isEmpty)
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testPatternSubscriptionMatchingInternalTopic(): Unit = {
     createTopic(topic)

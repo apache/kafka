@@ -46,6 +46,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
@@ -63,7 +64,8 @@ public class RecordQueueTest {
         StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class),
         new MockRecordCollector()
     );
-    private final MockSourceNode mockSourceNodeWithMetrics = new MockSourceNode<>(new String[] {"topic"}, intDeserializer, intDeserializer);
+    private final MockSourceNode<Integer, Integer, ?, ?> mockSourceNodeWithMetrics
+        = new MockSourceNode<>(intDeserializer, intDeserializer);
     private final RecordQueue queue = new RecordQueue(
         new TopicPartition("topic", 1),
         mockSourceNodeWithMetrics,
@@ -192,11 +194,11 @@ public class RecordQueueTest {
     }
 
     @Test
-    public void shouldTrackPartitionTimeAsMaxSeenTimestamp() {
-
+    public void shouldTrackPartitionTimeAsMaxProcessedTimestamp() {
         assertTrue(queue.isEmpty());
-        assertEquals(0, queue.size());
-        assertEquals(RecordQueue.UNKNOWN, queue.headRecordTimestamp());
+        assertThat(queue.size(), is(0));
+        assertThat(queue.headRecordTimestamp(), is(RecordQueue.UNKNOWN));
+        assertThat(queue.partitionTime(), is(RecordQueue.UNKNOWN));
 
         // add three 3 out-of-order records with timestamp 2, 1, 3, 4
         final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
@@ -205,25 +207,28 @@ public class RecordQueueTest {
             new ConsumerRecord<>("topic", 1, 3, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
             new ConsumerRecord<>("topic", 1, 4, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue));
 
-        assertEquals(queue.partitionTime(), RecordQueue.UNKNOWN);
-
         queue.addRawRecords(list1);
-
-        assertEquals(queue.partitionTime(), 2L);
-
-        queue.poll();
-        assertEquals(queue.partitionTime(), 2L);
+        assertThat(queue.partitionTime(), is(RecordQueue.UNKNOWN));
 
         queue.poll();
-        assertEquals(queue.partitionTime(), 3L);
+        assertThat(queue.partitionTime(), is(2L));
+
+        queue.poll();
+        assertThat(queue.partitionTime(), is(2L));
+
+        queue.poll();
+        assertThat(queue.partitionTime(), is(3L));
     }
 
     @Test
     public void shouldSetTimestampAndRespectMaxTimestampPolicy() {
         assertTrue(queue.isEmpty());
-        assertEquals(0, queue.size());
-        assertEquals(RecordQueue.UNKNOWN, queue.headRecordTimestamp());
+        assertThat(queue.size(), is(0));
+        assertThat(queue.headRecordTimestamp(), is(RecordQueue.UNKNOWN));
+        assertThat(queue.partitionTime(), is(RecordQueue.UNKNOWN));
+
         queue.setPartitionTime(150L);
+        assertThat(queue.partitionTime(), is(150L));
 
         final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
             new ConsumerRecord<>("topic", 1, 200, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
@@ -231,18 +236,17 @@ public class RecordQueueTest {
             new ConsumerRecord<>("topic", 1, 300, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
             new ConsumerRecord<>("topic", 1, 400, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue));
 
-        assertEquals(150L, queue.partitionTime());
-
         queue.addRawRecords(list1);
+        assertThat(queue.partitionTime(), is(150L));
 
-        assertEquals(200L, queue.partitionTime());
+        queue.poll();
+        assertThat(queue.partitionTime(), is(200L));
 
         queue.setPartitionTime(500L);
-        queue.poll();
-        assertEquals(500L, queue.partitionTime());
+        assertThat(queue.partitionTime(), is(500L));
 
         queue.poll();
-        assertEquals(500L, queue.partitionTime());
+        assertThat(queue.partitionTime(), is(500L));
     }
 
     @Test

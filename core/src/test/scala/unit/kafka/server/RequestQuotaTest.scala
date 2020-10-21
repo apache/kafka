@@ -16,19 +16,22 @@ package kafka.server
 
 import java.util
 import java.util.concurrent.{Executors, Future, TimeUnit}
-import java.util.{Collections, LinkedHashMap, Optional, Properties}
+import java.util.{Collections, Optional, Properties}
 
+import kafka.api.LeaderAndIsr
 import kafka.log.LogConfig
 import kafka.network.RequestChannel.Session
 import kafka.security.authorizer.AclAuthorizer
 import kafka.utils.TestUtils
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.message.AddOffsetsToTxnRequestData
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
+import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.{KafkaMetric, Quota, Sensor}
@@ -143,16 +146,18 @@ class RequestQuotaTest extends BaseRequestTest {
 
   @Test
   def testUnthrottledClient(): Unit = {
-    for (apiKey <- RequestQuotaTest.ClientActions)
+    for (apiKey <- RequestQuotaTest.ClientActions) {
       submitTest(apiKey, () => checkUnthrottledClient(apiKey))
+    }
 
     waitAndCheckResults()
   }
 
   @Test
   def testExemptRequestTime(): Unit = {
-    for (apiKey <- RequestQuotaTest.ClusterActions)
+    for (apiKey <- RequestQuotaTest.ClusterActions) {
       submitTest(apiKey, () => checkExemptRequestMetric(apiKey))
+    }
 
     waitAndCheckResults()
   }
@@ -161,8 +166,9 @@ class RequestQuotaTest extends BaseRequestTest {
   def testUnauthorizedThrottle(): Unit = {
     RequestQuotaTest.principal = RequestQuotaTest.UnauthorizedPrincipal
 
-    for (apiKey <- ApiKeys.values)
+    for (apiKey <- ApiKeys.enabledApis.asScala) {
       submitTest(apiKey, () => checkUnauthorizedRequestThrottle(apiKey))
+    }
 
     waitAndCheckResults()
   }
@@ -174,22 +180,16 @@ class RequestQuotaTest extends BaseRequestTest {
   }
 
   private def throttleTimeMetricValueForQuotaType(clientId: String, quotaType: QuotaType): Double = {
-    val metricName = leaderNode.metrics.metricName("throttle-time",
-                                  quotaType.toString,
-                                  "",
-                                  "user", "",
-                                  "client-id", clientId)
+    val metricName = leaderNode.metrics.metricName("throttle-time", quotaType.toString,
+      "", "user", "", "client-id", clientId)
     val sensor = leaderNode.quotaManagers.request.getOrCreateQuotaSensors(session("ANONYMOUS"),
       clientId).throttleTimeSensor
     metricValue(leaderNode.metrics.metrics.get(metricName), sensor)
   }
 
   private def requestTimeMetricValue(clientId: String): Double = {
-    val metricName = leaderNode.metrics.metricName("request-time",
-                                  QuotaType.Request.toString,
-                                  "",
-                                  "user", "",
-                                  "client-id", clientId)
+    val metricName = leaderNode.metrics.metricName("request-time", QuotaType.Request.toString,
+      "", "user", "", "client-id", clientId)
     val sensor = leaderNode.quotaManagers.request.getOrCreateQuotaSensors(session("ANONYMOUS"),
       clientId).quotaSensor
     metricValue(leaderNode.metrics.metrics.get(metricName), sensor)
@@ -240,7 +240,16 @@ class RequestQuotaTest extends BaseRequestTest {
             Set(new Node(brokerId, "localhost", 0)).asJava)
 
         case ApiKeys.STOP_REPLICA =>
-          new StopReplicaRequest.Builder(ApiKeys.STOP_REPLICA.latestVersion, brokerId, Int.MaxValue, Long.MaxValue, true, Set(tp).asJava)
+          val topicStates = Seq(
+            new StopReplicaTopicState()
+              .setTopicName(tp.topic())
+              .setPartitionStates(Seq(new StopReplicaPartitionState()
+                .setPartitionIndex(tp.partition())
+                .setLeaderEpoch(LeaderAndIsr.initialLeaderEpoch + 2)
+                .setDeletePartition(true)).asJava)
+          ).asJava
+          new StopReplicaRequest.Builder(ApiKeys.STOP_REPLICA.latestVersion, brokerId,
+            Int.MaxValue, Long.MaxValue, false, topicStates)
 
         case ApiKeys.UPDATE_METADATA =>
           val partitionState = Seq(new UpdateMetadataPartitionState()
@@ -395,7 +404,12 @@ class RequestQuotaTest extends BaseRequestTest {
           new AddPartitionsToTxnRequest.Builder("test-transactional-id", 1, 0, List(tp).asJava)
 
         case ApiKeys.ADD_OFFSETS_TO_TXN =>
-          new AddOffsetsToTxnRequest.Builder("test-transactional-id", 1, 0, "test-txn-group")
+          new AddOffsetsToTxnRequest.Builder(new AddOffsetsToTxnRequestData()
+            .setTransactionalId("test-transactional-id")
+            .setProducerId(1)
+            .setProducerEpoch(0)
+            .setGroupId("test-txn-group")
+          )
 
         case ApiKeys.END_TXN =>
           new EndTxnRequest.Builder(new EndTxnRequestData()
@@ -441,7 +455,10 @@ class RequestQuotaTest extends BaseRequestTest {
               .setOperation(AclOperation.ANY.code)
               .setPermissionType(AclPermissionType.DENY.code))))
         case ApiKeys.DESCRIBE_CONFIGS =>
-          new DescribeConfigsRequest.Builder(Collections.singleton(new ConfigResource(ConfigResource.Type.TOPIC, tp.topic)))
+          new DescribeConfigsRequest.Builder(new DescribeConfigsRequestData()
+            .setResources(Collections.singletonList(new DescribeConfigsRequestData.DescribeConfigsResource()
+              .setResourceType(ConfigResource.Type.TOPIC.id)
+              .setResourceName(tp.topic))))
 
         case ApiKeys.ALTER_CONFIGS =>
           new AlterConfigsRequest.Builder(
@@ -451,7 +468,14 @@ class RequestQuotaTest extends BaseRequestTest {
               ))), true)
 
         case ApiKeys.ALTER_REPLICA_LOG_DIRS =>
-          new AlterReplicaLogDirsRequest.Builder(Collections.singletonMap(tp, logDir))
+          val dir = new AlterReplicaLogDirsRequestData.AlterReplicaLogDir()
+            .setPath(logDir)
+          dir.topics.add(new AlterReplicaLogDirsRequestData.AlterReplicaLogDirTopic()
+            .setName(tp.topic)
+            .setPartitions(Collections.singletonList(tp.partition)))
+          val data = new AlterReplicaLogDirsRequestData();
+          data.dirs.add(dir)
+          new AlterReplicaLogDirsRequest.Builder(data)
 
         case ApiKeys.DESCRIBE_LOG_DIRS =>
           val data = new DescribeLogDirsRequestData()
@@ -464,7 +488,7 @@ class RequestQuotaTest extends BaseRequestTest {
           val data = new CreatePartitionsRequestData()
             .setTimeoutMs(0)
             .setValidateOnly(false)
-            .setTopics(Collections.singletonList(new CreatePartitionsTopic().setName("topic-2").setCount(1)))
+          data.topics().add(new CreatePartitionsTopic().setName("topic-2").setCount(1))
           new CreatePartitionsRequest.Builder(data)
 
         case ApiKeys.CREATE_DELEGATION_TOKEN =>
@@ -532,6 +556,22 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.ALTER_CLIENT_QUOTAS =>
           new AlterClientQuotasRequest.Builder(List.empty.asJava, false)
+
+        case ApiKeys.DESCRIBE_USER_SCRAM_CREDENTIALS =>
+          new DescribeUserScramCredentialsRequest.Builder(new DescribeUserScramCredentialsRequestData())
+
+        case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS =>
+          new AlterUserScramCredentialsRequest.Builder(new AlterUserScramCredentialsRequestData())
+
+        case ApiKeys.VOTE =>
+          new VoteRequest.Builder(VoteRequest.singletonRequest(tp, 1, 2, 0, 10))
+
+        case ApiKeys.BEGIN_QUORUM_EPOCH =>
+          new BeginQuorumEpochRequest.Builder(BeginQuorumEpochRequest.singletonRequest(tp, 2, 5))
+
+        case ApiKeys.END_QUORUM_EPOCH =>
+          new EndQuorumEpochRequest.Builder(EndQuorumEpochRequest.singletonRequest(
+            tp, 10, 2, 5, Collections.singletonList(3)))
 
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
@@ -654,9 +694,9 @@ class RequestQuotaTest extends BaseRequestTest {
 }
 
 object RequestQuotaTest {
-  val ClusterActions = ApiKeys.values.toSet.filter(apiKey => apiKey.clusterAction)
+  val ClusterActions = ApiKeys.enabledApis.asScala.toSet.filter(apiKey => apiKey.clusterAction)
   val SaslActions = Set(ApiKeys.SASL_HANDSHAKE, ApiKeys.SASL_AUTHENTICATE)
-  val ClientActions = ApiKeys.values.toSet -- ClusterActions -- SaslActions
+  val ClientActions = ApiKeys.enabledApis.asScala.toSet -- ClusterActions -- SaslActions
 
   val UnauthorizedPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Unauthorized")
   // Principal used for all client connections. This is modified by tests which

@@ -43,10 +43,10 @@ public class ScramFormatterTest {
         String s1 = "r=rOprNGfwEbeRWgbNEkqO%hvYDpWUa2RaTCAfuxFIlj)hNlF$k0,s=W22ZaJ0SNY7soEsUEjb6gQ==,i=4096";
         String c2 = "c=biws,r=rOprNGfwEbeRWgbNEkqO%hvYDpWUa2RaTCAfuxFIlj)hNlF$k0,p=dHzbZapWIk4jUhN+Ute9ytag9zjfMHgsqmmiz7AndVQ=";
         String s2 = "v=6rriTRBi23WpRR/wtup+mMhUZUn/dB5nLTJRsjl95G4=";
-        ClientFirstMessage clientFirst = new ClientFirstMessage(formatter.toBytes(c1));
-        ServerFirstMessage serverFirst = new ServerFirstMessage(formatter.toBytes(s1));
-        ClientFinalMessage clientFinal = new ClientFinalMessage(formatter.toBytes(c2));
-        ServerFinalMessage serverFinal = new ServerFinalMessage(formatter.toBytes(s2));
+        ClientFirstMessage clientFirst = new ClientFirstMessage(ScramFormatter.toBytes(c1));
+        ServerFirstMessage serverFirst = new ServerFirstMessage(ScramFormatter.toBytes(s1));
+        ClientFinalMessage clientFinal = new ClientFinalMessage(ScramFormatter.toBytes(c2));
+        ServerFinalMessage serverFinal = new ServerFinalMessage(ScramFormatter.toBytes(s2));
 
         String username = clientFirst.saslName();
         assertEquals("user", username);
@@ -82,12 +82,12 @@ public class ScramFormatterTest {
         String[] usernames = {"user1", "123", "1,2", "user=A", "user==B", "user,1", "user 1", ",", "=", ",=", "=="};
         ScramFormatter formatter = new ScramFormatter(ScramMechanism.SCRAM_SHA_256);
         for (String username : usernames) {
-            String saslName = formatter.saslName(username);
+            String saslName = ScramFormatter.saslName(username);
             // There should be no commas in saslName (comma is used as field separator in SASL messages)
             assertEquals(-1, saslName.indexOf(','));
             // There should be no "=" in the saslName apart from those used in encoding (comma is =2C and equals is =3D)
             assertEquals(-1, saslName.replace("=2C", "").replace("=3D", "").indexOf('='));
-            assertEquals(username, formatter.username(saslName));
+            assertEquals(username, ScramFormatter.username(saslName));
         }
     }
 }

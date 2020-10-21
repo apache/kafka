@@ -33,6 +33,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE;
 import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.DELETE_KEY_NO_PROPAGATE;
@@ -43,21 +44,21 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
     private static final Logger LOG = LoggerFactory.getLogger(ForeignJoinSubscriptionSendProcessorSupplier.class);
 
     private final Function<V, KO> foreignKeyExtractor;
-    private final String foreignKeySerdeTopic;
-    private final String valueSerdeTopic;
+    private final Supplier<String> foreignKeySerdeTopicSupplier;
+    private final Supplier<String> valueSerdeTopicSupplier;
     private final boolean leftJoin;
     private Serializer<KO> foreignKeySerializer;
     private Serializer<V> valueSerializer;
 
     public ForeignJoinSubscriptionSendProcessorSupplier(final Function<V, KO> foreignKeyExtractor,
-                                                        final String foreignKeySerdeTopic,
-                                                        final String valueSerdeTopic,
+                                                        final Supplier<String> foreignKeySerdeTopicSupplier,
+                                                        final Supplier<String> valueSerdeTopicSupplier,
                                                         final Serde<KO> foreignKeySerde,
                                                         final Serializer<V> valueSerializer,
                                                         final boolean leftJoin) {
         this.foreignKeyExtractor = foreignKeyExtractor;
-        this.foreignKeySerdeTopic = foreignKeySerdeTopic;
-        this.valueSerdeTopic = valueSerdeTopic;
+        this.foreignKeySerdeTopicSupplier = foreignKeySerdeTopicSupplier;
+        this.valueSerdeTopicSupplier = valueSerdeTopicSupplier;
         this.valueSerializer = valueSerializer;
         this.leftJoin = leftJoin;
         foreignKeySerializer = foreignKeySerde == null ? null : foreignKeySerde.serializer();
@@ -71,11 +72,15 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
     private class UnbindChangeProcessor extends AbstractProcessor<K, Change<V>> {
 
         private Sensor droppedRecordsSensor;
+        private String foreignKeySerdeTopic;
+        private String valueSerdeTopic;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
+            foreignKeySerdeTopic = foreignKeySerdeTopicSupplier.get();
+            valueSerdeTopic = valueSerdeTopicSupplier.get();
             // get default key serde if it wasn't supplied directly at construction
             if (foreignKeySerializer == null) {
                 foreignKeySerializer = (Serializer<KO>) context.keySerde().serializer();

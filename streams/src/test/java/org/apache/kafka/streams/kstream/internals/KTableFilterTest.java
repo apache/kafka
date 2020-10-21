@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyTestDriverWrapper;
@@ -30,10 +31,10 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
-import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.TestInputTopic;
+import org.apache.kafka.test.MockApiProcessor;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -151,8 +152,8 @@ public class KTableFilterTest {
             final KTableValueGetter<String, Integer> getter2 = getterSupplier2.get();
             final KTableValueGetter<String, Integer> getter3 = getterSupplier3.get();
 
-            getter2.init(new ForwardingDisabledProcessorContext(driver.setCurrentNodeForProcessorContext(table2.name)));
-            getter3.init(new ForwardingDisabledProcessorContext(driver.setCurrentNodeForProcessorContext(table3.name)));
+            getter2.init(driver.setCurrentNodeForProcessorContext(table2.name));
+            getter3.init(driver.setCurrentNodeForProcessorContext(table3.name));
 
             inputTopic.pipeInput("A", 1, 5L);
             inputTopic.pipeInput("B", 1, 10L);
@@ -226,7 +227,7 @@ public class KTableFilterTest {
                                           final KTableImpl<String, Integer, Integer> table1,
                                           final KTableImpl<String, Integer, Integer> table2,
                                           final String topic1) {
-        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
 
         builder.build().addProcessor("proc1", supplier, table1.name);
         builder.build().addProcessor("proc2", supplier, table2.name);
@@ -239,7 +240,7 @@ public class KTableFilterTest {
             inputTopic.pipeInput("B", 1, 10L);
             inputTopic.pipeInput("C", 1, 15L);
 
-            final List<MockProcessor<String, Integer>> processors = supplier.capturedProcessors(2);
+            final List<MockApiProcessor<String, Integer, Void, Void>> processors = supplier.capturedProcessors(2);
 
             processors.get(0).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(1, null), 5),
                 new KeyValueTimestamp<>("B", new Change<>(1, null), 10),
@@ -302,7 +303,7 @@ public class KTableFilterTest {
                                        final String topic1) {
         table2.enableSendingOldValues();
 
-        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final Topology topology = builder.build();
 
         topology.addProcessor("proc1", supplier, table1.name);
@@ -316,7 +317,7 @@ public class KTableFilterTest {
             inputTopic.pipeInput("B", 1, 10L);
             inputTopic.pipeInput("C", 1, 15L);
 
-            final List<MockProcessor<String, Integer>> processors = supplier.capturedProcessors(2);
+            final List<MockApiProcessor<String, Integer, Void, Void>> processors = supplier.capturedProcessors(2);
 
             processors.get(0).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(1, null), 5),
                 new KeyValueTimestamp<>("B", new Change<>(1, null), 10),
@@ -375,7 +376,7 @@ public class KTableFilterTest {
                                                  final KTableImpl<String, String, String> table1,
                                                  final KTableImpl<String, String, String> table2,
                                                  final String topic1) {
-        final MockProcessorSupplier<String, String> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<String, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final Topology topology = builder.build();
 
         topology.addProcessor("proc1", supplier, table1.name);
@@ -390,7 +391,7 @@ public class KTableFilterTest {
             stringinputTopic.pipeInput("C", "reject", 20L);
         }
 
-        final List<MockProcessor<String, String>> processors = supplier.capturedProcessors(2);
+        final List<MockApiProcessor<String, String, Void, Void>> processors = supplier.capturedProcessors(2);
         processors.get(0).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>("reject", null), 5),
             new KeyValueTimestamp<>("B", new Change<>("reject", null), 10),
             new KeyValueTimestamp<>("C", new Change<>("reject", null), 20));

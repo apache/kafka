@@ -200,7 +200,7 @@ public class RepartitionOptimizingTest {
                                                     .withOtherValueSerde(Serdes.Long()))
             .to(JOINED_TOPIC, Produced.as("join-to"));
 
-        streamsConfiguration.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, optimizationConfig);
+        streamsConfiguration.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, optimizationConfig);
         final Topology topology = builder.build(streamsConfiguration);
 
         topologyTestDriver = new TopologyTestDriver(topology, streamsConfiguration);

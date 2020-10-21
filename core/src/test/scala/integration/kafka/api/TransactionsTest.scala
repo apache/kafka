@@ -170,7 +170,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     // even if we seek to the end, we should not be able to see the undecided data
     assertEquals(2, readCommittedConsumer.assignment.size)
     readCommittedConsumer.seekToEnd(readCommittedConsumer.assignment)
-    readCommittedConsumer.assignment.asScala.foreach { tp =>
+    readCommittedConsumer.assignment.forEach { tp =>
       assertEquals(1L, readCommittedConsumer.position(tp))
     }
 
@@ -406,6 +406,48 @@ class TransactionsTest extends KafkaServerTestHarness {
     TestUtils.waitUntilTrue(() => offsetAndMetadata.equals(consumer.committed(Set(tp).asJava).get(tp)), "cannot read committed offset")
   }
 
+  @Test(expected = classOf[TimeoutException])
+  def testInitTransactionsTimeout(): Unit = {
+    testTimeout(false, producer => producer.initTransactions())
+  }
+
+  @Test(expected = classOf[TimeoutException])
+  def testSendOffsetsToTransactionTimeout(): Unit = {
+    testTimeout(true, producer => producer.sendOffsetsToTransaction(
+      Map(new TopicPartition(topic1, 0) -> new OffsetAndMetadata(0)).asJava, "test-group"))
+  }
+
+  @Test(expected = classOf[TimeoutException])
+  def testCommitTransactionTimeout(): Unit = {
+    testTimeout(true, producer => producer.commitTransaction())
+  }
+
+  @Test(expected = classOf[TimeoutException])
+  def testAbortTransactionTimeout(): Unit = {
+    testTimeout(true, producer => producer.abortTransaction())
+  }
+
+  def testTimeout(needInitAndSendMsg: Boolean,
+                  timeoutProcess: KafkaProducer[Array[Byte], Array[Byte]] => Unit): Unit = {
+    val producer = createTransactionalProducer("transactionProducer", maxBlockMs =  1000)
+
+    if (needInitAndSendMsg) {
+      producer.initTransactions()
+      producer.beginTransaction()
+      producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic1, "foo".getBytes, "bar".getBytes))
+    }
+
+    for  (i <- servers.indices)
+      killBroker(i)
+
+    try {
+      timeoutProcess(producer)
+      fail("Should raise a TimeoutException")
+    } finally {
+      producer.close(Duration.ZERO)
+    }
+  }
+
   @Test
   def testFencingOnSend(): Unit = {
     val producer1 = transactionalProducers(0)
@@ -586,26 +628,10 @@ class TransactionsTest extends KafkaServerTestHarness {
     fail("Should have raised a KafkaException")
   }
 
-  @Test(expected = classOf[TimeoutException])
-  def testCommitTransactionTimeout(): Unit = {
-    val producer = createTransactionalProducer("transactionalProducer", maxBlockMs = 1000)
-    producer.initTransactions()
-    producer.beginTransaction()
-    producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic1, "foobar".getBytes))
-
-    for (i <- 0 until servers.size)
-      killBroker(i) // pretend all brokers not available
-
-    try {
-      producer.commitTransaction()
-    } finally {
-      producer.close(Duration.ZERO)
-    }
-  }
-
   @Test
   def testBumpTransactionalEpoch(): Unit = {
-    val producer = createTransactionalProducer("transactionalProducer", deliveryTimeoutMs = 5000)
+    val producer = createTransactionalProducer("transactionalProducer",
+      deliveryTimeoutMs = 5000, requestTimeoutMs = 5000)
     val consumer = transactionalConsumers.head
     try {
       // Create a topic with RF=1 so that a single broker failure will render it unavailable
@@ -661,6 +687,65 @@ class TransactionsTest extends KafkaServerTestHarness {
     }
   }
 
+  @Test
+  def testFailureToFenceEpoch(): Unit = {
+    val producer1 = transactionalProducers.head
+    val producer2 = createTransactionalProducer("transactional-producer", maxBlockMs = 1000)
+
+    producer1.initTransactions()
+
+    producer1.beginTransaction()
+    producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 0, "4", "4", willBeCommitted = true))
+    producer1.commitTransaction()
+
+    val partitionLeader = TestUtils.waitUntilLeaderIsKnown(servers, new TopicPartition(topic1, 0))
+    var producerStateEntry =
+      servers(partitionLeader).logManager.getLog(new TopicPartition(topic1, 0)).get.producerStateManager.activeProducers.head._2
+    val producerId = producerStateEntry.producerId
+    val initialProducerEpoch = producerStateEntry.producerEpoch
+
+    // Kill two brokers to bring the transaction log under min-ISR
+    killBroker(0)
+    killBroker(1)
+
+    try {
+      producer2.initTransactions()
+    } catch {
+      case _: TimeoutException =>
+        // good!
+      case e: Exception =>
+        fail("Got an unexpected exception from initTransactions", e)
+    } finally {
+      producer2.close()
+    }
+
+    restartDeadBrokers()
+
+    // Because the epoch was bumped in memory, attempting to begin a transaction with producer 1 should fail
+    try {
+      producer1.beginTransaction()
+    } catch {
+      case _: ProducerFencedException =>
+        // good!
+      case e: Exception =>
+        fail("Got an unexpected exception from commitTransaction", e)
+    } finally {
+      producer1.close()
+    }
+
+    val producer3 = createTransactionalProducer("transactional-producer", maxBlockMs = 5000)
+    producer3.initTransactions()
+
+    producer3.beginTransaction()
+    producer3.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 0, "4", "4", willBeCommitted = true))
+    producer3.commitTransaction()
+
+    // Check that the epoch only increased by 1
+    producerStateEntry =
+      servers(partitionLeader).logManager.getLog(new TopicPartition(topic1, 0)).get.producerStateManager.activeProducers(producerId)
+    assertEquals((initialProducerEpoch + 1).toShort, producerStateEntry.producerEpoch)
+  }
+
   private def sendTransactionalMessagesWithValueRange(producer: KafkaProducer[Array[Byte], Array[Byte]], topic: String,
                                                       start: Int, end: Int, willBeCommitted: Boolean): Unit = {
     for (i <- start until end) {
@@ -709,11 +794,13 @@ class TransactionsTest extends KafkaServerTestHarness {
   private def createTransactionalProducer(transactionalId: String,
                                           transactionTimeoutMs: Long = 60000,
                                           maxBlockMs: Long = 60000,
-                                          deliveryTimeoutMs: Int = 120000): KafkaProducer[Array[Byte], Array[Byte]] = {
+                                          deliveryTimeoutMs: Int = 120000,
+                                          requestTimeoutMs: Int = 30000): KafkaProducer[Array[Byte], Array[Byte]] = {
     val producer = TestUtils.createTransactionalProducer(transactionalId, servers,
       transactionTimeoutMs = transactionTimeoutMs,
       maxBlockMs = maxBlockMs,
-      deliveryTimeoutMs = deliveryTimeoutMs)
+      deliveryTimeoutMs = deliveryTimeoutMs,
+      requestTimeoutMs = requestTimeoutMs)
     transactionalProducers += producer
     producer
   }

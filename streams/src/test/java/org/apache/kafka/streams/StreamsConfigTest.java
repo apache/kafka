@@ -47,7 +47,7 @@ import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
 import static org.apache.kafka.common.IsolationLevel.READ_UNCOMMITTED;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_BETA;
-import static org.apache.kafka.streams.StreamsConfig.TOPOLOGY_OPTIMIZATION;
+import static org.apache.kafka.streams.StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.adminClientPrefix;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
@@ -147,7 +147,10 @@ public class StreamsConfigTest {
         final StreamsConfig streamsConfig = new StreamsConfig(props);
 
         Map<String, Object> returnedProps = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
-        assertThat(returnedProps.get(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG), equalTo("group-instance-id-1-" + threadIdx));
+        assertThat(
+            returnedProps.get(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG),
+            equalTo("group-instance-id-1-" + threadIdx)
+        );
 
         returnedProps = streamsConfig.getRestoreConsumerConfigs(clientId);
         assertNull(returnedProps.get(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG));
@@ -160,35 +163,27 @@ public class StreamsConfigTest {
     public void consumerConfigMustContainStreamPartitionAssignorConfig() {
         props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 42);
         props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
+        props.put(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, 99L);
+        props.put(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, 9);
+        props.put(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, 99_999L);
         props.put(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG, 7L);
         props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "dummy:host");
-        props.put(StreamsConfig.RETRIES_CONFIG, 10);
-        props.put(StreamsConfig.adminClientPrefix(StreamsConfig.RETRIES_CONFIG), 5);
         props.put(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_BYTES_CONFIG), 100);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> returnedProps = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
 
         assertEquals(42, returnedProps.get(StreamsConfig.REPLICATION_FACTOR_CONFIG));
         assertEquals(1, returnedProps.get(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG));
-        assertEquals(StreamsPartitionAssignor.class.getName(), returnedProps.get(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG));
+        assertEquals(99L, returnedProps.get(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG));
+        assertEquals(9, returnedProps.get(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG));
+        assertEquals(99_999L, returnedProps.get(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG));
+        assertEquals(
+            StreamsPartitionAssignor.class.getName(),
+            returnedProps.get(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG)
+        );
         assertEquals(7L, returnedProps.get(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG));
         assertEquals("dummy:host", returnedProps.get(StreamsConfig.APPLICATION_SERVER_CONFIG));
-        assertNull(returnedProps.get(StreamsConfig.RETRIES_CONFIG));
-        assertEquals(5, returnedProps.get(StreamsConfig.adminClientPrefix(StreamsConfig.RETRIES_CONFIG)));
         assertEquals(100, returnedProps.get(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_BYTES_CONFIG)));
-    }
-
-    @Test
-    public void consumerConfigShouldContainAdminClientConfigsForRetriesAndRetryBackOffMsWithAdminPrefix() {
-        props.put(StreamsConfig.adminClientPrefix(StreamsConfig.RETRIES_CONFIG), 20);
-        props.put(StreamsConfig.adminClientPrefix(StreamsConfig.RETRY_BACKOFF_MS_CONFIG), 200L);
-        props.put(StreamsConfig.RETRIES_CONFIG, 10);
-        props.put(StreamsConfig.RETRY_BACKOFF_MS_CONFIG, 100L);
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> returnedProps = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
-
-        assertEquals(20, returnedProps.get(StreamsConfig.adminClientPrefix(StreamsConfig.RETRIES_CONFIG)));
-        assertEquals(200L, returnedProps.get(StreamsConfig.adminClientPrefix(StreamsConfig.RETRY_BACKOFF_MS_CONFIG)));
     }
 
     @Test
@@ -220,12 +215,18 @@ public class StreamsConfigTest {
         final String topic = "my topic";
 
         serializer.configure(serializerConfigs, true);
-        assertEquals("Should get the original string after serialization and deserialization with the configured encoding",
-            str, streamsConfig.defaultKeySerde().deserializer().deserialize(topic, serializer.serialize(topic, str)));
+        assertEquals(
+            "Should get the original string after serialization and deserialization with the configured encoding",
+            str,
+            streamsConfig.defaultKeySerde().deserializer().deserialize(topic, serializer.serialize(topic, str))
+        );
 
         serializer.configure(serializerConfigs, false);
-        assertEquals("Should get the original string after serialization and deserialization with the configured encoding",
-            str, streamsConfig.defaultValueSerde().deserializer().deserialize(topic, serializer.serialize(topic, str)));
+        assertEquals(
+            "Should get the original string after serialization and deserialization with the configured encoding",
+            str,
+            streamsConfig.defaultValueSerde().deserializer().deserialize(topic, serializer.serialize(topic, str))
+        );
     }
 
     @Test
@@ -354,10 +355,10 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldSupportNonPrefixedAdminConfigs() {
-        props.put(AdminClientConfig.RETRIES_CONFIG, 10);
+        props.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, 10);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> configs = streamsConfig.getAdminConfigs(clientId);
-        assertEquals(10, configs.get(AdminClientConfig.RETRIES_CONFIG));
+        assertEquals(10, configs.get(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG));
     }
 
     @Test(expected = StreamsException.class)
@@ -387,9 +388,11 @@ public class StreamsConfigTest {
     @Test
     public void shouldOverrideStreamsDefaultProducerConfigs() {
         props.put(StreamsConfig.producerPrefix(ProducerConfig.LINGER_MS_CONFIG), "10000");
+        props.put(StreamsConfig.producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG), "30000");
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
         assertEquals("10000", producerConfigs.get(ProducerConfig.LINGER_MS_CONFIG));
+        assertEquals("30000", producerConfigs.get(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG));
     }
 
     @Test
@@ -598,7 +601,10 @@ public class StreamsConfigTest {
         props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "anyValue");
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
-        assertThat(consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG), equalTo(READ_COMMITTED.name().toLowerCase(Locale.ROOT)));
+        assertThat(
+            consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG),
+            equalTo(READ_COMMITTED.name().toLowerCase(Locale.ROOT))
+        );
     }
 
     @Test
@@ -606,7 +612,10 @@ public class StreamsConfigTest {
         props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT));
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
-        assertThat(consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG), equalTo(READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT)));
+        assertThat(
+            consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG),
+            equalTo(READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT))
+        );
     }
 
     @Test
@@ -654,7 +663,10 @@ public class StreamsConfigTest {
         final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
         final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
 
-        assertThat(consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG), equalTo(READ_COMMITTED.name().toLowerCase(Locale.ROOT)));
+        assertThat(
+            consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG),
+            equalTo(READ_COMMITTED.name().toLowerCase(Locale.ROOT))
+        );
         assertTrue((Boolean) producerConfigs.get(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG));
         assertThat(producerConfigs.get(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG), equalTo(Integer.MAX_VALUE));
         assertThat(streamsConfig.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG), equalTo(100L));
@@ -681,18 +693,21 @@ public class StreamsConfigTest {
         assertThat(producerConfigs.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG), is(nullValue()));
     }
 
+    @Deprecated
     @Test
     public void shouldNotOverrideUserConfigRetriesIfExactlyAlphaOnceEnabled() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
         shouldNotOverrideUserConfigRetriesIfExactlyOnceEnabled();
     }
 
+    @Deprecated
     @Test
     public void shouldNotOverrideUserConfigRetriesIfExactlyBetaOnceEnabled() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_BETA);
         shouldNotOverrideUserConfigRetriesIfExactlyOnceEnabled();
     }
 
+    @Deprecated
     private void shouldNotOverrideUserConfigRetriesIfExactlyOnceEnabled() {
         final int numberOfRetries = 42;
         props.put(ProducerConfig.RETRIES_CONFIG, numberOfRetries);
@@ -731,7 +746,10 @@ public class StreamsConfigTest {
             new StreamsConfig(props);
             fail("Should throw ConfigException when commitIntervalMs is set to a negative value");
         } catch (final ConfigException e) {
-            assertEquals("Invalid value -1 for configuration commit.interval.ms: Value must be at least 0", e.getMessage());
+            assertEquals(
+                "Invalid value -1 for configuration commit.interval.ms: Value must be at least 0",
+                e.getMessage()
+            );
         }
     }
 
@@ -765,7 +783,10 @@ public class StreamsConfigTest {
             config.defaultKeySerde();
             fail("Test should throw a StreamsException");
         } catch (final StreamsException e) {
-            assertEquals("Failed to configure key serde class org.apache.kafka.streams.StreamsConfigTest$MisconfiguredSerde", e.getMessage());
+            assertEquals(
+                "Failed to configure key serde class org.apache.kafka.streams.StreamsConfigTest$MisconfiguredSerde",
+                e.getMessage()
+            );
         }
     }
 
@@ -778,7 +799,10 @@ public class StreamsConfigTest {
             config.defaultValueSerde();
             fail("Test should throw a StreamsException");
         } catch (final StreamsException e) {
-            assertEquals("Failed to configure value serde class org.apache.kafka.streams.StreamsConfigTest$MisconfiguredSerde", e.getMessage());
+            assertEquals(
+                "Failed to configure value serde class org.apache.kafka.streams.StreamsConfigTest$MisconfiguredSerde",
+                e.getMessage()
+            );
         }
     }
 
@@ -801,7 +825,11 @@ public class StreamsConfigTest {
             streamsConfig.getProducerConfigs(clientId);
             fail("Should throw ConfigException when ESO is enabled and maxInFlight requests exceeds 5");
         } catch (final ConfigException e) {
-            assertEquals("Invalid value 7 for configuration max.in.flight.requests.per.connection: Can't exceed 5 when exactly-once processing is enabled", e.getMessage());
+            assertEquals(
+                "Invalid value 7 for configuration max.in.flight.requests.per.connection:" +
+                    " Can't exceed 5 when exactly-once processing is enabled",
+                e.getMessage()
+            );
         }
     }
 
@@ -842,47 +870,71 @@ public class StreamsConfigTest {
             new StreamsConfig(props).getProducerConfigs(clientId);
             fail("Should throw ConfigException when EOS is enabled and maxInFlight cannot be paresed into an integer");
         } catch (final ConfigException e) {
-            assertEquals("Invalid value not-a-number for configuration max.in.flight.requests.per.connection: String value could not be parsed as 32-bit integer", e.getMessage());
+            assertEquals(
+                "Invalid value not-a-number for configuration max.in.flight.requests.per.connection:" +
+                " String value could not be parsed as 32-bit integer",
+                e.getMessage()
+            );
         }
     }
 
     @Test
     public void shouldSpecifyNoOptimizationWhenNotExplicitlyAddedToConfigs() {
         final String expectedOptimizeConfig = "none";
-        final String actualOptimizedConifig = streamsConfig.getString(TOPOLOGY_OPTIMIZATION);
+        final String actualOptimizedConifig = streamsConfig.getString(TOPOLOGY_OPTIMIZATION_CONFIG);
         assertEquals("Optimization should be \"none\"", expectedOptimizeConfig, actualOptimizedConifig);
     }
 
     @Test
     public void shouldSpecifyOptimizationWhenNotExplicitlyAddedToConfigs() {
         final String expectedOptimizeConfig = "all";
-        props.put(TOPOLOGY_OPTIMIZATION, "all");
+        props.put(TOPOLOGY_OPTIMIZATION_CONFIG, "all");
         final StreamsConfig config = new StreamsConfig(props);
-        final String actualOptimizedConifig = config.getString(TOPOLOGY_OPTIMIZATION);
+        final String actualOptimizedConifig = config.getString(TOPOLOGY_OPTIMIZATION_CONFIG);
         assertEquals("Optimization should be \"all\"", expectedOptimizeConfig, actualOptimizedConifig);
     }
 
     @Test(expected = ConfigException.class)
     public void shouldThrowConfigExceptionWhenOptimizationConfigNotValueInRange() {
-        props.put(TOPOLOGY_OPTIMIZATION, "maybe");
+        props.put(TOPOLOGY_OPTIMIZATION_CONFIG, "maybe");
         new StreamsConfig(props);
     }
 
     @SuppressWarnings("deprecation")
     @Test
     public void shouldLogWarningWhenPartitionGrouperIsUsed() {
-        props.put(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, org.apache.kafka.streams.processor.DefaultPartitionGrouper.class);
+        props.put(
+            StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG,
+            org.apache.kafka.streams.processor.DefaultPartitionGrouper.class
+        );
 
         LogCaptureAppender.setClassLoggerToDebug(StreamsConfig.class);
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            new StreamsConfig(props);
 
-        new StreamsConfig(props);
+            assertThat(
+                appender.getMessages(),
+                hasItem("Configuration parameter `" + StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG +
+                    "` is deprecated and will be removed in 3.0.0 release.")
+            );
+        }
+    }
 
-        LogCaptureAppender.unregister(appender);
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldLogWarningWhenRetriesIsUsed() {
+        props.put(StreamsConfig.RETRIES_CONFIG, 0);
 
-        assertThat(
-            appender.getMessages(),
-            hasItem("Configuration parameter `" + StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG + "` is deprecated and will be removed in 3.0.0 release."));
+        LogCaptureAppender.setClassLoggerToDebug(StreamsConfig.class);
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            new StreamsConfig(props);
+
+            assertThat(
+                appender.getMessages(),
+                hasItem("Configuration parameter `" + StreamsConfig.RETRIES_CONFIG +
+                    "` is deprecated and will be removed in 3.0.0 release.")
+            );
+        }
     }
 
     @Test
@@ -894,18 +946,6 @@ public class StreamsConfigTest {
     @Test
     public void shouldThrowConfigExceptionIfAcceptableRecoveryLagIsOutsideBounds() {
         props.put(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, -1L);
-        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
-    }
-
-    @Test
-    public void shouldSetDefaultBalanceFactor() {
-        final StreamsConfig config = new StreamsConfig(props);
-        assertThat(config.getInt(StreamsConfig.BALANCE_FACTOR_CONFIG), is(1));
-    }
-
-    @Test
-    public void shouldThrowConfigExceptionIfBalanceFactorIsOutsideBounds() {
-        props.put(StreamsConfig.BALANCE_FACTOR_CONFIG, 0);
         assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 

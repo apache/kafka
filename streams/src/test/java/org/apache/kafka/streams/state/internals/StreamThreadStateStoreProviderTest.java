@@ -29,8 +29,10 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
@@ -41,6 +43,7 @@ import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsProducer;
 import org.apache.kafka.streams.processor.internals.Task;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
@@ -48,8 +51,8 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockClientSupplier;
-import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
@@ -70,13 +73,10 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 
-import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.not;
-import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
 
 public class StreamThreadStateStoreProviderTest {
 
@@ -92,7 +92,7 @@ public class StreamThreadStateStoreProviderTest {
     public void before() {
         final TopologyWrapper topology = new TopologyWrapper();
         topology.addSource("the-source", topicName);
-        topology.addProcessor("the-processor", new MockProcessorSupplier<>(), "the-source");
+        topology.addProcessor("the-processor", new MockApiProcessorSupplier<>(), "the-source");
         topology.addStateStore(
             Stores.keyValueStoreBuilder(
                 Stores.inMemoryKeyValueStore("kv-store"),
@@ -135,8 +135,8 @@ public class StreamThreadStateStoreProviderTest {
 
         final StreamsConfig streamsConfig = new StreamsConfig(properties);
         final MockClientSupplier clientSupplier = new MockClientSupplier();
-        configureRestoreConsumer(clientSupplier, "applicationId-kv-store-changelog");
-        configureRestoreConsumer(clientSupplier, "applicationId-window-store-changelog");
+        configureClients(clientSupplier, "applicationId-kv-store-changelog");
+        configureClients(clientSupplier, "applicationId-window-store-changelog");
 
         final InternalTopologyBuilder internalTopologyBuilder = topology.getInternalBuilder(applicationId);
         final ProcessorTopology processorTopology = internalTopologyBuilder.buildTopology();
@@ -324,16 +324,12 @@ public class StreamThreadStateStoreProviderTest {
     }
 
     @Test
-    public void shouldThrowForInvalidPartitions() {
+    public void shouldReturnEmptyListForInvalidPartitions() {
         mockThread(true);
-        final InvalidStateStoreException thrown = assertThrows(
-            InvalidStateStoreException.class,
-            () -> provider.stores(
-                StoreQueryParameters
-                    .fromNameAndType("kv-store", QueryableStoreTypes.keyValueStore())
-                    .withPartition(2))
+        assertEquals(
+                Collections.emptyList(),
+                provider.stores(StoreQueryParameters.fromNameAndType("kv-store", QueryableStoreTypes.keyValueStore()).withPartition(2))
         );
-        assertThat(thrown.getMessage(), equalTo("The specified partition 2 for store kv-store does not exist."));
     }
 
     @Test
@@ -361,13 +357,14 @@ public class StreamThreadStateStoreProviderTest {
         final ProcessorStateManager stateManager = new ProcessorStateManager(
             taskId,
             Task.TaskType.ACTIVE,
-            EXACTLY_ONCE.equals(streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)),
+            StreamThread.eosEnabled(streamsConfig),
             logContext,
             stateDirectory,
             new StoreChangelogReader(
                 new MockTime(),
                 streamsConfig,
                 logContext,
+                clientSupplier.adminClient,
                 clientSupplier.restoreConsumer,
                 new MockStateRestoreListener()),
             topology.storeToChangelogTopic(), partitions);
@@ -384,18 +381,27 @@ public class StreamThreadStateStoreProviderTest {
             ),
             streamsConfig.defaultProductionExceptionHandler(),
             new MockStreamsMetrics(metrics));
+        final StreamsMetricsImpl streamsMetrics = new MockStreamsMetrics(metrics);
+        final InternalProcessorContext context = new ProcessorContextImpl(
+            taskId,
+            streamsConfig,
+            stateManager,
+            streamsMetrics,
+            null
+        );
         return new StreamTask(
             taskId,
             partitions,
             topology,
             clientSupplier.consumer,
             streamsConfig,
-            new MockStreamsMetrics(metrics),
+            streamsMetrics,
             stateDirectory,
-            null,
+            EasyMock.createNiceMock(ThreadCache.class),
             new MockTime(),
             stateManager,
-            recordCollector);
+            recordCollector,
+            context);
     }
 
     private void mockThread(final boolean initialized) {
@@ -409,8 +415,7 @@ public class StreamThreadStateStoreProviderTest {
         EasyMock.replay(threadMock);
     }
 
-    private void configureRestoreConsumer(final MockClientSupplier clientSupplier,
-                                          final String topic) {
+    private void configureClients(final MockClientSupplier clientSupplier, final String topic) {
         final List<PartitionInfo> partitions = Arrays.asList(
             new PartitionInfo(topic, 0, null, null, null),
             new PartitionInfo(topic, 1, null, null, null)
@@ -427,5 +432,8 @@ public class StreamThreadStateStoreProviderTest {
 
         clientSupplier.restoreConsumer.updateBeginningOffsets(offsets);
         clientSupplier.restoreConsumer.updateEndOffsets(offsets);
+
+        clientSupplier.adminClient.updateBeginningOffsets(offsets);
+        clientSupplier.adminClient.updateEndOffsets(offsets);
     }
 }

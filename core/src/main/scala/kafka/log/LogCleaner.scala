@@ -112,9 +112,18 @@ class LogCleaner(initialConfig: CleanerConfig,
 
   private[log] val cleaners = mutable.ArrayBuffer[CleanerThread]()
 
+  /**
+   * scala 2.12 does not support maxOption so we handle the empty manually.
+   * @param f to compute the result
+   * @return the max value (int value) or 0 if there is no cleaner
+   */
+  private def maxOverCleanerThreads(f: CleanerThread => Double): Int =
+    cleaners.foldLeft(0.0d)((max: Double, thread: CleanerThread) => math.max(max, f(thread))).toInt
+
+
   /* a metric to track the maximum utilization of any thread's buffer in the last cleaning */
   newGauge("max-buffer-utilization-percent",
-    () => cleaners.iterator.map(100 * _.lastStats.bufferUtilization).max.toInt)
+    () => maxOverCleanerThreads(_.lastStats.bufferUtilization) * 100)
 
   /* a metric to track the recopy rate of each thread's last cleaning */
   newGauge("cleaner-recopy-percent", () => {
@@ -124,12 +133,14 @@ class LogCleaner(initialConfig: CleanerConfig,
   })
 
   /* a metric to track the maximum cleaning time for the last cleaning from each thread */
-  newGauge("max-clean-time-secs", () => cleaners.iterator.map(_.lastStats.elapsedSecs).max.toInt)
+  newGauge("max-clean-time-secs",
+    () => maxOverCleanerThreads(_.lastStats.elapsedSecs))
+
 
   // a metric to track delay between the time when a log is required to be compacted
   // as determined by max compaction lag and the time of last cleaner run.
   newGauge("max-compaction-delay-secs",
-    () => Math.max(0, (cleaners.iterator.map(_.lastPreCleanStats.maxCompactionDelayMs).max / 1000).toInt))
+    () => maxOverCleanerThreads(_.lastPreCleanStats.maxCompactionDelayMs.toDouble) / 1000)
 
   newGauge("DeadThreadCount", () => deadThreadCount)
 
@@ -192,16 +203,24 @@ class LogCleaner(initialConfig: CleanerConfig,
   }
 
   /**
-   * Update checkpoint file, removing topics and partitions that no longer exist
+   * Update checkpoint file to remove partitions if necessary.
    */
-  def updateCheckpoints(dataDir: File): Unit = {
-    cleanerManager.updateCheckpoints(dataDir, update=None)
+  def updateCheckpoints(dataDir: File, partitionToRemove: Option[TopicPartition] = None): Unit = {
+    cleanerManager.updateCheckpoints(dataDir, partitionToRemove = partitionToRemove)
   }
 
+  /**
+   * alter the checkpoint directory for the topicPartition, to remove the data in sourceLogDir, and add the data in destLogDir
+   */
   def alterCheckpointDir(topicPartition: TopicPartition, sourceLogDir: File, destLogDir: File): Unit = {
     cleanerManager.alterCheckpointDir(topicPartition, sourceLogDir, destLogDir)
   }
 
+  /**
+   * Stop cleaning logs in the provided directory
+   *
+   * @param dir     the absolute path of the log dir
+   */
   def handleLogDirFailure(dir: String): Unit = {
     cleanerManager.handleLogDirFailure(dir)
   }
@@ -883,7 +902,7 @@ private[log] class Cleaner(val id: Int,
     // Add all the cleanable dirty segments. We must take at least map.slots * load_factor,
     // but we may be able to fit more (if there is lots of duplication in the dirty section of the log)
     var full = false
-    for ( (segment, nextSegmentStartOffset) <- dirty.zip(nextSegmentStartOffsets) if !full) {
+    for ((segment, nextSegmentStartOffset) <- dirty.zip(nextSegmentStartOffsets) if !full) {
       checkDone(log.topicPartition)
 
       full = buildOffsetMapForSegment(log.topicPartition, segment, map, start, nextSegmentStartOffset, log.config.maxMessageSize,
@@ -938,15 +957,18 @@ private[log] class Cleaner(val id: Int,
             // Note that abort markers are supported in v2 and above, which means count is defined.
             stats.indexMessagesRead(batch.countOrNull)
           } else {
-            for (record <- batch.asScala) {
-              if (record.hasKey && record.offset >= startOffset) {
-                if (map.size < maxDesiredMapSize)
-                  map.put(record.key, record.offset)
-                else
-                  return true
+            val recordsIterator = batch.streamingIterator(decompressionBufferSupplier)
+            try {
+              for (record <- recordsIterator.asScala) {
+                if (record.hasKey && record.offset >= startOffset) {
+                  if (map.size < maxDesiredMapSize)
+                    map.put(record.key, record.offset)
+                  else
+                    return true
+                }
+                stats.indexMessagesRead(1)
               }
-              stats.indexMessagesRead(1)
-            }
+            } finally recordsIterator.close()
           }
         }
 

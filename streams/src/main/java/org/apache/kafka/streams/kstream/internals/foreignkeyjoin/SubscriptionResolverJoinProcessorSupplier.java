@@ -29,6 +29,8 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.Murmur3;
 
+import java.util.function.Supplier;
+
 /**
  * Receives {@code SubscriptionResponseWrapper<VO>} events and filters out events which do not match the current hash
  * of the primary key. This eliminates race-condition results for rapidly-changing foreign-keys for a given primary key.
@@ -42,18 +44,18 @@ import org.apache.kafka.streams.state.internals.Murmur3;
 public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements ProcessorSupplier<K, SubscriptionResponseWrapper<VO>> {
     private final KTableValueGetterSupplier<K, V> valueGetterSupplier;
     private final Serializer<V> constructionTimeValueSerializer;
-    private final String valueHashSerdePseudoTopic;
+    private final Supplier<String> valueHashSerdePseudoTopicSupplier;
     private final ValueJoiner<V, VO, VR> joiner;
     private final boolean leftJoin;
 
     public SubscriptionResolverJoinProcessorSupplier(final KTableValueGetterSupplier<K, V> valueGetterSupplier,
                                                      final Serializer<V> valueSerializer,
-                                                     final String valueHashSerdePseudoTopic,
+                                                     final Supplier<String> valueHashSerdePseudoTopicSupplier,
                                                      final ValueJoiner<V, VO, VR> joiner,
                                                      final boolean leftJoin) {
         this.valueGetterSupplier = valueGetterSupplier;
         constructionTimeValueSerializer = valueSerializer;
-        this.valueHashSerdePseudoTopic = valueHashSerdePseudoTopic;
+        this.valueHashSerdePseudoTopicSupplier = valueHashSerdePseudoTopicSupplier;
         this.joiner = joiner;
         this.leftJoin = leftJoin;
     }
@@ -61,6 +63,7 @@ public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements 
     @Override
     public Processor<K, SubscriptionResponseWrapper<VO>> get() {
         return new AbstractProcessor<K, SubscriptionResponseWrapper<VO>>() {
+            private String valueHashSerdePseudoTopic;
             private Serializer<V> runtimeValueSerializer = constructionTimeValueSerializer;
 
             private KTableValueGetter<K, V> valueGetter;
@@ -69,6 +72,7 @@ public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements 
             @Override
             public void init(final ProcessorContext context) {
                 super.init(context);
+                valueHashSerdePseudoTopic = valueHashSerdePseudoTopicSupplier.get();
                 valueGetter = valueGetterSupplier.get();
                 valueGetter.init(context);
                 if (runtimeValueSerializer == null) {

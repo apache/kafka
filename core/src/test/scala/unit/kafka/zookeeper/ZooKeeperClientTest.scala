@@ -696,7 +696,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
 
   private def cleanMetricsRegistry(): Unit = {
     val metrics = KafkaYammerMetrics.defaultRegistry
-    metrics.allMetrics.keySet.asScala.foreach(metrics.removeMetric)
+    metrics.allMetrics.keySet.forEach(metrics.removeMetric)
   }
 
   private def bytes = UUID.randomUUID().toString.getBytes(StandardCharsets.UTF_8)

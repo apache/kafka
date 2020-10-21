@@ -214,22 +214,22 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     val testSemaphore = new Semaphore(0)
     SslAdminIntegrationTest.semaphore = Some(testSemaphore)
 
-    client = Admin.create(createConfig())
+    client = Admin.create(createConfig)
     val results = client.createAcls(List(acl2, acl3).asJava).values
     assertEquals(Set(acl2, acl3), results.keySet().asScala)
-    assertFalse(results.values().asScala.exists(_.isDone))
+    assertFalse(results.values.asScala.exists(_.isDone))
     TestUtils.waitUntilTrue(() => testSemaphore.hasQueuedThreads, "Authorizer not blocked in createAcls")
     testSemaphore.release()
-    results.values().asScala.foreach(_.get)
+    results.values.forEach(_.get)
     validateRequestContext(SslAdminIntegrationTest.lastUpdateRequestContext.get, ApiKeys.CREATE_ACLS)
 
     testSemaphore.acquire()
     val results2 = client.deleteAcls(List(acl.toFilter, acl2.toFilter, acl3.toFilter).asJava).values
     assertEquals(Set(acl.toFilter, acl2.toFilter, acl3.toFilter), results2.keySet.asScala)
-    assertFalse(results2.values().asScala.exists(_.isDone))
+    assertFalse(results2.values.asScala.exists(_.isDone))
     TestUtils.waitUntilTrue(() => testSemaphore.hasQueuedThreads, "Authorizer not blocked in deleteAcls")
     testSemaphore.release()
-    results.values().asScala.foreach(_.get)
+    results.values.forEach(_.get)
     assertEquals(0, results2.get(acl.toFilter).get.values.size())
     assertEquals(Set(acl2), results2.get(acl2.toFilter).get.values.asScala.map(_.binding).toSet)
     assertEquals(Set(acl3), results2.get(acl3.toFilter).get.values.asScala.map(_.binding).toSet)
@@ -237,7 +237,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
   }
 
   private def createAdminClient: Admin = {
-    val config = createConfig()
+    val config = createConfig
     config.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "40000")
     val client = Admin.create(config)
     adminClients += client

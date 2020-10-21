@@ -18,7 +18,7 @@
 package kafka.server
 
 import java.util
-import java.util.{Collections}
+import java.util.Collections
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import scala.collection.{mutable, Seq, Set}
@@ -28,6 +28,7 @@ import kafka.api._
 import kafka.controller.StateChangeLogger
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
+import kafka.utils.Implicits._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
 import org.apache.kafka.common.{Cluster, Node, PartitionInfo, TopicPartition}
@@ -37,7 +38,6 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{MetadataResponse, UpdateMetadataRequest}
 import org.apache.kafka.common.security.auth.SecurityProtocol
-
 
 /**
  *  A cache for the state (e.g., current leader) of each partition. This cache is updated through
@@ -98,7 +98,7 @@ class MetadataCache(brokerId: Int) extends Logging {
 
         maybeLeader match {
           case None =>
-            val error = if (!snapshot.aliveBrokers.contains(brokerId)) { // we are already holding the read lock
+            val error = if (!snapshot.aliveBrokers.contains(leaderBrokerId)) { // we are already holding the read lock
               debug(s"Error while fetching metadata for $topicPartition: leader not available")
               Errors.LEADER_NOT_AVAILABLE
             } else {
@@ -214,12 +214,16 @@ class MetadataCache(brokerId: Int) extends Logging {
                                        topic: String,
                                        partitionId: Int,
                                        stateInfo: UpdateMetadataPartitionState): Unit = {
-    val infos = partitionStates.getOrElseUpdate(topic, mutable.LongMap())
+    val infos = partitionStates.getOrElseUpdate(topic, mutable.LongMap.empty)
     infos(partitionId) = stateInfo
   }
 
   def getPartitionInfo(topic: String, partitionId: Int): Option[UpdateMetadataPartitionState] = {
     metadataSnapshot.partitionStates.get(topic).flatMap(_.get(partitionId))
+  }
+
+  def numPartitions(topic: String): Option[Int] = {
+    metadataSnapshot.partitionStates.get(topic).map(_.size)
   }
 
   // if the leader is not known, return None;
@@ -290,13 +294,13 @@ class MetadataCache(brokerId: Int) extends Logging {
           case id => Some(id)
         }
 
-      updateMetadataRequest.liveBrokers.asScala.foreach { broker =>
+      updateMetadataRequest.liveBrokers.forEach { broker =>
         // `aliveNodes` is a hot path for metadata requests for large clusters, so we use java.util.HashMap which
         // is a bit faster than scala.collection.mutable.HashMap. When we drop support for Scala 2.10, we could
         // move to `AnyRefMap`, which has comparable performance.
         val nodes = new java.util.HashMap[ListenerName, Node]
         val endPoints = new mutable.ArrayBuffer[EndPoint]
-        broker.endpoints.asScala.foreach { ep =>
+        broker.endpoints.forEach { ep =>
           val listenerName = new ListenerName(ep.listener)
           endPoints += new EndPoint(ep.host, ep.port, listenerName, SecurityProtocol.forId(ep.securityProtocol))
           nodes.put(listenerName, new Node(broker.id, ep.host, ep.port))
@@ -316,10 +320,10 @@ class MetadataCache(brokerId: Int) extends Logging {
       } else {
         //since kafka may do partial metadata updates, we start by copying the previous state
         val partitionStates = new mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataPartitionState]](metadataSnapshot.partitionStates.size)
-        metadataSnapshot.partitionStates.foreach { case (topic, oldPartitionStates) =>
+        metadataSnapshot.partitionStates.forKeyValue { (topic, oldPartitionStates) =>
           val copy = new mutable.LongMap[UpdateMetadataPartitionState](oldPartitionStates.size)
           copy ++= oldPartitionStates
-          partitionStates += (topic -> copy)
+          partitionStates(topic) = copy
         }
 
         val traceEnabled = stateChangeLogger.isTraceEnabled

@@ -121,4 +121,31 @@ public class StructRegistryTest {
             assertTrue(e.getMessage().contains("Common struct TestCommonStruct was specified twice."));
         }
     }
+
+    @Test
+    public void testSingleStruct() throws Exception {
+        MessageSpec testMessageSpec = MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
+                "{",
+                "  \"type\": \"request\",",
+                "  \"name\": \"LeaderAndIsrRequest\",",
+                "  \"validVersions\": \"0-2\",",
+                "  \"fields\": [",
+                "    { \"name\": \"field1\", \"type\": \"int32\", \"versions\": \"0+\" },",
+                "    { \"name\": \"field2\", \"type\": \"TestInlineStruct\", \"versions\": \"0+\", ",
+                "    \"fields\": [",
+                "      { \"name\": \"inlineField1\", \"type\": \"int64\", \"versions\": \"0+\" }",
+                "    ]}",
+                "  ]",
+                "}")), MessageSpec.class);
+        StructRegistry structRegistry = new StructRegistry();
+        structRegistry.register(testMessageSpec);
+
+        FieldSpec field2 = testMessageSpec.fields().get(1);
+        assertTrue(field2.type().isStruct());
+        assertEquals("TestInlineStruct", field2.type().toString());
+        assertEquals("field2", field2.name());
+
+        assertEquals("TestInlineStruct", structRegistry.findStruct(field2).name());
+        assertFalse(structRegistry.isStructArrayWithKeys(field2));
+    }
 }

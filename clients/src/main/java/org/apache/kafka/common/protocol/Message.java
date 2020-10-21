@@ -77,11 +77,15 @@ public interface Message {
     void read(Readable readable, short version);
 
     /**
-     * Reads this message from the a Struct object.  This will overwrite all
+     * Reads this message from a Struct object.  This will overwrite all
      * relevant fields with information from the Struct.
      *
      * @param struct        The source struct.
      * @param version       The version to use.
+     *
+     * @throws {@see org.apache.kafka.common.errors.UnsupportedVersionException}
+     *                      If the specified struct can't be processed with the
+     *                      specified message version.
      */
     void fromStruct(Struct struct, short version);
 
@@ -102,4 +106,11 @@ public interface Message {
      * @return              The raw tagged fields.
      */
     List<RawTaggedField> unknownTaggedFields();
+
+    /**
+     * Make a deep copy of the message.
+     *
+     * @return              A copy of the message which does not share any mutable fields.
+     */
+    Message duplicate();
 }

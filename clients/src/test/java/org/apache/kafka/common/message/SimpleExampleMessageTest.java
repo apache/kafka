@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.common.message;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.junit.Test;
@@ -281,21 +283,122 @@ public class SimpleExampleMessageTest {
                 message.taggedLong()));
     }
 
-    private void testRoundTrip(SimpleExampleMessageData message,
-                               Consumer<SimpleExampleMessageData> validator) {
-        validator.accept(message);
-        short version = 1;
+    @Test
+    public void testMyStruct() {
+        // Verify that we can set and retrieve a nullable struct object.
+        SimpleExampleMessageData.MyStruct myStruct =
+            new SimpleExampleMessageData.MyStruct().setStructId(10).setArrayInStruct(
+                Collections.singletonList(new SimpleExampleMessageData.StructArray().setArrayFieldId(20))
+            );
+        testRoundTrip(new SimpleExampleMessageData().setMyStruct(myStruct),
+            message -> assertEquals(myStruct, message.myStruct()), (short) 2);
+    }
+
+    @Test(expected = UnsupportedVersionException.class)
+    public void testMyStructUnsupportedVersion() {
+        SimpleExampleMessageData.MyStruct myStruct =
+                new SimpleExampleMessageData.MyStruct().setStructId(10);
+        // Check serialization throws exception for unsupported version
+        testRoundTrip(new SimpleExampleMessageData().setMyStruct(myStruct), (short) 1);
+    }
+
+    /**
+     * Check following cases:
+     * 1. Tagged struct can be serialized/deserialized for version it is supported
+     * 2. Tagged struct doesn't matter for versions it is not declared.
+     */
+    @Test
+    public void testMyTaggedStruct() {
+        // Verify that we can set and retrieve a nullable struct object.
+        SimpleExampleMessageData.TaggedStruct myStruct =
+            new SimpleExampleMessageData.TaggedStruct().setStructId("abc");
+        testRoundTrip(new SimpleExampleMessageData().setMyTaggedStruct(myStruct),
+            message -> assertEquals(myStruct, message.myTaggedStruct()), (short) 2);
+
+        // Not setting field works for both version 1 and version 2 protocol
+        testRoundTrip(new SimpleExampleMessageData().setMyString("abc"),
+            message -> assertEquals("abc", message.myString()), (short) 1);
+        testRoundTrip(new SimpleExampleMessageData().setMyString("abc"),
+            message -> assertEquals("abc", message.myString()), (short) 2);
+    }
+
+    @Test
+    public void testCommonStruct() {
+        SimpleExampleMessageData message = new SimpleExampleMessageData();
+        message.setMyCommonStruct(new SimpleExampleMessageData.TestCommonStruct()
+            .setFoo(1)
+            .setBar(2));
+        message.setMyOtherCommonStruct(new SimpleExampleMessageData.TestCommonStruct()
+            .setFoo(3)
+            .setBar(4));
+        testRoundTrip(message, (short) 2);
+    }
+
+    private ByteBuffer serialize(SimpleExampleMessageData message, short version) {
         ObjectSerializationCache cache = new ObjectSerializationCache();
         int size = message.size(cache, version);
         ByteBuffer buf = ByteBuffer.allocate(size);
         message.write(new ByteBufferAccessor(buf), cache, version);
         buf.flip();
         assertEquals(size, buf.remaining());
+        return buf;
+    }
 
-        SimpleExampleMessageData message2 = new SimpleExampleMessageData();
-        message2.read(new ByteBufferAccessor(buf.duplicate()), version);
+    private SimpleExampleMessageData deserialize(ByteBuffer buf, short version) {
+        SimpleExampleMessageData message = new SimpleExampleMessageData();
+        message.read(new ByteBufferAccessor(buf.duplicate()), version);
+        return message;
+    }
+
+    private ByteBuffer serializeThroughStruct(SimpleExampleMessageData message, short version) {
+        Struct struct = message.toStruct(version);
+        int size = struct.sizeOf();
+        ByteBuffer buf = ByteBuffer.allocate(size);
+        struct.writeTo(buf);
+        buf.flip();
+        assertEquals(size, buf.remaining());
+        return buf;
+    }
+
+    private SimpleExampleMessageData deserializeThroughStruct(ByteBuffer buf, short version) {
+        Schema schema = SimpleExampleMessageData.SCHEMAS[version];
+        Struct struct = schema.read(buf);
+        return new SimpleExampleMessageData(struct, version);
+    }
+
+    private void testRoundTrip(SimpleExampleMessageData message, short version) {
+        testRoundTrip(message, m -> { }, version);
+    }
+
+    private void testRoundTrip(SimpleExampleMessageData message,
+                               Consumer<SimpleExampleMessageData> validator) {
+        testRoundTrip(message, validator, (short) 1);
+    }
+
+    private void testRoundTrip(SimpleExampleMessageData message,
+                               Consumer<SimpleExampleMessageData> validator,
+                               short version) {
+        validator.accept(message);
+        ByteBuffer buf = serialize(message, version);
+
+        SimpleExampleMessageData message2 = deserialize(buf.duplicate(), version);
         validator.accept(message2);
         assertEquals(message, message2);
         assertEquals(message.hashCode(), message2.hashCode());
+
+        // Check struct serialization as well
+        assertEquals(buf, serializeThroughStruct(message, version));
+        SimpleExampleMessageData messageFromStruct = deserializeThroughStruct(buf.duplicate(), version);
+        validator.accept(messageFromStruct);
+        assertEquals(message, messageFromStruct);
+        assertEquals(message.hashCode(), messageFromStruct.hashCode());
+
+        // Check JSON serialization
+        JsonNode serializedJson = SimpleExampleMessageDataJsonConverter.write(message, version);
+        SimpleExampleMessageData messageFromJson = SimpleExampleMessageDataJsonConverter.read(serializedJson, version);
+        validator.accept(messageFromJson);
+        assertEquals(message, messageFromJson);
+        assertEquals(message.hashCode(), messageFromJson.hashCode());
     }
+
 }

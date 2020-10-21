@@ -25,18 +25,15 @@ from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmo
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.tests.streams.utils import extract_generation_from_logs
 from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, \
-    LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, DEV_BRANCH, DEV_VERSION, KafkaVersion
+    LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, DEV_BRANCH, DEV_VERSION, KafkaVersion
 
 # broker 0.10.0 is not compatible with newer Kafka Streams versions
 broker_upgrade_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1), \
-                           str(LATEST_2_0), str(LATEST_2_1), str(LATEST_2_2), str(LATEST_2_3), str(LATEST_2_4), str(DEV_BRANCH)]
+                           str(LATEST_2_0), str(LATEST_2_1), str(LATEST_2_2), str(LATEST_2_3), \
+                           str(LATEST_2_4), str(LATEST_2_5), str(LATEST_2_6), str(DEV_BRANCH)]
 
 metadata_1_versions = [str(LATEST_0_10_0)]
 metadata_2_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1)]
-# once 0.10.1.2 is available backward_compatible_metadata_2_versions
-# can be replaced with metadata_2_versions
-backward_compatible_metadata_2_versions = [str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1)]
-metadata_3_or_higher_versions = [str(LATEST_2_0), str(LATEST_2_1), str(LATEST_2_2), str(LATEST_2_3), str(LATEST_2_4), str(DEV_VERSION)]
 
 """
 After each release one should first check that the released version has been uploaded to 
@@ -152,7 +149,7 @@ class StreamsUpgradeTest(Test):
 
         self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)
 
-        processor = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka)
+        processor = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, "at_least_once")
 
         with self.driver.node.account.monitor_log(self.driver.STDOUT_FILE) as driver_monitor:
             self.driver.start()
@@ -189,57 +186,8 @@ class StreamsUpgradeTest(Test):
         processor.stop()
         processor.node.account.ssh_capture("grep SMOKE-TEST-CLIENT-CLOSED %s" % processor.STDOUT_FILE, allow_fail=False)
 
-    @matrix(from_version=metadata_2_versions, to_version=metadata_2_versions)
-    def test_simple_upgrade_downgrade(self, from_version, to_version):
-        """
-        Starts 3 KafkaStreams instances with <old_version>, and upgrades one-by-one to <new_version>
-        """
-
-        if from_version == to_version:
-            return
-
-        self.zk = ZookeeperService(self.test_context, num_nodes=1)
-        self.zk.start()
-
-        self.kafka = KafkaService(self.test_context, num_nodes=1, zk=self.zk, topics=self.topics)
-        self.kafka.start()
-
-        self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)
-        self.driver.disable_auto_terminate()
-        self.processor1 = StreamsUpgradeTestJobRunnerService(self.test_context, self.kafka)
-        self.processor2 = StreamsUpgradeTestJobRunnerService(self.test_context, self.kafka)
-        self.processor3 = StreamsUpgradeTestJobRunnerService(self.test_context, self.kafka)
-
-        self.driver.start()
-        self.start_all_nodes_with(from_version)
-
-        self.processors = [self.processor1, self.processor2, self.processor3]
-
-        counter = 1
-        random.seed()
-
-        # upgrade one-by-one via rolling bounce
-        random.shuffle(self.processors)
-        for p in self.processors:
-            p.CLEAN_NODE_ENABLED = False
-            self.do_stop_start_bounce(p, None, to_version, counter)
-            counter = counter + 1
-
-        # shutdown
-        self.driver.stop()
-
-        random.shuffle(self.processors)
-        for p in self.processors:
-            node = p.node
-            with node.account.monitor_log(p.STDOUT_FILE) as monitor:
-                p.stop()
-                monitor.wait_until("UPGRADE-TEST-CLIENT-CLOSED",
-                                   timeout_sec=60,
-                                   err_msg="Never saw output 'UPGRADE-TEST-CLIENT-CLOSED' on" + str(node.account))
-
-    @matrix(from_version=metadata_1_versions, to_version=backward_compatible_metadata_2_versions)
-    @matrix(from_version=metadata_1_versions, to_version=metadata_3_or_higher_versions)
-    @matrix(from_version=metadata_2_versions, to_version=metadata_3_or_higher_versions)
+    @matrix(from_version=metadata_1_versions, to_version=[str(DEV_VERSION)])
+    @matrix(from_version=metadata_2_versions, to_version=[str(DEV_VERSION)])
     def test_metadata_upgrade(self, from_version, to_version):
         """
         Starts 3 KafkaStreams instances with version <from_version> and upgrades one-by-one to <to_version>
@@ -528,20 +476,22 @@ class StreamsUpgradeTest(Test):
                         log_monitor.wait_until("Sent a version 8 subscription and got version 7 assignment back (successful version probing). Downgrade subscription metadata to commonly supported version 7 and trigger new rebalance.",
                                                timeout_sec=60,
                                                err_msg="Could not detect 'successful version probing' at upgrading node " + str(node.account))
-                    else:
-                        log_monitor.wait_until("Sent a version 8 subscription and got version 7 assignment back (successful version probing). Downgrade subscription metadata to commonly supported version 8 and trigger new rebalance.",
+                        log_monitor.wait_until("Triggering the followup rebalance scheduled for 0 ms.",
                                                timeout_sec=60,
-                                               err_msg="Could not detect 'successful version probing with upgraded leader' at upgrading node " + str(node.account))
+                                               err_msg="Could not detect 'Triggering followup rebalance' at upgrading node " + str(node.account))
+                    else:
                         first_other_monitor.wait_until("Sent a version 7 subscription and group.s latest commonly supported version is 8 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 8 for next rebalance.",
                                                        timeout_sec=60,
                                                        err_msg="Never saw output 'Upgrade metadata to version 8' on" + str(first_other_node.account))
+                        first_other_monitor.wait_until("Triggering the followup rebalance scheduled for 0 ms.",
+                                                       timeout_sec=60,
+                                                       err_msg="Could not detect 'Triggering followup rebalance' at upgrading node " + str(node.account))
                         second_other_monitor.wait_until("Sent a version 7 subscription and group.s latest commonly supported version is 8 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 8 for next rebalance.",
                                                         timeout_sec=60,
                                                         err_msg="Never saw output 'Upgrade metadata to version 8' on" + str(second_other_node.account))
-
-                    log_monitor.wait_until("Detected that the assignor requested a rebalance. Rejoining the consumer group to trigger a new rebalance.",
-                                           timeout_sec=60,
-                                           err_msg="Could not detect 'Triggering new rebalance' at upgrading node " + str(node.account))
+                        second_other_monitor.wait_until("Triggering the followup rebalance scheduled for 0 ms.",
+                                                        timeout_sec=60,
+                                                        err_msg="Could not detect 'Triggering followup rebalance' at upgrading node " + str(node.account))
 
                     # version probing should trigger second rebalance
                     # now we check that after consecutive rebalances we have synchronized generation

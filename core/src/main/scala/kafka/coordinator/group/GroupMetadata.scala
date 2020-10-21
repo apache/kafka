@@ -22,6 +22,7 @@ import java.util.concurrent.locks.ReentrantLock
 
 import kafka.common.OffsetAndMetadata
 import kafka.utils.{CoreUtils, Logging, nonthreadsafe}
+import kafka.utils.Implicits._
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
@@ -159,7 +160,8 @@ private object GroupMetadata extends Logging {
  * Case class used to represent group metadata for the ListGroups API
  */
 case class GroupOverview(groupId: String,
-                         protocolType: String)
+                         protocolType: String,
+                         state: String)
 
 /**
  * Case class used to represent group metadata for the DescribeGroup API
@@ -353,7 +355,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def currentState = state
 
-  def notYetRejoinedMembers = members.values.filter(!_.isAwaitingJoin).toList
+  def notYetRejoinedMembers = members.filter(!_._2.isAwaitingJoin).toMap
 
   def hasAllMembersJoined = members.size == numMembersAwaitingJoin && pendingMembers.isEmpty
 
@@ -361,7 +363,17 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def allStaticMembers = staticMembers.keySet
 
+  // For testing only.
+  def allDynamicMembers = {
+    val dynamicMemberSet = new mutable.HashSet[String]
+    allMembers.foreach(memberId => dynamicMemberSet.add(memberId))
+    staticMembers.values.foreach(memberId => dynamicMemberSet.remove(memberId))
+    dynamicMemberSet.toSet
+  }
+
   def numPending = pendingMembers.size
+
+  def numAwaiting: Int = numMembersAwaitingJoin
 
   def allMemberMetadata = members.values.toList
 
@@ -389,10 +401,10 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
                            operation: String): Boolean = {
     if (hasStaticMember(groupInstanceId)
       && getStaticMemberId(groupInstanceId) != memberId) {
-        error(s"given member.id $memberId is identified as a known static member ${groupInstanceId.get}, " +
-          s"but not matching the expected member.id ${getStaticMemberId(groupInstanceId)} during $operation, will " +
-          s"respond with instance fenced error")
-        true
+      error(s"given member.id $memberId is identified as a known static member ${groupInstanceId.get}, " +
+        s"but not matching the expected member.id ${getStaticMemberId(groupInstanceId)} during $operation, will " +
+        s"respond with instance fenced error")
+      true
     } else
       false
   }
@@ -560,7 +572,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   }
 
   def overview: GroupOverview = {
-    GroupOverview(groupId, protocolType.getOrElse(""))
+    GroupOverview(groupId, protocolType.getOrElse(""), state.toString)
   }
 
   def initializeOffsets(offsets: collection.Map[TopicPartition, CommitRecordMetadataAndOffset],
@@ -605,7 +617,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     val producerOffsets = pendingTransactionalOffsetCommits.getOrElseUpdate(producerId,
       mutable.Map.empty[TopicPartition, CommitRecordMetadataAndOffset])
 
-    offsets.foreach { case (topicPartition, offsetAndMetadata) =>
+    offsets.forKeyValue { (topicPartition, offsetAndMetadata) =>
       producerOffsets.put(topicPartition, CommitRecordMetadataAndOffset(None, offsetAndMetadata))
     }
   }
@@ -649,7 +661,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     val pendingOffsetsOpt = pendingTransactionalOffsetCommits.remove(producerId)
     if (isCommit) {
       pendingOffsetsOpt.foreach { pendingOffsets =>
-        pendingOffsets.foreach { case (topicPartition, commitRecordMetadataAndOffset) =>
+        pendingOffsets.forKeyValue { (topicPartition, commitRecordMetadataAndOffset) =>
           if (commitRecordMetadataAndOffset.appendedBatchOffset.isEmpty)
             throw new IllegalStateException(s"Trying to complete a transactional offset commit for producerId $producerId " +
               s"and groupId $groupId even though the offset commit record itself hasn't been appended to the log.")
@@ -687,7 +699,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def removeOffsets(topicPartitions: Seq[TopicPartition]): immutable.Map[TopicPartition, OffsetAndMetadata] = {
     topicPartitions.flatMap { topicPartition =>
       pendingOffsetCommits.remove(topicPartition)
-      pendingTransactionalOffsetCommits.foreach { case (_, pendingOffsets) =>
+      pendingTransactionalOffsetCommits.forKeyValue { (_, pendingOffsets) =>
         pendingOffsets.remove(topicPartition)
       }
       val removedOffset = offsets.remove(topicPartition)

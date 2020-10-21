@@ -31,9 +31,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import static java.time.Instant.ofEpochMilli;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
-
 
 @RunWith(EasyMockRunner.class)
 public class ChangeLoggingWindowBytesStoreTest {
@@ -49,7 +46,6 @@ public class ChangeLoggingWindowBytesStoreTest {
     @Mock(type = MockType.NICE)
     private ProcessorContextImpl context;
     private ChangeLoggingWindowBytesStore store;
-
 
     @Before
     public void setUp() {
@@ -74,15 +70,16 @@ public class ChangeLoggingWindowBytesStoreTest {
 
         init();
 
+        final Bytes key = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 0);
+
+        EasyMock.reset(context);
+        EasyMock.expect(context.timestamp()).andStubReturn(0L);
+        context.logChange(store.name(), key, value, 0L);
+
+        EasyMock.replay(context);
         store.put(bytesKey, value);
 
-        final Bytes key = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 0);
-        assertThat(collector.collected().size(), equalTo(1));
-        assertThat(collector.collected().get(0).key(), equalTo(key));
-        assertThat(collector.collected().get(0).value(), equalTo(value));
-        assertThat(collector.collected().get(0).timestamp(), equalTo(0L));
-
-        EasyMock.verify(inner);
+        EasyMock.verify(inner, context);
     }
 
     @Test
@@ -94,6 +91,18 @@ public class ChangeLoggingWindowBytesStoreTest {
         init();
 
         store.fetch(bytesKey, ofEpochMilli(0), ofEpochMilli(10));
+        EasyMock.verify(inner);
+    }
+
+    @Test
+    public void shouldDelegateToUnderlyingStoreWhenBackwardFetching() {
+        EasyMock
+            .expect(inner.backwardFetch(bytesKey, 0, 10))
+            .andReturn(KeyValueIterators.emptyWindowStoreIterator());
+
+        init();
+
+        store.backwardFetch(bytesKey, ofEpochMilli(0), ofEpochMilli(10));
         EasyMock.verify(inner);
     }
 
@@ -110,27 +119,41 @@ public class ChangeLoggingWindowBytesStoreTest {
     }
 
     @Test
+    public void shouldDelegateToUnderlyingStoreWhenBackwardFetchingRange() {
+        EasyMock
+            .expect(inner.backwardFetch(bytesKey, bytesKey, 0, 1))
+            .andReturn(KeyValueIterators.emptyIterator());
+
+        init();
+
+        store.backwardFetch(bytesKey, bytesKey, ofEpochMilli(0), ofEpochMilli(1));
+        EasyMock.verify(inner);
+    }
+
+    @Test
     @SuppressWarnings("deprecation")
     public void shouldRetainDuplicatesWhenSet() {
         store = new ChangeLoggingWindowBytesStore(inner, true);
+
         inner.put(bytesKey, value, 0);
         EasyMock.expectLastCall().times(2);
 
         init();
-        store.put(bytesKey, value);
-        store.put(bytesKey, value);
 
         final Bytes key1 = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 1);
         final Bytes key2 = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 2);
-        assertThat(collector.collected().size(), equalTo(2));
-        assertThat(collector.collected().get(0).key(), equalTo(key1));
-        assertThat(collector.collected().get(0).value(), equalTo(value));
-        assertThat(collector.collected().get(0).timestamp(), equalTo(0L));
-        assertThat(collector.collected().get(1).key(), equalTo(key2));
-        assertThat(collector.collected().get(1).value(), equalTo(value));
-        assertThat(collector.collected().get(1).timestamp(), equalTo(0L));
 
-        EasyMock.verify(inner);
+        EasyMock.reset(context);
+        EasyMock.expect(context.timestamp()).andStubReturn(0L);
+        context.logChange(store.name(), key1, value, 0L);
+        context.logChange(store.name(), key2, value, 0L);
+
+        EasyMock.replay(context);
+
+        store.put(bytesKey, value);
+        store.put(bytesKey, value);
+
+        EasyMock.verify(inner, context);
     }
 
 }

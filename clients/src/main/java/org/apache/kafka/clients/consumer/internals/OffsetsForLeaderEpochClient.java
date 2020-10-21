@@ -80,15 +80,11 @@ public class OffsetsForLeaderEpochClient extends AsyncClient<
                             topicPartition, epochEndOffset.endOffset(), epochEndOffset.leaderEpoch());
                     endOffsets.put(topicPartition, epochEndOffset);
                     break;
-                case NOT_LEADER_FOR_PARTITION:
+                case NOT_LEADER_OR_FOLLOWER:
                 case REPLICA_NOT_AVAILABLE:
                 case KAFKA_STORAGE_ERROR:
                 case OFFSET_NOT_AVAILABLE:
                 case LEADER_NOT_AVAILABLE:
-                    logger().debug("Attempt to fetch offsets for partition {} failed due to {}, retrying.",
-                            topicPartition, error);
-                    partitionsToRetry.add(topicPartition);
-                    break;
                 case FENCED_LEADER_EPOCH:
                 case UNKNOWN_LEADER_EPOCH:
                     logger().debug("Attempt to fetch offsets for partition {} failed due to {}, retrying.",
@@ -96,7 +92,7 @@ public class OffsetsForLeaderEpochClient extends AsyncClient<
                     partitionsToRetry.add(topicPartition);
                     break;
                 case UNKNOWN_TOPIC_OR_PARTITION:
-                    logger().warn("Received unknown topic or partition error in ListOffset request for partition {}",
+                    logger().warn("Received unknown topic or partition error in OffsetsForLeaderEpoch request for partition {}",
                             topicPartition);
                     partitionsToRetry.add(topicPartition);
                     break;

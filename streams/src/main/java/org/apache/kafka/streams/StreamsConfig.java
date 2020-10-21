@@ -30,6 +30,7 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
@@ -44,6 +45,7 @@ import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Locale;
@@ -200,19 +202,19 @@ public class StreamsConfig extends AbstractConfig {
 
     /**
      * Prefix used to isolate {@link Admin admin} configs from other client configs.
-     * It is recommended to use {@link #adminClientPrefix(String)} to add this prefix to {@link ProducerConfig producer
-     * properties}.
+     * It is recommended to use {@link #adminClientPrefix(String)} to add this prefix to {@link AdminClientConfig admin
+     * client properties}.
      */
     @SuppressWarnings("WeakerAccess")
     public static final String ADMIN_CLIENT_PREFIX = "admin.";
 
     /**
-     * Config value for parameter (@link #TOPOLOGY_OPTIMIZATION "topology.optimization" for disabling topology optimization
+     * Config value for parameter {@link #TOPOLOGY_OPTIMIZATION_CONFIG "topology.optimization"} for disabling topology optimization
      */
     public static final String NO_OPTIMIZATION = "none";
 
     /**
-     * Config value for parameter (@link #TOPOLOGY_OPTIMIZATION "topology.optimization" for enabling topology optimization
+     * Config value for parameter {@link #TOPOLOGY_OPTIMIZATION_CONFIG "topology.optimization"} for enabling topology optimization
      */
     public static final String OPTIMIZE = "all";
 
@@ -329,10 +331,6 @@ public class StreamsConfig extends AbstractConfig {
     public static final String APPLICATION_SERVER_CONFIG = "application.server";
     private static final String APPLICATION_SERVER_DOC = "A host:port pair pointing to a user-defined endpoint that can be used for state store discovery and interactive queries on this KafkaStreams instance.";
 
-    /** {@code balance.factor} */
-    public static final String BALANCE_FACTOR_CONFIG = "balance.factor";
-    private static final String BALANCE_FACTOR_DOC = "Maximum difference in the number of stateful (and total) active tasks assigned to the stream thread with the most tasks and the stream thread with the least in a steady-state assignment. Must be at least 1.";
-
     /** {@code bootstrap.servers} */
     @SuppressWarnings("WeakerAccess")
     public static final String BOOTSTRAP_SERVERS_CONFIG = CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
@@ -360,44 +358,35 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code commit.interval.ms} */
     @SuppressWarnings("WeakerAccess")
     public static final String COMMIT_INTERVAL_MS_CONFIG = "commit.interval.ms";
-    private static final String COMMIT_INTERVAL_MS_DOC = "The frequency with which to save the position of the processor." +
+    private static final String COMMIT_INTERVAL_MS_DOC = "The frequency in milliseconds with which to save the position of the processor." +
         " (Note, if <code>processing.guarantee</code> is set to <code>" + EXACTLY_ONCE + "</code>, the default value is <code>" + EOS_DEFAULT_COMMIT_INTERVAL_MS + "</code>," +
         " otherwise the default value is <code>" + DEFAULT_COMMIT_INTERVAL_MS + "</code>.";
-
-    /** {@code max.task.idle.ms} */
-    public static final String MAX_TASK_IDLE_MS_CONFIG = "max.task.idle.ms";
-    private static final String MAX_TASK_IDLE_MS_DOC = "Maximum amount of time a stream task will stay idle when not all of its partition buffers contain records," +
-        " to avoid potential out-of-order record processing across multiple input streams.";
 
     /** {@code connections.max.idle.ms} */
     @SuppressWarnings("WeakerAccess")
     public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG;
 
-    /**
-     * {@code default.deserialization.exception.handler}
-     */
+    /** {@code default.deserialization.exception.handler} */
     @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG = "default.deserialization.exception.handler";
     private static final String DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.DeserializationExceptionHandler</code> interface.";
 
-    /**
-     * {@code default.production.exception.handler}
-     */
+    /** {@code default.production.exception.handler} */
     @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG = "default.production.exception.handler";
     private static final String DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.ProductionExceptionHandler</code> interface.";
 
-    /**
-     * {@code default.windowed.key.serde.inner}
-     */
+    /** {@code default.windowed.key.serde.inner} */
     @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS = "default.windowed.key.serde.inner";
+    private static final String DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS_DOC = "Default serializer / deserializer for the inner class of a windowed key. Must implement the " +
+        "<code>org.apache.kafka.common.serialization.Serde</code> interface.";
 
-    /**
-     * {@code default.windowed.value.serde.inner}
-     */
+    /** {@code default.windowed.value.serde.inner} */
     @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS = "default.windowed.value.serde.inner";
+    private static final String DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS_DOC = "Default serializer / deserializer for the inner class of a windowed value. Must implement the " +
+        "<code>org.apache.kafka.common.serialization.Serde</code> interface.";
 
     /** {@code default key.serde} */
     @SuppressWarnings("WeakerAccess")
@@ -417,6 +406,11 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG = "default.timestamp.extractor";
     private static final String DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC = "Default timestamp extractor class that implements the <code>org.apache.kafka.streams.processor.TimestampExtractor</code> interface.";
+
+    /** {@code max.task.idle.ms} */
+    public static final String MAX_TASK_IDLE_MS_CONFIG = "max.task.idle.ms";
+    private static final String MAX_TASK_IDLE_MS_DOC = "Maximum amount of time in milliseconds a stream task will stay idle when not all of its partition buffers contain records," +
+        " to avoid potential out-of-order record processing across multiple input streams.";
 
     /** {@code max.warmup.replicas} */
     public static final String MAX_WARMUP_REPLICAS_CONFIG = "max.warmup.replicas";
@@ -461,14 +455,15 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code probing.rebalance.interval.ms} */
     public static final String PROBING_REBALANCE_INTERVAL_MS_CONFIG = "probing.rebalance.interval.ms";
-    private static final String PROBING_REBALANCE_INTERVAL_MS_DOC = "The maximum time to wait before triggering a rebalance to probe for warmup replicas that have finished warming up and are ready to become active. Probing rebalances " +
-                                                                        "will continue to be triggered until the assignment is balanced according to the " + BALANCE_FACTOR_CONFIG + ". Must be at least 1 minute.";
+    private static final String PROBING_REBALANCE_INTERVAL_MS_DOC = "The maximum time in milliseconds to wait before triggering a rebalance to probe for warmup replicas that have finished warming up and are ready to become active." +
+        " Probing rebalances will continue to be triggered until the assignment is balanced. Must be at least 1 minute.";
 
     /** {@code processing.guarantee} */
     @SuppressWarnings("WeakerAccess")
     public static final String PROCESSING_GUARANTEE_CONFIG = "processing.guarantee";
     private static final String PROCESSING_GUARANTEE_DOC = "The processing guarantee that should be used. " +
-        "Possible values are <code>" + AT_LEAST_ONCE + "</code> (default), <code>" + EXACTLY_ONCE + "</code>, " +
+        "Possible values are <code>" + AT_LEAST_ONCE + "</code> (default), " +
+        "<code>" + EXACTLY_ONCE + "</code> (requires brokers version 0.11.0 or higher), " +
         "and <code>" + EXACTLY_ONCE_BETA + "</code> (requires brokers version 2.5 or higher). " +
         "Note that exactly-once processing requires a cluster of at least three brokers by default what is the " +
         "recommended setting for production; for development you can change this, by adjusting broker setting " +
@@ -495,8 +490,15 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String REQUEST_TIMEOUT_MS_CONFIG = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG;
 
-    /** {@code retries} */
+    /**
+     * {@code retries}
+     * <p>
+     * This config is ignored by Kafka Streams. Note, that the internal clients (producer, admin) are still impacted by this config.
+     *
+     * @deprecated since 2.7
+     */
     @SuppressWarnings("WeakerAccess")
+    @Deprecated
     public static final String RETRIES_CONFIG = CommonClientConfigs.RETRIES_CONFIG;
 
     /** {@code retry.backoff.ms} */
@@ -526,8 +528,14 @@ public class StreamsConfig extends AbstractConfig {
     public static final String STATE_DIR_CONFIG = "state.dir";
     private static final String STATE_DIR_DOC = "Directory location for state store. This path must be unique for each streams instance sharing the same underlying filesystem.";
 
+    /** {@code task.timeout.ms} */
+    public static final String TASK_TIMEOUT_MS_CONFIG = "task.timeout.ms";
+    public static final String TASK_TIMEOUT_MS_DOC = "The maximum amount of time in milliseconds a task might stall due to internal errors and retries until an error is raised. " +
+        "For a timeout of 0ms, a task would raise an error for the first internal error. " +
+        "For any timeout larger than 0ms, a task will retry at least once before an error is raised.";
+
     /** {@code topology.optimization} */
-    public static final String TOPOLOGY_OPTIMIZATION = "topology.optimization";
+    public static final String TOPOLOGY_OPTIMIZATION_CONFIG = "topology.optimization";
     private static final String TOPOLOGY_OPTIMIZATION_DOC = "A configuration telling Kafka Streams if it should optimize the topology, disabled by default";
 
     /** {@code upgrade.from} */
@@ -554,6 +562,13 @@ public class StreamsConfig extends AbstractConfig {
     public static final String PARTITION_GROUPER_CLASS_CONFIG = "partition.grouper";
     private static final String PARTITION_GROUPER_CLASS_DOC = "Partition grouper class that implements the <code>org.apache.kafka.streams.processor.PartitionGrouper</code> interface." +
         " WARNING: This config is deprecated and will be removed in 3.0.0 release.";
+
+    /**
+     * {@code topology.optimization}
+     * @deprecated since 2.7; use {@link #TOPOLOGY_OPTIMIZATION_CONFIG} instead
+     */
+    @Deprecated
+    public static final String TOPOLOGY_OPTIMIZATION = TOPOLOGY_OPTIMIZATION_CONFIG;
 
 
     private static final String[] NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS =
@@ -635,16 +650,16 @@ public class StreamsConfig extends AbstractConfig {
                     Serdes.ByteArraySerde.class.getName(),
                     Importance.MEDIUM,
                     DEFAULT_VALUE_SERDE_CLASS_DOC)
-            .define(NUM_STANDBY_REPLICAS_CONFIG,
-                    Type.INT,
-                    0,
+            .define(DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS,
+                    Type.CLASS,
+                    null,
                     Importance.MEDIUM,
-                    NUM_STANDBY_REPLICAS_DOC)
-            .define(NUM_STREAM_THREADS_CONFIG,
-                    Type.INT,
-                    1,
+                    DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS_DOC)
+            .define(DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS,
+                    Type.CLASS,
+                    null,
                     Importance.MEDIUM,
-                    NUM_STREAM_THREADS_DOC)
+                    DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS_DOC)
             .define(MAX_TASK_IDLE_MS_CONFIG,
                     Type.LONG,
                     0L,
@@ -656,6 +671,16 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(1),
                     Importance.MEDIUM,
                     MAX_WARMUP_REPLICAS_DOC)
+            .define(NUM_STANDBY_REPLICAS_CONFIG,
+                    Type.INT,
+                    0,
+                    Importance.MEDIUM,
+                    NUM_STANDBY_REPLICAS_DOC)
+            .define(NUM_STREAM_THREADS_CONFIG,
+                    Type.INT,
+                    1,
+                    Importance.MEDIUM,
+                    NUM_STREAM_THREADS_DOC)
             .define(PROCESSING_GUARANTEE_CONFIG,
                     Type.STRING,
                     AT_LEAST_ONCE,
@@ -667,7 +692,13 @@ public class StreamsConfig extends AbstractConfig {
                     CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
                     Importance.MEDIUM,
                     CommonClientConfigs.SECURITY_PROTOCOL_DOC)
-            .define(TOPOLOGY_OPTIMIZATION,
+            .define(TASK_TIMEOUT_MS_CONFIG,
+                    Type.LONG,
+                    Duration.ofSeconds(5L).toMillis(),
+                    atLeast(0L),
+                    Importance.MEDIUM,
+                    TASK_TIMEOUT_MS_DOC)
+            .define(TOPOLOGY_OPTIMIZATION_CONFIG,
                     Type.STRING,
                     NO_OPTIMIZATION,
                     in(NO_OPTIMIZATION, OPTIMIZE),
@@ -681,12 +712,6 @@ public class StreamsConfig extends AbstractConfig {
                     "",
                     Importance.LOW,
                     APPLICATION_SERVER_DOC)
-            .define(BALANCE_FACTOR_CONFIG,
-                    Type.INT,
-                    1,
-                    atLeast(1),
-                    Importance.LOW,
-                    BALANCE_FACTOR_DOC)
             .define(BUFFERED_RECORDS_PER_PARTITION_CONFIG,
                     Type.INT,
                     1000,
@@ -732,7 +757,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(METRICS_RECORDING_LEVEL_CONFIG,
                     Type.STRING,
                     Sensor.RecordingLevel.INFO.toString(),
-                    in(Sensor.RecordingLevel.INFO.toString(), Sensor.RecordingLevel.DEBUG.toString()),
+                    in(Sensor.RecordingLevel.INFO.toString(), Sensor.RecordingLevel.DEBUG.toString(), RecordingLevel.TRACE.toString()),
                     Importance.LOW,
                     CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC)
             .define(METRICS_SAMPLE_WINDOW_MS_CONFIG,
@@ -838,6 +863,8 @@ public class StreamsConfig extends AbstractConfig {
     static {
         final Map<String, Object> tempProducerDefaultOverrides = new HashMap<>();
         tempProducerDefaultOverrides.put(ProducerConfig.LINGER_MS_CONFIG, "100");
+        // Reduce the transaction timeout for quicker pending offset expiration on broker side.
+        tempProducerDefaultOverrides.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, 10000);
         PRODUCER_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempProducerDefaultOverrides);
     }
 
@@ -868,10 +895,20 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     public static class InternalConfig {
+        // This is settable in the main Streams config, but it's a private API for now
+        public static final String INTERNAL_TASK_ASSIGNOR_CLASS = "internal.task.assignor.class";
+
+        // These are not settable in the main Streams config; they are set by the StreamThread to pass internal
+        // state into the assignor.
         public static final String TASK_MANAGER_FOR_PARTITION_ASSIGNOR = "__task.manager.instance__";
         public static final String STREAMS_METADATA_STATE_FOR_PARTITION_ASSIGNOR = "__streams.metadata.state.instance__";
         public static final String STREAMS_ADMIN_CLIENT = "__streams.admin.client.instance__";
         public static final String ASSIGNMENT_ERROR_CODE = "__assignment.error.code__";
+        public static final String NEXT_SCHEDULED_REBALANCE_MS = "__next.probing.rebalance.ms__";
+        public static final String TIME = "__time__";
+
+        // This is settable in the main Streams config, but it's a private API for testing
+        public static final String ASSIGNMENT_LISTENER = "__assignment.listener__";
     }
 
     /**
@@ -983,6 +1020,9 @@ public class StreamsConfig extends AbstractConfig {
         eosEnabled = StreamThread.eosEnabled(this);
         if (props.containsKey(PARTITION_GROUPER_CLASS_CONFIG)) {
             log.warn("Configuration parameter `{}` is deprecated and will be removed in 3.0.0 release.", PARTITION_GROUPER_CLASS_CONFIG);
+        }
+        if (props.containsKey(RETRIES_CONFIG)) {
+            log.warn("Configuration parameter `{}` is deprecated and will be removed in 3.0.0 release.", RETRIES_CONFIG);
         }
     }
 
@@ -1145,16 +1185,14 @@ public class StreamsConfig extends AbstractConfig {
         consumerProps.put(REPLICATION_FACTOR_CONFIG, getInt(REPLICATION_FACTOR_CONFIG));
         consumerProps.put(APPLICATION_SERVER_CONFIG, getString(APPLICATION_SERVER_CONFIG));
         consumerProps.put(NUM_STANDBY_REPLICAS_CONFIG, getInt(NUM_STANDBY_REPLICAS_CONFIG));
+        consumerProps.put(ACCEPTABLE_RECOVERY_LAG_CONFIG, getLong(ACCEPTABLE_RECOVERY_LAG_CONFIG));
+        consumerProps.put(MAX_WARMUP_REPLICAS_CONFIG, getInt(MAX_WARMUP_REPLICAS_CONFIG));
+        consumerProps.put(PROBING_REBALANCE_INTERVAL_MS_CONFIG, getLong(PROBING_REBALANCE_INTERVAL_MS_CONFIG));
         consumerProps.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, StreamsPartitionAssignor.class.getName());
         consumerProps.put(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG, getLong(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG));
 
         // disable auto topic creation
         consumerProps.put(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, "false");
-
-        // add admin retries configs for creating topics
-        final AdminClientConfig adminClientDefaultConfig = new AdminClientConfig(getClientPropsWithPrefix(ADMIN_CLIENT_PREFIX, AdminClientConfig.configNames()));
-        consumerProps.put(adminClientPrefix(AdminClientConfig.RETRIES_CONFIG), adminClientDefaultConfig.getInt(AdminClientConfig.RETRIES_CONFIG));
-        consumerProps.put(adminClientPrefix(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG), adminClientDefaultConfig.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG));
 
         // verify that producer batch config is no larger than segment size, then add topic configs required for creating topics
         final Map<String, Object> topicProps = originalsWithPrefix(TOPIC_PREFIX, false);
@@ -1275,9 +1313,6 @@ public class StreamsConfig extends AbstractConfig {
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, originals().get(BOOTSTRAP_SERVERS_CONFIG));
         // add client id with stream client id prefix
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
-
-        // Reduce the transaction timeout for quicker pending offset expiration on broker side.
-        props.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, 10000);
 
         return props;
     }
@@ -1403,6 +1438,6 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     public static void main(final String[] args) {
-        System.out.println(CONFIG.toHtml());
+        System.out.println(CONFIG.toHtml(4, config -> "streamsconfigs_" + config));
     }
 }

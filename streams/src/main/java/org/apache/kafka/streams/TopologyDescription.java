@@ -17,6 +17,7 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.streams.processor.TopicNameExtractor;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 
 import java.util.Set;
@@ -37,8 +38,8 @@ public interface TopologyDescription {
     /**
      * A connected sub-graph of a {@link Topology}.
      * <p>
-     * Nodes of a {@code Subtopology} are connected {@link Topology#addProcessor(String,
-     * org.apache.kafka.streams.processor.ProcessorSupplier, String...) directly} or indirectly via
+     * Nodes of a {@code Subtopology} are connected
+     * {@link Topology#addProcessor(String, ProcessorSupplier, String...) directly} or indirectly via
      * {@link Topology#connectProcessorAndStateStores(String, String...) state stores}
      * (i.e., if multiple processors share the same state).
      */

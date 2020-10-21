@@ -24,7 +24,6 @@ import org.apache.kafka.common.protocol.types.Struct;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 public class CreateAclsResponse extends AbstractResponse {
     private final CreateAclsResponseData data;
@@ -53,7 +52,7 @@ public class CreateAclsResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return errorCounts(results().stream().map(r -> Errors.forCode(r.errorCode())).collect(Collectors.toList()));
+        return errorCounts(results().stream().map(r -> Errors.forCode(r.errorCode())));
     }
 
     public static CreateAclsResponse parse(ByteBuffer buffer, short version) {

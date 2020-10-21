@@ -17,8 +17,11 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.GroupRebalanceConfig;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+
+import org.slf4j.Logger;
 
 /**
  * A helper class for managing the heartbeat to the coordinator
@@ -30,6 +33,7 @@ public final class Heartbeat {
     private final Timer heartbeatTimer;
     private final Timer sessionTimer;
     private final Timer pollTimer;
+    private final Logger log;
 
     private volatile long lastHeartbeatSend = 0L;
     private volatile boolean heartbeatInFlight = false;
@@ -44,6 +48,9 @@ public final class Heartbeat {
         this.sessionTimer = time.timer(config.sessionTimeoutMs);
         this.maxPollIntervalMs = config.rebalanceTimeoutMs;
         this.pollTimer = time.timer(maxPollIntervalMs);
+
+        final LogContext logContext = new LogContext("[Heartbeat groupID=" + config.groupId + "] ");
+        this.log = logContext.logger(getClass());
     }
 
     private void update(long now) {
@@ -66,12 +73,18 @@ public final class Heartbeat {
         heartbeatInFlight = true;
         update(now);
         heartbeatTimer.reset(rebalanceConfig.heartbeatIntervalMs);
+
+        if (log.isTraceEnabled()) {
+            log.trace("Sending heartbeat request with {}ms remaining on timer", heartbeatTimer.remainingMs());
+        }
     }
 
     void failHeartbeat() {
         update(time.milliseconds());
         heartbeatInFlight = false;
         heartbeatTimer.reset(rebalanceConfig.retryBackoffMs);
+
+        log.trace("Heartbeat failed, reset the timer to {}ms remaining", heartbeatTimer.remainingMs());
     }
 
     void receiveHeartbeat() {

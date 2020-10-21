@@ -121,7 +121,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
         private final String storeName;
 
         private TimeOrderedKeyValueBuffer<K, V> buffer;
-        private InternalProcessorContext<Object, Object> internalProcessorContext;
+        private InternalProcessorContext internalProcessorContext;
         private Sensor suppressionEmitSensor;
         private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
@@ -138,8 +138,8 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext<Object, Object> context) {
-            internalProcessorContext = (InternalProcessorContext<Object, Object>) context;
+        public void init(final ProcessorContext context) {
+            internalProcessorContext = (InternalProcessorContext) context;
             suppressionEmitSensor = ProcessorNodeMetrics.suppressionEmitSensor(
                 Thread.currentThread().getName(),
                 context.taskId().toString(),
@@ -201,7 +201,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
                 internalProcessorContext.setRecordContext(toEmit.recordContext());
                 try {
                     internalProcessorContext.forward(toEmit.key(), toEmit.value());
-                    suppressionEmitSensor.record();
+                    suppressionEmitSensor.record(1.0d, internalProcessorContext.currentSystemTimeMs());
                 } finally {
                     internalProcessorContext.setRecordContext(prevRecordContext);
                 }

@@ -20,10 +20,12 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.AlterClientQuotasResponseData;
 import org.apache.kafka.common.message.AlterClientQuotasResponseData.EntityData;
 import org.apache.kafka.common.message.AlterClientQuotasResponseData.EntryData;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -50,14 +52,13 @@ public class AlterClientQuotasResponse extends AbstractResponse {
     }
 
     public AlterClientQuotasResponse(Collection<ClientQuotaEntity> entities, int throttleTimeMs, Throwable e) {
-        short errorCode = Errors.forException(e).code();
-        String errorMessage = e.getMessage();
+        ApiError apiError = ApiError.fromThrowable(e);
 
         List<EntryData> entries = new ArrayList<>(entities.size());
         for (ClientQuotaEntity entity : entities) {
             entries.add(new EntryData()
-                    .setErrorCode(errorCode)
-                    .setErrorMessage(errorMessage)
+                    .setErrorCode(apiError.error().code())
+                    .setErrorMessage(apiError.message())
                     .setEntity(toEntityData(entity)));
         }
 
@@ -100,10 +101,9 @@ public class AlterClientQuotasResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> counts = new HashMap<>();
-        for (EntryData entry : data.entries()) {
-            Errors error = Errors.forCode(entry.errorCode());
-            counts.put(error, counts.getOrDefault(error, 0) + 1);
-        }
+        data.entries().forEach(entry ->
+            updateErrorCounts(counts, Errors.forCode(entry.errorCode()))
+        );
         return counts;
     }
 
@@ -120,5 +120,9 @@ public class AlterClientQuotasResponse extends AbstractResponse {
                     .setEntityName(entry.getValue()));
         }
         return entityData;
+    }
+
+    public static AlterClientQuotasResponse parse(ByteBuffer buffer, short version) {
+        return new AlterClientQuotasResponse(ApiKeys.ALTER_CLIENT_QUOTAS.parseResponse(version, buffer), version);
     }
 }

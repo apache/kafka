@@ -574,7 +574,7 @@ class ReassignPartitionsUnitTest {
                                           expectedInterBrokerThrottle: Long,
                                           expectedReplicaAlterLogDirsThrottle: Long): Unit = {
     val configs = new mutable.HashMap[String, String]
-    config.entries().asScala.foreach(entry => configs.put(entry.name(), entry.value()))
+    config.entries.forEach(entry => configs.put(entry.name, entry.value))
     if (expectedInterBrokerThrottle >= 0) {
       assertEquals(expectedInterBrokerThrottle.toString,
         configs.getOrElse(brokerLevelLeaderThrottle, ""))
@@ -609,7 +609,7 @@ class ReassignPartitionsUnitTest {
                                          expectedLeaderThrottle: String,
                                          expectedFollowerThrottle: String): Unit = {
     val configs = new mutable.HashMap[String, String]
-    config.entries().asScala.foreach(entry => configs.put(entry.name(), entry.value()))
+    config.entries.forEach(entry => configs.put(entry.name, entry.value))
     assertEquals(expectedLeaderThrottle.toString,
       configs.getOrElse(topicLevelLeaderThrottle, ""))
     assertEquals(expectedFollowerThrottle.toString,

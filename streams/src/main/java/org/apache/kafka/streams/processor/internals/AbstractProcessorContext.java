@@ -22,6 +22,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
@@ -30,8 +31,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
-
-public abstract class AbstractProcessorContext<K, V> implements InternalProcessorContext<K, V> {
+public abstract class AbstractProcessorContext implements InternalProcessorContext {
 
     public static final String NONEXIST_TOPIC = "__null_topic__";
     private final TaskId taskId;
@@ -39,26 +39,37 @@ public abstract class AbstractProcessorContext<K, V> implements InternalProcesso
     private final StreamsConfig config;
     private final StreamsMetricsImpl metrics;
     private final Serde<?> keySerde;
-    private final ThreadCache cache;
     private final Serde<?> valueSerde;
     private boolean initialized;
     protected ProcessorRecordContext recordContext;
-    protected ProcessorNode<?, ?> currentNode;
-    final StateManager stateManager;
+    protected ProcessorNode<?, ?, ?, ?> currentNode;
+    private long currentSystemTimeMs;
+
+    protected ThreadCache cache;
 
     public AbstractProcessorContext(final TaskId taskId,
                                     final StreamsConfig config,
                                     final StreamsMetricsImpl metrics,
-                                    final StateManager stateManager,
                                     final ThreadCache cache) {
         this.taskId = taskId;
         this.applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         this.config = config;
         this.metrics = metrics;
-        this.stateManager = stateManager;
         valueSerde = config.defaultValueSerde();
         keySerde = config.defaultKeySerde();
         this.cache = cache;
+    }
+
+    protected abstract StateManager stateManager();
+
+    @Override
+    public void setSystemTimeMs(final long timeMs) {
+        currentSystemTimeMs = timeMs;
+    }
+
+    @Override
+    public long currentSystemTimeMs() {
+        return currentSystemTimeMs;
     }
 
     @Override
@@ -83,7 +94,7 @@ public abstract class AbstractProcessorContext<K, V> implements InternalProcesso
 
     @Override
     public File stateDir() {
-        return stateManager.baseDir();
+        return stateManager().baseDir();
     }
 
     @Override
@@ -98,7 +109,7 @@ public abstract class AbstractProcessorContext<K, V> implements InternalProcesso
             throw new IllegalStateException("Can only create state stores during initialization.");
         }
         Objects.requireNonNull(store, "store must not be null");
-        stateManager.registerStore(store, stateRestoreCallback);
+        stateManager().registerStore(store, stateRestoreCallback);
     }
 
     /**
@@ -112,7 +123,7 @@ public abstract class AbstractProcessorContext<K, V> implements InternalProcesso
 
         final String topic = recordContext.topic();
 
-        if (topic.equals(NONEXIST_TOPIC)) {
+        if (NONEXIST_TOPIC.equals(topic)) {
             return null;
         }
 
@@ -127,6 +138,7 @@ public abstract class AbstractProcessorContext<K, V> implements InternalProcesso
         if (recordContext == null) {
             throw new IllegalStateException("This should not happen as partition() should only be called while a record is processed");
         }
+
         return recordContext.partition();
     }
 
@@ -184,17 +196,17 @@ public abstract class AbstractProcessorContext<K, V> implements InternalProcesso
     }
 
     @Override
-    public void setCurrentNode(final ProcessorNode<?, ?> currentNode) {
+    public void setCurrentNode(final ProcessorNode<?, ?, ?, ?> currentNode) {
         this.currentNode = currentNode;
     }
 
     @Override
-    public ProcessorNode<?, ?> currentNode() {
+    public ProcessorNode<?, ?, ?, ?> currentNode() {
         return currentNode;
     }
 
     @Override
-    public ThreadCache getCache() {
+    public ThreadCache cache() {
         return cache;
     }
 
@@ -206,5 +218,15 @@ public abstract class AbstractProcessorContext<K, V> implements InternalProcesso
     @Override
     public void uninitialize() {
         initialized = false;
+    }
+
+    @Override
+    public TaskType taskType() {
+        return stateManager().taskType();
+    }
+
+    @Override
+    public String changelogFor(final String storeName) {
+        return stateManager().changelogFor(storeName);
     }
 }

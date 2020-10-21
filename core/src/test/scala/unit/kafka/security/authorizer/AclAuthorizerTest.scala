@@ -20,7 +20,7 @@ import java.io.File
 import java.net.InetAddress
 import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.Files
-import java.util.UUID
+import java.util.{Collections, UUID}
 import java.util.concurrent.{Executors, Semaphore, TimeUnit}
 
 import kafka.Kafka
@@ -52,7 +52,6 @@ import org.scalatest.Assertions.intercept
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
-import scala.compat.java8.OptionConverters._
 
 class AclAuthorizerTest extends ZooKeeperTestHarness {
 
@@ -363,7 +362,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     val acls1 = Set(acl2)
     addAcls(aclAuthorizer, acls1, resource1)
 
-    zkClient.deleteAclChangeNotifications
+    zkClient.deleteAclChangeNotifications()
     val authorizer = new AclAuthorizer
     try {
       authorizer.configure(config.originals)
@@ -913,6 +912,82 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     })
   }
 
+  @Test
+  def testCreateDeleteTiming(): Unit = {
+    val literalResource = new ResourcePattern(TOPIC, "foo-" + UUID.randomUUID(), LITERAL)
+    val prefixedResource = new ResourcePattern(TOPIC, "bar-", PREFIXED)
+    val wildcardResource = new ResourcePattern(TOPIC, "*", LITERAL)
+    val ace = new AccessControlEntry(principal.toString, WildcardHost, READ, ALLOW)
+    val updateSemaphore = new Semaphore(1)
+
+    def createAcl(createAuthorizer: AclAuthorizer, resource: ResourcePattern): AclBinding = {
+      val acl = new AclBinding(resource, ace)
+      createAuthorizer.createAcls(requestContext, Collections.singletonList(acl)).asScala
+        .foreach(_.toCompletableFuture.get(15, TimeUnit.SECONDS))
+      acl
+    }
+
+    def deleteAcl(deleteAuthorizer: AclAuthorizer,
+                  resource: ResourcePattern,
+                  deletePatternType: PatternType): List[AclBinding] = {
+
+      val filter = new AclBindingFilter(
+        new ResourcePatternFilter(resource.resourceType(), resource.name(), deletePatternType),
+        AccessControlEntryFilter.ANY)
+      deleteAuthorizer.deleteAcls(requestContext, Collections.singletonList(filter)).asScala
+        .map(_.toCompletableFuture.get(15, TimeUnit.SECONDS))
+        .flatMap(_.aclBindingDeleteResults.asScala)
+        .map(_.aclBinding)
+        .toList
+    }
+
+    def listAcls(authorizer: AclAuthorizer): List[AclBinding] = {
+      authorizer.acls(AclBindingFilter.ANY).asScala.toList
+    }
+
+    def verifyCreateDeleteAcl(deleteAuthorizer: AclAuthorizer,
+                              resource: ResourcePattern,
+                              deletePatternType: PatternType): Unit = {
+      updateSemaphore.acquire()
+      assertEquals(List.empty, listAcls(deleteAuthorizer))
+      val acl = createAcl(aclAuthorizer, resource)
+      val deleted = deleteAcl(deleteAuthorizer, resource, deletePatternType)
+      if (deletePatternType != PatternType.MATCH) {
+        assertEquals(List(acl), deleted)
+      } else {
+        assertEquals(List.empty[AclBinding], deleted)
+      }
+      updateSemaphore.release()
+      if (deletePatternType == PatternType.MATCH) {
+        TestUtils.waitUntilTrue(() => listAcls(deleteAuthorizer).nonEmpty, "ACL not propagated")
+        assertEquals(List(acl), deleteAcl(deleteAuthorizer, resource, deletePatternType))
+      }
+      TestUtils.waitUntilTrue(() => listAcls(deleteAuthorizer).isEmpty, "ACL delete not propagated")
+    }
+
+    val deleteAuthorizer = new AclAuthorizer {
+      override def processAclChangeNotification(resource: ResourcePattern): Unit = {
+        updateSemaphore.acquire()
+        try {
+          super.processAclChangeNotification(resource)
+        } finally {
+          updateSemaphore.release()
+        }
+      }
+    }
+
+    try {
+      deleteAuthorizer.configure(config.originals)
+      List(literalResource, prefixedResource, wildcardResource).foreach { resource =>
+        verifyCreateDeleteAcl(deleteAuthorizer, resource, resource.patternType())
+        verifyCreateDeleteAcl(deleteAuthorizer, resource, PatternType.ANY)
+        verifyCreateDeleteAcl(deleteAuthorizer, resource, PatternType.MATCH)
+      }
+    } finally {
+      deleteAuthorizer.close()
+    }
+  }
+
   private def givenAuthorizerWithProtocolVersion(protocolVersion: Option[ApiVersion]): Unit = {
     aclAuthorizer.close()
 
@@ -962,7 +1037,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     val securityProtocol = SecurityProtocol.SASL_PLAINTEXT
     val header = new RequestHeader(apiKey, 2, "", 1) //ApiKeys apiKey, short version, String clientId, int correlation
     new RequestContext(header, "", clientAddress, principal, ListenerName.forSecurityProtocol(securityProtocol),
-      securityProtocol, ClientInformation.EMPTY)
+      securityProtocol, ClientInformation.EMPTY, false)
   }
 
   private def authorize(authorizer: AclAuthorizer, requestContext: RequestContext, operation: AclOperation, resource: ResourcePattern): Boolean = {
@@ -974,7 +1049,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     val bindings = aces.map { ace => new AclBinding(resourcePattern, ace) }
     authorizer.createAcls(requestContext, bindings.toList.asJava).asScala
       .map(_.toCompletableFuture.get)
-      .foreach { result => result.exception.asScala.foreach { e => throw e } }
+      .foreach { result => result.exception.ifPresent { e => throw e } }
   }
 
   private def removeAcls(authorizer: AclAuthorizer, aces: Set[AccessControlEntry], resourcePattern: ResourcePattern): Boolean = {
@@ -985,11 +1060,11 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     authorizer.deleteAcls(requestContext, bindings.toList.asJava).asScala
       .map(_.toCompletableFuture.get)
       .forall { result =>
-        result.exception.asScala.foreach { e => throw e }
-        result.aclBindingDeleteResults.asScala.foreach { r =>
-          r.exception.asScala.foreach { e => throw e }
+        result.exception.ifPresent { e => throw e }
+        result.aclBindingDeleteResults.forEach { r =>
+          r.exception.ifPresent { e => throw e }
         }
-        result.aclBindingDeleteResults.asScala.exists(_.exception.asScala.isEmpty)
+        !result.aclBindingDeleteResults.isEmpty
       }
   }
 
@@ -1012,9 +1087,8 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     op != AclOperation.ANY && op != AclOperation.UNKNOWN
   }
 
-  private def prepareDefaultConfig(): String = {
+  private def prepareDefaultConfig: String =
     prepareConfig(Array("broker.id=1", "zookeeper.connect=somewhere"))
-  }
 
   private def prepareConfig(lines : Array[String]): String = {
     val file = File.createTempFile("kafkatest", ".properties")
