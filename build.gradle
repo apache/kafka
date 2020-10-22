@@ -1784,6 +1784,8 @@ project(':connect:transforms') {
 
   dependencies {
     compile project(':connect:api')
+    compile project(':connect:json')
+    compile libs.jacksonDatabind
     compile libs.slf4jApi
 
     testCompile libs.easymock
