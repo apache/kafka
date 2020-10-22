@@ -77,13 +77,13 @@ final class RaftClientTestContext {
     final int electionTimeoutMs = Builder.ELECTION_TIMEOUT_MS;
     final int electionFetchMaxWaitMs = Builder.FETCH_MAX_WAIT_MS;
     final int fetchTimeoutMs = Builder.FETCH_TIMEOUT_MS;
-    final int localId = Builder.LOCAL_ID;
     final int requestTimeoutMs = Builder.REQUEST_TIMEOUT_MS;
     final int retryBackoffMs = Builder.RETRY_BACKOFF_MS;
 
     private final QuorumStateStore quorumStateStore;
     private final Random random;
 
+    final int localId;
     final KafkaRaftClient client;
     final Metrics metrics;
     final MockLog log;
@@ -93,7 +93,6 @@ final class RaftClientTestContext {
 
     public static final class Builder {
         static final int ELECTION_TIMEOUT_MS = 10000;
-        static final int LOCAL_ID = 0;
 
         private static final TopicPartition METADATA_PARTITION = new TopicPartition("metadata", 0);
         private static final int ELECTION_BACKOFF_MAX_MS = 100;
@@ -107,9 +106,11 @@ final class RaftClientTestContext {
         private final Random random = Mockito.spy(new Random(1));
         private final MockLog log = new MockLog(METADATA_PARTITION);
         private final Set<Integer> voters;
+        private final int localId;
 
-        Builder(Set<Integer> voters) {
+        Builder(int localId, Set<Integer> voters) {
             this.voters = voters;
+            this.localId = localId;
         }
 
         Builder withElectedLeader(int epoch, int leaderId) throws IOException {
@@ -142,7 +143,7 @@ final class RaftClientTestContext {
             Metrics metrics = new Metrics(time);
             MockNetworkChannel channel = new MockNetworkChannel();
             LogContext logContext = new LogContext();
-            QuorumState quorum = new QuorumState(LOCAL_ID, voters, ELECTION_TIMEOUT_MS, FETCH_TIMEOUT_MS,
+            QuorumState quorum = new QuorumState(localId, voters, ELECTION_TIMEOUT_MS, FETCH_TIMEOUT_MS,
                     quorumStateStore, time, logContext, random);
 
             Map<Integer, InetSocketAddress> voterAddresses = voters
@@ -158,11 +159,12 @@ final class RaftClientTestContext {
 
             client.initialize();
 
-            return new RaftClientTestContext(client, log, channel, time, quorumStateStore, voters, random, metrics);
+            return new RaftClientTestContext(localId, client, log, channel, time, quorumStateStore, voters, random, metrics);
         }
     }
 
     private RaftClientTestContext(
+        int localId,
         KafkaRaftClient client,
         MockLog log,
         MockNetworkChannel channel,
@@ -172,6 +174,7 @@ final class RaftClientTestContext {
         Random random,
         Metrics metrics
     ) {
+        this.localId = localId;
         this.client = client;
         this.log = log;
         this.channel = channel;
@@ -182,12 +185,12 @@ final class RaftClientTestContext {
         this.metrics = metrics;
     }
 
-    static RaftClientTestContext initializeAsLeader(Set<Integer> voters, int epoch) throws Exception {
+    static RaftClientTestContext initializeAsLeader(int localId, Set<Integer> voters, int epoch) throws Exception {
         if (epoch <= 0) {
             throw new IllegalArgumentException("Cannot become leader in epoch " + epoch);
         }
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .updateRandom(random -> {
                 Mockito.doReturn(0).when(random).nextInt(Builder.ELECTION_TIMEOUT_MS);
             })
@@ -203,7 +206,7 @@ final class RaftClientTestContext {
         // Handle BeginEpoch
         context.pollUntilSend();
         for (RaftRequest.Outbound request : context.collectBeginEpochRequests(epoch)) {
-            BeginQuorumEpochResponseData beginEpochResponse = context.beginEpochResponse(epoch, Builder.LOCAL_ID);
+            BeginQuorumEpochResponseData beginEpochResponse = context.beginEpochResponse(epoch, localId);
             context.deliverResponse(request.correlationId, request.destinationId(), beginEpochResponse);
         }
 

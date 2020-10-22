@@ -50,7 +50,6 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
 
-import static org.apache.kafka.raft.RaftClientTestContext.Builder.LOCAL_ID;
 import static org.apache.kafka.raft.RaftClientTestContext.Builder.ELECTION_TIMEOUT_MS;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -64,7 +63,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class KafkaRaftClientTest {
     @Test
     public void testInitializeSingleMemberQuorum() throws IOException {
-        RaftClientTestContext context = new RaftClientTestContext.Builder(Collections.singleton(LOCAL_ID)).build();
+        int localId = 0;
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, Collections.singleton(localId)).build();
         context.assertElectedLeader(1, context.localId);
     }
 
@@ -72,10 +72,11 @@ public class KafkaRaftClientTest {
     public void testInitializeAsLeaderFromStateStoreSingleMemberQuorum() throws Exception {
         // Start off as leader. We should still bump the epoch after initialization
 
+        int localId = 0;
         int initialEpoch = 2;
-        Set<Integer> voters = Collections.singleton(LOCAL_ID);
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
-            .withElectedLeader(initialEpoch, LOCAL_ID)
+        Set<Integer> voters = Collections.singleton(localId);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withElectedLeader(initialEpoch, localId)
             .build();
 
         assertEquals(1L, context.log.endOffset().offset);
@@ -87,14 +88,15 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testInitializeAsLeaderFromStateStore() throws Exception {
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, 1);
+        int localId = 0;
+        Set<Integer> voters = Utils.mkSet(localId, 1);
         int epoch = 2;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .updateRandom(random -> {
                 Mockito.doReturn(0).when(random).nextInt(ELECTION_TIMEOUT_MS);
             })
-            .withElectedLeader(epoch, LOCAL_ID)
+            .withElectedLeader(epoch, localId)
             .build();
 
 
@@ -108,11 +110,12 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testInitializeAsCandidateFromStateStore() throws Exception {
+        int localId = 0;
         // Need 3 node to require a 2-node majority
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, 1, 2);
+        Set<Integer> voters = Utils.mkSet(localId, 1, 2);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
-            .withVotedCandidate(2, LOCAL_ID)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withVotedCandidate(2, localId)
             .build();
 
         assertEquals(0L, context.log.endOffset().offset);
@@ -126,9 +129,10 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testInitializeAsCandidateAndBecomeLeader() throws Exception {
+        int localId = 0;
         final int otherNodeId = 1;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters).build();
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
         context.assertUnknownLeader(0);
         context.time.sleep(2 * context.electionTimeoutMs);
@@ -163,11 +167,12 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testHandleBeginQuorumRequest() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int votedCandidateEpoch = 2;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withVotedCandidate(votedCandidateEpoch, otherNodeId)
             .build();
 
@@ -183,12 +188,13 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testHandleBeginQuorumResponse() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int leaderEpoch = 2;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
-            .withElectedLeader(leaderEpoch, LOCAL_ID)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withElectedLeader(leaderEpoch, localId)
             .build();
 
         context.deliverRequest(context.beginEpochRequest(leaderEpoch + 1, otherNodeId));
@@ -200,16 +206,17 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testEndQuorumIgnoredIfAlreadyCandidate() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int epoch = 2;
         int jitterMs = 85;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .updateRandom(random -> {
                 Mockito.doReturn(jitterMs).when(random).nextInt(Mockito.anyInt());
             })
-            .withVotedCandidate(epoch, LOCAL_ID)
+            .withVotedCandidate(epoch, localId)
             .build();
 
         context.deliverRequest(context.endEpochRequest(epoch, OptionalInt.empty(), otherNodeId, Collections.singletonList(context.localId)));
@@ -235,12 +242,13 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testEndQuorumIgnoredIfAlreadyLeader() throws Exception {
-        int voter2 = LOCAL_ID + 1;
-        int voter3 = LOCAL_ID + 2;
+        int localId = 0;
+        int voter2 = localId + 1;
+        int voter3 = localId + 2;
         int epoch = 2;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, voter2, voter3);
+        Set<Integer> voters = Utils.mkSet(localId, voter2, voter3);
 
-        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(voters, epoch);
+        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
 
         // One of the voters may have sent EndEpoch as a candidate because it
         // had not yet been notified that the local node was the leader.
@@ -257,11 +265,12 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testEndQuorumStartsNewElectionAfterBackoffIfReceivedFromVotedCandidate() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int epoch = 2;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withVotedCandidate(epoch, otherNodeId)
             .build();
 
@@ -276,12 +285,13 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testEndQuorumStartsNewElectionImmediatelyIfFollowerUnattached() throws Exception {
-        int voter2 = LOCAL_ID + 1;
-        int voter3 = LOCAL_ID + 2;
+        int localId = 0;
+        int voter2 = localId + 1;
+        int voter3 = localId + 2;
         int epoch = 2;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, voter2, voter3);
+        Set<Integer> voters = Utils.mkSet(localId, voter2, voter3);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(epoch)
             .build();
         
@@ -297,11 +307,12 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testLocalReadFromLeader() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int epoch = 2;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(voters, epoch);
+        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
 
         assertEquals(1L, context.log.endOffset().offset);
         assertEquals(OptionalLong.empty(), context.client.highWatermark());
@@ -337,11 +348,12 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testDelayedLocalReadFromLeader() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int epoch = 2;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(voters, epoch);
+        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
 
         assertEquals(1L, context.log.endOffset().offset);
         assertEquals(OptionalLong.empty(), context.client.highWatermark());
@@ -384,11 +396,12 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testLocalReadFromFollower() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int epoch = 2;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .build();
 
@@ -429,11 +442,12 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testDelayedLocalReadFromFollowerToHighWatermark() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int epoch = 2;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .build();
 
@@ -458,11 +472,12 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testDelayedLocalReadFromFollowerToHighWatermarkTimeout() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int epoch = 2;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .build();
 
@@ -486,11 +501,12 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testLocalReadLogTruncationError() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int epoch = 2;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .build();
 
@@ -510,12 +526,13 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testDelayedLocalReadLogTruncationErrorAfterUncleanElection() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int epoch = 2;
 
         // Initialize as leader and append some data that will eventually get truncated
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
-        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(voters, epoch);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
 
         SimpleRecord[] records = new SimpleRecord[] {
             new SimpleRecord("a".getBytes()),
@@ -551,11 +568,12 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testHandleEndQuorumRequest() throws Exception {
+        int localId = 0;
         int oldLeaderId = 1;
         int leaderEpoch = 2;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, oldLeaderId);
+        Set<Integer> voters = Utils.mkSet(localId, oldLeaderId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(leaderEpoch, oldLeaderId)
             .build();
 
@@ -570,12 +588,13 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testHandleEndQuorumRequestWithLowerPriorityToBecomeLeader() throws Exception {
+        int localId = 0;
         int oldLeaderId = 1;
         int leaderEpoch = 2;
         int preferredNextLeader = 3;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, oldLeaderId, preferredNextLeader);
+        Set<Integer> voters = Utils.mkSet(localId, oldLeaderId, preferredNextLeader);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(leaderEpoch, oldLeaderId)
             .build();
 
@@ -605,11 +624,12 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testVoteRequestTimeout() throws Exception {
+        int localId = 0;
         int epoch = 1;
         int otherNodeId = 1;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters).build();
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
         context.assertUnknownLeader(0);
 
@@ -637,11 +657,12 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testHandleValidVoteRequestAsFollower() throws Exception {
+        int localId = 0;
         int epoch = 2;
         int otherNodeId = 1;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(epoch)
             .build();
 
@@ -656,12 +677,13 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testHandleVoteRequestAsFollowerWithElectedLeader() throws Exception {
+        int localId = 0;
         int epoch = 2;
         int otherNodeId = 1;
         int electedLeaderId = 3;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId, electedLeaderId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId, electedLeaderId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, electedLeaderId)
             .build();
 
@@ -676,12 +698,13 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testHandleVoteRequestAsFollowerWithVotedCandidate() throws Exception {
+        int localId = 0;
         int epoch = 2;
         int otherNodeId = 1;
         int votedCandidateId = 3;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId, votedCandidateId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId, votedCandidateId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withVotedCandidate(epoch, votedCandidateId)
             .build();
 
@@ -695,11 +718,12 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testHandleInvalidVoteRequestWithOlderEpoch() throws Exception {
+        int localId = 0;
         int epoch = 2;
         int otherNodeId = 1;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(epoch)
             .build();
 
@@ -713,12 +737,13 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testHandleInvalidVoteRequestAsObserver() throws Exception {
+        int localId = 0;
         int epoch = 2;
         int otherNodeId = 1;
         int otherNodeId2 = 2;
         Set<Integer> voters = Utils.mkSet(otherNodeId, otherNodeId2);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(epoch)
             .build();
 
@@ -732,11 +757,12 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testLeaderIgnoreVoteRequestOnSameEpoch() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int leaderEpoch = 2;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(voters, leaderEpoch);
+        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, leaderEpoch);
 
         context.deliverRequest(context.voteRequest(leaderEpoch, otherNodeId, leaderEpoch - 1, 1));
 
@@ -748,11 +774,12 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testStateMachineApplyCommittedRecords() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int epoch = 5;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(voters, epoch);
+        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
 
         // First poll has no high watermark advance
         context.client.poll();
@@ -818,11 +845,12 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testStateMachineExpireAppendedRecords() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int epoch = 5;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(voters, epoch);
+        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
 
         // First poll has no high watermark advance
         context.client.poll();
@@ -856,12 +884,13 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testCandidateIgnoreVoteRequestOnSameEpoch() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int leaderEpoch = 2;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
-            .withVotedCandidate(leaderEpoch, LOCAL_ID)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withVotedCandidate(leaderEpoch, localId)
             .build();
 
         context.pollUntilSend();
@@ -874,12 +903,13 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testRetryElection() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int epoch = 1;
         int exponentialFactor = 85;  // set it large enough so that we will bound on jitter
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .updateRandom(random -> {
                 Mockito.doReturn(exponentialFactor).when(random).nextInt(Mockito.anyInt());
             })
@@ -917,11 +947,12 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testInitializeAsFollowerEmptyLog() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int epoch = 5;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .build();
 
@@ -934,12 +965,13 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testInitializeAsFollowerNonEmptyLog() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int epoch = 5;
         int lastEpoch = 3;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .updateLog(log -> {
                 log.appendAsLeader(Collections.singleton(new SimpleRecord("foo".getBytes())), lastEpoch);
@@ -955,12 +987,13 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testVoterBecomeCandidateAfterFetchTimeout() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int epoch = 5;
         int lastEpoch = 3;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .updateLog(log -> {
                 log.appendAsLeader(Collections.singleton(new SimpleRecord("foo".getBytes())), lastEpoch);
@@ -982,12 +1015,13 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testInitializeObserverNoPreviousState() throws Exception {
+        int localId = 0;
         int leaderId = 1;
         int otherNodeId = 2;
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(leaderId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters).build();
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
         context.pollUntilSend();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
@@ -1003,11 +1037,12 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testObserverQuorumDiscoveryFailure() throws Exception {
+        int localId = 0;
         int leaderId = 1;
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(leaderId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters).build();
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
         context.pollUntilSend();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
@@ -1034,12 +1069,13 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testObserverSendDiscoveryFetchAfterFetchTimeout() throws Exception {
+        int localId = 0;
         int leaderId = 1;
         int otherNodeId = 2;
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(leaderId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters).build();
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
         context.pollUntilSend();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
@@ -1061,11 +1097,12 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testInvalidFetchRequest() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int epoch = 5;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(voters, epoch);
+        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
 
         context.deliverRequest(context.fetchRequest(
             epoch, otherNodeId, -5L, 0, 0));
@@ -1095,11 +1132,12 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testVoterOnlyRequestValidation() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int epoch = 5;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(voters, epoch);
+        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
 
         int nonVoterId = 2;
         context.deliverRequest(context.voteRequest(epoch, nonVoterId, 0, 0));
@@ -1119,11 +1157,12 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testInvalidVoteRequest() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int epoch = 5;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .build();
 
@@ -1147,11 +1186,12 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testPurgatoryFetchTimeout() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int epoch = 5;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(voters, epoch);
+        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
 
         // Follower sends a fetch which cannot be satisfied immediately
         int maxWaitTimeMs = 500;
@@ -1168,11 +1208,12 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testPurgatoryFetchSatisfiedByWrite() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int epoch = 5;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(voters, epoch);
+        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
 
         // Follower sends a fetch which cannot be satisfied immediately
         context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 1L, epoch, 500));
@@ -1200,13 +1241,14 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testPurgatoryFetchCompletedByFollowerTransition() throws Exception {
-        int voter1 = LOCAL_ID;
-        int voter2 = LOCAL_ID + 1;
-        int voter3 = LOCAL_ID + 2;
+        int localId = 0;
+        int voter1 = localId;
+        int voter2 = localId + 1;
+        int voter3 = localId + 2;
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(voter1, voter2, voter3);
 
-        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(voters, epoch);
+        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
 
         // Follower sends a fetch which cannot be satisfied immediately
         context.deliverRequest(context.fetchRequest(epoch, voter2, 1L, epoch, 500));
@@ -1231,12 +1273,13 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testFetchResponseIgnoredAfterBecomingCandidate() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int epoch = 5;
         // The other node starts out as the leader
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .build();
 
@@ -1264,14 +1307,15 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testFetchResponseIgnoredAfterBecomingFollowerOfDifferentLeader() throws Exception {
-        int voter1 = LOCAL_ID;
-        int voter2 = LOCAL_ID + 1;
-        int voter3 = LOCAL_ID + 2;
+        int localId = 0;
+        int voter1 = localId;
+        int voter2 = localId + 1;
+        int voter3 = localId + 2;
         int epoch = 5;
         // Start out with `voter2` as the leader
         Set<Integer> voters = Utils.mkSet(voter1, voter2, voter3);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, voter2)
             .build();
 
@@ -1299,14 +1343,15 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testVoteResponseIgnoredAfterBecomingFollower() throws Exception {
-        int voter1 = LOCAL_ID;
-        int voter2 = LOCAL_ID + 1;
-        int voter3 = LOCAL_ID + 2;
+        int localId = 0;
+        int voter1 = localId;
+        int voter2 = localId + 1;
+        int voter3 = localId + 2;
         int epoch = 5;
         // This node initializes as a candidate
         Set<Integer> voters = Utils.mkSet(voter1, voter2, voter3);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withVotedCandidate(epoch, voter1)
             .build();
 
@@ -1336,12 +1381,13 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testObserverLeaderRediscoveryAfterBrokerNotAvailableError() throws Exception {
+        int localId = 0;
         int leaderId = 1;
         int otherNodeId = 2;
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(leaderId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters).build();
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
         context.discoverLeaderAsObserver(leaderId, epoch);
 
@@ -1372,12 +1418,13 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testObserverLeaderRediscoveryAfterRequestTimeout() throws Exception {
+        int localId = 0;
         int leaderId = 1;
         int otherNodeId = 2;
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(leaderId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters).build();
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
         context.discoverLeaderAsObserver(leaderId, epoch);
 
@@ -1405,11 +1452,12 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testLeaderGracefulShutdown() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int epoch = 1;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(voters, epoch);
+        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
 
         // Now shutdown
         int shutdownTimeoutMs = 5000;
@@ -1446,12 +1494,13 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testEndQuorumEpochSentBasedOnFetchOffset() throws Exception {
+        int localId = 0;
         int closeFollower = 2;
         int laggingFollower = 1;
         int epoch = 1;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, closeFollower, laggingFollower);
+        Set<Integer> voters = Utils.mkSet(localId, closeFollower, laggingFollower);
 
-        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(voters, epoch);
+        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
 
         context.buildFollowerSet(epoch, closeFollower, laggingFollower);
 
@@ -1473,12 +1522,13 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testDescribeQuorum() throws Exception {
+        int localId = 0;
         int closeFollower = 2;
         int laggingFollower = 1;
         int epoch = 1;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, closeFollower, laggingFollower);
+        Set<Integer> voters = Utils.mkSet(localId, closeFollower, laggingFollower);
 
-        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(voters, epoch);
+        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
 
         context.buildFollowerSet(epoch, closeFollower, laggingFollower);
 
@@ -1516,11 +1566,12 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testLeaderGracefulShutdownTimeout() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int epoch = 1;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(voters, epoch);
+        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
 
         // Now shutdown
         int shutdownTimeoutMs = 5000;
@@ -1547,11 +1598,12 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testFollowerGracefulShutdown() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int epoch = 5;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .build();
 
@@ -1572,7 +1624,8 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testGracefulShutdownSingleMemberQuorum() throws IOException {
-        RaftClientTestContext context = new RaftClientTestContext.Builder(Collections.singleton(LOCAL_ID)).build();
+        int localId = 0;
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, Collections.singleton(localId)).build();
 
         context.assertElectedLeader(1, context.localId);
         context.client.poll();
@@ -1586,11 +1639,12 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testFollowerReplication() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int epoch = 5;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .build();
 
@@ -1611,11 +1665,12 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testEmptyRecordSetInFetchResponse() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int epoch = 5;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .build();
 
@@ -1656,11 +1711,12 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testAppendEmptyRecordSetNotAllowed() throws Exception {
+        int localId = 0;
         int epoch = 5;
-        Set<Integer> voters = Collections.singleton(LOCAL_ID);
+        Set<Integer> voters = Collections.singleton(localId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
-            .withElectedLeader(epoch, LOCAL_ID)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withElectedLeader(epoch, localId)
             .build();
 
         assertThrows(IllegalArgumentException.class, () ->
@@ -1669,11 +1725,12 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testAppendToNonLeaderFails() throws IOException {
+        int localId = 0;
         int otherNodeId = 1;
         int epoch = 5;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .build();
 
@@ -1694,11 +1751,12 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testFetchShouldBeTreatedAsLeaderEndorsement() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int epoch = 5;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .updateRandom(random -> {
                 Mockito.doReturn(0).when(random).nextInt(ELECTION_TIMEOUT_MS);
             })
@@ -1730,9 +1788,10 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testLeaderAppendSingleMemberQuorum() throws IOException {
-        Set<Integer> voters = Collections.singleton(LOCAL_ID);
+        int localId = 0;
+        Set<Integer> voters = Collections.singleton(localId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters).build();
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
         long now = context.time.milliseconds();
 
         context.assertElectedLeader(1, context.localId);
@@ -1789,12 +1848,13 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testFollowerLogReconciliation() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int epoch = 5;
         int lastEpoch = 3;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .updateLog(log -> {
                 log.appendAsLeader(Arrays.asList(
@@ -1827,9 +1887,10 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testMetrics() throws Exception {
+        int localId = 0;
         int epoch = 1;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(Collections.singleton(LOCAL_ID)).build();
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, Collections.singleton(localId)).build();
 
         assertNotNull(getMetric(context.metrics, "current-state"));
         assertNotNull(getMetric(context.metrics, "current-leader"));
@@ -1879,11 +1940,12 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testClusterAuthorizationFailedInFetch() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int epoch = 5;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .build();
 
@@ -1900,11 +1962,12 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testClusterAuthorizationFailedInBeginQuorumEpoch() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int epoch = 5;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .updateRandom(random -> {
                 Mockito.doReturn(0).when(random).nextInt(ELECTION_TIMEOUT_MS);
             })
@@ -1926,12 +1989,13 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testClusterAuthorizationFailedInVote() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int epoch = 5;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
-            .withVotedCandidate(epoch, LOCAL_ID)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withVotedCandidate(epoch, localId)
             .build();
 
         context.assertVotedCandidate(epoch, context.localId);
@@ -1947,11 +2011,12 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testClusterAuthorizationFailedInEndQuorumEpoch() throws Exception {
+        int localId = 0;
         int otherNodeId = 1;
         int epoch = 2;
-        Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(voters, epoch);
+        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
 
         context.client.shutdown(5000);
         context.pollUntilSend();
