@@ -66,7 +66,6 @@ import static org.apache.kafka.raft.RaftClientTestContext.RETRY_BACKOFF_MS;
 import static org.apache.kafka.raft.RaftClientTestContext.fetchRequest;
 import static org.apache.kafka.raft.RaftClientTestContext.fetchResponse;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -78,11 +77,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class KafkaRaftClientTest {
     @Test
     public void testInitializeSingleMemberQuorum() throws IOException {
-        RaftClientTestContext context = RaftClientTestContext.build(Collections.singleton(LOCAL_ID));
-        assertEquals(
-            ElectionState.withElectedLeader(1, LOCAL_ID, Collections.singleton(LOCAL_ID)),
-            context.quorumStateStore.readElectionState()
-        );
+        RaftClientTestContext context = new RaftClientTestContext.Builder(Collections.singleton(LOCAL_ID)).build();
+        context.assertElectedLeader(1, LOCAL_ID);
     }
 
     @Test
@@ -91,22 +87,15 @@ public class KafkaRaftClientTest {
 
         int initialEpoch = 2;
         Set<Integer> voters = Collections.singleton(LOCAL_ID);
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(
-                        ElectionState.withElectedLeader(initialEpoch, LOCAL_ID, voters)
-                    );
-                });
-            })
-            .build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+            .withElectedLeader(initialEpoch, LOCAL_ID)
+            .build();
 
         assertEquals(1L, context.log.endOffset().offset);
         assertEquals(initialEpoch + 1, context.log.lastFetchedEpoch());
         assertEquals(new LeaderAndEpoch(OptionalInt.of(LOCAL_ID), initialEpoch + 1),
             context.client.currentLeaderAndEpoch());
-        assertEquals(ElectionState.withElectedLeader(initialEpoch + 1, LOCAL_ID, voters),
-            context.quorumStateStore.readElectionState());
+        context.assertElectedLeader(initialEpoch + 1, LOCAL_ID);
     }
 
     @Test
@@ -114,20 +103,16 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, 1);
         int epoch = 2;
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
             .updateRandom(random -> {
                 Mockito.doReturn(0).when(random).nextInt(RaftClientTestContext.ELECTION_TIMEOUT_MS);
             })
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withElectedLeader(epoch, LOCAL_ID, voters));
-                });
-            })
-            .build(voters);
+            .withElectedLeader(epoch, LOCAL_ID)
+            .build();
 
 
         assertEquals(0L, context.log.endOffset().offset);
-        assertEquals(ElectionState.withUnknownLeader(epoch, voters), context.quorumStateStore.readElectionState());
+        context.assertUnknownLeader(epoch);
 
         context.time.sleep(RaftClientTestContext.ELECTION_TIMEOUT_MS);
         context.pollUntilSend();
@@ -139,13 +124,9 @@ public class KafkaRaftClientTest {
         // Need 3 node to require a 2-node majority
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, 1, 2);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withVotedCandidate(2, LOCAL_ID, voters));
-                });
-            })
-            .build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+            .withVotedCandidate(2, LOCAL_ID)
+            .build();
 
         assertEquals(0L, context.log.endOffset().offset);
 
@@ -160,20 +141,20 @@ public class KafkaRaftClientTest {
     public void testInitializeAsCandidateAndBecomeLeader() throws Exception {
         final int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
-        RaftClientTestContext context = RaftClientTestContext.build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters).build();
 
-        assertEquals(ElectionState.withUnknownLeader(0, voters), context.quorumStateStore.readElectionState());
+        context.assertUnknownLeader(0);
         context.time.sleep(2 * RaftClientTestContext.ELECTION_TIMEOUT_MS);
 
         context.pollUntilSend();
-        assertEquals(ElectionState.withVotedCandidate(1, LOCAL_ID, voters), context.quorumStateStore.readElectionState());
+        context.assertVotedCandidate(1, LOCAL_ID);
 
         int correlationId = context.assertSentVoteRequest(1, 0, 0L);
         context.deliverResponse(correlationId, otherNodeId, RaftClientTestContext.voteResponse(true, Optional.empty(), 1));
 
         // Become leader after receiving the vote
         context.client.poll();
-        assertEquals(ElectionState.withElectedLeader(1, LOCAL_ID, voters), context.quorumStateStore.readElectionState());
+        context.assertElectedLeader(1, LOCAL_ID);
         long electionTimestamp = context.time.milliseconds();
 
         // Leader change record appended
@@ -199,23 +180,16 @@ public class KafkaRaftClientTest {
         int votedCandidateEpoch = 2;
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withVotedCandidate(votedCandidateEpoch, otherNodeId, voters));
-                });
-            })
-            .build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+            .withVotedCandidate(votedCandidateEpoch, otherNodeId)
+            .build();
 
 
         context.deliverRequest(beginEpochRequest(votedCandidateEpoch, otherNodeId));
 
         context.client.poll();
 
-        assertEquals(
-            ElectionState.withElectedLeader(votedCandidateEpoch, otherNodeId, voters),
-            context.quorumStateStore.readElectionState()
-        );
+        context.assertElectedLeader(votedCandidateEpoch, otherNodeId);
 
         context.assertSentBeginQuorumEpochResponse(Errors.NONE, votedCandidateEpoch, OptionalInt.of(otherNodeId));
     }
@@ -226,22 +200,15 @@ public class KafkaRaftClientTest {
         int leaderEpoch = 2;
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withElectedLeader(leaderEpoch, LOCAL_ID, voters));
-                });
-            })
-            .build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+            .withElectedLeader(leaderEpoch, LOCAL_ID)
+            .build();
 
         context.deliverRequest(beginEpochRequest(leaderEpoch + 1, otherNodeId));
 
         context.client.poll();
 
-        assertEquals(
-            ElectionState.withElectedLeader(leaderEpoch + 1, otherNodeId, voters),
-            context.quorumStateStore.readElectionState()
-        );
+        context.assertElectedLeader(leaderEpoch + 1, otherNodeId);
     }
 
     @Test
@@ -251,16 +218,12 @@ public class KafkaRaftClientTest {
         int jitterMs = 85;
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
             .updateRandom(random -> {
                 Mockito.doReturn(jitterMs).when(random).nextInt(Mockito.anyInt());
             })
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withVotedCandidate(epoch, LOCAL_ID, voters));
-                });
-            })
-            .build(voters);
+            .withVotedCandidate(epoch, LOCAL_ID)
+            .build();
 
         context.deliverRequest(endEpochRequest(epoch, OptionalInt.empty(), otherNodeId, Collections.singletonList(LOCAL_ID)));
 
@@ -270,17 +233,17 @@ public class KafkaRaftClientTest {
         // We should still be candidate until expiration of election timeout
         context.time.sleep(ELECTION_TIMEOUT_MS + jitterMs - 1);
         context.client.poll();
-        assertEquals(ElectionState.withVotedCandidate(epoch, LOCAL_ID, voters), context.quorumStateStore.readElectionState());
+        context.assertVotedCandidate(epoch, LOCAL_ID);
 
         // Enter the backoff period
         context.time.sleep(1);
         context.client.poll();
-        assertEquals(ElectionState.withVotedCandidate(epoch, LOCAL_ID, voters), context.quorumStateStore.readElectionState());
+        context.assertVotedCandidate(epoch, LOCAL_ID);
 
         // After backoff, we will become a candidate again
         context.time.sleep(ELECTION_BACKOFF_MAX_MS);
         context.client.poll();
-        assertEquals(ElectionState.withVotedCandidate(epoch + 1, LOCAL_ID, voters), context.quorumStateStore.readElectionState());
+        context.assertVotedCandidate(epoch + 1, LOCAL_ID);
     }
 
     @Test
@@ -302,7 +265,7 @@ public class KafkaRaftClientTest {
         // We should still be leader as long as fetch timeout has not expired
         context.time.sleep(FETCH_TIMEOUT_MS - 1);
         context.client.poll();
-        assertEquals(ElectionState.withElectedLeader(epoch, LOCAL_ID, voters), context.quorumStateStore.readElectionState());
+        context.assertElectedLeader(epoch, LOCAL_ID);
     }
 
     @Test
@@ -311,13 +274,9 @@ public class KafkaRaftClientTest {
         int epoch = 2;
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withVotedCandidate(epoch, otherNodeId, voters));
-                });
-            })
-            .build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+            .withVotedCandidate(epoch, otherNodeId)
+            .build();
 
         context.deliverRequest(endEpochRequest(epoch, OptionalInt.empty(), otherNodeId, Collections.singletonList(LOCAL_ID)));
         context.client.poll();
@@ -325,7 +284,7 @@ public class KafkaRaftClientTest {
 
         context.time.sleep(ELECTION_BACKOFF_MAX_MS);
         context.client.poll();
-        assertEquals(ElectionState.withVotedCandidate(epoch + 1, LOCAL_ID, voters), context.quorumStateStore.readElectionState());
+        context.assertVotedCandidate(epoch + 1, LOCAL_ID);
     }
 
     @Test
@@ -335,13 +294,9 @@ public class KafkaRaftClientTest {
         int epoch = 2;
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, voter2, voter3);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withUnknownLeader(epoch, voters));
-                });
-            })
-            .build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+            .withUnknownLeader(epoch)
+            .build();
         
         context.deliverRequest(endEpochRequest(epoch, OptionalInt.of(voter2), voter2, Arrays.asList(LOCAL_ID, voter3)));
 
@@ -350,7 +305,7 @@ public class KafkaRaftClientTest {
 
         // Should become a candidate immediately
         context.client.poll();
-        assertEquals(ElectionState.withVotedCandidate(epoch + 1, LOCAL_ID, voters), context.quorumStateStore.readElectionState());
+        context.assertVotedCandidate(epoch + 1, LOCAL_ID);
     }
 
     @Test
@@ -446,13 +401,9 @@ public class KafkaRaftClientTest {
         int epoch = 2;
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withElectedLeader(epoch, otherNodeId, voters));
-                });
-            })
-            .build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+            .withElectedLeader(epoch, otherNodeId)
+            .build();
 
         SimpleRecord[] records1 = new SimpleRecord[] {
             new SimpleRecord("a".getBytes()),
@@ -495,13 +446,9 @@ public class KafkaRaftClientTest {
         int epoch = 2;
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withElectedLeader(epoch, otherNodeId, voters));
-                });
-            })
-            .build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+            .withElectedLeader(epoch, otherNodeId)
+            .build();
 
         SimpleRecord[] records = new SimpleRecord[] {
             new SimpleRecord("a".getBytes()),
@@ -528,13 +475,9 @@ public class KafkaRaftClientTest {
         int epoch = 2;
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withElectedLeader(epoch, otherNodeId, voters));
-                });
-            })
-            .build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+            .withElectedLeader(epoch, otherNodeId)
+            .build();
 
         SimpleRecord[] records1 = new SimpleRecord[] {
             new SimpleRecord("a".getBytes()),
@@ -560,13 +503,9 @@ public class KafkaRaftClientTest {
         int epoch = 2;
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withElectedLeader(epoch, otherNodeId, voters));
-                });
-            })
-            .build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+            .withElectedLeader(epoch, otherNodeId)
+            .build();
 
         SimpleRecord[] records = new SimpleRecord[] {
             new SimpleRecord("a".getBytes()),
@@ -629,13 +568,9 @@ public class KafkaRaftClientTest {
         int leaderEpoch = 2;
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, oldLeaderId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withElectedLeader(leaderEpoch, oldLeaderId, voters));
-                });
-            })
-            .build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+            .withElectedLeader(leaderEpoch, oldLeaderId)
+            .build();
 
         context.deliverRequest(endEpochRequest(leaderEpoch, OptionalInt.of(oldLeaderId), oldLeaderId, Collections.singletonList(LOCAL_ID)));
 
@@ -643,10 +578,7 @@ public class KafkaRaftClientTest {
         context.assertSentEndQuorumEpochResponse(Errors.NONE, leaderEpoch, OptionalInt.of(oldLeaderId));
 
         context.client.poll();
-        assertEquals(
-            ElectionState.withVotedCandidate(leaderEpoch + 1, LOCAL_ID, voters),
-            context.quorumStateStore.readElectionState()
-        );
+        context.assertVotedCandidate(leaderEpoch + 1, LOCAL_ID);
     }
 
     @Test
@@ -656,13 +588,9 @@ public class KafkaRaftClientTest {
         int preferredNextLeader = 3;
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, oldLeaderId, preferredNextLeader);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withElectedLeader(leaderEpoch, oldLeaderId, voters));
-                });
-            })
-            .build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+            .withElectedLeader(leaderEpoch, oldLeaderId)
+            .build();
 
         context.deliverRequest(endEpochRequest(leaderEpoch,
             OptionalInt.of(oldLeaderId), oldLeaderId, Arrays.asList(preferredNextLeader, LOCAL_ID)));
@@ -685,8 +613,7 @@ public class KafkaRaftClientTest {
         assertEquals(2, voteRequests.size());
 
         // Should have already done self-voting
-        assertEquals(ElectionState.withVotedCandidate(leaderEpoch + 1, LOCAL_ID, voters),
-            context.quorumStateStore.readElectionState());
+        context.assertVotedCandidate(leaderEpoch + 1, LOCAL_ID);
     }
 
     @Test
@@ -695,13 +622,13 @@ public class KafkaRaftClientTest {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
 
-        RaftClientTestContext context = RaftClientTestContext.build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters).build();
 
-        assertEquals(ElectionState.withUnknownLeader(0, voters), context.quorumStateStore.readElectionState());
+        context.assertUnknownLeader(0);
 
         context.time.sleep(2 * ELECTION_TIMEOUT_MS);
         context.pollUntilSend();
-        assertEquals(ElectionState.withVotedCandidate(epoch, LOCAL_ID, voters), context.quorumStateStore.readElectionState());
+        context.assertVotedCandidate(epoch, LOCAL_ID);
 
         int correlationId = context.assertSentVoteRequest(epoch, 0, 0L);
 
@@ -713,12 +640,12 @@ public class KafkaRaftClientTest {
         // the first request if it arrives late.
         context.deliverResponse(correlationId, otherNodeId, RaftClientTestContext.voteResponse(true, Optional.empty(), 1));
         context.client.poll();
-        assertEquals(ElectionState.withElectedLeader(epoch, LOCAL_ID, voters), context.quorumStateStore.readElectionState());
+        context.assertElectedLeader(epoch, LOCAL_ID);
 
         // If the second request arrives later, it should have no effect
         context.deliverResponse(retryCorrelationId, otherNodeId, RaftClientTestContext.voteResponse(true, Optional.empty(), 1));
         context.client.poll();
-        assertEquals(ElectionState.withElectedLeader(epoch, LOCAL_ID, voters), context.quorumStateStore.readElectionState());
+        context.assertElectedLeader(epoch, LOCAL_ID);
     }
 
     @Test
@@ -727,13 +654,9 @@ public class KafkaRaftClientTest {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withUnknownLeader(epoch, voters));
-                });
-            })
-            .build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+            .withUnknownLeader(epoch)
+            .build();
 
         context.deliverRequest(voteRequest(epoch, otherNodeId, epoch - 1, 1));
 
@@ -741,8 +664,7 @@ public class KafkaRaftClientTest {
 
         context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.empty(), true);
 
-        assertEquals(ElectionState.withVotedCandidate(epoch, otherNodeId, voters),
-            context.quorumStateStore.readElectionState());
+        context.assertVotedCandidate(epoch, otherNodeId);
     }
 
     @Test
@@ -752,13 +674,9 @@ public class KafkaRaftClientTest {
         int electedLeaderId = 3;
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId, electedLeaderId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withElectedLeader(epoch, electedLeaderId, voters));
-                });
-            })
-            .build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+            .withElectedLeader(epoch, electedLeaderId)
+            .build();
 
         context.deliverRequest(voteRequest(epoch, otherNodeId, epoch - 1, 1));
 
@@ -766,8 +684,7 @@ public class KafkaRaftClientTest {
 
         context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(electedLeaderId), false);
 
-        assertEquals(ElectionState.withElectedLeader(epoch, electedLeaderId, voters),
-            context.quorumStateStore.readElectionState());
+        context.assertElectedLeader(epoch, electedLeaderId);
     }
 
     @Test
@@ -777,21 +694,16 @@ public class KafkaRaftClientTest {
         int votedCandidateId = 3;
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId, votedCandidateId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withVotedCandidate(epoch, votedCandidateId, voters));
-                });
-            })
-            .build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+            .withVotedCandidate(epoch, votedCandidateId)
+            .build();
 
         context.deliverRequest(voteRequest(epoch, otherNodeId, epoch - 1, 1));
 
         context.client.poll();
 
         context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.empty(), false);
-        assertEquals(ElectionState.withVotedCandidate(epoch, votedCandidateId, voters),
-            context.quorumStateStore.readElectionState());
+        context.assertVotedCandidate(epoch, votedCandidateId);
     }
 
     @Test
@@ -800,20 +712,16 @@ public class KafkaRaftClientTest {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withUnknownLeader(epoch, voters));
-                });
-            })
-            .build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+            .withUnknownLeader(epoch)
+            .build();
 
         context.deliverRequest(voteRequest(epoch - 1, otherNodeId, epoch - 2, 1));
 
         context.client.poll();
 
         context.assertSentVoteResponse(Errors.FENCED_LEADER_EPOCH, epoch, OptionalInt.empty(), false);
-        assertEquals(ElectionState.withUnknownLeader(epoch, voters), context.quorumStateStore.readElectionState());
+        context.assertUnknownLeader(epoch);
     }
 
     @Test
@@ -823,20 +731,16 @@ public class KafkaRaftClientTest {
         int otherNodeId2 = 2;
         Set<Integer> voters = Utils.mkSet(otherNodeId, otherNodeId2);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withUnknownLeader(epoch, voters));
-                });
-            })
-            .build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+            .withUnknownLeader(epoch)
+            .build();
 
         context.deliverRequest(voteRequest(epoch + 1, otherNodeId, epoch, 1));
 
         context.client.poll();
 
         context.assertSentVoteResponse(Errors.INCONSISTENT_VOTER_SET, epoch, OptionalInt.empty(), false);
-        assertEquals(ElectionState.withUnknownLeader(epoch, voters), context.quorumStateStore.readElectionState());
+        context.assertUnknownLeader(epoch);
     }
 
     @Test
@@ -852,8 +756,7 @@ public class KafkaRaftClientTest {
         context.client.poll();
 
         context.assertSentVoteResponse(Errors.NONE, leaderEpoch, OptionalInt.of(LOCAL_ID), false);
-        assertEquals(ElectionState.withElectedLeader(leaderEpoch, LOCAL_ID, voters),
-            context.quorumStateStore.readElectionState());
+        context.assertElectedLeader(leaderEpoch, LOCAL_ID);
     }
 
     @Test
@@ -970,21 +873,16 @@ public class KafkaRaftClientTest {
         int leaderEpoch = 2;
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withVotedCandidate(leaderEpoch, LOCAL_ID, voters));
-                });
-            })
-            .build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+            .withVotedCandidate(leaderEpoch, LOCAL_ID)
+            .build();
 
         context.pollUntilSend();
 
         context.deliverRequest(voteRequest(leaderEpoch, otherNodeId, leaderEpoch - 1, 1));
         context.client.poll();
         context.assertSentVoteResponse(Errors.NONE, leaderEpoch, OptionalInt.empty(), false);
-        assertEquals(ElectionState.withVotedCandidate(leaderEpoch, LOCAL_ID, voters),
-            context.quorumStateStore.readElectionState());
+        context.assertVotedCandidate(leaderEpoch, LOCAL_ID);
     }
 
     @Test
@@ -994,18 +892,18 @@ public class KafkaRaftClientTest {
         int exponentialFactor = 85;  // set it large enough so that we will bound on jitter
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
             .updateRandom(random -> {
                 Mockito.doReturn(exponentialFactor).when(random).nextInt(Mockito.anyInt());
             })
-            .build(voters);
+            .build();
 
 
-        assertEquals(ElectionState.withUnknownLeader(0, voters), context.quorumStateStore.readElectionState());
+        context.assertUnknownLeader(0);
 
         context.time.sleep(2 * ELECTION_TIMEOUT_MS);
         context.pollUntilSend();
-        assertEquals(ElectionState.withVotedCandidate(epoch, LOCAL_ID, voters), context.quorumStateStore.readElectionState());
+        context.assertVotedCandidate(epoch, LOCAL_ID);
 
         // Quorum size is two. If the other member rejects, then we need to schedule a revote.
         int correlationId = context.assertSentVoteRequest(epoch, 0, 0L);
@@ -1014,22 +912,19 @@ public class KafkaRaftClientTest {
         context.client.poll();
 
         // All nodes have rejected our candidacy, but we should still remember that we had voted
-        ElectionState latest = context.quorumStateStore.readElectionState();
-        assertEquals(epoch, latest.epoch);
-        assertTrue(latest.hasVoted());
-        assertEquals(LOCAL_ID, latest.votedId());
+        context.assertVotedCandidate(epoch, LOCAL_ID);
 
         // Even though our candidacy was rejected, we will backoff for jitter period
         // before we bump the epoch and start a new election.
         context.time.sleep(ELECTION_BACKOFF_MAX_MS - 1);
         context.client.poll();
-        assertEquals(epoch, context.quorumStateStore.readElectionState().epoch);
+        context.assertVotedCandidate(epoch, LOCAL_ID);
 
         // After jitter expires, we become a candidate again
         context.time.sleep(1);
         context.client.poll();
         context.pollUntilSend();
-        assertEquals(ElectionState.withVotedCandidate(epoch + 1, LOCAL_ID, voters), context.quorumStateStore.readElectionState());
+        context.assertVotedCandidate(epoch + 1, LOCAL_ID);
         context.assertSentVoteRequest(epoch + 1, 0, 0L);
     }
 
@@ -1039,15 +934,11 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withElectedLeader(epoch, otherNodeId, voters));
-                });
-            })
-            .build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+            .withElectedLeader(epoch, otherNodeId)
+            .build();
 
-        assertEquals(ElectionState.withElectedLeader(epoch, otherNodeId, voters), context.quorumStateStore.readElectionState());
+        context.assertElectedLeader(epoch, otherNodeId);
 
         context.pollUntilSend();
 
@@ -1061,19 +952,15 @@ public class KafkaRaftClientTest {
         int lastEpoch = 3;
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withElectedLeader(epoch, otherNodeId, voters));
-                });
-            })
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+            .withElectedLeader(epoch, otherNodeId)
             .updateLog(log -> {
                 log.appendAsLeader(Collections.singleton(new SimpleRecord("foo".getBytes())), lastEpoch);
             })
-            .build(voters);
+            .build();
 
 
-        assertEquals(ElectionState.withElectedLeader(epoch, otherNodeId, voters), context.quorumStateStore.readElectionState());
+        context.assertElectedLeader(epoch, otherNodeId);
 
         context.pollUntilSend();
         context.assertSentFetchRequest(epoch, 1L, lastEpoch);
@@ -1086,18 +973,14 @@ public class KafkaRaftClientTest {
         int lastEpoch = 3;
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withElectedLeader(epoch, otherNodeId, voters));
-                });
-            })
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+            .withElectedLeader(epoch, otherNodeId)
             .updateLog(log -> {
                 log.appendAsLeader(Collections.singleton(new SimpleRecord("foo".getBytes())), lastEpoch);
             })
-            .build(voters);
+            .build();
 
-        assertEquals(ElectionState.withElectedLeader(epoch, otherNodeId, voters), context.quorumStateStore.readElectionState());
+        context.assertElectedLeader(epoch, otherNodeId);
 
         context.pollUntilSend();
         context.assertSentFetchRequest(epoch, 1L, lastEpoch);
@@ -1107,7 +990,7 @@ public class KafkaRaftClientTest {
         context.pollUntilSend();
 
         context.assertSentVoteRequest(epoch + 1, lastEpoch, 1L);
-        assertEquals(ElectionState.withVotedCandidate(epoch + 1, LOCAL_ID, voters), context.quorumStateStore.readElectionState());
+        context.assertVotedCandidate(epoch + 1, LOCAL_ID);
     }
 
     @Test
@@ -1117,7 +1000,7 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(leaderId, otherNodeId);
 
-        RaftClientTestContext context = RaftClientTestContext.build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters).build();
 
         context.pollUntilSend();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
@@ -1128,7 +1011,7 @@ public class KafkaRaftClientTest {
             fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, 0L, Errors.FENCED_LEADER_EPOCH));
 
         context.client.poll();
-        assertEquals(ElectionState.withElectedLeader(epoch, leaderId, voters), context.quorumStateStore.readElectionState());
+        context.assertElectedLeader(epoch, leaderId);
     }
 
     @Test
@@ -1137,7 +1020,7 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(leaderId);
 
-        RaftClientTestContext context = RaftClientTestContext.build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters).build();
 
         context.pollUntilSend();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
@@ -1159,7 +1042,7 @@ public class KafkaRaftClientTest {
             fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, 0L, Errors.FENCED_LEADER_EPOCH));
         context.client.poll();
 
-        assertEquals(ElectionState.withElectedLeader(epoch, leaderId, voters), context.quorumStateStore.readElectionState());
+        context.assertElectedLeader(epoch, leaderId);
     }
 
     @Test
@@ -1169,7 +1052,7 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(leaderId, otherNodeId);
 
-        RaftClientTestContext context = RaftClientTestContext.build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters).build();
 
         context.pollUntilSend();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
@@ -1180,7 +1063,7 @@ public class KafkaRaftClientTest {
             fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, 0L, Errors.FENCED_LEADER_EPOCH));
         context.client.poll();
 
-        assertEquals(ElectionState.withElectedLeader(epoch, leaderId, voters), context.quorumStateStore.readElectionState());
+        context.assertElectedLeader(epoch, leaderId);
         context.time.sleep(FETCH_TIMEOUT_MS);
 
         context.pollUntilSend();
@@ -1253,30 +1136,26 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withElectedLeader(epoch, otherNodeId, voters));
-                });
-            })
-            .build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+            .withElectedLeader(epoch, otherNodeId)
+            .build();
 
-        assertEquals(ElectionState.withElectedLeader(epoch, otherNodeId, voters), context.quorumStateStore.readElectionState());
+        context.assertElectedLeader(epoch, otherNodeId);
 
         context.deliverRequest(voteRequest(epoch + 1, otherNodeId, 0, -5L));
         context.client.poll();
         context.assertSentVoteResponse(Errors.INVALID_REQUEST, epoch, OptionalInt.of(otherNodeId), false);
-        assertEquals(ElectionState.withElectedLeader(epoch, otherNodeId, voters), context.quorumStateStore.readElectionState());
+        context.assertElectedLeader(epoch, otherNodeId);
 
         context.deliverRequest(voteRequest(epoch + 1, otherNodeId, -1, 0L));
         context.client.poll();
         context.assertSentVoteResponse(Errors.INVALID_REQUEST, epoch, OptionalInt.of(otherNodeId), false);
-        assertEquals(ElectionState.withElectedLeader(epoch, otherNodeId, voters), context.quorumStateStore.readElectionState());
+        context.assertElectedLeader(epoch, otherNodeId);
 
         context.deliverRequest(voteRequest(epoch + 1, otherNodeId, epoch + 1, 0L));
         context.client.poll();
         context.assertSentVoteResponse(Errors.INVALID_REQUEST, epoch, OptionalInt.of(otherNodeId), false);
-        assertEquals(ElectionState.withElectedLeader(epoch, otherNodeId, voters), context.quorumStateStore.readElectionState());
+        context.assertElectedLeader(epoch, otherNodeId);
     }
 
     @Test
@@ -1351,7 +1230,7 @@ public class KafkaRaftClientTest {
         // Now we get a BeginEpoch from the other voter and become a follower
         context.deliverRequest(beginEpochRequest(epoch + 1, voter3));
         context.client.poll();
-        assertEquals(ElectionState.withElectedLeader(epoch + 1, voter3, voters), context.quorumStateStore.readElectionState());
+        context.assertElectedLeader(epoch + 1, voter3);
 
         // We expect the BeginQuorumEpoch response and a failed Fetch response
         context.assertSentBeginQuorumEpochResponse(Errors.NONE, epoch + 1, OptionalInt.of(voter3));
@@ -1370,15 +1249,11 @@ public class KafkaRaftClientTest {
         // The other node starts out as the leader
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withElectedLeader(epoch, otherNodeId, voters));
-                });
-            })
-            .build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+            .withElectedLeader(epoch, otherNodeId)
+            .build();
 
-        assertEquals(ElectionState.withElectedLeader(epoch, otherNodeId, voters), context.quorumStateStore.readElectionState());
+        context.assertElectedLeader(epoch, otherNodeId);
 
         // Wait until we have a Fetch inflight to the leader
         context.pollUntilSend();
@@ -1387,7 +1262,7 @@ public class KafkaRaftClientTest {
         // Now await the fetch timeout and become a candidate
         context.time.sleep(FETCH_TIMEOUT_MS);
         context.client.poll();
-        assertEquals(ElectionState.withVotedCandidate(epoch + 1, LOCAL_ID, voters), context.quorumStateStore.readElectionState());
+        context.assertVotedCandidate(epoch + 1, LOCAL_ID);
 
         // The fetch response from the old leader returns, but it should be ignored
         Records records = MemoryRecords.withRecords(0L, CompressionType.NONE,
@@ -1397,7 +1272,7 @@ public class KafkaRaftClientTest {
 
         context.client.poll();
         assertEquals(0, context.log.endOffset().offset);
-        assertEquals(ElectionState.withVotedCandidate(epoch + 1, LOCAL_ID, voters), context.quorumStateStore.readElectionState());
+        context.assertVotedCandidate(epoch + 1, LOCAL_ID);
     }
 
     @Test
@@ -1409,15 +1284,11 @@ public class KafkaRaftClientTest {
         // Start out with `voter2` as the leader
         Set<Integer> voters = Utils.mkSet(voter1, voter2, voter3);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withElectedLeader(epoch, voter2, voters));
-                });
-            })
-            .build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+            .withElectedLeader(epoch, voter2)
+            .build();
 
-        assertEquals(ElectionState.withElectedLeader(epoch, voter2, voters), context.quorumStateStore.readElectionState());
+        context.assertElectedLeader(epoch, voter2);
 
         // Wait until we have a Fetch inflight to the leader
         context.pollUntilSend();
@@ -1426,7 +1297,7 @@ public class KafkaRaftClientTest {
         // Now receive a BeginEpoch from `voter3`
         context.deliverRequest(beginEpochRequest(epoch + 1, voter3));
         context.client.poll();
-        assertEquals(ElectionState.withElectedLeader(epoch + 1, voter3, voters), context.quorumStateStore.readElectionState());
+        context.assertElectedLeader(epoch + 1, voter3);
 
         // The fetch response from the old leader returns, but it should be ignored
         Records records = MemoryRecords.withRecords(0L, CompressionType.NONE,
@@ -1436,7 +1307,7 @@ public class KafkaRaftClientTest {
 
         context.client.poll();
         assertEquals(0, context.log.endOffset().offset);
-        assertEquals(ElectionState.withElectedLeader(epoch + 1, voter3, voters), context.quorumStateStore.readElectionState());
+        context.assertElectedLeader(epoch + 1, voter3);
     }
 
     @Test
@@ -1448,16 +1319,12 @@ public class KafkaRaftClientTest {
         // This node initializes as a candidate
         Set<Integer> voters = Utils.mkSet(voter1, voter2, voter3);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withVotedCandidate(epoch, voter1, voters));
-                });
-            })
-            .build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+            .withVotedCandidate(epoch, voter1)
+            .build();
 
 
-        assertEquals(ElectionState.withVotedCandidate(epoch, voter1, voters), context.quorumStateStore.readElectionState());
+        context.assertVotedCandidate(epoch, voter1);
 
         // Wait until the vote requests are inflight
         context.pollUntilSend();
@@ -1467,7 +1334,7 @@ public class KafkaRaftClientTest {
         // While the vote requests are still inflight, we receive a BeginEpoch for the same epoch
         context.deliverRequest(beginEpochRequest(epoch, voter3));
         context.client.poll();
-        assertEquals(ElectionState.withElectedLeader(epoch, voter3, voters), context.quorumStateStore.readElectionState());
+        context.assertElectedLeader(epoch, voter3);
 
         // The vote requests now return and should be ignored
         VoteResponseData voteResponse1 = RaftClientTestContext.voteResponse(false, Optional.empty(), epoch);
@@ -1477,7 +1344,7 @@ public class KafkaRaftClientTest {
         context.deliverResponse(voteRequests.get(1).correlationId, voter3, voteResponse2);
 
         context.client.poll();
-        assertEquals(ElectionState.withElectedLeader(epoch, voter3, voters), context.quorumStateStore.readElectionState());
+        context.assertElectedLeader(epoch, voter3);
     }
 
     @Test
@@ -1487,9 +1354,9 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(leaderId, otherNodeId);
 
-        RaftClientTestContext context = RaftClientTestContext.build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters).build();
 
-        context.discoverLeaderAsObserver(voters, leaderId, epoch);
+        context.discoverLeaderAsObserver(leaderId, epoch);
 
         context.pollUntilSend();
         RaftRequest.Outbound fetchRequest1 = context.assertSentFetchRequest();
@@ -1513,7 +1380,7 @@ public class KafkaRaftClientTest {
             fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, 0L, error));
         context.client.poll();
 
-        assertEquals(ElectionState.withElectedLeader(epoch, leaderId, voters), context.quorumStateStore.readElectionState());
+        context.assertElectedLeader(epoch, leaderId);
     }
 
     @Test
@@ -1523,9 +1390,9 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(leaderId, otherNodeId);
 
-        RaftClientTestContext context = RaftClientTestContext.build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters).build();
 
-        context.discoverLeaderAsObserver(voters, leaderId, epoch);
+        context.discoverLeaderAsObserver(leaderId, epoch);
 
         context.pollUntilSend();
         RaftRequest.Outbound fetchRequest1 = context.assertSentFetchRequest();
@@ -1546,7 +1413,7 @@ public class KafkaRaftClientTest {
             fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, 0L, Errors.FENCED_LEADER_EPOCH));
         context.client.poll();
 
-        assertEquals(ElectionState.withElectedLeader(epoch, leaderId, voters), context.quorumStateStore.readElectionState());
+        context.assertElectedLeader(epoch, leaderId);
     }
 
     @Test
@@ -1697,15 +1564,11 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withElectedLeader(epoch, otherNodeId, voters));
-                });
-            })
-            .build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+            .withElectedLeader(epoch, otherNodeId)
+            .build();
 
-        assertEquals(ElectionState.withElectedLeader(epoch, otherNodeId, voters), context.quorumStateStore.readElectionState());
+        context.assertElectedLeader(epoch, otherNodeId);
 
         context.client.poll();
 
@@ -1722,10 +1585,9 @@ public class KafkaRaftClientTest {
 
     @Test
     public void testGracefulShutdownSingleMemberQuorum() throws IOException {
-        RaftClientTestContext context = RaftClientTestContext.build(Collections.singleton(LOCAL_ID));
+        RaftClientTestContext context = new RaftClientTestContext.Builder(Collections.singleton(LOCAL_ID)).build();
 
-        assertEquals(ElectionState.withElectedLeader(
-            1, LOCAL_ID, Collections.singleton(LOCAL_ID)), context.quorumStateStore.readElectionState());
+        context.assertElectedLeader(1, LOCAL_ID);
         context.client.poll();
         assertEquals(0, context.channel.drainSendQueue().size());
         int shutdownTimeoutMs = 5000;
@@ -1741,15 +1603,11 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withElectedLeader(epoch, otherNodeId, voters));
-                });
-            })
-            .build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+            .withElectedLeader(epoch, otherNodeId)
+            .build();
 
-        assertEquals(ElectionState.withElectedLeader(epoch, otherNodeId, voters), context.quorumStateStore.readElectionState());
+        context.assertElectedLeader(epoch, otherNodeId);
 
         context.pollUntilSend();
 
@@ -1770,15 +1628,11 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withElectedLeader(epoch, otherNodeId, voters));
-                });
-            })
-            .build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+            .withElectedLeader(epoch, otherNodeId)
+            .build();
 
-        assertEquals(ElectionState.withElectedLeader(epoch, otherNodeId, voters), context.quorumStateStore.readElectionState());
+        context.assertElectedLeader(epoch, otherNodeId);
 
         // Receive an empty fetch response
         context.pollUntilSend();
@@ -1818,13 +1672,9 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Collections.singleton(LOCAL_ID);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withElectedLeader(epoch, LOCAL_ID, voters));
-                });
-            })
-            .build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+            .withElectedLeader(epoch, LOCAL_ID)
+            .build();
 
         assertThrows(IllegalArgumentException.class, () ->
             context.client.append(MemoryRecords.EMPTY, AckMode.LEADER, Integer.MAX_VALUE));
@@ -1836,15 +1686,11 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withElectedLeader(epoch, otherNodeId, voters));
-                });
-            })
-            .build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+            .withElectedLeader(epoch, otherNodeId)
+            .build();
 
-        assertEquals(ElectionState.withElectedLeader(epoch, otherNodeId, voters), context.quorumStateStore.readElectionState());
+        context.assertElectedLeader(epoch, otherNodeId);
 
         SimpleRecord[] appendRecords = new SimpleRecord[] {
             new SimpleRecord("a".getBytes()),
@@ -1865,19 +1711,15 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
             .updateRandom(random -> {
                 Mockito.doReturn(0).when(random).nextInt(ELECTION_TIMEOUT_MS);
             })
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withUnknownLeader(epoch - 1, voters));
-                });
-            })
-            .build(voters);
+            .withUnknownLeader(epoch - 1)
+            .build();
 
         context.time.sleep(ELECTION_TIMEOUT_MS);
-        context.expectLeaderElection(voters, epoch);
+        context.expectLeaderElection(epoch);
 
         context.pollUntilSend();
 
@@ -1903,10 +1745,10 @@ public class KafkaRaftClientTest {
     public void testLeaderAppendSingleMemberQuorum() throws IOException {
         Set<Integer> voters = Collections.singleton(LOCAL_ID);
 
-        RaftClientTestContext context = RaftClientTestContext.build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters).build();
         long now = context.time.milliseconds();
 
-        assertEquals(ElectionState.withElectedLeader(1, LOCAL_ID, voters), context.quorumStateStore.readElectionState());
+        context.assertElectedLeader(1, LOCAL_ID);
 
         // We still write the leader change message
         assertEquals(OptionalLong.of(1L), context.client.highWatermark());
@@ -1965,12 +1807,8 @@ public class KafkaRaftClientTest {
         int lastEpoch = 3;
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withElectedLeader(epoch, otherNodeId, voters));
-                });
-            })
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+            .withElectedLeader(epoch, otherNodeId)
             .updateLog(log -> {
                 log.appendAsLeader(Arrays.asList(
                             new SimpleRecord("foo".getBytes()),
@@ -1978,9 +1816,9 @@ public class KafkaRaftClientTest {
                 log.appendAsLeader(Arrays.asList(
                             new SimpleRecord("baz".getBytes())), lastEpoch);
             })
-            .build(voters);
+            .build();
 
-        assertEquals(ElectionState.withElectedLeader(epoch, otherNodeId, voters), context.quorumStateStore.readElectionState());
+        context.assertElectedLeader(epoch, otherNodeId);
         assertEquals(3L, context.log.endOffset().offset);
 
         context.pollUntilSend();
@@ -2004,7 +1842,7 @@ public class KafkaRaftClientTest {
     public void testMetrics() throws Exception {
         int epoch = 1;
 
-        RaftClientTestContext context = RaftClientTestContext.build(Collections.singleton(LOCAL_ID));
+        RaftClientTestContext context = new RaftClientTestContext.Builder(Collections.singleton(LOCAL_ID)).build();
 
         assertNotNull(getMetric(context.metrics, "current-state"));
         assertNotNull(getMetric(context.metrics, "current-leader"));
@@ -2058,15 +1896,11 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withElectedLeader(epoch, otherNodeId, voters));
-                });
-            })
-            .build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+            .withElectedLeader(epoch, otherNodeId)
+            .build();
 
-        assertEquals(ElectionState.withElectedLeader(epoch, otherNodeId, voters), context.quorumStateStore.readElectionState());
+        context.assertElectedLeader(epoch, otherNodeId);
 
         context.pollUntilSend();
 
@@ -2083,20 +1917,16 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
             .updateRandom(random -> {
                 Mockito.doReturn(0).when(random).nextInt(ELECTION_TIMEOUT_MS);
             })
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withUnknownLeader(epoch - 1, voters));
-                });
-            })
-            .build(voters);
+            .withUnknownLeader(epoch - 1)
+            .build();
 
 
         context.time.sleep(ELECTION_TIMEOUT_MS);
-        context.expectLeaderElection(voters, epoch);
+        context.expectLeaderElection(epoch);
 
         context.pollUntilSend();
         int correlationId = context.assertSentBeginQuorumEpochRequest(epoch);
@@ -2113,15 +1943,11 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(LOCAL_ID, otherNodeId);
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(ElectionState.withVotedCandidate(epoch, LOCAL_ID, voters));
-                });
-            })
-            .build(voters);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
+            .withVotedCandidate(epoch, LOCAL_ID)
+            .build();
 
-        assertEquals(ElectionState.withVotedCandidate(epoch, LOCAL_ID, voters), context.quorumStateStore.readElectionState());
+        context.assertVotedCandidate(epoch, LOCAL_ID);
 
         context.pollUntilSend();
         int correlationId = context.assertSentVoteRequest(epoch, 0, 0L);

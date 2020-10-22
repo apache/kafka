@@ -65,7 +65,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.mockito.Mockito;
 import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -82,22 +81,38 @@ final class RaftClientTestContext {
     static final int REQUEST_TIMEOUT_MS = 5000;
     static final int RETRY_BACKOFF_MS = 50;
 
+    private final QuorumStateStore quorumStateStore;
     private final Random random;
 
     final KafkaRaftClient client;
+    final Metrics metrics;
     final MockLog log;
     final MockNetworkChannel channel;
     final MockTime time;
-    final QuorumStateStore quorumStateStore;
-    final Metrics metrics;
+    final Set<Integer> voters;
 
     public static final class Builder {
         private final QuorumStateStore quorumStateStore = new MockQuorumStateStore();
         private final Random random = Mockito.spy(new Random(1));
         private final MockLog log = new MockLog(METADATA_PARTITION);
+        private final Set<Integer> voters;
 
-        Builder updateQuorumStateStore(Consumer<QuorumStateStore> consumer) {
-            consumer.accept(quorumStateStore);
+        Builder(Set<Integer> voters) {
+            this.voters = voters;
+        }
+
+        Builder withElectedLeader(int epoch, int leaderId) throws IOException {
+            quorumStateStore.writeElectionState(ElectionState.withElectedLeader(epoch, leaderId, voters));
+            return this;
+        }
+
+        Builder withUnknownLeader(int epoch) throws IOException {
+            quorumStateStore.writeElectionState(ElectionState.withUnknownLeader(epoch, voters));
+            return this;
+        }
+
+        Builder withVotedCandidate(int epoch, int votedId) throws IOException {
+            quorumStateStore.writeElectionState(ElectionState.withVotedCandidate(epoch, votedId, voters));
             return this;
         }
 
@@ -111,7 +126,7 @@ final class RaftClientTestContext {
             return this;
         }
 
-        RaftClientTestContext build(Set<Integer> voters) throws IOException {
+        RaftClientTestContext build() throws IOException {
             MockTime time = new MockTime();
             Metrics metrics = new Metrics(time);
             MockNetworkChannel channel = new MockNetworkChannel();
@@ -130,7 +145,7 @@ final class RaftClientTestContext {
 
             client.initialize();
 
-            return new RaftClientTestContext(client, log, channel, time, quorumStateStore, random, metrics);
+            return new RaftClientTestContext(client, log, channel, time, quorumStateStore, voters, random, metrics);
         }
     }
 
@@ -140,15 +155,17 @@ final class RaftClientTestContext {
         MockNetworkChannel channel,
         MockTime time,
         QuorumStateStore quorumStateStore,
+        Set<Integer> voters,
         Random random,
         Metrics metrics
     ) {
-        this.channel = channel;
         this.client = client;
         this.log = log;
-        this.quorumStateStore = quorumStateStore;
-        this.random = random;
+        this.channel = channel;
         this.time = time;
+        this.quorumStateStore = quorumStateStore;
+        this.voters = voters;
+        this.random = random;
         this.metrics = metrics;
     }
 
@@ -157,23 +174,18 @@ final class RaftClientTestContext {
             throw new IllegalArgumentException("Cannot become leader in epoch " + epoch);
         }
 
-        ElectionState electionState = ElectionState.withUnknownLeader(epoch - 1, voters);
-        RaftClientTestContext context = new RaftClientTestContext.Builder()
+        RaftClientTestContext context = new RaftClientTestContext.Builder(voters)
             .updateRandom(random -> {
                 Mockito.doReturn(0).when(random).nextInt(ELECTION_TIMEOUT_MS);
             })
-            .updateQuorumStateStore(quorumStateStore -> {
-                assertDoesNotThrow(() -> {
-                    quorumStateStore.writeElectionState(electionState);
-                });
-            })
-            .build(voters);
+            .withUnknownLeader(epoch - 1)
+            .build();
 
-        assertEquals(electionState, context.quorumStateStore.readElectionState());
+        context.assertUnknownLeader(epoch - 1);
 
         // Advance the clock so that we become a candidate
         context.time.sleep(ELECTION_TIMEOUT_MS);
-        context.expectLeaderElection(voters, epoch);
+        context.expectLeaderElection(epoch);
 
         // Handle BeginEpoch
         context.pollUntilSend();
@@ -186,12 +198,7 @@ final class RaftClientTestContext {
         return context;
     }
 
-    static RaftClientTestContext build(Set<Integer> voters) throws IOException {
-        return new Builder().build(voters);
-    }
-
     void expectLeaderElection(
-        Set<Integer> voters,
         int epoch
     ) throws Exception {
         pollUntilSend();
@@ -205,8 +212,7 @@ final class RaftClientTestContext {
         }
 
         client.poll();
-        assertEquals(ElectionState.withElectedLeader(epoch, LOCAL_ID, voters),
-            quorumStateStore.readElectionState());
+        assertElectedLeader(epoch, LOCAL_ID);
     }
 
     void pollUntilSend() throws InterruptedException {
@@ -214,6 +220,18 @@ final class RaftClientTestContext {
             client.poll();
             return channel.hasSentMessages();
         }, 5000, "Condition failed to be satisfied before timeout");
+    }
+
+    void assertVotedCandidate(int epoch, int leaderId) throws IOException {
+        assertEquals(ElectionState.withVotedCandidate(epoch, leaderId, voters), quorumStateStore.readElectionState());
+    }
+
+    void assertElectedLeader(int epoch, int leaderId) throws IOException {
+        assertEquals(ElectionState.withElectedLeader(epoch, leaderId, voters), quorumStateStore.readElectionState());
+    }
+
+    void assertUnknownLeader(int epoch) throws IOException {
+        assertEquals(ElectionState.withUnknownLeader(epoch, voters), quorumStateStore.readElectionState());
     }
 
     int assertSentDescribeQuorumResponse(int leaderId,
@@ -472,7 +490,6 @@ final class RaftClientTestContext {
     }
 
     void discoverLeaderAsObserver(
-        Set<Integer> voters,
         int leaderId,
         int epoch
     ) throws Exception {
@@ -484,7 +501,7 @@ final class RaftClientTestContext {
         deliverResponse(fetchRequest.correlationId, fetchRequest.destinationId(),
             fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, 0L, Errors.NONE));
         client.poll();
-        assertEquals(ElectionState.withElectedLeader(epoch, leaderId, voters), quorumStateStore.readElectionState());
+        assertElectedLeader(epoch, leaderId);
     }
 
     private List<RaftRequest.Outbound> collectBeginEpochRequests(int epoch) {
