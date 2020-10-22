@@ -206,7 +206,7 @@ public class KTableTransformValuesTest {
         expect(parent.enableSendingOldValues(true)).andReturn(true);
         replay(parent);
 
-        new KTableTransformValues<>(parent, new SingletonNoOpValueTransformer<>(), null).enableSendingOldValues(true);
+        new KTableTransformValues<>(parent, new NoOpValueTransformerWithKeySupplier<>(), null).enableSendingOldValues(true);
 
         verify(parent);
     }
