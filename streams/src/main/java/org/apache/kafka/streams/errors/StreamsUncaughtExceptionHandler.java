@@ -21,27 +21,15 @@ public interface StreamsUncaughtExceptionHandler {
      * Inspect the exception received in a stream thread and respond with an action.
      * @param exception the actual exception
      */
-    default StreamThreadExceptionResponse handleExceptionInStreamThread(final Throwable exception) {
-        return StreamThreadExceptionResponse.SHUTDOWN_STREAM_THREAD;
-    }
-
-
-    /**
-     * Inspect the exception received in a global stream thread.
-     * @param exception the actual exception
-     */
-    default GlobalThreadExceptionResponse handleExceptionInGlobalThread(final Throwable exception) {
-        return GlobalThreadExceptionResponse.SHUTDOWN_KAFKA_STREAMS_CLIENT;
-    }
+    StreamThreadExceptionResponse handle(final Throwable exception);
 
     /**
      * Enumeration that describes the response from the exception handler.
      */
     enum StreamThreadExceptionResponse {
-        SHUTDOWN_STREAM_THREAD(0, "SHUTDOWN_STREAM_THREAD"),
-//        REPLACE_STREAM_THREAD(1, "REPLACE_STREAM_THREAD"),
-        SHUTDOWN_KAFKA_STREAMS_CLIENT(2, "SHUTDOWN_KAFKA_STREAMS_CLIENT"),
-        SHUTDOWN_KAFKA_STREAMS_APPLICATION(3, "SHUTDOWN_KAFKA_STREAMS_APPLICATION");
+//        REPLACE_THREAD(1, "REPLACE_THREAD"),
+        SHUTDOWN_CLIENT(2, "SHUTDOWN_KAFKA_STREAMS_CLIENT"),
+        SHUTDOWN_APPLICATION(3, "SHUTDOWN_KAFKA_STREAMS_APPLICATION");
 
         /** an english description of the api--this is for debugging and can change */
         public final String name;
@@ -50,24 +38,6 @@ public interface StreamsUncaughtExceptionHandler {
         public final int id;
 
         StreamThreadExceptionResponse(final int id, final String name) {
-            this.id = id;
-            this.name = name;
-        }
-    }
-
-    /**
-     * Enumeration that describes the response from the exception handler.
-     */
-    enum GlobalThreadExceptionResponse {
-        SHUTDOWN_KAFKA_STREAMS_CLIENT(2, "SHUTDOWN_KAFKA_STREAMS_CLIENT");
-
-        /** an english description of the api--this is for debugging and can change */
-        public final String name;
-
-        /** the permanent and immutable id of an API--this can't change ever */
-        public final int id;
-
-        GlobalThreadExceptionResponse(final int id, final String name) {
             this.id = id;
             this.name = name;
         }

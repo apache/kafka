@@ -214,7 +214,17 @@ public class GlobalStreamThread extends Thread {
         this.log = logContext.logger(getClass());
         this.cache = new ThreadCache(logContext, cacheSizeBytes, this.streamsMetrics);
         this.stateRestoreListener = stateRestoreListener;
-        this.streamsUncaughtExceptionHandler = new StreamsUncaughtExceptionHandler() { };
+        this.streamsUncaughtExceptionHandler = new StreamsUncaughtExceptionHandler() {
+            /**
+             * Inspect the exception received in a stream thread and respond with an action.
+             *
+             * @param exception the actual exception
+             */
+            @Override
+            public StreamThreadExceptionResponse handle(final Throwable exception) {
+                return StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
+            }
+        };
     }
 
     static class StateConsumer {
@@ -314,9 +324,15 @@ public class GlobalStreamThread extends Thread {
                 "Updating global state failed. You can restart KafkaStreams to recover from this error.",
                 recoverableException
             );
-            this.streamsUncaughtExceptionHandler.handleExceptionInGlobalThread(e);
+            if (this.streamsUncaughtExceptionHandler.handle(e) == StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_APPLICATION) {
+                log.warn("Exception in global stream thread cause the application to attempt to shutdown." +
+                        " This action will succeed only if there is at least one StreamThread running on ths client");
+            }
         } catch (final Exception e) {
-            this.streamsUncaughtExceptionHandler.handleExceptionInGlobalThread(e);
+            if (this.streamsUncaughtExceptionHandler.handle(e) == StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_APPLICATION) {
+                log.warn("Exception in global stream thread cause the application to attempt to shutdown." +
+                        " This action will succeed only if there is at least one StreamThread running on ths client");
+            }
         } finally {
             // set the state to pending shutdown first as it may be called due to error;
             // its state may already be PENDING_SHUTDOWN so it will return false but we

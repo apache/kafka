@@ -68,7 +68,6 @@ import static org.apache.kafka.streams.processor.internals.ClientUtils.getShared
 
 public class StreamThread extends Thread {
 
-
     /**
      * Stream thread states are the possible states that a stream thread can be in.
      * A thread must only be in one state at a time
@@ -286,8 +285,8 @@ public class StreamThread extends Thread {
     private final InternalTopologyBuilder builder;
 
     private final AtomicInteger assignmentErrorCode;
-
     private final ShutdownErrorHook shutdownErrorHook;
+    private boolean newHandler = false;
 
     public interface ShutdownErrorHook {
         void shutdown();
@@ -306,8 +305,9 @@ public class StreamThread extends Thread {
                                       final StateDirectory stateDirectory,
                                       final StateRestoreListener userStateRestoreListener,
                                       final int threadIdx,
-                                      final AtomicInteger assignmentErrorCode,
-                                      final ShutdownErrorHook shutdownErrorHook) {
+                                      final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler,
+                                      final ShutdownErrorHook shutdownErrorHook,
+                                      final AtomicInteger assignmentErrorCode) {
         final String threadId = clientId + "-StreamThread-" + threadIdx;
 
         final String logPrefix = String.format("stream-thread [%s] ", threadId);
@@ -399,8 +399,9 @@ public class StreamThread extends Thread {
             threadId,
             logContext,
             nextScheduledRebalanceMs,
-            assignmentErrorCode,
-            shutdownErrorHook
+            streamsUncaughtExceptionHandler,
+            shutdownErrorHook,
+            assignmentErrorCode
         );
 
         taskManager.setPartitionResetter(partitions -> streamThread.resetOffsets(partitions, null));
@@ -451,12 +452,12 @@ public class StreamThread extends Thread {
                         final String threadId,
                         final LogContext logContext,
                         final AtomicLong nextProbingRebalanceMs,
-                        final AtomicInteger assignmentErrorCode,
-                        final ShutdownErrorHook shutdownErrorHook) {
+                        final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler,
+                        final ShutdownErrorHook shutdownErrorHook,
+                        final AtomicInteger assignmentErrorCode) {
         super(threadId);
         this.stateLock = new Object();
 
-        this.shutdownErrorHook = shutdownErrorHook;
         this.adminClient = adminClient;
         this.streamsMetrics = streamsMetrics;
         this.commitSensor = ThreadMetrics.commitSensor(threadId, streamsMetrics);
@@ -490,7 +491,8 @@ public class StreamThread extends Thread {
         this.logPrefix = logContext.logPrefix();
         this.log = logContext.logger(StreamThread.class);
         this.rebalanceListener = new StreamsRebalanceListener(time, taskManager, this, this.log, this.assignmentErrorCode);
-        this.streamsUncaughtExceptionHandler = new StreamsUncaughtExceptionHandler() { };
+        this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
+        this.shutdownErrorHook = shutdownErrorHook;
         this.taskManager = taskManager;
         this.restoreConsumer = restoreConsumer;
         this.mainConsumer = mainConsumer;
@@ -584,8 +586,15 @@ public class StreamThread extends Thread {
             } catch (final TaskMigratedException e) {
                 handleTaskMigrated(e);
             } catch (final Exception e) {
-                final StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse action = streamsUncaughtExceptionHandler.handleExceptionInStreamThread(e);
-                if (action != StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_KAFKA_STREAMS_APPLICATION) {
+                if (newHandler || Thread.getDefaultUncaughtExceptionHandler() == null) {
+                    if (Thread.getDefaultUncaughtExceptionHandler() != null) {
+                        log.error("Stream's new uncaught exception handler is set as well as the deprecated old handler." +
+                                "The old handler will be ignored as long as a new handler is set.");
+                    }
+                    if (this.streamsUncaughtExceptionHandler.handle(e) != StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_APPLICATION) {
+                        throw e;
+                    }
+                } else {
                     throw e;
                 }
             }
@@ -599,7 +608,9 @@ public class StreamThread extends Thread {
      */
     public void setStreamsUncaughtExceptionHandler(final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
+        this.newHandler = true;
     }
+
 
     public void shutdownToError() {
         shutdownErrorHook.shutdown();

@@ -48,13 +48,13 @@ import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
-import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_KAFKA_STREAMS_APPLICATION;
-import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_KAFKA_STREAMS_CLIENT;
-import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_STREAM_THREAD;
+import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_APPLICATION;
+import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateBeforeTest;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.purgeLocalStreamsState;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
@@ -117,7 +117,7 @@ public class StreamsHandlerIntegrationTest {
     }
 
     @Test
-    public void shouldShutdownThread() throws Exception {
+    public void shouldShutdownThreadUsingOldHandler() throws Exception {
         //
         //
         // Also note that this is an integration test because so many components have to come together to
@@ -127,13 +127,8 @@ public class StreamsHandlerIntegrationTest {
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
             final CountDownLatch latch = new CountDownLatch(1);
             kafkaStreams.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
-
-            kafkaStreams.setUncaughtExceptionHandler(new StreamsUncaughtExceptionHandler() {
-                @Override
-                public StreamThreadExceptionResponse handleExceptionInStreamThread(final Throwable exception) {
-                    return SHUTDOWN_STREAM_THREAD;
-                }
-            });
+            final AtomicBoolean flag = new AtomicBoolean(false);
+            kafkaStreams.setUncaughtExceptionHandler((t, e) -> flag.set(true));
 
             kafkaStreams.start();
 
@@ -142,6 +137,7 @@ public class StreamsHandlerIntegrationTest {
 
             assertThat(processorValueCollector.size(), equalTo(2));
             assertThat(kafkaStreams.state(), equalTo(KafkaStreams.State.ERROR));
+            assertThat("handler was called", flag.get());
         }
     }
 
@@ -157,12 +153,7 @@ public class StreamsHandlerIntegrationTest {
             final CountDownLatch latch = new CountDownLatch(1);
             kafkaStreams.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
 
-            kafkaStreams.setUncaughtExceptionHandler(new StreamsUncaughtExceptionHandler() {
-                @Override
-                public StreamThreadExceptionResponse handleExceptionInStreamThread(final Throwable exception) {
-                    return SHUTDOWN_KAFKA_STREAMS_CLIENT;
-                }
-            });
+            kafkaStreams.setUncaughtExceptionHandler(exception -> SHUTDOWN_CLIENT);
 
             kafkaStreams.start();
 
@@ -191,18 +182,7 @@ public class StreamsHandlerIntegrationTest {
             final CountDownLatch latch = new CountDownLatch(1);
             kafkaStreams.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
             kafkaStreams1.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
-            kafkaStreams.setUncaughtExceptionHandler(new StreamsUncaughtExceptionHandler() {
-                @Override
-                public StreamThreadExceptionResponse handleExceptionInStreamThread(final Throwable exception) {
-                    return SHUTDOWN_KAFKA_STREAMS_APPLICATION;
-                }
-            });
-            kafkaStreams1.setUncaughtExceptionHandler(new StreamsUncaughtExceptionHandler() {
-                @Override
-                public StreamThreadExceptionResponse handleExceptionInStreamThread(final Throwable exception) {
-                    return SHUTDOWN_KAFKA_STREAMS_APPLICATION;
-                }
-            });
+            kafkaStreams.setUncaughtExceptionHandler(exception -> SHUTDOWN_APPLICATION);
 
             kafkaStreams.start();
             kafkaStreams1.start();
@@ -211,9 +191,10 @@ public class StreamsHandlerIntegrationTest {
             produceMessages(0L, inputTopic, "A");
             latch.await(30, TimeUnit.SECONDS);
 
-            assertThat(processorValueCollector.size(), equalTo(1));
+
             assertThat(kafkaStreams.state(), equalTo(KafkaStreams.State.ERROR));
             assertThat(kafkaStreams1.state(), equalTo(KafkaStreams.State.ERROR));
+            assertThat(processorValueCollector.size(), equalTo(1));
         }
     }
 
@@ -249,18 +230,8 @@ public class StreamsHandlerIntegrationTest {
             final CountDownLatch latch = new CountDownLatch(1);
             kafkaStreams.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
             kafkaStreams1.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
-            kafkaStreams.setUncaughtExceptionHandler(new StreamsUncaughtExceptionHandler() {
-                @Override
-                public StreamThreadExceptionResponse handleExceptionInStreamThread(final Throwable exception) {
-                    return SHUTDOWN_KAFKA_STREAMS_APPLICATION;
-                }
-            });
-            kafkaStreams1.setUncaughtExceptionHandler(new StreamsUncaughtExceptionHandler() {
-                @Override
-                public StreamThreadExceptionResponse handleExceptionInStreamThread(final Throwable exception) {
-                    return SHUTDOWN_KAFKA_STREAMS_APPLICATION;
-                }
-            });
+            kafkaStreams.setUncaughtExceptionHandler(exception -> SHUTDOWN_APPLICATION);
+            kafkaStreams1.setUncaughtExceptionHandler(exception -> SHUTDOWN_APPLICATION);
 
             kafkaStreams.start();
             kafkaStreams1.start();
