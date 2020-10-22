@@ -129,7 +129,7 @@ public class MirrorSourceConnectorTest {
         Config targetConfig = connector.targetConfig(config);
         assertTrue("should replicate properties", targetConfig.entries().stream()
             .anyMatch(x -> x.name().equals("name-1")));
-        assertFalse("should not replicate blacklisted properties", targetConfig.entries().stream()
+        assertFalse("should not replicate excluded properties", targetConfig.entries().stream()
             .anyMatch(x -> x.name().equals("min.insync.replicas")));
     }
 

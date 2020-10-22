@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.protocol.types;
 
+import org.apache.kafka.common.UUID;
 import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.utils.ByteUtils;
@@ -23,7 +24,6 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.Optional;
-import java.util.UUID;
 
 /**
  * A serializable type
@@ -331,14 +331,14 @@ public abstract class Type {
     public static final DocumentedType UUID = new DocumentedType() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
-            final java.util.UUID uuid = (java.util.UUID) o;
+            final UUID uuid = (UUID) o;
             buffer.putLong(uuid.getMostSignificantBits());
             buffer.putLong(uuid.getLeastSignificantBits());
         }
 
         @Override
         public Object read(ByteBuffer buffer) {
-            return new java.util.UUID(buffer.getLong(), buffer.getLong());
+            return new UUID(buffer.getLong(), buffer.getLong());
         }
 
         @Override
@@ -361,7 +361,7 @@ public abstract class Type {
 
         @Override
         public String documentation() {
-            return "Represents a java.util.UUID. " +
+            return "Represents a type 4 immutable universally unique identifier (UUID). " +
                     "The values are encoded using sixteen bytes in network byte order (big-endian).";
         }
     };
