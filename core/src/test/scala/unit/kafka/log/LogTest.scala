@@ -649,7 +649,7 @@ class LogTest {
     log.close()
 
     // Force recovery by setting the recoveryPoint to the log start
-    log = createLog(logDir, logConfig, recoveryPoint = 0L)
+    log = createLog(logDir, logConfig, recoveryPoint = 0L, lastShutdownClean = false)
     assertEquals(secondAppendTimestamp, log.producerStateManager.lastEntry(producerId).get.lastTimestamp)
     log.close()
   }
@@ -2330,12 +2330,12 @@ class LogTest {
       assertEquals("Should have same number of time index entries as before.", numTimeIndexEntries, log.activeSegment.timeIndex.entries)
     }
 
-    log = createLog(logDir, logConfig, recoveryPoint = lastOffset)
+    log = createLog(logDir, logConfig, recoveryPoint = lastOffset, lastShutdownClean = false)
     verifyRecoveredLog(log, lastOffset)
     log.close()
 
     // test recovery case
-    log = createLog(logDir, logConfig)
+    log = createLog(logDir, logConfig, lastShutdownClean = false)
     verifyRecoveredLog(log, lastOffset)
     log.close()
   }
@@ -3082,7 +3082,7 @@ class LogTest {
     segment.close()
 
     val logConfig = LogTest.createLogConfig(indexIntervalBytes = 1, fileDeleteDelayMs = 1000)
-    val log = createLog(logDir, logConfig, recoveryPoint = Long.MaxValue, lastShutdownClean = true)
+    val log = createLog(logDir, logConfig, recoveryPoint = Long.MaxValue)
 
     val segmentWithOverflow = LogTest.firstOverflowSegment(log).getOrElse {
       Assertions.fail("Failed to create log with a segment which has overflowed offsets")
@@ -3108,7 +3108,7 @@ class LogTest {
 
     // Run recovery on the log. This should split the segment underneath. Ignore .deleted files as we could have still
     // have them lying around after the split.
-    val recoveredLog = recoverAndCheck(logConfig, expectedKeys, hadCleanShutdown = false)
+    val recoveredLog = recoverAndCheck(logConfig, expectedKeys)
     assertEquals(expectedKeys, LogTest.keysInLog(recoveredLog))
 
     // Running split again would throw an error
@@ -3141,7 +3141,7 @@ class LogTest {
     for (file <- logDir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix))
       Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
 
-    val recoveredLog = recoverAndCheck(logConfig, expectedKeys, hadCleanShutdown = false)
+    val recoveredLog = recoverAndCheck(logConfig, expectedKeys)
     assertEquals(expectedKeys, LogTest.keysInLog(recoveredLog))
     assertEquals(numSegmentsInitial + 1, recoveredLog.logSegments.size)
     recoveredLog.close()
@@ -3169,7 +3169,7 @@ class LogTest {
     for (file <- logDir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix))
       Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
 
-    val recoveredLog = recoverAndCheck(logConfig, expectedKeys, hadCleanShutdown = false)
+    val recoveredLog = recoverAndCheck(logConfig, expectedKeys)
     assertEquals(expectedKeys, LogTest.keysInLog(recoveredLog))
     assertEquals(numSegmentsInitial + 1, recoveredLog.logSegments.size)
     recoveredLog.close()
@@ -3196,7 +3196,7 @@ class LogTest {
     // Truncate the old segment
     segmentWithOverflow.truncateTo(0)
 
-    val recoveredLog = recoverAndCheck(logConfig, expectedKeys, hadCleanShutdown = false)
+    val recoveredLog = recoverAndCheck(logConfig, expectedKeys)
     assertEquals(expectedKeys, LogTest.keysInLog(recoveredLog))
     assertEquals(numSegmentsInitial + 1, recoveredLog.logSegments.size)
     log.close()
@@ -3222,7 +3222,7 @@ class LogTest {
     // Truncate the old segment
     segmentWithOverflow.truncateTo(0)
 
-    val recoveredLog = recoverAndCheck(logConfig, expectedKeys, hadCleanShutdown = false)
+    val recoveredLog = recoverAndCheck(logConfig, expectedKeys)
     assertEquals(expectedKeys, LogTest.keysInLog(recoveredLog))
     assertEquals(numSegmentsInitial + 1, recoveredLog.logSegments.size)
     recoveredLog.close()
@@ -3245,7 +3245,7 @@ class LogTest {
     // Truncate the old segment
     segmentWithOverflow.truncateTo(0)
 
-    val recoveredLog = recoverAndCheck(logConfig, expectedKeys, hadCleanShutdown = false)
+    val recoveredLog = recoverAndCheck(logConfig, expectedKeys)
     assertEquals(expectedKeys, LogTest.keysInLog(recoveredLog))
     assertEquals(numSegmentsInitial + 1, recoveredLog.logSegments.size)
     recoveredLog.close()
@@ -3265,9 +3265,11 @@ class LogTest {
     log.close()
 
     // check if recovery was attempted. Even if the recovery point is 0L, recovery should not be attempted as the
-    // clean shutdown file exists.
+    // clean shutdown file exists. Note: Earlier, Log layer relied on the presence of clean shutdown file to determine the status
+    // of last shutdown. Now, LogManager checks for the presence of this file and immediately deletes the same. It passes
+    // down a clean shutdown flag to the Log layer as log is loaded. Recovery is attempted based on this flag.
     recoveryPoint = log.logEndOffset
-    log = createLog(logDir, logConfig, lastShutdownClean = true)
+    log = createLog(logDir, logConfig)
     assertEquals(recoveryPoint, log.logEndOffset)
   }
 
@@ -4630,12 +4632,9 @@ class LogTest {
     (log, segmentWithOverflow)
   }
 
-  private def recoverAndCheck(config: LogConfig,
-                              expectedKeys: Iterable[Long],
-                              expectDeletedFiles: Boolean = true,
-                              hadCleanShutdown: Boolean): Log = {
-    LogTest.recoverAndCheck(logDir, config, expectedKeys, brokerTopicStats, mockTime, mockTime.scheduler,
-      hadCleanShutdown, expectDeletedFiles)
+  private def recoverAndCheck(config: LogConfig, expectedKeys: Iterable[Long], expectDeletedFiles: Boolean = true) = {
+    // method is called only in case of recovery from hard reset
+    LogTest.recoverAndCheck(logDir, config, expectedKeys, brokerTopicStats, mockTime, mockTime.scheduler, expectDeletedFiles)
   }
 
   private def readLog(log: Log,
@@ -4788,17 +4787,10 @@ object LogTest {
       yield TestUtils.readString(record.key).toLong
   }
 
-  def recoverAndCheck(logDir: File,
-                      config: LogConfig,
-                      expectedKeys: Iterable[Long],
-                      brokerTopicStats: BrokerTopicStats,
-                      time: Time,
-                      scheduler: Scheduler,
-                      hadCleanShutdown: Boolean,
-                      expectDeletedFiles: Boolean = false): Log = {
+  def recoverAndCheck(logDir: File, config: LogConfig, expectedKeys: Iterable[Long], brokerTopicStats: BrokerTopicStats, time: Time, scheduler: Scheduler, expectDeletedFiles: Boolean = false): Log = {
     // Recover log file and check that after recovery, keys are as expected
     // and all temporary files have been deleted
-    val recoveredLog = createLog(logDir, config, brokerTopicStats, scheduler, time, lastShutdownClean = hadCleanShutdown)
+    val recoveredLog = createLog(logDir, config, brokerTopicStats, scheduler, time, lastShutdownClean = false)
     time.sleep(config.fileDeleteDelayMs + 1)
     for (file <- logDir.listFiles) {
       if (!expectDeletedFiles)

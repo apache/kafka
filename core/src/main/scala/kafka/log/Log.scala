@@ -231,6 +231,8 @@ case object SegmentDeletion extends LogStartOffsetIncrementReason {
  * @param time The time instance used for checking the clock
  * @param maxProducerIdExpirationMs The maximum amount of time to wait before a producer id is considered expired
  * @param producerIdExpirationCheckIntervalMs How often to check for producer ids which need to be expired
+ * @param hadCleanShutdown boolean flag to indicate if the Log had a clean/graceful shutdown last time. true means
+ *                         clean shutdown whereas false means a crash.
  */
 @threadsafe
 class Log(@volatile private var _dir: File,
