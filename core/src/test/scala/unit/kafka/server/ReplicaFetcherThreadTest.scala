@@ -117,7 +117,7 @@ class ReplicaFetcherThreadTest {
     expect(log.latestEpoch).andReturn(Some(leaderEpoch)).once()
     expect(log.latestEpoch).andReturn(None).once()  // t2p1 doesnt support epochs
     if (ApiVersion.isTruncationOnFetchSupported(ibp))
-      expect(log.latestEpoch).andReturn(Some(leaderEpoch)).times(2) // to set lastFetchedEpoch
+      expect(log.latestEpoch).andReturn(Some(leaderEpoch)).times(3) // to set lastFetchedEpoch
     expect(log.endOffsetForEpoch(leaderEpoch)).andReturn(
       Some(OffsetAndEpoch(0, leaderEpoch))).anyTimes()
     expect(replicaManager.logManager).andReturn(logManager).anyTimes()
