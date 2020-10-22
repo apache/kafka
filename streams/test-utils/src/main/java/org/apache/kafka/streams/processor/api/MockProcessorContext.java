@@ -240,7 +240,15 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
      * @param stateDir a {@link File}, which the context makes available viw {@link MockProcessorContext#stateDir()}.
      */
     public MockProcessorContext(final Properties config, final TaskId taskId, final File stateDir) {
-        final StreamsConfig streamsConfig = new ClientUtils.QuietStreamsConfig(config);
+        final Properties configCopy = new Properties();
+        configCopy.putAll(config);
+        if (!configCopy.containsKey(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG)) {
+            configCopy.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-bootstrap-host:0");
+        }
+        if (!configCopy.containsKey(StreamsConfig.APPLICATION_ID_CONFIG)) {
+            configCopy.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "dummy-mock-app-id");
+        }
+        final StreamsConfig streamsConfig = new ClientUtils.QuietStreamsConfig(configCopy);
         this.taskId = taskId;
         this.config = streamsConfig;
         this.stateDir = stateDir;
