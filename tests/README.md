@@ -482,7 +482,7 @@ the test driver machine.
 
 * Start by making sure you're up to date, and install git and ducktape:
 
-        $ sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y python-pip git
+        $ sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y python3-pip git
         $ pip install ducktape
 
 * Get Kafka:
@@ -548,7 +548,7 @@ Where are the unit tests?
 
 How do I run the unit tests?
 * cd kafka/tests # The base system test directory
-* python setup.py test
+* python3 setup.py test
 
 How can I add a unit test?
 * Follow the naming conventions - module name starts with "check", class name begins with "Check", test method name begins with "check"
