@@ -29,9 +29,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
-import static org.apache.kafka.clients.CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.clients.CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC;
-import static org.apache.kafka.clients.CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 
 public class RaftConfig extends AbstractConfig {
@@ -57,15 +55,21 @@ public class RaftConfig extends AbstractConfig {
     private static final String QUORUM_ELECTION_BACKOFF_MAX_MS_DOC = "Maximum time in milliseconds before starting new elections. " +
         "This is used in the binary exponential backoff mechanism that helps prevent gridlocked elections";
 
+    private static final String QUORUM_REQUEST_TIMEOUT_MS_CONFIG = QUORUM_PREFIX +
+        CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG;
+
+    private static final String QUORUM_RETRY_BACKOFF_MS_CONFIG = QUORUM_PREFIX +
+        CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG;
+
     static {
         CONFIG = new ConfigDef()
-            .define(QUORUM_PREFIX + REQUEST_TIMEOUT_MS_CONFIG,
+            .define(QUORUM_REQUEST_TIMEOUT_MS_CONFIG,
                 ConfigDef.Type.INT,
                 20000,
                 atLeast(0),
                 ConfigDef.Importance.MEDIUM,
                 REQUEST_TIMEOUT_MS_DOC)
-            .define(QUORUM_PREFIX + RETRY_BACKOFF_MS_CONFIG,
+            .define(QUORUM_RETRY_BACKOFF_MS_CONFIG,
                 ConfigDef.Type.INT,
                 100,
                 atLeast(0L),
@@ -140,11 +144,11 @@ public class RaftConfig extends AbstractConfig {
     }
 
     public int requestTimeoutMs() {
-        return getInt(QUORUM_PREFIX + CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG);
+        return getInt(QUORUM_REQUEST_TIMEOUT_MS_CONFIG);
     }
 
     public int retryBackoffMs() {
-        return getInt(QUORUM_PREFIX + CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG);
+        return getInt(QUORUM_RETRY_BACKOFF_MS_CONFIG);
     }
 
     public int electionTimeoutMs() {
