@@ -143,7 +143,7 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
             case INIT_PRODUCER_ID:
                 return new InitProducerIdResponse(struct, version);
             case OFFSET_FOR_LEADER_EPOCH:
-                return new OffsetsForLeaderEpochResponse(struct);
+                return new OffsetsForLeaderEpochResponse(struct, version);
             case ADD_PARTITIONS_TO_TXN:
                 return new AddPartitionsToTxnResponse(struct, version);
             case ADD_OFFSETS_TO_TXN:

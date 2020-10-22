@@ -358,12 +358,12 @@ public final class MessageTest {
                         .setPartitionIndex(0)
                         .setLeaderEpoch(3)
                         .setCurrentLeaderEpoch(5);
+        OffsetForLeaderEpochRequestData data = new OffsetForLeaderEpochRequestData();
+        data.topics().add(new OffsetForLeaderEpochRequestData.OffsetForLeaderTopic()
+                .setName("foo")
+                .setPartitions(singletonList(partitionDataNoCurrentEpoch)));
 
-        testAllMessageRoundTrips(new OffsetForLeaderEpochRequestData().setTopics(singletonList(
-                new OffsetForLeaderEpochRequestData.OffsetForLeaderTopic()
-                        .setName("foo")
-                        .setPartitions(singletonList(partitionDataNoCurrentEpoch)))
-        ));
+        testAllMessageRoundTrips(data);
         testAllMessageRoundTripsBeforeVersion((short) 2, partitionDataWithCurrentEpoch, partitionDataNoCurrentEpoch);
         testAllMessageRoundTripsFromVersion((short) 2, partitionDataWithCurrentEpoch);
 

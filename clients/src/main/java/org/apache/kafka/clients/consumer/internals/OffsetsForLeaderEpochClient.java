@@ -65,8 +65,9 @@ public class OffsetsForLeaderEpochClient extends AsyncClient<
         Set<String> unauthorizedTopics = new HashSet<>();
         Map<TopicPartition, EpochEndOffset> endOffsets = new HashMap<>();
 
+        Map<TopicPartition, EpochEndOffset> responses = response.responses();
         for (TopicPartition topicPartition : requestData.keySet()) {
-            EpochEndOffset epochEndOffset = response.responses().get(topicPartition);
+            EpochEndOffset epochEndOffset = responses.get(topicPartition);
             if (epochEndOffset == null) {
                 logger().warn("Missing partition {} from response, ignoring", topicPartition);
                 partitionsToRetry.add(topicPartition);

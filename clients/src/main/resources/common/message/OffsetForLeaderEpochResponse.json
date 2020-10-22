@@ -18,7 +18,10 @@
   "type": "response",
   "name": "OffsetForLeaderEpochResponse",
   // Version 1 added the leader epoch to the response.
+  //
   // Version 2 added the throttle time.
+  //
+  // Version 3 is the same as version 2.
   "validVersions": "0-3",
   "flexibleVersions": "none",
   "fields": [
@@ -27,7 +30,7 @@
     { "name": "Topics", "type": "[]OffsetForLeaderTopicResult", "versions": "0+",
       "about": "Each topic we fetched offsets for.", "fields": [
       { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
-        "about": "The topic name." },
+        "mapKey": true, "about": "The topic name." },
       { "name": "Partitions", "type": "[]OffsetForLeaderPartitionResult", "versions": "0+",
         "about": "Each partition in the topic we fetched offsets for.", "fields": [
         { "name": "ErrorCode", "type": "int16", "versions": "0+",
