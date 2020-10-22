@@ -96,6 +96,8 @@ public class GlobalStateStoreProviderTest {
             .anyTimes();
         expect(mockContext.taskId()).andReturn(new TaskId(0, 0)).anyTimes();
         expect(mockContext.recordCollector()).andReturn(null).anyTimes();
+        expect(mockContext.keySerde()).andReturn(null).anyTimes();
+        expect(mockContext.valueSerde()).andReturn(null).anyTimes();
         replay(mockContext);
         for (final StateStore store : stores.values()) {
             store.init(mockContext, null);
