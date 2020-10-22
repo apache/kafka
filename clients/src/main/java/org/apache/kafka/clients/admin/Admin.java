@@ -45,6 +45,69 @@ import org.apache.kafka.common.requests.LeaveGroupResponse;
 /**
  * The administrative client for Kafka, which supports managing and inspecting topics, brokers, configurations and ACLs.
  * <p>
+ * Instances returned from the {@code create} methods of this interface are guaranteed to be thread safe.
+ * <p>
+ * The operations exposed by Admin follow a consistent pattern:
+ * <ul>
+ *     <li>Admin instances should be created using {@link Admin#create(Properties)} or {@link Admin#create(Map)}</li>
+ *     <li>Each operation typically has two overloaded methods, one which uses a default set of options and an
+ *     overloaded method where the last parameter is an explicit options object.
+ *     <li>The operation method's first parameter is a {@code Collection} of items to perform
+ *     the operation on. Batching multiple requests into a single call is more efficient and should be
+ *     preferred over multiple calls to the same method.
+ *     <li>The operation methods execute asynchronously.
+ *     <li>Each {@code xxx} operation method returns an {@code XxxResult} class with methods which expose
+ *     {@link org.apache.kafka.common.KafkaFuture} for accessing the result(s) of the operation.
+ *     <li>Typically an {@code all()} method is provided for getting the overall success/failure of the batch and a
+ *     {@code values()} method provided access to each item in a request batch.
+ *     Other methods may also be provided.
+ *     <li>For synchronous behaviour use {@link org.apache.kafka.common.KafkaFuture#get()}
+ * </ul>
+ * <p>
+ * Here is a simple example of using an Admin client instance to create a new topic:
+ * <pre>
+ * {@code
+ * Properties props = new Properties();
+ * props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+ *
+ * try (Admin admin = Admin.create(props)) {
+ *   String topicName = "my-topic";
+ *   int partitions = 12;
+ *   short replicationFactor = 3;
+ *   // Create a compacted topic
+ *   CreateTopicsResult result = admin.createTopics(Collections.singleton(
+ *     new NewTopic(topicName, partitions, replicationFactor)
+ *       .configs(Collections.singletonMap(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)));
+ *
+ *   // Call values() to get the result for a specific topic
+ *   KafkaFuture<Void> future = result.values().get(topicName);
+ *
+ *   // Call get() to block until the topic creation is complete or has failed
+ *   // if creation failed the ExecutionException wraps the underlying cause.
+ *   future.get();
+ * }
+ * }
+ * </pre>
+ *
+ * <h3>Bootstrap and balancing</h3>
+ * <p>
+ * The {@code bootstrap.servers} config in the {@code Map} or {@code Properties} passed
+ * to {@link Admin#create(Properties)} is only used for discovering the brokers in the cluster,
+ * which the client will then connect to as needed.
+ * As such, it is sufficient to include only two or three broker addresses to cope with the possibility of brokers
+ * being unavailable.
+ * <p>
+ * Different operations necessitate requests being sent to different nodes in the cluster. For example
+ * {@link #createTopics(Collection)} communicates with the controller, but {@link #describeTopics(Collection)}
+ * can talk to any broker. When the recipient does not matter the instance will try to use the broker with the
+ * fewest outstanding requests.
+ * <p>
+ * The client will transparently retry certain errors which are usually transient.
+ * For example if the request for {@code createTopics()} get sent to a node which was not the controller
+ * the metadata would be refreshed and the request re-sent to the controller.
+ *
+ * <h3>Broker Compatibility</h3>
+ * <p>
  * The minimum broker version required is 0.10.0.0. Methods with stricter requirements will specify the minimum broker
  * version required.
  * <p>
@@ -52,8 +115,6 @@ import org.apache.kafka.common.requests.LeaveGroupResponse;
  * manner, but we reserve the right to make breaking changes in minor releases, if necessary. We will update the
  * {@code InterfaceStability} annotation and this notice once the API is considered stable.
  * <p>
- * Instances returned from the {@code create} methods of this interface are guaranteed to be thread safe.
- * </p>
  */
 @InterfaceStability.Evolving
 public interface Admin extends AutoCloseable {
@@ -458,7 +519,6 @@ public interface Admin extends AutoCloseable {
      *
      * @param replicaAssignment     The replicas with their log directory absolute path
      * @return                      The AlterReplicaLogDirsResult
-     * @throws InterruptedException Interrupted while joining I/O thread
      */
     default AlterReplicaLogDirsResult alterReplicaLogDirs(Map<TopicPartitionReplica, String> replicaAssignment) {
         return alterReplicaLogDirs(replicaAssignment, new AlterReplicaLogDirsOptions());
@@ -477,7 +537,6 @@ public interface Admin extends AutoCloseable {
      * @param replicaAssignment     The replicas with their log directory absolute path
      * @param options               The options to use when changing replica dir
      * @return                      The AlterReplicaLogDirsResult
-     * @throws InterruptedException Interrupted while joining I/O thread
      */
     AlterReplicaLogDirsResult alterReplicaLogDirs(Map<TopicPartitionReplica, String> replicaAssignment,
                                                   AlterReplicaLogDirsOptions options);
