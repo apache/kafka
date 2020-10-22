@@ -404,7 +404,7 @@ https://cwiki.apache.org/confluence/display/KAFKA/tutorial+-+set+up+and+run+Kafk
 * Install system test dependencies, including ducktape, a command-line tool and library for testing distributed systems. We recommend to use virtual env for system test development
 
         $ cd kafka/tests
-        $ virtualenv venv
+        $ virtualenv -p python3 venv
         $ . ./venv/bin/activate
         $ python3 setup.py develop
         $ cd ..  # back to base kafka directory
