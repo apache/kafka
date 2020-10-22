@@ -45,7 +45,6 @@ import scala.jdk.CollectionConverters._
 import scala.collection._
 import scala.compat.java8.OptionConverters._
 import scala.concurrent.ExecutionException
-import scala.io.StdIn
 
 object TopicCommand extends Logging {
 
@@ -776,14 +775,5 @@ object TopicCommand extends Logging {
       CommandLineUtils.checkInvalidArgs(parser, options, excludeInternalTopicOpt, allTopicLevelOpts -- Set(listOpt, describeOpt))
     }
   }
-
-  def askToProceed(): Unit = {
-    println("Are you sure you want to continue? [y/n]")
-    if (!StdIn.readLine().equalsIgnoreCase("y")) {
-      println("Ending your session")
-      Exit.exit(0)
-    }
-  }
-
 }
 

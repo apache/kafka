@@ -22,12 +22,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
-import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
@@ -51,30 +46,17 @@ public class MeteredTimestampedKeyValueStore<K, V>
         super(inner, metricScope, time, keySerde, valueSerde);
     }
 
-    @Deprecated
-    @SuppressWarnings("unchecked")
-    void initStoreSerde(final ProcessorContext context) {
-        final String storeName = name();
-        final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
-        serdes = new StateSerdes<>(
-            changelogTopic != null ?
-                changelogTopic :
-                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName),
-            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-            valueSerde == null ? new ValueAndTimestampSerde<>((Serde<V>) context.valueSerde()) : valueSerde);
-    }
 
     @SuppressWarnings("unchecked")
-    void initStoreSerde(final StateStoreContext context) {
-        final String storeName = name();
-        final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
-        serdes = new StateSerdes<>(
-            changelogTopic != null ?
-                changelogTopic :
-                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName),
-            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-            valueSerde == null ? new ValueAndTimestampSerde<>((Serde<V>) context.valueSerde()) : valueSerde);
+    @Override
+    protected Serde<ValueAndTimestamp<V>> prepareValueSerdeForStore(final Serde<ValueAndTimestamp<V>> valueSerde, final Serde<?> contextKeySerde, final Serde<?> contextValueSerde) {
+        if (valueSerde == null) {
+            return new ValueAndTimestampSerde<>((Serde<V>) contextValueSerde);
+        } else {
+            return super.prepareValueSerdeForStore(valueSerde, contextKeySerde, contextValueSerde);
+        }
     }
+
 
     public RawAndDeserializedValue<V> getWithBinary(final K key) {
         try {

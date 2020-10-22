@@ -19,11 +19,12 @@ package org.apache.kafka.common.protocol;
 
 import org.apache.kafka.common.protocol.types.RawTaggedField;
 
+import org.apache.kafka.common.UUID;
+
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 public interface Readable {
     byte readByte();

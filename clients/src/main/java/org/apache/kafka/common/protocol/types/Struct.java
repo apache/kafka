@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.common.protocol.types;
 
+import org.apache.kafka.common.UUID;
 import org.apache.kafka.common.record.BaseRecords;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Objects;
-import java.util.UUID;
 
 /**
  * A record that can be serialized and deserialized according to a pre-defined schema

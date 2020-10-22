@@ -29,7 +29,7 @@ specific topics or groups:
     A->B.groups = group-1, group-2
 
 By default, all topics and consumer groups are replicated (except
-blacklisted ones), across all enabled replication flows. Each
+excluded ones), across all enabled replication flows. Each
 replication flow must be explicitly enabled to begin replication:
 
     A->B.enabled = true

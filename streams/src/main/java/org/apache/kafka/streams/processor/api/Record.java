@@ -52,7 +52,7 @@ public class Record<K, V> {
      * @param value The value of the record. May be null.
      * @param timestamp The timestamp of the record. May not be negative.
      * @param headers The headers of the record. May be null, which will cause subsequent calls
-     *                to {@link this#headers()} to return a non-null, empty, {@link Headers} collection.
+     *                to {@link #headers()} to return a non-null, empty, {@link Headers} collection.
      * @throws IllegalArgumentException if the timestamp is negative.
      * @see ProcessorContext#forward(Record)
      */
@@ -71,7 +71,7 @@ public class Record<K, V> {
 
     /**
      * Convenience constructor in case you do not wish to specify any headers.
-     * Subsequent calls to {@link this#headers()} will return a non-null, empty, {@link Headers} collection.
+     * Subsequent calls to {@link #headers()} will return a non-null, empty, {@link Headers} collection.
      *
      * @param key The key of the record. May be null.
      * @param value The value of the record. May be null.

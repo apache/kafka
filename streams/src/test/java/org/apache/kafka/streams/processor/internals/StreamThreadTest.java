@@ -965,7 +965,7 @@ public class StreamThreadTest {
 
         final ChangelogReader changelogReader = new MockChangelogReader() {
             @Override
-            public void restore() {
+            public void restore(final Map<TaskId, Task> tasks) {
                 consumer.addRecord(new ConsumerRecord<>(topic1, 1, 11, new byte[0], new byte[0]));
                 consumer.addRecord(new ConsumerRecord<>(topic1, 1, 12, new byte[1], new byte[0]));
 
@@ -1520,7 +1520,7 @@ public class StreamThreadTest {
         standbyTasks.put(task3, Collections.singleton(t2p1));
 
         thread.taskManager().handleAssignment(emptyMap(), standbyTasks);
-        thread.taskManager().tryToCompleteRestoration();
+        thread.taskManager().tryToCompleteRestoration(mockTime.milliseconds());
 
         thread.rebalanceListener().onPartitionsAssigned(Collections.emptyList());
 
