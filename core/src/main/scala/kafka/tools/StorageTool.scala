@@ -19,17 +19,17 @@ package kafka.tools
 
 import java.io.PrintStream
 import java.nio.file.{Files, Paths}
+import java.util.UUID
 
-import kafka.server.KafkaConfig
+import kafka.server.{BrokerMetadataCheckpoint, KafkaConfig, LegacyMetaProperties, MetaProperties}
 import kafka.utils.{Exit, Logging}
 import net.sourceforge.argparse4j.ArgumentParsers
-import net.sourceforge.argparse4j.impl.Arguments.{append, store, storeTrue}
-import net.sourceforge.argparse4j.inf.Namespace
+import net.sourceforge.argparse4j.impl.Arguments.{store, storeTrue}
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.mutable
-import scala.jdk.CollectionConverters._
+import scala.util.{Failure, Success, Try}
 
 /**
  * An exception thrown to indicate that the command has failed, but we don't want to
@@ -50,17 +50,25 @@ object StorageTool extends Logging {
         description("The Kafka storage tool.")
       val subparsers = parser.addSubparsers().dest("command")
 
-      val infoParser = subparsers.addParser("info")
-      val formatParser = subparsers.addParser("format")
+      val infoParser = subparsers.addParser("info").
+        help("Get information about the Kafka log directories on this node.")
+      val formatParser = subparsers.addParser("format").
+        help("Format the Kafka log directories on this node.")
+      subparsers.addParser("random-uuid").help("Print a random UUID.")
       List(infoParser, formatParser).foreach(parser => {
         parser.addArgument("--config", "-c").
           action(store()).
+          required(true).
           help("The Kafka configuration file to use.")
-        parser.addArgument("--directory", "-d").
-          action(append()).
-          help("The directories to use.")
       })
-      formatParser.addArgument("--force", "-f").
+      formatParser.addArgument("--incarnation-id", "-i").
+        action(store()).
+        help("The node incarnation ID to use.  You usually do not need to specify this.")
+      formatParser.addArgument("--cluster-id", "-t").
+        action(store()).
+        required(true).
+        help("The cluster ID to use.")
+      formatParser.addArgument("--ignore-formatted", "-g").
         action(storeTrue())
 
       val namespace = parser.parseArgsOrFail(args)
@@ -70,13 +78,20 @@ object StorageTool extends Logging {
 
       command match {
         case "info" => {
-          val directories = readDirectoryOptions(config, namespace)
+          val directories = configToLogDirectories(config)
           Exit.exit(infoCommand(System.out, directories))
         }
         case "format" => {
-          val directories = readDirectoryOptions(config, namespace)
-          val force = namespace.getBoolean("force")
-          Exit.exit(format(System.out, directories, force))
+          val directories = configToLogDirectories(config)
+          val incarnationId = Option(namespace.getString("incarnation_id"))
+          val clusterId = namespace.getString("cluster_id")
+          val ignoreFormatted = namespace.getBoolean("ignore_formatted")
+          Exit.exit(formatCommand(System.out, directories, incarnationId,
+            clusterId, ignoreFormatted ))
+        }
+        case "random-uuid" => {
+          System.out.println(UUID.randomUUID())
+          Exit.exit(0)
         }
         case _ => {
           throw new RuntimeException(s"Unknown command $command")
@@ -89,22 +104,14 @@ object StorageTool extends Logging {
     }
   }
 
-  def readDirectoryOptions(config: Option[KafkaConfig], namespace: Namespace): Seq[String] = {
-    val directoryList = Option(namespace.getList[String]("directory"))
-    if (directoryList.isDefined) {
-      directoryList.get.asScala.toSeq
-    } else if (config.isDefined) {
-      config.get.logDirs.toSeq
-    } else {
-      throw new TerseFailure("You must specify either --directory or --config")
-    }
+  def configToLogDirectories(config: Option[KafkaConfig]): Seq[String] = {
+    config.get.logDirs.toSeq
   }
 
   def infoCommand(stream: PrintStream, directories: Seq[String]): Int = {
     val problems = new mutable.ArrayBuffer[String]
     val foundDirectories = new mutable.ArrayBuffer[String]
-    var prevKip500: Option[Boolean] = None
-    var prevClusterId: Option[String] = None
+    var prevMetadata: Option[Either[LegacyMetaProperties, MetaProperties]] = None
     directories.sorted.foreach(directory => {
       val directoryPath = Paths.get(directory)
       if (!Files.isDirectory(directoryPath)) {
@@ -119,27 +126,28 @@ object StorageTool extends Logging {
         if (!Files.exists(metaPath)) {
           problems += s"${directoryPath} is not formatted."
         } else {
-          val props = Utils.loadProps(metaPath.toString)
-          val clusterId = props.getProperty("cluster.id")
-          if (clusterId == null) {
-            problems += s"${metaPath} does not contain cluster.id."
-          } else {
-            if (prevClusterId.isDefined) {
-              if (!prevClusterId.get.equals(clusterId)) {
-                problems += s"${metaPath} has a different cluster id than the other directories."
+          val properties = Utils.loadProps(metaPath.toString)
+          Try(MetaProperties.version(properties)) match {
+            case Failure(exception) =>
+              problems += s"Unable to find version in ${metaPath}: ${exception.toString}"
+            case Success(version) => {
+              val curMetadata: Option[Either[LegacyMetaProperties, MetaProperties]] = version match {
+                case 0 => Some(Left(LegacyMetaProperties(properties)))
+                case 1 => Some(Right(MetaProperties(properties)))
+                case v => {
+                  problems += s"Unsupported version for ${metaPath}: ${v}"
+                  None
+                }
               }
-            } else {
-              prevClusterId = Some(clusterId)
+              if (prevMetadata.isEmpty) {
+                prevMetadata = curMetadata
+              } else {
+                if (!prevMetadata.get.equals(curMetadata.get)) {
+                  problems += s"Metadata for ${metaPath} was ${curMetadata.get}, " +
+                    s"but other directories featured ${prevMetadata.get}"
+                }
+              }
             }
-          }
-          val kip500prop = props.getProperty("kip.500")
-          val kip500 = kip500prop != null && kip500prop.equals("true")
-          if (prevKip500.isDefined) {
-            if (prevKip500.get != kip500) {
-              problems += s"${metaPath} has a different value for kip.500 than the other directories."
-            }
-          } else {
-            prevKip500 = Some(kip500)
           }
         }
       }
@@ -154,13 +162,14 @@ object StorageTool extends Logging {
         foundDirectories.foreach(d => stream.println("  %s".format(d)))
         stream.println("")
       }
-      if (prevClusterId.isDefined) {
-        stream.println(s"ClusterId: ${prevClusterId.get}")
+      if (prevMetadata.isDefined) {
+        stream.println("Found metadata: %s".format(
+          prevMetadata.get match {
+            case Left(p) => p.toString
+            case Right(p) => p.toString
+          }))
+        stream.println("")
       }
-      if (prevKip500.isDefined) {
-        stream.println(s"KIP-500 mode: ${prevKip500.get}")
-      }
-      stream.println("")
       if (problems.size > 0) {
         stream.println("Found problem%s:".format(
           if (problems.size == 1) "" else "s"))
@@ -173,8 +182,60 @@ object StorageTool extends Logging {
     }
   }
 
-  def format(stream: PrintStream, directories: Seq[String], force: Boolean): Int = {
-    stream.println(s"force ${directories} ${force}")
+  def formatCommand(stream: PrintStream,
+                    directories: Seq[String],
+                    incarnationId: Option[String],
+                    clusterId: String,
+                    ignoreFormatted: Boolean): Int = {
+    if (directories.isEmpty) {
+      throw new TerseFailure("No log directories found in the configuration.")
+    }
+    val unformattedDirectories = directories.filter(directory => {
+      if (Files.isDirectory(Paths.get(directory))) {
+        if (!ignoreFormatted && Files.exists(Paths.get(directory, "meta.properties"))) {
+          throw new TerseFailure(s"Log directory ${directory} is already formatted. " +
+            "Use --ignore-formatted to ignore this directory and format the others.")
+        }
+        false
+      } else {
+        true
+      }
+    })
+    if (unformattedDirectories.isEmpty) {
+      throw new TerseFailure("All of the log directories are already formatted.")
+    }
+    val effectiveIncarnationId = incarnationId match {
+      case None => {
+        val newUuid = UUID.randomUUID()
+        stream.println(s"Generating random incarnation ID: ${newUuid}")
+        newUuid
+      }
+      case Some(str) => try {
+        UUID.fromString(str)
+      } catch {
+        case e: Throwable => throw new TerseFailure(s"Incarnation ID string ${str} " +
+          s"does not appear to be a valid UUID: ${e.getMessage}")
+      }
+    }
+    val effectiveClusterId = try {
+      UUID.fromString(clusterId)
+    } catch {
+      case e: Throwable => throw new TerseFailure(s"Cluster ID string ${clusterId} " +
+        s"does not appear to be a valid UUID: ${e.getMessage}")
+    }
+    val metaProperties = new MetaProperties(effectiveIncarnationId, effectiveClusterId)
+    unformattedDirectories.foreach(directory => {
+      try {
+        Files.createDirectories(Paths.get(directory))
+      } catch {
+        case e: Throwable => throw new TerseFailure(s"Unable to create storage " +
+          s"directory ${directory}: ${e.getMessage}")
+      }
+      val metaPropertiesPath = Paths.get(directory, "meta.properties")
+      val checkpoint = new BrokerMetadataCheckpoint(metaPropertiesPath.toFile)
+      checkpoint.write(metaProperties.toProperties())
+      stream.println(s"Formatting ${metaPropertiesPath}")
+    })
     0
   }
 }

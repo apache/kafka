@@ -292,7 +292,7 @@ abstract class KafkaBroker(val config: KafkaConfig,
         val brokerEpoch = zkClient.registerBroker(brokerInfo)
 
         // Now that the broker is successfully registered, checkpoint its metadata
-        checkpointBrokerMetadata(BrokerMetadata(config.brokerId, Some(clusterId)))
+        checkpointBrokerMetadata(LegacyMetaProperties(config.brokerId, Some(clusterId)))
 
         /* start token manager */
         tokenManager = new DelegationTokenManager(config, tokenCache, time , zkClient)
@@ -756,18 +756,18 @@ abstract class KafkaBroker(val config: KafkaConfig,
    *
    * @return A 2-tuple containing the brokerMetadata and a sequence of offline log directories.
    */
-  private def getBrokerMetadataAndOfflineDirs: (BrokerMetadata, Seq[String]) = {
-    val brokerMetadataMap = mutable.HashMap[String, BrokerMetadata]()
-    val brokerMetadataSet = mutable.HashSet[BrokerMetadata]()
+  private def getBrokerMetadataAndOfflineDirs: (LegacyMetaProperties, Seq[String]) = {
+    val brokerMetadataMap = mutable.HashMap[String, LegacyMetaProperties]()
+    val brokerMetadataSet = mutable.HashSet[LegacyMetaProperties]()
     val offlineDirs = mutable.ArrayBuffer.empty[String]
 
     for (logDir <- config.logDirs) {
       try {
-        val brokerMetadataOpt = brokerMetadataCheckpoints(logDir).read()
-        brokerMetadataOpt.foreach { brokerMetadata =>
+        brokerMetadataCheckpoints(logDir).read().foreach(properties => {
+          val brokerMetadata = LegacyMetaProperties(properties)
           brokerMetadataMap += (logDir -> brokerMetadata)
           brokerMetadataSet += brokerMetadata
-        }
+        })
       } catch {
         case e: IOException =>
           offlineDirs += logDir
@@ -788,7 +788,7 @@ abstract class KafkaBroker(val config: KafkaConfig,
     } else if (brokerMetadataSet.size == 1)
       (brokerMetadataSet.last, offlineDirs)
     else
-      (BrokerMetadata(-1, None), offlineDirs)
+      (LegacyMetaProperties(-1, None), offlineDirs)
   }
 
 
@@ -797,10 +797,10 @@ abstract class KafkaBroker(val config: KafkaConfig,
    *
    * @param brokerMetadata
    */
-  private def checkpointBrokerMetadata(brokerMetadata: BrokerMetadata) = {
+  private def checkpointBrokerMetadata(brokerMetadata: LegacyMetaProperties) = {
     for (logDir <- config.logDirs if logManager.isLogDirOnline(new File(logDir).getAbsolutePath)) {
       val checkpoint = brokerMetadataCheckpoints(logDir)
-      checkpoint.write(brokerMetadata)
+      checkpoint.write(brokerMetadata.toProperties())
     }
   }
 
@@ -814,7 +814,7 @@ abstract class KafkaBroker(val config: KafkaConfig,
    *
    * @return The brokerId.
    */
-  private def getOrGenerateBrokerId(brokerMetadata: BrokerMetadata): Int = {
+  private def getOrGenerateBrokerId(brokerMetadata: LegacyMetaProperties): Int = {
     val brokerId = config.brokerId
 
     if (brokerId >= 0 && brokerMetadata.brokerId >= 0 && brokerMetadata.brokerId != brokerId)
