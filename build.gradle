@@ -472,7 +472,7 @@ subprojects {
       zincVersion = versions.zinc
     }
 
-    task scaladocJar(type:Jar) {
+    task scaladocJar(type:Jar, dependsOn: scaladoc) {
       classifier = 'scaladoc'
       from "$rootDir/LICENSE"
       from "$rootDir/NOTICE"
@@ -942,6 +942,7 @@ project(':core') {
     from(project(':streams').jar) { into("libs/") }
     from(project(':streams').configurations.runtime) { into("libs/") }
     from(project(':streams:streams-scala').jar) { into("libs/") }
+    from(project(':streams:streams-scala').configurations.archives.artifacts.files.filter { file -> file.name.matches(".*scaladoc.*")}) { into("libs/") }
     from(project(':streams:streams-scala').configurations.runtime) { into("libs/") }
     from(project(':streams:test-utils').jar) { into("libs/") }
     from(project(':streams:test-utils').configurations.runtime) { into("libs/") }
@@ -1439,7 +1440,7 @@ project(':streams:streams-scala') {
   }
 
   jar {
-    dependsOn 'copyDependantLibs'
+    dependsOn 'copyDependantLibs' , 'scaladocJar'
   }
 
   test.dependsOn(':spotlessScalaCheck')
