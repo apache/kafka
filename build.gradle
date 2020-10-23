@@ -1440,7 +1440,7 @@ project(':streams:streams-scala') {
   }
 
   jar {
-    dependsOn 'copyDependantLibs' , 'scaladocJar'
+    dependsOn 'copyDependantLibs'
   }
 
   test.dependsOn(':spotlessScalaCheck')
