@@ -92,6 +92,39 @@ object KafkaBroker {
       .timeWindow(kafkaConfig.metricSampleWindowMs, TimeUnit.MILLISECONDS)
   }
 
+  //properties for MetricsContext
+  private val metricsPrefix: String = "kafka.server"
+  private val KAFKA_CLUSTER_ID: String = "kafka.cluster.id"
+  private val KAFKA_BROKER_ID: String = "kafka.broker.id"
+
+  private[server] def createKafkaMetricsContext(clusterId: String,
+                                                config: KafkaConfig) : KafkaMetricsContext = {
+    val contextLabels = new util.HashMap[String, Object]
+    contextLabels.put(KAFKA_CLUSTER_ID, clusterId)
+    contextLabels.put(KAFKA_BROKER_ID, config.brokerId.toString)
+    contextLabels.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX))
+    val metricsContext = new KafkaMetricsContext(metricsPrefix, contextLabels)
+    metricsContext
+  }
+
+  private[server] def notifyClusterListeners(clusterId: String,
+                                             clusterListeners: Seq[AnyRef]): Unit = {
+    val clusterResourceListeners = new ClusterResourceListeners
+    clusterResourceListeners.maybeAddAll(clusterListeners.asJava)
+    clusterResourceListeners.onUpdate(new ClusterResource(clusterId))
+  }
+
+  private[server] def notifyMetricsReporters(clusterId: String,
+                                             config: KafkaConfig,
+                                             metricsReporters: Seq[AnyRef]): Unit = {
+    val metricsContext = KafkaBroker.createKafkaMetricsContext(clusterId, config)
+    metricsReporters.foreach {
+      case x: MetricsReporter => x.contextChange(metricsContext)
+      case _ => //do nothing
+    }
+  }
+
+
   val MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS: Long = 120000
 }
 
@@ -103,16 +136,13 @@ abstract class KafkaBroker(val config: KafkaConfig,
                            time: Time,
                            threadNamePrefix: Option[String],
                            kafkaMetricsReporters: Seq[KafkaMetricsReporter]) extends Logging with KafkaMetricsGroup {
+  import KafkaBroker._
+
   private val startupComplete = new AtomicBoolean(false)
   private val isShuttingDown = new AtomicBoolean(false)
   private val isStartingUp = new AtomicBoolean(false)
 
   private var shutdownLatch = new CountDownLatch(1)
-
-  //properties for MetricsContext
-  private val metricsPrefix: String = "kafka.server"
-  private val KAFKA_CLUSTER_ID: String = "kafka.cluster.id"
-  private val KAFKA_BROKER_ID: String = "kafka.broker.id"
 
 
   private var logContext: LogContext = null
@@ -255,14 +285,14 @@ abstract class KafkaBroker(val config: KafkaConfig,
         reporters.add(jmxReporter)
 
         val metricConfig = KafkaBroker.metricConfig(config)
-        val metricsContext = createKafkaMetricsContext()
+        val metricsContext = KafkaBroker.createKafkaMetricsContext(_clusterId, config)
         metrics = new Metrics(metricConfig, reporters, time, true, metricsContext)
 
         /* register broker metrics */
         _brokerTopicStats = new BrokerTopicStats
 
         quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
-        notifyClusterListeners(kafkaMetricsReporters ++ metrics.reporters.asScala)
+        notifyClusterListeners(_clusterId, kafkaMetricsReporters ++ metrics.reporters.asScala)
 
         logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
 
@@ -383,29 +413,6 @@ abstract class KafkaBroker(val config: KafkaConfig,
         shutdown()
         throw e
     }
-  }
-
-  private[server] def notifyClusterListeners(clusterListeners: Seq[AnyRef]): Unit = {
-    val clusterResourceListeners = new ClusterResourceListeners
-    clusterResourceListeners.maybeAddAll(clusterListeners.asJava)
-    clusterResourceListeners.onUpdate(new ClusterResource(clusterId))
-  }
-
-  private[server] def notifyMetricsReporters(metricsReporters: Seq[AnyRef]): Unit = {
-    val metricsContext = createKafkaMetricsContext()
-    metricsReporters.foreach {
-      case x: MetricsReporter => x.contextChange(metricsContext)
-      case _ => //do nothing
-    }
-  }
-
-  private[server] def createKafkaMetricsContext() : KafkaMetricsContext = {
-    val contextLabels = new util.HashMap[String, Object]
-    contextLabels.put(KAFKA_CLUSTER_ID, clusterId)
-    contextLabels.put(KAFKA_BROKER_ID, config.brokerId.toString)
-    contextLabels.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX))
-    val metricsContext = new KafkaMetricsContext(metricsPrefix, contextLabels)
-    metricsContext
   }
 
   protected def createReplicaManager(isShuttingDown: AtomicBoolean): ReplicaManager = {

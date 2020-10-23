@@ -796,8 +796,8 @@ class DynamicMetricsReporters(brokerId: Int, server: LegacyBroker) extends Recon
       metrics.addReporter(reporter)
       currentReporters += reporter.getClass.getName -> reporter
     }
-    server.notifyClusterListeners(reporters.asScala)
-    server.notifyMetricsReporters(reporters.asScala)
+    KafkaBroker.notifyClusterListeners(server.clusterId, reporters.asScala)
+    KafkaBroker.notifyMetricsReporters(server.clusterId, server.config, reporters.asScala)
   }
 
   private def removeReporter(className: String): Unit = {
