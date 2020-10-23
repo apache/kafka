@@ -195,8 +195,6 @@ public class StreamsHandlerIntegrationTest {
             assertThat(processorValueCollector.size(), equalTo(1));
             assertThat(kafkaStreams.state(), equalTo(KafkaStreams.State.ERROR));
             assertThat(kafkaStreams1.state(), equalTo(KafkaStreams.State.ERROR));
-//            kafkaStreams.close(Duration.ZERO);
-//            kafkaStreams1.close(Duration.ZERO);
         }
     }
 

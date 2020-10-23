@@ -61,6 +61,7 @@ import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidator;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.QueryableStoreType;
@@ -432,9 +433,6 @@ public class KafkaStreams implements AutoCloseable {
         }
         return action;
     }
-
-
-
 
     /**
      * Set the listener which is triggered whenever a {@link StateStore} is being restored in order to resume
