@@ -19,18 +19,65 @@
 
 <script id="upgrade-template" type="text/x-handlebars-template">
 
+<h5><a id="upgrade_280_notable" href="#upgrade_280_notable">Notable changes in 2.8.0</a></h5>
+
 <h5><a id="upgrade_270_notable" href="#upgrade_270_notable">Notable changes in 2.7.0</a></h5>
 <ul>
-    <li>The configuration parameter <code>retries</code> is deprecated for the Kafka Streams client
-        via <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-572%3A+Improve+timeouts+and+retries+in+Kafka+Streams">KIP-572</a>.
-        You should use the new <code>task.timeout.ms</code> parameters instead.
-        Note that parameter <code>retry.backoff.ms</code> is not impacted by this change.
+    <li>
+        The 2.7.0 release includes the core Raft implementation specified in
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-595%3A+A+Raft+Protocol+for+the+Metadata+Quorum">KIP-595</a>.
+        There is a separate "raft" module containing most of the logic. Until integration with the
+        controller is complete, there is a standalone server that users can use for testing the p
+        erformance of the Raft implementation.  See the README.md in the raft module for details
+    </li>
+    <li>
+        KIP-651 <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-651+-+Support+PEM+format+for+SSL+certificates+and+private+key">adds support</a>
+        for using PEM files for key and trust stores.
+    </li>
+    <li>
+        KIP-612 <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-612%3A+Ability+to+Limit+Connection+Creation+Rate+on+Brokers">adds support</a>
+        for enforcing broker-wide and per-listener connection create rates.  The 2.7.0 release contains
+        the first part of KIP-612 with dynamic configuration coming in the 2.8.0 release.
+    </li>
+    <li>
+        The ability to throttle topic and partition creations or
+        topics deletions to prevent a cluster from being harmed via
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-599%3A+Throttle+Create+Topic%2C+Create+Partition+and+Delete+Topic+Operations">KIP-599</a>
+    </li>
+    <li>
+      The addition of <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-554%3A+Add+Broker-side+SCRAM+Config+API">KIP-554</a>
+        continues progress towards the goal of Zookeeper removal from Kafka. The addition of KIP-554
+        means you don't have to connect directly to ZooKeeper anymore for managing SCRAM credentials.
     </li>
     <li>Altering non-reconfigurable configs of existent listeners causes <code>InvalidRequestException</code>.
-        By contrast, the previous (unintended) behavior would have caused the updated configuration to be persisted, but it wouldn't
+        By contrast, the previous (unintended) behavior would have caused the updated configuration to be persisted,
+        but it wouldn't
         take effect until the broker was restarted. See <a href="https://github.com/apache/kafka/pull/9284">KAFKA-10479</a> for more discussion.
         See <code>DynamicBrokerConfig.DynamicSecurityConfigs</code> and <code>SocketServer.ListenerReconfigurableConfigs</code>
         for the supported reconfigurable configs of existent listeners.
+    </li>
+
+    <li>
+        Kafka Streams adds support for
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-450%3A+Sliding+Window+Aggregations+in+the+DSL">Sliding Windows Aggregations</a>
+        in the KStreams DSL.
+    </li>
+    <li>
+        Reverse iteration over state stores enabling more efficient most recent update searches with
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-617%3A+Allow+Kafka+Streams+State+Stores+to+be+iterated+backwards">KIP-617</a>
+    </li>
+    <li>
+        End-to-End latency metrics in Kafka Steams see
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-613%3A+Add+end-to-end+latency+metrics+to+Streams">KIP-613</a>
+        for more details
+    </li>
+    <li>
+        Kafka Streams added metrics reporting default RocksDB properties with
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-607%3A+Add+Metrics+to+Kafka+Streams+to+Report+Properties+of+RocksDB">KIP-607</a>
+    </li>
+    <li>
+        Better Scala implicit Serdes support from
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-616%3A+Rename+implicit+Serdes+instances+in+kafka-streams-scala">KIP-616</a>
     </li>
 </ul>
 

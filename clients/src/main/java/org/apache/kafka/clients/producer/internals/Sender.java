@@ -444,9 +444,24 @@ public class Sender implements Runnable {
         AbstractRequest.Builder<?> requestBuilder = nextRequestHandler.requestBuilder();
         Node targetNode = null;
         try {
-            targetNode = awaitNodeReady(nextRequestHandler.coordinatorType());
-            if (targetNode == null) {
+            FindCoordinatorRequest.CoordinatorType coordinatorType = nextRequestHandler.coordinatorType();
+            targetNode = coordinatorType != null ?
+                    transactionManager.coordinator(coordinatorType) :
+                    client.leastLoadedNode(time.milliseconds());
+            if (targetNode != null) {
+                if (!awaitNodeReady(targetNode, coordinatorType)) {
+                    log.trace("Target node {} not ready within request timeout, will retry when node is ready.", targetNode);
+                    maybeFindCoordinatorAndRetry(nextRequestHandler);
+                    return true;
+                }
+            } else if (coordinatorType != null) {
+                log.trace("Coordinator not known for {}, will retry {} after finding coordinator.", coordinatorType, requestBuilder.apiKey());
                 maybeFindCoordinatorAndRetry(nextRequestHandler);
+                return true;
+            } else {
+                log.trace("No nodes available to send requests, will poll and retry when until a node is ready.");
+                transactionManager.retry(nextRequestHandler);
+                client.poll(retryBackoffMs, time.milliseconds());
                 return true;
             }
 
@@ -512,21 +527,17 @@ public class Sender implements Runnable {
         return running;
     }
 
-    private Node awaitNodeReady(FindCoordinatorRequest.CoordinatorType coordinatorType) throws IOException {
-        Node node = coordinatorType != null ?
-                transactionManager.coordinator(coordinatorType) :
-                client.leastLoadedNode(time.milliseconds());
-
-        if (node != null && NetworkClientUtils.awaitReady(client, node, time, requestTimeoutMs)) {
+    private boolean awaitNodeReady(Node node, FindCoordinatorRequest.CoordinatorType coordinatorType) throws IOException {
+        if (NetworkClientUtils.awaitReady(client, node, time, requestTimeoutMs)) {
             if (coordinatorType == FindCoordinatorRequest.CoordinatorType.TRANSACTION) {
                 // Indicate to the transaction manager that the coordinator is ready, allowing it to check ApiVersions
                 // This allows us to bump transactional epochs even if the coordinator is temporarily unavailable at
                 // the time when the abortable error is handled
                 transactionManager.handleCoordinatorReady();
             }
-            return node;
+            return true;
         }
-        return null;
+        return false;
     }
 
     /**

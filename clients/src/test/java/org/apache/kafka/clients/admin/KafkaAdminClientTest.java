@@ -23,6 +23,7 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
+import org.apache.kafka.clients.admin.internals.ConsumerGroupOperationContext;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
@@ -115,10 +116,12 @@ import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResp
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.quota.ClientQuotaFilterComponent;
+import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.AlterClientQuotasResponse;
 import org.apache.kafka.common.requests.AlterPartitionReassignmentsResponse;
 import org.apache.kafka.common.requests.AlterReplicaLogDirsResponse;
@@ -4908,6 +4911,40 @@ public class KafkaAdminClientTest {
             TestUtils.assertFutureThrows(result.descriptions().get(0), ApiException.class);
             assertNotNull(result.descriptions().get(1).get());
         }
+    }
+
+    @Test
+    public void testHasCoordinatorMoved() {
+        Map<Errors, Integer> errors = new HashMap<>();
+        AbstractResponse response = new AbstractResponse() {
+            @Override
+            public Map<Errors, Integer> errorCounts() {
+                return errors;
+            }
+            @Override
+            protected Struct toStruct(short version) {
+                return null;
+            }
+        };
+
+        assertFalse(ConsumerGroupOperationContext.hasCoordinatorMoved(response));
+
+        errors.put(Errors.NOT_COORDINATOR, 1);
+        assertTrue(ConsumerGroupOperationContext.hasCoordinatorMoved(response));
+    }
+
+    @Test
+    public void testShouldRefreshCoordinator() {
+        Map<Errors, Integer> errorCounts = new HashMap<>();
+
+        assertFalse(ConsumerGroupOperationContext.shouldRefreshCoordinator(errorCounts));
+
+        errorCounts.put(Errors.COORDINATOR_LOAD_IN_PROGRESS, 1);
+        assertTrue(ConsumerGroupOperationContext.shouldRefreshCoordinator(errorCounts));
+
+        errorCounts.clear();
+        errorCounts.put(Errors.COORDINATOR_NOT_AVAILABLE, 1);
+        assertTrue(ConsumerGroupOperationContext.shouldRefreshCoordinator(errorCounts));
     }
 
     private DescribeLogDirsResponse prepareDescribeLogDirsResponse(Errors error, String logDir) {

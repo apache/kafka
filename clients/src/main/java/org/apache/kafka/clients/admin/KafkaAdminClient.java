@@ -3941,23 +3941,14 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse abstractResponse) {
                 final OffsetCommitResponse response = (OffsetCommitResponse) abstractResponse;
 
-                // If coordinator changed since we fetched it, retry
-                if (ConsumerGroupOperationContext.hasCoordinatorMoved(response)) {
+                Map<Errors, Integer> errorCounts = response.errorCounts();
+                // 1) If coordinator changed since we fetched it, retry
+                // 2) If there is a coordinator error, retry
+                if (ConsumerGroupOperationContext.hasCoordinatorMoved(errorCounts) ||
+                    ConsumerGroupOperationContext.shouldRefreshCoordinator(errorCounts)) {
                     Call call = getAlterConsumerGroupOffsetsCall(context, offsets);
                     rescheduleFindCoordinatorTask(context, () -> call, this);
                     return;
-                }
-
-                // If there is a coordinator error, retry
-                for (OffsetCommitResponseTopic topic : response.data().topics()) {
-                    for (OffsetCommitResponsePartition partition : topic.partitions()) {
-                        Errors error = Errors.forCode(partition.errorCode());
-                        if (ConsumerGroupOperationContext.shouldRefreshCoordinator(error)) {
-                            Call call = getAlterConsumerGroupOffsetsCall(context, offsets);
-                            rescheduleFindCoordinatorTask(context, () -> call, this);
-                            return;
-                        }
-                    }
                 }
 
                 final Map<TopicPartition, Errors> partitions = new HashMap<>();
