@@ -18,10 +18,14 @@
 package kafka.tools
 
 import java.io.{ByteArrayOutputStream, PrintStream}
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+import java.util
 import java.util.Properties
 
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
+import org.apache.kafka.common.utils.Utils
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -37,7 +41,16 @@ class StorageToolTest {
   @Test
   def testConfigToLogDirectories(): Unit = {
     val config = new KafkaConfig(newKip500Properties())
-    assertEquals(Seq("/tmp/foo", "/tmp/bar"), StorageTool.configToLogDirectories(config))
+    assertEquals(Seq("/tmp/bar", "/tmp/foo"), StorageTool.configToLogDirectories(config))
+  }
+
+  @Test
+  def testConfigToLogDirectoriesWithMetaLogDir(): Unit = {
+    val properties = newKip500Properties()
+    properties.setProperty(KafkaConfig.MetadataLogDirProp, "/tmp/baz")
+    val config = new KafkaConfig(properties)
+    assertEquals(Seq("/tmp/bar", "/tmp/baz", "/tmp/foo"),
+      StorageTool.configToLogDirectories(config))
   }
 
   @Test
@@ -46,7 +59,7 @@ class StorageToolTest {
     val tempDir = TestUtils.tempDir()
     try {
       assertEquals(1, StorageTool.
-        infoCommand(new PrintStream(stream), Seq(tempDir.toString)))
+        infoCommand(new PrintStream(stream), true, Seq(tempDir.toString)))
       assertEquals(s"""Found log directory:
   ${tempDir.toString}
 
@@ -55,7 +68,7 @@ Found problem:
 
 """, stream.toString())
     } finally {
-      tempDir.delete()
+      Utils.delete(tempDir)
     }
   }
 
@@ -66,13 +79,13 @@ Found problem:
     tempDir.delete()
     try {
       assertEquals(1, StorageTool.
-        infoCommand(new PrintStream(stream), Seq(tempDir.toString)))
+        infoCommand(new PrintStream(stream), true, Seq(tempDir.toString)))
       assertEquals(s"""Found problem:
   ${tempDir.toString} does not exist
 
 """, stream.toString())
     } finally {
-      tempDir.delete()
+      Utils.delete(tempDir)
     }
   }
 
@@ -82,13 +95,67 @@ Found problem:
     val tempFile = TestUtils.tempFile()
     try {
       assertEquals(1, StorageTool.
-        infoCommand(new PrintStream(stream), Seq(tempFile.toString)))
+        infoCommand(new PrintStream(stream), true, Seq(tempFile.toString)))
       assertEquals(s"""Found problem:
   ${tempFile.toString} is not a directory
 
 """, stream.toString())
     } finally {
       tempFile.delete()
+    }
+  }
+
+  @Test
+  def testInfoWithMismatchedLegacyKafkaConfig(): Unit = {
+    val stream = new ByteArrayOutputStream()
+    val tempDir = TestUtils.tempDir()
+    try {
+      Files.write(tempDir.toPath.resolve("meta.properties"),
+        String.join("\n", util.Arrays.asList(
+          "version=1", "kip.500=true",
+          "incarnation.id=dbb6e889-19e7-4437-b4c3-dd5fa7ffb973",
+          "cluster.id=26c36907-4158-4a35-919d-6534229f5241")).
+            getBytes(StandardCharsets.UTF_8))
+      assertEquals(1, StorageTool.
+        infoCommand(new PrintStream(stream), false, Seq(tempDir.toString)))
+      assertEquals(s"""Found log directory:
+  ${tempDir.toString}
+
+Found metadata: MetaProperties(incarnation.id=dbb6e889-19e7-4437-b4c3-dd5fa7ffb973, clusterId=26c36907-4158-4a35-919d-6534229f5241)
+
+Found problem:
+  The kafka configuration file appears to be for a legacy cluster, but the directories are formatted for kip-500.
+
+""", stream.toString())
+    } finally {
+      Utils.delete(tempDir)
+    }
+  }
+
+  @Test
+  def testInfoWithMismatchedKip500KafkaConfig(): Unit = {
+    val stream = new ByteArrayOutputStream()
+    val tempDir = TestUtils.tempDir()
+    try {
+      Files.write(tempDir.toPath.resolve("meta.properties"),
+        String.join("\n", util.Arrays.asList(
+          "version=0",
+          "broker.id=1",
+          "cluster.id=26c36907-4158-4a35-919d-6534229f5241")).
+          getBytes(StandardCharsets.UTF_8))
+      assertEquals(1, StorageTool.
+        infoCommand(new PrintStream(stream), true, Seq(tempDir.toString)))
+      assertEquals(s"""Found log directory:
+  ${tempDir.toString}
+
+Found metadata: LegacyMetaProperties(brokerId=1, clusterId=26c36907-4158-4a35-919d-6534229f5241)
+
+Found problem:
+  The kafka configuration file appears to be for a kip-500 cluster, but the directories are formatted for legacy mode.
+
+""", stream.toString())
+    } finally {
+      Utils.delete(tempDir)
     }
   }
 
@@ -123,7 +190,7 @@ Found problem:
           "formatted.", e.getMessage)
       }
     } finally {
-      tempDir.delete()
+      Utils.delete(tempDir)
     }
   }
 
@@ -141,7 +208,7 @@ Found problem:
         assertEquals("Cluster ID string invalid does not appear to be a valid UUID: " +
           "Invalid UUID string: invalid", e.getMessage)
     } finally {
-      tempDir.delete()
+      Utils.delete(tempDir)
     }
   }
 
@@ -159,7 +226,7 @@ Found problem:
         assertEquals("Incarnation ID string invalid does not appear to be a valid UUID: " +
           "Invalid UUID string: invalid", e.getMessage)
     } finally {
-      tempDir.delete()
+      Utils.delete(tempDir)
     }
   }
 }
