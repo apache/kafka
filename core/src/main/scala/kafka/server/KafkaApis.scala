@@ -375,8 +375,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     val unauthorizedTopicErrors = mutable.Map[TopicPartition, Errors]()
     val nonExistingTopicErrors = mutable.Map[TopicPartition, Errors]()
     // the callback for sending an offset commit response
-    def sendResponseCallback(commitStatus: Map[TopicPartition, Errors]): Unit = {
-      val combinedCommitStatus = commitStatus ++ unauthorizedTopicErrors ++ nonExistingTopicErrors
+    def sendResponseCallback(commitStatus: (Map[TopicPartition, Errors], Boolean)): Unit = {
+      val combinedCommitStatus = commitStatus._1 ++ unauthorizedTopicErrors ++ nonExistingTopicErrors
       if (isDebugEnabled)
         combinedCommitStatus.forKeyValue { (topicPartition, error) =>
           if (error != Errors.NONE) {
@@ -385,7 +385,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
         }
       sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new OffsetCommitResponse(requestThrottleMs, combinedCommitStatus.asJava))
+        new OffsetCommitResponse(requestThrottleMs, combinedCommitStatus.asJava, commitStatus._2))
     }
 
     // reject the request if not authorized to the group
@@ -411,7 +411,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           errorMap += topicPartition -> Errors.UNSUPPORTED_VERSION
         }
       }
-      sendResponseCallback(errorMap.toMap)
+      sendResponseCallback((errorMap.toMap, false))
     } else {
       val authorizedTopicRequestInfoBldr = immutable.Map.newBuilder[TopicPartition, OffsetCommitRequestData.OffsetCommitRequestPartition]
 
@@ -432,7 +432,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val authorizedTopicRequestInfo = authorizedTopicRequestInfoBldr.result()
 
       if (authorizedTopicRequestInfo.isEmpty)
-        sendResponseCallback(Map.empty)
+        sendResponseCallback((Map.empty, false))
       else if (header.apiVersion == 0) {
         // for version 0 always store offsets to ZK
         val responseInfo = authorizedTopicRequestInfo.map {
@@ -452,7 +452,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               case e: Throwable => (topicPartition, Errors.forException(e))
             }
         }
-        sendResponseCallback(responseInfo)
+        sendResponseCallback((responseInfo, false))
       } else {
         // for version 1 and beyond store offsets in offset manager
 
@@ -489,6 +489,8 @@ class KafkaApis(val requestChannel: RequestChannel,
           )
         }
 
+        val alsoHeartbeat = offsetCommitRequest.version >= 9
+
         // call coordinator to handle commit offset
         groupCoordinator.handleCommitOffsets(
           offsetCommitRequest.data.groupId,
@@ -496,6 +498,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           Option(offsetCommitRequest.data.groupInstanceId),
           offsetCommitRequest.data.generationId,
           partitionData,
+          alsoHeartbeat,
           sendResponseCallback)
       }
     }

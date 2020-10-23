@@ -688,23 +688,24 @@ class GroupCoordinator(val brokerId: Int,
                           groupInstanceId: Option[String],
                           generationId: Int,
                           offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
-                          responseCallback: immutable.Map[TopicPartition, Errors] => Unit): Unit = {
+                          alsoHeartbeat: Boolean,
+                          responseCallback: ((immutable.Map[TopicPartition, Errors], Boolean)) => Unit): Unit = {
     validateGroupStatus(groupId, ApiKeys.OFFSET_COMMIT) match {
-      case Some(error) => responseCallback(offsetMetadata.map { case (k, _) => k -> error })
+      case Some(error) => responseCallback(offsetMetadata.map { case (k, _) => k -> error }, false)
       case None =>
         groupManager.getGroup(groupId) match {
           case None =>
             if (generationId < 0) {
               // the group is not relying on Kafka for group management, so allow the commit
               val group = groupManager.addGroup(new GroupMetadata(groupId, Empty, time))
-              doCommitOffsets(group, memberId, groupInstanceId, generationId, offsetMetadata, responseCallback)
+              doCommitOffsets(group, memberId, groupInstanceId, generationId, offsetMetadata, alsoHeartbeat, responseCallback)
             } else {
               // or this is a request coming from an older generation. either way, reject the commit
-              responseCallback(offsetMetadata.map { case (k, _) => k -> Errors.ILLEGAL_GENERATION })
+              responseCallback(offsetMetadata.map { case (k, _) => k -> Errors.ILLEGAL_GENERATION }, false)
             }
 
           case Some(group) =>
-            doCommitOffsets(group, memberId, groupInstanceId, generationId, offsetMetadata, responseCallback)
+            doCommitOffsets(group, memberId, groupInstanceId, generationId, offsetMetadata, alsoHeartbeat, responseCallback)
         }
     }
   }
@@ -751,38 +752,50 @@ class GroupCoordinator(val brokerId: Int,
                               groupInstanceId: Option[String],
                               generationId: Int,
                               offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
-                              responseCallback: immutable.Map[TopicPartition, Errors] => Unit): Unit = {
+                              alsoHeartbeat: Boolean,
+                              responseCallback: ((immutable.Map[TopicPartition, Errors], Boolean)) => Unit): Unit = {
+
     group.inLock {
       if (group.is(Dead)) {
         // if the group is marked as dead, it means some other thread has just removed the group
         // from the coordinator metadata; it is likely that the group has migrated to some other
         // coordinator OR the group is in a transient unstable phase. Let the member retry
         // finding the correct coordinator and rejoin.
-        responseCallback(offsetMetadata.map { case (k, _) => k -> Errors.COORDINATOR_NOT_AVAILABLE })
+        responseCallback(offsetMetadata.map { case (k, _) => k -> Errors.COORDINATOR_NOT_AVAILABLE }, false)
       } else if (group.isStaticMemberFenced(memberId, groupInstanceId, "commit-offsets")) {
-        responseCallback(offsetMetadata.map { case (k, _) => k -> Errors.FENCED_INSTANCE_ID })
+        responseCallback(offsetMetadata.map { case (k, _) => k -> Errors.FENCED_INSTANCE_ID }, false)
       } else if (generationId < 0 && group.is(Empty)) {
         // The group is only using Kafka to store offsets.
-        groupManager.storeOffsets(group, memberId, offsetMetadata, responseCallback)
+        groupManager.storeOffsetsAndCheckReblance(group, memberId, offsetMetadata, responseCallback)
       } else if (!group.has(memberId)) {
-        responseCallback(offsetMetadata.map { case (k, _) => k -> Errors.UNKNOWN_MEMBER_ID })
+        responseCallback(offsetMetadata.map { case (k, _) => k -> Errors.UNKNOWN_MEMBER_ID }, false)
       } else if (generationId != group.generationId) {
-        responseCallback(offsetMetadata.map { case (k, _) => k -> Errors.ILLEGAL_GENERATION })
+        responseCallback(offsetMetadata.map { case (k, _) => k -> Errors.ILLEGAL_GENERATION }, false)
       } else {
         group.currentState match {
           case Stable | PreparingRebalance =>
-            // During PreparingRebalance phase, we still allow a commit request since we rely
-            // on heartbeat response to eventually notify the rebalance in progress signal to the consumer
             val member = group.get(memberId)
             completeAndScheduleNextHeartbeatExpiration(group, member)
-            groupManager.storeOffsets(group, memberId, offsetMetadata, responseCallback)
+
+            val reblancing = group.currentState == PreparingRebalance && alsoHeartbeat
+
+            // reblancing == true
+            // If we also rely on commit response notify the rebalance in progress signal to the consumer,
+            // we should, say, "still successfully commit the offset but returns an reblanceInProgress",
+            // and the client should interpret it intelligently
+
+            // reblancing == false
+            // During PreparingRebalance phase, we still allow a commit request since we rely
+            // on heartbeat response to eventually notify the rebalance in progress signal to the consumer
+
+            groupManager.storeOffsetsAndCheckReblance(group, memberId, offsetMetadata, responseCallback, reblancing = reblancing)
 
           case CompletingRebalance =>
             // We should not receive a commit request if the group has not completed rebalance;
             // but since the consumer's member.id and generation is valid, it means it has received
             // the latest group generation information from the JoinResponse.
             // So let's return a REBALANCE_IN_PROGRESS to let consumer handle it gracefully.
-            responseCallback(offsetMetadata.map { case (k, _) => k -> Errors.REBALANCE_IN_PROGRESS })
+            responseCallback(offsetMetadata.map { case (k, _) => k -> Errors.REBALANCE_IN_PROGRESS }, true)
 
           case _ =>
             throw new RuntimeException(s"Logic error: unexpected group state ${group.currentState}")

@@ -30,7 +30,8 @@
   // version 7 adds a new field called groupInstanceId to indicate member identity across restarts.
   //
   // Version 8 is the first flexible version.
-  "validVersions": "0-8",
+  // From version 9 an OffsetCommitRequest will be treated as a HeartbeatRequest as well
+  "validVersions": "0-9",
   "flexibleVersions": "8+",
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",

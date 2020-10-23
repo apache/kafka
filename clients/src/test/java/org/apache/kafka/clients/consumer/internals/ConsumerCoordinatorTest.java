@@ -2735,6 +2735,26 @@ public class ConsumerCoordinatorTest {
     }
 
     @Test
+    public void testCommitOffsetWillRefreshTimeout() {
+
+        final Heartbeat heartbeat = coordinator.heartbeat();
+        heartbeat.sentHeartbeat(time.milliseconds());
+        time.sleep(heartbeatIntervalMs);
+        // should heartbeat after heartbeatIntervalMs
+        assertTrue(heartbeat.shouldHeartbeat(time.milliseconds()));
+
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        // sync commit and update heartbeat
+        prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.NONE);
+        coordinator.commitOffsetsSync(singletonMap(t1p, new OffsetAndMetadata(100L)), time.timer(Long.MAX_VALUE));
+
+        // commit offset will heartbeat at the same time
+        assertFalse(heartbeat.shouldHeartbeat(time.milliseconds()));
+    }
+
+    @Test
     public void testGetGroupMetadata() {
         final ConsumerGroupMetadata groupMetadata = coordinator.groupMetadata();
         assertNotNull(groupMetadata);

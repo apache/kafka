@@ -53,7 +53,7 @@ public class OffsetCommitResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public OffsetCommitResponse(int requestThrottleMs, Map<TopicPartition, Errors> responseData) {
+    public OffsetCommitResponse(int requestThrottleMs, Map<TopicPartition, Errors> responseData, boolean reblanceInProgress) {
         Map<String, OffsetCommitResponseTopic>
                 responseTopicDataMap = new HashMap<>();
 
@@ -72,7 +72,12 @@ public class OffsetCommitResponse extends AbstractResponse {
 
         data = new OffsetCommitResponseData()
                 .setTopics(new ArrayList<>(responseTopicDataMap.values()))
-                .setThrottleTimeMs(requestThrottleMs);
+                .setThrottleTimeMs(requestThrottleMs)
+                .setRebalanceInProgress(reblanceInProgress);
+    }
+
+    public OffsetCommitResponse(int requestThrottleMs, Map<TopicPartition, Errors> responseData) {
+        this(requestThrottleMs, responseData, false);
     }
 
     public OffsetCommitResponse(Map<TopicPartition, Errors> responseData) {
