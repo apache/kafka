@@ -26,7 +26,7 @@ import org.apache.kafka.common.utils.Time
 
 import scala.jdk.CollectionConverters._
 
-object KafkaServerManager {
+object KafkaServerManager extends Logging {
   def apply(config: KafkaConfig,
             time: Time = Time.SYSTEM,
             threadNamePrefix: Option[String] = None,
@@ -36,6 +36,7 @@ object KafkaServerManager {
     var kip500Broker: Option[Kip500Broker] = None
     var controller: Option[Kip500Controller] = None
     if (roles == null || roles.isEmpty) {
+      info("Starting legacy broker.")
       legacyBroker = Some(new LegacyBroker(config, time, threadNamePrefix, kafkaMetricsReporters))
     } else {
       if (roles.asScala.distinct.length != roles.size()) {
@@ -51,6 +52,18 @@ object KafkaServerManager {
         case _ =>
           throw new RuntimeException("Unknown process role " + role)
       })
+      val bld = new StringBuilder
+      var prefix = ""
+      bld.append("Starting ")
+      if (kip500Broker.isDefined) {
+        bld.append("broker")
+        prefix = " and "
+      }
+      if (controller.isDefined) {
+        bld.append(prefix).append("controller")
+      }
+      bld.append(".")
+      info(bld.toString)
     }
     new KafkaServerManager(config, legacyBroker, kip500Broker, controller)
   }
@@ -84,16 +97,19 @@ class KafkaServerManager(val config: KafkaConfig,
     }
     legacyBroker.foreach(_.startup())
     kip500Broker.foreach(_.startup())
+    controller.foreach(_.startup())
   }
 
   def shutdown(): Unit = {
     legacyBroker.foreach(_.shutdown())
     kip500Broker.foreach(_.shutdown())
+    controller.foreach(_.shutdown())
   }
 
   def awaitShutdown(): Unit = {
     legacyBroker.foreach(_.awaitShutdown())
     kip500Broker.foreach(_.awaitShutdown())
+    controller.foreach(_.awaitShutdown())
   }
 
   def broker(): KafkaBroker = {
