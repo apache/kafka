@@ -79,13 +79,18 @@ object StorageTool extends Logging {
       command match {
         case "info" => {
           val directories = configToLogDirectories(config.get)
-          Exit.exit(infoCommand(System.out, directories))
+          val kip500Mode = configToKip500Mode(config.get)
+          Exit.exit(infoCommand(System.out, kip500Mode, directories))
         }
         case "format" => {
           val directories = configToLogDirectories(config.get)
           val incarnationId = Option(namespace.getString("incarnation_id"))
           val clusterId = namespace.getString("cluster_id")
           val ignoreFormatted = namespace.getBoolean("ignore_formatted")
+          if (!configToKip500Mode(config.get)) {
+            throw new TerseFailure("The kafka configuration file appears to be for " +
+              "a legacy cluster. Formatting is only supported for kip-500 clusters.")
+          }
           Exit.exit(formatCommand(System.out, directories, incarnationId,
             clusterId, ignoreFormatted ))
         }
@@ -104,9 +109,16 @@ object StorageTool extends Logging {
     }
   }
 
-  def configToLogDirectories(config: KafkaConfig): Seq[String] = config.logDirs.toSeq
+  def configToLogDirectories(config: KafkaConfig): Seq[String] = {
+    val directories = new mutable.TreeSet[String]
+    directories.addAll(config.logDirs)
+    Option(config.metadataLogDir).foreach(directories.add(_))
+    directories.toSeq
+  }
 
-  def infoCommand(stream: PrintStream, directories: Seq[String]): Int = {
+  def configToKip500Mode(config: KafkaConfig): Boolean = !config.processRoles.isEmpty
+
+  def infoCommand(stream: PrintStream, kip500Mode: Boolean, directories: Seq[String]): Int = {
     val problems = new mutable.ArrayBuffer[String]
     val foundDirectories = new mutable.ArrayBuffer[String]
     var prevMetadata: Option[Either[LegacyMetaProperties, MetaProperties]] = None
@@ -150,6 +162,17 @@ object StorageTool extends Logging {
         }
       }
     })
+    if (prevMetadata.isDefined) {
+      if (kip500Mode) {
+        if (prevMetadata.get.isLeft) {
+          problems += "The kafka configuration file appears to be for a kip-500 cluster, but " +
+            "the directories are formatted for legacy mode."
+        }
+      } else if (prevMetadata.get.isRight) {
+        problems += "The kafka configuration file appears to be for a legacy cluster, but " +
+          "the directories are formatted for kip-500."
+      }
+    }
     if (directories.isEmpty) {
       stream.println("No directories specified.")
       0
