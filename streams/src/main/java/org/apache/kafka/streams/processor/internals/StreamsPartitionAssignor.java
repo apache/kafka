@@ -255,8 +255,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             taskManager.processId(),
             userEndPoint,
             taskManager.getTaskOffsetSums(),
-            uniqueField)
-                .encode();
+            uniqueField,
+            (byte) assignmentErrorCode.get()
+        ).encode();
     }
 
     private Map<String, Assignment> errorAssignment(final Map<UUID, ClientMetadata> clientsMetadata,
@@ -308,12 +309,16 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         int minReceivedMetadataVersion = LATEST_SUPPORTED_VERSION;
         int minSupportedMetadataVersion = LATEST_SUPPORTED_VERSION;
 
+        boolean shutdownRequested = false;
         int futureMetadataVersion = UNKNOWN;
         for (final Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
             final String consumerId = entry.getKey();
             final Subscription subscription = entry.getValue();
             final SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
             final int usedVersion = info.version();
+            if (info.shutdownRequested() == AssignorError.SHUTDOWN_REQUESTED.code()) {
+                shutdownRequested = true;
+            }
 
             minReceivedMetadataVersion = updateMinReceivedVersion(usedVersion, minReceivedMetadataVersion);
             minSupportedMetadataVersion = updateMinSupportedVersion(info.latestSupportedVersion(), minSupportedMetadataVersion);
@@ -350,6 +355,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             log.debug("Constructed client metadata {} from the member subscriptions.", clientMetadataMap);
 
             // ---------------- Step One ---------------- //
+
+            if (shutdownRequested) {
+                return new GroupAssignment(errorAssignment(clientMetadataMap, AssignorError.SHUTDOWN_REQUESTED.code()));
+            }
 
             // parse the topology to determine the repartition source topics,
             // making sure they are created with the number of partitions as
@@ -1437,6 +1446,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 break;
             case 7:
             case 8:
+            case 9:
                 validateActiveTaskEncoding(partitions, info, logPrefix);
 
                 activeTasks = getActiveTasks(partitions, info);

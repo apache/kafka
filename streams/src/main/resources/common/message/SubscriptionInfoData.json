@@ -15,7 +15,7 @@
 
 {
   "name": "SubscriptionInfoData",
-  "validVersions": "1-8",
+  "validVersions": "1-9",
   "fields": [
     {
       "name": "version",
@@ -56,6 +56,11 @@
     {
       "name": "uniqueField",
       "versions": "8+",
+      "type": "int8"
+    },
+    {
+      "name": "shutdownRequested",
+      "versions": "9+",
       "type": "int8"
     }
   ],

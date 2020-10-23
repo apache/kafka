@@ -34,12 +34,14 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.streams.processor.ThreadMetadata;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
@@ -66,6 +68,7 @@ import static org.apache.kafka.streams.processor.internals.ClientUtils.getRestor
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getSharedAdminClientId;
 
 public class StreamThread extends Thread {
+
 
     /**
      * Stream thread states are the possible states that a stream thread can be in.
@@ -282,6 +285,15 @@ public class StreamThread extends Thread {
     private final Admin adminClient;
     private final InternalTopologyBuilder builder;
 
+
+    private boolean newHandler;
+    private StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler;
+    private ShutdownErrorHook shutdownErrorHook;
+    private AtomicInteger assignmentErrorCode;
+    public interface ShutdownErrorHook {
+        void shutdown(Duration duration);
+    }
+
     public static StreamThread create(final InternalTopologyBuilder builder,
                                       final StreamsConfig config,
                                       final KafkaClientSupplier clientSupplier,
@@ -294,7 +306,10 @@ public class StreamThread extends Thread {
                                       final long cacheSizeBytes,
                                       final StateDirectory stateDirectory,
                                       final StateRestoreListener userStateRestoreListener,
-                                      final int threadIdx) {
+                                      final int threadIdx,
+                                      final ShutdownErrorHook shutdownErrorHook,
+                                      final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler,
+                                      final AtomicInteger assignmentErrorCode) {
         final String threadId = clientId + "-StreamThread-" + threadIdx;
 
         final String logPrefix = String.format("stream-thread [%s] ", threadId);
@@ -305,6 +320,7 @@ public class StreamThread extends Thread {
         referenceContainer.adminClient = adminClient;
         referenceContainer.streamsMetadataState = streamsMetadataState;
         referenceContainer.time = time;
+        referenceContainer.assignmentErrorCode = assignmentErrorCode;
 
         log.info("Creating restore consumer client");
         final Map<String, Object> restoreConsumerConfigs = config.getRestoreConsumerConfigs(getRestoreConsumerClientId(threadId));
@@ -386,7 +402,9 @@ public class StreamThread extends Thread {
             threadId,
             logContext,
             referenceContainer.assignmentErrorCode,
-            referenceContainer.nextScheduledRebalanceMs
+            referenceContainer.nextScheduledRebalanceMs,
+            shutdownErrorHook,
+            streamsUncaughtExceptionHandler
         );
 
         taskManager.setPartitionResetter(partitions -> streamThread.resetOffsets(partitions, null));
@@ -437,7 +455,9 @@ public class StreamThread extends Thread {
                         final String threadId,
                         final LogContext logContext,
                         final AtomicInteger assignmentErrorCode,
-                        final AtomicLong nextProbingRebalanceMs) {
+                        final AtomicLong nextProbingRebalanceMs,
+                        final ShutdownErrorHook shutdownErrorHook,
+                        final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
         super(threadId);
         this.stateLock = new Object();
 
@@ -454,6 +474,10 @@ public class StreamThread extends Thread {
         this.punctuateSensor = ThreadMetrics.punctuateSensor(threadId, streamsMetrics);
         this.punctuateRatioSensor = ThreadMetrics.punctuateRatioSensor(threadId, streamsMetrics);
         this.commitRatioSensor = ThreadMetrics.commitRatioSensor(threadId, streamsMetrics);
+        this.assignmentErrorCode = assignmentErrorCode;
+        this.shutdownErrorHook = shutdownErrorHook;
+        this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
+        this.newHandler = false;
 
         // The following sensors are created here but their references are not stored in this object, since within
         // this object they are not recorded. The sensors are created here so that the stream threads starts with all
@@ -471,7 +495,7 @@ public class StreamThread extends Thread {
         this.builder = builder;
         this.logPrefix = logContext.logPrefix();
         this.log = logContext.logger(StreamThread.class);
-        this.rebalanceListener = new StreamsRebalanceListener(time, taskManager, this, this.log, assignmentErrorCode);
+        this.rebalanceListener = new StreamsRebalanceListener(time, taskManager, this, this.log, this.assignmentErrorCode);
         this.taskManager = taskManager;
         this.restoreConsumer = restoreConsumer;
         this.mainConsumer = mainConsumer;
@@ -567,9 +591,47 @@ public class StreamThread extends Thread {
                 }
             } catch (final TaskMigratedException e) {
                 handleTaskMigrated(e);
+            } catch (final Exception e) {
+                if (newHandler) {
+                    if (Thread.getDefaultUncaughtExceptionHandler() != null) {
+                        log.error("Stream's new uncaught exception handler is set as well as the deprecated old handler." +
+                                "The old handler will be ignored as long as a new handler is set.");
+                    }
+                    if (this.streamsUncaughtExceptionHandler.handle(e) != StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_APPLICATION) {
+                        throw e;
+                    } else {
+                        sendShutdownRequest(AssignorError.SHUTDOWN_REQUESTED);
+                    }
+                } else {
+                    throw e;
+                }
             }
         }
     }
+
+    /**
+     * Sets the streams uncaught exception handler.
+     *
+     * @param streamsUncaughtExceptionHandler the user handler wrapped in shell to execute the action
+     */
+    public void setStreamsUncaughtExceptionHandler(final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
+        this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
+        this.newHandler = true;
+    }
+
+
+    public void shutdownToError() {
+        shutdownErrorHook.shutdown(Duration.ZERO);
+    }
+
+    public void sendShutdownRequest(final AssignorError assignorError) {
+        log.warn("Detected that shutdown was requested. " +
+                "The all clients in this app will now begin to shutdown");
+        assignmentErrorCode.set(assignorError.code());
+        mainConsumer.unsubscribe();
+        subscribeConsumer();
+    }
+
 
     private void handleTaskMigrated(final TaskMigratedException e) {
         log.warn("Detected that the thread is being fenced. " +
@@ -577,8 +639,7 @@ public class StreamThread extends Thread {
                      "Will close out all assigned tasks and rejoin the consumer group.", e);
 
         taskManager.handleLostAll();
-        mainConsumer.unsubscribe();
-        subscribeConsumer();
+        mainConsumer.enforceRebalance();
     }
 
     private void subscribeConsumer() {

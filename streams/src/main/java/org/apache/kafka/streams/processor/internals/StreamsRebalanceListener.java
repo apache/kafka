@@ -60,6 +60,10 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
         }  else if (assignmentErrorCode.get() == AssignorError.ASSIGNMENT_ERROR.code()) {
             log.error("Received error code {}", AssignorError.ASSIGNMENT_ERROR);
             throw new TaskAssignmentException("Hit an unexpected exception during task assignment phase of rebalance");
+        } else if (assignmentErrorCode.get() == AssignorError.SHUTDOWN_REQUESTED.code()) {
+            log.error("An application is requesting Shutdown");
+            streamThread.shutdownToError();
+            return;
         } else if (assignmentErrorCode.get() != AssignorError.NONE.code()) {
             log.error("Received unknown error code {}", assignmentErrorCode.get());
             throw new TaskAssignmentException("Hit an unrecognized exception during rebalance");

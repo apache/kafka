@@ -29,6 +29,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -63,6 +64,7 @@ public class GlobalStreamThread extends Thread {
     private final StreamsMetricsImpl streamsMetrics;
     private final ProcessorTopology topology;
     private volatile StreamsException startupException;
+    private StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler;
 
     /**
      * The states that the global stream thread can be in
@@ -199,7 +201,8 @@ public class GlobalStreamThread extends Thread {
                               final StreamsMetricsImpl streamsMetrics,
                               final Time time,
                               final String threadClientId,
-                              final StateRestoreListener stateRestoreListener) {
+                              final StateRestoreListener stateRestoreListener,
+                              final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
         super(threadClientId);
         this.time = time;
         this.config = config;
@@ -212,6 +215,7 @@ public class GlobalStreamThread extends Thread {
         this.log = logContext.logger(getClass());
         this.cache = new ThreadCache(logContext, cacheSizeBytes, this.streamsMetrics);
         this.stateRestoreListener = stateRestoreListener;
+        this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
     }
 
     static class StateConsumer {
@@ -311,6 +315,11 @@ public class GlobalStreamThread extends Thread {
                 "Updating global state failed. You can restart KafkaStreams to recover from this error.",
                 recoverableException
             );
+        } catch (final Exception e) {
+            if (this.streamsUncaughtExceptionHandler.handle(e) == StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_APPLICATION) {
+                log.warn("Exception in global stream thread cause the application to attempt to shutdown." +
+                        " This action will succeed only if there is at least one StreamThread running on ths client");
+            }
         } finally {
             // set the state to pending shutdown first as it may be called due to error;
             // its state may already be PENDING_SHUTDOWN so it will return false but we
@@ -331,6 +340,10 @@ public class GlobalStreamThread extends Thread {
 
             log.info("Shutdown complete");
         }
+    }
+
+    public void setUncaughtExceptionHandler(final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
+        this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
     }
 
     private StateConsumer initialize() {

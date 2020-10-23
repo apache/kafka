@@ -39,6 +39,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
@@ -60,6 +61,7 @@ import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidator;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.QueryableStoreType;
@@ -81,6 +83,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
@@ -88,8 +91,10 @@ import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
+import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchEndOffsets;
 
@@ -346,25 +351,91 @@ public class KafkaStreams implements AutoCloseable {
      * Set the handler invoked when a {@link StreamsConfig#NUM_STREAM_THREADS_CONFIG internal thread} abruptly
      * terminates due to an uncaught exception.
      *
-     * @param eh the uncaught exception handler for all internal threads; {@code null} deletes the current handler
+     * @param uncaughtExceptionHandler the uncaught exception handler for all internal threads; {@code null} deletes the current handler
      * @throws IllegalStateException if this {@code KafkaStreams} instance is not in state {@link State#CREATED CREATED}.
+     *
+     * @Deprecated Since 2.7.0. Use {@link KafkaStreams#setUncaughtExceptionHandler(StreamsUncaughtExceptionHandler)} instead.
+     *
      */
-    public void setUncaughtExceptionHandler(final Thread.UncaughtExceptionHandler eh) {
+    public void setUncaughtExceptionHandler(final Thread.UncaughtExceptionHandler uncaughtExceptionHandler) {
         synchronized (stateLock) {
             if (state == State.CREATED) {
                 for (final StreamThread thread : threads) {
-                    thread.setUncaughtExceptionHandler(eh);
+                    thread.setUncaughtExceptionHandler(uncaughtExceptionHandler);
                 }
 
                 if (globalStreamThread != null) {
-                    globalStreamThread.setUncaughtExceptionHandler(eh);
+                    globalStreamThread.setUncaughtExceptionHandler(uncaughtExceptionHandler);
                 }
             } else {
                 throw new IllegalStateException("Can only set UncaughtExceptionHandler in CREATED state. " +
-                    "Current state is: " + state);
+                        "Current state is: " + state);
             }
         }
     }
+
+    /**
+     * Set the handler invoked when a {@link StreamsConfig#NUM_STREAM_THREADS_CONFIG internal thread}
+     * throws an unexpected exception.
+     * These might be exceptions indicating rare bugs in Kafka Streams, or they
+     * might be exceptions thrown by your code, for example a NullPointerException thrown from your processor
+     * logic.
+     * <p>
+     * Note, this handler must be threadsafe, since it will be shared among all threads, and invoked from any
+     * thread that encounters such an exception.
+     *
+     * @param streamsUncaughtExceptionHandler the uncaught exception handler of type {@link StreamsUncaughtExceptionHandler} for all internal threads; {@code null} deletes the current handler
+     * @throws IllegalStateException if this {@code KafkaStreams} instance is not in state {@link State#CREATED CREATED}.
+     * @throws NullPointerException @NotNull if streamsUncaughtExceptionHandler is null.
+     */
+    public void setUncaughtExceptionHandler(final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
+        final StreamsUncaughtExceptionHandler handler = exception -> handleStreamsUncaughtException(exception, streamsUncaughtExceptionHandler);
+        synchronized (stateLock) {
+            if (state == State.CREATED) {
+                Objects.requireNonNull(streamsUncaughtExceptionHandler);
+                for (final StreamThread thread : threads) {
+                    thread.setStreamsUncaughtExceptionHandler(handler);
+                }
+                if (globalStreamThread != null) {
+                    globalStreamThread.setUncaughtExceptionHandler(handler);
+                }
+            } else {
+                throw new IllegalStateException("Can only set UncaughtExceptionHandler in CREATED state. " +
+                        "Current state is: " + state);
+            }
+        }
+    }
+
+    private StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse handleStreamsUncaughtException(final Throwable e,
+                                                                                                         final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
+        final StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse action = streamsUncaughtExceptionHandler.handle(e);
+        switch (action) {
+//            case REPLACE_STREAM_THREAD:
+//                log.error("Encountered the following exception during processing " +
+//                        "and the the stream thread will be replaced: ", e);
+//            this.addStreamsThread();
+//                break;
+            case SHUTDOWN_CLIENT:
+                log.error("Encountered the following exception during processing " +
+                        "and the client is going to shut down: ", e);
+                close(Duration.ZERO);
+                break;
+            case SHUTDOWN_APPLICATION:
+                if (e instanceof Error) {
+                    log.error("This option requires the thread to stay running to start the shutdown." +
+                            "Therefore it is not suitable for Error types.");
+                }
+//                for (final StreamThread streamThread: threads) {
+//                    streamThread.sendShutdownRequest(AssignorError.SHUTDOWN_REQUESTED);
+//                }
+                log.error("Encountered the following exception during processing " +
+                        "and the application is going to shut down: ", e);
+        }
+        return action;
+    }
+
+
+
 
     /**
      * Set the listener which is triggered whenever a {@link StateStore} is being restored in order to resume
@@ -668,7 +739,6 @@ public class KafkaStreams implements AutoCloseable {
         } else {
             clientId = userClientId;
         }
-
         final LogContext logContext = new LogContext(String.format("stream-client [%s] ", clientId));
         this.log = logContext.logger(getClass());
 
@@ -704,7 +774,6 @@ public class KafkaStreams implements AutoCloseable {
 
         // sanity check to fail-fast in case we cannot build a ProcessorTopology due to an exception
         taskTopology = internalTopologyBuilder.buildTopology();
-
         streamsMetadataState = new StreamsMetadataState(
                 internalTopologyBuilder,
                 parseHostInfo(config.getString(StreamsConfig.APPLICATION_SERVER_CONFIG)));
@@ -742,7 +811,6 @@ public class KafkaStreams implements AutoCloseable {
         } catch (final ProcessorStateException fatal) {
             throw new StreamsException(fatal);
         }
-
         final StateRestoreListener delegatingStateRestoreListener = new DelegatingStateRestoreListener();
         GlobalStreamThread.State globalThreadState = null;
         if (hasGlobalTopology) {
@@ -756,7 +824,8 @@ public class KafkaStreams implements AutoCloseable {
                 streamsMetrics,
                 time,
                 globalThreadId,
-                delegatingStateRestoreListener
+                delegatingStateRestoreListener,
+                e -> SHUTDOWN_CLIENT
             );
             globalThreadState = globalStreamThread.state();
         }
@@ -780,7 +849,11 @@ public class KafkaStreams implements AutoCloseable {
                 cacheSizePerThread,
                 stateDirectory,
                 delegatingStateRestoreListener,
-                i + 1);
+                i + 1,
+                KafkaStreams.this::close,
+                exception -> handleStreamsUncaughtException(exception, e -> SHUTDOWN_CLIENT),
+                new AtomicInteger()
+            );
             threads.add(streamThread);
             threadState.put(streamThread.getId(), streamThread.state());
             storeProviders.add(new StreamThreadStateStoreProvider(streamThread));
@@ -993,6 +1066,62 @@ public class KafkaStreams implements AutoCloseable {
         } else {
             log.info("Streams client cannot stop completely within the timeout");
             return false;
+        }
+    }
+
+    private void closeToError() {
+        if (!setState(State.ERROR)) {
+            // if transition failed, it means it was either in PENDING_SHUTDOWN
+            // or NOT_RUNNING already; just check that all threads have been stopped
+            log.info("Can not close to error");
+        } else {
+            stateDirCleaner.shutdownNow();
+            if (rocksDBMetricsRecordingService != null) {
+                rocksDBMetricsRecordingService.shutdownNow();
+            }
+
+            // wait for all threads to join in a separate thread;
+            // save the current thread so that if it is a stream thread
+            // we don't attempt to join it and cause a deadlock
+            final Thread shutdownThread = new Thread(() -> {
+                // notify all the threads to stop; avoid deadlocks by stopping any
+                // further state reports from the thread since we're shutting down
+                for (final StreamThread thread : threads) {
+                    thread.shutdown();
+                }
+
+                for (final StreamThread thread : threads) {
+                    try {
+                        if (!thread.isRunning()) {
+                            thread.join();
+                        }
+                    } catch (final InterruptedException ex) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+
+                if (globalStreamThread != null) {
+                    globalStreamThread.shutdown();
+                }
+
+                if (globalStreamThread != null && !globalStreamThread.stillRunning()) {
+                    try {
+                        globalStreamThread.join();
+                    } catch (final InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                    globalStreamThread = null;
+                }
+
+                adminClient.close();
+
+                streamsMetrics.removeAllClientLevelMetrics();
+                metrics.close();
+                setState(State.ERROR);
+            }, "kafka-streams-close-thread");
+
+            shutdownThread.setDaemon(true);
+            shutdownThread.start();
         }
     }
 

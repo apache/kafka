@@ -82,6 +82,20 @@ public class SubscriptionInfo {
                             final UUID processId,
                             final String userEndPoint,
                             final Map<TaskId, Long> taskOffsetSums,
+                            final byte uniqueField,
+                            final byte shutdownRequested) {
+        this(version, latestSupportedVersion, processId, userEndPoint, taskOffsetSums, uniqueField);
+
+        if (version >= 9) {
+            data.setShutdownRequested(shutdownRequested);
+        }
+
+    }
+    public SubscriptionInfo(final int version,
+                            final int latestSupportedVersion,
+                            final UUID processId,
+                            final String userEndPoint,
+                            final Map<TaskId, Long> taskOffsetSums,
                             final byte uniqueField) {
         validateVersions(version, latestSupportedVersion);
         final SubscriptionInfoData data = new SubscriptionInfoData();
@@ -113,6 +127,10 @@ public class SubscriptionInfo {
     private SubscriptionInfo(final SubscriptionInfoData subscriptionInfoData) {
         validateVersions(subscriptionInfoData.version(), subscriptionInfoData.latestSupportedVersion());
         this.data = subscriptionInfoData;
+    }
+
+    public int shutdownRequested() {
+        return data.shutdownRequested();
     }
 
     private void setTaskOffsetSumDataFromTaskOffsetSumMap(final Map<TaskId, Long> taskOffsetSums) {
