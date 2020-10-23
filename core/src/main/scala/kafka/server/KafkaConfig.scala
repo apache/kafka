@@ -1011,7 +1011,7 @@ object KafkaConfig {
     new ConfigDef()
 
       /** ********* Zookeeper Configuration ***********/
-      .define(ZkConnectProp, STRING, HIGH, ZkConnectDoc)
+      .define(ZkConnectProp, STRING, "", HIGH, ZkConnectDoc)
       .define(ZkSessionTimeoutMsProp, INT, Defaults.ZkSessionTimeoutMs, HIGH, ZkSessionTimeoutMsDoc)
       .define(ZkConnectionTimeoutMsProp, INT, null, HIGH, ZkConnectionTimeoutMsDoc)
       .define(ZkSyncTimeMsProp, INT, Defaults.ZkSyncTimeMs, LOW, ZkSyncTimeMsDoc)
@@ -1047,8 +1047,8 @@ object KafkaConfig {
       .define(RequestTimeoutMsProp, INT, Defaults.RequestTimeoutMs, HIGH, RequestTimeoutMsDoc)
       .define(ConnectionSetupTimeoutMsProp, LONG, Defaults.ConnectionSetupTimeoutMs, MEDIUM, ConnectionSetupTimeoutMsDoc)
       .define(ConnectionSetupTimeoutMaxMsProp, LONG, Defaults.ConnectionSetupTimeoutMaxMs, MEDIUM, ConnectionSetupTimeoutMaxMsDoc)
-      .define(ProcessRolesProp, STRING, null, HIGH, ProcessRolesDoc)
-      .define(ControllerConnectProp, LIST, null, HIGH, ControllerConnectDoc)
+      .define(ProcessRolesProp, LIST, Collections.emptyList(), HIGH, ProcessRolesDoc)
+      .define(ControllerConnectProp, LIST, Collections.emptyList(), HIGH, ControllerConnectDoc)
       .define(RegistrationHeartbeatIntervalMsProp, INT, Defaults.RegistrationHeartbeatIntervalMs, MEDIUM, RegistrationHeartbeatIntervalMsDoc)
       .define(RegistrationLeaseTimeoutMsProp, INT, Defaults.RegistrationLeaseTimeoutMs, MEDIUM, RegistrationLeaseTimeoutMsDoc)
       .define(MetadataLogDirProp, STRING, null, HIGH, MetadataLogDirDoc)
@@ -1809,11 +1809,6 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   validateValues()
 
   private def validateValues(): Unit = {
-    if(brokerIdGenerationEnable) {
-      require(brokerId >= -1 && brokerId <= maxReservedBrokerId, "broker.id must be equal or greater than -1 and not greater than reserved.broker.max.id")
-    } else {
-      require(brokerId >= 0, "broker.id must be equal or greater than 0")
-    }
     require(logRollTimeMillis >= 1, "log.roll.ms must be equal or greater than 1")
     require(logRollTimeJitterMillis >= 0, "log.roll.jitter.ms must be equal or greater than 0")
     require(logRetentionTimeMillis >= 1 || logRetentionTimeMillis == -1, "log.retention.ms must be unlimited (-1) or, equal or greater than 1")
@@ -1841,17 +1836,6 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     require(!advertisedListeners.exists(endpoint => endpoint.host=="0.0.0.0"),
       s"${KafkaConfig.AdvertisedListenersProp} cannot use the nonroutable meta-address 0.0.0.0. "+
       s"Use a routable IP address.")
-
-    // validate controller.listener.name config
-    if (controlPlaneListenerName.isDefined) {
-      require(advertisedListenerNames.contains(controlPlaneListenerName.get),
-        s"${KafkaConfig.ControlPlaneListenerNameProp} must be a listener name defined in ${KafkaConfig.AdvertisedListenersProp}. " +
-        s"The valid options based on currently configured listeners are ${advertisedListenerNames.map(_.value).mkString(",")}")
-      // controlPlaneListenerName should be different from interBrokerListenerName
-      require(!controlPlaneListenerName.get.value().equals(interBrokerListenerName.value()),
-        s"${KafkaConfig.ControlPlaneListenerNameProp}, when defined, should have a different value from the inter broker listener name. " +
-        s"Currently they both have the value ${controlPlaneListenerName.get}")
-    }
 
     val recordVersion = logMessageFormatVersion.recordVersion
     require(interBrokerProtocolVersion.recordVersion.value >= recordVersion.value,
@@ -1884,5 +1868,41 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
         s"${KafkaConfig.FailedAuthenticationDelayMsProp}=$failedAuthenticationDelayMs should always be less than" +
         s" ${KafkaConfig.ConnectionsMaxIdleMsProp}=$connectionsMaxIdleMs to prevent failed" +
         s" authentication responses from timing out")
+
+    if (processRoles.isEmpty) {
+      if (zkConnect.isEmpty) {
+        throw new ConfigException("Missing required configuration \"zookeeper.connect\" which has no default value.")
+      }
+      // validate controller.listener.name config
+      if (controlPlaneListenerName.isDefined) {
+        require(advertisedListenerNames.contains(controlPlaneListenerName.get),
+          s"${KafkaConfig.ControlPlaneListenerNameProp} must be a listener name defined in ${KafkaConfig.AdvertisedListenersProp}. " +
+            s"The valid options based on currently configured listeners are ${advertisedListenerNames.map(_.value).mkString(",")}")
+        // controlPlaneListenerName should be different from interBrokerListenerName
+        require(!controlPlaneListenerName.get.value().equals(interBrokerListenerName.value()),
+          s"${KafkaConfig.ControlPlaneListenerNameProp}, when defined, should have a different value from the inter broker listener name. " +
+            s"Currently they both have the value ${controlPlaneListenerName.get}")
+      }
+      if(brokerIdGenerationEnable) {
+        require(brokerId >= -1 && brokerId <= maxReservedBrokerId, "broker.id must be equal or greater than -1 and not greater than reserved.broker.max.id")
+      } else {
+        require(brokerId >= 0, "broker.id must be equal or greater than 0")
+      }
+    } else {
+      processRoles.asScala.foreach(role => if (!(role.equals("broker") || role.equals("controller"))) {
+        throw new ConfigException(s"Unknown process role ${role}")
+      })
+      if (controlPlaneListenerName.isDefined) {
+        throw new ConfigException(s"${KafkaConfig.ControlPlaneListenerNameProp} is not compatible with kip-500 mode.")
+      }
+      val isBroker = processRoles.contains("broker")
+      val isController = processRoles.contains("controller")
+      if (isBroker) {
+        require(brokerId >= 0, "broker.id must be equal or greater than 0")
+      }
+      if (isController) {
+        require(controllerId >= 0, "controller.id must be equal or greater than 0")
+      }
+    }
   }
 }
