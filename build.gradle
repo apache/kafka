@@ -731,6 +731,9 @@ project(':core') {
   println "Building project 'core' with Scala version ${versions.scala}"
 
   apply plugin: 'scala'
+  scaladoc {
+      enabled = false
+  }
   if (userEnableTestCoverage)
     apply plugin: "org.scoverage"
   archivesBaseName = "kafka_${versions.baseScala}"
