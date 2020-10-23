@@ -988,6 +988,108 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     }
   }
 
+  @Test
+  def testAllowAnyWithCustomPrincipal(): Unit = {
+    val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1")
+    val user2 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user2")
+    val host1 = InetAddress.getByName("192.168.1.1")
+    val host2 = InetAddress.getByName("192.168.1.2")
+    val resource1 = new ResourcePattern(TOPIC, "sb1" + UUID.randomUUID(), LITERAL)
+    val resource2 = new ResourcePattern(TOPIC, "sb2" + UUID.randomUUID(), LITERAL)
+    val resource3 = new ResourcePattern(GROUP, "s", PREFIXED)
+
+    val acl1 = new AccessControlEntry(user1.toString, host1.getHostAddress, READ, DENY)
+    val acl2 = new AccessControlEntry(user2.toString, host1.getHostAddress, READ, DENY)
+    val acl3 = new AccessControlEntry(user1.toString, host2.getHostAddress, WRITE, DENY)
+    val acl4 = new AccessControlEntry(user1.toString, host2.getHostAddress, READ, DENY)
+    val acl5 = new AccessControlEntry(user1.toString, host2.getHostAddress, READ, DENY)
+    val acl6 = new AccessControlEntry(user2.toString, host2.getHostAddress, READ, DENY)
+    val acl7 = new AccessControlEntry(user1.toString, host2.getHostAddress, READ, ALLOW)
+
+    addAcls(aclAuthorizer, Set(acl1, acl2, acl3, acl6, acl7), resource1)
+    addAcls(aclAuthorizer, Set(acl4), resource2)
+    addAcls(aclAuthorizer, Set(acl5), resource3)
+
+    val u1h1Context = newRequestContext(user1, host1)
+    val u1h2Context = newRequestContext(user1, host2)
+
+    val anyTopicFilter = new ResourcePatternFilter(
+      ResourceType.TOPIC, null, PatternType.ANY)
+    val anyGroupFilter = new ResourcePatternFilter(
+      ResourceType.GROUP, null, PatternType.ANY)
+    val anyTransactionFilter = new ResourcePatternFilter(
+      ResourceType.TRANSACTIONAL_ID, null, PatternType.ANY)
+    val anyClusterFilter = new ResourcePatternFilter(
+      ResourceType.CLUSTER, null, PatternType.ANY)
+    val anyResourceFilter = new ResourcePatternFilter(
+      ResourceType.ANY, null, PatternType.ANY
+    )
+
+    assertFalse("User1 from host1 should not have READ access to any topic",
+      authorizeAny(aclAuthorizer, u1h1Context, READ, anyTopicFilter))
+    assertFalse("User1 from host2 should not have READ access to any consumer group",
+      authorizeAny(aclAuthorizer, u1h1Context, READ, anyGroupFilter))
+    assertFalse("User1 from host2 should not have READ access to any topic",
+      authorizeAny(aclAuthorizer, u1h1Context, READ, anyTransactionFilter))
+    assertFalse("User1 from host2 should not have READ access to any topic",
+      authorizeAny(aclAuthorizer, u1h1Context, READ, anyClusterFilter))
+    assertTrue("User1 from host2 should have READ access to at least one topic",
+      authorizeAny(aclAuthorizer, u1h2Context, READ, anyTopicFilter))
+    assertTrue("User1 from host2 should have READ access to at least one resource of any type",
+      authorizeAny(aclAuthorizer, u1h2Context, READ, anyResourceFilter))
+  }
+
+  @Test
+  def testAllowAnyDenyTakesPrecedence(): Unit = {
+    val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1")
+    val host1 = InetAddress.getByName("192.168.1.1")
+    val resource1 = new ResourcePattern(TOPIC, "sb1" + UUID.randomUUID(), LITERAL)
+
+    val anyTopicFilter = new ResourcePatternFilter(
+      ResourceType.TOPIC, null, PatternType.ANY)
+    val anyResourceFilter = new ResourcePatternFilter(
+      ResourceType.ANY, null, PatternType.ANY
+    )
+
+    val u1h1Context = newRequestContext(user1, host1)
+    val acl1 = new AccessControlEntry(user1.toString, host1.getHostAddress, WRITE, ALLOW)
+    val acl2 = new AccessControlEntry(user1.toString, host1.getHostAddress, WRITE, DENY)
+
+    addAcls(aclAuthorizer, Set(acl1), resource1)
+    assertTrue("User1 from host1 should have READ access to at least one topic",
+      authorizeAny(aclAuthorizer, u1h1Context, WRITE, anyTopicFilter))
+    assertTrue("User1 from host1 should have READ access to at least one resource of any type",
+      authorizeAny(aclAuthorizer, u1h1Context, WRITE, anyResourceFilter))
+
+    addAcls(aclAuthorizer, Set(acl2), resource1)
+    assertFalse("User1 from host1 should not have READ access to any topic",
+      authorizeAny(aclAuthorizer, u1h1Context, WRITE, anyTopicFilter))
+    assertFalse("User1 from host1 should not have READ access to any resource of any type",
+      authorizeAny(aclAuthorizer, u1h1Context, WRITE, anyResourceFilter))
+  }
+
+  @Test
+  def testAllowAnyNoAclFoundOverride(): Unit = {
+    val props = TestUtils.createBrokerConfig(1, zkConnect)
+    props.put(AclAuthorizer.AllowEveryoneIfNoAclIsFoundProp, "true")
+    val typeFilter = new ResourcePatternFilter(
+      resource.resourceType(), null, PatternType.ANY)
+
+    val cfg = KafkaConfig.fromProps(props)
+    val testAuthorizer = new AclAuthorizer
+    try {
+      testAuthorizer.configure(cfg.originals)
+      assertTrue("If allow.everyone.if.no.acl.found = true, " +
+        "caller should have read access to at least one topic",
+        authorizeAny(testAuthorizer, requestContext, READ, typeFilter))
+      assertTrue("If allow.everyone.if.no.acl.found = true, " +
+        "caller should have write access to at least one topic",
+        authorizeAny(testAuthorizer, requestContext, WRITE, typeFilter))
+    } finally {
+      testAuthorizer.close()
+    }
+  }
+
   private def givenAuthorizerWithProtocolVersion(protocolVersion: Option[ApiVersion]): Unit = {
     aclAuthorizer.close()
 
@@ -1043,6 +1145,10 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
   private def authorize(authorizer: AclAuthorizer, requestContext: RequestContext, operation: AclOperation, resource: ResourcePattern): Boolean = {
     val action = new Action(operation, resource, 1, true, true)
     authorizer.authorize(requestContext, List(action).asJava).asScala.head == AuthorizationResult.ALLOWED
+  }
+
+  private def authorizeAny(authorizer: AclAuthorizer, requestContext: RequestContext, operation: AclOperation, filter: ResourcePatternFilter) : Boolean = {
+    authorizer.authorizeAny(requestContext, operation, filter) == AuthorizationResult.ALLOWED
   }
 
   private def addAcls(authorizer: AclAuthorizer, aces: Set[AccessControlEntry], resourcePattern: ResourcePattern): Unit = {

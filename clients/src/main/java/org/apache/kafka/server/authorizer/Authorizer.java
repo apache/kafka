@@ -18,15 +18,27 @@
 package org.apache.kafka.server.authorizer;
 
 import java.io.Closeable;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletionStage;
 
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.Endpoint;
+import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
+import org.apache.kafka.common.acl.AclOperation;
+import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.resource.PatternType;
+import org.apache.kafka.common.resource.ResourcePattern;
+import org.apache.kafka.common.resource.ResourcePatternFilter;
+import org.apache.kafka.common.resource.ResourceType;
 
 /**
  *
@@ -139,4 +151,52 @@ public interface Authorizer extends Configurable, Closeable {
      * @return Iterator for ACL bindings, which may be populated lazily.
      */
     Iterable<AclBinding> acls(AclBindingFilter filter);
+
+    /**
+     * Check if the caller is authorized to perform the given ACL operation on at least one
+     * resource satisfying the filter.
+     * The request caller is not allowed to perform the given ACL operation on at least one
+     * resource satisfying iff
+     *
+     * @param requestContext Request context including request type, security protocol, and listener name
+     * @param op             The ACL operation to check
+     * @param f              The resource filter
+     * @return Return true if the caller is authorized to perform the given ACL operation
+     * on at least one resource satisfying the filter. Return false otherwise.
+     */
+    default AuthorizationResult authorizeAny(AuthorizableRequestContext requestContext, AclOperation op, ResourcePatternFilter f) {
+        AclBindingFilter filter = new AclBindingFilter(
+            f, new AccessControlEntryFilter(
+                requestContext.principal().toString(),
+                requestContext.clientAddress().getHostAddress(),
+                op,
+                AclPermissionType.ANY));
+
+        Iterable<AclBinding> bindings = acls(filter);
+        Set<String> allResourceNames = new HashSet<>();
+
+        for (AclBinding binding : bindings) {
+            if (binding.entry().permissionType() != AclPermissionType.ALLOW)
+                continue;
+            List<Action> action = Collections.singletonList(new Action(
+                op, binding.pattern(), 1, false, false));
+            if (authorize(requestContext, action).get(0) == AuthorizationResult.ALLOWED) {
+                return AuthorizationResult.ALLOWED;
+            }
+            allResourceNames.add(binding.pattern().name());
+        }
+
+        // More cases to investigate, see slack
+        String randomResourceName = UUID.randomUUID().toString();
+        while (allResourceNames.contains(randomResourceName)) {
+            randomResourceName = UUID.randomUUID().toString();
+        }
+
+        ResourcePattern randomResource = new ResourcePattern(
+            ResourceType.TOPIC, randomResourceName, PatternType.LITERAL);
+        List<Action> randomAction = Collections.singletonList(new Action(
+            op, randomResource, 1, false, false));
+        return authorize(requestContext, randomAction).get(0);
+    }
+
 }
