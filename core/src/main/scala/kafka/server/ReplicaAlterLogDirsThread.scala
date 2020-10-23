@@ -20,7 +20,7 @@ package kafka.server
 import java.util
 import java.util.Optional
 
-import kafka.api.{ApiVersion, Request}
+import kafka.api.Request
 import kafka.cluster.BrokerEndPoint
 import kafka.log.{LeaderOffsetIncremented, LogAppendInfo}
 import kafka.server.AbstractFetcherThread.ReplicaFetch
@@ -184,7 +184,7 @@ class ReplicaAlterLogDirsThread(name: String,
 
   override protected def isOffsetForLeaderEpochSupported: Boolean = true
 
-  override protected def isTruncationOnFetchSupported: Boolean = ApiVersion.isTruncationOnFetchSupported(brokerConfig.interBrokerProtocolVersion)
+  override protected def isTruncationOnFetchSupported: Boolean = false
 
   /**
    * Truncate the log for each partition based on current replica's returned epoch and offset.

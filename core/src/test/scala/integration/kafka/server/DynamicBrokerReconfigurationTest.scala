@@ -850,12 +850,8 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
         assertEquals(1, fetcherThreads.size)
         assertEquals(replicaFetcherManager.getFetcherId(tp), fetcherThreads.head._1.fetcherId)
         val thread = fetcherThreads.head._2
-        if (!thread.isTruncationOnFetchSupported) {
-          assertEquals(Some(truncationOffset), thread.fetchState(tp).map(_.fetchOffset))
-          assertEquals(Some(Truncating), thread.fetchState(tp).map(_.state))
-        } else {
-          assertEquals(Some(Fetching), thread.fetchState(tp).map(_.state))
-        }
+        assertEquals(Some(truncationOffset), thread.fetchState(tp).map(_.fetchOffset))
+        assertEquals(Some(Truncating), thread.fetchState(tp).map(_.state))
       }
     }
   }

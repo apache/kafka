@@ -427,22 +427,19 @@ abstract class AbstractFetcherThread(name: String,
 
   /**
    * This is used to mark partitions for truncation in ReplicaAlterLogDirsThread after leader
-   * offsets are known. From IBP 2.7 onwards, we track lastFetchedEpoch and perform truncation
-   * based on diverging offsets returned in fetch responses, so this step is not required.
+   * offsets are known.
    */
   def markPartitionsForTruncation(topicPartition: TopicPartition, truncationOffset: Long): Unit = {
-    if (!isTruncationOnFetchSupported) {
-      partitionMapLock.lockInterruptibly()
-      try {
-        Option(partitionStates.stateValue(topicPartition)).foreach { state =>
-          val newState = PartitionFetchState(math.min(truncationOffset, state.fetchOffset),
-            state.lag, state.currentLeaderEpoch, state.delay, state = Truncating,
-            lastFetchedEpoch = None)
-          partitionStates.updateAndMoveToEnd(topicPartition, newState)
-          partitionMapCond.signalAll()
-        }
-      } finally partitionMapLock.unlock()
-    }
+    partitionMapLock.lockInterruptibly()
+    try {
+      Option(partitionStates.stateValue(topicPartition)).foreach { state =>
+        val newState = PartitionFetchState(math.min(truncationOffset, state.fetchOffset),
+          state.lag, state.currentLeaderEpoch, state.delay, state = Truncating,
+          lastFetchedEpoch = None)
+        partitionStates.updateAndMoveToEnd(topicPartition, newState)
+        partitionMapCond.signalAll()
+      }
+    } finally partitionMapLock.unlock()
   }
 
   private def markPartitionFailed(topicPartition: TopicPartition): Unit = {
