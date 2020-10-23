@@ -78,11 +78,11 @@ object StorageTool extends Logging {
 
       command match {
         case "info" => {
-          val directories = configToLogDirectories(config)
+          val directories = configToLogDirectories(config.get)
           Exit.exit(infoCommand(System.out, directories))
         }
         case "format" => {
-          val directories = configToLogDirectories(config)
+          val directories = configToLogDirectories(config.get)
           val incarnationId = Option(namespace.getString("incarnation_id"))
           val clusterId = namespace.getString("cluster_id")
           val ignoreFormatted = namespace.getBoolean("ignore_formatted")
@@ -104,9 +104,7 @@ object StorageTool extends Logging {
     }
   }
 
-  def configToLogDirectories(config: Option[KafkaConfig]): Seq[String] = {
-    config.get.logDirs.toSeq
-  }
+  def configToLogDirectories(config: KafkaConfig): Seq[String] = config.logDirs.toSeq
 
   def infoCommand(stream: PrintStream, directories: Seq[String]): Int = {
     val problems = new mutable.ArrayBuffer[String]
@@ -191,14 +189,13 @@ object StorageTool extends Logging {
       throw new TerseFailure("No log directories found in the configuration.")
     }
     val unformattedDirectories = directories.filter(directory => {
-      if (Files.isDirectory(Paths.get(directory))) {
-        if (!ignoreFormatted && Files.exists(Paths.get(directory, "meta.properties"))) {
-          throw new TerseFailure(s"Log directory ${directory} is already formatted. " +
-            "Use --ignore-formatted to ignore this directory and format the others.")
-        }
-        false
+      if (!Files.isDirectory(Paths.get(directory)) || !Files.exists(Paths.get(directory, "meta.properties"))) {
+          true
+      } else if (!ignoreFormatted) {
+        throw new TerseFailure(s"Log directory ${directory} is already formatted. " +
+          "Use --ignore-formatted to ignore this directory and format the others.")
       } else {
-        true
+        false
       }
     })
     if (unformattedDirectories.isEmpty) {
@@ -234,7 +231,7 @@ object StorageTool extends Logging {
       val metaPropertiesPath = Paths.get(directory, "meta.properties")
       val checkpoint = new BrokerMetadataCheckpoint(metaPropertiesPath.toFile)
       checkpoint.write(metaProperties.toProperties())
-      stream.println(s"Formatting ${metaPropertiesPath}")
+      stream.println(s"Formatting ${directory}")
     })
     0
   }
