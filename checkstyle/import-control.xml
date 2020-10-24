@@ -471,9 +471,12 @@
 
     <subpackage name="transforms">
       <allow class="org.apache.kafka.connect.connector.ConnectRecord" />
+      <allow class="org.apache.kafka.connect.json.JsonConverter" />
+      <allow class="org.apache.kafka.connect.json.JsonDeserializer" />
       <allow class="org.apache.kafka.connect.source.SourceRecord" />
       <allow class="org.apache.kafka.connect.sink.SinkRecord" />
       <allow pkg="org.apache.kafka.connect.transforms.util" />
+      <allow pkg="com.fasterxml.jackson" />
     </subpackage>
   </subpackage>
 
