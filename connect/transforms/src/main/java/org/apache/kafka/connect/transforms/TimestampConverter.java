@@ -284,7 +284,6 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
             this.fields = fields;
             this.type = type;
             this.inputFormatPattern = inputFormatPattern;
-            this.outputFormatPattern = outputFormatPattern;
 
             if (type.equals(TYPE_STRING) && Utils.isBlank(outputFormatPattern)) {
                 throw new ConfigException("TimestampConverter requires '" + ConfigName.FORMAT_OUTPUT + "' option to be specified when using string timestamps");
@@ -316,7 +315,6 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
         List<String> fields;
         String type;
         String inputFormatPattern;
-        String outputFormatPattern;
         DateTimeFormatter inputFormatter;
         SimpleDateFormat outputFormatter;
     }
