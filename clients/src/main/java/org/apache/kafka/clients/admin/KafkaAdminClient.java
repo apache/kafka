@@ -4347,9 +4347,9 @@ public class KafkaAdminClient extends AdminClient {
             "describeFeatures", calcDeadlineMs(now, options.timeoutMs()), provider) {
 
             private FeatureMetadata createFeatureMetadata(final ApiVersionsResponse response) {
-                final Map<String, FinalizedVersionRange> finalizedFeatures = new HashMap<>();
+                final Map<String, FinalizedVersions> finalizedFeatures = new HashMap<>();
                 for (final FinalizedFeatureKey key : response.data().finalizedFeatures().valuesSet()) {
-                    finalizedFeatures.put(key.name(), new FinalizedVersionRange(key.minVersionLevel(), key.maxVersionLevel()));
+                    finalizedFeatures.put(key.name(), new FinalizedVersions(key.minVersionLevel(), key.maxVersionLevel()));
                 }
 
                 Optional<Long> finalizedFeaturesEpoch;
@@ -4359,9 +4359,9 @@ public class KafkaAdminClient extends AdminClient {
                     finalizedFeaturesEpoch = Optional.empty();
                 }
 
-                final Map<String, SupportedVersionRange> supportedFeatures = new HashMap<>();
+                final Map<String, SupportedVersions> supportedFeatures = new HashMap<>();
                 for (final SupportedFeatureKey key : response.data().supportedFeatures().valuesSet()) {
-                    supportedFeatures.put(key.name(), new SupportedVersionRange(key.minVersion(), key.maxVersion()));
+                    supportedFeatures.put(key.name(), new SupportedVersions(key.minVersion(), key.maxVersion()));
                 }
 
                 return new FeatureMetadata(finalizedFeatures, finalizedFeaturesEpoch, supportedFeatures);

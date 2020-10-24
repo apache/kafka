@@ -33,7 +33,7 @@ import static org.junit.Assert.assertTrue;
  * Most of the unit tests required for BaseVersionRange are part of the SupportedVersionRangeTest
  * suite. This suite only tests behavior very specific to FinalizedVersionRange.
  */
-public class FinalizedVersionRangeTest {
+public class FinalizedVersionsTest {
 
     @Test
     public void testFromToMap() {

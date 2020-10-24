@@ -32,7 +32,7 @@ import static org.junit.Assert.assertTrue;
  * Unit tests for the SupportedVersionRange class.
  * Along the way, this suite also includes extensive tests for the base class BaseVersionRange.
  */
-public class SupportedVersionRangeTest {
+public class SupportedVersionsTest {
     @Test
     public void testFailDueToInvalidParams() {
         // min and max can't be < 1.
