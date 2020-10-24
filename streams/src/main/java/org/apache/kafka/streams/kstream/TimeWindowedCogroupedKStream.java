@@ -22,6 +22,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.WindowStore;
 
 import java.time.Duration;
@@ -81,7 +82,7 @@ public interface TimeWindowedCogroupedKStream<K, V> {
      * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "internalStoreName" is an internal name
      * and "-changelog" is a fixed suffix.
-     * Note that the internal store name may not be queriable through Interactive Queries.
+     * Note that the internal store name may not be queryable through Interactive Queries.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
@@ -120,7 +121,7 @@ public interface TimeWindowedCogroupedKStream<K, V> {
      * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "internalStoreName" is an internal name
      * and "-changelog" is a fixed suffix.
-     * Note that the internal store name may not be queriable through Interactive Queries.
+     * Note that the internal store name may not be queryable through Interactive Queries.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *

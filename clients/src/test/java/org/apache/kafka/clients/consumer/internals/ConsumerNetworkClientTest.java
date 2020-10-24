@@ -86,7 +86,7 @@ public class ConsumerNetworkClientTest {
     }
 
     @Test
-    public void sendWithinBlackoutPeriodAfterAuthenticationFailure() {
+    public void sendWithinBackoffPeriodAfterAuthenticationFailure() {
         client.authenticationFailed(node, 300);
         client.prepareResponse(heartbeatResponse(Errors.NONE));
         final RequestFuture<ClientResponse> future = consumerClient.send(node, heartbeat());
@@ -94,7 +94,7 @@ public class ConsumerNetworkClientTest {
         assertTrue(future.failed());
         assertTrue("Expected only an authentication error.", future.exception() instanceof AuthenticationException);
 
-        time.sleep(30); // wait less than the blackout period
+        time.sleep(30); // wait less than the backoff period
         assertTrue(client.connectionFailed(node));
 
         final RequestFuture<ClientResponse> future2 = consumerClient.send(node, heartbeat());

@@ -20,11 +20,14 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.List;
+
+import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 
 public class ChangeLoggingKeyValueBytesStore
     extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, byte[], byte[]>
@@ -36,12 +39,24 @@ public class ChangeLoggingKeyValueBytesStore
         super(inner);
     }
 
+    @Deprecated
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
         super.init(context, root);
-        this.context = (InternalProcessorContext) context;
+        this.context = asInternalProcessorContext(context);
+        maybeSetEvictionListener();
+    }
 
+    @Override
+    public void init(final StateStoreContext context,
+                     final StateStore root) {
+        super.init(context, root);
+        this.context = asInternalProcessorContext(context);
+        maybeSetEvictionListener();
+    }
+
+    private void maybeSetEvictionListener() {
         // if the inner store is an LRU cache, add the eviction listener to log removed record
         if (wrapped() instanceof MemoryLRUCache) {
             ((MemoryLRUCache) wrapped()).setWhenEldestRemoved((key, value) -> {
@@ -101,8 +116,19 @@ public class ChangeLoggingKeyValueBytesStore
     }
 
     @Override
+    public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from,
+                                                        final Bytes to) {
+        return wrapped().reverseRange(from, to);
+    }
+
+    @Override
     public KeyValueIterator<Bytes, byte[]> all() {
         return wrapped().all();
+    }
+
+    @Override
+    public KeyValueIterator<Bytes, byte[]> reverseAll() {
+        return wrapped().reverseAll();
     }
 
     void log(final Bytes key,

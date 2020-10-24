@@ -52,6 +52,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -74,7 +75,8 @@ public class NetworkClientTest {
     protected final Node node = TestUtils.singletonCluster().nodes().iterator().next();
     protected final long reconnectBackoffMsTest = 10 * 1000;
     protected final long reconnectBackoffMaxMsTest = 10 * 10000;
-
+    protected final long connectionSetupTimeoutMsTest = 5 * 1000;
+    protected final long connectionSetupTimeoutMaxMsTest = 127 * 1000;
     private final TestMetadataUpdater metadataUpdater = new TestMetadataUpdater(Collections.singletonList(node));
     private final NetworkClient client = createNetworkClient(reconnectBackoffMaxMsTest);
     private final NetworkClient clientWithNoExponentialBackoff = createNetworkClient(reconnectBackoffMsTest);
@@ -84,26 +86,34 @@ public class NetworkClientTest {
     private NetworkClient createNetworkClient(long reconnectBackoffMaxMs) {
         return new NetworkClient(selector, metadataUpdater, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMs, 64 * 1024, 64 * 1024,
-                defaultRequestTimeoutMs, ClientDnsLookup.DEFAULT, time, true, new ApiVersions(), new LogContext());
+                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, ClientDnsLookup.DEFAULT, time, true, new ApiVersions(), new LogContext());
+    }
+
+    private NetworkClient createNetworkClientWithMultipleNodes(long reconnectBackoffMaxMs, long connectionSetupTimeoutMsTest, int nodeNumber) {
+        List<Node> nodes = TestUtils.clusterWith(nodeNumber).nodes();
+        TestMetadataUpdater metadataUpdater = new TestMetadataUpdater(nodes);
+        return new NetworkClient(selector, metadataUpdater, "mock", Integer.MAX_VALUE,
+                reconnectBackoffMsTest, reconnectBackoffMaxMs, 64 * 1024, 64 * 1024,
+                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, ClientDnsLookup.DEFAULT, time, true, new ApiVersions(), new LogContext());
     }
 
     private NetworkClient createNetworkClientWithStaticNodes() {
         return new NetworkClient(selector, metadataUpdater,
                 "mock-static", Integer.MAX_VALUE, 0, 0, 64 * 1024, 64 * 1024, defaultRequestTimeoutMs,
-                ClientDnsLookup.DEFAULT, time, true, new ApiVersions(), new LogContext());
+                connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, ClientDnsLookup.DEFAULT, time, true, new ApiVersions(), new LogContext());
     }
 
     private NetworkClient createNetworkClientWithNoVersionDiscovery(Metadata metadata) {
         return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
-                defaultRequestTimeoutMs, ClientDnsLookup.DEFAULT, time, false, new ApiVersions(), new LogContext());
+                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, ClientDnsLookup.DEFAULT, time, false, new ApiVersions(), new LogContext());
     }
 
     private NetworkClient createNetworkClientWithNoVersionDiscovery() {
         return new NetworkClient(selector, metadataUpdater, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest,
                 64 * 1024, 64 * 1024, defaultRequestTimeoutMs,
-                ClientDnsLookup.DEFAULT, time, false, new ApiVersions(), new LogContext());
+                connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, ClientDnsLookup.DEFAULT, time, false, new ApiVersions(), new LogContext());
     }
 
     @Before
@@ -139,6 +149,20 @@ public class NetworkClientTest {
     public void testDnsLookupFailure() {
         /* Fail cleanly when the node has a bad hostname */
         assertFalse(client.ready(new Node(1234, "badhost", 1234), time.milliseconds()));
+    }
+
+    @Test
+    public void testIncludeInitialPrincipalNameAndClientIdInHeader() {
+        MetadataRequest.Builder builder = new MetadataRequest.Builder(Collections.singletonList("test"), true);
+        final String initialPrincipalName = "initial-principal";
+        final String initialClientId = "initial-client";
+
+        ClientRequest request = client.newClientRequest("5", builder, 0L, false,
+            defaultRequestTimeoutMs, initialPrincipalName, initialClientId, null);
+        RequestHeader header = request.makeHeader(builder.latestAllowedVersion());
+
+        assertEquals(initialPrincipalName, header.initialPrincipalName());
+        assertEquals(initialClientId, header.initialClientId());
     }
 
     @Test
@@ -184,8 +208,8 @@ public class NetworkClientTest {
                 Collections.emptyMap(),
                 null);
         TestCallbackHandler handler = new TestCallbackHandler();
-        ClientRequest request = networkClient.newClientRequest(
-                node.idString(), builder, time.milliseconds(), true, defaultRequestTimeoutMs, handler);
+        ClientRequest request = networkClient.newClientRequest(node.idString(), builder, time.milliseconds(), true,
+                defaultRequestTimeoutMs, null, null, handler);
         networkClient.send(request, time.milliseconds());
         networkClient.poll(1, time.milliseconds());
         assertEquals(1, networkClient.inFlightRequestCount());
@@ -430,7 +454,7 @@ public class NetworkClientTest {
         TestCallbackHandler handler = new TestCallbackHandler();
         int requestTimeoutMs = defaultRequestTimeoutMs + 5000;
         ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true,
-                requestTimeoutMs, handler);
+                requestTimeoutMs,  null, null, handler);
         assertEquals(requestTimeoutMs, request.requestTimeoutMs());
         testRequestTimeout(request);
     }
@@ -458,6 +482,34 @@ public class NetworkClientTest {
     }
 
     @Test
+    public void testConnectionSetupTimeout() {
+        // Use two nodes to ensure that the logic iterate over a set of more than one
+        // element. ConcurrentModificationException is not triggered otherwise.
+        final Cluster cluster = TestUtils.clusterWith(2);
+        final Node node0 = cluster.nodeById(0);
+        final Node node1 = cluster.nodeById(1);
+
+        client.ready(node0, time.milliseconds());
+        selector.serverConnectionBlocked(node0.idString());
+
+        client.ready(node1, time.milliseconds());
+        selector.serverConnectionBlocked(node1.idString());
+
+        client.poll(0, time.milliseconds());
+        assertFalse(
+                "The connections should not fail before the socket connection setup timeout elapsed",
+                client.connectionFailed(node)
+        );
+
+        time.sleep((long) (connectionSetupTimeoutMsTest * 1.2) + 1);
+        client.poll(0, time.milliseconds());
+        assertTrue(
+                "Expected the connections to fail due to the socket connection setup timeout",
+                client.connectionFailed(node)
+        );
+    }
+
+    @Test
     public void testConnectionThrottling() {
         // Instrument the test to return a response with a 100ms throttle delay.
         awaitReady(client, node);
@@ -470,7 +522,7 @@ public class NetworkClientTest {
             null);
         TestCallbackHandler handler = new TestCallbackHandler();
         ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true,
-                defaultRequestTimeoutMs, handler);
+                defaultRequestTimeoutMs,  null, null, handler);
         client.send(request, time.milliseconds());
         client.poll(1, time.milliseconds());
         ResponseHeader respHeader =
@@ -556,7 +608,7 @@ public class NetworkClientTest {
                 Collections.emptyMap());
         TestCallbackHandler handler = new TestCallbackHandler();
         ClientRequest request = client.newClientRequest(nodeId, builder, time.milliseconds(), true,
-                defaultRequestTimeoutMs, handler);
+                defaultRequestTimeoutMs, null, null, handler);
         client.send(request, time.milliseconds());
         return request.correlationId();
     }
@@ -604,6 +656,29 @@ public class NetworkClientTest {
         assertFalse("After we forced the disconnection the client is no longer ready.", client.ready(node, time.milliseconds()));
         leastNode = client.leastLoadedNode(time.milliseconds());
         assertNull("There should be NO leastloadednode", leastNode);
+    }
+
+    @Test
+    public void testLeastLoadedNodeProvideDisconnectedNodesPrioritizedByLastConnectionTimestamp() {
+        int nodeNumber = 3;
+        NetworkClient client = createNetworkClientWithMultipleNodes(0, connectionSetupTimeoutMsTest, nodeNumber);
+
+        Set<Node> providedNodeIds = new HashSet<>();
+        for (int i = 0; i < nodeNumber * 10; i++) {
+            Node node = client.leastLoadedNode(time.milliseconds());
+            assertNotNull("Should provide a node", node);
+            providedNodeIds.add(node);
+            client.ready(node, time.milliseconds());
+            client.disconnect(node.idString());
+            time.sleep(connectionSetupTimeoutMsTest + 1);
+            client.poll(0, time.milliseconds());
+            // Define a round as nodeNumber of nodes have been provided
+            // In each round every node should be provided exactly once
+            if ((i + 1) % nodeNumber == 0) {
+                assertEquals("All the nodes should be provided", nodeNumber, providedNodeIds.size());
+                providedNodeIds.clear();
+            }
+        }
     }
 
     @Test
@@ -814,11 +889,11 @@ public class NetworkClientTest {
             }
         };
 
-        ClientRequest request1 = client.newClientRequest(node.idString(), builder, now, true, defaultRequestTimeoutMs, callback);
+        ClientRequest request1 = client.newClientRequest(node.idString(), builder, now, true, defaultRequestTimeoutMs, null, null, callback);
         client.send(request1, now);
         client.poll(0, now);
 
-        ClientRequest request2 = client.newClientRequest(node.idString(), builder, now, true, defaultRequestTimeoutMs, callback);
+        ClientRequest request2 = client.newClientRequest(node.idString(), builder, now, true, defaultRequestTimeoutMs, null, null, callback);
         client.send(request2, now);
         client.poll(0, now);
 
@@ -859,7 +934,7 @@ public class NetworkClientTest {
             client.connectionFailed(node));
         assertFalse(client.canConnect(node, time.milliseconds()));
 
-        // ensure disconnect does not reset blackout period if already disconnected
+        // ensure disconnect does not reset backoff period if already disconnected
         time.sleep(reconnectBackoffMaxMsTest);
         assertTrue(client.canConnect(node, time.milliseconds()));
         client.disconnect(node.idString());

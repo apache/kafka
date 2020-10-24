@@ -663,7 +663,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public KafkaConsumer(Map<String, Object> configs,
                          Deserializer<K> keyDeserializer,
                          Deserializer<V> valueDeserializer) {
-        ConsumerConfig config = new ConsumerConfig(ConsumerConfig.addDeserializerToConfig(configs, keyDeserializer, valueDeserializer));
+        ConsumerConfig config = new ConsumerConfig(ConsumerConfig.appendDeserializerToConfig(configs, keyDeserializer, valueDeserializer));
         try {
             GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(config,
                     GroupRebalanceConfig.ProtocolType.CONSUMER);
@@ -704,14 +704,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.interceptors = new ConsumerInterceptors<>(interceptorList);
             if (keyDeserializer == null) {
                 this.keyDeserializer = config.getConfiguredInstance(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
-                this.keyDeserializer.configure(config.originals(), true);
+                this.keyDeserializer.configure(config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId)), true);
             } else {
                 config.ignore(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG);
                 this.keyDeserializer = keyDeserializer;
             }
             if (valueDeserializer == null) {
                 this.valueDeserializer = config.getConfiguredInstance(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
-                this.valueDeserializer.configure(config.originals(), false);
+                this.valueDeserializer.configure(config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId)), false);
             } else {
                 config.ignore(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG);
                 this.valueDeserializer = valueDeserializer;
@@ -748,6 +748,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     config.getInt(ConsumerConfig.SEND_BUFFER_CONFIG),
                     config.getInt(ConsumerConfig.RECEIVE_BUFFER_CONFIG),
                     config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
+                    config.getLong(ConsumerConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG),
+                    config.getLong(ConsumerConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG),
                     ClientDnsLookup.forConfig(config.getString(ConsumerConfig.CLIENT_DNS_LOOKUP_CONFIG)),
                     time,
                     true,
@@ -1216,19 +1218,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
             }
 
-            // poll for new data until the timeout expires
             do {
                 client.maybeTriggerWakeup();
 
                 if (includeMetadataInTimeout) {
-                    // try to update assignment metadata BUT do not need to block on the timer,
-                    // since even if we are 1) in the middle of a rebalance or 2) have partitions
-                    // with unknown starting positions we may still want to return some data
-                    // as long as there are some partitions fetchable; NOTE we always use a timer with 0ms
-                    // to never block on completing the rebalance procedure if there's any
-                    updateAssignmentMetadataIfNeeded(time.timer(0L));
+                    // try to update assignment metadata BUT do not need to block on the timer for join group
+                    updateAssignmentMetadataIfNeeded(timer, false);
                 } else {
-                    while (!updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE))) {
+                    while (!updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE), true)) {
                         log.warn("Still waiting for metadata");
                     }
                 }
@@ -1256,11 +1253,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         }
     }
 
-    /**
-     * Visible for testing
-     */
-    boolean updateAssignmentMetadataIfNeeded(final Timer timer) {
-        if (coordinator != null && !coordinator.poll(timer)) {
+    boolean updateAssignmentMetadataIfNeeded(final Timer timer, final boolean waitForJoinGroup) {
+        if (coordinator != null && !coordinator.poll(timer, waitForJoinGroup)) {
             return false;
         }
 
@@ -1291,6 +1285,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         if (!cachedSubscriptionHashAllFetchPositions && pollTimeout > retryBackoffMs) {
             pollTimeout = retryBackoffMs;
         }
+
+        log.trace("Polling for fetches with timeout {}", pollTimeout);
 
         Timer pollTimer = time.timer(pollTimeout);
         client.poll(pollTimer, () -> {
@@ -2231,10 +2227,17 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Return the current group metadata associated with this consumer.
      *
      * @return consumer group metadata
+     * @throws org.apache.kafka.common.errors.InvalidGroupIdException if consumer does not have a group
      */
     @Override
     public ConsumerGroupMetadata groupMetadata() {
-        return coordinator.groupMetadata();
+        acquireAndEnsureOpen();
+        try {
+            maybeThrowInvalidGroupIdException();
+            return coordinator.groupMetadata();
+        } finally {
+            release();
+        }
     }
 
     /**
@@ -2414,7 +2417,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         // If there are partitions still needing a position and a reset policy is defined,
         // request reset using the default policy. If no reset strategy is defined and there
         // are partitions with a missing position, then we will raise an exception.
-        subscriptions.resetMissingPositions();
+        subscriptions.resetInitializingPositions();
 
         // Finally send an asynchronous request to lookup and update the positions of any
         // partitions which are awaiting reset.
@@ -2473,8 +2476,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             offsetAndMetadata.leaderEpoch().ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(topicPartition, epoch));
     }
 
-    // Visible for testing
+    // Functions below are for testing only
     String getClientId() {
         return clientId;
+    }
+
+    boolean updateAssignmentMetadataIfNeeded(final Timer timer) {
+        return updateAssignmentMetadataIfNeeded(timer, true);
     }
 }

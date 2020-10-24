@@ -47,6 +47,8 @@ class HighwatermarkPersistenceTest {
     new LogDirFailureChannel(config.logDirs.size)
   }
 
+  val alterIsrManager = TestUtils.createAlterIsrManager()
+
   @After
   def teardown(): Unit = {
     for (manager <- logManagers; dir <- manager.liveLogDirs)
@@ -60,13 +62,13 @@ class HighwatermarkPersistenceTest {
 
     // create kafka scheduler
     val scheduler = new KafkaScheduler(2)
-    scheduler.startup
+    scheduler.startup()
     val metrics = new Metrics
     val time = new MockTime
     // create replica manager
     val replicaManager = new ReplicaManager(configs.head, metrics, time, zkClient, scheduler,
       logManagers.head, new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time, ""),
-      new BrokerTopicStats, new MetadataCache(configs.head.brokerId), logDirFailureChannels.head)
+      new BrokerTopicStats, new MetadataCache(configs.head.brokerId), logDirFailureChannels.head, alterIsrManager)
     replicaManager.startup()
     try {
       replicaManager.checkpointHighWatermarks()
@@ -110,13 +112,13 @@ class HighwatermarkPersistenceTest {
     EasyMock.replay(zkClient)
     // create kafka scheduler
     val scheduler = new KafkaScheduler(2)
-    scheduler.startup
+    scheduler.startup()
     val metrics = new Metrics
     val time = new MockTime
     // create replica manager
     val replicaManager = new ReplicaManager(configs.head, metrics, time, zkClient,
       scheduler, logManagers.head, new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time, ""),
-      new BrokerTopicStats, new MetadataCache(configs.head.brokerId), logDirFailureChannels.head)
+      new BrokerTopicStats, new MetadataCache(configs.head.brokerId), logDirFailureChannels.head, alterIsrManager)
     replicaManager.startup()
     try {
       replicaManager.checkpointHighWatermarks()
@@ -178,7 +180,7 @@ class HighwatermarkPersistenceTest {
   }
 
   private def hwmFor(replicaManager: ReplicaManager, topic: String, partition: Int): Long = {
-    replicaManager.highWatermarkCheckpoints(new File(replicaManager.config.logDirs.head).getAbsolutePath).read.getOrElse(
+    replicaManager.highWatermarkCheckpoints(new File(replicaManager.config.logDirs.head).getAbsolutePath).read().getOrElse(
       new TopicPartition(topic, partition), 0L)
   }
 }

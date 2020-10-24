@@ -37,7 +37,7 @@ import java.util.Map;
  *   - {@link Errors#CORRUPT_MESSAGE}
  *   - {@link Errors#INVALID_PRODUCER_EPOCH}
  *   - {@link Errors#UNKNOWN_TOPIC_OR_PARTITION}
- *   - {@link Errors#NOT_LEADER_FOR_PARTITION}
+ *   - {@link Errors#NOT_LEADER_OR_FOLLOWER}
  *   - {@link Errors#MESSAGE_TOO_LARGE}
  *   - {@link Errors#RECORD_LIST_TOO_LARGE}
  *   - {@link Errors#NOT_ENOUGH_REPLICAS}

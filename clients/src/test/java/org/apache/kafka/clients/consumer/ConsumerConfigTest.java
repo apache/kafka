@@ -68,6 +68,7 @@ public class ConsumerConfigTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testDeserializerToPropertyConfig() {
         Properties properties = new Properties();
@@ -96,28 +97,28 @@ public class ConsumerConfigTest {
     }
 
     @Test
-    public void testDeserializerToMapConfig() {
+    public void testAppendDeserializerToConfig() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
-        Map<String, Object> newConfigs = ConsumerConfig.addDeserializerToConfig(configs, null, null);
+        Map<String, Object> newConfigs = ConsumerConfig.appendDeserializerToConfig(configs, null, null);
         assertEquals(newConfigs.get(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG), keyDeserializerClass);
         assertEquals(newConfigs.get(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG), valueDeserializerClass);
 
         configs.clear();
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
-        newConfigs = ConsumerConfig.addDeserializerToConfig(configs, keyDeserializer, null);
+        newConfigs = ConsumerConfig.appendDeserializerToConfig(configs, keyDeserializer, null);
         assertEquals(newConfigs.get(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG), keyDeserializerClass);
         assertEquals(newConfigs.get(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG), valueDeserializerClass);
 
         configs.clear();
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
-        newConfigs = ConsumerConfig.addDeserializerToConfig(configs, null, valueDeserializer);
+        newConfigs = ConsumerConfig.appendDeserializerToConfig(configs, null, valueDeserializer);
         assertEquals(newConfigs.get(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG), keyDeserializerClass);
         assertEquals(newConfigs.get(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG), valueDeserializerClass);
 
         configs.clear();
-        newConfigs = ConsumerConfig.addDeserializerToConfig(configs, keyDeserializer, valueDeserializer);
+        newConfigs = ConsumerConfig.appendDeserializerToConfig(configs, keyDeserializer, valueDeserializer);
         assertEquals(newConfigs.get(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG), keyDeserializerClass);
         assertEquals(newConfigs.get(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG), valueDeserializerClass);
     }

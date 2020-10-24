@@ -214,7 +214,11 @@ public class SaslClientAuthenticator implements Authenticator {
                 String[] mechs = {mechanism};
                 log.debug("Creating SaslClient: client={};service={};serviceHostname={};mechs={}",
                     clientPrincipalName, servicePrincipal, host, Arrays.toString(mechs));
-                return Sasl.createSaslClient(mechs, clientPrincipalName, servicePrincipal, host, configs, callbackHandler);
+                SaslClient retvalSaslClient = Sasl.createSaslClient(mechs, clientPrincipalName, servicePrincipal, host, configs, callbackHandler);
+                if (retvalSaslClient == null) {
+                    throw new SaslAuthenticationException("Failed to create SaslClient with mechanism " + mechanism);
+                }
+                return retvalSaslClient;
             });
         } catch (PrivilegedActionException e) {
             throw new SaslAuthenticationException("Failed to create SaslClient with mechanism " + mechanism, e.getCause());
@@ -672,7 +676,7 @@ public class SaslClientAuthenticator implements Authenticator {
                 double pctWindowJitterToAvoidReauthenticationStormAcrossManyChannelsSimultaneously = 0.10;
                 double pctToUse = pctWindowFactorToTakeNetworkLatencyAndClockDriftIntoAccount + RNG.nextDouble()
                         * pctWindowJitterToAvoidReauthenticationStormAcrossManyChannelsSimultaneously;
-                sessionLifetimeMsToUse = (long) (positiveSessionLifetimeMs.longValue() * pctToUse);
+                sessionLifetimeMsToUse = (long) (positiveSessionLifetimeMs * pctToUse);
                 clientSessionReauthenticationTimeNanos = authenticationEndNanos + 1000 * 1000 * sessionLifetimeMsToUse;
                 log.debug(
                         "Finished {} with session expiration in {} ms and session re-authentication on or after {} ms",
@@ -684,7 +688,7 @@ public class SaslClientAuthenticator implements Authenticator {
 
         public Long reauthenticationLatencyMs() {
             return reauthenticating()
-                    ? Long.valueOf(Math.round((authenticationEndNanos - reauthenticationBeginNanos) / 1000.0 / 1000.0))
+                    ? Math.round((authenticationEndNanos - reauthenticationBeginNanos) / 1000.0 / 1000.0)
                     : null;
         }
 

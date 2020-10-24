@@ -25,6 +25,7 @@ import org.apache.kafka.test.GenericInMemoryKeyValueStore;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.Collections;
 import java.util.List;
 
 import static java.util.Arrays.asList;
@@ -121,7 +122,7 @@ public class FilteredCacheIteratorTest {
     @Test
     public void shouldFilterEntriesNotMatchingHasNextCondition() {
         final List<KeyValue<Bytes, LRUCacheEntry>> keyValues = toList(firstEntryIterator);
-        assertThat(keyValues, equalTo(asList(firstEntry)));
+        assertThat(keyValues, equalTo(Collections.singletonList(firstEntry)));
     }
 
     @Test(expected = UnsupportedOperationException.class)

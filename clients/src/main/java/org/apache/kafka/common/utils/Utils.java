@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.utils;
 
+import java.nio.BufferUnderflowException;
 import java.util.EnumSet;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -71,6 +72,9 @@ import java.util.regex.Pattern;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 public final class Utils {
 
@@ -282,6 +286,37 @@ public final class Utils {
             buffer.position(pos);
         }
         return dest;
+    }
+
+    /**
+     * Starting from the current position, read an integer indicating the size of the byte array to read,
+     * then read the array. Consumes the buffer: upon returning, the buffer's position is after the array
+     * that is returned.
+     * @param buffer The buffer to read a size-prefixed array from
+     * @return The array
+     */
+    public static byte[] getNullableSizePrefixedArray(final ByteBuffer buffer) {
+        final int size = buffer.getInt();
+        return getNullableArray(buffer, size);
+    }
+
+    /**
+     * Read a byte array of the given size. Consumes the buffer: upon returning, the buffer's position
+     * is after the array that is returned.
+     * @param buffer The buffer to read a size-prefixed array from
+     * @param size The number of bytes to read out of the buffer
+     * @return The array
+     */
+    public static byte[] getNullableArray(final ByteBuffer buffer, final int size) {
+        if (size > buffer.remaining()) {
+            // preemptively throw this when the read is doomed to fail, so we don't have to allocate the array.
+            throw new BufferUnderflowException();
+        }
+        final byte[] oldBytes = size == -1 ? null : new byte[size];
+        if (oldBytes != null) {
+            buffer.get(oldBytes);
+        }
+        return oldBytes;
     }
 
     /**
@@ -949,6 +984,16 @@ public final class Utils {
     }
 
     /**
+     * close all closable objects even if one of them throws exception.
+     * @param firstException keeps the first exception
+     * @param name message of closing those objects
+     * @param closeables closable objects
+     */
+    public static void closeAllQuietly(AtomicReference<Throwable> firstException, String name, AutoCloseable... closeables) {
+        for (AutoCloseable closeable : closeables) closeQuietly(closeable, name, firstException);
+    }
+
+    /**
      * A cheap way to deterministically convert a number to a positive value. When the input is
      * positive, the original value is returned. When the input number is negative, the returned
      * positive value is the original value bit AND against 0x7fffffff which is not its absolutely
@@ -1083,6 +1128,10 @@ public final class Utils {
             for (int i = pos; i < length + pos; i++)
                 out.writeByte(buffer.get(i));
         }
+    }
+
+    public static <T> List<T> toList(Iterable<T> iterable) {
+        return toList(iterable.iterator());
     }
 
     public static <T> List<T> toList(Iterator<T> iterator) {
@@ -1228,5 +1277,35 @@ public final class Utils {
             }
         }
         return map;
+    }
+
+    /**
+     * Convert timestamp to an epoch value
+     * @param timestamp to be converted
+     * @return epoch value of a given timestamp
+     * @throws ParseException for timestamp that doesn't follow ISO8601 format
+     */
+    public static long getDateTime(String timestamp) throws ParseException {
+        final String[] timestampParts = timestamp.split("T");
+        if (timestampParts.length < 2) {
+            throw new ParseException("Error parsing timestamp. It does not contain a 'T' according to ISO8601 format", timestamp.length());
+        }
+
+        final String secondPart = timestampParts[1];
+        if (secondPart == null || secondPart.isEmpty()) {
+            throw new ParseException("Error parsing timestamp. Time part after 'T' is null or empty", timestamp.length());
+        }
+
+        if (!(secondPart.contains("+") || secondPart.contains("-") || secondPart.contains("Z"))) {
+            timestamp = timestamp + "Z";
+        }
+
+        try {
+            final Date date = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX").parse(timestamp);
+            return date.getTime();
+        } catch (final ParseException e) {
+            final Date date = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX").parse(timestamp);
+            return date.getTime();
+        }
     }
 }

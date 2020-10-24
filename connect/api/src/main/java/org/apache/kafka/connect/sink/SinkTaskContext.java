@@ -33,7 +33,7 @@ public interface SinkTaskContext {
      * and the configuration is using variable references such as those compatible with
      * {@link org.apache.kafka.common.config.ConfigTransformer}.
      */
-    public Map<String, String> configs();
+    Map<String, String> configs();
 
     /**
      * Reset the consumer offsets for the given topic partitions. SinkTasks should use this if they manage offsets
@@ -119,6 +119,8 @@ public interface SinkTaskContext {
      * @return the reporter; null if no error reporter has been configured for the connector
      * @since 2.6
      */
-    ErrantRecordReporter errantRecordReporter();
+    default ErrantRecordReporter errantRecordReporter() {
+        return null;
+    }
 
 }

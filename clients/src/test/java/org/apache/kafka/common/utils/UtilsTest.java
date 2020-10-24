@@ -26,6 +26,7 @@ import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.File;
 import java.io.IOException;
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
@@ -39,8 +40,11 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptySet;
@@ -54,12 +58,14 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.utils.Utils.murmur2;
 import static org.apache.kafka.common.utils.Utils.union;
 import static org.apache.kafka.common.utils.Utils.validHostPattern;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -69,6 +75,9 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 public class UtilsTest {
 
@@ -80,7 +89,7 @@ public class UtilsTest {
         cases.put("a-little-bit-long-string".getBytes(), -985981536);
         cases.put("a-little-bit-longer-string".getBytes(), -1486304829);
         cases.put("lkjh234lh9fiuh90y23oiuhsafujhadof229phr9h19h89h8".getBytes(), -58897971);
-        cases.put(new byte[]{'a', 'b', 'c'}, 479470107);
+        cases.put(new byte[] {'a', 'b', 'c'}, 479470107);
 
         for (Map.Entry<byte[], Integer> c : cases.entrySet()) {
             assertEquals(c.getValue().intValue(), murmur2(c.getKey()));
@@ -211,6 +220,65 @@ public class UtilsTest {
         buffer.position(2);
         assertArrayEquals(new byte[] {2, 3, 4}, Utils.toArray(buffer));
         assertEquals(2, buffer.position());
+    }
+
+    @Test
+    public void getNullableSizePrefixedArrayExact() {
+        byte[] input = {0, 0, 0, 2, 1, 0};
+        final ByteBuffer buffer = ByteBuffer.wrap(input);
+        final byte[] array = Utils.getNullableSizePrefixedArray(buffer);
+        assertArrayEquals(new byte[] {1, 0}, array);
+        assertEquals(6, buffer.position());
+        assertFalse(buffer.hasRemaining());
+    }
+
+    @Test
+    public void getNullableSizePrefixedArrayExactEmpty() {
+        byte[] input = {0, 0, 0, 0};
+        final ByteBuffer buffer = ByteBuffer.wrap(input);
+        final byte[] array = Utils.getNullableSizePrefixedArray(buffer);
+        assertArrayEquals(new byte[] {}, array);
+        assertEquals(4, buffer.position());
+        assertFalse(buffer.hasRemaining());
+    }
+
+    @Test
+    public void getNullableSizePrefixedArrayRemainder() {
+        byte[] input = {0, 0, 0, 2, 1, 0, 9};
+        final ByteBuffer buffer = ByteBuffer.wrap(input);
+        final byte[] array = Utils.getNullableSizePrefixedArray(buffer);
+        assertArrayEquals(new byte[] {1, 0}, array);
+        assertEquals(6, buffer.position());
+        assertTrue(buffer.hasRemaining());
+    }
+
+    @Test
+    public void getNullableSizePrefixedArrayNull() {
+        // -1
+        byte[] input = {-1, -1, -1, -1};
+        final ByteBuffer buffer = ByteBuffer.wrap(input);
+        final byte[] array = Utils.getNullableSizePrefixedArray(buffer);
+        assertNull(array);
+        assertEquals(4, buffer.position());
+        assertFalse(buffer.hasRemaining());
+    }
+
+    @Test
+    public void getNullableSizePrefixedArrayInvalid() {
+        // -2
+        byte[] input = {-1, -1, -1, -2};
+        final ByteBuffer buffer = ByteBuffer.wrap(input);
+        assertThrows(NegativeArraySizeException.class, () -> Utils.getNullableSizePrefixedArray(buffer));
+    }
+
+    @Test
+    public void getNullableSizePrefixedArrayUnderflow() {
+        // Integer.MAX_VALUE
+        byte[] input = {127, -1, -1, -1};
+        final ByteBuffer buffer = ByteBuffer.wrap(input);
+        // note, we get a buffer underflow exception instead of an OOME, even though the encoded size
+        // would be 2,147,483,647 aka 2.1 GB, probably larger than the available heap
+        assertThrows(BufferUnderflowException.class, () -> Utils.getNullableSizePrefixedArray(buffer));
     }
 
     @Test
@@ -424,7 +492,7 @@ public class UtilsTest {
         String expectedBufferContent = fileChannelMockExpectReadWithRandomBytes(channelMock, bufferSize);
         Utils.readFullyOrFail(channelMock, buffer, 0L, "test");
         assertEquals("The buffer should be populated correctly", expectedBufferContent,
-                new String(buffer.array()));
+                     new String(buffer.array()));
         assertFalse("The buffer should be filled", buffer.hasRemaining());
         verify(channelMock, atLeastOnce()).read(any(), anyLong());
     }
@@ -441,7 +509,7 @@ public class UtilsTest {
         ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
         Utils.readFully(channelMock, buffer, 0L);
         assertEquals("The buffer should be populated correctly.", expectedBufferContent,
-                new String(buffer.array()));
+                     new String(buffer.array()));
         assertFalse("The buffer should be filled", buffer.hasRemaining());
         verify(channelMock, atLeastOnce()).read(any(), anyLong());
     }
@@ -490,7 +558,7 @@ public class UtilsTest {
      *
      * @param channelMock           The mocked FileChannel object
      * @param bufferSize            The buffer size
-     * @return                      Expected buffer string
+     * @return Expected buffer string
      * @throws IOException          If an I/O error occurs
      */
     private String fileChannelMockExpectReadWithRandomBytes(final FileChannel channelMock,
@@ -527,8 +595,9 @@ public class UtilsTest {
         @Override
         public void close() throws IOException {
             closed = true;
-            if (closeException != null)
+            if (closeException != null) {
                 throw closeException;
+            }
         }
 
         static TestCloseable[] createCloseables(boolean... exceptionOnClose) {
@@ -705,4 +774,48 @@ public class UtilsTest {
         props.put("key", value);
         assertEquals(Utils.propsToMap(props).get("key"), value);
     }
+
+    @Test
+    public void testCloseAllQuietly() {
+        AtomicReference<Throwable> exception = new AtomicReference<>();
+        String msg = "you should fail";
+        AtomicInteger count = new AtomicInteger(0);
+        AutoCloseable c0 = () -> {
+            throw new RuntimeException(msg);
+        };
+        AutoCloseable c1 = count::incrementAndGet;
+        Utils.closeAllQuietly(exception, "test", Stream.of(c0, c1).toArray(AutoCloseable[]::new));
+        assertEquals(msg, exception.get().getMessage());
+        assertEquals(1, count.get());
+    }
+
+    @Test
+    public void shouldAcceptValidDateFormats() throws ParseException {
+        //check valid formats
+        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS"));
+        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ"));
+        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX"));
+        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXX"));
+        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX"));
+    }
+
+    @Test
+    public void shouldThrowOnInvalidDateFormat() {
+        //check some invalid formats
+        assertThat(assertThrows(ParseException.class, () -> {
+            invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss"));
+        }).getMessage(), containsString("Unparseable date"));
+
+        assertThat(assertThrows(ParseException.class, () -> {
+            invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.X"));
+        }).getMessage(), containsString("Unparseable date"));
+
+    }
+
+    private void invokeGetDateTimeMethod(final SimpleDateFormat format) throws ParseException {
+        final Date checkpoint = new Date();
+        final String formattedCheckpoint = format.format(checkpoint);
+        Utils.getDateTime(formattedCheckpoint);
+    }
+
 }

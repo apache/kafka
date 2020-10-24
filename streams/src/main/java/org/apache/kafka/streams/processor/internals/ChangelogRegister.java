@@ -22,7 +22,7 @@ import org.apache.kafka.common.TopicPartition;
 /**
  * See {@link StoreChangelogReader}.
  */
-interface ChangelogRegister {
+public interface ChangelogRegister {
     /**
      * Register a state store for restoration.
      *
@@ -34,7 +34,6 @@ interface ChangelogRegister {
     /**
      * Unregisters and removes the passed in partitions from the set of changelogs
      * @param removedPartitions the set of partitions to remove
-     * @param triggerOnRestoreEnd whether to trigger the onRestoreEnd callback
      */
-    void unregister(final Collection<TopicPartition> removedPartitions, final boolean triggerOnRestoreEnd);
+    void unregister(final Collection<TopicPartition> removedPartitions);
 }

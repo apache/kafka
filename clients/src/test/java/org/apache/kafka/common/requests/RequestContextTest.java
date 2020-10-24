@@ -23,12 +23,13 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.junit.Test;
 
 import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 
 import static org.junit.Assert.assertEquals;
@@ -42,7 +43,7 @@ public class RequestContextTest {
 
         RequestHeader header = new RequestHeader(ApiKeys.API_VERSIONS, Short.MAX_VALUE, "", correlationId);
         RequestContext context = new RequestContext(header, "0", InetAddress.getLocalHost(), KafkaPrincipal.ANONYMOUS,
-                new ListenerName("ssl"), SecurityProtocol.SASL_SSL, ClientInformation.EMPTY);
+                new ListenerName("ssl"), SecurityProtocol.SASL_SSL, ClientInformation.EMPTY, false);
         assertEquals(0, context.apiVersion());
 
         // Write some garbage to the request buffer. This should be ignored since we will treat
@@ -79,4 +80,13 @@ public class RequestContextTest {
         assertTrue(response.data.apiKeys().isEmpty());
     }
 
+    @Test
+    public void testInitialPrincipalName() throws UnknownHostException {
+        final String initialPrincipalName = "initial-principal";
+        RequestHeader header = new RequestHeader(ApiKeys.API_VERSIONS, Short.MAX_VALUE, "", 1, initialPrincipalName, null);
+        RequestContext context = new RequestContext(header, "0", InetAddress.getLocalHost(), KafkaPrincipal.ANONYMOUS,
+            new ListenerName("ssl"), SecurityProtocol.SASL_SSL, ClientInformation.EMPTY, false);
+
+        assertEquals(initialPrincipalName, context.initialPrincipalName());
+    }
 }

@@ -56,7 +56,6 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -95,6 +94,7 @@ class WorkerSinkTask extends WorkerTask {
     private int commitFailures;
     private boolean pausedForRedelivery;
     private boolean committing;
+    private boolean taskStopped;
     private final WorkerErrantRecordReporter workerErrantRecordReporter;
 
     public WorkerSinkTask(ConnectorTaskId id,
@@ -139,6 +139,7 @@ class WorkerSinkTask extends WorkerTask {
         this.sinkTaskMetricsGroup.recordOffsetSequenceNumber(commitSeqno);
         this.consumer = consumer;
         this.isTopicTrackingEnabled = workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
+        this.taskStopped = false;
         this.workerErrantRecordReporter = workerErrantRecordReporter;
     }
 
@@ -169,14 +170,19 @@ class WorkerSinkTask extends WorkerTask {
         } catch (Throwable t) {
             log.warn("Could not stop task", t);
         }
+        taskStopped = true;
         Utils.closeQuietly(consumer, "consumer");
         Utils.closeQuietly(transformationChain, "transformation chain");
         Utils.closeQuietly(retryWithToleranceOperator, "retry operator");
     }
 
     @Override
-    protected void releaseResources() {
-        sinkTaskMetricsGroup.close();
+    public void removeMetrics() {
+        try {
+            sinkTaskMetricsGroup.close();
+        } finally {
+            super.removeMetrics();
+        }
     }
 
     @Override
@@ -193,6 +199,9 @@ class WorkerSinkTask extends WorkerTask {
         try (UncheckedCloseable suppressible = this::closePartitions) {
             while (!isStopping())
                 iteration();
+        } catch (WakeupException e) {
+            log.trace("Consumer woken up during initial offset commit attempt, " 
+                + "but succeeded during a later attempt");
         }
     }
 
@@ -285,10 +294,9 @@ class WorkerSinkTask extends WorkerTask {
         SinkConnectorConfig.validate(taskConfig);
 
         if (SinkConnectorConfig.hasTopicsConfig(taskConfig)) {
-            String[] topics = taskConfig.get(SinkTask.TOPICS_CONFIG).split(",");
-            Arrays.setAll(topics, i -> topics[i].trim());
-            consumer.subscribe(Arrays.asList(topics), new HandleRebalance());
-            log.debug("{} Initializing and starting task for topics {}", this, topics);
+            List<String> topics = SinkConnectorConfig.parseTopicsList(taskConfig);
+            consumer.subscribe(topics, new HandleRebalance());
+            log.debug("{} Initializing and starting task for topics {}", this, Utils.join(topics, ", "));
         } else {
             String topicsRegexStr = taskConfig.get(SinkTask.TOPICS_REGEX_CONFIG);
             Pattern pattern = Pattern.compile(topicsRegexStr);
@@ -327,7 +335,7 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     private void doCommitSync(Map<TopicPartition, OffsetAndMetadata> offsets, int seqno) {
-        log.info("{} Committing offsets synchronously using sequence number {}: {}", this, seqno, offsets);
+        log.debug("{} Committing offsets synchronously using sequence number {}: {}", this, seqno, offsets);
         try {
             consumer.commitSync(offsets);
             onCommitCompleted(null, seqno, offsets);
@@ -341,7 +349,7 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     private void doCommitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, final int seqno) {
-        log.info("{} Committing offsets asynchronously using sequence number {}: {}", this, seqno, offsets);
+        log.debug("{} Committing offsets asynchronously using sequence number {}: {}", this, seqno, offsets);
         OffsetCommitCallback cb = new OffsetCommitCallback() {
             @Override
             public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception error) {
@@ -487,10 +495,10 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     private SinkRecord convertAndTransformRecord(final ConsumerRecord<byte[], byte[]> msg) {
-        SchemaAndValue keyAndSchema = retryWithToleranceOperator.execute(() -> keyConverter.toConnectData(msg.topic(), msg.headers(), msg.key()),
+        SchemaAndValue keyAndSchema = retryWithToleranceOperator.execute(() -> convertKey(msg),
                 Stage.KEY_CONVERTER, keyConverter.getClass());
 
-        SchemaAndValue valueAndSchema = retryWithToleranceOperator.execute(() -> valueConverter.toConnectData(msg.topic(), msg.headers(), msg.value()),
+        SchemaAndValue valueAndSchema = retryWithToleranceOperator.execute(() -> convertValue(msg),
                 Stage.VALUE_CONVERTER, valueConverter.getClass());
 
         Headers headers = retryWithToleranceOperator.execute(() -> convertHeadersFor(msg), Stage.HEADER_CONVERTER, headerConverter.getClass());
@@ -520,6 +528,26 @@ class WorkerSinkTask extends WorkerTask {
         }
         // Error reporting will need to correlate each sink record with the original consumer record
         return new InternalSinkRecord(msg, transformedRecord);
+    }
+
+    private SchemaAndValue convertKey(ConsumerRecord<byte[], byte[]> msg) {
+        try {
+            return keyConverter.toConnectData(msg.topic(), msg.headers(), msg.key());
+        } catch (Exception e) {
+            log.error("{} Error converting message key in topic '{}' partition {} at offset {} and timestamp {}: {}",
+                    this, msg.topic(), msg.partition(), msg.offset(), msg.timestamp(), e.getMessage(), e);
+            throw e;
+        }
+    }
+
+    private SchemaAndValue convertValue(ConsumerRecord<byte[], byte[]> msg) {
+        try {
+            return valueConverter.toConnectData(msg.topic(), msg.headers(), msg.value());
+        } catch (Exception e) {
+            log.error("{} Error converting message value in topic '{}' partition {} at offset {} and timestamp {}: {}",
+                    this, msg.topic(), msg.partition(), msg.offset(), msg.timestamp(), e.getMessage(), e);
+            throw e;
+        }
     }
 
     private Headers convertHeadersFor(ConsumerRecord<byte[], byte[]> record) {
@@ -556,6 +584,12 @@ class WorkerSinkTask extends WorkerTask {
             log.trace("{} Delivering batch of {} messages to task", this, messageBatch.size());
             long start = time.milliseconds();
             task.put(new ArrayList<>(messageBatch));
+            // if errors raised from the operator were swallowed by the task implementation, an
+            // exception needs to be thrown to kill the task indicating the tolerance was exceeded
+            if (retryWithToleranceOperator.failed() && !retryWithToleranceOperator.withinToleranceLimits()) {
+                throw new ConnectException("Tolerance exceeded in error handler",
+                    retryWithToleranceOperator.error());
+            }
             recordBatch(messageBatch.size());
             sinkTaskMetricsGroup.recordPut(time.milliseconds() - start);
             currentOffsets.putAll(origOffsets);
@@ -681,6 +715,10 @@ class WorkerSinkTask extends WorkerTask {
 
         @Override
         public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+            if (taskStopped) {
+                log.trace("Skipping partition revocation callback as task has already been stopped");
+                return;
+            }
             log.debug("{} Partitions revoked", WorkerSinkTask.this);
             try {
                 closePartitions();

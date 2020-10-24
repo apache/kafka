@@ -144,15 +144,16 @@ abstract class WorkerTask implements Runnable {
         }
     }
 
+    /**
+     * Remove all metrics published by this task.
+     */
+    public void removeMetrics() {
+        taskMetricsGroup.close();
+    }
+
     protected abstract void execute();
 
     protected abstract void close();
-
-    /**
-     * Method called when this worker task has been completely closed, and when the subclass should clean up
-     * all resources.
-     */
-    protected abstract void releaseResources();
 
     protected boolean isStopping() {
         return stopping;
@@ -183,8 +184,7 @@ abstract class WorkerTask implements Runnable {
 
             execute();
         } catch (Throwable t) {
-            log.error("{} Task threw an uncaught and unrecoverable exception", this, t);
-            log.error("{} Task is being killed and will not recover until manually restarted", this);
+            log.error("{} Task threw an uncaught and unrecoverable exception. Task is being killed and will not recover until manually restarted", this, t);
             throw t;
         } finally {
             doClose();
@@ -239,17 +239,9 @@ abstract class WorkerTask implements Runnable {
                 if (t instanceof Error)
                     throw (Error) t;
             } finally {
-                try {
-                    Thread.currentThread().setName(savedName);
-                    Plugins.compareAndSwapLoaders(savedLoader);
-                    shutdownLatch.countDown();
-                } finally {
-                    try {
-                        releaseResources();
-                    } finally {
-                        taskMetricsGroup.close();
-                    }
-                }
+                Thread.currentThread().setName(savedName);
+                Plugins.compareAndSwapLoaders(savedLoader);
+                shutdownLatch.countDown();
             }
         }
     }

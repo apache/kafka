@@ -23,6 +23,7 @@ import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 
 /**
  * {@code KGroupedStream} is an abstraction of a <i>grouped</i> record stream of {@link KeyValue} pairs.
@@ -59,7 +60,7 @@ public interface KGroupedStream<K, V> {
      * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "internalStoreName" is an internal name
      * and "-changelog" is a fixed suffix.
-     * Note that the internal store name may not be queriable through Interactive Queries.
+     * Note that the internal store name may not be queryable through Interactive Queries.
      *
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
@@ -86,7 +87,7 @@ public interface KGroupedStream<K, V> {
      * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "internalStoreName" is an internal name
      * and "-changelog" is a fixed suffix.
-     * Note that the internal store name may not be queriable through Interactive Queries.
+     * Note that the internal store name may not be queryable through Interactive Queries.
      *
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
@@ -214,7 +215,7 @@ public interface KGroupedStream<K, V> {
      * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "internalStoreName" is an internal name
      * and "-changelog" is a fixed suffix.
-     * Note that the internal store name may not be queriable through Interactive Queries.
+     * Note that the internal store name may not be queryable through Interactive Queries.
      *
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
@@ -276,7 +277,7 @@ public interface KGroupedStream<K, V> {
      * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "internalStoreName" is an internal name
      * and "-changelog" is a fixed suffix.
-     * Note that the internal store name may not be queriable through Interactive Queries.
+     * Note that the internal store name may not be queryable through Interactive Queries.
      *
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
@@ -339,7 +340,7 @@ public interface KGroupedStream<K, V> {
      * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "internalStoreName" is an internal name
      * and "-changelog" is a fixed suffix.
-     * Note that the internal store name may not be queriable through Interactive Queries.
+     * Note that the internal store name may not be queryable through Interactive Queries.
      *
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
@@ -385,7 +386,7 @@ public interface KGroupedStream<K, V> {
      * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "internalStoreName" is an internal name
      * and "-changelog" is a fixed suffix.
-     * Note that the internal store name may not be queriable through Interactive Queries.
+     * Note that the internal store name may not be queryable through Interactive Queries.
      *
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
@@ -529,6 +530,13 @@ public interface KGroupedStream<K, V> {
     <W extends Window> TimeWindowedKStream<K, V> windowedBy(final Windows<W> windows);
 
     /**
+     * Create a new {@link TimeWindowedKStream} instance that can be used to perform sliding windowed aggregations.
+     * @param windows the specification of the aggregation {@link SlidingWindows}
+     * @return an instance of {@link TimeWindowedKStream}
+     */
+    TimeWindowedKStream<K, V> windowedBy(final SlidingWindows windows);
+
+    /**
      * Create a new {@link SessionWindowedKStream} instance that can be used to perform session windowed aggregations.
      * @param windows the specification of the aggregation {@link SessionWindows}
      * @return an instance of {@link TimeWindowedKStream}
@@ -548,9 +556,9 @@ public interface KGroupedStream<K, V> {
      * is passed into {@link CogroupedKStream#aggregate(Initializer)}) and the record's value.
      *
      * @param aggregator an {@link Aggregator} that computes a new aggregate result
-     * @param <Vout> the type of the output values
+     * @param <VOut> the type of the output values
      * @return a {@link CogroupedKStream}
      */
-    <Vout> CogroupedKStream<K, Vout> cogroup(final Aggregator<? super K, ? super V, Vout> aggregator);
+    <VOut> CogroupedKStream<K, VOut> cogroup(final Aggregator<? super K, ? super V, VOut> aggregator);
 
 }

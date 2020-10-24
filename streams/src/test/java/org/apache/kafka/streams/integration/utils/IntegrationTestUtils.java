@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-
 import kafka.api.Request;
 import kafka.server.KafkaServer;
 import kafka.server.MetadataCache;
@@ -79,9 +75,13 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -255,6 +255,8 @@ public class IntegrationTestUtils {
             }
             if (enableTransactions) {
                 producer.commitTransaction();
+            } else {
+                producer.flush();
             }
         }
     }
@@ -594,7 +596,7 @@ public class IntegrationTestUtils {
                 final List<KeyValue<K, V>> readData =
                     readKeyValues(topic, consumer, waitTime, expectedNumRecords);
                 accumData.addAll(readData);
-                assertThat(reason, accumData.size(), is(greaterThanOrEqualTo(expectedNumRecords)));
+                assertThat(reason + ",  currently accumulated data is " + accumData, accumData.size(), is(greaterThanOrEqualTo(expectedNumRecords)));
             });
         }
         return accumData;
@@ -1185,6 +1187,28 @@ public class IntegrationTestUtils {
         return driver;
     }
 
+    public static KafkaStreams getRunningStreams(final Properties streamsConfig,
+                                                 final StreamsBuilder builder,
+                                                 final boolean clean) {
+        final KafkaStreams driver = new KafkaStreams(builder.build(), streamsConfig);
+        if (clean) {
+            driver.cleanUp();
+        }
+        final CountDownLatch latch = new CountDownLatch(1);
+        driver.setStateListener((newState, oldState) -> {
+            if (newState == State.RUNNING) {
+                latch.countDown();
+            }
+        });
+        driver.start();
+        try {
+            latch.await(DEFAULT_TIMEOUT, TimeUnit.MILLISECONDS);
+        } catch (final InterruptedException e) {
+            throw new RuntimeException("Streams didn't start in time.", e);
+        }
+        return driver;
+    }
+
     public static <S> S getStore(final String storeName,
                                  final KafkaStreams streams,
                                  final QueryableStoreType<S> storeType) throws Exception {
@@ -1271,7 +1295,7 @@ public class IntegrationTestUtils {
          */
         public void waitForNextStableAssignment(final long maxWaitMs) throws InterruptedException {
             waitForCondition(
-                () -> nextExpectedNumStableAssignments == numStableAssignments(),
+                () -> numStableAssignments() >= nextExpectedNumStableAssignments,
                 maxWaitMs,
                 () -> "Client did not reach " + nextExpectedNumStableAssignments + " stable assignments on time, " +
                     "numStableAssignments was " + numStableAssignments()

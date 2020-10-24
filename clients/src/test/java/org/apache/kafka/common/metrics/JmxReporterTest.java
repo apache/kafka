@@ -124,7 +124,7 @@ public class JmxReporterTest {
 
         Map<String, String> configs = new HashMap<>();
 
-        configs.put(JmxReporter.BLACKLIST_CONFIG,
+        configs.put(JmxReporter.EXCLUDE_CONFIG,
                     JmxReporter.getMBeanName("", metrics.metricName("pack.bean2.total", "grp2")));
 
         try {
@@ -143,7 +143,7 @@ public class JmxReporterTest {
 
             sensor.record();
 
-            configs.put(JmxReporter.BLACKLIST_CONFIG,
+            configs.put(JmxReporter.EXCLUDE_CONFIG,
                         JmxReporter.getMBeanName("", metrics.metricName("pack.bean2.avg", "grp1")));
 
             reporter.reconfigure(configs);
@@ -171,6 +171,25 @@ public class JmxReporterTest {
             Sensor sensor = metrics.sensor("kafka.requests");
             sensor.add(metrics.metricName("pack.bean1.avg", "grp1"), new Avg());
             assertEquals("kafka.server", server.getObjectInstance(new ObjectName("kafka.server:type=grp1")).getObjectName().getDomain());
+        } finally {
+            metrics.close();
+        }
+    }
+
+    @Test
+    public void testDeprecatedJmxPrefixWithDefaultMetrics() throws Exception {
+        @SuppressWarnings("deprecation")
+        JmxReporter reporter = new JmxReporter("my-prefix");
+
+        // for backwards compatibility, ensure prefix does not get overridden by the default empty namespace in metricscontext
+        MetricConfig metricConfig = new MetricConfig();
+        Metrics metrics = new Metrics(metricConfig, new ArrayList<>(Arrays.asList(reporter)), Time.SYSTEM);
+
+        MBeanServer server = ManagementFactory.getPlatformMBeanServer();
+        try {
+            Sensor sensor = metrics.sensor("my-sensor");
+            sensor.add(metrics.metricName("pack.bean1.avg", "grp1"), new Avg());
+            assertEquals("my-prefix", server.getObjectInstance(new ObjectName("my-prefix:type=grp1")).getObjectName().getDomain());
         } finally {
             metrics.close();
         }

@@ -174,10 +174,10 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     *
     * @return
     */
-  def upperBound(): Long = {
+  def upperBound: Long = {
     inReadLock(lock) {
       if (quota != null)
-        quota.bound().toLong
+        quota.bound.toLong
       else
         Long.MaxValue
     }
@@ -194,9 +194,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     sensorAccess.getOrCreate(
       replicationType.toString,
       InactiveSensorExpirationTimeSeconds,
-      rateMetricName,
-      Some(getQuotaMetricConfig(quota)),
-      new SimpleRate
+      sensor => sensor.add(rateMetricName, new SimpleRate, getQuotaMetricConfig(quota))
     )
   }
 }

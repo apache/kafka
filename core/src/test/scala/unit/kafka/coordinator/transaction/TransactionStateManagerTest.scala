@@ -366,7 +366,7 @@ class TransactionStateManagerTest {
     expectedError = Errors.NOT_COORDINATOR
     var failedMetadata = txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)), time.milliseconds())
 
-    prepareForTxnMessageAppend(Errors.NOT_LEADER_FOR_PARTITION)
+    prepareForTxnMessageAppend(Errors.NOT_LEADER_OR_FOLLOWER)
     transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback)
     assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))), transactionManager.getTransactionState(transactionalId1))
     assertTrue(txnMetadata1.pendingState.isEmpty)

@@ -30,7 +30,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
-import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
@@ -47,7 +47,6 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
-import org.rocksdb.Options;
 import org.rocksdb.WriteBatch;
 
 import java.io.File;
@@ -132,7 +131,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
             new MockRecordCollector(),
             new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()))
         );
-        bytesStore.init(context, bytesStore);
+        bytesStore.init((StateStoreContext) context, bytesStore);
     }
 
     @After
@@ -143,8 +142,6 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
     abstract AbstractRocksDBSegmentedBytesStore<S> getBytesStore();
 
     abstract AbstractSegments<S> newSegments();
-
-    abstract Options getOptions(S segment);
 
     @Test
     public void shouldPutAndFetch() {
@@ -291,7 +288,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
 
         bytesStore = getBytesStore();
 
-        bytesStore.init(context, bytesStore);
+        bytesStore.init((StateStoreContext) context, bytesStore);
         final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.fetch(Bytes.wrap(key.getBytes()), 0L, 60_000L));
         assertThat(
             results,
@@ -321,7 +318,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
 
         bytesStore = getBytesStore();
 
-        bytesStore.init(context, bytesStore);
+        bytesStore.init((StateStoreContext) context, bytesStore);
         final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.fetch(Bytes.wrap(key.getBytes()), 0L, 60_000L));
         assertThat(
             results,
@@ -340,7 +337,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         // need to create a segment so we can attempt to write to it again.
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50));
         bytesStore.close();
-        bytesStore.init(context, bytesStore);
+        bytesStore.init((StateStoreContext) context, bytesStore);
         bytesStore.put(serializeKey(new Windowed<>(key, windows[1])), serializeValue(100));
     }
 
@@ -369,7 +366,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
     }
 
     private void shouldRestoreToByteStore(final TaskType taskType) {
-        bytesStore.init(context, bytesStore);
+        bytesStore.init((StateStoreContext) context, bytesStore);
         // 0 segments initially.
         assertEquals(0, bytesStore.getSegments().size());
         final String key = "a";
@@ -381,39 +378,12 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         // 2 segments are created during restoration.
         assertEquals(2, bytesStore.getSegments().size());
 
-        // Bulk loading is disabled during recovery for stand-by tasks.
-        for (final S segment : bytesStore.getSegments()) {
-            assertThat(getOptions(segment).level0FileNumCompactionTrigger(), equalTo(taskType == TaskType.ACTIVE ? 1 << 30 : 4));
-        }
-
         final List<KeyValue<Windowed<String>, Long>> expected = new ArrayList<>();
         expected.add(new KeyValue<>(new Windowed<>(key, windows[0]), 50L));
         expected.add(new KeyValue<>(new Windowed<>(key, windows[3]), 100L));
 
         final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.all());
         assertEquals(expected, results);
-    }
-
-    @Test
-    public void shouldRespectBulkLoadOptionsDuringInit() {
-        bytesStore.init(context, bytesStore);
-        final String key = "a";
-        bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50L));
-        bytesStore.put(serializeKey(new Windowed<>(key, windows[3])), serializeValue(100L));
-        assertEquals(2, bytesStore.getSegments().size());
-
-        final StateRestoreListener restoreListener = context.getRestoreListener(bytesStore.name());
-
-        restoreListener.onRestoreStart(null, bytesStore.name(), 0L, 0L);
-
-        for (final S segment : bytesStore.getSegments()) {
-            assertThat(getOptions(segment).level0FileNumCompactionTrigger(), equalTo(1 << 30));
-        }
-
-        restoreListener.onRestoreEnd(null, bytesStore.name(), 0L);
-        for (final S segment : bytesStore.getSegments()) {
-            assertThat(getOptions(segment).level0FileNumCompactionTrigger(), equalTo(4));
-        }
     }
 
     @Test
@@ -436,7 +406,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         );
         final Time time = new SystemTime();
         context.setSystemTimeMs(time.milliseconds());
-        bytesStore.init(context, bytesStore);
+        bytesStore.init((StateStoreContext) context, bytesStore);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
             // write a record to advance stream time, with a high enough timestamp

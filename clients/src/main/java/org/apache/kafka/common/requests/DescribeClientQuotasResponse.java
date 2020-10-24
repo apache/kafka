@@ -21,10 +21,12 @@ import org.apache.kafka.common.message.DescribeClientQuotasResponseData;
 import org.apache.kafka.common.message.DescribeClientQuotasResponseData.EntityData;
 import org.apache.kafka.common.message.DescribeClientQuotasResponseData.EntryData;
 import org.apache.kafka.common.message.DescribeClientQuotasResponseData.ValueData;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -66,10 +68,11 @@ public class DescribeClientQuotasResponse extends AbstractResponse {
     }
 
     public DescribeClientQuotasResponse(int throttleTimeMs, Throwable e) {
+        ApiError apiError = ApiError.fromThrowable(e);
         this.data = new DescribeClientQuotasResponseData()
                 .setThrottleTimeMs(throttleTimeMs)
-                .setErrorCode(Errors.forException(e).code())
-                .setErrorMessage(e.getMessage())
+                .setErrorCode(apiError.error().code())
+                .setErrorMessage(apiError.message())
                 .setEntries(null);
     }
 
@@ -114,5 +117,9 @@ public class DescribeClientQuotasResponse extends AbstractResponse {
     @Override
     protected Struct toStruct(short version) {
         return data.toStruct(version);
+    }
+
+    public static DescribeClientQuotasResponse parse(ByteBuffer buffer, short version) {
+        return new DescribeClientQuotasResponse(ApiKeys.DESCRIBE_CLIENT_QUOTAS.parseResponse(version, buffer), version);
     }
 }

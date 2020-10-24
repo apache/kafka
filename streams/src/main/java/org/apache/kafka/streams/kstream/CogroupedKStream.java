@@ -23,6 +23,7 @@ import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 
 /**
  * {@code CogroupedKStream} is an abstraction of multiple <i>grouped</i> record streams of {@link KeyValue} pairs.
@@ -180,7 +181,7 @@ public interface CogroupedKStream<K, VOut> {
      * <p>
      * To query the local {@link ReadOnlyKeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
-     * <pre>
+     * <pre>{@code
      * KafkaStreams streams = ... // some aggregation on value type double
      * String queryableStoreName = "storeName" // the store name should be the name of the store as defined by the Materialized instance
      * ReadOnlyKeyValueStore<K, ValueAndTimestamp<VOut>> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, ValueAndTimestamp<VOut>> timestampedKeyValueStore());
@@ -230,9 +231,9 @@ public interface CogroupedKStream<K, VOut> {
      * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
      * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
      * <p>
-     * To query the local {@link ReadOnlyKeyValueStore} it must be obtained via
+     * To query the local {@link org.apache.kafka.streams.state.ReadOnlyKeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
-     * <pre>
+     * <pre>{@code
      * KafkaStreams streams = ... // some aggregation on value type double
      * String queryableStoreName = "storeName" // the store name should be the name of the store as defined by the Materialized instance
      * ReadOnlyKeyValueStore<K, ValueAndTimestamp<VOut>> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, ValueAndTimestamp<VOut>> timestampedKeyValueStore());
@@ -273,6 +274,15 @@ public interface CogroupedKStream<K, VOut> {
      * @return an instance of {@link TimeWindowedCogroupedKStream}
      */
     <W extends Window> TimeWindowedCogroupedKStream<K, VOut> windowedBy(final Windows<W> windows);
+
+    /**
+     * Create a new {@link TimeWindowedCogroupedKStream} instance that can be used to perform sliding
+     * windowed aggregations.
+     *
+     * @param windows the specification of the aggregation {@link SlidingWindows}
+     * @return an instance of {@link TimeWindowedCogroupedKStream}
+     */
+    TimeWindowedCogroupedKStream<K, VOut> windowedBy(final SlidingWindows windows);
 
     /**
      * Create a new {@link SessionWindowedCogroupedKStream} instance that can be used to perform session

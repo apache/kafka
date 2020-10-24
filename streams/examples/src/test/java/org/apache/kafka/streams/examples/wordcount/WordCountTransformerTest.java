@@ -33,6 +33,7 @@ import static org.junit.Assert.assertTrue;
  * Demonstrate the use of {@link MockProcessorContext} for testing the {@link Transformer} in the {@link WordCountTransformerDemo}.
  */
 public class WordCountTransformerTest {
+    @SuppressWarnings("deprecation") // TODO will be fixed in KAFKA-10437
     @Test
     public void test() {
         final MockProcessorContext context = new MockProcessorContext();
@@ -40,7 +41,10 @@ public class WordCountTransformerTest {
         // Create and initialize the transformer under test; including its provided store
         final WordCountTransformerDemo.MyTransformerSupplier supplier = new WordCountTransformerDemo.MyTransformerSupplier();
         for (final StoreBuilder<?> storeBuilder : supplier.stores()) {
-            final StateStore store = storeBuilder.withLoggingDisabled().build(); // Changelog is not supported by MockProcessorContext.
+            final StateStore store = storeBuilder
+                .withLoggingDisabled() // Changelog is not supported by MockProcessorContext.
+                // Caching is disabled by default, but FYI: caching is also not supported by MockProcessorContext.
+                .build();
             store.init(context, store);
             context.register(store, null);
         }

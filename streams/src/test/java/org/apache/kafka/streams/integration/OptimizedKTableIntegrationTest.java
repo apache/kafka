@@ -21,8 +21,6 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.st
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.notNullValue;
-import static org.junit.Assert.assertTrue;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -46,7 +44,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.KeyQueryMetadata;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
-import org.apache.kafka.streams.integration.utils.IntegrationTestUtils.TrackingStateRestoreListener;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -107,9 +104,7 @@ public class OptimizedKTableIntegrationTest {
         final KafkaStreams kafkaStreams1 = createKafkaStreams(builder, streamsConfiguration());
         final KafkaStreams kafkaStreams2 = createKafkaStreams(builder, streamsConfiguration());
         final List<KafkaStreams> kafkaStreamsList = Arrays.asList(kafkaStreams1, kafkaStreams2);
-        final TrackingStateRestoreListener listener = new TrackingStateRestoreListener();
 
-        kafkaStreamsList.forEach(kafkaStreams -> kafkaStreams.setGlobalStateRestoreListener(listener));
         startApplicationAndWaitUntilRunning(kafkaStreamsList, Duration.ofSeconds(60));
 
         produceValueRange(key, 0, batch1NumMessages);
@@ -123,21 +118,14 @@ public class OptimizedKTableIntegrationTest {
         final boolean kafkaStreams1WasFirstActive;
         final KeyQueryMetadata keyQueryMetadata = kafkaStreams1.queryMetadataForKey(TABLE_NAME, key, (topic, somekey, value, numPartitions) -> 0);
 
-        if ((keyQueryMetadata.getActiveHost().port() % 2) == 1) {
+        // Assert that the current value in store reflects all messages being processed
+        if ((keyQueryMetadata.activeHost().port() % 2) == 1) {
+            assertThat(store1.get(key), is(equalTo(batch1NumMessages - 1)));
             kafkaStreams1WasFirstActive = true;
         } else {
-            // Assert that data from the job was sent to the store
-            assertThat(store2.get(key), is(notNullValue()));
+            assertThat(store2.get(key), is(equalTo(batch1NumMessages - 1)));
             kafkaStreams1WasFirstActive = false;
         }
-
-        // Assert that no restore has occurred, ensures that when we check later that the restore
-        // notification actually came from after the rebalance.
-        assertTrue(listener.allStartOffsetsAtZero());
-        assertThat(listener.totalNumRestored(), is(equalTo(0L)));
-
-        // Assert that the current value in store reflects all messages being processed
-        assertThat(kafkaStreams1WasFirstActive ? store1.get(key) : store2.get(key), is(equalTo(batch1NumMessages - 1)));
 
         if (kafkaStreams1WasFirstActive) {
             kafkaStreams1.close();
@@ -164,7 +152,7 @@ public class OptimizedKTableIntegrationTest {
         });
     }
 
-    private void produceValueRange(final int key, final int start, final int endExclusive) throws Exception {
+    private void produceValueRange(final int key, final int start, final int endExclusive) {
         final Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
@@ -185,11 +173,10 @@ public class OptimizedKTableIntegrationTest {
         return streams;
     }
 
-
     private Properties streamsConfiguration() {
         final String safeTestName = safeUniqueTestName(getClass(), testName);
         final Properties config = new Properties();
-        config.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
+        config.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         config.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + (++port));
         config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());

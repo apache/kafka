@@ -140,6 +140,8 @@ public class NetworkClient implements KafkaClient {
                          int socketSendBuffer,
                          int socketReceiveBuffer,
                          int defaultRequestTimeoutMs,
+                         long connectionSetupTimeoutMs,
+                         long connectionSetupTimeoutMaxMs,
                          ClientDnsLookup clientDnsLookup,
                          Time time,
                          boolean discoverBrokerVersions,
@@ -155,6 +157,8 @@ public class NetworkClient implements KafkaClient {
              socketSendBuffer,
              socketReceiveBuffer,
              defaultRequestTimeoutMs,
+             connectionSetupTimeoutMs,
+             connectionSetupTimeoutMaxMs,
              clientDnsLookup,
              time,
              discoverBrokerVersions,
@@ -172,6 +176,8 @@ public class NetworkClient implements KafkaClient {
             int socketSendBuffer,
             int socketReceiveBuffer,
             int defaultRequestTimeoutMs,
+            long connectionSetupTimeoutMs,
+            long connectionSetupTimeoutMaxMs,
             ClientDnsLookup clientDnsLookup,
             Time time,
             boolean discoverBrokerVersions,
@@ -188,6 +194,8 @@ public class NetworkClient implements KafkaClient {
              socketSendBuffer,
              socketReceiveBuffer,
              defaultRequestTimeoutMs,
+             connectionSetupTimeoutMs,
+             connectionSetupTimeoutMaxMs,
              clientDnsLookup,
              time,
              discoverBrokerVersions,
@@ -205,6 +213,8 @@ public class NetworkClient implements KafkaClient {
                          int socketSendBuffer,
                          int socketReceiveBuffer,
                          int defaultRequestTimeoutMs,
+                         long connectionSetupTimeoutMs,
+                         long connectionSetupTimeoutMaxMs,
                          ClientDnsLookup clientDnsLookup,
                          Time time,
                          boolean discoverBrokerVersions,
@@ -220,6 +230,8 @@ public class NetworkClient implements KafkaClient {
              socketSendBuffer,
              socketReceiveBuffer,
              defaultRequestTimeoutMs,
+             connectionSetupTimeoutMs,
+             connectionSetupTimeoutMaxMs,
              clientDnsLookup,
              time,
              discoverBrokerVersions,
@@ -238,6 +250,8 @@ public class NetworkClient implements KafkaClient {
                           int socketSendBuffer,
                           int socketReceiveBuffer,
                           int defaultRequestTimeoutMs,
+                          long connectionSetupTimeoutMs,
+                          long connectionSetupTimeoutMaxMs,
                           ClientDnsLookup clientDnsLookup,
                           Time time,
                           boolean discoverBrokerVersions,
@@ -258,7 +272,9 @@ public class NetworkClient implements KafkaClient {
         this.selector = selector;
         this.clientId = clientId;
         this.inFlightRequests = new InFlightRequests(maxInFlightRequestsPerConnection);
-        this.connectionStates = new ClusterConnectionStates(reconnectBackoffMs, reconnectBackoffMax, logContext);
+        this.connectionStates = new ClusterConnectionStates(
+                reconnectBackoffMs, reconnectBackoffMax,
+                connectionSetupTimeoutMs, connectionSetupTimeoutMaxMs, logContext);
         this.socketSendBuffer = socketSendBuffer;
         this.socketReceiveBuffer = socketReceiveBuffer;
         this.correlation = 0;
@@ -554,6 +570,7 @@ public class NetworkClient implements KafkaClient {
         handleDisconnections(responses, updatedNow);
         handleConnections();
         handleInitiateApiVersionRequests(updatedNow);
+        handleTimedOutConnections(responses, updatedNow);
         handleTimedOutRequests(responses, updatedNow);
         completeResponses(responses);
 
@@ -643,7 +660,8 @@ public class NetworkClient implements KafkaClient {
     /**
      * Choose the node with the fewest outstanding requests which is at least eligible for connection. This method will
      * prefer a node with an existing connection, but will potentially choose a node for which we don't yet have a
-     * connection if all existing connections are in use. This method will never choose a node for which there is no
+     * connection if all existing connections are in use. If no connection exists, this method will prefer a node
+     * with least recent connection attempts. This method will never choose a node for which there is no
      * existing connection and from which we have disconnected within the reconnect backoff period, or an active
      * connection which is being throttled.
      *
@@ -678,7 +696,11 @@ public class NetworkClient implements KafkaClient {
             } else if (connectionStates.isPreparingConnection(node.idString())) {
                 foundConnecting = node;
             } else if (canConnect(node, now)) {
-                foundCanConnect = node;
+                if (foundCanConnect == null ||
+                        this.connectionStates.lastConnectAttemptMs(foundCanConnect.idString()) >
+                                this.connectionStates.lastConnectAttemptMs(node.idString())) {
+                    foundCanConnect = node;
+                }
             } else {
                 log.trace("Removing node {} from least loaded node selection since it is neither ready " +
                         "for sending or connecting", node);
@@ -784,6 +806,27 @@ public class NetworkClient implements KafkaClient {
     private void handleAbortedSends(List<ClientResponse> responses) {
         responses.addAll(abortedSends);
         abortedSends.clear();
+    }
+
+    /**
+     * Handle socket channel connection timeout. The timeout will hit iff a connection
+     * stays at the ConnectionState.CONNECTING state longer than the timeout value,
+     * as indicated by ClusterConnectionStates.NodeConnectionState.
+     *
+     * @param responses The list of responses to update
+     * @param now The current time
+     */
+    private void handleTimedOutConnections(List<ClientResponse> responses, long now) {
+        List<String> nodes = connectionStates.nodesWithConnectionSetupTimeout(now);
+        for (String nodeId : nodes) {
+            this.selector.close(nodeId);
+            log.debug(
+                "Disconnecting from node {} due to socket connection setup timeout. " +
+                "The timeout value is {} ms.",
+                nodeId,
+                connectionStates.connectionSetupTimeoutMs(nodeId));
+            processDisconnection(responses, nodeId, now, ChannelState.LOCAL_CLOSE);
+        }
     }
 
     /**
@@ -1155,7 +1198,7 @@ public class NetworkClient implements KafkaClient {
                                           AbstractRequest.Builder<?> requestBuilder,
                                           long createdTimeMs,
                                           boolean expectResponse) {
-        return newClientRequest(nodeId, requestBuilder, createdTimeMs, expectResponse, defaultRequestTimeoutMs, null);
+        return newClientRequest(nodeId, requestBuilder, createdTimeMs, expectResponse, defaultRequestTimeoutMs, null, null, null);
     }
 
     // visible for testing
@@ -1173,9 +1216,11 @@ public class NetworkClient implements KafkaClient {
                                           long createdTimeMs,
                                           boolean expectResponse,
                                           int requestTimeoutMs,
+                                          String initialPrincipalName,
+                                          String initialClientId,
                                           RequestCompletionHandler callback) {
         return new ClientRequest(nodeId, requestBuilder, nextCorrelationId(), clientId, createdTimeMs, expectResponse,
-                requestTimeoutMs, callback);
+                requestTimeoutMs, initialPrincipalName, initialClientId, callback);
     }
 
     public boolean discoverBrokerVersions() {

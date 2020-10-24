@@ -41,7 +41,7 @@ import java.util.Objects;
 import java.util.Set;
 
 public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends AbstractStream<K, V>
-        implements TimeWindowedCogroupedKStream<K, V> {
+    implements TimeWindowedCogroupedKStream<K, V> {
 
     private final Windows<W> windows;
     private final CogroupedStreamAggregateBuilder<K, V> aggregateBuilder;
@@ -96,19 +96,17 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends Ab
             new NamedInternal(named),
             materialize(materializedInternal),
             materializedInternal.keySerde() != null ?
-                    new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size())
-                    : null,
+                new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size())
+                : null,
             materializedInternal.valueSerde(),
             materializedInternal.queryableStoreName(),
-            windows,
-            null,
-            null);
+            windows);
     }
 
     @SuppressWarnings("deprecation")
     // continuing to support Windows#maintainMs/segmentInterval in fallback mode
     private StoreBuilder<TimestampedWindowStore<K, V>> materialize(
-            final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materialized) {
+        final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materialized) {
         WindowBytesStoreSupplier supplier = (WindowBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
             if (materialized.retention() != null) {
@@ -117,13 +115,13 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends Ab
 
                 if ((windows.size() + windows.gracePeriodMs()) > retentionPeriod) {
                     throw new IllegalArgumentException("The retention period of the window store "
-                                                       + name
-                                                       + " must be no smaller than its window size plus the grace period."
-                                                       + " Got size=[" + windows.size() + "],"
-                                                       + " grace=[" + windows.gracePeriodMs()
-                                                       + "],"
-                                                       + " retention=[" + retentionPeriod
-                                                       + "]");
+                        + name
+                        + " must be no smaller than its window size plus the grace period."
+                        + " Got size=[" + windows.size() + "],"
+                        + " grace=[" + windows.gracePeriodMs()
+                        + "],"
+                        + " retention=[" + retentionPeriod
+                        + "]");
                 }
 
                 supplier = Stores.persistentTimestampedWindowStore(
@@ -141,13 +139,13 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends Ab
 
                 if ((windows.size() + windows.gracePeriodMs()) > windows.maintainMs()) {
                     throw new IllegalArgumentException("The retention period of the window store "
-                                                       + name
-                                                       + " must be no smaller than its window size plus the grace period."
-                                                       + " Got size=[" + windows.size() + "],"
-                                                       + " grace=[" + windows.gracePeriodMs()
-                                                       + "],"
-                                                       + " retention=[" + windows.maintainMs()
-                                                       + "]");
+                        + name
+                        + " must be no smaller than its window size plus the grace period."
+                        + " Got size=[" + windows.size() + "],"
+                        + " grace=[" + windows.gracePeriodMs()
+                        + "],"
+                        + " retention=[" + windows.maintainMs()
+                        + "]");
                 }
 
                 supplier = new RocksDbWindowBytesStoreSupplier(

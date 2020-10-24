@@ -704,6 +704,40 @@ public class KafkaProducerTest {
     }
 
     @Test
+    public void closeWithNegativeTimestampShouldThrow() {
+        Properties producerProps = new Properties();
+        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        try (Producer producer = new KafkaProducer<>(producerProps, new ByteArraySerializer(), new ByteArraySerializer())) {
+            assertThrows(IllegalArgumentException.class, () -> producer.close(Duration.ofMillis(-100)));
+        }
+    }
+
+    @Test
+    public void testFlushCompleteSendOfInflightBatches() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+
+        Time time = new MockTime(1);
+        MetadataResponse initialUpdateResponse = TestUtils.metadataUpdateWith(1, singletonMap("topic", 1));
+        ProducerMetadata metadata = newMetadata(0, Long.MAX_VALUE);
+
+        MockClient client = new MockClient(time, metadata);
+        client.updateMetadata(initialUpdateResponse);
+
+        try (Producer<String, String> producer = new KafkaProducer<>(configs, new StringSerializer(),
+                new StringSerializer(), metadata, client, null, time)) {
+            ArrayList<Future<RecordMetadata>> futureResponses = new ArrayList<>();
+            for (int i = 0; i < 50; i++) {
+                Future<RecordMetadata> response = producer.send(new ProducerRecord<>("topic", "value" + i));
+                futureResponses.add(response);
+            }
+            futureResponses.forEach(res -> assertTrue(!res.isDone()));
+            producer.flush();
+            futureResponses.forEach(res -> assertTrue(res.isDone()));
+        }
+    }
+
+    @Test
     public void testMetricConfigRecordingLevel() {
         Properties props = new Properties();
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
@@ -813,6 +847,31 @@ public class KafkaProducerTest {
         try (Producer<String, String> producer = new KafkaProducer<>(configs, new StringSerializer(),
                 new StringSerializer(), metadata, client, null, time)) {
             producer.initTransactions();
+        }
+    }
+
+    @Test
+    public void testAbortTransaction() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+
+        Time time = new MockTime(1);
+        MetadataResponse initialUpdateResponse = TestUtils.metadataUpdateWith(1, singletonMap("topic", 1));
+        ProducerMetadata metadata = newMetadata(0, Long.MAX_VALUE);
+
+        MockClient client = new MockClient(time, metadata);
+        client.updateMetadata(initialUpdateResponse);
+
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, host1));
+        client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
+        client.prepareResponse(endTxnResponse(Errors.NONE));
+
+        try (Producer<String, String> producer = new KafkaProducer<>(configs, new StringSerializer(),
+                new StringSerializer(), metadata, client, null, time)) {
+            producer.initTransactions();
+            producer.beginTransaction();
+            producer.abortTransaction();
         }
     }
 
@@ -1215,6 +1274,33 @@ public class KafkaProducerTest {
     private ProducerMetadata newMetadata(long refreshBackoffMs, long expirationMs) {
         return new ProducerMetadata(refreshBackoffMs, expirationMs, defaultMetadataIdleMs,
                 new LogContext(), new ClusterResourceListeners(), Time.SYSTEM);
+    }
+
+    @Test
+    public void serializerShouldSeeGeneratedClientId() {
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, SerializerForClientId.class.getName());
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, SerializerForClientId.class.getName());
+
+        KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(props);
+        assertEquals(2, SerializerForClientId.CLIENT_IDS.size());
+        assertEquals(SerializerForClientId.CLIENT_IDS.get(0), producer.getClientId());
+        assertEquals(SerializerForClientId.CLIENT_IDS.get(1), producer.getClientId());
+        producer.close();
+    }
+
+    public static class SerializerForClientId implements Serializer<byte[]> {
+        static final List<String> CLIENT_IDS = new ArrayList<>();
+        @Override
+        public void configure(Map<String, ?> configs, boolean isKey) {
+            CLIENT_IDS.add(configs.get(ProducerConfig.CLIENT_ID_CONFIG).toString());
+        }
+
+        @Override
+        public byte[] serialize(String topic, byte[] data) {
+            return data;
+        }
     }
 
 }

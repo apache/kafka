@@ -26,6 +26,7 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.SessionWindowedCogroupedKStream;
 import org.apache.kafka.streams.kstream.SessionWindows;
+import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.kstream.TimeWindowedCogroupedKStream;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windows;
@@ -108,6 +109,19 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
     }
 
     @Override
+    public TimeWindowedCogroupedKStream<K, VOut> windowedBy(final SlidingWindows slidingWindows) {
+        Objects.requireNonNull(slidingWindows, "slidingWindows can't be null");
+        return new SlidingWindowedCogroupedKStreamImpl<>(
+            slidingWindows,
+            builder,
+            subTopologySourceNodes,
+            name,
+            aggregateBuilder,
+            streamsGraphNode,
+            groupPatterns);
+    }
+
+    @Override
     public SessionWindowedCogroupedKStream<K, VOut> windowedBy(final SessionWindows sessionWindows) {
         Objects.requireNonNull(sessionWindows, "sessionWindows can't be null");
         return new SessionWindowedCogroupedKStreamImpl<>(sessionWindows,
@@ -129,9 +143,6 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
             new TimestampedKeyValueStoreMaterializer<>(materializedInternal).materialize(),
             materializedInternal.keySerde(),
             materializedInternal.valueSerde(),
-            materializedInternal.queryableStoreName(),
-            null,
-            null,
-            null);
+            materializedInternal.queryableStoreName());
     }
 }

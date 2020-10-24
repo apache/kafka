@@ -57,6 +57,7 @@ import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.network.CertStores.{KEYSTORE_PROPS, TRUSTSTORE_PROPS}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.junit.Assert._
@@ -205,7 +206,11 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     }
 
     def verifySslConfig(prefix: String, expectedProps: Properties, configDesc: Config): Unit = {
-      KEYSTORE_PROPS.forEach { configName =>
+      // Validate file-based SSL keystore configs
+      val keyStoreProps = new util.HashSet[String](KEYSTORE_PROPS)
+      keyStoreProps.remove(SSL_KEYSTORE_KEY_CONFIG)
+      keyStoreProps.remove(SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG)
+      keyStoreProps.forEach { configName =>
         val desc = configEntry(configDesc, s"$prefix$configName")
         val isSensitive = configName.contains("password")
         verifyConfig(configName, desc, isSensitive, isReadOnly = prefix.nonEmpty, if (prefix.isEmpty) invalidSslProperties else sslProperties1)
@@ -622,12 +627,34 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     // configuration across brokers, they can also be defined at per-broker level for testing
     props.clear()
     props.put(KafkaConfig.LogIndexSizeMaxBytesProp, "500000")
+    props.put(KafkaConfig.LogRetentionTimeMillisProp, TimeUnit.DAYS.toMillis(2).toString)
     alterConfigsOnServer(servers.head, props)
     assertEquals(500000, servers.head.config.values.get(KafkaConfig.LogIndexSizeMaxBytesProp))
-    servers.tail.foreach { server => assertEquals(Defaults.LogIndexSizeMaxBytes, server.config.values.get(KafkaConfig.LogIndexSizeMaxBytesProp)) }
+    assertEquals(TimeUnit.DAYS.toMillis(2), servers.head.config.values.get(KafkaConfig.LogRetentionTimeMillisProp))
+    servers.tail.foreach { server =>
+      assertEquals(Defaults.LogIndexSizeMaxBytes, server.config.values.get(KafkaConfig.LogIndexSizeMaxBytesProp))
+      assertEquals(1680000000L, server.config.values.get(KafkaConfig.LogRetentionTimeMillisProp))
+    }
 
     // Verify that produce/consume worked throughout this test without any retries in producer
     stopAndVerifyProduceConsume(producerThread, consumerThread)
+
+    // Verify that configuration at both per-broker level and default cluster level could be deleted and
+    // the default value should be restored
+    props.clear()
+    props.put(KafkaConfig.LogRetentionTimeMillisProp, "")
+    props.put(KafkaConfig.LogIndexSizeMaxBytesProp, "")
+    TestUtils.incrementalAlterConfigs(servers.take(1), adminClients.head, props, perBrokerConfig = true, opType = OpType.DELETE).all.get
+    TestUtils.incrementalAlterConfigs(servers, adminClients.head, props, perBrokerConfig = false, opType = OpType.DELETE).all.get
+    servers.foreach { server =>
+      waitForConfigOnServer(server, KafkaConfig.LogRetentionTimeMillisProp, 1680000000.toString)
+    }
+    servers.foreach { server =>
+      val log = server.logManager.getLog(new TopicPartition(topic, 0)).getOrElse(throw new IllegalStateException("Log not found"))
+      // Verify default values for these two configurations are restored on all brokers
+      TestUtils.waitUntilTrue(() => log.config.maxIndexSize == Defaults.LogIndexSizeMaxBytes && log.config.retentionMs == 1680000000L,
+        "Existing topic config using defaults not updated")
+    }
   }
 
   @Test
@@ -1025,9 +1052,18 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
 
   @Test
   def testAddRemoveSaslListeners(): Unit = {
-    createScramCredentials(zkConnect, JaasTestUtils.KafkaScramUser, JaasTestUtils.KafkaScramPassword)
-    createScramCredentials(zkConnect, JaasTestUtils.KafkaScramAdmin, JaasTestUtils.KafkaScramAdminPassword)
+    createScramCredentials(adminClients.head, JaasTestUtils.KafkaScramUser, JaasTestUtils.KafkaScramPassword)
+    createScramCredentials(adminClients.head, JaasTestUtils.KafkaScramAdmin, JaasTestUtils.KafkaScramAdminPassword)
     initializeKerberos()
+    // make sure each server's credential cache has all the created credentials
+    // (check after initializing Kerberos to minimize delays)
+    List(JaasTestUtils.KafkaScramUser, JaasTestUtils.KafkaScramAdmin).foreach { scramUser =>
+      servers.foreach { server =>
+        ScramMechanism.values().filter(_ != ScramMechanism.UNKNOWN).foreach(mechanism =>
+          TestUtils.waitUntilTrue(() => server.credentialProvider.credentialCache.cache(
+            mechanism.mechanismName(), classOf[ScramCredential]).get(scramUser) != null,
+            s"$mechanism credentials not created for $scramUser"))
+      }}
 
     //verifyAddListener("SASL_SSL", SecurityProtocol.SASL_SSL, Seq("SCRAM-SHA-512", "SCRAM-SHA-256", "PLAIN"))
     verifyAddListener("SASL_PLAINTEXT", SecurityProtocol.SASL_PLAINTEXT, Seq("GSSAPI"))

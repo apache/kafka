@@ -31,6 +31,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, 
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
+import org.apache.kafka.common.message.ListOffsetRequestData.{ListOffsetPartition, ListOffsetTopic}
 import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
 import org.apache.kafka.common.message._
@@ -146,16 +147,18 @@ class RequestQuotaTest extends BaseRequestTest {
 
   @Test
   def testUnthrottledClient(): Unit = {
-    for (apiKey <- RequestQuotaTest.ClientActions)
+    for (apiKey <- RequestQuotaTest.ClientActions) {
       submitTest(apiKey, () => checkUnthrottledClient(apiKey))
+    }
 
     waitAndCheckResults()
   }
 
   @Test
   def testExemptRequestTime(): Unit = {
-    for (apiKey <- RequestQuotaTest.ClusterActions)
+    for (apiKey <- RequestQuotaTest.ClusterActions) {
       submitTest(apiKey, () => checkExemptRequestMetric(apiKey))
+    }
 
     waitAndCheckResults()
   }
@@ -164,8 +167,9 @@ class RequestQuotaTest extends BaseRequestTest {
   def testUnauthorizedThrottle(): Unit = {
     RequestQuotaTest.principal = RequestQuotaTest.UnauthorizedPrincipal
 
-    for (apiKey <- ApiKeys.values)
+    for (apiKey <- ApiKeys.enabledApis.asScala) {
       submitTest(apiKey, () => checkUnauthorizedRequestThrottle(apiKey))
+    }
 
     waitAndCheckResults()
   }
@@ -177,22 +181,16 @@ class RequestQuotaTest extends BaseRequestTest {
   }
 
   private def throttleTimeMetricValueForQuotaType(clientId: String, quotaType: QuotaType): Double = {
-    val metricName = leaderNode.metrics.metricName("throttle-time",
-                                  quotaType.toString,
-                                  "",
-                                  "user", "",
-                                  "client-id", clientId)
+    val metricName = leaderNode.metrics.metricName("throttle-time", quotaType.toString,
+      "", "user", "", "client-id", clientId)
     val sensor = leaderNode.quotaManagers.request.getOrCreateQuotaSensors(session("ANONYMOUS"),
       clientId).throttleTimeSensor
     metricValue(leaderNode.metrics.metrics.get(metricName), sensor)
   }
 
   private def requestTimeMetricValue(clientId: String): Double = {
-    val metricName = leaderNode.metrics.metricName("request-time",
-                                  QuotaType.Request.toString,
-                                  "",
-                                  "user", "",
-                                  "client-id", clientId)
+    val metricName = leaderNode.metrics.metricName("request-time", QuotaType.Request.toString,
+      "", "user", "", "client-id", clientId)
     val sensor = leaderNode.quotaManagers.request.getOrCreateQuotaSensors(session("ANONYMOUS"),
       clientId).quotaSensor
     metricValue(leaderNode.metrics.metrics.get(metricName), sensor)
@@ -224,9 +222,14 @@ class RequestQuotaTest extends BaseRequestTest {
           new MetadataRequest.Builder(List(topic).asJava, true)
 
         case ApiKeys.LIST_OFFSETS =>
+          val topic = new ListOffsetTopic()
+            .setName(tp.topic)
+            .setPartitions(List(new ListOffsetPartition()
+              .setPartitionIndex(tp.partition)
+              .setTimestamp(0L)
+              .setCurrentLeaderEpoch(15)).asJava)
           ListOffsetRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
-            .setTargetTimes(Map(tp -> new ListOffsetRequest.PartitionData(
-              0L, Optional.of[Integer](15))).asJava)
+            .setTargetTimes(List(topic).asJava)
 
         case ApiKeys.LEADER_AND_ISR =>
           new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, brokerId, Int.MaxValue, Long.MaxValue,
@@ -458,7 +461,10 @@ class RequestQuotaTest extends BaseRequestTest {
               .setOperation(AclOperation.ANY.code)
               .setPermissionType(AclPermissionType.DENY.code))))
         case ApiKeys.DESCRIBE_CONFIGS =>
-          new DescribeConfigsRequest.Builder(Collections.singleton(new ConfigResource(ConfigResource.Type.TOPIC, tp.topic)))
+          new DescribeConfigsRequest.Builder(new DescribeConfigsRequestData()
+            .setResources(Collections.singletonList(new DescribeConfigsRequestData.DescribeConfigsResource()
+              .setResourceType(ConfigResource.Type.TOPIC.id)
+              .setResourceName(tp.topic))))
 
         case ApiKeys.ALTER_CONFIGS =>
           new AlterConfigsRequest.Builder(
@@ -468,7 +474,14 @@ class RequestQuotaTest extends BaseRequestTest {
               ))), true)
 
         case ApiKeys.ALTER_REPLICA_LOG_DIRS =>
-          new AlterReplicaLogDirsRequest.Builder(Collections.singletonMap(tp, logDir))
+          val dir = new AlterReplicaLogDirsRequestData.AlterReplicaLogDir()
+            .setPath(logDir)
+          dir.topics.add(new AlterReplicaLogDirsRequestData.AlterReplicaLogDirTopic()
+            .setName(tp.topic)
+            .setPartitions(Collections.singletonList(tp.partition)))
+          val data = new AlterReplicaLogDirsRequestData();
+          data.dirs.add(dir)
+          new AlterReplicaLogDirsRequest.Builder(data)
 
         case ApiKeys.DESCRIBE_LOG_DIRS =>
           val data = new DescribeLogDirsRequestData()
@@ -481,7 +494,7 @@ class RequestQuotaTest extends BaseRequestTest {
           val data = new CreatePartitionsRequestData()
             .setTimeoutMs(0)
             .setValidateOnly(false)
-            .setTopics(Collections.singletonList(new CreatePartitionsTopic().setName("topic-2").setCount(1)))
+          data.topics().add(new CreatePartitionsTopic().setName("topic-2").setCount(1))
           new CreatePartitionsRequest.Builder(data)
 
         case ApiKeys.CREATE_DELEGATION_TOKEN =>
@@ -549,6 +562,28 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.ALTER_CLIENT_QUOTAS =>
           new AlterClientQuotasRequest.Builder(List.empty.asJava, false)
+
+        case ApiKeys.DESCRIBE_USER_SCRAM_CREDENTIALS =>
+          new DescribeUserScramCredentialsRequest.Builder(new DescribeUserScramCredentialsRequestData())
+
+        case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS =>
+          new AlterUserScramCredentialsRequest.Builder(new AlterUserScramCredentialsRequestData())
+
+        case ApiKeys.VOTE =>
+          new VoteRequest.Builder(VoteRequest.singletonRequest(tp, 1, 2, 0, 10))
+
+        case ApiKeys.BEGIN_QUORUM_EPOCH =>
+          new BeginQuorumEpochRequest.Builder(BeginQuorumEpochRequest.singletonRequest(tp, 2, 5))
+
+        case ApiKeys.END_QUORUM_EPOCH =>
+          new EndQuorumEpochRequest.Builder(EndQuorumEpochRequest.singletonRequest(
+            tp, 10, 2, 5, Collections.singletonList(3)))
+
+        case ApiKeys.ALTER_ISR =>
+          new AlterIsrRequest.Builder(new AlterIsrRequestData())
+
+        case ApiKeys.UPDATE_FEATURES =>
+          new UpdateFeaturesRequest.Builder(new UpdateFeaturesRequestData())
 
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
@@ -671,9 +706,9 @@ class RequestQuotaTest extends BaseRequestTest {
 }
 
 object RequestQuotaTest {
-  val ClusterActions = ApiKeys.values.toSet.filter(apiKey => apiKey.clusterAction)
+  val ClusterActions = ApiKeys.enabledApis.asScala.toSet.filter(apiKey => apiKey.clusterAction)
   val SaslActions = Set(ApiKeys.SASL_HANDSHAKE, ApiKeys.SASL_AUTHENTICATE)
-  val ClientActions = ApiKeys.values.toSet -- ClusterActions -- SaslActions
+  val ClientActions = ApiKeys.enabledApis.asScala.toSet -- ClusterActions -- SaslActions
 
   val UnauthorizedPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Unauthorized")
   // Principal used for all client connections. This is modified by tests which

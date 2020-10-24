@@ -78,11 +78,11 @@
 Topology topology = new Topology();
 topology.addSource("sourceProcessor", "input-topic");
 topology.addProcessor("processor", ..., "sourceProcessor");
-topology.addSink("sinkProcessor", "output-topic", "processor");
+topology.addSink("sinkProcessor", "result-topic", "processor");
 // or
 // using DSL
 StreamsBuilder builder = new StreamsBuilder();
-builder.stream("input-topic").filter(...).to("output-topic");
+builder.stream("input-topic").filter(...).to("result-topic");
 Topology topology = builder.build();
 
 // setup test driver

@@ -24,6 +24,7 @@ import java.util.concurrent.locks.ReentrantLock
 
 import kafka.cluster.BrokerEndPoint
 import kafka.utils.{DelayedItem, Pool, ShutdownableThread}
+import kafka.utils.Implicits._
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.requests.EpochEndOffset._
 import kafka.common.ClientIdAndBroker
@@ -248,7 +249,7 @@ abstract class AbstractFetcherThread(name: String,
     val fetchOffsets = mutable.HashMap.empty[TopicPartition, OffsetTruncationState]
     val partitionsWithError = mutable.HashSet.empty[TopicPartition]
 
-    fetchedEpochs.foreach { case (tp, leaderEpochOffset) =>
+    fetchedEpochs.forKeyValue { (tp, leaderEpochOffset) =>
       leaderEpochOffset.error match {
         case Errors.NONE =>
           val offsetTruncationState = getOffsetTruncationState(tp, leaderEpochOffset)
@@ -305,7 +306,7 @@ abstract class AbstractFetcherThread(name: String,
           inLock(partitionMapLock) {
             partitionsWithError ++= partitionStates.partitionSet.asScala
             // there is an error occurred while fetching partitions, sleep a while
-            // note that `ReplicaFetcherThread.handlePartitionsWithError` will also introduce the same delay for every
+            // note that `AbstractFetcherThread.handlePartitionsWithError` will also introduce the same delay for every
             // partition with error effectively doubling the delay. It would be good to improve this.
             partitionMapCond.await(fetchBackOffMs, TimeUnit.MILLISECONDS)
           }
@@ -316,7 +317,7 @@ abstract class AbstractFetcherThread(name: String,
     if (responseData.nonEmpty) {
       // process fetched data
       inLock(partitionMapLock) {
-        responseData.foreach { case (topicPartition, partitionData) =>
+        responseData.forKeyValue { (topicPartition, partitionData) =>
           Option(partitionStates.stateValue(topicPartition)).foreach { currentFetchState =>
             // It's possible that a partition is removed and re-added or truncated when there is a pending fetch request.
             // In this case, we only want to process the fetch response if the partition state is ready for fetch and
@@ -377,9 +378,15 @@ abstract class AbstractFetcherThread(name: String,
                 case Errors.FENCED_LEADER_EPOCH =>
                   if (onPartitionFenced(topicPartition, requestEpoch)) partitionsWithError += topicPartition
 
-                case Errors.NOT_LEADER_FOR_PARTITION =>
+                case Errors.NOT_LEADER_OR_FOLLOWER =>
                   debug(s"Remote broker is not the leader for partition $topicPartition, which could indicate " +
                     "that the partition is being moved")
+                  partitionsWithError += topicPartition
+
+                case Errors.UNKNOWN_TOPIC_OR_PARTITION =>
+                  warn(s"Received ${Errors.UNKNOWN_TOPIC_OR_PARTITION} from the leader for partition $topicPartition. " +
+                       "This error may be returned transiently when the partition is being created or deleted, but it is not " +
+                       "expected to persist.")
                   partitionsWithError += topicPartition
 
                 case _ =>
@@ -424,7 +431,7 @@ abstract class AbstractFetcherThread(name: String,
     try {
       failedPartitions.removeAll(initialFetchStates.keySet)
 
-      initialFetchStates.foreach { case (tp, initialFetchState) =>
+      initialFetchStates.forKeyValue { (tp, initialFetchState) =>
         // We can skip the truncation step iff the leader epoch matches the existing epoch
         val currentState = partitionStates.stateValue(tp)
         val updatedState = if (currentState != null && currentState.currentLeaderEpoch == initialFetchState.leaderEpoch) {
@@ -556,7 +563,7 @@ abstract class AbstractFetcherThread(name: String,
 
       case e @ (_ : UnknownTopicOrPartitionException |
                 _ : UnknownLeaderEpochException |
-                _ : NotLeaderForPartitionException) =>
+                _ : NotLeaderOrFollowerException) =>
         info(s"Could not fetch offset for $topicPartition due to error: ${e.getMessage}")
         true
 
@@ -651,7 +658,7 @@ abstract class AbstractFetcherThread(name: String,
     } finally partitionMapLock.unlock()
   }
 
-  def partitionCount(): Int = {
+  def partitionCount: Int = {
     partitionMapLock.lockInterruptibly()
     try partitionStates.size
     finally partitionMapLock.unlock()

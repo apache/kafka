@@ -64,6 +64,8 @@ public class MockAdminClient extends AdminClient {
         new HashMap<>();
     private final Map<TopicPartitionReplica, ReplicaLogDirInfo> replicaMoves =
         new HashMap<>();
+    private final Map<TopicPartition, Long> beginningOffsets;
+    private final Map<TopicPartition, Long> endOffsets;
     private final String clusterId;
     private final List<List<String>> brokerLogDirs;
     private final List<Map<String, String>> brokerConfigs;
@@ -145,8 +147,11 @@ public class MockAdminClient extends AdminClient {
         }
     }
 
-    public MockAdminClient(List<Node> brokers,
-                           Node controller) {
+    public MockAdminClient() {
+        this(Collections.singletonList(Node.noNode()), Node.noNode());
+    }
+
+    public MockAdminClient(List<Node> brokers, Node controller) {
         this(brokers, controller, DEFAULT_CLUSTER_ID, 1, brokers.size(),
             Collections.nCopies(brokers.size(), DEFAULT_LOG_DIRS));
     }
@@ -167,6 +172,8 @@ public class MockAdminClient extends AdminClient {
         for (int i = 0; i < brokers.size(); i++) {
             this.brokerConfigs.add(new HashMap<>());
         }
+        this.beginningOffsets = new HashMap<>();
+        this.endOffsets = new HashMap<>();
     }
 
     synchronized public void controller(Node controller) {
@@ -490,6 +497,19 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     synchronized public DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
+
+        if (timeoutNextRequests > 0) {
+            Map<ConfigResource, KafkaFuture<Config>> configs = new HashMap<>();
+            for (ConfigResource requestedResource : resources) {
+                KafkaFutureImpl<Config> future = new KafkaFutureImpl<>();
+                future.completeExceptionally(new TimeoutException());
+                configs.put(requestedResource, future);
+            }
+
+            --timeoutNextRequests;
+            return new DescribeConfigsResult(configs);
+        }
+
         Map<ConfigResource, KafkaFuture<Config>> results = new HashMap<>();
         for (ConfigResource resource : resources) {
             KafkaFutureImpl<Config> future = new KafkaFutureImpl<>();
@@ -506,7 +526,7 @@ public class MockAdminClient extends AdminClient {
     synchronized private Config getResourceDescription(ConfigResource resource) {
         switch (resource.type()) {
             case BROKER: {
-                int brokerId = Integer.valueOf(resource.name());
+                int brokerId = Integer.parseInt(resource.name());
                 if (brokerId >= brokerConfigs.size()) {
                     throw new InvalidRequestException("Broker " + resource.name() +
                         " not found.");
@@ -515,10 +535,13 @@ public class MockAdminClient extends AdminClient {
             }
             case TOPIC: {
                 TopicMetadata topicMetadata = allTopics.get(resource.name());
-                if (topicMetadata == null) {
-                    throw new UnknownTopicOrPartitionException();
+                if (topicMetadata != null && !topicMetadata.markedForDeletion) {
+                    if (topicMetadata.fetchesRemainingUntilVisible > 0)
+                        topicMetadata.fetchesRemainingUntilVisible = Math.max(0, topicMetadata.fetchesRemainingUntilVisible - 1);
+                    else return toConfigObject(topicMetadata.configs);
+
                 }
-                return toConfigObject(topicMetadata.configs);
+                throw new UnknownTopicOrPartitionException("Resource " + resource + " not found.");
             }
             default:
                 throw new UnsupportedOperationException("Not implemented yet");
@@ -773,7 +796,24 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     synchronized public ListOffsetsResult listOffsets(Map<TopicPartition, OffsetSpec> topicPartitionOffsets, ListOffsetsOptions options) {
-        throw new UnsupportedOperationException("Not implement yet");
+        Map<TopicPartition, KafkaFuture<ListOffsetsResult.ListOffsetsResultInfo>> futures = new HashMap<>();
+
+        for (Map.Entry<TopicPartition, OffsetSpec> entry : topicPartitionOffsets.entrySet()) {
+            TopicPartition tp = entry.getKey();
+            OffsetSpec spec = entry.getValue();
+            KafkaFutureImpl<ListOffsetsResult.ListOffsetsResultInfo> future = new KafkaFutureImpl<>();
+
+            if (spec instanceof OffsetSpec.TimestampSpec)
+                throw new UnsupportedOperationException("Not implement yet");
+            else if (spec instanceof OffsetSpec.EarliestSpec)
+                future.complete(new ListOffsetsResult.ListOffsetsResultInfo(beginningOffsets.get(tp), -1, Optional.empty()));
+            else
+                future.complete(new ListOffsetsResult.ListOffsetsResultInfo(endOffsets.get(tp), -1, Optional.empty()));
+
+            futures.put(tp, future);
+        }
+
+        return new ListOffsetsResult(futures);
     }
 
     @Override
@@ -787,7 +827,35 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
+    public DescribeUserScramCredentialsResult describeUserScramCredentials(List<String> users, DescribeUserScramCredentialsOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public AlterUserScramCredentialsResult alterUserScramCredentials(List<UserScramCredentialAlteration> alterations, AlterUserScramCredentialsOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public DescribeFeaturesResult describeFeatures(DescribeFeaturesOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public UpdateFeaturesResult updateFeatures(Map<String, FeatureUpdate> featureUpdates, UpdateFeaturesOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
     synchronized public void close(Duration timeout) {}
+
+    public synchronized void updateBeginningOffsets(Map<TopicPartition, Long> newOffsets) {
+        beginningOffsets.putAll(newOffsets);
+    }
+
+    public synchronized void updateEndOffsets(final Map<TopicPartition, Long> newOffsets) {
+        endOffsets.putAll(newOffsets);
+    }
 
     private final static class TopicMetadata {
         final boolean isInternalTopic;
