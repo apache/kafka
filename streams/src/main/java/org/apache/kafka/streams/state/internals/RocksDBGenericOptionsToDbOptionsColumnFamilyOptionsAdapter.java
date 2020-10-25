@@ -1396,5 +1396,6 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
         // ColumnFamilyOptions should be closed last
         dbOptions.close();
         columnFamilyOptions.close();
+        super.close();
     }
 }
