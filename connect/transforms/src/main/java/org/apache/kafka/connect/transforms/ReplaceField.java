@@ -59,7 +59,7 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
         String EXCLUDE_ALIAS = "blacklist";
 
         String RENAME = "renames";
-        
+
         String RECURSIVE = "recursive";
     }
 
@@ -91,7 +91,6 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
             .define(ConfigName.RECURSIVE, ConfigDef.Type.BOOLEAN, ConfigDefault.RECURSIVE, ConfigDef.Importance.MEDIUM, 
                     "Boolean which indicates if the ReplaceField should recursively replace child fields of nested complex types, "
                     + "if any nested children fields exist with the same names as given in the configuration.");
-                            
 
     private static final String PURPOSE = "field replacement";
 
@@ -227,82 +226,92 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
 
         // Perform different logic for different types of parent schemas.
 
-        if (schema.type() == Schema.Type.STRUCT) {
-            SchemaBuilder builder = SchemaUtil.copySchemaBasics(schema, SchemaBuilder.struct());
+        if (schema.type() == Schema.Type.STRUCT)
+            return buildUpdatedStructSchema(schema);
 
-            for (Field field : schema.fields()) {
-                if (filter(field.name())) {
-                    String updatedName = renamed(field.name());
+        else if (isRecursive && schema.type() == Schema.Type.ARRAY)
+            return buildUpdatedArraySchema(schema);
 
-                    // If field has already been added then skip adding it again. This will allow rename of multiple "can contain only one of" kind of fields into one common name.
-                    if (builder.field(updatedName) != null)
-                        continue;
+        else if (isRecursive && schema.type() == Schema.Type.MAP)
+            return buildUpdatedMapSchema(schema);
 
-                    if (isRecursive && 
-                            (field.schema().type() == Schema.Type.STRUCT 
-                            || field.schema().type() == Schema.Type.ARRAY 
-                            || field.schema().type() == Schema.Type.MAP)
-                    ) { 
+        else
+            throw new DataException(schema.type().toString() + " is not a supported parent Schema type for the ReplaceField transformation.");
+
+    }
+
+    private SchemaBuilder buildUpdatedStructSchema(Schema schema) {
+        SchemaBuilder builder = SchemaUtil.copySchemaBasics(schema, SchemaBuilder.struct());
+
+        for (Field field : schema.fields()) {
+            if (filter(field.name())) {
+                String updatedName = renamed(field.name());
+
+                // If field has already been added then skip adding it again. This will allow rename of multiple "can contain only one of" kind of fields into one common name.
+                if (builder.field(updatedName) != null)
+                    continue;
+
+                if (isRecursive && 
+                        (field.schema().type() == Schema.Type.STRUCT 
+                        || field.schema().type() == Schema.Type.ARRAY 
+                        || field.schema().type() == Schema.Type.MAP)
+                ) { 
+                    Schema updatedChildSchema = getOrBuildUpdatedSchema(field.schema());
+                    builder.field(updatedName, updatedChildSchema);
+
+                } else // This is where all non-parent Schema fields should be added (is not recursive, or we are at the bottom of a recursion) 
+                    builder.field(updatedName, field.schema());
+            }
+        }
+
+        return builder;
+    }
+
+    private SchemaBuilder buildUpdatedArraySchema(Schema schema) {
+        // For complex types, just go one level lower to more detail and then return a new Array schema with the updated child value schema
+        if (schema.valueSchema().type() == Schema.Type.STRUCT 
+                || schema.valueSchema().type() == Schema.Type.ARRAY 
+                || schema.valueSchema().type() == Schema.Type.MAP) {
+            Schema updatedChildSchema = getOrBuildUpdatedSchema(schema.valueSchema());
+            return SchemaUtil.copySchemaBasics(schema, SchemaBuilder.array(updatedChildSchema));
+
+        } else // Otherwise we will just assume to pass it along since the Array itself was already allowed by an upstream filter()
+            return SchemaUtil.copySchemaBasics(schema, SchemaBuilder.array(schema.valueSchema()));
+    }
+
+    private SchemaBuilder buildUpdatedMapSchema(Schema schema) {
+        // For complex type values, just go one level lower to more detail and then return a new Map schema with the updated child value schema
+        if (schema.valueSchema().type() == Schema.Type.STRUCT 
+                || schema.valueSchema().type() == Schema.Type.ARRAY 
+                || schema.valueSchema().type() == Schema.Type.MAP) {
+            Schema updatedChildSchema = getOrBuildUpdatedSchema(schema.valueSchema());
+            return SchemaUtil.copySchemaBasics(schema, SchemaBuilder.map(schema.keySchema(), updatedChildSchema));
+
+        } else if (schema.keySchema().type() == Schema.Type.STRING) {
+            // Otherwise, if the Map key is a string, then we will also perform ReplaceField based on the key names within the Map fields
+
+            SchemaBuilder childBuilder = SchemaUtil.copySchemaBasics(schema.valueSchema());
+
+            for (Field field : schema.valueSchema().fields()) {
+                String fieldName = field.name();
+
+                if (filter(fieldName)) {
+
+                    if (schema.valueSchema().type() == Schema.Type.STRUCT 
+                            || schema.valueSchema().type() == Schema.Type.ARRAY 
+                            || schema.valueSchema().type() == Schema.Type.MAP) {
                         Schema updatedChildSchema = getOrBuildUpdatedSchema(field.schema());
-                        builder.field(updatedName, updatedChildSchema);
+                        childBuilder.field(renamed(field.name()), updatedChildSchema);
 
-                    } else // This is where all non-parent Schema fields should be added (is not recursive, or we are at the bottom of a recursion) 
-                        builder.field(updatedName, field.schema());
+                    } else
+                        childBuilder.field(renamed(fieldName), field.schema());
                 }
             }
 
-            return builder;
+            return SchemaUtil.copySchemaBasics(schema, SchemaBuilder.map(schema.keySchema(), childBuilder.build()));
 
-        } else if (isRecursive && schema.type() == Schema.Type.ARRAY) {
-
-            // For complex types, just go one level lower to more detail and then return a new Array schema with the updated child value schema
-            if (schema.valueSchema().type() == Schema.Type.STRUCT 
-                    || schema.valueSchema().type() == Schema.Type.ARRAY 
-                    || schema.valueSchema().type() == Schema.Type.MAP) {
-                Schema updatedChildSchema = getOrBuildUpdatedSchema(schema.valueSchema());
-                return SchemaUtil.copySchemaBasics(schema, SchemaBuilder.array(updatedChildSchema));
-
-            } else // Otherwise we will just assume to pass it along since the Array itself was already allowed by an upstream filter()
-                return SchemaUtil.copySchemaBasics(schema, SchemaBuilder.array(schema.valueSchema()));
-
-        } else if (isRecursive && schema.type() == Schema.Type.MAP) {
-
-            // For complex type values, just go one level lower to more detail and then return a new Map schema with the updated child value schema
-            if (schema.valueSchema().type() == Schema.Type.STRUCT 
-                    || schema.valueSchema().type() == Schema.Type.ARRAY 
-                    || schema.valueSchema().type() == Schema.Type.MAP) {
-                Schema updatedChildSchema = getOrBuildUpdatedSchema(schema.valueSchema());
-                return SchemaUtil.copySchemaBasics(schema, SchemaBuilder.map(schema.keySchema(), updatedChildSchema));
-
-            } else if (schema.keySchema().type() == Schema.Type.STRING) {
-                // Otherwise, if the Map key is a string, then we will also perform ReplaceField based on the key names within the Map fields
-
-                SchemaBuilder childBuilder = SchemaUtil.copySchemaBasics(schema.valueSchema());
-
-                for (Field field : schema.valueSchema().fields()) {
-                    String fieldName = field.name();
-
-                    if (filter(fieldName)) {
-
-                        if (schema.valueSchema().type() == Schema.Type.STRUCT 
-                                || schema.valueSchema().type() == Schema.Type.ARRAY 
-                                || schema.valueSchema().type() == Schema.Type.MAP) {
-                            Schema updatedChildSchema = getOrBuildUpdatedSchema(field.schema());
-                            childBuilder.field(renamed(field.name()), updatedChildSchema);
-
-                        } else
-                            childBuilder.field(renamed(fieldName), field.schema());
-                    }
-                }
-
-                return SchemaUtil.copySchemaBasics(schema, SchemaBuilder.map(schema.keySchema(), childBuilder.build()));
-
-            } else // And in the last-case scenario (not a complex value and not a String key type) then we will just assume to pass it along since the Map itself was already allowed by an upstream filter()
-                return SchemaUtil.copySchemaBasics(schema, SchemaBuilder.map(schema.keySchema(), schema.valueSchema()));
-
-        } else
-            throw new DataException(schema.type().toString() + " is not a supported parent Schema type for the ReplaceField transformation.");
-
+        } else // And in the last-case scenario (not a complex value and not a String key type) then we will just assume to pass it along since the Map itself was already allowed by an upstream filter()
+            return SchemaUtil.copySchemaBasics(schema, SchemaBuilder.map(schema.keySchema(), schema.valueSchema()));
     }
 
     @SuppressWarnings("unchecked")

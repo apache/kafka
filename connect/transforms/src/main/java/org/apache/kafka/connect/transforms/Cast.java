@@ -168,7 +168,6 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
     public void close() {
     }
 
-
     private R applySchemaless(R record) {
         if (wholeValueCastType != null) {
             return newRecord(record, null, castValueToType(null, operatingValue(record), wholeValueCastType));
@@ -266,63 +265,74 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
 
         // Perform different logic for different types of parent schemas.
 
-        if (schema.type() == Type.STRUCT) {
-            SchemaBuilder builder = SchemaUtil.copySchemaBasics(schema, SchemaBuilder.struct());
+        if (schema.type() == Type.STRUCT)
+            return buildUpdatedStructSchema(schema);
 
-            for (Field field : schema.fields()) {
-                if (!casts.containsKey(field.name()) && // If we shouldn't cast this parent,
-                        isRecursive && // and the config says to recurse,
-                        (field.schema().type() == Type.STRUCT // and the field is a complex type...
-                        || field.schema().type() == Type.ARRAY 
-                        || field.schema().type() == Type.MAP)
-                ) { // ... then recurse one level deeper to get/build a child schema for the complex type.
-                    Schema updatedChildSchema = getOrBuildUpdatedSchema(field.schema());
-                    builder.field(field.name(), updatedChildSchema);
+        else if (isRecursive && schema.type() == Type.ARRAY)
+            return buildUpdatedArraySchema(schema);
 
-                } else { // Otherwise this is where all non-parent Struct fields should be added: it is something we want to cast, and it is not recursive or we are at the bottom of a recursion
-                    if (casts.containsKey(field.name())) {
-                        SchemaBuilder fieldBuilder = convertFieldType(casts.get(field.name()));
-                        if (field.schema().isOptional())
-                            fieldBuilder.optional();
-                        if (field.schema().defaultValue() != null) {
-                            Schema fieldSchema = field.schema();
-                            fieldBuilder.defaultValue(castValueToType(fieldSchema, fieldSchema.defaultValue(), fieldBuilder.type()));
-                        }
-                        builder.field(field.name(), fieldBuilder.build());
+        else if (isRecursive && schema.type() == Type.MAP)
+            return buildUpdatedMapSchema(schema);
 
-                    } else // Copy the existing field to the new schema if we do not want to cast
-                        builder.field(field.name(), field.schema());
-                }
-            }
-
-            return builder;
-        } else if (isRecursive && schema.type() == Type.ARRAY) {
-
-            // For complex types, just go one level lower to more detail and then return a new Array schema builder with the updated child value schema
-            if (schema.valueSchema().type() == Type.STRUCT 
-                    || schema.valueSchema().type() == Type.ARRAY 
-                    || schema.valueSchema().type() == Type.MAP) {
-                Schema updatedChildSchema = getOrBuildUpdatedSchema(schema.valueSchema());
-                return SchemaUtil.copySchemaBasics(schema, SchemaBuilder.array(updatedChildSchema));
-
-            } else // Otherwise we will just assume to pass it along since the Array itself should be part of an upstream parent
-                return SchemaUtil.copySchemaBasics(schema, SchemaBuilder.array(schema.valueSchema()));
-
-        } else if (isRecursive && schema.type() == Type.MAP) {
-
-            // For complex types, just go one level lower to more detail and then return a new Map schema builder with the updated child value schema
-            if (schema.valueSchema().type() == Type.STRUCT 
-                    || schema.valueSchema().type() == Type.ARRAY 
-                    || schema.valueSchema().type() == Type.MAP) {
-                Schema updatedChildSchema = getOrBuildUpdatedSchema(schema.valueSchema());
-                return SchemaUtil.copySchemaBasics(schema, SchemaBuilder.map(schema.keySchema(), updatedChildSchema));
-
-            } else // Otherwise we will just assume to pass it along since the Map itself should be part of an upstream parent
-                return SchemaUtil.copySchemaBasics(schema, SchemaBuilder.map(schema.keySchema(), schema.valueSchema()));
-
-        } else
+        else
             throw new DataException(schema.type().toString() + " is not a supported parent Schema type for the Cast transformation.");
 
+    }
+
+    private SchemaBuilder buildUpdatedStructSchema(Schema schema) {
+        SchemaBuilder builder = SchemaUtil.copySchemaBasics(schema, SchemaBuilder.struct());
+
+        for (Field field : schema.fields()) {
+            if (!casts.containsKey(field.name()) && // If we shouldn't cast this parent,
+                    isRecursive && // and the config says to recurse,
+                    (field.schema().type() == Type.STRUCT // and the field is a complex type...
+                    || field.schema().type() == Type.ARRAY 
+                    || field.schema().type() == Type.MAP)
+            ) { // ... then recurse one level deeper to get/build a child schema for the complex type.
+                Schema updatedChildSchema = getOrBuildUpdatedSchema(field.schema());
+                builder.field(field.name(), updatedChildSchema);
+
+            } else { // Otherwise this is where all non-parent Struct fields should be added: it is something we want to cast, and it is not recursive or we are at the bottom of a recursion
+                if (casts.containsKey(field.name())) {
+                    SchemaBuilder fieldBuilder = convertFieldType(casts.get(field.name()));
+                    if (field.schema().isOptional())
+                        fieldBuilder.optional();
+                    if (field.schema().defaultValue() != null) {
+                        Schema fieldSchema = field.schema();
+                        fieldBuilder.defaultValue(castValueToType(fieldSchema, fieldSchema.defaultValue(), fieldBuilder.type()));
+                    }
+                    builder.field(field.name(), fieldBuilder.build());
+
+                } else // Copy the existing field to the new schema if we do not want to cast
+                    builder.field(field.name(), field.schema());
+            }
+        }
+
+        return builder;        
+    }
+
+    private SchemaBuilder buildUpdatedArraySchema(Schema schema) {
+        // For complex types, just go one level lower to more detail and then return a new Array schema builder with the updated child value schema
+        if (schema.valueSchema().type() == Type.STRUCT 
+                || schema.valueSchema().type() == Type.ARRAY 
+                || schema.valueSchema().type() == Type.MAP) {
+            Schema updatedChildSchema = getOrBuildUpdatedSchema(schema.valueSchema());
+            return SchemaUtil.copySchemaBasics(schema, SchemaBuilder.array(updatedChildSchema));
+
+        } else // Otherwise we will just assume to pass it along since the Array itself should be part of an upstream parent
+            return SchemaUtil.copySchemaBasics(schema, SchemaBuilder.array(schema.valueSchema()));
+    }
+
+    private SchemaBuilder buildUpdatedMapSchema(Schema schema) {
+        // For complex types, just go one level lower to more detail and then return a new Map schema builder with the updated child value schema
+        if (schema.valueSchema().type() == Type.STRUCT 
+                || schema.valueSchema().type() == Type.ARRAY 
+                || schema.valueSchema().type() == Type.MAP) {
+            Schema updatedChildSchema = getOrBuildUpdatedSchema(schema.valueSchema());
+            return SchemaUtil.copySchemaBasics(schema, SchemaBuilder.map(schema.keySchema(), updatedChildSchema));
+
+        } else // Otherwise we will just assume to pass it along since the Map itself should be part of an upstream parent
+            return SchemaUtil.copySchemaBasics(schema, SchemaBuilder.map(schema.keySchema(), schema.valueSchema()));
     }
 
     @SuppressWarnings("unchecked")
@@ -436,35 +446,32 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
         }
     }
 
-    private static Object encodeLogicalType(Schema schema, Object value) {
-        switch (schema.name()) {
-            case Date.LOGICAL_NAME:
-                return Date.fromLogical(schema, (java.util.Date) value);
-            case Time.LOGICAL_NAME:
-                return Time.fromLogical(schema, (java.util.Date) value);
-            case Timestamp.LOGICAL_NAME:
-                return Timestamp.fromLogical(schema, (java.util.Date) value);
-        }
-        return value;
+    private static Object encodeLogicalType(Schema schema, Object value, Schema.Type targetType) {
+        if (schema != null && schema.name() != null && targetType != Type.STRING) {
+            switch (schema.name()) {
+                case Date.LOGICAL_NAME:
+                    return Date.fromLogical(schema, (java.util.Date) value);
+                case Time.LOGICAL_NAME:
+                    return Time.fromLogical(schema, (java.util.Date) value);
+                case Timestamp.LOGICAL_NAME:
+                    return Timestamp.fromLogical(schema, (java.util.Date) value);
+                default:
+                    return value;
+            }
+        } else
+            return value;
     }
 
     private Object castValueToType(Schema schema, Object value, Schema.Type targetType) {
         try {
             if (value == null) return null;
 
-            Schema.Type inferredType = schema == null ? ConnectSchema.schemaType(value.getClass()) :
-                    schema.type();
-            if (inferredType == null) {
-                throw new DataException("Cast transformation was passed a value of type " + value.getClass()
-                        + " which is not supported by Connect's data API");
-            }
+            Schema.Type inferredType = getInferredType(schema, value);
             // Ensure the type we are trying to cast from is supported
             validCastType(inferredType, FieldType.INPUT);
 
             // Perform logical type encoding to their internal representation.
-            if (schema != null && schema.name() != null && targetType != Type.STRING) {
-                value = encodeLogicalType(schema, value);
-            }
+            value = encodeLogicalType(schema, value, targetType);
 
             switch (targetType) {
                 case INT8:
@@ -492,6 +499,16 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
         } catch (NumberFormatException e) {
             throw new DataException("Value (" + value.toString() + ") was out of range for requested data type", e);
         }
+    }
+
+    private static Schema.Type getInferredType(Schema schema, Object value) {
+        Schema.Type inferredType = schema == null ? ConnectSchema.schemaType(value.getClass()) :
+                schema.type();
+        if (inferredType == null) {
+            throw new DataException("Cast transformation was passed a value of type " + value.getClass()
+                    + " which is not supported by Connect's data API");
+        } else 
+            return inferredType;
     }
 
     private static byte castToInt8(Object value) {

@@ -205,40 +205,30 @@ public class ReplaceFieldTest {
         parentValueB.put("array", array);
 
         final SinkRecord record = new SinkRecord("test", 0, null, null, null, parentValueB, 0);
-        final SinkRecord transformedRecord = xform.apply(record);
+        final Map<String, Object> transformedMap = (Map<String, Object>) xform.apply(record).value();
 
-        final Map<String, Object> updatedParentB = (Map<String, Object>) transformedRecord.value();
-        assertEquals(2, updatedParentB.size());
+        assertEquals(2, transformedMap.size());
 
-        final Map<String, Object> updatedParentADo = (Map<String, Object>) updatedParentB.get("do");
-        assertEquals(5, updatedParentADo.size());
-        assertEquals(42, updatedParentADo.get("xyz"));
-        assertEquals(true, updatedParentADo.get("bar"));
-        assertEquals("etc", updatedParentADo.get("etc"));
+        assertEquals(5, ((Map<String, Object>) transformedMap.get("do")).size());
+        assertEquals(42, ((Map<String, Object>) transformedMap.get("do")).get("xyz"));
+        assertEquals(true, ((Map<String, Object>) transformedMap.get("do")).get("bar"));
+        assertEquals("etc", ((Map<String, Object>) transformedMap.get("do")).get("etc"));
 
-        final Map<String, Object> updatedParentADoDo = (Map<String, Object>) updatedParentADo.get("do");
-        assertEquals(3, updatedParentADoDo.size());
-        assertEquals(42, updatedParentADoDo.get("xyz"));
-        assertEquals(true, updatedParentADoDo.get("bar"));
-        assertEquals("etc", updatedParentADoDo.get("etc"));
+        assertEquals(3, ((Map<String, Object>) ((Map<String, Object>) transformedMap.get("do")).get("do")).size());
+        assertEquals(42, ((Map<String, Object>) ((Map<String, Object>) transformedMap.get("do")).get("do")).get("xyz"));
+        assertEquals(true, ((Map<String, Object>) ((Map<String, Object>) transformedMap.get("do")).get("do")).get("bar"));
+        assertEquals("etc", ((Map<String, Object>) ((Map<String, Object>) transformedMap.get("do")).get("do")).get("etc"));
 
-        final List<Object> updatedParentAArray = (ArrayList<Object>) updatedParentB.get("array");
-        assertEquals(2, updatedParentAArray.size());
+        assertEquals(2, ((ArrayList<Object>) transformedMap.get("array")).size());
 
-        final Map<String, Object> updatedParentAArray0 = (Map<String, Object>) updatedParentAArray.get(0);
-        assertEquals(3, updatedParentAArray0.size());
-        assertEquals(42, updatedParentAArray0.get("xyz"));
-        assertEquals(true, updatedParentAArray0.get("bar"));
-        assertEquals("etc", updatedParentAArray0.get("etc"));
+        assertEquals(3, ((Map<String, Object>) ((ArrayList<Object>) transformedMap.get("array")).get(0)).size());
+        assertEquals(42, ((Map<String, Object>) ((ArrayList<Object>) transformedMap.get("array")).get(0)).get("xyz"));
+        assertEquals(true, ((Map<String, Object>) ((ArrayList<Object>) transformedMap.get("array")).get(0)).get("bar"));
+        assertEquals("etc", ((Map<String, Object>) ((ArrayList<Object>) transformedMap.get("array")).get(0)).get("etc"));
 
-        final Map<String, Object> updatedParentAArray1 = (Map<String, Object>) updatedParentAArray.get(1);
-        assertEquals(3, updatedParentAArray1.size());
-        assertEquals(42, updatedParentAArray1.get("xyz"));
-        assertEquals(true, updatedParentAArray1.get("bar"));
-        assertEquals("etc", updatedParentAArray1.get("etc"));
+        assertEquals(((ArrayList<Object>) transformedMap.get("array")).get(0), ((ArrayList<Object>) transformedMap.get("array")).get(1));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void withSchemaRecursive() {
         final Map<String, Object> props = new HashMap<>();
@@ -247,8 +237,6 @@ public class ReplaceFieldTest {
         props.put(ReplaceField.ConfigName.RECURSIVE, true);
 
         xform.configure(props);
-
-        // Schema
 
         final Schema schema = SchemaBuilder.struct()
                 .field("dont", Schema.STRING_SCHEMA)
@@ -276,8 +264,6 @@ public class ReplaceFieldTest {
                 .field("array", arraySchema)
                 .field("map", mapSchema)
                 .build();
-
-        // Value
 
         final Struct value1 = new Struct(schema)
                 .put("dont", "whatever")
@@ -313,67 +299,45 @@ public class ReplaceFieldTest {
                 .put("array", array)
                 .put("map", map);
 
-        // Create and transform record
-
         final SinkRecord record = new SinkRecord("test", 0, null, null, parentBSchema, parentBValue, 0);
-        final SinkRecord transformedRecord = xform.apply(record);
+        final Struct transformedStruct = (Struct) xform.apply(record).value();
 
-        // Assert results
+        assertEquals(3, transformedStruct.schema().fields().size());
 
-        final Struct updatedParentB = (Struct) transformedRecord.value();
-        assertEquals(3, updatedParentB.schema().fields().size());
+        assertEquals(4, transformedStruct.getStruct("do").schema().fields().size());
+        assertEquals(42, transformedStruct.getStruct("do").get("xyz"));
+        assertEquals(true, transformedStruct.getStruct("do").get("bar"));
 
-        final Struct updatedDo = (Struct) updatedParentB.get("do");
-        assertEquals(4, updatedDo.schema().fields().size());
-        assertEquals(42, updatedDo.get("xyz"));
-        assertEquals(true, updatedDo.get("bar"));
-        
-        final List<Object> updatedDoArray = (List<Object>) updatedDo.get("array");
-        assertEquals(2, updatedDoArray.size());
+        assertEquals(2, transformedStruct.getStruct("do").getArray("array").size());
 
-        final Struct updatedDoArray0 = (Struct) updatedDoArray.get(0);
-        assertEquals(2, updatedDoArray0.schema().fields().size());
-        assertEquals(42, updatedDoArray0.get("xyz"));
-        assertEquals(true, updatedDoArray0.get("bar"));
+        assertEquals(2, ((Struct) transformedStruct.getStruct("do").getArray("array").get(0)).schema().fields().size());
+        assertEquals(42, ((Struct) transformedStruct.getStruct("do").getArray("array").get(0)).get("xyz"));
+        assertEquals(true, ((Struct) transformedStruct.getStruct("do").getArray("array").get(0)).get("bar"));
 
-        final Struct updatedDoArray1 = (Struct) updatedDoArray.get(1);
-        assertEquals(2, updatedDoArray1.schema().fields().size());
-        assertEquals(42, updatedDoArray1.get("xyz"));
-        assertEquals(true, updatedDoArray1.get("bar"));
+        assertEquals(transformedStruct.getStruct("do").getArray("array").get(0), transformedStruct.getStruct("do").getArray("array").get(1));
 
-        final List<Object> updatedArray = (List<Object>) updatedParentB.get("array");
-        assertEquals(2, updatedArray.size());
+        assertEquals(2, transformedStruct.getArray("array").size());
 
-        final Struct updatedArray0 = (Struct) updatedArray.get(0);
-        assertEquals(2, updatedArray0.schema().fields().size());
-        assertEquals(42, updatedArray0.get("xyz"));
-        assertEquals(true, updatedArray0.get("bar"));
+        assertEquals(2, ((Struct) transformedStruct.getArray("array").get(0)).schema().fields().size());
+        assertEquals(42, ((Struct) transformedStruct.getArray("array").get(0)).get("xyz"));
+        assertEquals(true, ((Struct) transformedStruct.getArray("array").get(0)).get("bar"));
 
-        final Struct updatedArray1 = (Struct) updatedArray.get(1);
-        assertEquals(2, updatedArray1.schema().fields().size());
-        assertEquals(42, updatedArray1.get("xyz"));
-        assertEquals(true, updatedArray1.get("bar"));
+        assertEquals(transformedStruct.getArray("array").get(0), transformedStruct.getArray("array").get(1));
 
-        final Map<String, Object> updatedMap = (Map<String, Object>) updatedParentB.get("map");
-        assertEquals(1, updatedMap.size());
+        assertEquals(1, transformedStruct.getMap("map").size());
 
-        final Struct updatedMapDo = (Struct) updatedMap.get("do");
-        assertEquals(4, updatedMapDo.schema().fields().size());
-        assertEquals(42, updatedMapDo.get("xyz"));
-        assertEquals(true, updatedMapDo.get("bar"));
+        assertEquals(4, ((Struct) transformedStruct.getMap("map").get("do")).schema().fields().size());
+        assertEquals(42, ((Struct) transformedStruct.getMap("map").get("do")).get("xyz"));
+        assertEquals(true, ((Struct) transformedStruct.getMap("map").get("do")).get("bar"));
 
-        final List<Object> updatedMapDoArray = (List<Object>) updatedMapDo.get("array");
-        assertEquals(2, updatedMapDoArray.size());
+        assertEquals(2, ((Struct) transformedStruct.getMap("map").get("do")).getArray("array").size());
 
-        final Struct updatedMapDoArray0 = (Struct) updatedMapDoArray.get(0);
-        assertEquals(2, updatedMapDoArray0.schema().fields().size());
-        assertEquals(42, updatedMapDoArray0.get("xyz"));
-        assertEquals(true, updatedMapDoArray0.get("bar"));
+        assertEquals(2, ((Struct) ((Struct) transformedStruct.getMap("map").get("do")).getArray("array").get(0)).schema().fields().size());
+        assertEquals(42, ((Struct) ((Struct) transformedStruct.getMap("map").get("do")).getArray("array").get(0)).get("xyz"));
+        assertEquals(true, ((Struct) ((Struct) transformedStruct.getMap("map").get("do")).getArray("array").get(0)).get("bar"));
 
-        final Struct updatedMapDoArray1 = (Struct) updatedMapDoArray.get(1);
-        assertEquals(2, updatedMapDoArray1.schema().fields().size());
-        assertEquals(42, updatedMapDoArray1.get("xyz"));
-        assertEquals(true, updatedMapDoArray1.get("bar"));
+        assertEquals(((Struct) transformedStruct.getMap("map").get("do")).getArray("array").get(0), 
+                ((Struct) transformedStruct.getMap("map").get("do")).getArray("array").get(1));
     }
 
     @Test
@@ -397,12 +361,10 @@ public class ReplaceFieldTest {
                 .put("value_two", 42);
 
         final SinkRecord record = new SinkRecord("test", 0, null, null, schema, value, 0);
-        final SinkRecord transformedRecord = xform.apply(record);
+        final Struct transformedStruct = (Struct) xform.apply(record).value();
 
-        final Struct updatedValue = (Struct) transformedRecord.value();
-
-        assertEquals(1, updatedValue.schema().fields().size());
-        assertEquals(Integer.valueOf(42), updatedValue.getInt32("value"));
+        assertEquals(1, transformedStruct.schema().fields().size());
+        assertEquals(Integer.valueOf(42), transformedStruct.getInt32("value"));
     }
 
     @Test(expected = DataException.class)
@@ -424,12 +386,10 @@ public class ReplaceFieldTest {
                 .put("value_three", 15);
 
         final SinkRecord record = new SinkRecord("test", 0, null, null, schema, value, 0);
-        final SinkRecord transformedRecord = xform.apply(record);
+        final Struct transformedStruct = (Struct) xform.apply(record).value();
 
-        final Struct updatedValue = (Struct) transformedRecord.value();
-
-        assertEquals(1, updatedValue.schema().fields().size());
-        assertEquals(Integer.valueOf(42), updatedValue.getInt32("value"));
+        assertEquals(1, transformedStruct.schema().fields().size());
+        assertEquals(Integer.valueOf(42), transformedStruct.getInt32("value"));
     }
 
 }
