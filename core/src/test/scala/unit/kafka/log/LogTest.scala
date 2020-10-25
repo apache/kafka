@@ -4101,7 +4101,7 @@ class LogTest {
     log.close()
 
     val reloadedLogConfig = LogTest.createLogConfig(segmentBytes = 1024 * 5)
-    val reloadedLog = createLog(logDir, reloadedLogConfig, recoveryPoint = recoveryPoint)
+    val reloadedLog = createLog(logDir, reloadedLogConfig, recoveryPoint = recoveryPoint, lastShutdownClean = false)
     val abortedTransactions = allAbortedTransactions(reloadedLog)
     assertEquals(List(new AbortedTxn(pid1, 0L, 29L, 8L), new AbortedTxn(pid2, 8L, 74L, 36L)), abortedTransactions)
   }
@@ -4632,9 +4632,9 @@ class LogTest {
     (log, segmentWithOverflow)
   }
 
-  private def recoverAndCheck(config: LogConfig, expectedKeys: Iterable[Long], expectDeletedFiles: Boolean = true) = {
+  private def recoverAndCheck(config: LogConfig, expectedKeys: Iterable[Long]) = {
     // method is called only in case of recovery from hard reset
-    LogTest.recoverAndCheck(logDir, config, expectedKeys, brokerTopicStats, mockTime, mockTime.scheduler, expectDeletedFiles)
+    LogTest.recoverAndCheck(logDir, config, expectedKeys, brokerTopicStats, mockTime, mockTime.scheduler)
   }
 
   private def readLog(log: Log,
@@ -4787,14 +4787,13 @@ object LogTest {
       yield TestUtils.readString(record.key).toLong
   }
 
-  def recoverAndCheck(logDir: File, config: LogConfig, expectedKeys: Iterable[Long], brokerTopicStats: BrokerTopicStats, time: Time, scheduler: Scheduler, expectDeletedFiles: Boolean = false): Log = {
+  def recoverAndCheck(logDir: File, config: LogConfig, expectedKeys: Iterable[Long], brokerTopicStats: BrokerTopicStats, time: Time, scheduler: Scheduler): Log = {
     // Recover log file and check that after recovery, keys are as expected
     // and all temporary files have been deleted
     val recoveredLog = createLog(logDir, config, brokerTopicStats, scheduler, time, lastShutdownClean = false)
     time.sleep(config.fileDeleteDelayMs + 1)
     for (file <- logDir.listFiles) {
-      if (!expectDeletedFiles)
-        assertFalse("Unexpected .deleted file after recovery", file.getName.endsWith(Log.DeletedFileSuffix))
+      assertFalse("Unexpected .deleted file after recovery", file.getName.endsWith(Log.DeletedFileSuffix))
       assertFalse("Unexpected .cleaned file after recovery", file.getName.endsWith(Log.CleanedFileSuffix))
       assertFalse("Unexpected .swap file after recovery", file.getName.endsWith(Log.SwapFileSuffix))
     }
