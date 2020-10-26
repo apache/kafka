@@ -47,7 +47,7 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
     private static final Logger log = LoggerFactory.getLogger(ReplaceField.class);
 
     public static final String OVERVIEW_DOC = "Filter or rename fields. Recursion through nested values is also "
-    		+ "possible by setting <code>recursive</code> to <code>true</code>."
+            + "possible by setting <code>recursive</code> to <code>true</code>."
             + "<p/>Use the concrete transformation type designed for the record key (<code>" + Key.class.getName() + "</code>) "
             + "or value (<code>" + Value.class.getName() + "</code>).";
 
