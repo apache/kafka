@@ -21,32 +21,38 @@ import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.raft.RecordSerde;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 
-/**
- * TODO: Also flush after minimum size limit is reached?
- */
 public class BatchAccumulator<T> implements Closeable {
     private final int epoch;
     private final Time time;
-    private final Timer lingerTimer;
+    private final SimpleTimer lingerTimer;
     private final int lingerMs;
     private final int maxBatchSize;
     private final CompressionType compressionType;
     private final MemoryPool memoryPool;
-    private final ReentrantLock lock;
+    private final ReentrantLock appendLock;
     private final RecordSerde<T> serde;
 
+    private final ConcurrentLinkedQueue<CompletedBatch<T>> completed;
+    private volatile DrainStatus drainStatus;
+
+    // These fields are protected by the append lock
     private long nextOffset;
     private BatchBuilder<T> currentBatch;
-    private List<CompletedBatch<T>> completed;
+
+    private enum DrainStatus {
+        STARTED, FINISHED, NONE
+    }
 
     public BatchAccumulator(
         int epoch,
@@ -63,12 +69,13 @@ public class BatchAccumulator<T> implements Closeable {
         this.maxBatchSize = maxBatchSize;
         this.memoryPool = memoryPool;
         this.time = time;
-        this.lingerTimer = time.timer(lingerMs);
+        this.lingerTimer = new SimpleTimer();
         this.compressionType = compressionType;
         this.serde = serde;
         this.nextOffset = baseOffset;
-        this.completed = new ArrayList<>();
-        this.lock = new ReentrantLock();
+        this.drainStatus = DrainStatus.NONE;
+        this.completed = new ConcurrentLinkedQueue<>();
+        this.appendLock = new ReentrantLock();
     }
 
     /**
@@ -104,16 +111,18 @@ public class BatchAccumulator<T> implements Closeable {
                 ", which exceeds the maximum allowed batch size of " + maxBatchSize);
         }
 
-        lock.lock();
+        appendLock.lock();
         try {
+            maybeCompleteDrain();
+
             BatchBuilder<T> batch = maybeAllocateBatch(batchSize);
             if (batch == null) {
                 return null;
             }
 
-            if (isEmpty()) {
-                lingerTimer.update();
-                lingerTimer.reset(lingerMs);
+            // Restart the linger timer if necessary
+            if (!lingerTimer.isRunning()) {
+                lingerTimer.reset(time.milliseconds() + lingerMs);
             }
 
             for (T record : records) {
@@ -123,7 +132,7 @@ public class BatchAccumulator<T> implements Closeable {
 
             return nextOffset - 1;
         } finally {
-            lock.unlock();
+            appendLock.unlock();
         }
     }
 
@@ -146,7 +155,18 @@ public class BatchAccumulator<T> implements Closeable {
             currentBatch.initialBuffer()
         ));
         currentBatch = null;
-        startNewBatch();
+    }
+
+    private void maybeCompleteDrain() {
+        if (drainStatus == DrainStatus.STARTED) {
+            if (currentBatch != null && currentBatch.nonEmpty()) {
+                completeCurrentBatch();
+            }
+            // Reset the timer to a large value. The linger clock will begin
+            // ticking after the next append.
+            lingerTimer.reset(Long.MAX_VALUE);
+            drainStatus = DrainStatus.FINISHED;
+        }
     }
 
     private void startNewBatch() {
@@ -183,29 +203,10 @@ public class BatchAccumulator<T> implements Closeable {
      * @return the delay in milliseconds before the next expected drain
      */
     public long timeUntilDrain(long currentTimeMs) {
-        lock.lock();
-        try {
-            lingerTimer.update(currentTimeMs);
-            if (isEmpty()) {
-                return Long.MAX_VALUE;
-            } else {
-                return lingerTimer.remainingMs();
-            }
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    private boolean isEmpty() {
-        lock.lock();
-        try {
-            if (currentBatch != null && currentBatch.nonEmpty()) {
-                return false;
-            } else {
-                return completed.isEmpty();
-            }
-        } finally {
-            lock.unlock();
+        if (drainStatus == DrainStatus.FINISHED) {
+            return 0;
+        } else {
+            return lingerTimer.remainingMs(currentTimeMs);
         }
     }
 
@@ -222,20 +223,51 @@ public class BatchAccumulator<T> implements Closeable {
      * Drain completed batches. The caller is expected to first check whether
      * {@link #needsDrain(long)} returns true in order to avoid unnecessary draining.
      *
+     * Note on thread-safety: this method is safe in the presence of concurrent
+     * appends, but it assumes a single thread is responsible for draining.
+     *
+     * This call will not block, but the drain may require multiple attempts before
+     * it can be completed if the thread responsible for appending is holding the
+     * append lock. In the worst case, the append will be completed on the next
+     * call to {@link #append(int, List)} following the initial call to this method.
+     * The caller should respect the time to the next flush as indicated by
+     * {@link #timeUntilDrain(long)}.
+     *
      * @return the list of completed batches
      */
     public List<CompletedBatch<T>> drain() {
-        lock.lock();
-        try {
-            if (currentBatch != null && currentBatch.nonEmpty()) {
-                completeCurrentBatch();
-            }
+        // Start the drain if it has not been started already
+        if (drainStatus == DrainStatus.NONE) {
+            drainStatus = DrainStatus.STARTED;
+        }
 
-            List<CompletedBatch<T>> res = completed;
-            this.completed = new ArrayList<>();
-            return res;
-        } finally {
-            lock.unlock();
+        // Complete the drain ourselves if we can acquire the lock
+        if (appendLock.tryLock()) {
+            try {
+                maybeCompleteDrain();
+            } finally {
+                appendLock.unlock();
+            }
+        }
+
+        // If the drain has finished, then all of the batches will be completed
+        if (drainStatus == DrainStatus.FINISHED) {
+            drainStatus = DrainStatus.NONE;
+            return drainCompleted();
+        } else {
+            return Collections.emptyList();
+        }
+    }
+
+    private List<CompletedBatch<T>> drainCompleted() {
+        List<CompletedBatch<T>> res = new ArrayList<>(completed.size());
+        while (true) {
+            CompletedBatch<T> batch = completed.poll();
+            if (batch == null) {
+                return res;
+            } else {
+                res.add(batch);
+            }
         }
     }
 
@@ -244,7 +276,7 @@ public class BatchAccumulator<T> implements Closeable {
      * written to (if it exists).
      */
     public int count() {
-        lock.lock();
+        appendLock.lock();
         try {
             int count = completed.size();
             if (currentBatch != null) {
@@ -253,7 +285,7 @@ public class BatchAccumulator<T> implements Closeable {
                 return count;
             }
         } finally {
-            lock.unlock();
+            appendLock.unlock();
         }
     }
 
@@ -290,6 +322,24 @@ public class BatchAccumulator<T> implements Closeable {
 
         public void release() {
             pool.release(buffer);
+        }
+    }
+
+    private static class SimpleTimer {
+        // We use an atomic long so that the Raft IO thread can query the linger
+        // time without any locking
+        private final AtomicLong deadlineMs = new AtomicLong(Long.MAX_VALUE);
+
+        boolean isRunning() {
+            return deadlineMs.get() != Long.MAX_VALUE;
+        }
+
+        void reset(long deadlineMs) {
+            this.deadlineMs.set(deadlineMs);
+        }
+
+        long remainingMs(long currentTimeMs) {
+            return Math.max(0, deadlineMs.get() - currentTimeMs);
         }
     }
 

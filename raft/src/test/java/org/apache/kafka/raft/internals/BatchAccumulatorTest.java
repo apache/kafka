@@ -17,13 +17,17 @@
 package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
@@ -69,7 +73,7 @@ class BatchAccumulatorTest {
         );
 
         assertFalse(acc.needsDrain(time.milliseconds()));
-        assertEquals(Long.MAX_VALUE, acc.timeUntilDrain(time.milliseconds()));
+        assertEquals(Long.MAX_VALUE - time.milliseconds(), acc.timeUntilDrain(time.milliseconds()));
     }
 
     @Test
@@ -182,6 +186,8 @@ class BatchAccumulatorTest {
 
         List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
         assertEquals(1, batches.size());
+        assertFalse(acc.needsDrain(time.milliseconds()));
+        assertEquals(Long.MAX_VALUE - time.milliseconds(), acc.timeUntilDrain(time.milliseconds()));
 
         BatchAccumulator.CompletedBatch<String> batch = batches.get(0);
         assertEquals(records, batch.records);
@@ -211,10 +217,6 @@ class BatchAccumulatorTest {
 
         List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
         assertEquals(3, batches.size());
-        batches.forEach(batch -> {
-            System.out.println(batch.data.sizeInBytes());
-        });
-
         assertTrue(batches.stream().allMatch(batch -> batch.data.sizeInBytes() <= maxBatchSize));
     }
 
@@ -234,6 +236,61 @@ class BatchAccumulatorTest {
 
         acc.close();
         Mockito.verifyNoInteractions(memoryPool);
+    }
+
+    @Test
+    public void testDrainDoesNotBlockWithConcurrentAppend() throws Exception {
+        int leaderEpoch = 17;
+        long baseOffset = 157;
+        int lingerMs = 50;
+        int maxBatchSize = 256;
+
+        StringSerde serde = Mockito.spy(new StringSerde());
+        BatchAccumulator<String> acc = new BatchAccumulator<>(
+            leaderEpoch,
+            baseOffset,
+            lingerMs,
+            maxBatchSize,
+            memoryPool,
+            time,
+            CompressionType.NONE,
+            serde
+        );
+
+        CountDownLatch acquireLockLatch = new CountDownLatch(1);
+        CountDownLatch releaseLockLatch = new CountDownLatch(1);
+
+        // Do the first append outside the thread to start the linger timer
+        Mockito.when(memoryPool.tryAllocate(maxBatchSize))
+            .thenReturn(ByteBuffer.allocate(maxBatchSize));
+        acc.append(leaderEpoch, singletonList("a"));
+
+        // Let the serde block to simulate a slow append
+        Mockito.doAnswer(invocation -> {
+            Writable writable = invocation.getArgument(2);
+            acquireLockLatch.countDown();
+            releaseLockLatch.await();
+            writable.writeByteArray(Utils.utf8("b"));
+            return null;
+        }).when(serde)
+            .write(Mockito.eq("b"), Mockito.eq(null), Mockito.any(Writable.class));
+
+        Thread appendThread = new Thread(() -> acc.append(leaderEpoch, singletonList("b")));
+        appendThread.start();
+
+        // Attempt to drain while the append thread is holding the lock
+        acquireLockLatch.await();
+        time.sleep(lingerMs);
+        assertTrue(acc.needsDrain(time.milliseconds()));
+        assertEquals(Collections.emptyList(), acc.drain());
+        assertTrue(acc.needsDrain(time.milliseconds()));
+
+        // Now let the append thread complete and verify that we can finish the drain
+        releaseLockLatch.countDown();
+        appendThread.join();
+        List<BatchAccumulator.CompletedBatch<String>> drained = acc.drain();
+        assertEquals(1, drained.size());
+        assertEquals(Long.MAX_VALUE - time.milliseconds(), acc.timeUntilDrain(time.milliseconds()));
     }
 
 }

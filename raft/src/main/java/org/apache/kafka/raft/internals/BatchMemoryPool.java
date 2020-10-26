@@ -66,6 +66,7 @@ public class BatchMemoryPool implements MemoryPool {
         lock.lock();
         try {
             previouslyAllocated.clear();
+
             if (previouslyAllocated.limit() != batchSize) {
                 throw new IllegalArgumentException("Released buffer with unexpected size "
                     + previouslyAllocated.limit());
