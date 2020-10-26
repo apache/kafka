@@ -43,6 +43,15 @@ public class VersionRangeTest {
     }
 
     @Test
+    public void testContains() {
+        assertTrue(v(1, 1).contains(v(1, 1)));
+        assertFalse(v(1, 1).contains(v(1, 2)));
+        assertTrue(v(1, 2).contains(v(1, 1)));
+        assertFalse(v(4, 10).contains(v(3, 8)));
+        assertTrue(v(2, 12).contains(v(3, 11)));
+    }
+
+    @Test
     public void testToString() {
         assertEquals("1-2", v(1, 2).toString());
         assertEquals("1", v(1, 1).toString());
