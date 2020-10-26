@@ -63,6 +63,7 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
         } else if (assignmentErrorCode.get() == AssignorError.SHUTDOWN_REQUESTED.code()) {
             log.error("An application is requesting Shutdown");
             streamThread.shutdownToError();
+            streamThread.shutdown();
             return;
         } else if (assignmentErrorCode.get() != AssignorError.NONE.code()) {
             log.error("Received unknown error code {}", assignmentErrorCode.get());

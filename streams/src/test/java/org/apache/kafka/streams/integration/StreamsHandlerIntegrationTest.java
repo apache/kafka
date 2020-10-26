@@ -41,6 +41,7 @@ import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -192,10 +193,11 @@ public class StreamsHandlerIntegrationTest {
             produceMessages(0L, inputTopic, "A");
             latch.await(30, TimeUnit.SECONDS);
 
-
+            assertThat(processorValueCollector.size(), equalTo(1));
             assertThat(kafkaStreams.state(), equalTo(KafkaStreams.State.ERROR));
             assertThat(kafkaStreams1.state(), equalTo(KafkaStreams.State.ERROR));
-            assertThat(processorValueCollector.size(), equalTo(1));
+//            kafkaStreams.close(Duration.ZERO);
+//            kafkaStreams1.close(Duration.ZERO);
         }
     }
 

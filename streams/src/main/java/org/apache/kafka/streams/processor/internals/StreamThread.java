@@ -291,7 +291,7 @@ public class StreamThread extends Thread {
     private ShutdownErrorHook shutdownErrorHook;
     private AtomicInteger assignmentErrorCode;
     public interface ShutdownErrorHook {
-        void shutdown(Duration duration);
+        void shutdown();
     }
 
     public static StreamThread create(final InternalTopologyBuilder builder,
@@ -601,6 +601,7 @@ public class StreamThread extends Thread {
                         throw e;
                     } else {
                         sendShutdownRequest(AssignorError.SHUTDOWN_REQUESTED);
+                        throw e;
                     }
                 } else {
                     throw e;
@@ -621,15 +622,14 @@ public class StreamThread extends Thread {
 
 
     public void shutdownToError() {
-        shutdownErrorHook.shutdown(Duration.ZERO);
+        shutdownErrorHook.shutdown();
     }
 
     public void sendShutdownRequest(final AssignorError assignorError) {
         log.warn("Detected that shutdown was requested. " +
                 "The all clients in this app will now begin to shutdown");
         assignmentErrorCode.set(assignorError.code());
-        mainConsumer.unsubscribe();
-        subscribeConsumer();
+        mainConsumer.enforceRebalance();
     }
 
 
