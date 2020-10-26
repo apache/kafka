@@ -434,6 +434,9 @@ public class KafkaStreams implements AutoCloseable {
         return action;
     }
 
+
+
+
     /**
      * Set the listener which is triggered whenever a {@link StateStore} is being restored in order to resume
      * processing.
@@ -738,6 +741,7 @@ public class KafkaStreams implements AutoCloseable {
         }
         final LogContext logContext = new LogContext(String.format("stream-client [%s] ", clientId));
         this.log = logContext.logger(getClass());
+
         final MetricConfig metricConfig = new MetricConfig()
             .samples(config.getInt(StreamsConfig.METRICS_NUM_SAMPLES_CONFIG))
             .recordLevel(Sensor.RecordingLevel.forName(config.getString(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG)))
@@ -846,7 +850,7 @@ public class KafkaStreams implements AutoCloseable {
                 stateDirectory,
                 delegatingStateRestoreListener,
                 i + 1,
-                KafkaStreams.this::closeToError,
+                KafkaStreams.this::close,
                 exception -> handleStreamsUncaughtException(exception, e -> SHUTDOWN_CLIENT),
                 new AtomicInteger()
             );
@@ -970,7 +974,6 @@ public class KafkaStreams implements AutoCloseable {
      * This will block until all threads have stopped.
      */
     public void close() {
-        log.error("BLOCKING CLOSE CALL WHY?");
         close(Long.MAX_VALUE);
     }
 
@@ -1070,9 +1073,8 @@ public class KafkaStreams implements AutoCloseable {
         if (!setState(State.ERROR)) {
             // if transition failed, it means it was either in PENDING_SHUTDOWN
             // or NOT_RUNNING already; just check that all threads have been stopped
-            log.info("Can not close to error from state " + state());
+            log.info("Can not close to error");
         } else {
-            log.info("closing to ERROR");
             stateDirCleaner.shutdownNow();
             if (rocksDBMetricsRecordingService != null) {
                 rocksDBMetricsRecordingService.shutdownNow();
@@ -1115,20 +1117,11 @@ public class KafkaStreams implements AutoCloseable {
 
                 streamsMetrics.removeAllClientLevelMetrics();
                 metrics.close();
+                setState(State.ERROR);
             }, "kafka-streams-close-thread");
 
             shutdownThread.setDaemon(true);
             shutdownThread.start();
-
-            if (globalStreamThread != null) {
-                globalStreamThread.shutdown();
-            }
-
-            adminClient.close();
-
-            streamsMetrics.removeAllClientLevelMetrics();
-            metrics.close();
-            setState(State.ERROR);
         }
     }
 

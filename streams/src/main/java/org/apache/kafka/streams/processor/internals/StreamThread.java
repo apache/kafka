@@ -69,7 +69,6 @@ import static org.apache.kafka.streams.processor.internals.ClientUtils.getShared
 
 public class StreamThread extends Thread {
 
-
     /**
      * Stream thread states are the possible states that a stream thread can be in.
      * A thread must only be in one state at a time
