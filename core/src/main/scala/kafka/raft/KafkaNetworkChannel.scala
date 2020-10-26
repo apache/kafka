@@ -185,7 +185,18 @@ class KafkaNetworkChannel(time: Time,
     new RaftResponse.Inbound(header.correlationId, data, response.destination.toInt)
   }
 
-  private def pollInboundResponses(timeoutMs: Long): util.List[RaftMessage] = {
+  private def pollInboundResponses(timeoutMs: Long, inboundMessages: util.List[RaftMessage]): Unit = {
+    val responses = client.poll(timeoutMs, time.milliseconds())
+    for (response <- responses.asScala) {
+      inboundMessages.add(buildInboundRaftResponse(response))
+    }
+  }
+
+  private def drainInboundRequests(inboundMessages: util.List[RaftMessage]): Unit = {
+    undelivered.drainTo(inboundMessages)
+  }
+
+  private def pollInboundMessages(timeoutMs: Long): util.List[RaftMessage] = {
     val pollTimeoutMs = if (!undelivered.isEmpty) {
       0L
     } else if (!pendingOutbound.isEmpty) {
@@ -193,18 +204,15 @@ class KafkaNetworkChannel(time: Time,
     } else {
       timeoutMs
     }
-    val responses = client.poll(pollTimeoutMs, time.milliseconds())
     val messages = new util.ArrayList[RaftMessage]
-    for (response <- responses.asScala) {
-      messages.add(buildInboundRaftResponse(response))
-    }
-    undelivered.drainTo(messages)
+    pollInboundResponses(pollTimeoutMs, messages)
+    drainInboundRequests(messages)
     messages
   }
 
   override def receive(timeoutMs: Long): util.List[RaftMessage] = {
     sendOutboundRequests(time.milliseconds())
-    pollInboundResponses(timeoutMs)
+    pollInboundMessages(timeoutMs)
   }
 
   override def wakeup(): Unit = {

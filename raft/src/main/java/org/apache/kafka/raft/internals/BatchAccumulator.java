@@ -76,10 +76,13 @@ public class BatchAccumulator<T> implements Closeable {
      * are included in the same underlying record batch so that either all of
      * the records become committed or none of them do.
      *
-     * @param epoch the expected leader epoch
+     * @param epoch the expected leader epoch. If this does not match, then
+     *              {@link Long#MAX_VALUE} will be returned as an offset which
+     *              cannot become committed.
      * @param records the list of records to include in a batch
-     * @return the offset of the last message or {@link Long#MAX_VALUE} if the epoch
-     *         does not match
+     * @return the expected offset of the last record (which will be
+     *         {@link Long#MAX_VALUE} if the epoch does not match), or null if
+     *         no memory could be allocated for the batch at this time
      */
     public Long append(int epoch, List<T> records) {
         if (epoch != this.epoch) {
@@ -163,23 +166,23 @@ public class BatchAccumulator<T> implements Closeable {
     }
 
     /**
-     * Check whether there are any batches which need flushing now.
+     * Check whether there are any batches which need to be drained now.
      *
      * @param currentTimeMs current time in milliseconds
-     * @return true if there are batches ready to flush, false otherwise
+     * @return true if there are batches ready to drain, false otherwise
      */
-    public boolean needsFlush(long currentTimeMs) {
-        return timeUntilFlush(currentTimeMs) <= 0;
+    public boolean needsDrain(long currentTimeMs) {
+        return timeUntilDrain(currentTimeMs) <= 0;
     }
 
     /**
-     * Check the time remaining until the next needed flush. If the accumulator
+     * Check the time remaining until the next needed drain. If the accumulator
      * is empty, then {@link Long#MAX_VALUE} will be returned.
      *
      * @param currentTimeMs current time in milliseconds
-     * @return the delay in milliseconds before the next expected flush
+     * @return the delay in milliseconds before the next expected drain
      */
-    public long timeUntilFlush(long currentTimeMs) {
+    public long timeUntilDrain(long currentTimeMs) {
         lock.lock();
         try {
             lingerTimer.update(currentTimeMs);
@@ -216,13 +219,12 @@ public class BatchAccumulator<T> implements Closeable {
     }
 
     /**
-     * Flush completed batches. The caller is expected to first check whether
-     * a flush is expected using {@link #needsFlush(long)} in order to avoid
-     * unnecessary flushing.
+     * Drain completed batches. The caller is expected to first check whether
+     * {@link #needsDrain(long)} returns true in order to avoid unnecessary draining.
      *
      * @return the list of completed batches
      */
-    public List<CompletedBatch<T>> flush() {
+    public List<CompletedBatch<T>> drain() {
         lock.lock();
         try {
             if (currentBatch != null && currentBatch.nonEmpty()) {
@@ -257,7 +259,7 @@ public class BatchAccumulator<T> implements Closeable {
 
     @Override
     public void close() {
-        List<CompletedBatch<T>> unwritten = flush();
+        List<CompletedBatch<T>> unwritten = drain();
         unwritten.forEach(CompletedBatch::release);
     }
 

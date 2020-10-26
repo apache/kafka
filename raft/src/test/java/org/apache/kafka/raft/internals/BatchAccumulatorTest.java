@@ -68,8 +68,8 @@ class BatchAccumulatorTest {
             maxBatchSize
         );
 
-        assertFalse(acc.needsFlush(time.milliseconds()));
-        assertEquals(Long.MAX_VALUE, acc.timeUntilFlush(time.milliseconds()));
+        assertFalse(acc.needsDrain(time.milliseconds()));
+        assertEquals(Long.MAX_VALUE, acc.timeUntilDrain(time.milliseconds()));
     }
 
     @Test
@@ -91,14 +91,14 @@ class BatchAccumulatorTest {
 
         time.sleep(15);
         assertEquals(baseOffset, acc.append(leaderEpoch, singletonList("a")));
-        assertEquals(lingerMs, acc.timeUntilFlush(time.milliseconds()));
+        assertEquals(lingerMs, acc.timeUntilDrain(time.milliseconds()));
 
         time.sleep(lingerMs / 2);
-        assertEquals(lingerMs / 2, acc.timeUntilFlush(time.milliseconds()));
+        assertEquals(lingerMs / 2, acc.timeUntilDrain(time.milliseconds()));
 
         time.sleep(lingerMs / 2);
-        assertEquals(0, acc.timeUntilFlush(time.milliseconds()));
-        assertTrue(acc.needsFlush(time.milliseconds()));
+        assertEquals(0, acc.timeUntilDrain(time.milliseconds()));
+        assertTrue(acc.needsDrain(time.milliseconds()));
     }
 
     @Test
@@ -122,7 +122,7 @@ class BatchAccumulatorTest {
         assertEquals(baseOffset, acc.append(leaderEpoch, singletonList("a")));
         time.sleep(lingerMs);
 
-        List<BatchAccumulator.CompletedBatch<String>> batches = acc.flush();
+        List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
         assertEquals(1, batches.size());
 
         BatchAccumulator.CompletedBatch<String> batch = batches.get(0);
@@ -178,9 +178,9 @@ class BatchAccumulatorTest {
         assertEquals(baseOffset + 8, acc.append(leaderEpoch, records.subList(8, 9)));
 
         time.sleep(lingerMs);
-        assertTrue(acc.needsFlush(time.milliseconds()));
+        assertTrue(acc.needsDrain(time.milliseconds()));
 
-        List<BatchAccumulator.CompletedBatch<String>> batches = acc.flush();
+        List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
         assertEquals(1, batches.size());
 
         BatchAccumulator.CompletedBatch<String> batch = batches.get(0);
@@ -209,7 +209,7 @@ class BatchAccumulatorTest {
             acc.append(leaderEpoch, singletonList("foo"));
         }
 
-        List<BatchAccumulator.CompletedBatch<String>> batches = acc.flush();
+        List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
         assertEquals(3, batches.size());
         batches.forEach(batch -> {
             System.out.println(batch.data.sizeInBytes());

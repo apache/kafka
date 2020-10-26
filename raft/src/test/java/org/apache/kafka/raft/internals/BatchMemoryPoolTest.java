@@ -94,4 +94,14 @@ class BatchMemoryPoolTest {
         assertThrows(IllegalArgumentException.class, () -> pool.tryAllocate(batchSize + 1));
     }
 
+    @Test
+    public void testReleaseBufferNotMatchingBatchSize() {
+        int batchSize = 1024;
+        int maxBatches = 3;
+
+        BatchMemoryPool pool = new BatchMemoryPool(maxBatches, batchSize);
+        ByteBuffer buffer = ByteBuffer.allocate(1023);
+        assertThrows(IllegalArgumentException.class, () -> pool.release(buffer));
+    }
+
 }

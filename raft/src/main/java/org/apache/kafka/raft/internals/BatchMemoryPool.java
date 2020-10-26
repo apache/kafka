@@ -55,11 +55,6 @@ public class BatchMemoryPool implements MemoryPool {
                 buffer = ByteBuffer.allocate(batchSize);
                 numAllocatedBatches += 1;
             }
-
-            if (buffer != null) {
-                buffer.clear();
-                buffer.limit(sizeBytes);
-            }
             return buffer;
         } finally {
             lock.unlock();
@@ -70,6 +65,12 @@ public class BatchMemoryPool implements MemoryPool {
     public void release(ByteBuffer previouslyAllocated) {
         lock.lock();
         try {
+            previouslyAllocated.clear();
+            if (previouslyAllocated.limit() != batchSize) {
+                throw new IllegalArgumentException("Released buffer with unexpected size "
+                    + previouslyAllocated.limit());
+            }
+
             free.offer(previouslyAllocated);
         } finally {
             lock.unlock();

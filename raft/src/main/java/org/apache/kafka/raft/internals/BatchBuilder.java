@@ -17,6 +17,7 @@
 package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.common.protocol.DataOutputStreamWritable;
+import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.record.AbstractRecords;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.DefaultRecord;
@@ -33,6 +34,15 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Collect a set of records into a single batch. New records are added
+ * through {@link #appendRecord(Object, Object)}, but the caller must first
+ * check whether there is room using {@link #hasRoomFor(int)}. Once the
+ * batch is ready, then {@link #build()} should be used to get the resulting
+ * {@link MemoryRecords} instance.
+ *
+ * @param <T> record type indicated by {@link RecordSerde} passed in constructor
+ */
 public class BatchBuilder<T> {
     private final ByteBuffer initialBuffer;
     private final CompressionType compressionType;
@@ -49,6 +59,7 @@ public class BatchBuilder<T> {
 
     private long nextOffset;
     private int unflushedBytes;
+    private boolean isOpenForAppends = true;
 
     public BatchBuilder(
         ByteBuffer buffer,
@@ -81,7 +92,19 @@ public class BatchBuilder<T> {
             compressionType.wrapForOutput(this.batchOutput, RecordBatch.MAGIC_VALUE_V2)));
     }
 
+    /**
+     * Append a record to this patch. The caller must first verify there is room for the batch
+     * using {@link #hasRoomFor(int)}.
+     *
+     * @param record the record to append
+     * @param serdeContext serialization context for use in {@link RecordSerde#write(Object, Object, Writable)}
+     * @return the offset of the appended batch
+     */
     public long appendRecord(T record, Object serdeContext) {
+        if (!isOpenForAppends) {
+            throw new IllegalArgumentException("Cannot append new records after the batch has been built");
+        }
+
         if (nextOffset - baseOffset > Integer.MAX_VALUE) {
             throw new IllegalArgumentException("Cannot include more than " + Integer.MAX_VALUE +
                 " records in a single batch");
@@ -94,7 +117,17 @@ public class BatchBuilder<T> {
         return offset;
     }
 
+    /**
+     * Check whether the batch has enough room for a record of the given size in bytes.
+     *
+     * @param sizeInBytes the size of the record to be appended
+     * @return true if there is room for the record to be appended, false otherwise
+     */
     public boolean hasRoomFor(int sizeInBytes) {
+        if (!isOpenForAppends) {
+            return false;
+        }
+
         if (nextOffset - baseOffset >= Integer.MAX_VALUE) {
             return false;
         }
@@ -124,30 +157,71 @@ public class BatchBuilder<T> {
         return batchOutput.position() - initialPosition;
     }
 
+    /**
+     * Get an estimate of the current size of the appended data. This estimate
+     * is precise if no compression is in use.
+     *
+     * @return estimated size in bytes of the appended records
+     */
     public int approximateSizeInBytes() {
         return flushedSizeInBytes() + unflushedBytes;
     }
 
+    /**
+     * Get the base offset of this batch. This is constant upon constructing
+     * the builder instance.
+     *
+     * @return the base offset
+     */
     public long baseOffset() {
         return baseOffset;
     }
 
+    /**
+     * Return the offset of the last appended record. This is updated after
+     * every append and can be used after the batch has been built to obtain
+     * the last offset.
+     *
+     * @return the offset of the last appended record
+     */
     public long lastOffset() {
         return nextOffset - 1;
     }
 
+    /**
+     * Get the number of records appended to the batch. This is updated after
+     * each append.
+     *
+     * @return the number of appended records
+     */
     public int numRecords() {
         return (int) (nextOffset - baseOffset);
     }
 
+    /**
+     * Check whether there has been at least one record appended to the batch.
+     *
+     * @return true if one or more records have been appended
+     */
     public boolean nonEmpty() {
         return numRecords() > 0;
     }
 
+    /**
+     * Return the reference to the initial buffer passed through the constructor.
+     * This is used in case the buffer needs to be returned to a pool (e.g.
+     * in {@link org.apache.kafka.common.memory.MemoryPool#release(ByteBuffer)}.
+     *
+     * @return the initial buffer passed to the constructor
+     */
     public ByteBuffer initialBuffer() {
         return initialBuffer;
     }
 
+    /**
+     * Get a list of the records appended to the batch.
+     * @return a list of records
+     */
     public List<T> records() {
         return records;
     }
@@ -188,6 +262,7 @@ public class BatchBuilder<T> {
         ByteBuffer buffer = batchOutput.buffer().duplicate();
         buffer.flip();
         buffer.position(initialPosition);
+        isOpenForAppends = false;
         return MemoryRecords.readableRecords(buffer.slice());
     }
 

@@ -1522,9 +1522,9 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         LeaderState state,
         long currentTimeMs
     ) {
-        long timeUnitFlush = accumulator.timeUntilFlush(currentTimeMs);
+        long timeUnitFlush = accumulator.timeUntilDrain(currentTimeMs);
         if (timeUnitFlush <= 0) {
-            List<BatchAccumulator.CompletedBatch<T>> batches = accumulator.flush();
+            List<BatchAccumulator.CompletedBatch<T>> batches = accumulator.drain();
             Iterator<BatchAccumulator.CompletedBatch<T>> iterator = batches.iterator();
 
             try {
@@ -1716,7 +1716,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         Long offset = accumulator.append(epoch, records);
-        if (accumulator.needsFlush(time.milliseconds())) {
+        if (accumulator.needsDrain(time.milliseconds())) {
             channel.wakeup();
         }
         return offset;
