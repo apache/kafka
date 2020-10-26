@@ -22,15 +22,19 @@ import java.util.concurrent.locks.ReentrantLock
 import java.util
 import java.util.concurrent.CompletableFuture
 
-import kafka.metrics.{KafkaMetricsGroup, KafkaMetricsReporter}
+import kafka.log.LogConfig
+import kafka.metrics.{KafkaMetricsGroup, KafkaMetricsReporter, KafkaYammerMetrics, LinuxIoMetricsCollector}
 import kafka.network.SocketServer
 import kafka.security.CredentialProvider
+import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.{CoreUtils, Logging}
+import org.apache.kafka.common.config.{ConfigResource }
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics, MetricsReporter}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, Endpoint}
+import org.apache.kafka.controller.{Controller, LocalLogManager, QuorumController}
 import org.apache.kafka.server.authorizer.{Authorizer, AuthorizerServerInfo}
 
 import scala.jdk.CollectionConverters._
@@ -73,11 +77,16 @@ class Kip500Controller(val config: KafkaConfig,
   var status: Status = SHUTDOWN
 
   var metaProperties: MetaProperties = null
+  var linuxIoMetricsCollector: LinuxIoMetricsCollector = null
   var authorizer: Option[Authorizer] = null
   var metrics: Metrics = null
+  var logManager: LocalLogManager = null
   var tokenCache: DelegationTokenCache = null
   var credentialProvider: CredentialProvider = null
   var socketServer: SocketServer = null
+  var controller: Controller = null
+  var quotaManagers: QuotaManagers = null
+  var controllerApis: ControllerApis = null
 
   private def maybeChangeStatus(from: Status, to: Status): Boolean = {
     lock.lock()
@@ -100,6 +109,15 @@ class Kip500Controller(val config: KafkaConfig,
       metaProperties = readMetaProperties(config)
       val clusterId = metaProperties.clusterId.toString
       info(s"starting with clusterId = ${metaProperties.clusterId}")
+
+      newGauge("ClusterId", () => clusterId)
+      newGauge("yammer-metrics-count", () =>  KafkaYammerMetrics.defaultRegistry.allMetrics.size)
+
+      linuxIoMetricsCollector = new LinuxIoMetricsCollector("/proc", time, logger.underlying)
+      if (linuxIoMetricsCollector.usable()) {
+        newGauge("linux-disk-read-bytes", () => linuxIoMetricsCollector.readBytes())
+        newGauge("linux-disk-write-bytes", () => linuxIoMetricsCollector.writeBytes())
+      }
 
       val javaListeners = config.controllerListeners.map(_.toJava).asJava
       authorizer = config.authorizer
@@ -130,12 +148,34 @@ class Kip500Controller(val config: KafkaConfig,
       KafkaBroker.notifyClusterListeners(clusterId,
         kafkaMetricsReporters ++ metrics.reporters.asScala)
 
+      logManager = new LocalLogManager(new LogContext(),
+        config.controllerId, config.metadataLogDir, "", 10)
+
       tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
       credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
       socketServer = new SocketServer(config, metrics, time, credentialProvider)
       socketServer.startup(startProcessingRequests = false)
       socketServer.startProcessingRequests(authorizerFutures)
 
+      val configDefs = Map(ConfigResource.Type.BROKER -> KafkaConfig.configDef,
+        ConfigResource.Type.TOPIC -> LogConfig.configDefCopy).toMap.asJava
+      val threadNamePrefixAsString = if (threadNamePrefix.isEmpty) {
+        ""
+      } else {
+        threadNamePrefix.get
+      }
+      controller = new QuorumController.Builder(config.controllerId).
+        setTime(time).
+        setConfigDefs(configDefs).
+        setThreadNamePrefix(threadNamePrefixAsString).
+        setLogManager(logManager).
+        build()
+      quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
+      controllerApis = new ControllerApis(socketServer.dataPlaneRequestChannel,
+        authorizer,
+        quotaManagers,
+        time,
+        controller)
     } catch {
       case e: Throwable =>
         maybeChangeStatus(STARTING, STARTED)

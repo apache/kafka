@@ -18,6 +18,7 @@
 package kafka.server
 
 import kafka.network.RequestChannel
+import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.acl.AclOperation.CLUSTER_ACTION
@@ -29,6 +30,7 @@ import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType.CLUSTER
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.controller.{Controller, LeaderAndIsr}
+import org.apache.kafka.server.authorizer.Authorizer
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
@@ -36,9 +38,13 @@ import scala.jdk.CollectionConverters._
 /**
  * Request handler for Controller APIs
  */
-class ControllerApis(val apisUtil: ApisUtils,
+class ControllerApis(val requestChannel: RequestChannel,
+                     val authorizer: Option[Authorizer],
+                     val quotas: QuotaManagers,
                      val time: Time,
                      val controller: Controller) extends ApiRequestHandler with Logging {
+
+  val apisUtil = new ApisUtils(requestChannel, authorizer, quotas, time)
 
   override def handle(request: RequestChannel.Request): Unit = {
     try {

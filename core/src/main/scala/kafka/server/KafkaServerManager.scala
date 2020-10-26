@@ -20,7 +20,7 @@ package kafka.server
 import java.util
 
 import kafka.metrics.{KafkaMetricsReporter, KafkaYammerMetrics}
-import kafka.utils.Logging
+import kafka.utils.{Logging, Mx4jLoader}
 import org.apache.kafka.common.metrics.{JmxReporter, MetricsReporter}
 import org.apache.kafka.common.utils.Time
 
@@ -94,6 +94,7 @@ class KafkaServerManager(val config: KafkaConfig,
     if (!legacyMode()) {
       // TODO: we can probably configure this here even in legacy mode... eventually.
       configureMetrics()
+      Mx4jLoader.maybeLoad()
     }
     legacyBroker.foreach(_.startup())
     kip500Broker.foreach(_.startup())
