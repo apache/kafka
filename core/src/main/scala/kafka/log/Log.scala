@@ -1144,7 +1144,7 @@ class Log(@volatile private var _dir: File,
             // re-validate message sizes if there's a possibility that they have changed (due to re-compression or message
             // format conversion)
             if (!ignoreRecordSize && validateAndOffsetAssignResult.messageSizeMaybeChanged) {
-              for (batch <- validRecords.batches.asScala) {
+              validRecords.batches.forEach { batch =>
                 if (batch.sizeInBytes > config.maxMessageSize) {
                   // we record the original message set size instead of the trimmed size
                   // to be consistent with pre-compression bytesRejectedRate recording
@@ -1214,51 +1214,51 @@ class Log(@volatile private var _dir: File,
           val (updatedProducers, completedTxns, maybeDuplicate) = analyzeAndValidateProducerState(
             logOffsetMetadata, validRecords, origin)
 
-          if (maybeDuplicate.isDefined) {
-            appendInfo.firstOffset = Some(maybeDuplicate.get.firstOffset)
-            appendInfo.lastOffset = maybeDuplicate.get.lastOffset
-            appendInfo.logAppendTime = maybeDuplicate.get.timestamp
-            appendInfo.logStartOffset = logStartOffset
-          } else {
-            segment.append(largestOffset = appendInfo.lastOffset,
-              largestTimestamp = appendInfo.maxTimestamp,
-              shallowOffsetOfMaxTimestamp = appendInfo.offsetOfMaxTimestamp,
-              records = validRecords)
+          maybeDuplicate match {
+            case Some(duplicate) =>
+              appendInfo.firstOffset = Some(duplicate.firstOffset)
+              appendInfo.lastOffset = duplicate.lastOffset
+              appendInfo.logAppendTime = duplicate.timestamp
+              appendInfo.logStartOffset = logStartOffset
+            case None =>
+              segment.append(largestOffset = appendInfo.lastOffset,
+                largestTimestamp = appendInfo.maxTimestamp,
+                shallowOffsetOfMaxTimestamp = appendInfo.offsetOfMaxTimestamp,
+                records = validRecords)
 
-            // Increment the log end offset. We do this immediately after the append because a
-            // write to the transaction index below may fail and we want to ensure that the offsets
-            // of future appends still grow monotonically. The resulting transaction index inconsistency
-            // will be cleaned up after the log directory is recovered. Note that the end offset of the
-            // ProducerStateManager will not be updated and the last stable offset will not advance
-            // if the append to the transaction index fails.
-            updateLogEndOffset(appendInfo.lastOffset + 1)
+              // Increment the log end offset. We do this immediately after the append because a
+              // write to the transaction index below may fail and we want to ensure that the offsets
+              // of future appends still grow monotonically. The resulting transaction index inconsistency
+              // will be cleaned up after the log directory is recovered. Note that the end offset of the
+              // ProducerStateManager will not be updated and the last stable offset will not advance
+              // if the append to the transaction index fails.
+              updateLogEndOffset(appendInfo.lastOffset + 1)
 
-            // update the producer state
-            for (producerAppendInfo <- updatedProducers.values) {
-              producerStateManager.update(producerAppendInfo)
-            }
+              // update the producer state
+              updatedProducers.values.foreach(producerAppendInfo => producerStateManager.update(producerAppendInfo))
 
-            // update the transaction index with the true last stable offset. The last offset visible
-            // to consumers using READ_COMMITTED will be limited by this value and the high watermark.
-            for (completedTxn <- completedTxns) {
-              val lastStableOffset = producerStateManager.lastStableOffset(completedTxn)
-              segment.updateTxnIndex(completedTxn, lastStableOffset)
-              producerStateManager.completeTxn(completedTxn)
-            }
+              // update the transaction index with the true last stable offset. The last offset visible
+              // to consumers using READ_COMMITTED will be limited by this value and the high watermark.
+              completedTxns.foreach {
+                completedTxn =>
+                  val lastStableOffset = producerStateManager.lastStableOffset(completedTxn)
+                  segment.updateTxnIndex(completedTxn, lastStableOffset)
+                  producerStateManager.completeTxn(completedTxn)
+              }
 
-            // always update the last producer id map offset so that the snapshot reflects the current offset
-            // even if there isn't any idempotent data being written
-            producerStateManager.updateMapEndOffset(appendInfo.lastOffset + 1)
+              // always update the last producer id map offset so that the snapshot reflects the current offset
+              // even if there isn't any idempotent data being written
+              producerStateManager.updateMapEndOffset(appendInfo.lastOffset + 1)
 
-            // update the first unstable offset (which is used to compute LSO)
-            maybeIncrementFirstUnstableOffset()
+              // update the first unstable offset (which is used to compute LSO)
+              maybeIncrementFirstUnstableOffset()
 
-            trace(s"Appended message set with last offset: ${appendInfo.lastOffset}, " +
-              s"first offset: ${appendInfo.firstOffset}, " +
-              s"next offset: ${nextOffsetMetadata.messageOffset}, " +
-              s"and messages: $validRecords")
+              trace(s"Appended message set with last offset: ${appendInfo.lastOffset}, " +
+                s"first offset: ${appendInfo.firstOffset}, " +
+                s"next offset: ${nextOffsetMetadata.messageOffset}, " +
+                s"and messages: $validRecords")
 
-            if (unflushedMessages >= config.flushInterval) flush()
+              if (unflushedMessages >= config.flushInterval) flush()
           }
           appendInfo
         }
@@ -1333,7 +1333,7 @@ class Log(@volatile private var _dir: File,
     val completedTxns = ListBuffer.empty[CompletedTxn]
     var relativePositionInSegment = appendOffsetMetadata.relativePositionInSegment
 
-    for (batch <- records.batches.asScala) {
+    records.batches.forEach { batch =>
       if (batch.hasProducerId) {
         val maybeLastEntry = producerStateManager.lastEntry(batch.producerId)
 
@@ -1393,7 +1393,7 @@ class Log(@volatile private var _dir: File,
     var readFirstMessage = false
     var lastOffsetOfFirstBatch = -1L
 
-    for (batch <- records.batches.asScala) {
+    records.batches.forEach { batch =>
       // we only validate V2 and higher to avoid potential compatibility issues with older clients
       if (batch.magic >= RecordBatch.MAGIC_VALUE_V2 && origin == AppendOrigin.Client && batch.baseOffset != 0)
         throw new InvalidRecordException(s"The baseOffset of the record batch in the append to $topicPartition should " +
@@ -1532,13 +1532,11 @@ class Log(@volatile private var _dir: File,
         case FetchTxnCommitted => fetchLastStableOffsetMetadata
       }
 
-      if (startOffset == maxOffsetMetadata.messageOffset) {
+      if (startOffset == maxOffsetMetadata.messageOffset)
         emptyFetchDataInfo(maxOffsetMetadata, includeAbortedTxns)
-      } else if (startOffset > maxOffsetMetadata.messageOffset) {
-        val startOffsetMetadata = convertToOffsetMetadataOrThrow(startOffset)
-        emptyFetchDataInfo(startOffsetMetadata, includeAbortedTxns)
-      } else {
-
+      else if (startOffset > maxOffsetMetadata.messageOffset)
+        emptyFetchDataInfo(convertToOffsetMetadataOrThrow(startOffset), includeAbortedTxns)
+      else {
         // Do the read on the segment with a base offset less than the target offset
         // but if that segment doesn't contain any messages with an offset greater than that
         // continue to read from successive segments until we get some messages or we reach the end of the log
@@ -1547,24 +1545,18 @@ class Log(@volatile private var _dir: File,
         while (!done) {
           val segment = segmentEntry.getValue
 
-          val maxPosition = {
+          val maxPosition =
             // Use the max offset position if it is on this segment; otherwise, the segment size is the limit.
-            if (maxOffsetMetadata.segmentBaseOffset == segment.baseOffset) {
-              maxOffsetMetadata.relativePositionInSegment
-            } else {
-              segment.size
-            }
-          }
+            if (maxOffsetMetadata.segmentBaseOffset == segment.baseOffset) maxOffsetMetadata.relativePositionInSegment
+            else segment.size
 
-          val fetchInfo = segment.read(startOffset, maxLength, maxPosition, minOneMessage)
-          if (fetchInfo == null) {
-            segmentEntry = segments.higherEntry(segmentEntry.getKey)
-            done = segmentEntry == null
-          } else {
-            fetchDataInfo = if (includeAbortedTxns) addAbortedTransactions(startOffset, segmentEntry, fetchInfo)
-            else fetchInfo
-            done = true
-          }
+          fetchDataInfo = segment.read(startOffset, maxLength, maxPosition, minOneMessage)
+          if (fetchDataInfo != null) {
+            if (includeAbortedTxns)
+              fetchDataInfo = addAbortedTransactions(startOffset, segmentEntry, fetchDataInfo)
+          } else segmentEntry = segments.higherEntry(segmentEntry.getKey)
+
+          done = fetchDataInfo != null || segmentEntry == null
         }
 
         if (fetchDataInfo != null) fetchDataInfo
@@ -2014,8 +2006,7 @@ class Log(@volatile private var _dir: File,
       if (offset > this.recoveryPoint) {
         debug(s"Flushing log up to offset $offset, last flushed: $lastFlushTime,  current time: ${time.milliseconds()}, " +
           s"unflushed: $unflushedMessages")
-        for (segment <- logSegments(this.recoveryPoint, offset))
-          segment.flush()
+        logSegments(this.recoveryPoint, offset).foreach(_.flush())
 
         lock synchronized {
           checkIfMemoryMappedBufferClosed()
