@@ -93,7 +93,7 @@ object KafkaBroker {
   }
 
   //properties for MetricsContext
-  private val metricsPrefix: String = "kafka.server"
+  val metricsPrefix: String = "kafka.server"
   private val KAFKA_CLUSTER_ID: String = "kafka.cluster.id"
   private val KAFKA_BROKER_ID: String = "kafka.broker.id"
 
