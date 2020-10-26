@@ -38,11 +38,13 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
+import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -67,6 +69,7 @@ import static org.junit.Assert.assertTrue;
  * task towards a standby task is safe across restarts of the application.
  */
 @RunWith(Parameterized.class)
+@Category({IntegrationTest.class})
 public class StandbyTaskEOSIntegrationTest {
 
     private final static long REBALANCE_TIMEOUT = Duration.ofMinutes(2L).toMillis();
