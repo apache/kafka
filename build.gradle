@@ -482,9 +482,6 @@ subprojects {
     //documentation task should also trigger building scala doc jar
     docsJar.dependsOn scaladocJar
 
-    artifacts {
-      archives scaladocJar
-    }
   }
 
   tasks.withType(ScalaCompile) {
@@ -1444,7 +1441,11 @@ project(':streams:streams-scala') {
     dependsOn 'copyDependantLibs'
   }
 
-  test.dependsOn(':spotlessScalaCheck')
+  artifacts {
+      archives scaladocJar
+  }
+
+    test.dependsOn(':spotlessScalaCheck')
 }
 
 project(':streams:test-utils') {
