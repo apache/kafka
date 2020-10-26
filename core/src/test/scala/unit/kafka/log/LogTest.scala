@@ -2280,7 +2280,7 @@ class LogTest {
 
     // test recovery case
     log = createLog(logDir, logConfig)
-    assertTrue(log.topicID == topicId)
+    assertTrue(log.topicId == topicId)
     log.close()
   }
 
@@ -2825,7 +2825,7 @@ class LogTest {
 
     // Write a topic ID to the partition metadata file to ensure it is transferred correctly.
     val id = UUID.randomUUID()
-    log.topicID = id
+    log.topicId = id
     log.partitionMetadataFile.get.write(id)
 
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 5)
@@ -2840,7 +2840,7 @@ class LogTest {
     assertFalse(PartitionMetadataFile.newFile(this.logDir).exists())
 
     // Check the topic ID remains in memory and was copied correctly.
-    assertEquals(id, log.topicID)
+    assertEquals(id, log.topicId)
     assertTrue(!log.partitionMetadataFile.isEmpty)
     assertEquals(id, log.partitionMetadataFile.get.read().topicId)
   }

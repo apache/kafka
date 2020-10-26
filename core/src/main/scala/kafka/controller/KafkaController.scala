@@ -1389,7 +1389,7 @@ class KafkaController(val config: KafkaConfig,
     }
 
     leaderAndIsrResponse.topics.forEach { topic =>
-      val topicName = controllerContext.topicNames.get(topic.topicID).get
+      val topicName = controllerContext.topicNames.get(topic.topicId).get
       topic.partitionErrors().forEach { partition =>
         val tp = new TopicPartition(topicName, partition.partitionIndex)
         if (partition.errorCode == Errors.KAFKA_STORAGE_ERROR.code)

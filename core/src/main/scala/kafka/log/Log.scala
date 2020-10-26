@@ -293,7 +293,7 @@ class Log(@volatile private var _dir: File,
 
   @volatile var partitionMetadataFile : Option[PartitionMetadataFile] = None
 
-  @volatile var topicID : UUID = UUID.ZERO_UUID
+  @volatile var topicId : UUID = UUID.ZERO_UUID
 
   locally {
     // create the log directory if it doesn't exist
@@ -327,7 +327,7 @@ class Log(@volatile private var _dir: File,
 
     // Recover topic ID if present
     if (!partitionMetadataFile.get.isEmpty()) {
-      topicID = partitionMetadataFile.get.read().topicId
+      topicId = partitionMetadataFile.get.read().topicId
     }
   }
 

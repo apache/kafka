@@ -140,8 +140,7 @@ class KafkaApisTest {
       time,
       null,
       brokerFeatures,
-      cache
-    )
+      cache)
   }
 
   @Test
@@ -2195,7 +2194,7 @@ class KafkaApisTest {
             .setListener(plaintextListener.value)).asJava)
     )
     val updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, 0,
-      0, 0, Seq.empty[UpdateMetadataPartitionState].asJava, Map.empty[String,UUID].asJava, brokers.asJava).build()
+      0, 0, Seq.empty[UpdateMetadataPartitionState].asJava, brokers.asJava).build()
     metadataCache.updateMetadata(correlationId = 0, updateMetadataRequest)
     (plaintextListener, anotherListener)
   }
@@ -2317,7 +2316,7 @@ class KafkaApisTest {
         .setListener(plaintextListener.value)).asJava)
     val partitionStates = (0 until numPartitions).map(createPartitionState)
     new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, 0,
-      0, brokerEpoch, partitionStates.asJava, Collections.singletonMap(topic,UUID.randomUUID()), Seq(broker).asJava).build()
+      0, brokerEpoch, partitionStates.asJava, Seq(broker).asJava).build()
   }
 
   private def setupBasicMetadataCache(topic: String, numPartitions: Int): Unit = {

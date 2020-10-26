@@ -109,7 +109,7 @@ public class LeaderAndIsrResponseTest {
     private List<LeaderAndIsrTopicError> createTopic(UUID id, List<Errors> errors) {
         List<LeaderAndIsrTopicError> topics = new ArrayList<>();
         LeaderAndIsrTopicError topic = new LeaderAndIsrTopicError();
-        topic.setTopicID(id);
+        topic.setTopicId(id);
         List<LeaderAndIsrPartitionError> partitions = new ArrayList<>();
         int partitionIndex = 0;
         for (Errors error : errors) {

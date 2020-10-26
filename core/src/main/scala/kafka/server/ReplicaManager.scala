@@ -1371,7 +1371,7 @@ class ReplicaManager(val config: KafkaConfig,
             def propagatePartitionState(requestLeaderEpoch: Int, currentLeaderEpoch: Int, partition: Partition): Boolean = {
               requestLeaderEpoch > currentLeaderEpoch ||
                 (requestLeaderEpoch == currentLeaderEpoch &&
-                  partition.log.map(_.topicID).isEmpty &&
+                  partition.log.map(_.topicId).isEmpty &&
                   topicIds.get(topicPartition.topic()) != UUID.ZERO_UUID)
             }
 
@@ -1456,8 +1456,8 @@ class ReplicaManager(val config: KafkaConfig,
                 // If the broker previously wrote it to file, it would be recovered on restart after failure.
                 // If the topic ID is not the default (ZERO_UUID), a topic ID is being used for the given topic.
                 // If the topic ID in the log does not match the one in the request, the broker's topic must be stale.
-                if (!log.topicID.equals(UUID.ZERO_UUID) && !log.topicID.equals(topicIds.get(topicPartition.topic))) {
-                  stateChangeLogger.warn(s"Topic Id in memory: ${log.topicID.toString} does not" +
+                if (!log.topicId.equals(UUID.ZERO_UUID) && !log.topicId.equals(topicIds.get(topicPartition.topic))) {
+                  stateChangeLogger.warn(s"Topic Id in memory: ${log.topicId.toString} does not" +
                     s" match the topic Id provided in the request: " +
                     s"${topicIds.get(topicPartition.topic).toString}.")
                 } else {
@@ -1465,7 +1465,7 @@ class ReplicaManager(val config: KafkaConfig,
                   // Write the partition metadata file if it is empty.
                   if (log.partitionMetadataFile.get.isEmpty()) {
                     log.partitionMetadataFile.get.write(topicIds.get(topicPartition.topic))
-                    log.topicID = topicIds.get(topicPartition.topic)
+                    log.topicId = topicIds.get(topicPartition.topic)
                   } else {
                     stateChangeLogger.warn("Partition metadata file already contains content.")
                   }
@@ -1508,7 +1508,7 @@ class ReplicaManager(val config: KafkaConfig,
             }
             val topicErrors = topics.iterator.map { case (topic, partitionError) =>
               new LeaderAndIsrTopicError()
-                .setTopicID(topicIds.get(topic))
+                .setTopicId(topicIds.get(topic))
                 .setPartitionErrors(partitionError.asJava)
             }.toBuffer
             new LeaderAndIsrResponse(new LeaderAndIsrResponseData()

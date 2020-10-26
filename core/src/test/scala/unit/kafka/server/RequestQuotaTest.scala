@@ -277,8 +277,7 @@ class RequestQuotaTest extends BaseRequestTest {
               .setPort(0)
               .setSecurityProtocol(securityProtocol.id)
               .setListener(ListenerName.forSecurityProtocol(securityProtocol).value)).asJava)).asJava
-          new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, brokerId, Int.MaxValue, Long.MaxValue,
-            partitionState, topicIds, brokers)
+          new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, brokerId, Int.MaxValue, Long.MaxValue, partitionState, brokers)
 
         case ApiKeys.CONTROLLED_SHUTDOWN =>
           new ControlledShutdownRequest.Builder(
@@ -584,6 +583,9 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.ALTER_ISR =>
           new AlterIsrRequest.Builder(new AlterIsrRequestData())
+
+        case ApiKeys.UPDATE_FEATURES =>
+          new UpdateFeaturesRequest.Builder(new UpdateFeaturesRequestData())
 
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)

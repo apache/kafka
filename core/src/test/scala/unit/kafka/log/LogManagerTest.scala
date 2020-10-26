@@ -181,7 +181,7 @@ class LogManagerTest {
     })
 
     // there should be a log file, two indexes, one producer snapshot, partition metadata, and the leader epoch checkpoint
-    assertEquals("Files should have been deleted", log.numberOfSegments * 4 + 1 + 1, log.dir.list.length)
+    assertEquals("Files should have been deleted", log.numberOfSegments * 4 + 2, log.dir.list.length)
     assertEquals("Should get empty fetch off new log.", 0, readLog(log, offset + 1).records.sizeInBytes)
 
     try {

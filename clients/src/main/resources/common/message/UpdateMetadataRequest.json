@@ -26,7 +26,7 @@
   // Version 4 adds the offline replica list.
   //
   // Version 5 adds the broker epoch field and normalizes partitions by topic.
-  "validVersions": "0-7",
+  "validVersions": "0-6",
   "flexibleVersions": "6+",
   "fields": [
     { "name": "ControllerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
@@ -41,7 +41,6 @@
       "about": "In newer versions of this RPC, each topic that we would like to update.", "fields": [
       { "name": "TopicName", "type": "string", "versions": "5+", "entityType": "topicName",
         "about": "The topic name." },
-      { "name":  "TopicID", "type": "uuid", "versions": "7+", "about": "the unique topic identifier"},
       { "name": "PartitionStates", "type": "[]UpdateMetadataPartitionState", "versions": "5+",
         "about": "The partition that we would like to update." }
     ]},

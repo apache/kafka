@@ -25,7 +25,7 @@
   //
   // Version 4 is the first flexible version.
   //
-  // Version 5 removes TopicName and replaces it with TopicID and and reorganizes the partitions by topic.
+  // Version 5 removes TopicName and replaces it with TopicId and and reorganizes the partitions by topic.
   "validVersions": "0-5",
   "flexibleVersions": "4+",
   "fields": [
@@ -35,7 +35,7 @@
       "about": "Each partition in v0 to v4 message."},
     {"name":  "Topics", "type":  "[]LeaderAndIsrTopicError", "versions": "5+",
       "about": "Each topic", "fields": [
-      { "name": "TopicID", "type": "uuid", "versions": "5+", "about": "The unique topic ID" },
+      { "name": "TopicId", "type": "uuid", "versions": "5+", "about": "The unique topic ID" },
       { "name": "PartitionErrors", "type": "[]LeaderAndIsrPartitionError", "versions": "0+",
         "about": "Each partition."}
       ]}

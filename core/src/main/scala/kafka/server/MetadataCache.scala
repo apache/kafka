@@ -21,7 +21,7 @@ import java.util
 import java.util.Collections
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
-import scala.collection.{Seq, Set, mutable}
+import scala.collection.{mutable, Seq, Set}
 import scala.jdk.CollectionConverters._
 import kafka.cluster.{Broker, EndPoint}
 import kafka.api._
@@ -31,7 +31,7 @@ import kafka.utils.Logging
 import kafka.utils.Implicits._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
-import org.apache.kafka.common.{Cluster, Node, PartitionInfo, TopicPartition, UUID}
+import org.apache.kafka.common.{Cluster, Node, PartitionInfo, TopicPartition}
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponsePartition
 import org.apache.kafka.common.network.ListenerName
@@ -52,7 +52,6 @@ class MetadataCache(brokerId: Int) extends Logging {
   //multiple reads of this value risk getting different snapshots.
   @volatile private var metadataSnapshot: MetadataSnapshot = MetadataSnapshot(partitionStates = mutable.AnyRefMap.empty,
     controllerId = None, aliveBrokers = mutable.LongMap.empty, aliveNodes = mutable.LongMap.empty)
-  private val topicIds = mutable.Map.empty[String,UUID]
 
   this.logIdent = s"[MetadataCache brokerId=$brokerId] "
   private val stateChangeLogger = new StateChangeLogger(brokerId, inControllerContext = false, None)
@@ -284,10 +283,6 @@ class MetadataCache(brokerId: Int) extends Logging {
       snapshot.controllerId.map(id => node(id)).orNull)
   }
 
-  def getTopicId(topic: String): UUID = {
-    topicIds.get(topic).get
-  }
-
   // This method returns the deleted TopicPartitions received from UpdateMetadataRequest
   def updateMetadata(correlationId: Int, updateMetadataRequest: UpdateMetadataRequest): Seq[TopicPartition] = {
     inWriteLock(partitionMetadataLock) {
@@ -354,23 +349,6 @@ class MetadataCache(brokerId: Int) extends Logging {
         val cachedPartitionsCount = newStates.size - deletedPartitions.size
         stateChangeLogger.info(s"Add $cachedPartitionsCount partitions and deleted ${deletedPartitions.size} partitions from metadata cache " +
           s"in response to UpdateMetadata request sent by controller $controllerId epoch $controllerEpoch with correlation id $correlationId")
-
-        // Update topicIds by adding the ids from the request
-        updateMetadataRequest.topicStates.forEach { topicState =>
-          topicIds.put(topicState.topicName(), topicState.topicID())
-          stateChangeLogger.trace(s"Added topic id ${topicState.topicID()} for topic ${topicState.topicName()} " +
-            s"in response to UpdateMetadata request sent by controller $controllerId epoch $controllerEpoch with " +
-            s"correlation id $correlationId")
-        }
-
-        // Remove topic IDs associated with deletedPartitions
-        val deletedTopics = deletedPartitions.map(tp => tp.topic()).toSet
-        deletedTopics.foreach{ case topic =>
-          val id = topicIds.get(topic)
-          topicIds.remove(topic)
-          stateChangeLogger.trace(s"Removed topic id $id for topic $topic in response to UpdateMetadata " +
-            s"request sent by controller $controllerId epoch $controllerEpoch with correlation id $correlationId")
-        }
 
         metadataSnapshot = MetadataSnapshot(partitionStates, controllerIdOpt, aliveBrokers, aliveNodes)
       }

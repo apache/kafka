@@ -19,7 +19,6 @@ package kafka.server
 import java.util
 import util.Arrays.asList
 
-import org.apache.kafka.common.UUID
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -47,8 +46,6 @@ class MetadataCacheTest {
   def getTopicMetadata(): Unit = {
     val topic0 = "topic-0"
     val topic1 = "topic-1"
-
-    val topicIds = Map(topic0 -> UUID.randomUUID(), topic1 -> UUID.randomUUID())
 
     val cache = new MetadataCache(1)
 
@@ -110,7 +107,7 @@ class MetadataCacheTest {
 
     val version = ApiKeys.UPDATE_METADATA.latestVersion
     val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch, brokerEpoch,
-      partitionStates.asJava, topicIds.asJava, brokers.asJava).build()
+      partitionStates.asJava, brokers.asJava).build()
     cache.updateMetadata(15, updateMetadataRequest)
 
     for (securityProtocol <- Seq(SecurityProtocol.PLAINTEXT, SecurityProtocol.SSL)) {
@@ -210,7 +207,6 @@ class MetadataCacheTest {
                                                                        expectedError: Errors,
                                                                        errorUnavailableListeners: Boolean): Unit = {
     val topic = "topic"
-    val topicIds = Map("topic" -> UUID.randomUUID())
 
     val cache = new MetadataCache(metadataCacheBrokerId)
 
@@ -231,7 +227,7 @@ class MetadataCacheTest {
 
     val version = ApiKeys.UPDATE_METADATA.latestVersion
     val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch, brokerEpoch,
-      partitionStates.asJava, topicIds.asJava, brokers.asJava).build()
+      partitionStates.asJava, brokers.asJava).build()
     cache.updateMetadata(15, updateMetadataRequest)
 
     val topicMetadatas = cache.getTopicMetadata(Set(topic), listenerName, errorUnavailableListeners = errorUnavailableListeners)
@@ -253,7 +249,6 @@ class MetadataCacheTest {
   @Test
   def getTopicMetadataReplicaNotAvailable(): Unit = {
     val topic = "topic"
-    val topicIds = Map("topic" -> UUID.randomUUID())
 
     val cache = new MetadataCache(1)
 
@@ -289,7 +284,7 @@ class MetadataCacheTest {
 
     val version = ApiKeys.UPDATE_METADATA.latestVersion
     val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch, brokerEpoch,
-      partitionStates.asJava, topicIds.asJava, brokers.asJava).build()
+      partitionStates.asJava, brokers.asJava).build()
     cache.updateMetadata(15, updateMetadataRequest)
 
     // Validate errorUnavailableEndpoints = false
@@ -328,7 +323,6 @@ class MetadataCacheTest {
   @Test
   def getTopicMetadataIsrNotAvailable(): Unit = {
     val topic = "topic"
-    val topicIds = Map("topic" -> UUID.randomUUID())
 
     val cache = new MetadataCache(1)
 
@@ -364,7 +358,7 @@ class MetadataCacheTest {
 
     val version = ApiKeys.UPDATE_METADATA.latestVersion
     val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch, brokerEpoch,
-      partitionStates.asJava, topicIds.asJava, brokers.asJava).build()
+      partitionStates.asJava, brokers.asJava).build()
     cache.updateMetadata(15, updateMetadataRequest)
 
     // Validate errorUnavailableEndpoints = false
@@ -403,7 +397,6 @@ class MetadataCacheTest {
   @Test
   def getTopicMetadataWithNonSupportedSecurityProtocol(): Unit = {
     val topic = "topic"
-    val topicIds = Map("topic" -> UUID.randomUUID())
     val cache = new MetadataCache(1)
     val securityProtocol = SecurityProtocol.PLAINTEXT
     val brokers = Seq(new UpdateMetadataBroker()
@@ -430,7 +423,7 @@ class MetadataCacheTest {
       .setReplicas(replicas))
     val version = ApiKeys.UPDATE_METADATA.latestVersion
     val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, 2, controllerEpoch, brokerEpoch, partitionStates.asJava,
-      topicIds.asJava, brokers.asJava).build()
+      brokers.asJava).build()
     cache.updateMetadata(15, updateMetadataRequest)
 
     val topicMetadata = cache.getTopicMetadata(Set(topic), ListenerName.forSecurityProtocol(SecurityProtocol.SSL))
@@ -442,7 +435,6 @@ class MetadataCacheTest {
   @Test
   def getAliveBrokersShouldNotBeMutatedByUpdateCache(): Unit = {
     val topic = "topic"
-    val topicIds = Map("topic" -> UUID.randomUUID())
     val cache = new MetadataCache(1)
 
     def updateCache(brokerIds: Seq[Int]): Unit = {
@@ -473,7 +465,7 @@ class MetadataCacheTest {
         .setReplicas(replicas))
       val version = ApiKeys.UPDATE_METADATA.latestVersion
       val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, 2, controllerEpoch, brokerEpoch, partitionStates.asJava,
-        topicIds.asJava, brokers.asJava).build()
+        brokers.asJava).build()
       cache.updateMetadata(15, updateMetadataRequest)
     }
 
