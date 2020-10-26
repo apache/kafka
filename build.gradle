@@ -728,14 +728,13 @@ project(':core') {
   println "Building project 'core' with Scala version ${versions.scala}"
 
   apply plugin: 'scala'
-  /*
-    scaladoc generation is now specifically configured at
-    the sub-module level with an artifacts block (cf. see streams-scala).
-    This block is here to ensure that if scaladoc is enabled globally
-    we do not generate scaladoc for core as it's not public API
-  */
+  
+  // scaladoc generation is configured at the sub-module level with an artifacts
+  // block (cf. see streams-scala). If scaladoc generation is invoked explicitly
+  // for the `core` module, this ensures the generated jar doesn't include scaladoc
+  // files since the `core` module doesn't include public APIs.
   scaladoc {
-      enabled = false
+    enabled = false
   }
   if (userEnableTestCoverage)
     apply plugin: "org.scoverage"
