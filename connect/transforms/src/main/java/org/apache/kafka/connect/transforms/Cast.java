@@ -61,7 +61,7 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
             "Cast fields or the entire key or value to a specific type, e.g. to force an integer field to a smaller "
                     + "width. Simple primitive types are supported -- integers, floats, boolean, and string, plus "
                     + "support for string representation of complex types. Recursion through nested values is also "
-                    + "possible if setting <code>recursion</code> to <code>true</code>. "
+                    + "possible by setting <code>recursive</code> to <code>true</code>. "
                     + "<p/>Use the concrete transformation type designed for the record key (<code>" + Key.class.getName() + "</code>) "
                     + "or value (<code>" + Value.class.getName() + "</code>). ";
 
