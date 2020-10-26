@@ -532,12 +532,12 @@ class WorkerSinkTask extends WorkerTask {
         try {
             return keyConverter.toConnectData(msg.topic(), msg.headers(), msg.key());
         } catch (Exception e) {
-            String errorMessage = "Error while deserializing the key for record in topic %s, partition %s, timestamp %s, and at offset %s. " +
+            String errorMessage = String.format("Error while deserializing the key for record in topic %s, partition %s, timestamp %s, and at offset %s. " +
                     "Check the key.converter and key.converter.* settings in the connector configuration, " +
                     "and ensure that the converter matches the converter/serializer used by the application that produced this record. " +
-                    "Underlying converter error: %s";
-            log.error(String.format(errorMessage, msg.topic(), msg.partition(), msg.timestamp(), msg.offset(), e.getMessage()), e);
-            throw new DataException(String.format(errorMessage, msg.topic(), msg.partition(), msg.offset(), msg.timestamp(), e.getMessage()), e);
+                    "Underlying converter error: %s", msg.topic(), msg.partition(), msg.timestamp(), msg.offset(), e.getMessage());
+            log.error(errorMessage, e);
+            throw new DataException(errorMessage, e);
         }
     }
 
@@ -545,12 +545,12 @@ class WorkerSinkTask extends WorkerTask {
         try {
             return valueConverter.toConnectData(msg.topic(), msg.headers(), msg.value());
         } catch (Exception e) {
-            String errorMessage = "Error while deserializing the value for record in topic %s, partition %s, timestamp %s, and at offset %s. " +
+            String errorMessage = String.format("Error while deserializing the value for record in topic %s, partition %s, timestamp %s, and at offset %s. " +
                     "Check the value.converter and value.converter.* settings in the connector configuration, " +
                     "and ensure that the converter matches the converter/serializer used by the application that produced this record. " +
-                    "Underlying converter error: %s";
-            log.error(String.format(errorMessage, msg.topic(), msg.partition(), msg.timestamp(), msg.offset(), e.getMessage()), e);
-            throw new DataException(String.format(errorMessage, msg.topic(), msg.partition(), msg.offset(), msg.timestamp(), e.getMessage()), e);
+                    "Underlying converter error: %s", msg.topic(), msg.partition(), msg.timestamp(), msg.offset(), e.getMessage());
+            log.error(errorMessage, e);
+            throw new DataException(errorMessage, e);
         }
     }
 

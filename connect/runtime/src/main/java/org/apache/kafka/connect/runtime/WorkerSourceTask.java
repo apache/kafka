@@ -606,11 +606,11 @@ class WorkerSourceTask extends WorkerTask {
         try {
             return keyConverter.fromConnectData(record.topic(), headers, record.keySchema(), record.key());
         } catch (Exception e) {
-            String errorMessage = "%s Error while serializing the key for a source record to topic: %s. Check the key.converter and key.converter.* " +
+            String errorMessage = String.format("Error while serializing the key for a source record to topic: %s. Check the key.converter and key.converter.* " +
                     "settings in the connector configuration, or in the worker configuration if the connector is inheriting the connector configuration. " +
-                    "Underlying converter error: %s";
-            log.error(String.format(errorMessage, this, record.topic(), e.getMessage()), e);
-            throw new RetriableException(String.format(errorMessage, this, record.topic(), e.getMessage()), e);
+                    "Underlying converter error: %s", record.topic(), e.getMessage());
+            log.error(errorMessage, e);
+            throw new RetriableException(errorMessage, e);
         }
     }
 
@@ -618,11 +618,11 @@ class WorkerSourceTask extends WorkerTask {
         try {
             return valueConverter.fromConnectData(record.topic(), headers, record.valueSchema(), record.value());
         } catch (Exception e) {
-            String errorMessage = "%s Error while serializing the value for a source record to topic: %s. Check the value.converter and value.converter.* " +
+            String errorMessage = String.format("Error while serializing the value for a source record to topic: %s. Check the value.converter and value.converter.* " +
                     "settings in the connector configuration, or in the worker configuration if the connector is inheriting the connector configuration. " +
-                    "Underlying converter error: %s";
-            log.error(String.format(errorMessage, this, record.topic(), e.getMessage()), e);
-            throw new RetriableException(String.format(errorMessage, this, record.topic(), e.getMessage()), e);
+                    "Underlying converter error: %s", record.topic(), e.getMessage());
+            log.error(errorMessage, e);
+            throw new RetriableException(errorMessage, e);
         }
     }
 

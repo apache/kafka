@@ -96,9 +96,9 @@ abstract class NumberConverter<T extends Number> implements Converter, HeaderCon
         try {
             return serializer.serialize(topic, value == null ? null : cast(value));
         } catch (ClassCastException e) {
-            throw new DataException(this.getClass() + " Failed to serialize to " + typeName + " (was " + value.getClass() + "): ", e);
+            throw new DataException("Failed to serialize to " + typeName + " (was " + value.getClass() + "): ", e);
         } catch (SerializationException e) {
-            throw new DataException(this.getClass() + " Failed to serialize to " + typeName + ": ", e);
+            throw new DataException("Failed to serialize to " + typeName + ": ", e);
         }
     }
 
@@ -107,7 +107,7 @@ abstract class NumberConverter<T extends Number> implements Converter, HeaderCon
         try {
             return new SchemaAndValue(schema, deserializer.deserialize(topic, value));
         } catch (SerializationException e) {
-            throw new DataException(this.getClass() + " Failed to deserialize " + typeName + ": ", e);
+            throw new DataException("Failed to deserialize " + typeName + ": ", e);
         }
     }
 

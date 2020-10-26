@@ -347,7 +347,7 @@ public class JsonConverter implements Converter, HeaderConverter {
         try {
             return serializer.serialize(topic, jsonValue);
         } catch (SerializationException e) {
-            throw new DataException(this.getClass() + " Converting Kafka Connect data to byte[] failed due to serialization error: ", e);
+            throw new DataException("Converting Kafka Connect data to byte[] failed due to serialization error: ", e);
         }
     }
 
@@ -363,7 +363,7 @@ public class JsonConverter implements Converter, HeaderConverter {
         try {
             jsonValue = deserializer.deserialize(topic, value);
         } catch (SerializationException e) {
-            throw new DataException(this.getClass() + " Converting byte[] to Kafka Connect data failed due to serialization error: ", e);
+            throw new DataException("Converting byte[] to Kafka Connect data failed due to serialization error: ", e);
         }
 
         if (config.schemasEnabled() && (!jsonValue.isObject() || jsonValue.size() != 2 || !jsonValue.has(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME) || !jsonValue.has(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME)))
