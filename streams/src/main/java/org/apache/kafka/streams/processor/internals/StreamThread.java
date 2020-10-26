@@ -601,7 +601,6 @@ public class StreamThread extends Thread {
                         throw e;
                     } else {
                         sendShutdownRequest(AssignorError.SHUTDOWN_REQUESTED);
-                        throw e;
                     }
                 } else {
                     throw e;
