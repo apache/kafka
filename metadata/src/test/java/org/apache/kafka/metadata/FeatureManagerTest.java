@@ -40,7 +40,7 @@ public class FeatureManagerTest {
 
     @Test
     public void testValidateFinalizedFeatures() {
-        FeatureManager manager = new FeatureManager(SUPPORTED, Collections.emptyMap());
+        FeatureManager manager = new FeatureManager(SUPPORTED, Collections.emptyMap(), 0);
         manager.validateFinalizedFeatures(Collections.emptyMap());
         manager.validateFinalizedFeatures(Collections.
             singletonMap("foo", new VersionRange((short) 2, (short) 2)));
@@ -58,20 +58,22 @@ public class FeatureManagerTest {
 
     @Test
     public void testEquals() {
-        FeatureManager manager = new FeatureManager(SUPPORTED, Collections.emptyMap());
+        FeatureManager manager = new FeatureManager(SUPPORTED, Collections.emptyMap(), 0);
         assertEquals(manager, manager);
-        FeatureManager manager2 = new FeatureManager(SUPPORTED, Collections.emptyMap());
+        FeatureManager manager2 = new FeatureManager(SUPPORTED, Collections.emptyMap(), 0);
         assertEquals(manager, manager2);
         FeatureManager manager3 = new FeatureManager(SUPPORTED, Collections.
-            singletonMap("foo", new VersionRange((short) 2, (short) 2)));
+            singletonMap("foo", new VersionRange((short) 2, (short) 2)), 0);
         assertNotEquals(manager3, manager2);
+        FeatureManager manager4 = new FeatureManager(SUPPORTED, Collections.emptyMap(), 1);
+        assertNotEquals(manager, manager4);
     }
 
     @Test
     public void testToString() {
         FeatureManager manager = new FeatureManager(SUPPORTED, Collections.
-            singletonMap("foo", new VersionRange((short) 2, (short) 2)));
+            singletonMap("foo", new VersionRange((short) 2, (short) 2)), 123);
         assertEquals("FeatureManager(supportedFeatures={bar: 2-10, foo: 1-2}, " +
-            "finalizedFeatures={foo: 2})", manager.toString());
+            "finalizedFeatures={foo: 2}, epoch=123)", manager.toString());
     }
 }

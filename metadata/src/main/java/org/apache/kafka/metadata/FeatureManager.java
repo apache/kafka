@@ -30,19 +30,53 @@ import java.util.stream.Collectors;
  */
 public class FeatureManager {
     private final Map<String, VersionRange> supportedFeatures;
-    volatile private Map<String, VersionRange> finalizedFeatures = Collections.emptyMap();
+    volatile private FinalizedFeaturesAndEpoch finalizedFeaturesAndEpoch =
+        new FinalizedFeaturesAndEpoch(Collections.emptyMap(), -1);
 
-    public FeatureManager(Map<String, VersionRange> supportedFeatures,
-                          Map<String, VersionRange> finalizedFeatures) {
-        this.supportedFeatures = Collections.unmodifiableMap(new HashMap<>(supportedFeatures));
-        updateFinalizedFeatures(finalizedFeatures);
+    public static class FinalizedFeaturesAndEpoch {
+        private final Map<String, VersionRange> finalizedFeatures;
+        private final long epoch;
+
+        public FinalizedFeaturesAndEpoch(Map<String, VersionRange> finalizedFeatures,
+                                         long epoch) {
+            this.finalizedFeatures = Collections.
+                unmodifiableMap(new HashMap<>(finalizedFeatures));
+            this.epoch = epoch;
+        }
+
+        public Map<String, VersionRange> finalizedFeatures() {
+            return finalizedFeatures;
+        }
+
+        public long epoch() {
+            return epoch;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(finalizedFeatures, epoch);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (!(o instanceof FinalizedFeaturesAndEpoch)) return false;
+            FinalizedFeaturesAndEpoch other = (FinalizedFeaturesAndEpoch) o;
+            return finalizedFeatures.equals(other.finalizedFeatures) &&
+                epoch == other.epoch;
+        }
     }
 
-    public void updateFinalizedFeatures(Map<String, VersionRange> newFinalizedFeatures) {
-        validateFinalizedFeatures(newFinalizedFeatures);
+    public FeatureManager(Map<String, VersionRange> supportedFeatures,
+                          Map<String, VersionRange> finalizedFeatures,
+                          long epoch) {
+        this.supportedFeatures = Collections.unmodifiableMap(new HashMap<>(supportedFeatures));
+        updateFinalizedFeatures(new FinalizedFeaturesAndEpoch(finalizedFeatures, epoch));
+    }
+
+    public void updateFinalizedFeatures(FinalizedFeaturesAndEpoch finalizedFeaturesAndEpoch) {
+        validateFinalizedFeatures(finalizedFeaturesAndEpoch.finalizedFeatures());
         synchronized (this) {
-            this.finalizedFeatures = Collections.unmodifiableMap(
-                    new HashMap<>(newFinalizedFeatures));
+            this.finalizedFeaturesAndEpoch = finalizedFeaturesAndEpoch;
         }
     }
 
@@ -63,13 +97,17 @@ public class FeatureManager {
         }
     }
 
-    public Map<String, VersionRange> finalizedFeatures() {
-        return finalizedFeatures;
+    public Map<String, VersionRange> supportedFeatures() {
+        return supportedFeatures;
+    }
+
+    public FinalizedFeaturesAndEpoch finalizedFeatures() {
+        return finalizedFeaturesAndEpoch;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(supportedFeatures, finalizedFeatures);
+        return Objects.hash(supportedFeatures, finalizedFeaturesAndEpoch);
     }
 
     @Override
@@ -77,21 +115,23 @@ public class FeatureManager {
         if (!(o instanceof FeatureManager)) return false;
         FeatureManager other = (FeatureManager) o;
         return supportedFeatures.equals(other.supportedFeatures) &&
-            finalizedFeatures.equals(other.finalizedFeatures);
+            finalizedFeaturesAndEpoch.equals(other.finalizedFeaturesAndEpoch);
     }
 
     @Override
     public String toString() {
+        FinalizedFeaturesAndEpoch finalized = finalizedFeaturesAndEpoch;
         StringBuilder bld = new StringBuilder();
         bld.append("FeatureManager(supportedFeatures={");
         bld.append(supportedFeatures.keySet().stream().sorted().
             map(k -> k + ": " + supportedFeatures.get(k)).
             collect(Collectors.joining(", ")));
         bld.append("}, finalizedFeatures={");
-        bld.append(finalizedFeatures.keySet().stream().sorted().
-                map(k -> k + ": " + finalizedFeatures.get(k)).
+        bld.append(finalized.finalizedFeatures.keySet().stream().sorted().
+                map(k -> k + ": " + finalized.finalizedFeatures.get(k)).
                 collect(Collectors.joining(", ")));
-        bld.append("})");
+        bld.append("}, epoch=").append(finalized.epoch);
+        bld.append(")");
         return bld.toString();
     }
 }
