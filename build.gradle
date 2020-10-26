@@ -1442,10 +1442,10 @@ project(':streams:streams-scala') {
   }
 
   artifacts {
-      archives scaladocJar
+    archives scaladocJar
   }
 
-    test.dependsOn(':spotlessScalaCheck')
+  test.dependsOn(':spotlessScalaCheck')
 }
 
 project(':streams:test-utils') {
