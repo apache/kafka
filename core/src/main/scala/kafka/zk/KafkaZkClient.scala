@@ -523,7 +523,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   /**
    * Sets the topic znode with the given assignment.
    * @param topic the topic whose assignment is being set.
-   * @param topicId optional topic ID if the topic has one
+   * @param topicId unique topic ID for the topic
    * @param assignment the partition to replica mapping to set for the given topic
    * @param expectedControllerEpochZkVersion expected controller epoch zkVersion.
    * @throws KeeperException if there is an error while setting assignment
@@ -539,7 +539,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   /**
    * Create the topic znode with the given assignment.
    * @param topic the topic whose assignment is being set.
-   * @param topicId optional topic ID if the topic has one
+   * @param topicId unique topic ID for the topic
    * @param assignment the partition to replica mapping to set for the given topic
    * @throws KeeperException if there is an error while creating assignment
    */
@@ -609,6 +609,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * Gets the topic IDs for the given topics.
    * @param topics the topics we wish to retrieve the Topic IDs for
    * @return the Topic IDs
+   * @throws IllegalStateException if a topic in topics does not have a Topic ID
    */
   def getTopicIdsForTopics(topics: Set[String]): Map[String, UUID] = {
     val getDataRequests = topics.map(topic => GetDataRequest(TopicZNode.path(topic), ctx = Some(topic)))
@@ -620,9 +621,10 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
         case Code.NONODE => None
         case _ => throw getDataResponse.resultException.get
       }
-    }.filter(_.flatMap(_.topicId).isDefined)
-      .map(_.get)
-      .map(topicIdAssignment => (topicIdAssignment.topic, topicIdAssignment.topicId.get))
+    }.map(_.get)
+      .map(topicIdAssignment => (topicIdAssignment.topic,
+        topicIdAssignment.topicId.getOrElse(
+          throw new IllegalStateException("Topic " + topicIdAssignment.topic + " does not have a topic ID."))))
       .toMap
   }
 
@@ -682,8 +684,8 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     val getDataResponses = retryRequestsUntilConnected(getDataRequests.toSeq)
     getDataResponses.flatMap { getDataResponse =>
       val topic = getDataResponse.ctx.get.asInstanceOf[String]
-       if (getDataResponse.resultCode == Code.OK) {
-         val partitionMap = TopicZNode.decode(topic, getDataResponse.data).assignment.map { case (k, v) => (k.partition, v) }
+      if (getDataResponse.resultCode == Code.OK) {
+        val partitionMap = TopicZNode.decode(topic, getDataResponse.data).assignment.map { case (k, v) => (k.partition, v) }
         Map(topic -> partitionMap)
       } else if (getDataResponse.resultCode == Code.NONODE) {
         Map.empty[String, Map[Int, ReplicaAssignment]]

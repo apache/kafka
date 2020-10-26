@@ -1033,7 +1033,7 @@ class KafkaController(val config: KafkaConfig,
       (topicPartition -> assignment)
 
     val setDataResponse = zkClient.setTopicAssignmentRaw(topicPartition.topic,
-      controllerContext.topicIds.get(topicPartition.topic).get,
+      controllerContext.topicIds(topicPartition.topic),
       topicAssignment, controllerContext.epochZkVersion)
     setDataResponse.resultCode match {
       case Code.OK =>
@@ -1691,7 +1691,7 @@ class KafkaController(val config: KafkaConfig,
       }.toMap
 
       zkClient.setTopicAssignment(topic,
-        controllerContext.topicIds.get(topic).get,
+        controllerContext.topicIds(topic),
         existingPartitionReplicaAssignment,
         controllerContext.epochZkVersion)
     }

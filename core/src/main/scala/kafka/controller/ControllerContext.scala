@@ -131,19 +131,22 @@ class ControllerContext {
   }
 
   def addTopicId(topic: String, id: UUID): Unit = {
+    if (!allTopics.contains(topic))
+      throw new IllegalStateException("topic " + topic +  " is not contained in all topics.")
+
     topicIds.get(topic).foreach { existingId =>
       if (!existingId.equals(id))
         throw new IllegalStateException("topic ID map already contained ID for topic "
           + topic + " and new ID " + id + " did not match existing ID "
           + existingId)
     }
-    topicIds.put(topic, id)
     topicNames.get(id).foreach { existingName =>
       if (!existingName.equals(topic))
         throw new IllegalStateException("topic name map already contained id "
           + id + " and new name " + topic + " did not match existing name "
           + existingName)
     }
+    topicIds.put(topic, id)
     topicNames.put(id, topic)
   }
 
@@ -316,9 +319,8 @@ class ControllerContext {
     topicsToBeDeleted -= topic
     topicsWithDeletionStarted -= topic
     allTopics -= topic
-    if (topicIds.get(topic)!= None) {
-      topicNames.remove(topicIds.get(topic).get)
-      topicIds.remove(topic)
+    topicIds.remove(topic).foreach { topicId =>
+      topicNames.remove(topicId)
     }
     partitionAssignments.remove(topic).foreach { assignments =>
       assignments.keys.foreach { partition =>
