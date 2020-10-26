@@ -39,6 +39,10 @@ public class VersionRange {
         return max;
     }
 
+    public boolean contains(VersionRange other) {
+        return other.min >= min && other.max <= max;
+    }
+
     @Override
     public int hashCode() {
         return Objects.hash(min, max);
