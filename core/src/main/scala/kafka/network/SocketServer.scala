@@ -79,12 +79,14 @@ class SocketServer(val config: KafkaConfig,
                    val metrics: Metrics,
                    val time: Time,
                    val credentialProvider: CredentialProvider,
-                   val allowDisabledApis: Boolean = false)
+                   val allowDisabledApis: Boolean = false,
+                   providedLogContext: Option[LogContext] = None)
   extends Logging with KafkaMetricsGroup with BrokerReconfigurable {
 
   private val maxQueuedRequests = config.queuedMaxRequests
 
-  private val logContext = new LogContext(s"[SocketServer brokerId=${config.brokerId}] ")
+  val logContext = providedLogContext.getOrElse(new LogContext(s"[SocketServer brokerId=${config.brokerId}] "))
+
   this.logIdent = logContext.logPrefix
 
   private val memoryPoolSensor = metrics.sensor("MemoryPoolUtilization")
