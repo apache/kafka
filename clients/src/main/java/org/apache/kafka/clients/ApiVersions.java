@@ -53,8 +53,10 @@ public class ApiVersions {
         // we will need to convert the messages when they are ready to be sent.
         byte maxUsableMagic = RecordBatch.CURRENT_MAGIC_VALUE;
         for (NodeApiVersions versions : this.nodeApiVersions.values()) {
-            byte nodeMaxUsableMagic = ProduceRequest.requiredMagicForVersion(versions.latestUsableVersion(ApiKeys.PRODUCE));
-            maxUsableMagic = (byte) Math.min(nodeMaxUsableMagic, maxUsableMagic);
+            if (versions.apiVersion(ApiKeys.PRODUCE) != null) {
+                byte nodeMaxUsableMagic = ProduceRequest.requiredMagicForVersion(versions.latestUsableVersion(ApiKeys.PRODUCE));
+                maxUsableMagic = (byte) Math.min(nodeMaxUsableMagic, maxUsableMagic);
+            }
         }
         return maxUsableMagic;
     }
