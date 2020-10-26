@@ -22,7 +22,6 @@ import kafka.utils.TestUtils._
 import java.io.{DataInputStream, File}
 import java.net.ServerSocket
 import java.util.Collections
-import java.util.UUID
 import java.util.concurrent.{Executors, TimeUnit}
 
 import kafka.cluster.Broker
@@ -31,6 +30,7 @@ import kafka.log.LogManager
 import kafka.zookeeper.ZooKeeperClientTimeoutException
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
+import org.apache.kafka.common.UUID
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName

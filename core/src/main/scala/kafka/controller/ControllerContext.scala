@@ -17,11 +17,10 @@
 
 package kafka.controller
 
-import java.util.UUID
-
 import kafka.cluster.Broker
 import kafka.utils.Implicits._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.UUID
 
 import scala.collection.{Map, Seq, Set, mutable}
 

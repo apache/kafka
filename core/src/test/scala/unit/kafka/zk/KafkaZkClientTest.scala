@@ -16,7 +16,7 @@
 */
 package kafka.zk
 
-import java.util.{Collections, Properties, UUID}
+import java.util.{Collections, Properties}
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 
@@ -25,7 +25,7 @@ import kafka.cluster.{Broker, EndPoint}
 import kafka.log.LogConfig
 import kafka.server.{ConfigType, KafkaConfig}
 import kafka.utils.CoreUtils
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, UUID}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.TokenInformation

@@ -20,10 +20,10 @@ package kafka.server
 import java.io.{BufferedReader, BufferedWriter, File, FileOutputStream, IOException, OutputStreamWriter}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{FileAlreadyExistsException, Files, Paths}
-import java.util.UUID
 import java.util.regex.Pattern
 
 import kafka.utils.Logging
+import org.apache.kafka.common.UUID
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.utils.Utils
 

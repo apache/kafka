@@ -193,17 +193,13 @@ public class UpdateMetadataRequestTest {
 
             assertEquals(new HashSet<>(partitionStates), iterableToSet(deserializedRequest.partitionStates()));
             assertEquals(liveBrokers, deserializedRequest.liveBrokers());
-            assertEquals(1, request.controllerId());
-            assertEquals(2, request.controllerEpoch());
-            assertEquals(3, request.brokerEpoch());
-
-            // Since there are no topicIds states prior to version 7, the topicIds map contains all ZERO_UUID
-            for (UpdateMetadataTopicState ts : request.topicStates()) {
-                if (version < 7)
-                   assertEquals(ts.topicID(), UUID.ZERO_UUID);
-                else
-                    assertEquals(ts.topicID(), topicIds.get(ts.topicName()));
-            }
+            assertEquals(1, deserializedRequest.controllerId());
+            assertEquals(2, deserializedRequest.controllerEpoch());
+            // Broker epoch is only supported from version 5
+            if (version >= 5)
+                assertEquals(3, deserializedRequest.brokerEpoch());
+            else
+                assertEquals(-1, deserializedRequest.brokerEpoch());
         }
     }
 

@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.errors.MissingSourceTopicException;
+import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.internals.StreamThread.State;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.junit.Before;
@@ -67,6 +68,42 @@ public class StreamsRebalanceListenerTest {
             () -> streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList())
         );
         assertThat(exception.getMessage(), is("One or more source topics were missing during rebalance"));
+        verify(taskManager, streamThread);
+    }
+
+    @Test
+    public void shouldSwallowVersionProbingError() {
+        expect(streamThread.setState(State.PARTITIONS_ASSIGNED)).andStubReturn(State.PARTITIONS_REVOKED);
+        taskManager.handleRebalanceComplete();
+        replay(taskManager, streamThread);
+        assignmentErrorCode.set(AssignorError.VERSION_PROBING.code());
+        streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList());
+        verify(taskManager, streamThread);
+    }
+
+    @Test
+    public void shouldThrowTaskAssignmentException() {
+        replay(taskManager, streamThread);
+        assignmentErrorCode.set(AssignorError.ASSIGNMENT_ERROR.code());
+
+        final TaskAssignmentException exception = assertThrows(
+            TaskAssignmentException.class,
+            () -> streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList())
+        );
+        assertThat(exception.getMessage(), is("Hit an unexpected exception during task assignment phase of rebalance"));
+        verify(taskManager, streamThread);
+    }
+
+    @Test
+    public void shouldThrowTaskAssignmentExceptionOnUnrecognizedErrorCode() {
+        replay(taskManager, streamThread);
+        assignmentErrorCode.set(Integer.MAX_VALUE);
+
+        final TaskAssignmentException exception = assertThrows(
+            TaskAssignmentException.class,
+            () -> streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList())
+        );
+        assertThat(exception.getMessage(), is("Hit an unrecognized exception during rebalance"));
         verify(taskManager, streamThread);
     }
 

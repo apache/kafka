@@ -21,6 +21,7 @@ import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.UUID;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBinding;
@@ -192,7 +193,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
@@ -1576,6 +1576,10 @@ public class RequestResponseTest {
                 .setReplicas(replicas)
                 .setOfflineReplicas(offlineReplicas));
 
+        HashMap<String, UUID> topicIds = new HashMap<>();
+        topicIds.put("topic5", UUID.randomUUID());
+        topicIds.put("topic20", UUID.randomUUID());
+
         SecurityProtocol plaintext = SecurityProtocol.PLAINTEXT;
         List<UpdateMetadataEndpoint> endpoints1 = new ArrayList<>();
         endpoints1.add(new UpdateMetadataEndpoint()
@@ -1616,7 +1620,7 @@ public class RequestResponseTest {
                 .setRack(rack)
         );
         return new UpdateMetadataRequest.Builder((short) version, 1, 10, 0, partitionStates,
-            liveBrokers).build();
+            topicIds, liveBrokers).build();
     }
 
     private UpdateMetadataResponse createUpdateMetadataResponse() {

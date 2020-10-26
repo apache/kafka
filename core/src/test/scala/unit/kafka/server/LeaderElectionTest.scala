@@ -18,9 +18,8 @@
 package kafka.server
 
 import java.util.Collections
-import java.util.UUID
 
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, UUID}
 
 import scala.jdk.CollectionConverters._
 import kafka.api.LeaderAndIsr

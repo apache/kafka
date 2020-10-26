@@ -23,6 +23,7 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
+import org.apache.kafka.clients.admin.internals.ConsumerGroupOperationContext;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
@@ -115,10 +116,12 @@ import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResp
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.quota.ClientQuotaFilterComponent;
+import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.AlterClientQuotasResponse;
 import org.apache.kafka.common.requests.AlterPartitionReassignmentsResponse;
 import org.apache.kafka.common.requests.AlterReplicaLogDirsResponse;
@@ -3483,10 +3486,11 @@ public class KafkaAdminClientTest {
             partitionLevelErrResult.values().get(tp2).get();
 
             // 4. top-level error
+            String errorMessage = "this is custom error message";
             AlterPartitionReassignmentsResponseData topLevelErrResponseData =
                     new AlterPartitionReassignmentsResponseData()
                             .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code())
-                            .setErrorMessage(Errors.CLUSTER_AUTHORIZATION_FAILED.message())
+                            .setErrorMessage(errorMessage)
                             .setResponses(Arrays.asList(
                                     new ReassignableTopicResponse()
                                             .setName("A")
@@ -3497,9 +3501,9 @@ public class KafkaAdminClientTest {
                             );
             env.kafkaClient().prepareResponse(new AlterPartitionReassignmentsResponse(topLevelErrResponseData));
             AlterPartitionReassignmentsResult topLevelErrResult = env.adminClient().alterPartitionReassignments(reassignments);
-            TestUtils.assertFutureError(topLevelErrResult.all(), Errors.CLUSTER_AUTHORIZATION_FAILED.exception().getClass());
-            TestUtils.assertFutureError(topLevelErrResult.values().get(tp1), Errors.CLUSTER_AUTHORIZATION_FAILED.exception().getClass());
-            TestUtils.assertFutureError(topLevelErrResult.values().get(tp2), Errors.CLUSTER_AUTHORIZATION_FAILED.exception().getClass());
+            assertEquals(errorMessage, TestUtils.assertFutureThrows(topLevelErrResult.all(), Errors.CLUSTER_AUTHORIZATION_FAILED.exception().getClass()).getMessage());
+            assertEquals(errorMessage, TestUtils.assertFutureThrows(topLevelErrResult.values().get(tp1), Errors.CLUSTER_AUTHORIZATION_FAILED.exception().getClass()).getMessage());
+            assertEquals(errorMessage, TestUtils.assertFutureThrows(topLevelErrResult.values().get(tp2), Errors.CLUSTER_AUTHORIZATION_FAILED.exception().getClass()).getMessage());
 
             // 5. unrepresentable topic name error
             TopicPartition invalidTopicTP = new TopicPartition("", 0);
@@ -4721,10 +4725,10 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
             final String user0Name = "user0";
-            ScramMechanism user0ScramMechanism0 = ScramMechanism.SCRAM_SHA_256;
-            int user0Iterations0 = 4096;
-            ScramMechanism user0ScramMechanism1 = ScramMechanism.SCRAM_SHA_512;
-            int user0Iterations1 = 8192;
+            final ScramMechanism user0ScramMechanism0 = ScramMechanism.SCRAM_SHA_256;
+            final int user0Iterations0 = 4096;
+            final ScramMechanism user0ScramMechanism1 = ScramMechanism.SCRAM_SHA_512;
+            final int user0Iterations1 = 8192;
 
             final CredentialInfo user0CredentialInfo0 = new CredentialInfo();
             user0CredentialInfo0.setMechanism(user0ScramMechanism0.type());
@@ -4734,50 +4738,57 @@ public class KafkaAdminClientTest {
             user0CredentialInfo1.setIterations(user0Iterations1);
 
             final String user1Name = "user1";
-            ScramMechanism user1ScramMechanism = ScramMechanism.SCRAM_SHA_256;
-            int user1Iterations = 4096;
+            final ScramMechanism user1ScramMechanism = ScramMechanism.SCRAM_SHA_256;
+            final int user1Iterations = 4096;
 
             final CredentialInfo user1CredentialInfo = new CredentialInfo();
             user1CredentialInfo.setMechanism(user1ScramMechanism.type());
             user1CredentialInfo.setIterations(user1Iterations);
 
-            DescribeUserScramCredentialsResponseData responseData = new DescribeUserScramCredentialsResponseData();
+            final DescribeUserScramCredentialsResponseData responseData = new DescribeUserScramCredentialsResponseData();
             responseData.setResults(Arrays.asList(
                     new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult()
                             .setUser(user0Name)
                             .setCredentialInfos(Arrays.asList(user0CredentialInfo0, user0CredentialInfo1)),
                     new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult()
                             .setUser(user1Name)
-                            .setCredentialInfos(Arrays.asList(user1CredentialInfo))));
+                            .setCredentialInfos(singletonList(user1CredentialInfo))));
+            final DescribeUserScramCredentialsResponse response = new DescribeUserScramCredentialsResponse(responseData);
 
-            env.kafkaClient().prepareResponse(new DescribeUserScramCredentialsResponse(responseData));
+            final Set<String> usersRequestedSet = new HashSet<>();
+            usersRequestedSet.add(user0Name);
+            usersRequestedSet.add(user1Name);
 
-            List<String> usersRequestedList = asList(user0Name, user1Name);
-            Set<String> usersRequestedSet = usersRequestedList.stream().collect(Collectors.toSet());
-            DescribeUserScramCredentialsResult result = env.adminClient().describeUserScramCredentials(usersRequestedList);
-            Map<String, UserScramCredentialsDescription> descriptionResults = result.all().get();
-            KafkaFuture<UserScramCredentialsDescription> user0DescriptionFuture = result.description(user0Name);
-            KafkaFuture<UserScramCredentialsDescription> user1DescriptionFuture = result.description(user1Name);
-            Set<String> usersDescribedFromUsersSet = result.users().get().stream().collect(Collectors.toSet());
-            assertEquals(usersRequestedSet, usersDescribedFromUsersSet);
-            Set<String> usersDescribedFromMapKeySet = descriptionResults.keySet();
-            assertEquals(usersRequestedSet, usersDescribedFromMapKeySet);
+            for (final List<String> users : asList(null, new ArrayList<String>(), asList(user0Name, null, user1Name))) {
+                env.kafkaClient().prepareResponse(response);
 
-            UserScramCredentialsDescription userScramCredentialsDescription0 = descriptionResults.get(user0Name);
-            assertEquals(user0Name, userScramCredentialsDescription0.name());
-            assertEquals(2, userScramCredentialsDescription0.credentialInfos().size());
-            assertEquals(user0ScramMechanism0, userScramCredentialsDescription0.credentialInfos().get(0).mechanism());
-            assertEquals(user0Iterations0, userScramCredentialsDescription0.credentialInfos().get(0).iterations());
-            assertEquals(user0ScramMechanism1, userScramCredentialsDescription0.credentialInfos().get(1).mechanism());
-            assertEquals(user0Iterations1, userScramCredentialsDescription0.credentialInfos().get(1).iterations());
-            assertEquals(userScramCredentialsDescription0, user0DescriptionFuture.get());
+                final DescribeUserScramCredentialsResult result = env.adminClient().describeUserScramCredentials(users);
+                final Map<String, UserScramCredentialsDescription> descriptionResults = result.all().get();
+                final KafkaFuture<UserScramCredentialsDescription> user0DescriptionFuture = result.description(user0Name);
+                final KafkaFuture<UserScramCredentialsDescription> user1DescriptionFuture = result.description(user1Name);
 
-            UserScramCredentialsDescription userScramCredentialsDescription1 = descriptionResults.get(user1Name);
-            assertEquals(user1Name, userScramCredentialsDescription1.name());
-            assertEquals(1, userScramCredentialsDescription1.credentialInfos().size());
-            assertEquals(user1ScramMechanism, userScramCredentialsDescription1.credentialInfos().get(0).mechanism());
-            assertEquals(user1Iterations, userScramCredentialsDescription1.credentialInfos().get(0).iterations());
-            assertEquals(userScramCredentialsDescription1, user1DescriptionFuture.get());
+                final Set<String> usersDescribedFromUsersSet = new HashSet<>(result.users().get());
+                assertEquals(usersRequestedSet, usersDescribedFromUsersSet);
+
+                final Set<String> usersDescribedFromMapKeySet = descriptionResults.keySet();
+                assertEquals(usersRequestedSet, usersDescribedFromMapKeySet);
+
+                final UserScramCredentialsDescription userScramCredentialsDescription0 = descriptionResults.get(user0Name);
+                assertEquals(user0Name, userScramCredentialsDescription0.name());
+                assertEquals(2, userScramCredentialsDescription0.credentialInfos().size());
+                assertEquals(user0ScramMechanism0, userScramCredentialsDescription0.credentialInfos().get(0).mechanism());
+                assertEquals(user0Iterations0, userScramCredentialsDescription0.credentialInfos().get(0).iterations());
+                assertEquals(user0ScramMechanism1, userScramCredentialsDescription0.credentialInfos().get(1).mechanism());
+                assertEquals(user0Iterations1, userScramCredentialsDescription0.credentialInfos().get(1).iterations());
+                assertEquals(userScramCredentialsDescription0, user0DescriptionFuture.get());
+
+                final UserScramCredentialsDescription userScramCredentialsDescription1 = descriptionResults.get(user1Name);
+                assertEquals(user1Name, userScramCredentialsDescription1.name());
+                assertEquals(1, userScramCredentialsDescription1.credentialInfos().size());
+                assertEquals(user1ScramMechanism, userScramCredentialsDescription1.credentialInfos().get(0).mechanism());
+                assertEquals(user1Iterations, userScramCredentialsDescription1.credentialInfos().get(0).iterations());
+                assertEquals(userScramCredentialsDescription1, user1DescriptionFuture.get());
+            }
         }
     }
 
@@ -4907,6 +4918,40 @@ public class KafkaAdminClientTest {
             TestUtils.assertFutureThrows(result.descriptions().get(0), ApiException.class);
             assertNotNull(result.descriptions().get(1).get());
         }
+    }
+
+    @Test
+    public void testHasCoordinatorMoved() {
+        Map<Errors, Integer> errors = new HashMap<>();
+        AbstractResponse response = new AbstractResponse() {
+            @Override
+            public Map<Errors, Integer> errorCounts() {
+                return errors;
+            }
+            @Override
+            protected Struct toStruct(short version) {
+                return null;
+            }
+        };
+
+        assertFalse(ConsumerGroupOperationContext.hasCoordinatorMoved(response));
+
+        errors.put(Errors.NOT_COORDINATOR, 1);
+        assertTrue(ConsumerGroupOperationContext.hasCoordinatorMoved(response));
+    }
+
+    @Test
+    public void testShouldRefreshCoordinator() {
+        Map<Errors, Integer> errorCounts = new HashMap<>();
+
+        assertFalse(ConsumerGroupOperationContext.shouldRefreshCoordinator(errorCounts));
+
+        errorCounts.put(Errors.COORDINATOR_LOAD_IN_PROGRESS, 1);
+        assertTrue(ConsumerGroupOperationContext.shouldRefreshCoordinator(errorCounts));
+
+        errorCounts.clear();
+        errorCounts.put(Errors.COORDINATOR_NOT_AVAILABLE, 1);
+        assertTrue(ConsumerGroupOperationContext.shouldRefreshCoordinator(errorCounts));
     }
 
     private DescribeLogDirsResponse prepareDescribeLogDirsResponse(Errors error, String logDir) {

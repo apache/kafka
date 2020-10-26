@@ -18,7 +18,6 @@
 package kafka.controller
 
 import java.util.Properties
-import java.util.UUID
 import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue}
 
 import com.yammer.metrics.core.Timer
@@ -31,7 +30,7 @@ import org.apache.kafka.common.errors.{ControllerMovedException, StaleBrokerEpoc
 import org.apache.kafka.common.feature.Features
 import org.apache.kafka.common.metrics.KafkaMetric
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.{ElectionType, TopicPartition}
+import org.apache.kafka.common.{ElectionType, TopicPartition, UUID}
 import org.apache.log4j.Level
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{After, Before, Test}

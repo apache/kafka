@@ -36,7 +36,7 @@ import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile, Of
 import kafka.utils._
 import kafka.utils.Implicits._
 import kafka.zk.KafkaZkClient
-import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicPartition}
+import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicPartition, UUID}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
@@ -47,7 +47,7 @@ import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPart
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.{Errors, MessageUtil}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.replica.PartitionView.DefaultPartitionView
@@ -1372,7 +1372,7 @@ class ReplicaManager(val config: KafkaConfig,
               requestLeaderEpoch > currentLeaderEpoch ||
                 (requestLeaderEpoch == currentLeaderEpoch &&
                   partition.log.map(_.topicID).isEmpty &&
-                  topicIds.get(topicPartition.topic()) != MessageUtil.ZERO_UUID)
+                  topicIds.get(topicPartition.topic()) != UUID.ZERO_UUID)
             }
 
             // Next check partition's leader epoch
@@ -1450,13 +1450,13 @@ class ReplicaManager(val config: KafkaConfig,
             else {
               val id = topicIds.get(topicPartition.topic())
               // Ensure we have not received a request from an older protocol
-              if (id != null && !id.equals(MessageUtil.ZERO_UUID)) {
+              if (id != null && !id.equals(UUID.ZERO_UUID)) {
                 val log = localLog(topicPartition).get
                 // Check if the topic ID is in memory, if not, it must be new to the broker.
                 // If the broker previously wrote it to file, it would be recovered on restart after failure.
                 // If the topic ID is not the default (ZERO_UUID), a topic ID is being used for the given topic.
                 // If the topic ID in the log does not match the one in the request, the broker's topic must be stale.
-                if (!log.topicID.equals(MessageUtil.ZERO_UUID) && !log.topicID.equals(topicIds.get(topicPartition.topic))) {
+                if (!log.topicID.equals(UUID.ZERO_UUID) && !log.topicID.equals(topicIds.get(topicPartition.topic))) {
                   stateChangeLogger.warn(s"Topic Id in memory: ${log.topicID.toString} does not" +
                     s" match the topic Id provided in the request: " +
                     s"${topicIds.get(topicPartition.topic).toString}.")

@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.UUID;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData;
@@ -26,7 +27,6 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrParti
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.MessageTestUtil;
-import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
@@ -37,7 +37,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -159,8 +158,8 @@ public class LeaderAndIsrRequestTest {
             //  In versions 2-4 there are TopicStates, but no topicIds, so deserialized requests will have
             //  Zero UUIDs in place.
             if (version > 1 && version < 5) {
-                topicIds.put("topic0", MessageUtil.ZERO_UUID);
-                topicIds.put("topic1", MessageUtil.ZERO_UUID);
+                topicIds.put("topic0", UUID.ZERO_UUID);
+                topicIds.put("topic1", UUID.ZERO_UUID);
             }
 
             assertEquals(new HashSet<>(partitionStates), iterableToSet(deserializedRequest.partitionStates()));
