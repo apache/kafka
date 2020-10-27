@@ -27,6 +27,7 @@ import java.util.Iterator;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -206,9 +207,18 @@ public class RecordHeadersTest {
         assertEquals(2, getCount(newHeaders));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNpeWhenAddingNullHeader() {
-        new RecordHeaders().add(null);
+        final RecordHeaders recordHeaders = new RecordHeaders();
+
+        assertThrows(NullPointerException.class, () -> recordHeaders.add(null));
+    }
+
+    @Test
+    public void shouldThrowNpeWhenAddingCollectionWithNullHeader() {
+        final Header[] headers = new Header[1];
+
+        assertThrows(NullPointerException.class, () -> new RecordHeaders(headers));
     }
 
     private int getCount(Headers headers) {
