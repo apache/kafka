@@ -165,10 +165,7 @@ public class CandidateState implements EpochState {
      * @return The set of unrecorded voters
      */
     public Set<Integer> unrecordedVoters() {
-        return voteStates.entrySet().stream()
-            .filter(entry -> entry.getValue() == State.UNRECORDED)
-            .map(Map.Entry::getKey)
-            .collect(Collectors.toSet());
+        return votersInState(State.UNRECORDED);
     }
 
     /**

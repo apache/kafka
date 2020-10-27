@@ -21,32 +21,22 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
+import org.apache.kafka.streams.kstream.internals.WrappingNullableSerde;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
 
 import java.nio.ByteBuffer;
 import java.util.Objects;
 import java.util.function.Supplier;
 
-public class SubscriptionWrapperSerde<K> implements Serde<SubscriptionWrapper<K>> {
-    private final SubscriptionWrapperSerializer<K> serializer;
-    private final SubscriptionWrapperDeserializer<K> deserializer;
-
+public class SubscriptionWrapperSerde<K> extends WrappingNullableSerde<SubscriptionWrapper<K>, K, Void> {
     public SubscriptionWrapperSerde(final Supplier<String> primaryKeySerializationPseudoTopicSupplier,
                                     final Serde<K> primaryKeySerde) {
-        serializer = new SubscriptionWrapperSerializer<>(primaryKeySerializationPseudoTopicSupplier,
-                                                         primaryKeySerde == null ? null : primaryKeySerde.serializer());
-        deserializer = new SubscriptionWrapperDeserializer<>(primaryKeySerializationPseudoTopicSupplier,
-                                                             primaryKeySerde == null ? null : primaryKeySerde.deserializer());
-    }
-
-    @Override
-    public Serializer<SubscriptionWrapper<K>> serializer() {
-        return serializer;
-    }
-
-    @Override
-    public Deserializer<SubscriptionWrapper<K>> deserializer() {
-        return deserializer;
+        super(
+            new SubscriptionWrapperSerializer<>(primaryKeySerializationPseudoTopicSupplier,
+                                                primaryKeySerde == null ? null : primaryKeySerde.serializer()),
+            new SubscriptionWrapperDeserializer<>(primaryKeySerializationPseudoTopicSupplier,
+                                                  primaryKeySerde == null ? null : primaryKeySerde.deserializer())
+        );
     }
 
     private static class SubscriptionWrapperSerializer<K>

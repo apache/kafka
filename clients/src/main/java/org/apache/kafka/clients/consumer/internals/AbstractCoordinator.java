@@ -948,7 +948,7 @@ public abstract class AbstractCoordinator implements Closeable {
     synchronized void resetGenerationOnResponseError(ApiKeys api, Errors error) {
         log.debug("Resetting generation after encountering {} from {} response and requesting re-join", error, api);
 
-        resetState();
+        resetStateAndRejoin();
     }
 
     synchronized void resetGenerationOnLeaveGroup() {

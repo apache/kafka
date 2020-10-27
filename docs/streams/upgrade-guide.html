@@ -101,14 +101,10 @@
         The old variable is deprecated. Note, that the parameter name itself is not affected.
         (Cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-626%3A+Rename+StreamsConfig+config+variable+name">KIP-629</a>.)
     </p>
-
     <p>
         The configuration parameter <code>retries</code> is deprecated in favor of the new parameter <code>task.timeout.ms</code>.
         Kafka Streams' runtime ignores <code>retries</code> if set, however, it would still forward the parameter
-        to its internal clients. Note though, that <code>retries</code> is deprecated for the producer and admin client, too.
-        Thus, instead of setting <code>retries</code>, you should configure the corresponding client timeouts, namely
-        <code>delivery.timeout.ms</code> and <code>max.block.ms</code> for the producer and
-        <code>default.api.timeout.ms</code> for the admin client.
+        to its internal clients.
     </p>
     <p>
         We added <code>SlidingWindows</code> as an option for <code>windowedBy()</code> windowed aggregations as described in

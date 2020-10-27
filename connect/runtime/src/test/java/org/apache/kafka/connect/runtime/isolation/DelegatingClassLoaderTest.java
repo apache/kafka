@@ -36,7 +36,7 @@ public class DelegatingClassLoaderTest {
     public TemporaryFolder pluginDir = new TemporaryFolder();
 
     @Test
-    public void testWhiteListedManifestResources() {
+    public void testPermittedManifestResources() {
         assertTrue(
             DelegatingClassLoader.serviceLoaderManifestForPlugin("META-INF/services/org.apache.kafka.connect.rest.ConnectRestExtension"));
         assertTrue(

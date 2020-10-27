@@ -40,6 +40,7 @@ import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.streams.processor.ThreadMetadata;
+import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
@@ -300,6 +301,11 @@ public class StreamThread extends Thread {
         final LogContext logContext = new LogContext(logPrefix);
         final Logger log = logContext.logger(StreamThread.class);
 
+        final ReferenceContainer referenceContainer = new ReferenceContainer();
+        referenceContainer.adminClient = adminClient;
+        referenceContainer.streamsMetadataState = streamsMetadataState;
+        referenceContainer.time = time;
+
         log.info("Creating restore consumer client");
         final Map<String, Object> restoreConsumerConfigs = config.getRestoreConsumerConfigs(getRestoreConsumerClientId(threadId));
         final Consumer<byte[], byte[]> restoreConsumer = clientSupplier.getRestoreConsumer(restoreConsumerConfigs);
@@ -348,18 +354,12 @@ public class StreamThread extends Thread {
             stateDirectory,
             StreamThread.processingMode(config)
         );
+        referenceContainer.taskManager = taskManager;
 
         log.info("Creating consumer client");
         final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         final Map<String, Object> consumerConfigs = config.getMainConsumerConfigs(applicationId, getConsumerClientId(threadId), threadIdx);
-        consumerConfigs.put(StreamsConfig.InternalConfig.TIME, time);
-        consumerConfigs.put(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR, taskManager);
-        consumerConfigs.put(StreamsConfig.InternalConfig.STREAMS_METADATA_STATE_FOR_PARTITION_ASSIGNOR, streamsMetadataState);
-        consumerConfigs.put(StreamsConfig.InternalConfig.STREAMS_ADMIN_CLIENT, adminClient);
-        final AtomicInteger assignmentErrorCode = new AtomicInteger();
-        consumerConfigs.put(StreamsConfig.InternalConfig.ASSIGNMENT_ERROR_CODE, assignmentErrorCode);
-        final AtomicLong nextScheduledRebalanceMs = new AtomicLong(Long.MAX_VALUE);
-        consumerConfigs.put(StreamsConfig.InternalConfig.NEXT_SCHEDULED_REBALANCE_MS, nextScheduledRebalanceMs);
+        consumerConfigs.put(StreamsConfig.InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
 
         final String originalReset = (String) consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
         // If there are any overrides, we never fall through to the consumer, but only handle offset management ourselves.
@@ -370,6 +370,7 @@ public class StreamThread extends Thread {
         final Consumer<byte[], byte[]> mainConsumer = clientSupplier.getConsumer(consumerConfigs);
         changelogReader.setMainConsumer(mainConsumer);
         taskManager.setMainConsumer(mainConsumer);
+        referenceContainer.mainConsumer = mainConsumer;
 
         final StreamThread streamThread = new StreamThread(
             time,
@@ -384,8 +385,8 @@ public class StreamThread extends Thread {
             builder,
             threadId,
             logContext,
-            assignmentErrorCode,
-            nextScheduledRebalanceMs
+            referenceContainer.assignmentErrorCode,
+            referenceContainer.nextScheduledRebalanceMs
         );
 
         taskManager.setPartitionResetter(partitions -> streamThread.resetOffsets(partitions, null));
@@ -725,7 +726,7 @@ public class StreamThread extends Thread {
             // transit to restore active is idempotent so we can call it multiple times
             changelogReader.enforceRestoreActive();
 
-            if (taskManager.tryToCompleteRestoration()) {
+            if (taskManager.tryToCompleteRestoration(now)) {
                 changelogReader.transitToUpdateStandby();
 
                 setState(State.RUNNING);
@@ -741,7 +742,7 @@ public class StreamThread extends Thread {
         }
         // we can always let changelog reader try restoring in order to initialize the changelogs;
         // if there's no active restoring or standby updating it would not try to fetch any data
-        changelogReader.restore();
+        changelogReader.restore(taskManager.tasks());
         log.debug("Idempotent restore call done. Thread state has not changed.");
     }
 
@@ -1090,9 +1091,5 @@ public class StreamThread extends Thread {
 
     Admin adminClient() {
         return adminClient;
-    }
-
-    InternalTopologyBuilder internalTopologyBuilder() {
-        return builder;
     }
 }

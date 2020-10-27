@@ -97,6 +97,9 @@ import java.util.function.Supplier;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
+import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -1011,11 +1014,11 @@ public class TransactionManagerTest {
         assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
 
         client.disconnect(brokerNode.idString());
-        client.blackout(brokerNode, 100);
+        client.backoff(brokerNode, 100);
         // send pid to coordinator. Should get disconnected before the send and resend the FindCoordinator
         // and InitPid requests.
         runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) == null);
-        time.sleep(110);  // waiting for the blackout period for the node to expire.
+        time.sleep(110);  // waiting for the backoff period for the node to expire.
 
         assertFalse(initPidResult.isCompleted());
         assertFalse(transactionManager.hasProducerId());
@@ -2060,6 +2063,53 @@ public class TransactionManagerTest {
     }
 
     @Test
+    public void testHandlingOfProducerFencedErrorOnTxnOffsetCommit() {
+        testFatalErrorInTxnOffsetCommit(Errors.PRODUCER_FENCED);
+    }
+
+    @Test
+    public void testHandlingOfTransactionalIdAuthorizationFailedErrorOnTxnOffsetCommit() {
+        testFatalErrorInTxnOffsetCommit(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED);
+    }
+
+    @Test
+    public void testHandlingOfInvalidProducerEpochErrorOnTxnOffsetCommit() {
+        testFatalErrorInTxnOffsetCommit(Errors.INVALID_PRODUCER_EPOCH);
+    }
+
+    @Test
+    public void testHandlingOfUnsupportedForMessageFormatErrorOnTxnOffsetCommit() {
+        testFatalErrorInTxnOffsetCommit(Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT);
+    }
+
+    private void testFatalErrorInTxnOffsetCommit(final Errors error) {
+        doInitTransactions();
+
+        transactionManager.beginTransaction();
+
+        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(tp0, new OffsetAndMetadata(1));
+        offsets.put(tp1, new OffsetAndMetadata(1));
+
+        TransactionalRequestResult addOffsetsResult = transactionManager.sendOffsetsToTransaction(
+            offsets, new ConsumerGroupMetadata(consumerGroupId));
+        prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, producerId, epoch);
+        runUntil(() -> !client.hasPendingResponses());
+        assertThat(addOffsetsResult.isCompleted(), is(false));  // The request should complete only after the TxnOffsetCommit completes.
+
+        Map<TopicPartition, Errors> txnOffsetCommitResponse = new HashMap<>();
+        txnOffsetCommitResponse.put(tp0, Errors.NONE);
+        txnOffsetCommitResponse.put(tp1, error);
+
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
+        prepareTxnOffsetCommitResponse(consumerGroupId, producerId, epoch, txnOffsetCommitResponse);
+
+        runUntil(addOffsetsResult::isCompleted);
+        assertThat(addOffsetsResult.isSuccessful(), is(false));
+        assertThat(addOffsetsResult.error(), instanceOf(error.exception().getClass()));
+    }
+
+    @Test
     public void shouldNotAddPartitionsToTransactionWhenTopicAuthorizationFailed() throws Exception {
         doInitTransactions();
 
@@ -2358,7 +2408,7 @@ public class TransactionManagerTest {
         // expire the batch.
         Node clusterNode = metadata.fetch().nodes().get(0);
         client.disconnect(clusterNode.idString());
-        client.blackout(clusterNode, 100);
+        client.backoff(clusterNode, 100);
 
         runUntil(responseFuture::isDone);
 
@@ -2409,7 +2459,7 @@ public class TransactionManagerTest {
         // expire the batch.
         Node clusterNode = metadata.fetch().nodes().get(0);
         client.disconnect(clusterNode.idString());
-        client.blackout(clusterNode, 100);
+        client.backoff(clusterNode, 100);
 
         runUntil(firstBatchResponse::isDone);
         runUntil(secondBatchResponse::isDone);
@@ -2525,7 +2575,7 @@ public class TransactionManagerTest {
         // expire the batch.
         Node clusterNode = metadata.fetch().nodes().get(0);
         client.disconnect(clusterNode.idString());
-        client.blackout(clusterNode, 100);
+        client.backoff(clusterNode, 100);
 
         runUntil(responseFuture::isDone);  // We should try to flush the produce, but expire it instead without sending anything.
 
@@ -2909,7 +2959,7 @@ public class TransactionManagerTest {
         // expire the batch.
         Node clusterNode = metadata.fetch().nodes().get(0);
         client.disconnect(clusterNode.idString());
-        client.blackout(clusterNode, 100);
+        client.backoff(clusterNode, 100);
 
         runUntil(responseFuture2::isDone); // We should try to flush the produce, but expire it instead without sending anything.
 
@@ -2917,7 +2967,7 @@ public class TransactionManagerTest {
         TransactionalRequestResult abortResult = transactionManager.beginAbort();
 
         sender.runOnce();  // handle the abort
-        time.sleep(110);  // Sleep to make sure the node blackout period has passed
+        time.sleep(110);  // Sleep to make sure the node backoff period has passed
 
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
         prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, initialEpoch);

@@ -18,10 +18,8 @@ Create 3 separate raft quorum properties as the following:
     
     broker.id=1
     listeners=PLAINTEXT://localhost:9092
-    quorum.bootstrap.servers=localhost:9092,localhost:9093,localhost:9094
-    quorum.bootstrap.voters=1,2,3
+    quorum.voters=1@localhost:9092,2@localhost:9093,3@localhost:9094
     log.dirs=/tmp/raft-logs-1
-    verbose=true
     
     zookeeper.connect=localhost:2181
     EOF
@@ -30,10 +28,8 @@ Create 3 separate raft quorum properties as the following:
     
     broker.id=2
     listeners=PLAINTEXT://localhost:9093
-    quorum.bootstrap.servers=localhost:9092,localhost:9093,localhost:9094
-    quorum.bootstrap.voters=1,2,3
+    quorum.voters=1@localhost:9092,2@localhost:9093,3@localhost:9094
     log.dirs=/tmp/raft-logs-2
-    verbose=true
     
     zookeeper.connect=localhost:2181
     EOF
@@ -42,10 +38,8 @@ Create 3 separate raft quorum properties as the following:
     
     broker.id=3
     listeners=PLAINTEXT://localhost:9094
-    quorum.bootstrap.servers=localhost:9092,localhost:9093,localhost:9094
-    quorum.bootstrap.voters=1,2,3
+    quorum.voters=1@localhost:9092,2@localhost:9093,3@localhost:9094
     log.dirs=/tmp/raft-logs-3
-    verbose=true
     
     zookeeper.connect=localhost:2181
     EOF
@@ -64,10 +58,7 @@ You need to use a `VerifiableProducer` to produce monolithic increasing records 
     ./bin/kafka-run-class.sh org.apache.kafka.tools.VerifiableProducer --bootstrap-server http://localhost:9092 \
     --topic __cluster_metadata --max-messages 2000 --throughput 1 --producer.config config/producer.properties
 ### Run Performance Test ###
-Make sure to turn off the printing by setting `verbose=false` in the property 
-files `config/raft-*.properties`, to ensure minimum affection to the performance.
-
-Then run the `ProducerPerformance` module using this example command:
+Run the `ProducerPerformance` module using this example command:
 
     ./bin/kafka-producer-perf-test.sh --topic __cluster_metadata --num-records 2000 --throughput -1 --record-size 10 --producer.config config/producer.properties 
-Collect the print out throughput to compare with Kafka performance.
+

@@ -167,14 +167,23 @@ public class QuorumStateTest {
         Set<Integer> voters = Utils.mkSet(localId, node1, node2);
         store.writeElectionState(ElectionState.withElectedLeader(epoch, localId, voters));
 
+        // If we were previously a leader, we will start as unattached
+        // so that records are always uniquely defined by epoch and offset
+        // even accounting for the loss of unflushed data.
+
+        // The election timeout should be reset after we become a candidate again
+        int jitterMs = 2500;
+        Mockito.doReturn(jitterMs).when(random).nextInt(Mockito.anyInt());
+
         QuorumState state = buildQuorumState(voters);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
-        assertTrue(state.isLeader());
+        assertFalse(state.isLeader());
         assertEquals(epoch, state.epoch());
 
-        LeaderState leaderState = state.leaderStateOrThrow();
-        assertEquals(epoch, leaderState.epoch());
-        assertEquals(Utils.mkSet(node1, node2), leaderState.nonEndorsingFollowers());
+        UnattachedState unattachedState = state.unattachedStateOrThrow();
+        assertEquals(epoch, unattachedState.epoch());
+        assertEquals(electionTimeoutMs + jitterMs,
+            unattachedState.remainingElectionTimeMs(time.milliseconds()));
     }
 
     @Test

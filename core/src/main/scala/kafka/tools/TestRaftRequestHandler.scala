@@ -15,12 +15,13 @@
  * limitations under the License.
  */
 
-package kafka.server
+package kafka.tools
 
 import java.util.Collections
 
 import kafka.network.RequestChannel
 import kafka.raft.KafkaNetworkChannel
+import kafka.server.ApiRequestHandler
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.feature.Features
@@ -34,12 +35,16 @@ import org.apache.kafka.raft.{AckMode, RaftClient}
 
 import scala.jdk.CollectionConverters._
 
-class RaftRequestHandler(networkChannel: KafkaNetworkChannel,
-                         requestChannel: RequestChannel,
-                         time: Time,
-                         client: RaftClient,
-                         metadataPartition: TopicPartition)
-  extends ApiRequestHandler with Logging {
+/**
+ * Simple request handler implementation for use by [[TestRaftServer]].
+ */
+class TestRaftRequestHandler(
+  networkChannel: KafkaNetworkChannel,
+  requestChannel: RequestChannel,
+  time: Time,
+  client: RaftClient,
+  metadataPartition: TopicPartition
+) extends ApiRequestHandler with Logging {
 
   override def handle(request: RequestChannel.Request): Unit = {
     try {

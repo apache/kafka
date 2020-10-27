@@ -20,6 +20,7 @@ package org.apache.kafka.common.message;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.UUID;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopic;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopicCollection;
@@ -65,7 +66,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.UUID;
 import java.util.function.Supplier;
 
 import static java.util.Collections.singletonList;

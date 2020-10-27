@@ -77,7 +77,8 @@ class CachedPartition(val topic: String,
                       var highWatermark: Long,
                       var leaderEpoch: Optional[Integer],
                       var fetcherLogStartOffset: Long,
-                      var localLogStartOffset: Long)
+                      var localLogStartOffset: Long,
+                      var lastFetchedEpoch: Optional[Integer])
     extends ImplicitLinkedHashCollection.Element {
 
   var cachedNext: Int = ImplicitLinkedHashCollection.INVALID_INDEX
@@ -89,21 +90,21 @@ class CachedPartition(val topic: String,
   override def setPrev(prev: Int): Unit = this.cachedPrev = prev
 
   def this(topic: String, partition: Int) =
-    this(topic, partition, -1, -1, -1, Optional.empty(), -1, -1)
+    this(topic, partition, -1, -1, -1, Optional.empty(), -1, -1, Optional.empty[Integer])
 
   def this(part: TopicPartition) =
     this(part.topic, part.partition)
 
   def this(part: TopicPartition, reqData: FetchRequest.PartitionData) =
     this(part.topic, part.partition, reqData.maxBytes, reqData.fetchOffset, -1,
-      reqData.currentLeaderEpoch, reqData.logStartOffset, -1)
+      reqData.currentLeaderEpoch, reqData.logStartOffset, -1, reqData.lastFetchedEpoch)
 
   def this(part: TopicPartition, reqData: FetchRequest.PartitionData,
            respData: FetchResponse.PartitionData[Records]) =
     this(part.topic, part.partition, reqData.maxBytes, reqData.fetchOffset, respData.highWatermark,
-      reqData.currentLeaderEpoch, reqData.logStartOffset, respData.logStartOffset)
+      reqData.currentLeaderEpoch, reqData.logStartOffset, respData.logStartOffset, reqData.lastFetchedEpoch)
 
-  def reqData = new FetchRequest.PartitionData(fetchOffset, fetcherLogStartOffset, maxBytes, leaderEpoch)
+  def reqData = new FetchRequest.PartitionData(fetchOffset, fetcherLogStartOffset, maxBytes, leaderEpoch, lastFetchedEpoch)
 
   def updateRequestParams(reqData: FetchRequest.PartitionData): Unit = {
     // Update our cached request parameters.
@@ -111,6 +112,7 @@ class CachedPartition(val topic: String,
     fetchOffset = reqData.fetchOffset
     fetcherLogStartOffset = reqData.logStartOffset
     leaderEpoch = reqData.currentLeaderEpoch
+    lastFetchedEpoch = reqData.lastFetchedEpoch
   }
 
   /**
