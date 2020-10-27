@@ -188,6 +188,15 @@ public class TaskManager {
             task.markChangelogAsCorrupted(corruptedPartitions);
 
             try {
+                // we do not need to take the returned offsets since we are not going to commit anyways;
+                // this call is only used for active tasks to flush the cache before suspending and
+                // closing the topology
+                task.prepareCommit();
+            } catch (final RuntimeException swallow) {
+                log.error("Error flushing cache for corrupted task {} ", task.id(), swallow);
+            }
+
+            try {
                 task.suspend();
                 // we need to enforce a checkpoint that removes the corrupted partitions
                 task.postCommit(true);
@@ -770,6 +779,14 @@ public class TaskManager {
     }
 
     private void closeTaskDirty(final Task task) {
+        try {
+            // we call this function only to flush the case if necessary
+            // before suspending and closing the topology
+            task.prepareCommit();
+        } catch (final RuntimeException swallow) {
+            log.error("Error flushing caches of dirty task {} ", task.id(), swallow);
+        }
+
         try {
             task.suspend();
         } catch (final RuntimeException swallow) {

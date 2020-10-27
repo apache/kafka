@@ -3066,7 +3066,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     if (authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME)) {
       val result = adminManager.describeUserScramCredentials(
-        Option(describeUserScramCredentialsRequest.data.users.asScala.map(_.name).toList))
+        Option(describeUserScramCredentialsRequest.data.users).map(_.asScala.map(_.name).toList))
       sendResponseMaybeThrottle(request, requestThrottleMs =>
         new DescribeUserScramCredentialsResponse(result.setThrottleTimeMs(requestThrottleMs)))
     } else {
