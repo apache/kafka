@@ -125,7 +125,6 @@ public class StreamsHandlerIntegrationTest {
 
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
             final CountDownLatch latch = new CountDownLatch(1);
-            kafkaStreams.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
             final AtomicBoolean flag = new AtomicBoolean(false);
             kafkaStreams.setUncaughtExceptionHandler((t, e) -> flag.set(true));
 

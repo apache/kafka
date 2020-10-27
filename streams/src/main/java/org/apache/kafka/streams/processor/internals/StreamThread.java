@@ -591,15 +591,16 @@ public class StreamThread extends Thread {
             } catch (final TaskMigratedException e) {
                 handleTaskMigrated(e);
             } catch (final Exception e) {
-                if (newHandler || Thread.getDefaultUncaughtExceptionHandler() == null) {
-                    if (Thread.getDefaultUncaughtExceptionHandler() != null) {
-                        log.error("Stream's new uncaught exception handler is set as well as the deprecated old handler." +
-                                "The old handler will be ignored as long as a new handler is set.");
-                    }
-                    if (this.streamsUncaughtExceptionHandler.handle(e) != StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_APPLICATION) {
-                        throw e;
-                    }
+                if (this.streamsUncaughtExceptionHandler == null) {
+                    throw e;
+                }
+                if (Thread.getDefaultUncaughtExceptionHandler() != null && newHandler) {
+                    log.error("Stream's new uncaught exception handler is set as well as the deprecated old handler." +
+                            "The old handler will be ignored as long as a new handler is set.");
                 } else {
+                    throw e;
+                }
+                if (this.streamsUncaughtExceptionHandler.handle(e) != StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_APPLICATION) {
                     throw e;
                 }
             }
@@ -635,7 +636,8 @@ public class StreamThread extends Thread {
                      "Will close out all assigned tasks and rejoin the consumer group.", e);
 
         taskManager.handleLostAll();
-        mainConsumer.enforceRebalance();
+        mainConsumer.unsubscribe();
+        subscribeConsumer();
     }
 
     private void subscribeConsumer() {

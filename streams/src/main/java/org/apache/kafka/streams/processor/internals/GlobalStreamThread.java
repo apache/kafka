@@ -318,19 +318,20 @@ public class GlobalStreamThread extends Thread {
                 recoverableException
             );
         } catch (final Exception e) {
-            if (newHandler || Thread.getDefaultUncaughtExceptionHandler() == null) {
-                if (Thread.getDefaultUncaughtExceptionHandler() != null) {
-                    log.error("Stream's new uncaught exception handler is set as well as the deprecated old handler." +
-                            "The old handler will be ignored as long as a new handler is set.");
-                }
-                if (this.streamsUncaughtExceptionHandler.handle(e) == StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_APPLICATION) {
-                    log.warn("Exception in global stream thread cause the application to attempt to shutdown." +
-                            " This action will succeed only if there is at least one StreamThread running on ths client");
-                } else {
-                    throw e;
-                }
+            if (this.streamsUncaughtExceptionHandler == null) {
+                throw e;
+            }
+            if (Thread.getDefaultUncaughtExceptionHandler() != null && newHandler) {
+                log.error("Stream's new uncaught exception handler is set as well as the deprecated old handler." +
+                        "The old handler will be ignored as long as a new handler is set.");
             } else {
                 throw e;
+            }
+            if (this.streamsUncaughtExceptionHandler.handle(e) != StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_APPLICATION) {
+                throw e;
+            } else {
+                log.warn("Exception in global stream thread cause the application to attempt to shutdown." +
+                        " This action will succeed only if there is at least one StreamThread running on ths client");
             }
         } finally {
             // set the state to pending shutdown first as it may be called due to error;
