@@ -2301,7 +2301,7 @@ class Log(@volatile private var _dir: File,
       val newSegmentBaseOffsets = sortedNewSegments.map(_.baseOffset).toSet
 
       // delete the old files
-      for (seg <- sortedOldSegments) {
+      sortedOldSegments.foreach { seg =>
         // remove the index entry
         if (seg.baseOffset != sortedNewSegments.head.baseOffset)
           segments.remove(seg.baseOffset)
