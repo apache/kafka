@@ -20,8 +20,10 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -33,6 +35,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
@@ -65,6 +68,7 @@ import org.apache.kafka.common.requests.VoteResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.raft.internals.StringSerde;
 import org.apache.kafka.test.TestUtils;
 import org.mockito.Mockito;
 import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
@@ -74,25 +78,25 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 final class RaftClientTestContext {
     final TopicPartition metadataPartition = Builder.METADATA_PARTITION;
     final int electionBackoffMaxMs = Builder.ELECTION_BACKOFF_MAX_MS;
-    final int electionTimeoutMs = Builder.ELECTION_TIMEOUT_MS;
+    final int electionTimeoutMs = Builder.DEFAULT_ELECTION_TIMEOUT_MS;
     final int electionFetchMaxWaitMs = Builder.FETCH_MAX_WAIT_MS;
     final int fetchTimeoutMs = Builder.FETCH_TIMEOUT_MS;
     final int requestTimeoutMs = Builder.REQUEST_TIMEOUT_MS;
     final int retryBackoffMs = Builder.RETRY_BACKOFF_MS;
 
     private final QuorumStateStore quorumStateStore;
-    private final Random random;
-
     final int localId;
-    final KafkaRaftClient client;
+    final KafkaRaftClient<String> client;
     final Metrics metrics;
     final MockLog log;
     final MockNetworkChannel channel;
     final MockTime time;
+    final MockListener listener;
+
     final Set<Integer> voters;
 
     public static final class Builder {
-        static final int ELECTION_TIMEOUT_MS = 10000;
+        static final int DEFAULT_ELECTION_TIMEOUT_MS = 10000;
 
         private static final TopicPartition METADATA_PARTITION = new TopicPartition("metadata", 0);
         private static final int ELECTION_BACKOFF_MAX_MS = 100;
@@ -101,12 +105,17 @@ final class RaftClientTestContext {
         private static final int FETCH_TIMEOUT_MS = 50000;
         private static final int REQUEST_TIMEOUT_MS = 5000;
         private static final int RETRY_BACKOFF_MS = 50;
+        private static final int DEFAULT_APPEND_LINGER_MS = 0;
 
         private final QuorumStateStore quorumStateStore = new MockQuorumStateStore();
         private final Random random = Mockito.spy(new Random(1));
         private final MockLog log = new MockLog(METADATA_PARTITION);
         private final Set<Integer> voters;
         private final int localId;
+
+        private int electionTimeoutMs = DEFAULT_ELECTION_TIMEOUT_MS;
+        private int appendLingerMs = DEFAULT_APPEND_LINGER_MS;
+        private MemoryPool memoryPool = MemoryPool.NONE;
 
         Builder(int localId, Set<Integer> voters) {
             this.voters = voters;
@@ -133,6 +142,16 @@ final class RaftClientTestContext {
             return this;
         }
 
+        Builder withMemoryPool(MemoryPool pool) {
+            this.memoryPool = pool;
+            return this;
+        }
+
+        Builder withAppendLingerMs(int appendLingerMs) {
+            this.appendLingerMs = appendLingerMs;
+            return this;
+        }
+
         Builder updateLog(Consumer<MockLog> consumer) {
             consumer.accept(log);
             return this;
@@ -143,8 +162,9 @@ final class RaftClientTestContext {
             Metrics metrics = new Metrics(time);
             MockNetworkChannel channel = new MockNetworkChannel();
             LogContext logContext = new LogContext();
-            QuorumState quorum = new QuorumState(localId, voters, ELECTION_TIMEOUT_MS, FETCH_TIMEOUT_MS,
+            QuorumState quorum = new QuorumState(localId, voters, electionTimeoutMs, FETCH_TIMEOUT_MS,
                     quorumStateStore, time, logContext, random);
+            MockListener listener = new MockListener();
 
             Map<Integer, InetSocketAddress> voterAddresses = voters
                 .stream()
@@ -153,26 +173,52 @@ final class RaftClientTestContext {
                     RaftClientTestContext::mockAddress
                 ));
 
-            KafkaRaftClient client = new KafkaRaftClient(channel, log, quorum, time, metrics,
-                    new MockFuturePurgatory<>(time), new MockFuturePurgatory<>(time), voterAddresses,
-                    ELECTION_BACKOFF_MAX_MS, RETRY_BACKOFF_MS, REQUEST_TIMEOUT_MS, FETCH_MAX_WAIT_MS, logContext, random);
+            KafkaRaftClient<String> client = new KafkaRaftClient<>(
+                new StringSerde(),
+                channel,
+                log,
+                quorum,
+                memoryPool,
+                time,
+                metrics,
+                new MockFuturePurgatory<>(time),
+                new MockFuturePurgatory<>(time),
+                voterAddresses,
+                ELECTION_BACKOFF_MAX_MS,
+                RETRY_BACKOFF_MS,
+                REQUEST_TIMEOUT_MS,
+                FETCH_MAX_WAIT_MS,
+                appendLingerMs,
+                logContext,
+                random
+            );
 
-            client.initialize();
+            client.initialize(listener);
 
-            return new RaftClientTestContext(localId, client, log, channel, time, quorumStateStore, voters, random, metrics);
+            return new RaftClientTestContext(
+                localId,
+                client,
+                log,
+                channel,
+                time,
+                quorumStateStore,
+                voters,
+                metrics,
+                listener
+            );
         }
     }
 
     private RaftClientTestContext(
         int localId,
-        KafkaRaftClient client,
+        KafkaRaftClient<String> client,
         MockLog log,
         MockNetworkChannel channel,
         MockTime time,
         QuorumStateStore quorumStateStore,
         Set<Integer> voters,
-        Random random,
-        Metrics metrics
+        Metrics metrics,
+        MockListener listener
     ) {
         this.localId = localId;
         this.client = client;
@@ -181,8 +227,8 @@ final class RaftClientTestContext {
         this.time = time;
         this.quorumStateStore = quorumStateStore;
         this.voters = voters;
-        this.random = random;
         this.metrics = metrics;
+        this.listener = listener;
     }
 
     static RaftClientTestContext initializeAsLeader(int localId, Set<Integer> voters, int epoch) throws Exception {
@@ -191,30 +237,22 @@ final class RaftClientTestContext {
         }
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .updateRandom(random -> {
-                Mockito.doReturn(0).when(random).nextInt(Builder.ELECTION_TIMEOUT_MS);
-            })
             .withUnknownLeader(epoch - 1)
             .build();
 
         context.assertUnknownLeader(epoch - 1);
-
-        // Advance the clock so that we become a candidate
-        context.time.sleep(context.electionTimeoutMs);
-        context.expectLeaderElection(epoch);
-
-        // Handle BeginEpoch
-        context.pollUntilSend();
-        for (RaftRequest.Outbound request : context.collectBeginEpochRequests(epoch)) {
-            BeginQuorumEpochResponseData beginEpochResponse = context.beginEpochResponse(epoch, localId);
-            context.deliverResponse(request.correlationId, request.destinationId(), beginEpochResponse);
-        }
-
-        context.client.poll();
+        context.becomeLeader();
         return context;
     }
 
-    void expectLeaderElection(
+    void becomeLeader() throws Exception {
+        int currentEpoch = client.currentLeaderAndEpoch().epoch;
+        time.sleep(electionTimeoutMs * 2);
+        expectAndGrantVotes(currentEpoch + 1);
+        expectBeginEpoch(currentEpoch + 1);
+    }
+
+    void expectAndGrantVotes(
         int epoch
     ) throws Exception {
         pollUntilSend();
@@ -229,6 +267,17 @@ final class RaftClientTestContext {
 
         client.poll();
         assertElectedLeader(epoch, localId);
+    }
+
+    void expectBeginEpoch(
+        int epoch
+    ) throws Exception {
+        pollUntilSend();
+        for (RaftRequest.Outbound request : collectBeginEpochRequests(epoch)) {
+            BeginQuorumEpochResponseData beginEpochResponse = beginEpochResponse(epoch, localId);
+            deliverResponse(request.correlationId, request.destinationId(), beginEpochResponse);
+        }
+        client.poll();
     }
 
     void pollUntilSend() throws InterruptedException {
@@ -311,9 +360,7 @@ final class RaftClientTestContext {
         for (RaftMessage raftMessage : channel.drainSendQueue()) {
             if (raftMessage.data() instanceof VoteRequestData) {
                 VoteRequestData request = (VoteRequestData) raftMessage.data();
-                assertTrue(hasValidTopicPartition(request, metadataPartition));
-
-                VoteRequestData.PartitionData partitionRequest = request.topics().get(0).partitions().get(0);
+                VoteRequestData.PartitionData partitionRequest = unwrap(request);
 
                 assertEquals(epoch, partitionRequest.candidateEpoch());
                 assertEquals(localId, partitionRequest.candidateId());
@@ -431,6 +478,16 @@ final class RaftClientTestContext {
     void validateLocalRead(
         OffsetAndEpoch fetchOffsetAndEpoch,
         Isolation isolation,
+        String[] expectedRecords
+    ) throws Exception {
+        CompletableFuture<Records> future = client.read(fetchOffsetAndEpoch, isolation, 0L);
+        assertTrue(future.isDone());
+        assertMatchingRecords(expectedRecords, future.get());
+    }
+
+    void validateLocalRead(
+        OffsetAndEpoch fetchOffsetAndEpoch,
+        Isolation isolation,
         SimpleRecord[] expectedRecords
     ) throws Exception {
         CompletableFuture<Records> future = client.read(fetchOffsetAndEpoch, isolation, 0L);
@@ -469,10 +526,7 @@ final class RaftClientTestContext {
         assertSentFetchResponse(0L, epoch);
 
         // Append some records, so that the close follower will be able to advance further.
-        MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE,
-            new SimpleRecord("foo".getBytes()),
-            new SimpleRecord("bar".getBytes()));
-        client.append(records, AckMode.LEADER, Integer.MAX_VALUE);
+        client.scheduleAppend(epoch, Arrays.asList("foo", "bar"));
         client.poll();
 
         deliverRequest(fetchRequest(epoch, closeFollower, 1L, epoch, 0));
@@ -608,6 +662,24 @@ final class RaftClientTestContext {
         );
     }
 
+    private VoteRequestData.PartitionData unwrap(VoteRequestData voteRequest) {
+        assertTrue(RaftUtil.hasValidTopicPartition(voteRequest, metadataPartition));
+        return voteRequest.topics().get(0).partitions().get(0);
+    }
+
+    static void assertMatchingRecords(
+        String[] expected,
+        Records actual
+    ) {
+        List<Record> recordList = Utils.toList(actual.records());
+        assertEquals(expected.length, recordList.size());
+        for (int i = 0; i < expected.length; i++) {
+            Record record = recordList.get(i);
+            assertEquals(expected[i], Utils.utf8(record.value()),
+                "Record at offset " + record.offset() + " does not match expected");
+        }
+    }
+
     static void assertMatchingRecords(
         SimpleRecord[] expected,
         Records actual
@@ -715,4 +787,19 @@ final class RaftClientTestContext {
                 .setEndOffset(divergingEpochEndOffset);
         });
     }
+
+    static class MockListener implements RaftClient.Listener<String> {
+        final LinkedHashMap<OffsetAndEpoch, List<String>> commits = new LinkedHashMap<>();
+
+        @Override
+        public void handleCommit(int epoch, long lastOffset, List<String> records) {
+            OffsetAndEpoch offsetAndEpoch = new OffsetAndEpoch(lastOffset, epoch);
+            if (commits.containsKey(offsetAndEpoch)) {
+                throw new AssertionError("Found duplicate append at " + offsetAndEpoch);
+            }
+            commits.put(offsetAndEpoch, records);
+        }
+
+    }
+
 }

@@ -19,37 +19,44 @@ package kafka.tools
 
 import java.io.File
 import java.nio.file.Files
-import java.util.concurrent.CountDownLatch
-import java.util.{Properties, Random}
+import java.util
+import java.util.concurrent.{CountDownLatch, TimeUnit}
+import java.util.{Collections, OptionalInt, Random}
 
-import joptsimple.OptionParser
+import com.yammer.metrics.core.MetricName
+import joptsimple.OptionException
 import kafka.log.{Log, LogConfig, LogManager}
 import kafka.network.SocketServer
 import kafka.raft.{KafkaFuturePurgatory, KafkaMetadataLog, KafkaNetworkChannel}
 import kafka.security.CredentialProvider
 import kafka.server.{BrokerTopicStats, KafkaConfig, KafkaRequestHandlerPool, KafkaServer, LogDirFailureChannel}
 import kafka.utils.timer.SystemTimer
-import kafka.utils.{CommandLineUtils, CoreUtils, Exit, KafkaScheduler, Logging, ShutdownableThread}
+import kafka.utils.{CommandDefaultOptions, CommandLineUtils, CoreUtils, Exit, KafkaScheduler, Logging, ShutdownableThread}
 import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ManualMetadataUpdater, NetworkClient}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ChannelBuilders, NetworkReceive, Selectable, Selector}
+import org.apache.kafka.common.protocol.Writable
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
 import org.apache.kafka.raft.internals.LogOffset
-import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, QuorumState, RaftConfig}
+import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, LeaderAndEpoch, QuorumState, RaftClient, RaftConfig, RecordSerde}
 
 import scala.jdk.CollectionConverters._
 
 /**
- * This is an experimental Raft server which is intended for testing purposes only.
- * It can really only be used for performance testing using the producer performance
- * tool with a hard-coded `__cluster_metadata` topic.
+ * This is an experimental server which is intended for testing the performance
+ * of the Raft implementation. It uses a hard-coded `__cluster_metadata` topic.
  */
-class TestRaftServer(val config: KafkaConfig) extends Logging {
+class TestRaftServer(
+  val config: KafkaConfig,
+  val throughput: Int,
+  val recordSize: Int
+) extends Logging {
+  import kafka.tools.TestRaftServer._
 
   private val partition = new TopicPartition("__cluster_metadata", 0)
   private val time = Time.SYSTEM
@@ -61,9 +68,10 @@ class TestRaftServer(val config: KafkaConfig) extends Logging {
   var dataPlaneRequestHandlerPool: KafkaRequestHandlerPool = _
   var scheduler: KafkaScheduler = _
   var metrics: Metrics = _
-  var raftIoThread: RaftIoThread = _
+  var ioThread: RaftIoThread = _
   var networkChannel: KafkaNetworkChannel = _
   var metadataLog: KafkaMetadataLog = _
+  var workloadGenerator: RaftWorkloadGenerator = _
 
   def startup(): Unit = {
     val logContext = new LogContext(s"[Raft id=${config.brokerId}] ")
@@ -94,14 +102,20 @@ class TestRaftServer(val config: KafkaConfig) extends Logging {
       logDir
     )
 
-    raftClient.initialize()
+    workloadGenerator = new RaftWorkloadGenerator(
+      raftClient,
+      time,
+      config.brokerId,
+      recordsPerSec = 20000,
+      recordSize = 256
+    )
+
+    raftClient.initialize(workloadGenerator)
 
     val requestHandler = new TestRaftRequestHandler(
       networkChannel,
       socketServer.dataPlaneRequestChannel,
-      time,
-      raftClient,
-      partition
+      time
     )
 
     dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(
@@ -115,14 +129,16 @@ class TestRaftServer(val config: KafkaConfig) extends Logging {
     )
 
     socketServer.startProcessingRequests(Map.empty)
-    raftIoThread = new RaftIoThread(raftClient)
-    raftIoThread.start()
-
+    ioThread = new RaftIoThread(raftClient)
+    ioThread.start()
+    workloadGenerator.start()
   }
 
   def shutdown(): Unit = {
-    if (raftIoThread != null)
-      CoreUtils.swallow(raftIoThread.shutdown(), this)
+    if (workloadGenerator != null)
+      CoreUtils.swallow(workloadGenerator.shutdown(), this)
+    if (ioThread != null)
+      CoreUtils.swallow(ioThread.shutdown(), this)
     if (dataPlaneRequestHandlerPool != null)
       CoreUtils.swallow(dataPlaneRequestHandlerPool.shutdown(), this)
     if (socketServer != null)
@@ -186,7 +202,7 @@ class TestRaftServer(val config: KafkaConfig) extends Logging {
                               metadataLog: KafkaMetadataLog,
                               networkChannel: KafkaNetworkChannel,
                               logContext: LogContext,
-                              logDir: File): KafkaRaftClient = {
+                              logDir: File): KafkaRaftClient[Array[Byte]] = {
     val quorumState = new QuorumState(
       config.brokerId,
       raftConfig.quorumVoterIds,
@@ -206,8 +222,11 @@ class TestRaftServer(val config: KafkaConfig) extends Logging {
       config.brokerId,
       new SystemTimer("raft-append-purgatory-reaper"))
 
+    val serde = new ByteArraySerde
+
     new KafkaRaftClient(
       raftConfig,
+      serde,
       networkChannel,
       metadataLog,
       quorumState,
@@ -272,7 +291,79 @@ class TestRaftServer(val config: KafkaConfig) extends Logging {
     )
   }
 
-  class RaftIoThread(client: KafkaRaftClient) extends ShutdownableThread("raft-io-thread") {
+  class RaftWorkloadGenerator(
+    client: KafkaRaftClient[Array[Byte]],
+    time: Time,
+    brokerId: Int,
+    recordsPerSec: Int,
+    recordSize: Int
+  ) extends ShutdownableThread(name = "raft-workload-generator") with RaftClient.Listener[Array[Byte]] {
+
+    private val stats = new WriteStats(time, printIntervalMs = 5000)
+    private val payload = new Array[Byte](recordSize)
+    private val pendingAppends = new util.ArrayDeque[PendingAppend]()
+
+    private var latestLeaderAndEpoch = new LeaderAndEpoch(OptionalInt.empty, 0)
+    private var isLeader = false
+    private var throttler: ThroughputThrottler = _
+    private var recordCount = 0
+
+    override def doWork(): Unit = {
+      if (latestLeaderAndEpoch != client.currentLeaderAndEpoch()) {
+        latestLeaderAndEpoch = client.currentLeaderAndEpoch()
+        isLeader = latestLeaderAndEpoch.leaderId.orElse(-1) == brokerId
+        if (isLeader) {
+          pendingAppends.clear()
+          throttler = new ThroughputThrottler(time, recordsPerSec)
+          recordCount = 0
+        }
+      }
+
+      if (isLeader) {
+        recordCount += 1
+
+        val startTimeMs = time.milliseconds()
+        val sendTimeMs = if (throttler.maybeThrottle(recordCount, startTimeMs)) {
+          time.milliseconds()
+        } else {
+          startTimeMs
+        }
+
+        val offset = client.scheduleAppend(latestLeaderAndEpoch.epoch, Collections.singletonList(payload))
+        if (offset == null) {
+          time.sleep(10)
+        } else {
+          pendingAppends.offer(PendingAppend(latestLeaderAndEpoch.epoch, offset, sendTimeMs))
+        }
+      } else {
+        time.sleep(500)
+      }
+    }
+
+    override def handleCommit(epoch: Int, lastOffset: Long, records: util.List[Array[Byte]]): Unit = {
+      var offset = lastOffset - records.size() + 1
+      val currentTimeMs = time.milliseconds()
+
+      for (record <- records.asScala) {
+        val pendingAppend = pendingAppends.poll()
+        if (pendingAppend.epoch != epoch || pendingAppend.offset!= offset) {
+          throw new IllegalStateException(s"Committed record $record from `handleCommit` does not " +
+            s"match the next expected append $pendingAppend" )
+        } else {
+          val latencyMs = math.max(0, currentTimeMs - pendingAppend.appendTimeMs)
+          stats.record(latencyMs, record.length, currentTimeMs)
+        }
+        offset += 1
+      }
+    }
+  }
+
+  class RaftIoThread(
+    client: KafkaRaftClient[Array[Byte]]
+  ) extends ShutdownableThread(
+    name = "raft-io-thread",
+    isInterruptible = false
+  ) {
     override def doWork(): Unit = {
       client.poll()
     }
@@ -281,9 +372,9 @@ class TestRaftServer(val config: KafkaConfig) extends Logging {
       if (super.initiateShutdown()) {
         client.shutdown(5000).whenComplete { (_, exception) =>
           if (exception != null) {
-            logger.error("Shutdown of RaftClient failed", exception)
+            error("Shutdown of RaftClient failed", exception)
           } else {
-            logger.info("Completed shutdown of RaftClient")
+            info("Completed shutdown of RaftClient")
           }
         }
         true
@@ -300,57 +391,140 @@ class TestRaftServer(val config: KafkaConfig) extends Logging {
 }
 
 object TestRaftServer extends Logging {
-  import kafka.utils.Implicits._
 
-  def getPropsFromArgs(args: Array[String]): Properties = {
-    val optionParser = new OptionParser(false)
-    val overrideOpt = optionParser.accepts("override", "Optional property that should override values set in server.properties file")
-      .withRequiredArg()
-      .ofType(classOf[String])
-    // This is just to make the parameter show up in the help output, we are not actually using this due the
-    // fact that this class ignores the first parameter which is interpreted as positional and mandatory
-    // but would not be mandatory if --version is specified
-    // This is a bit of an ugly crutch till we get a chance to rework the entire command line parsing
-    optionParser.accepts("version", "Print version information and exit.")
+  case class PendingAppend(
+    epoch: Int,
+    offset: Long,
+    appendTimeMs: Long
+  ) {
+    override def toString: String = {
+      s"PendingAppend(epoch=$epoch, offset=$offset, appendTimeMs=$appendTimeMs)"
+    }
+  }
 
-    if (args.length == 0 || args.contains("--help")) {
-      CommandLineUtils.printUsageAndDie(optionParser, "USAGE: java [options] %s server.properties [--override property=value]*".format(classOf[TestRaftServer].getSimpleName()))
+  private class ByteArraySerde extends RecordSerde[Array[Byte]] {
+    override def newWriteContext(): AnyRef = null
+
+    override def recordSize(data: Array[Byte], context: Any): Int = {
+      data.length
     }
 
-    if (args.contains("--version")) {
-      CommandLineUtils.printVersionAndDie()
+    override def write(data: Array[Byte], context: Any, out: Writable): Unit = {
+      out.writeByteArray(data)
     }
+  }
 
-    val props = Utils.loadProps(args(0))
+  private class ThroughputThrottler(
+    time: Time,
+    targetRecordsPerSec: Int
+  ) {
+    private val startTimeMs = time.milliseconds()
 
-    if (args.length > 1) {
-      val options = optionParser.parse(args.slice(1, args.length): _*)
+    require(targetRecordsPerSec > 0)
 
-      if (options.nonOptionArguments().size() > 0) {
-        CommandLineUtils.printUsageAndDie(optionParser, "Found non argument parameters: " + options.nonOptionArguments().toArray.mkString(","))
+    def maybeThrottle(
+      currentCount: Int,
+      currentTimeMs: Long
+    ): Boolean = {
+      val targetDurationMs = math.round(currentCount / targetRecordsPerSec.toDouble * 1000)
+      if (targetDurationMs > 0) {
+        val targetDeadlineMs = startTimeMs + targetDurationMs
+        if (targetDeadlineMs > currentTimeMs) {
+          val sleepDurationMs = targetDeadlineMs - currentTimeMs
+          time.sleep(sleepDurationMs)
+          return true
+        }
       }
-
-      props ++= CommandLineUtils.parseKeyValueArgs(options.valuesOf(overrideOpt).asScala)
+      false
     }
-    props
+  }
+
+  private class WriteStats(
+    time: Time,
+    printIntervalMs: Long
+  ) {
+    private var lastReportTimeMs = time.milliseconds()
+    private val latency = com.yammer.metrics.Metrics.newHistogram(
+      new MetricName("kafka.raft", "write", "throughput")
+    )
+    private val throughput = com.yammer.metrics.Metrics.newMeter(
+      new MetricName("kafka.raft", "write", "latency"),
+      "records",
+      TimeUnit.SECONDS
+    )
+
+    def record(
+      latencyMs: Long,
+      bytes: Int,
+      currentTimeMs: Long
+    ): Unit = {
+      throughput.mark(bytes)
+      latency.update(latencyMs)
+
+      if (currentTimeMs - lastReportTimeMs >= printIntervalMs) {
+        printSummary()
+        this.lastReportTimeMs = currentTimeMs
+      }
+    }
+
+    private def printSummary(): Unit = {
+      val latencies = latency.getSnapshot
+      println("Throughput (bytes/second): %.2f, Latency (ms): %.1f p50 %.1f p99 %.1f p999".format(
+        throughput.oneMinuteRate,
+        latencies.getMedian,
+        latencies.get99thPercentile,
+        latencies.get999thPercentile,
+      ))
+    }
+  }
+
+  class TestRaftServerOptions(args: Array[String]) extends CommandDefaultOptions(args) {
+    val configOpt = parser.accepts("config", "Required configured file")
+      .withRequiredArg
+      .describedAs("filename")
+      .ofType(classOf[String])
+
+    val throughputOpt = parser.accepts("throughput",
+      "The number of records per second the leader will write to the metadata topic")
+      .withRequiredArg
+      .describedAs("records/sec")
+      .ofType(classOf[Int])
+      .defaultsTo(5000)
+
+    val recordSizeOpt = parser.accepts("record-size", "The size of each record")
+      .withRequiredArg
+      .describedAs("size in bytes")
+      .ofType(classOf[Int])
+      .defaultsTo(256)
+
+    options = parser.parse(args : _*)
   }
 
   def main(args: Array[String]): Unit = {
+    val opts = new TestRaftServerOptions(args)
     try {
-      val serverProps = getPropsFromArgs(args)
-      val config = KafkaConfig.fromProps(serverProps, false)
-      val server = new TestRaftServer(config)
+      CommandLineUtils.printHelpAndExitIfNeeded(opts,
+        "Standalone raft server for performance testing")
+
+      val configFile = opts.options.valueOf(opts.configOpt)
+      val serverProps = Utils.loadProps(configFile)
+      val config = KafkaConfig.fromProps(serverProps, doLog = false)
+      val throughput = opts.options.valueOf(opts.throughputOpt)
+      val recordSize = opts.options.valueOf(opts.recordSizeOpt)
+      val server = new TestRaftServer(config, throughput, recordSize)
 
       Exit.addShutdownHook("raft-shutdown-hook", server.shutdown())
 
       server.startup()
       server.awaitShutdown()
-    }
-    catch {
+      Exit.exit(0)
+    } catch {
+      case e: OptionException =>
+        CommandLineUtils.printUsageAndDie(opts.parser, e.getMessage)
       case e: Throwable =>
         fatal("Exiting Kafka due to fatal exception", e)
         Exit.exit(1)
     }
-    Exit.exit(0)
   }
+
 }
