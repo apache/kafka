@@ -425,9 +425,9 @@ public class KafkaStreams implements AutoCloseable {
                     log.error("This option requires the thread to stay running to start the shutdown." +
                             "Therefore it is not suitable for Error types.");
                 }
-//                for (final StreamThread streamThread: threads) {
-//                    streamThread.sendShutdownRequest(AssignorError.SHUTDOWN_REQUESTED);
-//                }
+                for (final StreamThread streamThread: threads) {
+                    streamThread.sendShutdownRequest(AssignorError.SHUTDOWN_REQUESTED);
+                }
                 log.error("Encountered the following exception during processing " +
                         "and the application is going to shut down: ", e);
         }

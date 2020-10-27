@@ -591,15 +591,13 @@ public class StreamThread extends Thread {
             } catch (final TaskMigratedException e) {
                 handleTaskMigrated(e);
             } catch (final Exception e) {
-                if (newHandler) {
+                if (newHandler || Thread.getDefaultUncaughtExceptionHandler() == null) {
                     if (Thread.getDefaultUncaughtExceptionHandler() != null) {
                         log.error("Stream's new uncaught exception handler is set as well as the deprecated old handler." +
                                 "The old handler will be ignored as long as a new handler is set.");
                     }
                     if (this.streamsUncaughtExceptionHandler.handle(e) != StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_APPLICATION) {
                         throw e;
-                    } else {
-                        sendShutdownRequest(AssignorError.SHUTDOWN_REQUESTED);
                     }
                 } else {
                     throw e;
