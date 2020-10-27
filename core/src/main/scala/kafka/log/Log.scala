@@ -1239,11 +1239,10 @@ class Log(@volatile private var _dir: File,
 
               // update the transaction index with the true last stable offset. The last offset visible
               // to consumers using READ_COMMITTED will be limited by this value and the high watermark.
-              completedTxns.foreach {
-                completedTxn =>
-                  val lastStableOffset = producerStateManager.lastStableOffset(completedTxn)
-                  segment.updateTxnIndex(completedTxn, lastStableOffset)
-                  producerStateManager.completeTxn(completedTxn)
+              completedTxns.foreach { completedTxn =>
+                val lastStableOffset = producerStateManager.lastStableOffset(completedTxn)
+                segment.updateTxnIndex(completedTxn, lastStableOffset)
+                producerStateManager.completeTxn(completedTxn)
               }
 
               // always update the last producer id map offset so that the snapshot reflects the current offset
