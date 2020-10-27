@@ -233,7 +233,7 @@ object BrokerIdZNode {
     *   "timestamp":"2233345666",
     *   "endpoints":["CLIENT://host1:9092", "REPLICATION://host1:9093"],
     *   "rack":"dc1",
-    *   "features": {"feature": {"min_version": 1, "max_version": 5}}
+    *   "features": {"feature": {"min_version":1, "first_active_version":2, "max_version":3}}
     * }
     */
   def decode(id: Int, jsonBytes: Array[Byte]): BrokerInfo = {
@@ -797,44 +797,9 @@ object DelegationTokenInfoZNode {
  *             the finalized features stored in the FeatureZNode is not relevant. This status is
  *             written by the controller to the FeatureZNode only when the broker IBP config
  *             is less than KAFKA_2_7_IV0.
- *
- * The purpose behind the FeatureZNodeStatus is that it helps differentiates between the following
- * cases:
- *
- * 1. New cluster bootstrap:
- *    For a new Kafka cluster (i.e. it is deployed first time), we would like to start the cluster
- *    with all the possible supported features finalized immediately. The new cluster will almost
- *    never be started with an old IBP config that’s less than KAFKA_2_7_IV0. In such a case, the
- *    controller will start up and notice that the FeatureZNode is absent in the new cluster.
- *    To handle the requirement, the controller will create a FeatureZNode (with enabled status)
- *    containing the entire list of supported features as its finalized features.
- *
- * 2. Cluster upgrade:
- *    Imagine there is an existing Kafka cluster with IBP config less than KAFKA_2_7_IV0, but
- *    the Broker binary has been upgraded to a state where it supports the feature versioning
- *    system (KIP-584). This means the user is upgrading from an earlier version of the Broker
- *    binary. In this case, we want to start with no finalized features and allow the user to enable
- *    them whenever they are ready i.e. in the future whenever the user sets IBP config
- *    to be greater than or equal to KAFKA_2_7_IV0. The reason is that enabling all the possible
- *    features immediately after an upgrade could be harmful to the cluster.
- *    In such a case:
- *      - Before the Broker upgrade (i.e. IBP config set to less than KAFKA_2_7_IV0), the controller
- *        will start up and check if the FeatureZNode is absent. If true, then it will react by
- *        creating a FeatureZNode with disabled status and empty features.
- *      - After the Broker upgrade (i.e. IBP config set to greater than or equal to KAFKA_2_7_IV0),
- *        when the controller starts up it will check if the FeatureZNode exists and whether it is
- *        disabled. In such a case, it won’t upgrade all features immediately. Instead it will just
- *        switch the FeatureZNode status to enabled status. This lets the user finalize the features
- *        later.
- *
- * 3. Cluster downgrade:
- *    Imagine that a Kafka cluster exists already and the IBP config is greater than or equal to
- *    KAFKA_2_7_IV0. Then, the user decided to downgrade the cluster by setting IBP config to a
- *    value less than KAFKA_2_7_IV0. This means the user is also disabling the feature versioning
- *    system (KIP-584). In this case, when the controller starts up with the lower IBP config, it
- *    will switch the FeatureZNode status to disabled with empty features.
  */
 object FeatureZNodeStatus extends Enumeration {
+  type FeatureZNodeStatus = Value
   val Disabled, Enabled = Value
 
   def withNameOpt(value: Int): Option[Value] = {
@@ -848,7 +813,7 @@ object FeatureZNodeStatus extends Enumeration {
  * @param status     the status of the ZK node
  * @param features   the cluster-wide finalized features
  */
-case class FeatureZNode(status: FeatureZNodeStatus.Value, features: Features[FinalizedVersionRange]) {
+case class FeatureZNode(status: FeatureZNodeStatus.FeatureZNodeStatus, features: Features[FinalizedVersionRange]) {
 }
 
 object FeatureZNode {

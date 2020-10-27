@@ -43,10 +43,11 @@ import java.time.Instant;
 import java.util.Properties;
 
 import static java.util.Arrays.asList;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 
 @SuppressWarnings("unchecked")
 public class KTableMapValuesTest {
@@ -241,7 +242,7 @@ public class KTableMapValuesTest {
     }
 
     @Test
-    public void testSendingOldValue() {
+    public void shouldEnableSendingOldValuesOnParentIfMapValuesNotMaterialized() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -249,36 +250,74 @@ public class KTableMapValuesTest {
             (KTableImpl<String, String, String>) builder.table(topic1, consumed);
         final KTableImpl<String, String, Integer> table2 =
             (KTableImpl<String, String, Integer>) table1.mapValues(s -> Integer.valueOf(s));
+
         table2.enableSendingOldValues(true);
 
+        assertThat(table1.sendingOldValueEnabled(), is(true));
+        assertThat(table2.sendingOldValueEnabled(), is(true));
+
+        testSendingOldValues(builder, topic1, table2);
+    }
+
+    @Test
+    public void shouldNotEnableSendingOldValuesOnParentIfMapValuesMaterialized() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final String topic1 = "topic1";
+
+        final KTableImpl<String, String, String> table1 =
+            (KTableImpl<String, String, String>) builder.table(topic1, consumed);
+        final KTableImpl<String, String, Integer> table2 =
+            (KTableImpl<String, String, Integer>) table1.mapValues(
+                s -> Integer.valueOf(s),
+                Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("bob").withValueSerde(Serdes.Integer())
+            );
+
+        table2.enableSendingOldValues(true);
+
+        assertThat(table1.sendingOldValueEnabled(), is(false));
+        assertThat(table2.sendingOldValueEnabled(), is(true));
+
+        testSendingOldValues(builder, topic1, table2);
+    }
+
+    private void testSendingOldValues(
+        final StreamsBuilder builder,
+        final String topic1,
+        final KTableImpl<String, String, Integer> table2
+    ) {
         final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
         builder.build().addProcessor("proc", supplier, table2.name);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic1 =
-                    driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockApiProcessor<String, Integer, Void, Void> proc = supplier.theCapturedProcessor();
-
-            assertTrue(table1.sendingOldValueEnabled());
-            assertTrue(table2.sendingOldValueEnabled());
 
             inputTopic1.pipeInput("A", "01", 5L);
             inputTopic1.pipeInput("B", "01", 10L);
             inputTopic1.pipeInput("C", "01", 15L);
-            proc.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(1, null), 5),
-                    new KeyValueTimestamp<>("B", new Change<>(1, null), 10),
-                    new KeyValueTimestamp<>("C", new Change<>(1, null), 15));
+            proc.checkAndClearProcessResult(
+                new KeyValueTimestamp<>("A", new Change<>(1, null), 5),
+                new KeyValueTimestamp<>("B", new Change<>(1, null), 10),
+                new KeyValueTimestamp<>("C", new Change<>(1, null), 15)
+            );
 
             inputTopic1.pipeInput("A", "02", 10L);
             inputTopic1.pipeInput("B", "02", 8L);
-            proc.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(2, 1), 10),
-                    new KeyValueTimestamp<>("B", new Change<>(2, 1), 8));
+            proc.checkAndClearProcessResult(
+                new KeyValueTimestamp<>("A", new Change<>(2, 1), 10),
+                new KeyValueTimestamp<>("B", new Change<>(2, 1), 8)
+            );
 
             inputTopic1.pipeInput("A", "03", 20L);
-            proc.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(3, 2), 20));
+            proc.checkAndClearProcessResult(
+                new KeyValueTimestamp<>("A", new Change<>(3, 2), 20)
+            );
 
             inputTopic1.pipeInput("A", (String) null, 30L);
-            proc.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(null, 3), 30));
+            proc.checkAndClearProcessResult(
+                new KeyValueTimestamp<>("A", new Change<>(null, 3), 30)
+            );
         }
     }
 }

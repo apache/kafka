@@ -16,22 +16,19 @@
  */
 package org.apache.kafka.streams.processor.api;
 
-import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
-import org.apache.kafka.streams.processor.To;
 
 import java.io.File;
 import java.time.Duration;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Processor context interface.
@@ -54,6 +51,27 @@ public interface ProcessorContext<KForward, VForward> {
      * @return the task id
      */
     TaskId taskId();
+
+    /**
+     * The metadata of the source record, if is one. Processors may be invoked to
+     * process a source record from an input topic, to run a scheduled punctuation
+     * (see {@link ProcessorContext#schedule(Duration, PunctuationType, Punctuator)} ),
+     * or because a parent processor called {@link ProcessorContext#forward(Record)}.
+     * <p>
+     * In the case of a punctuation, there is no source record, so this metadata would be
+     * undefined. Note that when a punctuator invokes {@link ProcessorContext#forward(Record)},
+     * downstream processors will receive the forwarded record as a regular
+     * {@link Processor#process(Record)} invocation. In other words, it wouldn't be apparent to
+     * downstream processors whether or not the record being processed came from an input topic
+     * or punctuation and therefore whether or not this metadata is defined. This is why
+     * the return type of this method is {@link Optional}.
+     * <p>
+     * If there is any possibility of punctuators upstream, any access
+     * to this field should consider the case of
+     * "<code>recordMetadata().isPresent() == false</code>".
+     * Of course, it would be safest to always guard this condition.
+     */
+    Optional<RecordMetadata> recordMetadata();
 
     /**
      * Returns the default key serde.
@@ -84,29 +102,20 @@ public interface ProcessorContext<KForward, VForward> {
     StreamsMetrics metrics();
 
     /**
-     * Registers and possibly restores the specified storage engine.
-     *
-     * @param store the storage engine
-     * @param stateRestoreCallback the restoration callback logic for log-backed state stores upon restart
-     *
-     * @throws IllegalStateException If store gets registered after initialized is already finished
-     * @throws StreamsException if the store's change log does not contain the partition
-     */
-    void register(final StateStore store,
-                  final StateRestoreCallback stateRestoreCallback);
-
-    /**
      * Get the state store given the store name.
      *
      * @param name The store name
+     * @param <S> The type or interface of the store to return
      * @return The state store instance
+     *
+     * @throws ClassCastException if the return type isn't a type or interface of the actual returned store.
      */
     <S extends StateStore> S getStateStore(final String name);
 
     /**
      * Schedules a periodic operation for processors. A processor may call this method during
      * {@link Processor#init(ProcessorContext) initialization} or
-     * {@link Processor#process(Object, Object) processing} to
+     * {@link Processor#process(Record)}  processing} to
      * schedule a periodic callback &mdash; called a punctuation &mdash; to {@link Punctuator#punctuate(long)}.
      * The type parameter controls what notion of time is used for punctuation:
      * <ul>
@@ -140,75 +149,77 @@ public interface ProcessorContext<KForward, VForward> {
                          final Punctuator callback);
 
     /**
-     * Forwards a key/value pair to all downstream processors.
-     * Used the input record's timestamp as timestamp for the output record.
+     * Forwards a record to all child processors.
+     * <p>
+     * Note that the forwarded {@link Record} is shared between the parent and child
+     * processors. And of course, the parent may forward the same object to multiple children,
+     * and the child may forward it to grandchildren, etc. Therefore, you should be mindful
+     * of mutability.
+     * <p>
+     * The {@link Record} class itself is immutable (all the setter-style methods return an
+     * independent copy of the instance). However, the key, value, and headers referenced by
+     * the Record may themselves be mutable.
+     * <p>
+     * Some programs may opt to make use of this mutability for high performance, in which case
+     * the input record may be mutated and then forwarded by each {@link Processor}. However,
+     * most applications should instead favor safety.
+     * <p>
+     * Forwarding records safely simply means to make a copy of the record before you mutate it.
+     * This is trivial when using the {@link Record#withKey(Object)}, {@link Record#withValue(Object)},
+     * and {@link Record#withTimestamp(long)} methods, as each of these methods make a copy of the
+     * record as a matter of course. But a little extra care must be taken with headers, since
+     * the {@link org.apache.kafka.common.header.Header} class is mutable. The easiest way to
+     * safely handle headers is to use the {@link Record} constructors to make a copy before
+     * modifying headers.
+     * <p>
+     * In other words, this would be considered unsafe:
+     * <code>
+     *     process(Record inputRecord) {
+     *         inputRecord.headers().add(...);
+     *         context.forward(inputRecord);
+     *     }
+     * </code>
+     * This is unsafe because the parent, and potentially siblings, grandparents, etc.,
+     * all will see this modification to their shared Headers reference. This is a violation
+     * of causality and could lead to undefined behavior.
+     * <p>
+     * A safe usage would look like this:
+     * <code>
+     *     process(Record inputRecord) {
+     *         // makes a copy of the headers
+     *         Record toForward = inputRecord.withHeaders(inputRecord.headers());
+     *         // Other options to create a safe copy are:
+     *         // * use any copy-on-write method, which makes a copy of all fields:
+     *         //   toForward = inputRecord.withValue();
+     *         // * explicitly copy all fields:
+     *         //   toForward = new Record(inputRecord.key(), inputRecord.value(), inputRecord.timestamp(), inputRecord.headers());
+     *         // * create a fresh, empty Headers:
+     *         //   toForward = new Record(inputRecord.key(), inputRecord.value(), inputRecord.timestamp());
+     *         // * etc.
      *
-     * @param key key
-     * @param value value
+     *         // now, we are modifying our own independent copy of the headers.
+     *         toForward.headers().add(...);
+     *         context.forward(toForward);
+     *     }
+     * </code>
+     * @param record The record to forward to all children
      */
-    <K extends KForward, V extends VForward> void forward(final K key, final V value);
+    <K extends KForward, V extends VForward> void forward(Record<K, V> record);
 
     /**
-     * Forwards a key/value pair to the specified downstream processors.
-     * Can be used to set the timestamp of the output record.
+     * Forwards a record to the specified child processor.
+     * See {@link ProcessorContext#forward(Record)} for considerations.
      *
-     * @param key key
-     * @param value value
-     * @param to the options to use when forwarding
+     * @param record The record to forward
+     * @param childName The name of the child processor to receive the record
+     * @see ProcessorContext#forward(Record)
      */
-    <K extends KForward, V extends VForward> void forward(final K key, final V value, final To to);
+    <K extends KForward, V extends VForward> void forward(Record<K, V> record, final String childName);
 
     /**
      * Requests a commit.
      */
     void commit();
-
-    /**
-     * Returns the topic name of the current input record; could be null if it is not
-     * available (for example, if this method is invoked from the punctuate call).
-     *
-     * @return the topic name
-     */
-    String topic();
-
-    /**
-     * Returns the partition id of the current input record; could be -1 if it is not
-     * available (for example, if this method is invoked from the punctuate call).
-     *
-     * @return the partition id
-     */
-    int partition();
-
-    /**
-     * Returns the offset of the current input record; could be -1 if it is not
-     * available (for example, if this method is invoked from the punctuate call).
-     *
-     * @return the offset
-     */
-    long offset();
-
-    /**
-     * Returns the headers of the current input record; could be null if it is not
-     * available (for example, if this method is invoked from the punctuate call).
-     *
-     * @return the headers
-     */
-    Headers headers();
-
-    /**
-     * Returns the current timestamp.
-     *
-     * <p> If it is triggered while processing a record streamed from the source processor,
-     * timestamp is defined as the timestamp of the current input record; the timestamp is extracted from
-     * {@link org.apache.kafka.clients.consumer.ConsumerRecord ConsumerRecord} by {@link TimestampExtractor}.
-     *
-     * <p> If it is triggered while processing a record generated not from the source processor (for example,
-     * if this method is invoked from the punctuate call), timestamp is defined as the current
-     * task's stream time, which is defined as the largest timestamp of any record processed by the task.
-     *
-     * @return the timestamp
-     */
-    long timestamp();
 
     /**
      * Returns all the application config properties as key/value pairs.

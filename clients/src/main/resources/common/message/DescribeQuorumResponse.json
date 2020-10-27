@@ -37,7 +37,6 @@
           "about": "The latest known leader epoch"},
         { "name": "HighWatermark", "type": "int64", "versions": "0+"},
         { "name": "CurrentVoters", "type": "[]ReplicaState", "versions": "0+" },
-        { "name": "TargetVoters", "type": "[]ReplicaState", "versions": "0+" },
         { "name": "Observers", "type": "[]ReplicaState", "versions": "0+" }
       ]}
     ]}],

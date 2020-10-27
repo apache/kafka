@@ -64,7 +64,6 @@ import org.apache.zookeeper.data.ACL
 import org.junit.Assert._
 import org.scalatest.Assertions.fail
 
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.collection.{Map, Seq, mutable}
@@ -537,7 +536,7 @@ object TestUtils extends Logging {
             return true
           cur = null
         }
-        // should never reach her
+        // should never reach here
         throw new RuntimeException("should not reach here")
       }
 
@@ -585,7 +584,6 @@ object TestUtils extends Logging {
   /**
    * Create a (new) producer with a few pre-configured properties.
    */
-  @nowarn("cat=deprecation")
   def createProducer[K, V](brokerList: String,
                            acks: Int = -1,
                            maxBlockMs: Long = 60 * 1000L,
@@ -1429,7 +1427,8 @@ object TestUtils extends Logging {
                                   transactionTimeoutMs: Long = 60000,
                                   maxBlockMs: Long = 60000,
                                   deliveryTimeoutMs: Int = 120000,
-                                  requestTimeoutMs: Int = 30000): KafkaProducer[Array[Byte], Array[Byte]] = {
+                                  requestTimeoutMs: Int = 30000,
+                                  maxInFlight: Int = 5): KafkaProducer[Array[Byte], Array[Byte]] = {
     val props = new Properties()
     props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromServers(servers))
     props.put(ProducerConfig.ACKS_CONFIG, "all")
@@ -1440,6 +1439,7 @@ object TestUtils extends Logging {
     props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, maxBlockMs.toString)
     props.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, deliveryTimeoutMs.toString)
     props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs.toString)
+    props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, maxInFlight.toString)
     new KafkaProducer[Array[Byte], Array[Byte]](props, new ByteArraySerializer, new ByteArraySerializer)
   }
 

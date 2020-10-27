@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-
 import kafka.api.Request;
 import kafka.server.KafkaServer;
 import kafka.server.MetadataCache;
@@ -79,9 +75,13 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -1184,6 +1184,28 @@ public class IntegrationTestUtils {
             driver.cleanUp();
         }
         driver.start();
+        return driver;
+    }
+
+    public static KafkaStreams getRunningStreams(final Properties streamsConfig,
+                                                 final StreamsBuilder builder,
+                                                 final boolean clean) {
+        final KafkaStreams driver = new KafkaStreams(builder.build(), streamsConfig);
+        if (clean) {
+            driver.cleanUp();
+        }
+        final CountDownLatch latch = new CountDownLatch(1);
+        driver.setStateListener((newState, oldState) -> {
+            if (newState == State.RUNNING) {
+                latch.countDown();
+            }
+        });
+        driver.start();
+        try {
+            latch.await(DEFAULT_TIMEOUT, TimeUnit.MILLISECONDS);
+        } catch (final InterruptedException e) {
+            throw new RuntimeException("Streams didn't start in time.", e);
+        }
         return driver;
     }
 

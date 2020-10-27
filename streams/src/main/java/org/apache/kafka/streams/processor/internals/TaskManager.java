@@ -120,10 +120,6 @@ public class TaskManager {
         this.mainConsumer = mainConsumer;
     }
 
-    Consumer<byte[], byte[]> mainConsumer() {
-        return mainConsumer;
-    }
-
     public UUID processId() {
         return processId;
     }
@@ -192,6 +188,15 @@ public class TaskManager {
             task.markChangelogAsCorrupted(corruptedPartitions);
 
             try {
+                // we do not need to take the returned offsets since we are not going to commit anyways;
+                // this call is only used for active tasks to flush the cache before suspending and
+                // closing the topology
+                task.prepareCommit();
+            } catch (final RuntimeException swallow) {
+                log.error("Error flushing cache for corrupted task {} ", task.id(), swallow);
+            }
+
+            try {
                 task.suspend();
                 // we need to enforce a checkpoint that removes the corrupted partitions
                 task.postCommit(true);
@@ -204,7 +209,7 @@ public class TaskManager {
             // for this task until it has been re-initialized;
             // Note, closeDirty already clears the partitiongroup for the task.
             if (task.isActive()) {
-                final Set<TopicPartition> currentAssignment = mainConsumer().assignment();
+                final Set<TopicPartition> currentAssignment = mainConsumer.assignment();
                 final Set<TopicPartition> taskInputPartitions = task.inputPartitions();
                 final Set<TopicPartition> assignedToPauseAndReset =
                     intersection(HashSet::new, currentAssignment, taskInputPartitions);
@@ -217,12 +222,12 @@ public class TaskManager {
                     );
                 }
 
-                mainConsumer().pause(assignedToPauseAndReset);
-                final Map<TopicPartition, OffsetAndMetadata> committed = mainConsumer().committed(assignedToPauseAndReset);
+                mainConsumer.pause(assignedToPauseAndReset);
+                final Map<TopicPartition, OffsetAndMetadata> committed = mainConsumer.committed(assignedToPauseAndReset);
                 for (final Map.Entry<TopicPartition, OffsetAndMetadata> committedEntry : committed.entrySet()) {
                     final OffsetAndMetadata offsetAndMetadata = committedEntry.getValue();
                     if (offsetAndMetadata != null) {
-                        mainConsumer().seek(committedEntry.getKey(), offsetAndMetadata);
+                        mainConsumer.seek(committedEntry.getKey(), offsetAndMetadata);
                         assignedToPauseAndReset.remove(committedEntry.getKey());
                     }
                 }
@@ -454,18 +459,25 @@ public class TaskManager {
      * @throws StreamsException if the store's change log does not contain the partition
      * @return {@code true} if all tasks are fully restored
      */
-    boolean tryToCompleteRestoration() {
+    boolean tryToCompleteRestoration(final long now) {
         boolean allRunning = true;
 
         final List<Task> activeTasks = new LinkedList<>();
         for (final Task task : tasks.values()) {
             try {
                 task.initializeIfNeeded();
-            } catch (final LockException | TimeoutException e) {
+                task.clearTaskTimeout();
+            } catch (final LockException retriableException) {
                 // it is possible that if there are multiple threads within the instance that one thread
                 // trying to grab the task from the other, while the other has not released the lock since
                 // it did not participate in the rebalance. In this case we can just retry in the next iteration
-                log.debug("Could not initialize {} due to the following exception; will retry", task.id(), e);
+                log.debug(
+                    String.format("Could not initialize %s due to the following exception; will retry", task.id()),
+                    retriableException
+                );
+                allRunning = false;
+            } catch (final TimeoutException timeoutException) {
+                task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
                 allRunning = false;
             }
 
@@ -482,8 +494,15 @@ public class TaskManager {
                 if (restored.containsAll(task.changelogPartitions())) {
                     try {
                         task.completeRestoration();
-                    } catch (final TimeoutException e) {
-                        log.debug("Could not complete restoration for {} due to {}; will retry", task.id(), e);
+                        task.clearTaskTimeout();
+                    } catch (final TimeoutException timeoutException) {
+                        task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
+                        log.debug(
+                            String.format(
+                                "Could not complete restoration for %s due to the follosing exception; will retry",
+                                task.id()),
+                            timeoutException
+                        );
 
                         allRunning = false;
                     }
@@ -760,6 +779,14 @@ public class TaskManager {
     }
 
     private void closeTaskDirty(final Task task) {
+        try {
+            // we call this function only to flush the case if necessary
+            // before suspending and closing the topology
+            task.prepareCommit();
+        } catch (final RuntimeException swallow) {
+            log.error("Error flushing caches of dirty task {} ", task.id(), swallow);
+        }
+
         try {
             task.suspend();
         } catch (final RuntimeException swallow) {

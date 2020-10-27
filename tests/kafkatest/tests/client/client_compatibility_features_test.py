@@ -14,6 +14,8 @@
 # limitations under the License.
 
 import os
+
+import errno
 import time
 from random import randint
 
@@ -53,7 +55,7 @@ def run_command(node, cmd, ssh_log_file):
                 f.write(line)
         except Exception as e:
             f.write("** Command failed!")
-            print e
+            print(e)
             raise
 
 
@@ -86,14 +88,14 @@ class ClientCompatibilityFeaturesTest(Test):
                "--topic %s " % (self.zk.path.script("kafka-run-class.sh", node),
                                self.kafka.bootstrap_servers(),
                                len(self.kafka.nodes),
-                               self.topics.keys()[0]))
-        for k, v in features.iteritems():
+                               list(self.topics.keys())[0]))
+        for k, v in features.items():
             cmd = cmd + ("--%s %s " % (k, v))
         results_dir = TestContext.results_dir(self.test_context, 0)
         try:
             os.makedirs(results_dir)
         except OSError as e:
-            if e.errno == errno.EEXIST and os.path.isdir(path):
+            if e.errno == errno.EEXIST and os.path.isdir(results_dir):
                 pass
             else:
                 raise

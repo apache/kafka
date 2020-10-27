@@ -16,7 +16,6 @@
 from ducktape.mark.resource import cluster
 from ducktape.mark import parametrize
 from ducktape.tests.test import Test
-from ducktape.utils.util import wait_until
 
 from kafkatest.services.trogdor.produce_bench_workload import ProduceBenchWorkloadService, ProduceBenchWorkloadSpec
 from kafkatest.services.trogdor.consume_bench_workload import ConsumeBenchWorkloadService, ConsumeBenchWorkloadSpec
@@ -25,7 +24,6 @@ from kafkatest.services.kafka import KafkaService
 from kafkatest.services.trogdor.trogdor import TrogdorService
 from kafkatest.services.zookeeper import ZookeeperService
 
-import json
 import time
 
 
@@ -48,7 +46,7 @@ class ReplicaScaleTest(Test):
         self.zk.stop()
 
     @cluster(num_nodes=12)
-    @parametrize(topic_count=500, partition_count=34, replication_factor=3)
+    @parametrize(topic_count=50, partition_count=34, replication_factor=3)
     def test_produce_consume(self, topic_count, partition_count, replication_factor):
         topics_create_start_time = time.time()
         for i in range(topic_count):
@@ -103,7 +101,7 @@ class ReplicaScaleTest(Test):
         trogdor.stop()
 
     @cluster(num_nodes=12)
-    @parametrize(topic_count=500, partition_count=34, replication_factor=3)
+    @parametrize(topic_count=50, partition_count=34, replication_factor=3)
     def test_clean_bounce(self, topic_count, partition_count, replication_factor):
         topics_create_start_time = time.time()
         for i in range(topic_count):
