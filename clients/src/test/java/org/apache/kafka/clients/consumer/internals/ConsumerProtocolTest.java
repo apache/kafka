@@ -65,7 +65,7 @@ public class ConsumerProtocolTest {
             if (version >= 1) {
                 assertEquals(toSet(subscription.ownedPartitions()), toSet(parsedSubscription.ownedPartitions()));
             } else {
-                assertTrue(parsedSubscription.ownedPartitions().isEmpty());
+                assertEquals(Collections.emptyList(), parsedSubscription.ownedPartitions());
             }
         }
     }
@@ -170,7 +170,7 @@ public class ConsumerProtocolTest {
             ByteBuffer buffer = ConsumerProtocol.serializeAssignment(assignment, version);
             Assignment parsedAssignment = ConsumerProtocol.deserializeAssignment(buffer);
             assertEquals(toSet(partitions), toSet(parsedAssignment.partitions()));
-            assertEquals(parsedAssignment.userData(), parsedAssignment.userData());
+            assertEquals(assignment.userData(), parsedAssignment.userData());
         }
     }
 
