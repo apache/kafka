@@ -1272,7 +1272,7 @@ public class Selector implements Selectable, AutoCloseable {
                 String baseName, String action) {
             MetricName rateMetricName = metrics.metricName(baseName + "-ratio", groupName,
                     String.format("The fraction of time the I/O thread spent %s", action), metricTags);
-            MetricName totalMetricName = metrics.metricName(baseName + "time-total", groupName,
+            MetricName totalMetricName = metrics.metricName(baseName + "-time-total", groupName,
                     String.format("The total time the I/O thread spent %s", action), metricTags);
             return new Meter(TimeUnit.NANOSECONDS, rateMetricName, totalMetricName);
         }
