@@ -47,6 +47,30 @@ public class ConsumerProtocolTest {
     private final Optional<String> groupInstanceId = Optional.of("instance.id");
 
     @Test
+    public void serializeDeserializeSubscriptionAllVersions() {
+        List<TopicPartition> ownedPartitions = Arrays.asList(
+            new TopicPartition("foo", 0),
+            new TopicPartition("bar", 0));
+        Subscription subscription = new Subscription(Arrays.asList("foo", "bar"),
+            ByteBuffer.wrap("hello".getBytes()), ownedPartitions);
+
+        for (short version = ConsumerProtocolSubscription.LOWEST_SUPPORTED_VERSION; version <= ConsumerProtocolSubscription.HIGHEST_SUPPORTED_VERSION; version++) {
+            ByteBuffer buffer = ConsumerProtocol.serializeSubscription(subscription, version);
+            Subscription parsedSubscription = ConsumerProtocol.deserializeSubscription(buffer);
+
+            assertEquals(subscription.topics(), parsedSubscription.topics());
+            assertEquals(subscription.userData(), parsedSubscription.userData());
+            assertFalse(parsedSubscription.groupInstanceId().isPresent());
+
+            if (version >= 1) {
+                assertEquals(toSet(subscription.ownedPartitions()), toSet(parsedSubscription.ownedPartitions()));
+            } else {
+                assertEquals(Collections.emptyList(), parsedSubscription.ownedPartitions());
+            }
+        }
+    }
+
+    @Test
     public void serializeDeserializeMetadata() {
         Subscription subscription = new Subscription(Arrays.asList("foo", "bar"), ByteBuffer.wrap(new byte[0]));
         ByteBuffer buffer = ConsumerProtocol.serializeSubscription(subscription);
@@ -135,6 +159,19 @@ public class ConsumerProtocolTest {
         assertEquals(Collections.singletonList("topic"), subscription.topics());
         assertEquals(Collections.singletonList(tp2), subscription.ownedPartitions());
         assertEquals(groupInstanceId, subscription.groupInstanceId());
+    }
+
+    @Test
+    public void serializeDeserializeAssignmentAllVersions() {
+        List<TopicPartition> partitions = Arrays.asList(tp1, tp2);
+        Assignment assignment = new Assignment(partitions, ByteBuffer.wrap("hello".getBytes()));
+
+        for (short version = ConsumerProtocolAssignment.LOWEST_SUPPORTED_VERSION; version <= ConsumerProtocolAssignment.HIGHEST_SUPPORTED_VERSION; version++) {
+            ByteBuffer buffer = ConsumerProtocol.serializeAssignment(assignment, version);
+            Assignment parsedAssignment = ConsumerProtocol.deserializeAssignment(buffer);
+            assertEquals(toSet(partitions), toSet(parsedAssignment.partitions()));
+            assertEquals(assignment.userData(), parsedAssignment.userData());
+        }
     }
 
     @Test
