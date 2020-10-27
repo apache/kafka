@@ -16,6 +16,7 @@
  */
 package kafka.security.authorizer
 
+import java.util.Collections
 import java.{lang, util}
 import java.util.concurrent.{CompletableFuture, CompletionStage}
 
@@ -130,6 +131,11 @@ class AclAuthorizer extends Authorizer with Logging {
 
   @volatile
   private var aclCache = new scala.collection.immutable.TreeMap[ResourcePattern, VersionedAcls]()(new ResourceOrdering)
+
+  @volatile
+  private var resourceCache = new scala.collection.immutable.HashMap[AccessControlEntry,
+    scala.collection.mutable.HashSet[ResourcePattern]]()
+
   private val lock = new Object()
 
   // The maximum number of times we should try to update the resource acls in zookeeper before failing;
@@ -305,6 +311,84 @@ class AclAuthorizer extends Authorizer with Logging {
   override def close(): Unit = {
     aclChangeListeners.foreach(listener => listener.close())
     if (zkClient != null) zkClient.close()
+  }
+
+  // TODO: 1. Discuss how to log audit message
+  // TODO: 2. Discuss if we need a trie to optimize（mainly for the O(n^2) loop but I think
+  //  in most of the cases it would be O(1) because denyDominatePrefixAllow should be rare
+  override def authorizeAny(requestContext: AuthorizableRequestContext,
+                            op: AclOperation,
+                            resourceType: ResourceType): AuthorizationResult = {
+    if (resourceType == ResourceType.ANY) {
+      throw new IllegalArgumentException("Must specify a resource type for authorizeAny")
+    }
+
+    if (resourceType == ResourceType.UNKNOWN) {
+      throw new IllegalArgumentException("Unknown resource type")
+    }
+
+    val allow = new AccessControlEntry(requestContext.principal().toString,
+      requestContext.clientAddress().getHostAddress, op, AclPermissionType.ALLOW)
+    val deny = new AccessControlEntry(requestContext.principal().toString,
+      requestContext.clientAddress().getHostAddress, op, AclPermissionType.DENY)
+
+    val allowResource = resourceCache.getOrElse(allow, scala.collection.mutable.HashSet.empty)
+      .filter(rp => rp.resourceType() == resourceType)
+    val denyResource = resourceCache.getOrElse(deny, scala.collection.mutable.HashSet.empty)
+      .filter(rp => rp.resourceType() == resourceType)
+
+    for (rp <- denyResource) {
+      // We assume that there should be only one cluster resource,
+      // whose literal name is Resource.CLUSTER_NAME
+      if (rp.resourceType() == ResourceType.CLUSTER) {
+        return AuthorizationResult.DENIED
+      }
+      if (canDenyAnyAllow(rp)) {
+        return AuthorizationResult.DENIED
+      }
+    }
+
+    if (shouldAllowEveryoneIfNoAclIsFound)
+      return AuthorizationResult.ALLOWED
+
+    for (rp <- allowResource) {
+      rp.patternType() match {
+        case PatternType.LITERAL =>
+          // We've checked the potential dominated deny by canDenyAnyAllow
+          if (rp.name() == ResourcePattern.WILDCARD_RESOURCE)
+            return AuthorizationResult.ALLOWED
+          val action = Collections.singletonList(new Action(
+            op, rp, 1, false, false))
+          if (authorize(requestContext, action).get(0) == AuthorizationResult.ALLOWED) {
+            return AuthorizationResult.ALLOWED
+          }
+        case PatternType.PREFIXED =>
+          if (!denyDominatePrefixAllow(rp.name(), denyResource))
+            return AuthorizationResult.ALLOWED
+        case _ =>
+      }
+    }
+
+    AuthorizationResult.DENIED
+  }
+
+  private def canDenyAnyAllow(rp: ResourcePattern): Boolean = {
+    if (rp.patternType() == PatternType.LITERAL && rp.name() == ResourcePattern.WILDCARD_RESOURCE)
+      return true
+    if (rp.patternType() == PatternType.PREFIXED && rp.name().isEmpty)
+      return true
+    false
+  }
+
+  private def denyDominatePrefixAllow(prefixAllow: String,
+                                      denyResource: scala.collection.mutable.Set[ResourcePattern]): Boolean = {
+    for (rp <- denyResource) {
+      if (rp.patternType() == PatternType.LITERAL && rp.name() == ResourcePattern.WILDCARD_RESOURCE)
+        return true
+      if (rp.patternType() == PatternType.PREFIXED && prefixAllow.startsWith(rp.name()))
+        return true
+    }
+    false
   }
 
   private def authorizeAction(requestContext: AuthorizableRequestContext, action: Action): AuthorizationResult = {
@@ -550,6 +634,31 @@ class AclAuthorizer extends Authorizer with Logging {
   }
 
   private def updateCache(resource: ResourcePattern, versionedAcls: VersionedAcls): Unit = {
+    val currentAces: Set[AccessControlEntry] = aclCache.get(resource) match {
+      case Some(versionedAcls) => versionedAcls.acls.map(aclEntry => aclEntry.ace)
+      case None => Set.empty
+    }
+    val newAces: Set[AccessControlEntry] = versionedAcls.acls.map(aclEntry => aclEntry.ace)
+    val acesToAdd = newAces.diff(currentAces)
+    val acesToRemove = currentAces.diff(newAces)
+
+    acesToAdd.foreach(ace => {
+      resourceCache.get(ace) match {
+        case Some(resources) => resources.add(resource)
+        case None => resourceCache += (ace -> scala.collection.mutable.HashSet(resource))
+      }
+    })
+    acesToRemove.foreach(ace => {
+      resourceCache.get(ace) match {
+        case Some(resources) =>
+          resources.remove(resource)
+          if (resources.isEmpty) {
+            resourceCache -= ace
+          }
+        case None =>
+      }
+    })
+
     if (versionedAcls.acls.nonEmpty) {
       aclCache = aclCache.updated(resource, versionedAcls)
     } else {

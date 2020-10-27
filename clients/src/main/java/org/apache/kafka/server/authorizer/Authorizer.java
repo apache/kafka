@@ -17,16 +17,6 @@
 
 package org.apache.kafka.server.authorizer;
 
-import java.io.Closeable;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-import java.util.concurrent.CompletionStage;
-
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
@@ -36,9 +26,14 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.resource.PatternType;
-import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
+
+import java.io.Closeable;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletionStage;
 
 /**
  *
@@ -154,28 +149,24 @@ public interface Authorizer extends Configurable, Closeable {
 
     /**
      * Check if the caller is authorized to perform the given ACL operation on at least one
-     * resource satisfying the filter.
-     * The request caller is not allowed to perform the given ACL operation on at least one
-     * resource satisfying iff
+     * resource of the given type.
      *
-     * @param requestContext Request context including request type, security protocol, and listener name
+     * @param requestContext Request context including request resourceType, security protocol, and listener name
      * @param op             The ACL operation to check
-     * @param f              The resource filter
-     * @return Return true if the caller is authorized to perform the given ACL operation
-     * on at least one resource satisfying the filter. Return false otherwise.
+     * @param resourceType   The resource type to check
+     * @return               Return {@link AuthorizationResult#ALLOWED} if the caller is authorized to perform the
+     *                       given ACL operation on at least one resource of the given type.
+     *                       Return {@link AuthorizationResult#DENIED} otherwise.
      */
-    default AuthorizationResult authorizeAny(AuthorizableRequestContext requestContext, AclOperation op, ResourcePatternFilter f) {
-        AclBindingFilter filter = new AclBindingFilter(
-            f, new AccessControlEntryFilter(
+    default AuthorizationResult authorizeAny(AuthorizableRequestContext requestContext, AclOperation op, ResourceType resourceType) {
+        ResourcePatternFilter resourceFilter = new ResourcePatternFilter(resourceType, null, PatternType.ANY);
+        AclBindingFilter aclFilter = new AclBindingFilter(
+            resourceFilter, new AccessControlEntryFilter(
                 requestContext.principal().toString(),
                 requestContext.clientAddress().getHostAddress(),
                 op,
                 AclPermissionType.ANY));
-
-        Iterable<AclBinding> bindings = acls(filter);
-        Set<String> allResourceNames = new HashSet<>();
-
-        for (AclBinding binding : bindings) {
+        for (AclBinding binding : acls(aclFilter)) {
             if (binding.entry().permissionType() != AclPermissionType.ALLOW)
                 continue;
             List<Action> action = Collections.singletonList(new Action(
@@ -183,20 +174,8 @@ public interface Authorizer extends Configurable, Closeable {
             if (authorize(requestContext, action).get(0) == AuthorizationResult.ALLOWED) {
                 return AuthorizationResult.ALLOWED;
             }
-            allResourceNames.add(binding.pattern().name());
         }
-
-        // More cases to investigate, see slack
-        String randomResourceName = UUID.randomUUID().toString();
-        while (allResourceNames.contains(randomResourceName)) {
-            randomResourceName = UUID.randomUUID().toString();
-        }
-
-        ResourcePattern randomResource = new ResourcePattern(
-            ResourceType.TOPIC, randomResourceName, PatternType.LITERAL);
-        List<Action> randomAction = Collections.singletonList(new Action(
-            op, randomResource, 1, false, false));
-        return authorize(requestContext, randomAction).get(0);
+        return AuthorizationResult.DENIED;
     }
 
 }
