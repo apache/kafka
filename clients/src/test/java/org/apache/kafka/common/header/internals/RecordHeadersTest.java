@@ -210,15 +210,12 @@ public class RecordHeadersTest {
     @Test
     public void shouldThrowNpeWhenAddingNullHeader() {
         final RecordHeaders recordHeaders = new RecordHeaders();
-
         assertThrows(NullPointerException.class, () -> recordHeaders.add(null));
     }
 
     @Test
     public void shouldThrowNpeWhenAddingCollectionWithNullHeader() {
-        final Header[] headers = new Header[1];
-
-        assertThrows(NullPointerException.class, () -> new RecordHeaders(headers));
+        assertThrows(NullPointerException.class, () -> new RecordHeaders(new Header[1]));
     }
 
     private int getCount(Headers headers) {
