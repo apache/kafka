@@ -500,11 +500,11 @@ object TestRaftServer extends Logging {
   ) {
     private var lastReportTimeMs = time.milliseconds()
     private val latency = com.yammer.metrics.Metrics.newHistogram(
-      new MetricName("kafka.raft", "write", "throughput")
+      new MetricName("kafka.raft", "write", "latency")
     )
     private val throughput = com.yammer.metrics.Metrics.newMeter(
-      new MetricName("kafka.raft", "write", "latency"),
-      "records",
+      new MetricName("kafka.raft", "write", "throughput"),
+      "bytes",
       TimeUnit.SECONDS
     )
 
