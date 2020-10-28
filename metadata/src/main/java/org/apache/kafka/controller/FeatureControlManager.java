@@ -118,11 +118,9 @@ public class FeatureControlManager {
         return new FeatureManager.FinalizedFeaturesAndEpoch(features, currentEpoch);
     }
 
-    void replay(List<FeatureLevelRecord> records, long offset) {
-        for (FeatureLevelRecord record : records) {
-            finalizedVersions.put(record.name(),
-                new VersionRange(record.minFeatureLevel(), record.maxFeatureLevel()));
-        }
+    void replay(FeatureLevelRecord record, long offset) {
+        finalizedVersions.put(record.name(),
+            new VersionRange(record.minFeatureLevel(), record.maxFeatureLevel()));
         epoch.clear();
         epoch.add(offset);
     }
