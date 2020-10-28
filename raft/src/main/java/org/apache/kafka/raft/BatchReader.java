@@ -19,6 +19,7 @@ package org.apache.kafka.raft;
 import java.io.Closeable;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 import java.util.OptionalLong;
 
 /**
@@ -94,6 +95,21 @@ public interface BatchReader<T> extends Iterator<BatchReader.Batch<T>>, Closeabl
                 ", epoch=" + epoch +
                 ", records=" + records +
                 ')';
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            Batch<?> batch = (Batch<?>) o;
+            return baseOffset == batch.baseOffset &&
+                epoch == batch.epoch &&
+                Objects.equals(records, batch.records);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(baseOffset, epoch, records);
         }
     }
 

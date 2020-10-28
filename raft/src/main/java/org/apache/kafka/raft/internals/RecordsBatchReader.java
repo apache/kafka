@@ -46,6 +46,7 @@ public class RecordsBatchReader<T> implements BatchReader<T> {
     private long lastReturnedOffset;
     private Batch<T> nextBatch;
     private boolean isClosed = false;
+    private ByteBuffer allocatedBuffer = null;
 
     public RecordsBatchReader(
         long baseOffset,
@@ -66,10 +67,9 @@ public class RecordsBatchReader<T> implements BatchReader<T> {
         if (records instanceof MemoryRecords) {
             batchIterator = ((MemoryRecords) records).batchIterator();
         } else if (records instanceof FileRecords) {
-            // TODO: We need to return the buffer to the supplier
-            ByteBuffer buffer = bufferSupplier.get(records.sizeInBytes());
-            ((FileRecords) records).readInto(buffer, 0);
-            MemoryRecords memRecords = MemoryRecords.readableRecords(buffer);
+            this.allocatedBuffer = bufferSupplier.get(records.sizeInBytes());
+            ((FileRecords) records).readInto(allocatedBuffer, 0);
+            MemoryRecords memRecords = MemoryRecords.readableRecords(allocatedBuffer);
             batchIterator = memRecords.batchIterator();
         } else {
             throw new IllegalStateException("Unexpected Records type " + records.getClass());
@@ -164,6 +164,11 @@ public class RecordsBatchReader<T> implements BatchReader<T> {
     @Override
     public void close() {
         isClosed = true;
+
+        if (allocatedBuffer != null) {
+            bufferSupplier.release(allocatedBuffer);
+        }
+
         closeListener.onClose(this);
     }
 
