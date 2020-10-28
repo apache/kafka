@@ -43,6 +43,11 @@
   <disallow class="com.yammer.metrics.Metrics" />
   <allow pkg="com.yammer.metrics"/>
 
+  <subpackage name="testkit">
+    <allow pkg="kafka.metrics"/>
+    <allow pkg="kafka.server"/>
+  </subpackage>
+
   <subpackage name="tools">
     <allow pkg="org.apache.kafka.clients.admin" />
     <allow pkg="kafka.admin" />
