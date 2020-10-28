@@ -27,11 +27,9 @@ public class EnvelopeResponse extends AbstractResponse {
 
     private final EnvelopeResponseData data;
 
-    public EnvelopeResponse(int throttleTimeMs,
-                            ByteBuffer responseData,
+    public EnvelopeResponse(ByteBuffer responseData,
                             Errors error) {
         this.data = new EnvelopeResponseData()
-                        .setThrottleTimeMs(throttleTimeMs)
                         .setResponseData(responseData)
                         .setErrorCode(error.code());
     }
@@ -52,11 +50,6 @@ public class EnvelopeResponse extends AbstractResponse {
     @Override
     protected Struct toStruct(short version) {
         return data.toStruct(version);
-    }
-
-    @Override
-    public int throttleTimeMs() {
-        return data.throttleTimeMs();
     }
 
     public Errors error() {

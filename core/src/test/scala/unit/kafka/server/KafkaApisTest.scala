@@ -305,7 +305,7 @@ class KafkaApisTest {
     val requestHeader = new RequestHeader(ApiKeys.ALTER_CONFIGS, ApiKeys.ALTER_CONFIGS.latestVersion,
       clientId, 0)
 
-    EasyMock.expect(controller.isActive).andReturn(true).times(2)
+    EasyMock.expect(controller.isActive).andReturn(true)
 
     authorizeResource(authorizer, operation, ResourceType.TOPIC, resourceName, AuthorizationResult.ALLOWED)
 
@@ -340,11 +340,8 @@ class KafkaApisTest {
 
     assertEquals(Errors.NONE, response.error)
 
-    val innerResponse = AbstractResponse.parseResponse(ApiKeys.ALTER_CONFIGS,
-      ApiKeys.ALTER_CONFIGS.parseResponse(
-        ApiKeys.ALTER_CONFIGS.latestVersion, response.embedResponseData()),
-      ApiKeys.ALTER_CONFIGS.latestVersion)
-      .asInstanceOf[AlterConfigsResponse]
+    val innerResponse = AbstractResponse.deserializeBody(response.embedResponseData(),
+      requestHeader).asInstanceOf[AlterConfigsResponse]
 
     val responseMap = innerResponse.data.responses().asScala.map { resourceResponse =>
       resourceResponse.resourceName() -> Errors.forCode(resourceResponse.errorCode)
@@ -380,6 +377,36 @@ class KafkaApisTest {
     val response = readResponse(ApiKeys.ENVELOPE, envelopeRequest, capturedResponse)
       .asInstanceOf[EnvelopeResponse]
     assertEquals(Errors.UNKNOWN_SERVER_ERROR, response.error())
+  }
+
+  @Test
+  def testInvalidEnvelopeRequestWithNonForwardableAPI(): Unit = {
+    val requestHeader = new RequestHeader(ApiKeys.LEAVE_GROUP, ApiKeys.LEAVE_GROUP.latestVersion,
+      clientId, 0)
+    val leaveGroupRequest = new LeaveGroupRequest.Builder("group",
+      Collections.singletonList(new MemberIdentity())).build(requestHeader.apiVersion)
+    val serializedRequestData = leaveGroupRequest.serialize(requestHeader)
+
+    val capturedResponse = expectNoThrottling()
+
+    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, controller)
+
+    val envelopeHeader = new RequestHeader(ApiKeys.ENVELOPE, ApiKeys.ENVELOPE.latestVersion,
+      clientId, 0)
+
+    val envelopeRequest = new EnvelopeRequest.Builder(serializedRequestData, null, hostAddress)
+      .build(envelopeHeader.apiVersion)
+    val request = buildRequestWithEnvelopeContext(leaveGroupRequest,
+      fromPrivilegedListener = true,
+      requestHeader = Option(requestHeader),
+      principalSerde = kafkaPrincipalSerde,
+      envelopeHeader = envelopeHeader)
+
+    createKafkaApis(enableForwarding = true).handle(request)
+
+    val response = readResponse(ApiKeys.ENVELOPE, envelopeRequest, capturedResponse)
+      .asInstanceOf[EnvelopeResponse]
+    assertEquals(Errors.INVALID_REQUEST, response.error())
   }
 
   @Test
@@ -448,17 +475,8 @@ class KafkaApisTest {
 
     val response = readResponse(ApiKeys.ENVELOPE, envelopeRequest, capturedResponse)
       .asInstanceOf[EnvelopeResponse]
-    if (expectedError == Errors.NOT_CONTROLLER)
-      assertEquals(expectedError, response.error)
-    else {
-      val innerResponse = AbstractResponse.parseResponse(ApiKeys.ALTER_CONFIGS,
-        ApiKeys.ALTER_CONFIGS.parseResponse(
-          ApiKeys.ALTER_CONFIGS.latestVersion, response.embedResponseData()),
-        ApiKeys.ALTER_CONFIGS.latestVersion)
-         .asInstanceOf[AlterConfigsResponse]
 
-      assertEquals(Map(expectedError -> 1), innerResponse.errorCounts().asScala)
-    }
+    assertEquals(expectedError, response.error())
 
     verify(authorizer, adminManager)
   }

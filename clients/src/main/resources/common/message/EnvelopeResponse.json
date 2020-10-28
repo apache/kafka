@@ -21,8 +21,6 @@
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
-    { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
-      "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
     { "name": "ResponseData", "type": "bytes", "versions": "0+", "nullableVersions": "0+",
       "zeroCopy": true, "default": "null",
       "about": "The embedded response header and data."},

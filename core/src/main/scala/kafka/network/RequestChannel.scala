@@ -122,8 +122,7 @@ object RequestChannel extends Logging {
       envelopeContext match {
         case Some(envelopeContext) =>
           val envelopeResponse = new EnvelopeResponse(
-            abstractResponse.throttleTimeMs(),
-            abstractResponse.serializeBody(context.header.apiVersion),
+            abstractResponse.serialize(header.apiVersion, header.toResponseHeader),
             error
           )
 

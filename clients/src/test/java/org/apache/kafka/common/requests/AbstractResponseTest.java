@@ -37,12 +37,14 @@ public class AbstractResponseTest {
                 .setThrottleTimeMs(10)
                 .setTopics(collection)
         );
-        final int throttleTimeMs = 5;
-        final short version = (short) (CreateTopicsResponseData.SCHEMAS.length - 1);
-        EnvelopeResponse envelopeResponse = new EnvelopeResponse(throttleTimeMs,
-            createTopicsResponse.serializeBody(version), Errors.NONE);
 
-        RequestHeader header = new RequestHeader(ApiKeys.CREATE_TOPICS, version, "client", 4);
+        final short version = (short) (CreateTopicsResponseData.SCHEMAS.length - 1);
+        final RequestHeader header = new RequestHeader(ApiKeys.CREATE_TOPICS, version, "client", 4);
+
+        final EnvelopeResponse envelopeResponse = new EnvelopeResponse(
+            createTopicsResponse.serialize(version, header.toResponseHeader()),
+            Errors.NONE
+        );
 
         CreateTopicsResponse extractedResponse = (CreateTopicsResponse) CreateTopicsResponse.deserializeBody(
             envelopeResponse.embedResponseData(), header);

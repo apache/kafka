@@ -125,25 +125,27 @@ class KafkaApis(val requestChannel: RequestChannel,
     info("Shutdown complete.")
   }
 
-  private def maybeForward(request: RequestChannel.Request,
-                           handler: RequestChannel.Request => Unit): Unit = {
-    if (request.envelopeContext.isDefined &&
-      (!request.context.fromPrivilegedListener ||
-        !authorize(request.envelopeContext.get.brokerContext, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME))
-    ) {
+  private def validateForwardRequest(request: RequestChannel.Request): Unit = {
+    if (!request.context.fromPrivilegedListener ||
+      !authorize(request.envelopeContext.get.brokerContext, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
       // If the designated forwarding request is not coming from a privileged listener, or
       // it fails CLUSTER_ACTION permission, we would fail the authorization.
-      sendErrorResponseMaybeThrottle(request, Errors.CLUSTER_AUTHORIZATION_FAILED.exception)
-    } else if (!request.header.apiKey.forwardable && request.envelopeContext.isDefined) {
-      throw new IllegalStateException("Given RPC " + request.header.apiKey + " does not support forwarding.")
-    } else if (request.envelopeContext.isDefined && request.principalSerde.isEmpty) {
-      sendErrorResponseExemptThrottle(request, Errors.PRINCIPAL_DESERIALIZATION_FAILURE.exception())
-    } else if (request.envelopeContext.isDefined && !controller.isActive) {
-      sendErrorResponseExemptThrottle(request, Errors.NOT_CONTROLLER.exception())
-    } else if (!controller.isActive && isForwardingEnabled(request)) {
+      throw new ClusterAuthorizationException(s"Envelope request $request is not authorized")
+    } else if (!request.header.apiKey.forwardable) {
+      throw new InvalidRequestException("Given RPC " + request.header.apiKey + " does not support forwarding")
+    } else if (request.principalSerde.isEmpty) {
+      throw new PrincipalDeserializationFailureException("Principal serde is not defined for forwarding request")
+    } else if (!controller.isActive) {
+      throw new NotControllerException("Non-active controller could not process forward request")
+    }
+  }
+
+  private def maybeForward(request: RequestChannel.Request,
+                           handler: RequestChannel.Request => Unit): Unit = {
+    if (request.envelopeContext.isEmpty && !controller.isActive && isForwardingEnabled(request)) {
       forwardingManager.forwardRequest(sendResponseMaybeThrottle, request)
     } else {
-      // When IBP is smaller than 2.8 or the principal serde is undefined, forwarding is not supported,
+      // When the KIP-500 mode is off or the principal serde is undefined, forwarding is not supported,
       // therefore requests are handled directly.
       handler(request)
     }
@@ -159,6 +161,10 @@ class KafkaApis(val requestChannel: RequestChannel,
     try {
       trace(s"Handling request:${request.requestDesc(true)} from connection ${request.context.connectionId};" +
         s"securityProtocol:${request.context.securityProtocol},principal:${request.context.principal}")
+
+      if (request.envelopeContext.isDefined)
+        validateForwardRequest(request)
+
       request.header.apiKey match {
         case ApiKeys.PRODUCE => handleProduceRequest(request)
         case ApiKeys.FETCH => handleFetchRequest(request)

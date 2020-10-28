@@ -16,7 +16,8 @@
 {
   "type": "data",
   "name": "DefaultPrincipalData",
-  // The encoding format for default Kafka principal.
+  // The encoding format for default Kafka principal in
+  // org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder.
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
@@ -24,7 +25,7 @@
       "about": "The principal type"},
     {"name": "Name", "type": "string", "versions": "0+",
       "about": "The principal name"},
-    {"name": "tokenAuthenticated", "type": "bool", "versions": "0+",
-      "about": "Whether the given principal is token authenticated."}
+    {"name": "TokenAuthenticated", "type": "bool", "versions": "0+",
+      "about": "Whether the principal was authenticated by a delegation token on the forwarding broker."}
   ]
 }

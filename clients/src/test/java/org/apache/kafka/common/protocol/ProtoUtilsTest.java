@@ -23,7 +23,7 @@ import static org.junit.Assert.assertTrue;
 
 public class ProtoUtilsTest {
     @Test
-    public void testDelayedAllocationSchemaDetection() throws Exception {
+    public void testDelayedAllocationSchemaDetection() {
         //verifies that schemas known to retain a reference to the underlying byte buffer are correctly detected.
         for (ApiKeys key : ApiKeys.values()) {
             switch (key) {
@@ -35,14 +35,16 @@ public class ProtoUtilsTest {
                 case RENEW_DELEGATION_TOKEN:
                 case ALTER_USER_SCRAM_CREDENTIALS:
                 case ENVELOPE:
-                case ALTER_CONFIGS:
-                case INCREMENTAL_ALTER_CONFIGS:
-                case ALTER_CLIENT_QUOTAS:
-                case CREATE_TOPICS:
                     assertTrue(key + " should require delayed allocation", key.requiresDelayedAllocation);
                     break;
                 default:
-                    assertFalse(key + " should not require delayed allocation", key.requiresDelayedAllocation);
+                    if (key.forwardable) {
+                        assertTrue(key + " should require delayed allocation since it is forwardable",
+                            key.requiresDelayedAllocation);
+                    } else {
+                        assertFalse(key + " should not require delayed allocation",
+                            key.requiresDelayedAllocation);
+                    }
                     break;
             }
         }

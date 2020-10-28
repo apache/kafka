@@ -40,9 +40,6 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
         return new NetworkSend(destination, RequestUtils.serialize(header.toStruct(), toStruct(apiVersion)));
     }
 
-    /**
-     * Visible for testing, typically {@link #toSend(String, ResponseHeader, short)} should be used instead.
-     */
     public ByteBuffer serialize(short version, ResponseHeader responseHeader) {
         return RequestUtils.serialize(responseHeader.toStruct(), toStruct(version));
     }
@@ -99,6 +96,8 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
     public static AbstractResponse deserializeBody(ByteBuffer byteBuffer, RequestHeader header) {
         ApiKeys apiKey = header.apiKey();
         short apiVersion = header.apiVersion();
+
+        ResponseHeader.parse(byteBuffer, apiKey.responseHeaderVersion(apiVersion));
         Struct struct = apiKey.parseResponse(apiVersion, byteBuffer);
         return AbstractResponse.parseResponse(apiKey, struct, apiVersion);
     }

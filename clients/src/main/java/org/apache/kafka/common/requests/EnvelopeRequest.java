@@ -88,8 +88,7 @@ public class EnvelopeRequest extends AbstractRequest {
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         return new EnvelopeResponse(new EnvelopeResponseData()
-                                        .setErrorCode(Errors.forException(e).code())
-                                        .setThrottleTimeMs(throttleTimeMs));
+                                        .setErrorCode(Errors.forException(e).code()));
     }
 
     public static EnvelopeRequest parse(ByteBuffer buffer, short version) {

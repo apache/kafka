@@ -156,8 +156,9 @@ class BrokerToControllerChannelManagerImpl(metadataCache: kafka.server.MetadataC
           val envelopeResponse = response.responseBody.asInstanceOf[EnvelopeResponse]
           if (envelopeResponse.error() != Errors.NONE) {
             request.body[AbstractRequest].getErrorResponse(Errors.UNKNOWN_SERVER_ERROR.exception())
-          } else
+          } else {
             AbstractResponse.deserializeBody(envelopeResponse.embedResponseData, request.header)
+          }
         }, callback)))
     requestThread.wakeup()
   }

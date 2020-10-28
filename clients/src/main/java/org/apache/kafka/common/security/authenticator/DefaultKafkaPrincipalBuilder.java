@@ -17,8 +17,10 @@
 package org.apache.kafka.common.security.authenticator;
 
 import javax.security.auth.x500.X500Principal;
+
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.message.DefaultPrincipalData;
 import org.apache.kafka.common.network.Authenticator;
 import org.apache.kafka.common.network.TransportLayer;
@@ -166,12 +168,6 @@ public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, Kafk
     }
 
     @Override
-    public void close() {
-        if (oldPrincipalBuilder != null)
-            oldPrincipalBuilder.close();
-    }
-
-    @Override
     public ByteBuffer serialize(KafkaPrincipal principal) {
         DefaultPrincipalData data = new DefaultPrincipalData()
                                         .setType(principal.getPrincipalType())
@@ -188,9 +184,19 @@ public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, Kafk
     @Override
     public KafkaPrincipal deserialize(ByteBuffer bytes) {
         short version = bytes.getShort();
+        if (version < 0 || version >= DefaultPrincipalData.SCHEMAS.length) {
+            throw new SerializationException("Invalid principal data version " + version);
+        }
+
         DefaultPrincipalData data = new DefaultPrincipalData(
             DefaultPrincipalData.SCHEMAS[version].read(bytes),
             version);
         return new KafkaPrincipal(data.type(), data.name(), data.tokenAuthenticated());
+    }
+
+    @Override
+    public void close() {
+        if (oldPrincipalBuilder != null)
+            oldPrincipalBuilder.close();
     }
 }

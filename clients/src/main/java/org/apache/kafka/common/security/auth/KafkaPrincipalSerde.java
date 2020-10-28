@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.common.security.auth;
 
+import org.apache.kafka.common.errors.SerializationException;
+
 import java.nio.ByteBuffer;
 
 /**
- * Serializer/Deserializer interface for {@link KafkaPrincipal} for the forwarding purpose.
+ * Serializer/Deserializer interface for {@link KafkaPrincipal} for the the purpose of inter-broker forwarding.
+ * Any serialization/deserialization failure should raise a {@link SerializationException} to be consistent.
  */
 public interface KafkaPrincipalSerde {
 
