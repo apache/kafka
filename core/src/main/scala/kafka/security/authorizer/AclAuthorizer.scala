@@ -327,15 +327,20 @@ class AclAuthorizer extends Authorizer with Logging {
       throw new IllegalArgumentException("Unknown resource type")
     }
 
-    val allow = new AccessControlEntry(requestContext.principal().toString,
-      requestContext.clientAddress().getHostAddress, op, AclPermissionType.ALLOW)
-    val deny = new AccessControlEntry(requestContext.principal().toString,
-      requestContext.clientAddress().getHostAddress, op, AclPermissionType.DENY)
+    val allowResource = matchingResources(
+      requestContext.principal().toString,
+      requestContext.clientAddress().getHostAddress,
+      op,
+      AclPermissionType.ALLOW
+    )
 
-    val allowResource = resourceCache.getOrElse(allow, scala.collection.mutable.HashSet.empty)
-      .filter(rp => rp.resourceType() == resourceType)
-    val denyResource = resourceCache.getOrElse(deny, scala.collection.mutable.HashSet.empty)
-      .filter(rp => rp.resourceType() == resourceType)
+    val denyResource = matchingResources(
+      requestContext.principal().toString,
+      requestContext.clientAddress().getHostAddress,
+      op,
+      AclPermissionType.DENY
+    )
+
 
     for (rp <- denyResource) {
       // We assume that there should be only one cluster resource,
@@ -372,6 +377,24 @@ class AclAuthorizer extends Authorizer with Logging {
     AuthorizationResult.DENIED
   }
 
+  def matchingResources(principal: String, host: String, op: AclOperation,
+                        permission: AclPermissionType): Set[ResourcePattern] = {
+    var resources = Set[ResourcePattern]()
+    for (p <- Set(principal, AclEntry.WildcardPrincipal.toString)) {
+      for (h <- Set(host, AclEntry.WildcardHost)) {
+        for (o <- Set(op, AclOperation.ALL)) {
+          val ace = new AccessControlEntry(p, h, o, permission)
+          resourceCache.get(ace) match {
+            case Some(r) => resources ++= r
+            case None =>
+          }
+        }
+      }
+    }
+    resources
+  }
+
+
   private def canDenyAnyAllow(rp: ResourcePattern): Boolean = {
     if (rp.patternType() == PatternType.LITERAL && rp.name() == ResourcePattern.WILDCARD_RESOURCE)
       return true
@@ -381,7 +404,7 @@ class AclAuthorizer extends Authorizer with Logging {
   }
 
   private def denyDominatePrefixAllow(prefixAllow: String,
-                                      denyResource: scala.collection.mutable.Set[ResourcePattern]): Boolean = {
+                                      denyResource: Set[ResourcePattern]): Boolean = {
     for (rp <- denyResource) {
       if (rp.patternType() == PatternType.LITERAL && rp.name() == ResourcePattern.WILDCARD_RESOURCE)
         return true
