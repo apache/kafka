@@ -339,7 +339,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldComputeOffsetSumForUninitializedTask() throws Exception {
+    public void shouldComputeOffsetSumFromCheckpointFileForUninitializedTask() throws Exception {
         final Map<TopicPartition, Long> changelogOffsets = mkMap(
             mkEntry(new TopicPartition("changelog", 0), 5L),
             mkEntry(new TopicPartition("changelog", 1), 10L)
@@ -361,7 +361,7 @@ public class TaskManagerTest {
 
         assertThat(taskManager.getTaskOffsetSums(), is(expectedOffsetSums));
     }
-
+    
     @Test
     public void shouldNotReportOffsetSumsForTaskWeCantLock() throws Exception {
         expectLockFailedFor(taskId00);
