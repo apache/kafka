@@ -26,13 +26,16 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.resource.PatternType;
+import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
 
 import java.io.Closeable;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletionStage;
 
 /**
@@ -166,14 +169,54 @@ public interface Authorizer extends Configurable, Closeable {
                 requestContext.clientAddress().getHostAddress(),
                 op,
                 AclPermissionType.ANY));
+
+        Set<String> denyPrefixes = new HashSet<>();
+        Set<String> allowPrefixes = new HashSet<>();
+
         for (AclBinding binding : acls(aclFilter)) {
-            if (binding.entry().permissionType() != AclPermissionType.ALLOW)
+            if (binding.entry().permissionType() != AclPermissionType.ALLOW) {
+                if (binding.entry().permissionType() == AclPermissionType.DENY) {
+                    switch (binding.pattern().patternType()) {
+                        case LITERAL:
+                            if (binding.pattern().name().equals(ResourcePattern.WILDCARD_RESOURCE))
+                                return AuthorizationResult.DENIED;
+                            break;
+                        case PREFIXED:
+                            if (binding.pattern().name().isEmpty())
+                                return AuthorizationResult.DENIED;
+                            denyPrefixes.add(binding.pattern().name());
+                            break;
+                    }
+                }
                 continue;
-            List<Action> action = Collections.singletonList(new Action(
-                op, binding.pattern(), 1, false, false));
-            if (authorize(requestContext, action).get(0) == AuthorizationResult.ALLOWED) {
-                return AuthorizationResult.ALLOWED;
             }
+
+            switch (binding.pattern().patternType()) {
+                case LITERAL:
+                    List<Action> action = Collections.singletonList(new Action(
+                        op, binding.pattern(), 1, false, false));
+                    if (authorize(requestContext, action).get(0) == AuthorizationResult.ALLOWED) {
+                        return AuthorizationResult.ALLOWED;
+                    }
+                    break;
+                case PREFIXED:
+                    allowPrefixes.add(binding.pattern().name());
+                    break;
+            }
+        }
+
+        for (String allowed : allowPrefixes) {
+            StringBuilder sb = new StringBuilder();
+            boolean hasDominatedDeny = false;
+            for (int pos = 0; pos < allowed.length(); pos++) {
+                sb.append(allowed.charAt(pos));
+                if (denyPrefixes.contains(sb.toString())) {
+                    hasDominatedDeny = true;
+                    break;
+                }
+            }
+            if (!hasDominatedDeny)
+                return AuthorizationResult.ALLOWED;
         }
         return AuthorizationResult.DENIED;
     }
