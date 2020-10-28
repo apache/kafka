@@ -14,27 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.raft.internals;
 
-package org.apache.kafka.common.protocol;
+import org.apache.kafka.common.protocol.Writable;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.raft.RecordSerde;
 
-import org.apache.kafka.common.UUID;
+public class StringSerde implements RecordSerde<String> {
 
-import java.nio.ByteBuffer;
-
-public interface Writable {
-    void writeByte(byte val);
-    void writeShort(short val);
-    void writeInt(int val);
-    void writeLong(long val);
-    void writeDouble(double val);
-    void writeByteArray(byte[] arr);
-    void writeUnsignedVarint(int i);
-    void writeByteBuffer(ByteBuffer buf);
-    void writeVarint(int i);
-    void writeVarlong(long i);
-
-    default void writeUUID(UUID uuid) {
-        writeLong(uuid.getMostSignificantBits());
-        writeLong(uuid.getLeastSignificantBits());
+    @Override
+    public int recordSize(String data, Object context) {
+        return recordSize(data);
     }
+
+    public int recordSize(String data) {
+        return Utils.utf8Length(data);
+    }
+
+    @Override
+    public void write(String data, Object context, Writable out) {
+        out.writeByteArray(Utils.utf8(data));
+    }
+
 }

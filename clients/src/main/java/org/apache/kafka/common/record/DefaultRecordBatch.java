@@ -440,22 +440,22 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
                 producerEpoch, baseSequence, isTransactional, isControlRecord, partitionLeaderEpoch, 0);
     }
 
-    static void writeHeader(ByteBuffer buffer,
-                            long baseOffset,
-                            int lastOffsetDelta,
-                            int sizeInBytes,
-                            byte magic,
-                            CompressionType compressionType,
-                            TimestampType timestampType,
-                            long firstTimestamp,
-                            long maxTimestamp,
-                            long producerId,
-                            short epoch,
-                            int sequence,
-                            boolean isTransactional,
-                            boolean isControlBatch,
-                            int partitionLeaderEpoch,
-                            int numRecords) {
+    public static void writeHeader(ByteBuffer buffer,
+                                   long baseOffset,
+                                   int lastOffsetDelta,
+                                   int sizeInBytes,
+                                   byte magic,
+                                   CompressionType compressionType,
+                                   TimestampType timestampType,
+                                   long firstTimestamp,
+                                   long maxTimestamp,
+                                   long producerId,
+                                   short epoch,
+                                   int sequence,
+                                   boolean isTransactional,
+                                   boolean isControlBatch,
+                                   int partitionLeaderEpoch,
+                                   int numRecords) {
         if (magic < RecordBatch.CURRENT_MAGIC_VALUE)
             throw new IllegalArgumentException("Invalid magic value " + magic);
         if (firstTimestamp < 0 && firstTimestamp != NO_TIMESTAMP)

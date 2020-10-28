@@ -658,9 +658,9 @@ public class QuorumStateTest {
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
         QuorumState state = initializeEmptyState(voters);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
-        state.transitionToUnattached(5);
+        state.transitionToVoted(5, otherNodeId);
 
-        long remainingElectionTimeMs = state.unattachedStateOrThrow().remainingElectionTimeMs(time.milliseconds());
+        long remainingElectionTimeMs = state.votedStateOrThrow().remainingElectionTimeMs(time.milliseconds());
         time.sleep(1000);
 
         state.transitionToUnattached(6);

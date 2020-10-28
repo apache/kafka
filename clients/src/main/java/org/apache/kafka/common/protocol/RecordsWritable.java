@@ -105,6 +105,16 @@ public class RecordsWritable implements Writable {
         buffer.put(src);
     }
 
+    @Override
+    public void writeVarint(int i) {
+        ByteUtils.writeVarint(i, buffer);
+    }
+
+    @Override
+    public void writeVarlong(long i) {
+        ByteUtils.writeVarlong(i, buffer);
+    }
+
     public void writeRecords(BaseRecords records) {
         flush();
         sendConsumer.accept(records.toSend(dest));
