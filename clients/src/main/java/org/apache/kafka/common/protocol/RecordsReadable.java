@@ -80,6 +80,16 @@ public class RecordsReadable implements Readable {
         return res;
     }
 
+    @Override
+    public int readVarint() {
+        return ByteUtils.readVarint(buf);
+    }
+
+    @Override
+    public long readVarlong() {
+        return ByteUtils.readVarlong(buf);
+    }
+
     public BaseRecords readRecords(int length) {
         if (length < 0) {
             // no records
@@ -89,4 +99,5 @@ public class RecordsReadable implements Readable {
             return MemoryRecords.readableRecords(recordsBuffer);
         }
     }
+
 }

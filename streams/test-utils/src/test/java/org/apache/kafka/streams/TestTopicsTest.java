@@ -44,9 +44,6 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Properties;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItems;
@@ -68,10 +65,6 @@ public class TestTopicsTest {
     private final Serde<String> stringSerde = new Serdes.StringSerde();
     private final Serde<Long> longSerde = new Serdes.LongSerde();
 
-    private final Properties config = mkProperties(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "TestTopicsTest"),
-            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234")
-    ));
     private final Instant testBaseTime = Instant.parse("2019-06-01T10:00:00Z");
 
     @Before
@@ -82,7 +75,7 @@ public class TestTopicsTest {
         final KStream<Long, String> source = builder.stream(INPUT_TOPIC_MAP, Consumed.with(longSerde, stringSerde));
         final KStream<String, Long> mapped = source.map((key, value) -> new KeyValue<>(value, key));
         mapped.to(OUTPUT_TOPIC_MAP, Produced.with(stringSerde, longSerde));
-        testDriver = new TopologyTestDriver(builder.build(), config);
+        testDriver = new TopologyTestDriver(builder.build(), new Properties());
     }
 
     @After

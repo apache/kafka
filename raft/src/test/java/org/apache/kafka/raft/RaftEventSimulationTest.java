@@ -17,7 +17,9 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.protocol.types.Type;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -25,7 +27,9 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.MockLog.LogBatch;
 import org.apache.kafka.raft.MockLog.LogEntry;
+import org.apache.kafka.raft.internals.BatchMemoryPool;
 import org.apache.kafka.raft.internals.LogOffset;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -48,7 +52,6 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -63,6 +66,7 @@ public class RaftEventSimulationTest {
     private static final int RETRY_BACKOFF_MS = 50;
     private static final int REQUEST_TIMEOUT_MS = 500;
     private static final int FETCH_MAX_WAIT_MS = 100;
+    private static final int LINGER_MS = 0;
 
     @Test
     public void testInitialLeaderElectionQuorumSizeOne() {
@@ -758,9 +762,28 @@ public class RaftEventSimulationTest {
 
             persistentState.log.reopen();
 
-            KafkaRaftClient client = new KafkaRaftClient(channel, persistentState.log, quorum, time, metrics,
-                fetchPurgatory, appendPurgatory, voterConnectionMap, ELECTION_JITTER_MS,
-                RETRY_BACKOFF_MS, REQUEST_TIMEOUT_MS, FETCH_MAX_WAIT_MS, logContext, random);
+            IntSerde serde = new IntSerde();
+            MemoryPool memoryPool = new BatchMemoryPool(2, KafkaRaftClient.MAX_BATCH_SIZE);
+
+            KafkaRaftClient<Integer> client = new KafkaRaftClient<>(
+                serde,
+                channel,
+                persistentState.log,
+                quorum,
+                memoryPool,
+                time,
+                metrics,
+                fetchPurgatory,
+                appendPurgatory,
+                voterConnectionMap,
+                ELECTION_JITTER_MS,
+                RETRY_BACKOFF_MS,
+                REQUEST_TIMEOUT_MS,
+                FETCH_MAX_WAIT_MS,
+                LINGER_MS,
+                logContext,
+                random
+            );
             RaftNode node = new RaftNode(nodeId, client, persistentState.log, channel,
                     persistentState.store, quorum, logContext);
             node.initialize();
@@ -770,7 +793,7 @@ public class RaftEventSimulationTest {
 
     private static class RaftNode {
         final int nodeId;
-        final KafkaRaftClient client;
+        final KafkaRaftClient<Integer> client;
         final MockLog log;
         final MockNetworkChannel channel;
         final MockQuorumStateStore store;
@@ -779,7 +802,7 @@ public class RaftEventSimulationTest {
         final ReplicatedCounter counter;
 
         private RaftNode(int nodeId,
-                         KafkaRaftClient client,
+                         KafkaRaftClient<Integer> client,
                          MockLog log,
                          MockNetworkChannel channel,
                          MockQuorumStateStore store,
@@ -797,7 +820,7 @@ public class RaftEventSimulationTest {
 
         void initialize() {
             try {
-                client.initialize();
+                client.initialize(counter);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -806,7 +829,7 @@ public class RaftEventSimulationTest {
         void poll() {
             try {
                 client.poll();
-                counter.poll(0L);
+                counter.poll();
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -1105,6 +1128,19 @@ public class RaftEventSimulationTest {
             for (RaftNode node : cluster.running()) {
                 deliverTo(node);
             }
+        }
+    }
+
+    private static class IntSerde implements RecordSerde<Integer> {
+
+        @Override
+        public int recordSize(Integer data, Object context) {
+            return Type.INT32.sizeOf(data);
+        }
+
+        @Override
+        public void write(Integer data, Object context, Writable out) {
+            out.writeInt(data);
         }
     }
 

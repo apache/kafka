@@ -26,6 +26,7 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -35,17 +36,18 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public class MockLog implements ReplicatedLog {
+    private static final AtomicLong ID_GENERATOR = new AtomicLong();
+
     private final List<EpochStartOffset> epochStartOffsets = new ArrayList<>();
     private final List<LogBatch> log = new ArrayList<>();
     private final TopicPartition topicPartition;
 
-    private UUID nextId = UUID.randomUUID();
+    private long nextId = ID_GENERATOR.getAndIncrement();
     private LogOffsetMetadata highWatermark = new LogOffsetMetadata(0L, Optional.empty());
     private long lastFlushedOffset = 0L;
 
@@ -109,11 +111,11 @@ public class MockLog implements ReplicatedLog {
             return;
         }
 
-        UUID id = ((MockOffsetMetadata) offsetMetadata.metadata.get()).id;
+        long id = ((MockOffsetMetadata) offsetMetadata.metadata.get()).id;
         long offset = offsetMetadata.offset;
 
         metadataForOffset(offset).ifPresent(metadata -> {
-            UUID entryId = ((MockOffsetMetadata) metadata).id;
+            long entryId = ((MockOffsetMetadata) metadata).id;
             if (entryId != id) {
                 throw new IllegalArgumentException("High watermark " + offset +
                     " metadata uuid " + id + " does not match the " +
@@ -180,14 +182,26 @@ public class MockLog implements ReplicatedLog {
         List<LogEntry> entries = new ArrayList<>();
         for (Record record : batch) {
             long offset = offsetSupplier.apply(record);
-            entries.add(buildEntry(offset, new SimpleRecord(record)));
+            long timestamp = record.timestamp();
+            ByteBuffer key = copy(record.key());
+            ByteBuffer value = copy(record.value());
+            entries.add(buildEntry(offset, new SimpleRecord(timestamp, key, value)));
         }
         return entries;
     }
 
+    private ByteBuffer copy(ByteBuffer nullableByteBuffer) {
+        if (nullableByteBuffer == null) {
+            return null;
+        } else {
+            byte[] array = Utils.toArray(nullableByteBuffer, nullableByteBuffer.position(), nullableByteBuffer.limit());
+            return ByteBuffer.wrap(array);
+        }
+    }
+
     private LogEntry buildEntry(Long offset, SimpleRecord record) {
-        UUID id = nextId;
-        nextId = UUID.randomUUID();
+        long id = nextId;
+        nextId = ID_GENERATOR.getAndIncrement();
         return new LogEntry(new MockOffsetMetadata(id), offset, record);
     }
 
@@ -338,15 +352,17 @@ public class MockLog implements ReplicatedLog {
     }
 
     static class MockOffsetMetadata implements OffsetMetadata {
-        final UUID id;
+        final long id;
 
-        MockOffsetMetadata(UUID id) {
+        MockOffsetMetadata(long id) {
             this.id = id;
         }
 
         @Override
         public String toString() {
-            return id.toString();
+            return "MockOffsetMetadata(" +
+                "id=" + id +
+                ')';
         }
 
         @Override
@@ -354,7 +370,7 @@ public class MockLog implements ReplicatedLog {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
             MockOffsetMetadata that = (MockOffsetMetadata) o;
-            return Objects.equals(id, that.id);
+            return id == that.id;
         }
 
         @Override
