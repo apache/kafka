@@ -421,9 +421,9 @@ class TestRaftServer(
       if (super.initiateShutdown()) {
         client.shutdown(5000).whenComplete { (_, exception) =>
           if (exception != null) {
-            error("Shutdown of RaftClient failed", exception)
+            error("Graceful shutdown of RaftClient failed", exception)
           } else {
-            info("Completed shutdown of RaftClient")
+            info("Completed graceful shutdown of RaftClient")
           }
         }
         true
