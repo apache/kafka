@@ -42,6 +42,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.controller.ClusterControlManager.HeartbeatReply;
 import org.apache.kafka.controller.ClusterControlManager.RegistrationReply;
+import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
 
@@ -68,6 +69,7 @@ public final class QuorumController implements Controller {
         private LogContext logContext = null;
         private Map<ConfigResource.Type, ConfigDef> configDefs = Collections.emptyMap();
         private MetaLogManager logManager = null;
+        private Map<String, VersionRange> supportedFeatures = Collections.emptyMap();
 
         public Builder(int nodeId) {
             this.nodeId = nodeId;
@@ -98,6 +100,11 @@ public final class QuorumController implements Controller {
             return this;
         }
 
+        public Builder setSupportedFeatures(Map<String, VersionRange> supportedFeatures) {
+            this.supportedFeatures = supportedFeatures;
+            return this;
+        }
+
         public QuorumController build() {
             if (logManager == null) {
                 throw new RuntimeException("You must set a metadata log manager.");
@@ -112,7 +119,7 @@ public final class QuorumController implements Controller {
             try {
                 queue = new KafkaEventQueue(time, logContext, threadNamePrefix);
                 return new QuorumController(logContext, nodeId, queue, time, configDefs,
-                        logManager);
+                        logManager, supportedFeatures);
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
                 throw e;
@@ -503,6 +510,12 @@ public final class QuorumController implements Controller {
     private final ClusterControlManager clusterControlManager;
 
     /**
+     * An object which stores the controller's view of the cluster features.
+     * This must be accessed only by the event queue thread.
+     */
+    private final FeatureControlManager featureControlManager;
+
+    /**
      * The interface that we use to mutate the Raft log.
      */
     private final MetaLogManager logManager;
@@ -535,7 +548,8 @@ public final class QuorumController implements Controller {
                              KafkaEventQueue queue,
                              Time time,
                              Map<ConfigResource.Type, ConfigDef> configDefs,
-                             MetaLogManager logManager) {
+                             MetaLogManager logManager,
+                             Map<String, VersionRange> supportedFeatures) {
         this.log = logContext.logger(QuorumController.class);
         this.nodeId = nodeId;
         this.queue = queue;
@@ -547,6 +561,8 @@ public final class QuorumController implements Controller {
             new ConfigurationControlManager(snapshotRegistry, configDefs);
         this.clusterControlManager =
             new ClusterControlManager(time, snapshotRegistry, 18000, 9000);
+        this.featureControlManager =
+            new FeatureControlManager(supportedFeatures, snapshotRegistry);
         this.logManager = logManager;
         this.metaLogListener = new MetaLogListener();
         this.curClaimEpoch = -1L;
