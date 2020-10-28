@@ -23,7 +23,6 @@ import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 import java.util.concurrent.{CountDownLatch, LinkedBlockingDeque, TimeUnit}
 import java.util.{Collections, Random}
 
-import com.yammer.metrics.core.MetricName
 import joptsimple.OptionException
 import kafka.log.{Log, LogConfig, LogManager}
 import kafka.network.SocketServer
@@ -35,6 +34,8 @@ import kafka.utils.{CommandDefaultOptions, CommandLineUtils, CoreUtils, Exit, Ka
 import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ManualMetadataUpdater, NetworkClient}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.metrics.stats.Percentiles.BucketSizing
+import org.apache.kafka.common.metrics.stats.{Meter, Percentile, Percentiles}
 import org.apache.kafka.common.network.{ChannelBuilders, NetworkReceive, Selectable, Selector}
 import org.apache.kafka.common.protocol.Writable
 import org.apache.kafka.common.security.JaasContext
@@ -299,7 +300,7 @@ class TestRaftServer(
     case object Shutdown extends RaftEvent
 
     private val eventQueue = new LinkedBlockingDeque[RaftEvent]()
-    private val stats = new WriteStats(time, printIntervalMs = 5000)
+    private val stats = new WriteStats(metrics, time, printIntervalMs = 5000)
     private val payload = new Array[Byte](recordSize)
     private val pendingAppends = new LinkedBlockingDeque[PendingAppend]()
     private val recordCount = new AtomicInteger(0)
@@ -399,7 +400,7 @@ class TestRaftServer(
         }
 
         pendingAppends.poll()
-        val latencyMs = math.max(0, currentTimeMs - pendingAppend.appendTimeMs)
+        val latencyMs = math.max(0, currentTimeMs - pendingAppend.appendTimeMs).toInt
         stats.record(latencyMs, record.length, currentTimeMs)
         offset += 1
       }
@@ -466,6 +467,52 @@ object TestRaftServer extends Logging {
     }
   }
 
+  private class LatencyHistogram(
+    metrics: Metrics,
+    name: String,
+    group: String
+  ) {
+    private val sensor = metrics.sensor(name)
+    private val latencyP75Name = metrics.metricName(s"$name.p75", group)
+    private val latencyP99Name = metrics.metricName(s"$name.p99", group)
+    private val latencyP999Name = metrics.metricName(s"$name.p999", group)
+
+    sensor.add(new Percentiles(
+      1000,
+      250.0,
+      BucketSizing.CONSTANT,
+      new Percentile(latencyP75Name, 75),
+      new Percentile(latencyP99Name, 99),
+      new Percentile(latencyP999Name, 99.9)
+    ))
+
+    private val p75 = metrics.metric(latencyP75Name)
+    private val p99 = metrics.metric(latencyP99Name)
+    private val p999 = metrics.metric(latencyP999Name)
+
+    def record(latencyMs: Int): Unit = sensor.record(latencyMs)
+    def currentP75: Double = p75.metricValue.asInstanceOf[Double]
+    def currentP99: Double = p99.metricValue.asInstanceOf[Double]
+    def currentP999: Double = p999.metricValue.asInstanceOf[Double]
+  }
+
+  private class ThroughputMeter(
+    metrics: Metrics,
+    name: String,
+    group: String
+  ) {
+    private val sensor = metrics.sensor(name)
+    private val throughputRateName = metrics.metricName(s"$name.rate", group)
+    private val throughputTotalName = metrics.metricName(s"$name.total", group)
+
+    sensor.add(new Meter(throughputRateName, throughputTotalName))
+
+    private val rate = metrics.metric(throughputRateName)
+
+    def record(bytes: Int): Unit = sensor.record(bytes)
+    def currentRate: Double = rate.metricValue.asInstanceOf[Double]
+  }
+
   private class ThroughputThrottler(
     time: Time,
     targetRecordsPerSec: Int
@@ -495,26 +542,21 @@ object TestRaftServer extends Logging {
   }
 
   private class WriteStats(
+    metrics: Metrics,
     time: Time,
     printIntervalMs: Long
   ) {
     private var lastReportTimeMs = time.milliseconds()
-    private val latency = com.yammer.metrics.Metrics.newHistogram(
-      new MetricName("kafka.raft", "write", "latency")
-    )
-    private val throughput = com.yammer.metrics.Metrics.newMeter(
-      new MetricName("kafka.raft", "write", "throughput"),
-      "bytes",
-      TimeUnit.SECONDS
-    )
+    private val latency = new LatencyHistogram(metrics, name = "commit.latency", group = "kafka.raft")
+    private val throughput = new ThroughputMeter(metrics, name = "bytes.committed", group = "kafka.raft")
 
     def record(
-      latencyMs: Long,
+      latencyMs: Int,
       bytes: Int,
       currentTimeMs: Long
     ): Unit = {
-      throughput.mark(bytes)
-      latency.update(latencyMs)
+      throughput.record(bytes)
+      latency.record(latencyMs)
 
       if (currentTimeMs - lastReportTimeMs >= printIntervalMs) {
         printSummary()
@@ -523,12 +565,11 @@ object TestRaftServer extends Logging {
     }
 
     private def printSummary(): Unit = {
-      val latencies = latency.getSnapshot
-      println("Throughput (bytes/second): %.2f, Latency (ms): %.1f p50 %.1f p99 %.1f p999".format(
-        throughput.oneMinuteRate,
-        latencies.getMedian,
-        latencies.get99thPercentile,
-        latencies.get999thPercentile,
+      println("Throughput (bytes/second): %.2f, Latency (ms): %.1f p75 %.1f p99 %.1f p999".format(
+        throughput.currentRate,
+        latency.currentP75,
+        latency.currentP99,
+        latency.currentP999
       ))
     }
   }
