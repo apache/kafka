@@ -38,6 +38,7 @@ public class RecordHeaders implements Headers {
     }
 
     public RecordHeaders(Header[] headers) {
+        checkNullHeader(headers);
         if (headers == null) {
             this.headers = new ArrayList<>();
         } else {
@@ -46,6 +47,7 @@ public class RecordHeaders implements Headers {
     }
 
     public RecordHeaders(Iterable<Header> headers) {
+        checkNullHeader(headers);
         //Use efficient copy constructor if possible, fallback to iteration otherwise
         if (headers == null) {
             this.headers = new ArrayList<>();
@@ -115,6 +117,23 @@ public class RecordHeaders implements Headers {
 
     public Header[] toArray() {
         return headers.isEmpty() ? Record.EMPTY_HEADERS : headers.toArray(new Header[headers.size()]);
+    }
+
+    private void checkNullHeader(Header[] headers) throws IllegalArgumentException {
+        if (headers != null) {
+            if (!Arrays.stream(headers).allMatch(Objects::nonNull)) {
+                throw new IllegalArgumentException("header value cannot be null.");
+            }
+        }
+    }
+
+    private void checkNullHeader(Iterable<Header> headers) throws IllegalArgumentException {
+        if (headers != null) {
+            headers.forEach(header -> {
+                if (header == null)
+                    throw new IllegalArgumentException("header value cannot be null.");
+            });
+        }
     }
 
     private void checkKey(String key) {

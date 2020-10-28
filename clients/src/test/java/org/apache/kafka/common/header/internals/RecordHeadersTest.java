@@ -211,6 +211,16 @@ public class RecordHeadersTest {
         new RecordHeaders().add(null);
     }
 
+    @Test(expected = java.lang.IllegalArgumentException.class)
+    public void shouldThrowExceptionWhenPassingArrayWithNullValueInConstructor() {
+        new RecordHeaders(new Header[] {new RecordHeader("key", "value".getBytes()), null});
+    }
+
+    @Test(expected = java.lang.IllegalArgumentException.class)
+    public void shouldThrowExceptionWhenPassingIterableWithNullValueInConstructor() {
+        new RecordHeaders(Arrays.asList(new Header[] {new RecordHeader("key", "value".getBytes()), null}));
+    }
+
     private int getCount(Headers headers) {
         int count = 0;
         Iterator<Header> headerIterator = headers.iterator();
