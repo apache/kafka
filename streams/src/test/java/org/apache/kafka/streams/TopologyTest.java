@@ -51,6 +51,7 @@ import static java.time.Duration.ofMillis;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
 public class TopologyTest {
@@ -254,11 +255,11 @@ public class TopologyTest {
         } catch (final TopologyException expected) { }
     }
 
-    @Test(expected = TopologyException.class)
+    @Test
     public void shouldNotAllowToAddStateStoreToNonExistingProcessor() {
         mockStoreBuilder();
         EasyMock.replay(storeBuilder);
-        topology.addStateStore(storeBuilder, "no-such-processor");
+        assertThrows(TopologyException.class, () -> topology.addStateStore(storeBuilder, "no-such-processor"));
     }
 
     @Test
@@ -377,18 +378,18 @@ public class TopologyTest {
     }
 
     @Deprecated // testing old PAPI
-    @Test(expected = TopologyException.class)
+    @Test
     public void shouldNotAllowToAddGlobalStoreWithSourceNameEqualsProcessorName() {
         EasyMock.expect(globalStoreBuilder.name()).andReturn("anyName").anyTimes();
         EasyMock.replay(globalStoreBuilder);
-        topology.addGlobalStore(
+        assertThrows(TopologyException.class, () -> topology.addGlobalStore(
             globalStoreBuilder,
             "sameName",
             null,
             null,
             "anyTopicName",
             "sameName",
-            new MockProcessorSupplier<>());
+            new MockProcessorSupplier<>()));
     }
 
     @Test

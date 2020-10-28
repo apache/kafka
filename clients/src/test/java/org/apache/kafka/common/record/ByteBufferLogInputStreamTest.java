@@ -25,6 +25,7 @@ import java.util.Iterator;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class ByteBufferLogInputStreamTest {
@@ -54,7 +55,7 @@ public class ByteBufferLogInputStreamTest {
         assertFalse(iterator.hasNext());
     }
 
-    @Test(expected = CorruptRecordException.class)
+    @Test
     public void iteratorRaisesOnTooSmallRecords() {
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
@@ -74,10 +75,10 @@ public class ByteBufferLogInputStreamTest {
 
         ByteBufferLogInputStream logInputStream = new ByteBufferLogInputStream(buffer, Integer.MAX_VALUE);
         assertNotNull(logInputStream.nextBatch());
-        logInputStream.nextBatch();
+        assertThrows(CorruptRecordException.class, logInputStream::nextBatch);
     }
 
-    @Test(expected = CorruptRecordException.class)
+    @Test
     public void iteratorRaisesOnInvalidMagic() {
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
@@ -97,10 +98,10 @@ public class ByteBufferLogInputStreamTest {
 
         ByteBufferLogInputStream logInputStream = new ByteBufferLogInputStream(buffer, Integer.MAX_VALUE);
         assertNotNull(logInputStream.nextBatch());
-        logInputStream.nextBatch();
+        assertThrows(CorruptRecordException.class, logInputStream::nextBatch);
     }
 
-    @Test(expected = CorruptRecordException.class)
+    @Test
     public void iteratorRaisesOnTooLargeRecords() {
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
@@ -116,8 +117,7 @@ public class ByteBufferLogInputStreamTest {
         buffer.flip();
 
         ByteBufferLogInputStream logInputStream = new ByteBufferLogInputStream(buffer, 25);
-        assertNotNull(logInputStream.nextBatch());
-        logInputStream.nextBatch();
+        assertThrows(CorruptRecordException.class, logInputStream::nextBatch);
     }
 
 }

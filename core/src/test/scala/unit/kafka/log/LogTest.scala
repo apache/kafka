@@ -562,7 +562,7 @@ class LogTest {
     assertEquals("Expect two segments.", 2, log.numberOfSegments)
   }
 
-  @Test(expected = classOf[OutOfOrderSequenceException])
+  @Test
   def testNonSequentialAppend(): Unit = {
     // create a log
     val log = createLog(logDir, LogConfig())
@@ -573,7 +573,7 @@ class LogTest {
     log.appendAsLeader(records, leaderEpoch = 0)
 
     val nextRecords = TestUtils.records(List(new SimpleRecord(mockTime.milliseconds, "key".getBytes, "value".getBytes)), producerId = pid, producerEpoch = epoch, sequence = 2)
-    log.appendAsLeader(nextRecords, leaderEpoch = 0)
+    assertThrows[OutOfOrderSequenceException](log.appendAsLeader(nextRecords, leaderEpoch = 0))
   }
 
   @Test
@@ -1913,7 +1913,7 @@ class LogTest {
     assertEquals(5L, log.logEndOffset)
   }
 
-  @Test(expected = classOf[InvalidProducerEpochException])
+  @Test
   def testOldProducerEpoch(): Unit = {
     // create a log
     val log = createLog(logDir, LogConfig())
@@ -1925,7 +1925,7 @@ class LogTest {
     log.appendAsLeader(records, leaderEpoch = 0)
 
     val nextRecords = TestUtils.records(List(new SimpleRecord(mockTime.milliseconds, "key".getBytes, "value".getBytes)), producerId = pid, producerEpoch = oldEpoch, sequence = 0)
-    log.appendAsLeader(nextRecords, leaderEpoch = 0)
+    assertThrows[InvalidProducerEpochException](log.appendAsLeader(nextRecords, leaderEpoch = 0))
   }
 
   @Test
@@ -2080,12 +2080,12 @@ class LogTest {
       readLog(log, 1, 200).records.batches.iterator.next().lastOffset)
   }
 
-  @Test(expected = classOf[KafkaStorageException])
+  @Test
   def testLogRollAfterLogHandlerClosed(): Unit = {
     val logConfig = LogTest.createLogConfig()
     val log = createLog(logDir,  logConfig)
     log.closeHandlers()
-    log.roll(Some(1L))
+    assertThrows[KafkaStorageException](log.roll(Some(1L)))
   }
 
   @Test
@@ -4397,7 +4397,7 @@ class LogTest {
       assertNull(readInfo)
   }
 
-  @Test(expected = classOf[TransactionCoordinatorFencedException])
+  @Test
   def testZombieCoordinatorFenced(): Unit = {
     val pid = 1L
     val epoch = 0.toShort
@@ -4412,7 +4412,8 @@ class LogTest {
     append(5)
     appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.COMMIT, coordinatorEpoch = 2)
 
-    appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, coordinatorEpoch = 1)
+    assertThrows[TransactionCoordinatorFencedException](appendEndTxnMarkerAsLeader(log, pid, epoch,
+      ControlRecordType.ABORT, coordinatorEpoch = 1))
   }
 
   @Test

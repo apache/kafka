@@ -411,14 +411,13 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     * Tests that a consumer fails to consume messages without the appropriate
     * ACL set.
     */
-  @Test(expected = classOf[KafkaException])
+  @Test
   def testNoConsumeWithoutDescribeAclViaAssign(): Unit = {
     noConsumeWithoutDescribeAclSetup()
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
     // the exception is expected when the consumer attempts to lookup offsets
-    consumeRecords(consumer)
-    confirmReauthenticationMetrics()
+    assertThrows[KafkaException](consumeRecords(consumer))
   }
 
   @Test

@@ -22,6 +22,7 @@ import org.junit.Test;
 import java.nio.ByteBuffer;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 public class EndTransactionMarkerTest {
 
@@ -35,12 +36,12 @@ public class EndTransactionMarkerTest {
         EndTransactionMarker.deserializeValue(ControlRecordType.UNKNOWN, ByteBuffer.wrap(new byte[0]));
     }
 
-    @Test(expected = InvalidRecordException.class)
+    @Test
     public void testIllegalNegativeVersion() {
         ByteBuffer buffer = ByteBuffer.allocate(2);
         buffer.putShort((short) -1);
         buffer.flip();
-        EndTransactionMarker.deserializeValue(ControlRecordType.ABORT, buffer);
+        assertThrows(InvalidRecordException.class, () -> EndTransactionMarker.deserializeValue(ControlRecordType.ABORT, buffer));
     }
 
     @Test(expected = InvalidRecordException.class)

@@ -35,7 +35,7 @@ import org.apache.zookeeper.client.ZKClientConfig
 import org.apache.zookeeper.{CreateMode, WatchedEvent, ZooDefs}
 import org.junit.Assert.{assertArrayEquals, assertEquals, assertFalse, assertTrue}
 import org.junit.{After, Before, Test}
-import org.scalatest.Assertions.{fail, intercept}
+import org.scalatest.Assertions.{assertThrows, fail, intercept}
 
 import scala.jdk.CollectionConverters._
 
@@ -79,11 +79,11 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
     .map(_.getName)
     .filter(t => t.contains("SendThread()"))
 
-  @Test(expected = classOf[ZooKeeperClientTimeoutException])
+  @Test
   def testConnectionTimeout(): Unit = {
     zookeeper.shutdown()
-    new ZooKeeperClient(zkConnect, zkSessionTimeout, connectionTimeoutMs = 10, Int.MaxValue, time, "testMetricGroup",
-      "testMetricType").close()
+    assertThrows[ZooKeeperClientTimeoutException](new ZooKeeperClient(zkConnect, zkSessionTimeout,
+      connectionTimeoutMs = 10, Int.MaxValue, time, "testMetricGroup", "testMetricType").close())
   }
 
   @Test

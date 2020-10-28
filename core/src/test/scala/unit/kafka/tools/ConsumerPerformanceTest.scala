@@ -23,6 +23,7 @@ import java.text.SimpleDateFormat
 import kafka.utils.Exit
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import org.scalatest.Assertions.assertThrows
 
 class ConsumerPerformanceTest {
 
@@ -97,7 +98,7 @@ class ConsumerPerformanceTest {
     assertEquals(10, config.numMessages)
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def testConfigWithUnrecognizedOption(): Unit = {
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
     //Given
@@ -107,12 +108,8 @@ class ConsumerPerformanceTest {
       "--messages", "10",
       "--new-consumer"
     )
-    try {
-      //When
-      new ConsumerPerformance.ConsumerPerfConfig(args)
-    } finally {
-      Exit.resetExitProcedure()
-    }
+    try assertThrows[IllegalArgumentException](new ConsumerPerformance.ConsumerPerfConfig(args))
+    finally Exit.resetExitProcedure()
   }
 
   private def testHeaderMatchContent(detailed: Boolean, expectedOutputLineCount: Int, fun: () => Unit): Unit = {

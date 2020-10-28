@@ -34,7 +34,7 @@ import org.scalatest.Assertions.intercept
 
 class PlaintextProducerSendTest extends BaseProducerSendTest {
 
-  @Test(expected = classOf[SerializationException])
+  @Test
   def testWrongSerializer(): Unit = {
     val producerProps = new Properties()
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
@@ -42,7 +42,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer")
     val producer = registerProducer(new KafkaProducer(producerProps))
     val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, 0, "key".getBytes, "value".getBytes)
-    producer.send(record)
+    assertThrows(classOf[SerializationException], () => producer.send(record))
   }
 
   @Test

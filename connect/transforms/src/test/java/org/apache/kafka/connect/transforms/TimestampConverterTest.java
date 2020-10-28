@@ -38,6 +38,7 @@ import java.util.TimeZone;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireStruct;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 
 public class TimestampConverterTest {
     private static final TimeZone UTC = TimeZone.getTimeZone("UTC");
@@ -98,12 +99,12 @@ public class TimestampConverterTest {
         xformValue.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "string"));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testConfigInvalidFormat() {
         Map<String, String> config = new HashMap<>();
         config.put(TimestampConverter.TARGET_TYPE_CONFIG, "string");
         config.put(TimestampConverter.FORMAT_CONFIG, "bad-format");
-        xformValue.configure(config);
+        assertThrows(ConfigException.class, () -> xformValue.configure(config));
     }
 
     // Conversions without schemas (most flexible Timestamp -> other types)
