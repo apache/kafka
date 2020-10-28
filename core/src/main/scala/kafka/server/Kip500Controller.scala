@@ -20,7 +20,6 @@ package kafka.server
 import java.io.File
 import java.util.concurrent.locks.ReentrantLock
 import java.util
-import java.util.Collections
 import java.util.concurrent.CompletableFuture
 
 import kafka.log.LogConfig
@@ -36,7 +35,7 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, Endpoint}
 import org.apache.kafka.controller.{Controller, LocalLogManager, QuorumController}
-import org.apache.kafka.metadata.FeatureManager
+import org.apache.kafka.metadata.VersionRange
 import org.apache.kafka.server.authorizer.{Authorizer, AuthorizerServerInfo}
 
 import scala.jdk.CollectionConverters._
@@ -87,7 +86,7 @@ class Kip500Controller(val config: KafkaConfig,
   var credentialProvider: CredentialProvider = null
   var socketServer: SocketServer = null
   var controller: Controller = null
-  var featureManager: FeatureManager = null
+  val supportedFeatures: Map[String, VersionRange] = Map()
   var quotaManagers: QuotaManagers = null
   var controllerApis: ControllerApis = null
   var controllerApisHandlerPool: KafkaRequestHandlerPool = null
@@ -176,13 +175,12 @@ class Kip500Controller(val config: KafkaConfig,
         setThreadNamePrefix(threadNamePrefixAsString).
         setLogManager(logManager).
         build()
-      featureManager = new FeatureManager(Collections.emptyMap(), Collections.emptyMap(), 0)
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
       controllerApis = new ControllerApis(socketServer.dataPlaneRequestChannel,
         authorizer,
         quotaManagers,
         time,
-        featureManager,
+        supportedFeatures,
         controller)
       controllerApisHandlerPool = new KafkaRequestHandlerPool(config.controllerId,
         socketServer.dataPlaneRequestChannel,

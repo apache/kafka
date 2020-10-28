@@ -42,6 +42,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.controller.ClusterControlManager.HeartbeatReply;
 import org.apache.kafka.controller.ClusterControlManager.RegistrationReply;
+import org.apache.kafka.metadata.FeatureManager;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
@@ -637,6 +638,12 @@ public final class QuorumController implements Controller {
             registerBroker(BrokerRegistrationRequest request) {
         return appendWriteEvent("registerBroker", () ->
             clusterControlManager.registerBroker(request.data(), writeOffset));
+    }
+
+    @Override
+    public CompletableFuture<FeatureManager.FinalizedFeaturesAndEpoch> finalizedFeatures() {
+        return appendReadEvent("getFinalizedFeatures", () ->
+            featureControlManager.finalizedFeaturesAndEpoch(lastCommittedOffset));
     }
 
     @Override

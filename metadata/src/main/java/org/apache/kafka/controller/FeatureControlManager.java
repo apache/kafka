@@ -76,6 +76,14 @@ public class FeatureControlManager {
                                    boolean downgradeable,
                                    Map<Integer, Map<String, VersionRange>> brokerFeatures,
                                    List<ApiMessageAndVersion> records) {
+        if (newRange.min() <= 0) {
+            return new ApiError(Errors.INVALID_UPDATE_VERSION,
+                "The lower value for the new range cannot be less than 1.");
+        }
+        if (newRange.max() <= 0) {
+            return new ApiError(Errors.INVALID_UPDATE_VERSION,
+                "The upper value for the new range cannot be less than 1.");
+        }
         VersionRange localRange = supportedFeatures.get(featureName);
         if (localRange == null || !localRange.contains(newRange)) {
             return new ApiError(Errors.INVALID_UPDATE_VERSION,

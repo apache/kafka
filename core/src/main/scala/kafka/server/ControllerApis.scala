@@ -32,11 +32,14 @@ import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType.CLUSTER
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.controller.{Controller, LeaderAndIsr}
-import org.apache.kafka.metadata.FeatureManager
+import org.apache.kafka.metadata.{FeatureManager, VersionRange}
 import org.apache.kafka.server.authorizer.Authorizer
 
 import scala.collection.mutable
+import scala.compat.java8.FutureConverters
+import scala.concurrent.ExecutionContext.Implicits.global
 import scala.jdk.CollectionConverters._
+import scala.util.{Failure, Success}
 
 /**
  * Request handler for Controller APIs
@@ -45,7 +48,7 @@ class ControllerApis(val requestChannel: RequestChannel,
                      val authorizer: Option[Authorizer],
                      val quotas: QuotaManagers,
                      val time: Time,
-                     val featureManager: FeatureManager,
+                     val supportedFeatures: Map[String, VersionRange],
                      val controller: Controller) extends ApiRequestHandler with Logging {
 
   val apisUtil = new ApisUtils(requestChannel, authorizer, quotas, time)
@@ -108,23 +111,23 @@ class ControllerApis(val requestChannel: RequestChannel,
     // If this is considered to leak information about the broker version a workaround is to use SSL
     // with client authentication which is performed at an earlier stage of the connection where the
     // ApiVersionRequest is not available.
-    def createResponseCallback(requestThrottleMs: Int): ApiVersionsResponse = {
+    def createResponseCallback(features: FeatureManager.FinalizedFeaturesAndEpoch,
+                               requestThrottleMs: Int): ApiVersionsResponse = {
       val apiVersionRequest = request.body[ApiVersionsRequest]
       if (apiVersionRequest.hasUnsupportedRequestVersion)
         apiVersionRequest.getErrorResponse(requestThrottleMs, Errors.UNSUPPORTED_VERSION.exception)
       else if (!apiVersionRequest.isValid)
         apiVersionRequest.getErrorResponse(requestThrottleMs, Errors.INVALID_REQUEST.exception)
       else {
-        val finalized = featureManager.finalizedFeatures()
         val data = new ApiVersionsResponseData().
           setErrorCode(0.toShort).
           setThrottleTimeMs(requestThrottleMs).
-          setFinalizedFeaturesEpoch(finalized.epoch())
-        featureManager.supportedFeatures().asScala.foreach {
+          setFinalizedFeaturesEpoch(features.epoch())
+        supportedFeatures.foreach {
           case (k, v) => data.supportedFeatures().add(new SupportedFeatureKey().
             setName(k).setMaxVersion(v.max()).setMinVersion(v.min()))
         }
-        finalized.finalizedFeatures().asScala.foreach {
+        features.finalizedFeatures().asScala.foreach {
           case (k, v) => data.finalizedFeatures().add(new FinalizedFeatureKey().
             setName(k).setMaxVersionLevel(v.max()).setMinVersionLevel(v.min()))
         }
@@ -139,7 +142,14 @@ class ControllerApis(val requestChannel: RequestChannel,
         new ApiVersionsResponse(data)
       }
     }
-    apisUtil.sendResponseMaybeThrottle(request, createResponseCallback)
+    FutureConverters.toScala(controller.finalizedFeatures()).onComplete(
+      result => result match {
+        case Success(features) =>
+          apisUtil.sendResponseMaybeThrottle(request,
+            requestThrottleMs => createResponseCallback(features, requestThrottleMs))
+        case Failure(e) => apisUtil.handleError(request, e)
+      }
+    )
   }
 
   def handleAlterIsrRequest(request: RequestChannel.Request): Unit = {
