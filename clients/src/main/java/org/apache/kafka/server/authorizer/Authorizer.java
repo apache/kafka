@@ -26,6 +26,7 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.resource.PatternType;
+import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
@@ -180,6 +181,9 @@ public interface Authorizer extends Configurable, Closeable {
                         case LITERAL:
                             if (binding.pattern().name().equals(ResourcePattern.WILDCARD_RESOURCE))
                                 return AuthorizationResult.DENIED;
+                            if (binding.pattern().resourceType() == ResourceType.CLUSTER &&
+                                binding.pattern().name().equals(Resource.CLUSTER_NAME))
+                                return AuthorizationResult.DENIED;
                             break;
                         case PREFIXED:
                             if (binding.pattern().name().isEmpty())
@@ -193,6 +197,8 @@ public interface Authorizer extends Configurable, Closeable {
 
             switch (binding.pattern().patternType()) {
                 case LITERAL:
+                    if (binding.pattern().name() == ResourcePattern.WILDCARD_RESOURCE)
+                        return AuthorizationResult.ALLOWED;
                     List<Action> action = Collections.singletonList(new Action(
                         op, binding.pattern(), 1, false, false));
                     if (authorize(requestContext, action).get(0) == AuthorizationResult.ALLOWED) {
