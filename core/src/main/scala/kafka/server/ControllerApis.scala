@@ -51,8 +51,38 @@ class ControllerApis(val requestChannel: RequestChannel,
   val apisUtil = new ApisUtils(requestChannel, authorizer, quotas, time)
 
   val supportedApiKeys = Set(
+    ApiKeys.METADATA,
+    //ApiKeys.SASL_HANDSHAKE
     ApiKeys.API_VERSIONS,
-    ApiKeys.ALTER_ISR
+    //ApiKeys.CREATE_TOPICS,
+    //ApiKeys.DELETE_TOPICS,
+    //ApiKeys.DESCRIBE_ACLS,
+    //ApiKeys.CREATE_ACLS,
+    //ApiKeys.DELETE_ACLS,
+    //ApiKeys.DESCRIBE_CONFIGS,
+    //ApiKeys.ALTER_CONFIGS,
+    //ApiKeys.SASL_AUTHENTICATE,
+    //ApiKeys.CREATE_PARTITIONS,
+    //ApiKeys.CREATE_DELEGATION_TOKEN
+    //ApiKeys.RENEW_DELEGATION_TOKEN
+    //ApiKeys.EXPIRE_DELEGATION_TOKEN
+    //ApiKeys.DESCRIBE_DELEGATION_TOKEN
+    //ApiKeys.ELECT_LEADERS
+    //ApiKeys.INCREMENTAL_ALTER_CONFIGS
+    //ApiKeys.ALTER_PARTITION_REASSIGNMENTS
+    //ApiKeys.LIST_PARTITION_REASSIGNMENTS
+    //ApiKeys.DESCRIBE_CLIENT_QUOTAS
+    //ApiKeys.ALTER_CLIENT_QUOTAS
+    //ApiKeys.DESCRIBE_USER_SCRAM_CREDENTIALS
+    //ApiKeys.ALTER_USER_SCRAM_CREDENTIALS
+    //ApiKeys.VOTE
+    //ApiKeys.BEGIN_QUORUM_EPOCH
+    //ApiKeys.END_QUORUM_EPOCH
+    //ApiKeys.DESCRIBE_QUORUM
+    ApiKeys.ALTER_ISR,
+    //ApiKeys.UPDATE_FEATURES
+    //ApiKeys.BROKER_REGISTRATION
+    //ApiKeys.BROKER_HEARTBEAT
   )
 
   override def handle(request: RequestChannel.Request): Unit = {
