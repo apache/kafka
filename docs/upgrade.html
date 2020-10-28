@@ -45,6 +45,19 @@
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-599%3A+Throttle+Create+Topic%2C+Create+Partition+and+Delete+Topic+Operations">KIP-599</a>
     </li>
     <li>
+        When new features become available in Kafka there are two main issues:
+        <ol>
+            <li>How do Kafka clients become aware of broker capabilities?</li>
+            <li>How does the broker decide which features to enable?</li>
+        </ol>
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-584%3A+Versioning+scheme+for+features">KIP-584</a>
+        provides a flexible and operationally easy solution for client discovery, feature gating and rolling upgrades using a single restart.
+    </li>
+    <li>
+        The ability to print record offsets and headers with the <code>ConsoleConsumer</code> is now possible
+        via <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-431%3A+Support+of+printing+additional+ConsumerRecord+fields+in+DefaultMessageFormatter">KIP-431</a>
+    </li>
+    <li>
       The addition of <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-554%3A+Add+Broker-side+SCRAM+Config+API">KIP-554</a>
         continues progress towards the goal of Zookeeper removal from Kafka. The addition of KIP-554
         means you don't have to connect directly to ZooKeeper anymore for managing SCRAM credentials.

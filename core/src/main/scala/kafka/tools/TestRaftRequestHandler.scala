@@ -17,21 +17,14 @@
 
 package kafka.tools
 
-import java.util.Collections
-
 import kafka.network.RequestChannel
 import kafka.raft.KafkaNetworkChannel
 import kafka.server.ApiRequestHandler
 import kafka.utils.Logging
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.feature.Features
 import org.apache.kafka.common.internals.FatalExitError
-import org.apache.kafka.common.message.MetadataResponseData
-import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePartition, MetadataResponseTopic}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ApiVersionsResponse, MetadataRequest, MetadataResponse, ProduceRequest, ProduceResponse}
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse}
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.raft.{AckMode, RaftClient}
 
 import scala.jdk.CollectionConverters._
 
@@ -42,8 +35,6 @@ class TestRaftRequestHandler(
   networkChannel: KafkaNetworkChannel,
   requestChannel: RequestChannel,
   time: Time,
-  client: RaftClient,
-  metadataPartition: TopicPartition
 ) extends ApiRequestHandler with Logging {
 
   override def handle(request: RequestChannel.Request): Unit = {
@@ -56,73 +47,8 @@ class TestRaftRequestHandler(
              | ApiKeys.END_QUORUM_EPOCH
              | ApiKeys.FETCH =>
           val requestBody = request.body[AbstractRequest]
-          networkChannel.postInboundRequest(
-            request.header,
-            requestBody,
-            response => sendResponse(request, Some(response)))
-
-        case ApiKeys.API_VERSIONS =>
-          sendResponse(request, Option(ApiVersionsResponse.apiVersionsResponse(0, 2,
-            Features.emptySupportedFeatures())))
-
-        case ApiKeys.METADATA =>
-          val metadataRequest = request.body[MetadataRequest]
-          val topics = new MetadataResponseData.MetadataResponseTopicCollection
-
-          if (!metadataRequest.data.topics.isEmpty) {
-            val leaderAndEpoch = client.currentLeaderAndEpoch()
-
-            if (metadataRequest.data.topics.size != 1
-              || !metadataRequest.data.topics.get(0).name().equals(metadataPartition.topic)) {
-              throw new IllegalArgumentException(s"Should only handle metadata request querying for " +
-                s"`${metadataPartition.topic}, but found ${metadataRequest.data.topics}")
-            }
-
-            topics.add(new MetadataResponseTopic()
-              .setErrorCode(Errors.NONE.code)
-              .setName(metadataPartition.topic)
-              .setIsInternal(true)
-              .setPartitions(Collections.singletonList(new MetadataResponsePartition()
-                .setErrorCode(Errors.NONE.code)
-                .setPartitionIndex(metadataPartition.partition)
-                .setLeaderId(leaderAndEpoch.leaderId.orElse(-1)))))
-          }
-
-          val brokers = new MetadataResponseData.MetadataResponseBrokerCollection
-          networkChannel.allConnections().foreach { connection =>
-            brokers.add(new MetadataResponseData.MetadataResponseBroker()
-              .setNodeId(connection.id)
-              .setHost(connection.host)
-              .setPort(connection.port))
-          }
-
-          sendResponse(request, Option(new MetadataResponse(
-            new MetadataResponseData()
-              .setTopics(topics)
-              .setBrokers(brokers))))
-
-        case ApiKeys.PRODUCE =>
-          val produceRequest = request.body[ProduceRequest]
-          val records = produceRequest.partitionRecordsOrFail().get(metadataPartition)
-
-          val ackMode = produceRequest.acks match {
-            case 1 => AckMode.LEADER
-            case -1 => AckMode.QUORUM
-            case _ => throw new IllegalArgumentException(s"Unsupported ack mode ${produceRequest.acks} " +
-              s"in Produce request (the only supported modes are acks=1 and acks=-1)")
-          }
-
-          client.append(records, ackMode, produceRequest.timeout)
-            .whenComplete { (_, exception) =>
-              val error = if (exception == null)
-                Errors.NONE
-              else
-                Errors.forException(exception)
-
-              sendResponse(request, Option(new ProduceResponse(
-                Collections.singletonMap(metadataPartition,
-                  new ProduceResponse.PartitionResponse(error)))))
-            }
+          networkChannel.postInboundRequest(requestBody, response =>
+            sendResponse(request, Some(response)))
 
         case _ => throw new IllegalArgumentException(s"Unsupported api key: ${request.header.apiKey}")
       }

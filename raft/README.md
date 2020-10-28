@@ -12,7 +12,8 @@ Below we describe the details to set this up.
     bin/test-raft-server-start.sh config/raft.properties
 
 ### Run Multi Node Quorum ###
-Create 3 separate raft quorum properties as the following:
+Create 3 separate raft quorum properties as the following
+(note that the `zookeeper.connect` config is required, but unused):
 
 `cat << EOF >> config/raft-quorum-1.properties`
     
@@ -46,19 +47,11 @@ Create 3 separate raft quorum properties as the following:
  
 Open up 3 separate terminals, and run individual commands:
 
-    bin/test-raft-server-start.sh config/raft-quorum-1.properties
-    bin/test-raft-server-start.sh config/raft-quorum-2.properties
-    bin/test-raft-server-start.sh config/raft-quorum-3.properties
-    
-This would setup a three node Raft quorum with node id 1,2,3 using different endpoints and log dirs. 
+    bin/test-raft-server-start.sh --config config/raft-quorum-1.properties
+    bin/test-raft-server-start.sh --config config/raft-quorum-2.properties
+    bin/test-raft-server-start.sh --config config/raft-quorum-3.properties
 
-### Simulate a distributed state machine ###
-You need to use a `VerifiableProducer` to produce monolithic increasing records to the replicated state machine.
-
-    ./bin/kafka-run-class.sh org.apache.kafka.tools.VerifiableProducer --bootstrap-server http://localhost:9092 \
-    --topic __cluster_metadata --max-messages 2000 --throughput 1 --producer.config config/producer.properties
-### Run Performance Test ###
-Run the `ProducerPerformance` module using this example command:
-
-    ./bin/kafka-producer-perf-test.sh --topic __cluster_metadata --num-records 2000 --throughput -1 --record-size 10 --producer.config config/producer.properties 
-
+Once a leader is elected, it will begin writing to an internal
+`__cluster_metadata` topic with a steady workload of random data.
+You can control the workload using the `--throughput` and `--record-size`
+arguments passed to `test-raft-server-start.sh`.
