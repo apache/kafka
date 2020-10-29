@@ -16,9 +16,10 @@
  */
 package kafka.snapshot
 
-import java.lang.{Iterable => JIterable}
+import java.nio.ByteBuffer
 import java.nio.file.Path
-import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
+import java.util.{Iterator => JIterator}
+import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.record.FileRecords
 import org.apache.kafka.raft.OffsetAndEpoch
 import org.apache.kafka.snapshot.SnapshotReader
@@ -28,8 +29,30 @@ final class KafkaSnapshotReader private (fileRecords: FileRecords, snapshotId: O
     snapshotId
   }
 
-  def batches(): JIterable[FileChannelRecordBatch] = {
-    fileRecords.batches()
+  def sizeInBytes(): Long = {
+    fileRecords.sizeInBytes()
+  }
+
+  def iterator(): JIterator[RecordBatch] = {
+    new JIterator[RecordBatch] {
+      private[this] val iterator = fileRecords.batchIterator()
+
+      override def hasNext(): Boolean = {
+        iterator.hasNext()
+      }
+
+      override def next(): RecordBatch = {
+        iterator.next()
+      }
+    }
+  }
+
+  def read(buffer: ByteBuffer, position: Long): Unit =  {
+    if (position.isValidInt) {
+      fileRecords.readInto(buffer, position.toInt)
+    } else {
+      throw new IllegalArgumentException(s"Position $position is larger than the max integer (${Int.MaxValue})")
+    }
   }
 
   def close(): Unit = {

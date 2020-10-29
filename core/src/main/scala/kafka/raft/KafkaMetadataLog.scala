@@ -16,6 +16,7 @@
  */
 package kafka.raft
 
+import java.nio.file.NoSuchFileException
 import java.util.Optional
 
 import kafka.log.{AppendOrigin, Log}
@@ -26,8 +27,10 @@ import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.raft
 import org.apache.kafka.raft.{LogAppendInfo, LogFetchInfo, LogOffsetMetadata, Isolation, ReplicatedLog}
 import org.apache.kafka.snapshot.SnapshotWriter
+import org.apache.kafka.snapshot.SnapshotReader
 
 import scala.compat.java8.OptionConverters._
+import kafka.snapshot.KafkaSnapshotReader
 
 class KafkaMetadataLog(
   log: Log,
@@ -145,6 +148,14 @@ class KafkaMetadataLog(
 
   override def createSnapshot(snapshotId: raft.OffsetAndEpoch): SnapshotWriter = {
     KafkaSnapshotWriter(log.dir.toPath, snapshotId)
+  }
+
+  override def readSnapshot(snapshotId: raft.OffsetAndEpoch): Optional[SnapshotReader] = {
+    try {
+      Optional.of(KafkaSnapshotReader(log.dir.toPath, snapshotId))
+    } catch {
+      case e: NoSuchFileException => Optional.empty()
+    }
   }
 
   override def close(): Unit = {

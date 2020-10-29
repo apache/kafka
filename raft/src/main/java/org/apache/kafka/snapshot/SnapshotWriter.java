@@ -28,6 +28,8 @@ public interface SnapshotWriter extends AutoCloseable {
 
     public int append(MemoryRecords records) throws IOException;
 
+    public boolean isFrozen();
+
     public void freeze() throws IOException;
 
     public void close();

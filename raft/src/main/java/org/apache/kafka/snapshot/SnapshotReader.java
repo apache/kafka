@@ -16,15 +16,22 @@
  */
 package org.apache.kafka.snapshot;
 
-import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.Iterator;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 
 // TODO: Write documentation for this type and all of the methods
-public interface SnapshotReader extends AutoCloseable {
+public interface SnapshotReader extends AutoCloseable, Iterable<RecordBatch> {
 
     public OffsetAndEpoch snapshotId();
 
-    public Iterable<FileChannelRecordBatch> batches();
+    public long sizeInBytes();
+
+    public Iterator<RecordBatch> iterator();
+
+    public void read(ByteBuffer buffer, long position) throws IOException;
 
     public void close();
 }

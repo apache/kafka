@@ -74,7 +74,7 @@ final class KafkaSnapshotTest {
       var countBatches = 0
       var countRecords = 0
       var buffer = ByteBuffer.allocate(0)
-      snapshot.batches().forEach { batch =>
+      snapshot.forEach { batch =>
         countBatches += 1
 
         buffer = if (buffer.capacity() < batch.sizeInBytes()) {
@@ -124,7 +124,7 @@ final class KafkaSnapshotTest {
       var countBatches = 0
       var countRecords = 0
       var buffer = ByteBuffer.allocate(0)
-      snapshot.batches().forEach { batch =>
+      snapshot.forEach { batch =>
         countBatches += 1
 
         buffer = if (buffer.capacity() < batch.sizeInBytes()) {

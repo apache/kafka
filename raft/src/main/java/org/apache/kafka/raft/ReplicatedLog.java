@@ -18,6 +18,7 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.Records;
+import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
 
 import java.io.Closeable;
@@ -152,6 +153,9 @@ public interface ReplicatedLog extends Closeable {
 
     // TODO: Write documentation
     SnapshotWriter createSnapshot(OffsetAndEpoch snapshotId);
+
+    // TODO: Write documentation
+    Optional<SnapshotReader> readSnapshot(OffsetAndEpoch snapshotId);
 
     default void close() {}
 

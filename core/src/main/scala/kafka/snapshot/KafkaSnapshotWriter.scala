@@ -28,20 +28,23 @@ import org.apache.kafka.snapshot.SnapshotWriter
 final class KafkaSnapshotWriter private (fileRecords: FileRecords, snapshotId: OffsetAndEpoch) extends SnapshotWriter with Logging {
   private[this] var frozen = false
 
-  def snapshotId(): OffsetAndEpoch = {
+  override def snapshotId(): OffsetAndEpoch = {
     snapshotId
   }
 
-  def append(records: MemoryRecords): Int = {
+  override def append(records: MemoryRecords): Int = {
     if (frozen) {
-      // TODO: Do we need a new expection?
       throw new RuntimeException(s"Append not supported. Snapshot is already frozen: id = $snapshotId; path = ${fileRecords.file}")
     }
 
     fileRecords.append(records)
   }
 
-  def freeze(): Unit = {
+  override def isFrozen(): Boolean = {
+    frozen
+  }
+
+  override def freeze(): Unit = {
     fileRecords.close()
     frozen = true
 
@@ -56,7 +59,7 @@ final class KafkaSnapshotWriter private (fileRecords: FileRecords, snapshotId: O
     Files.move(source, destination, StandardCopyOption.ATOMIC_MOVE)
   }
 
-  def close(): Unit = {
+  override def close(): Unit = {
     // If it exist then it means that freeze was not called. Otherwise, this is a noop.
     fileRecords.deleteIfExists()
   }

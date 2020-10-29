@@ -56,7 +56,7 @@ import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.BatchMemoryPool;
 import org.apache.kafka.raft.internals.KafkaRaftMetrics;
 import org.apache.kafka.raft.internals.LogOffset;
-import org.apache.kafka.snapshot.SnapshotWriter;
+import org.apache.kafka.snapshot.BufferedSnapshotWriter;
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -1732,10 +1732,17 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         return shutdownComplete;
     }
 
-    // TODO: Change this signature to SnapshotWriter createSnapshot()
     @Override
-    public SnapshotWriter createSnapshot(OffsetAndEpoch snapshotId) {
-        return log.createSnapshot(snapshotId);
+    public BufferedSnapshotWriter<T> createSnapshot(OffsetAndEpoch snapshotId) {
+        // TODO: this operation should fail if a snapshot with that id already exists
+        return new BufferedSnapshotWriter<>(
+            log.createSnapshot(snapshotId),
+            MAX_BATCH_SIZE,
+            memoryPool,
+            time,
+            CompressionType.NONE,
+            serde
+        );
     }
 
     private void close() {

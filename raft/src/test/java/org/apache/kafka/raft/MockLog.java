@@ -23,16 +23,23 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.snapshot.SnapshotReader;
+import org.apache.kafka.snapshot.SnapshotWriter;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -45,6 +52,7 @@ public class MockLog implements ReplicatedLog {
 
     private final List<EpochStartOffset> epochStartOffsets = new ArrayList<>();
     private final List<LogBatch> log = new ArrayList<>();
+    private final Map<OffsetAndEpoch, SnapshotReader> snapshots = new HashMap<>();
     private final TopicPartition topicPartition;
 
     private long nextId = ID_GENERATOR.getAndIncrement();
@@ -356,6 +364,11 @@ public class MockLog implements ReplicatedLog {
         return new MockSnapshotWriter(snapshotId);
     }
 
+    @Override
+    public Optional<SnapshotReader> readSnapshot(OffsetAndEpoch snapshotId) {
+        return Optional.ofNullable(snapshots.get(snapshotId));
+    }
+
     static class MockOffsetMetadata implements OffsetMetadata {
         final long id;
 
@@ -519,9 +532,67 @@ public class MockLog implements ReplicatedLog {
         }
 
         @Override
+        public boolean isFrozen() {
+            return frozen;
+        }
+
+        @Override
         public void freeze() throws IOException {
             frozen = true;
             data.flip();
+
+            snapshots.putIfAbsent(snapshotId, new MockSnapshotReader(snapshotId, data));
+        }
+
+        @Override
+        public void close() {}
+    }
+
+    final static class MockSnapshotReader implements SnapshotReader {
+        private final OffsetAndEpoch snapshotId;
+        private final MemoryRecords data;
+
+        MockSnapshotReader(OffsetAndEpoch snapshotId, ByteBuffer data) {
+            this.snapshotId = snapshotId;
+            this.data = MemoryRecords.readableRecords(data);
+        }
+
+        @Override
+        public OffsetAndEpoch snapshotId() {
+            return snapshotId;
+        }
+
+        @Override
+        public long sizeInBytes() {
+            return data.sizeInBytes();
+        }
+
+        @Override
+        public Iterator<RecordBatch> iterator() {
+            return new Iterator<RecordBatch>() {
+                private final Iterator<MutableRecordBatch> iterator = data.batchIterator();
+
+                @Override
+                public boolean hasNext() {
+                    return iterator.hasNext();
+                }
+
+                @Override
+                public RecordBatch next() {
+                    return iterator.next();
+                }
+            };
+        }
+
+        @Override
+        public void read(ByteBuffer buffer, long position) throws IOException {
+            ByteBuffer copy = data.buffer();
+            copy.position((int) position);
+            copy.limit((int) position + Math.min(copy.remaining(), buffer.remaining()));
+
+            buffer.put(copy);
+            // Flip the buffer because the FileRecords also flips the buffer
+            buffer.flip();
         }
 
         @Override
