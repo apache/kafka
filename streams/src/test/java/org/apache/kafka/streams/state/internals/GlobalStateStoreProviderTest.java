@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
@@ -96,10 +97,17 @@ public class GlobalStateStoreProviderTest {
             .anyTimes();
         expect(mockContext.taskId()).andReturn(new TaskId(0, 0)).anyTimes();
         expect(mockContext.recordCollector()).andReturn(null).anyTimes();
+        expectSerdes(mockContext);
         replay(mockContext);
         for (final StateStore store : stores.values()) {
             store.init(mockContext, null);
         }
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static void expectSerdes(final ProcessorContextImpl context) {
+        expect(context.keySerde()).andReturn((Serde) Serdes.String()).anyTimes();
+        expect(context.valueSerde()).andReturn((Serde) Serdes.Long()).anyTimes();
     }
 
     @Test

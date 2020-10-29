@@ -128,6 +128,7 @@ public class MeteredTimestampedKeyValueStoreTest {
         expect(context.metrics())
             .andReturn(new StreamsMetricsImpl(metrics, "test", builtInMetricsVersion)).anyTimes();
         expect(context.taskId()).andReturn(taskId).anyTimes();
+        expectSerdes(context);
         expect(inner.name()).andReturn("metered").anyTimes();
         storeLevelGroup =
             StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? STORE_LEVEL_GROUP_FROM_0100_TO_24 : STORE_LEVEL_GROUP;
@@ -139,6 +140,11 @@ public class MeteredTimestampedKeyValueStoreTest {
             mkEntry(STORE_TYPE + "-state-id", "metered")
         );
 
+    }
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static void expectSerdes(final InternalProcessorContext context) {
+        expect(context.keySerde()).andReturn((Serde) Serdes.String()).anyTimes();
+        expect(context.valueSerde()).andReturn((Serde) Serdes.Long()).anyTimes();
     }
 
     private void init() {
