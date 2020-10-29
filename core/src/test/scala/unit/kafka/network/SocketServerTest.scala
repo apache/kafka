@@ -88,8 +88,6 @@ class SocketServerTest {
     // Run the tests with TRACE logging to exercise request logging path
     logLevelToRestore = kafkaLogger.getLevel
     kafkaLogger.setLevel(Level.TRACE)
-
-    assertTrue(server.controlPlaneRequestChannelOpt.isEmpty)
   }
 
   @After
@@ -304,7 +302,6 @@ class SocketServerTest {
     val config = KafkaConfig.fromProps(testProps)
     val testableServer = new TestableSocketServer(config)
     testableServer.startup(startProcessingRequests = false)
-
     val updatedEndPoints = config.advertisedListeners.map { endpoint =>
       endpoint.copy(port = testableServer.boundPort(endpoint.listenerName))
     }.map(_.toJava)
@@ -521,10 +518,10 @@ class SocketServerTest {
     val overrideConnectionId = "127.0.0.1:1-127.0.0.1:2-0"
     val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, time, credentialProvider) {
       override def newProcessor(id: Int, requestChannel: RequestChannel, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
-                                protocol: SecurityProtocol, memoryPool: MemoryPool, isPrivilegedListener: Boolean = false): Processor = {
+                                protocol: SecurityProtocol, memoryPool: MemoryPool): Processor = {
         new Processor(id, time, config.socketRequestMaxBytes, dataPlaneRequestChannel, connectionQuotas,
           config.connectionsMaxIdleMs, config.failedAuthenticationDelayMs, listenerName, protocol, config, metrics,
-          credentialProvider, memoryPool, new LogContext(), isPrivilegedListener = isPrivilegedListener) {
+          credentialProvider, memoryPool, new LogContext()) {
             override protected[network] def connectionId(socket: Socket): String = overrideConnectionId
             override protected[network] def createSelector(channelBuilder: ChannelBuilder): Selector = {
              val testableSelector = new TestableSelector(config, channelBuilder, time, metrics)
@@ -1021,10 +1018,10 @@ class SocketServerTest {
     var conn: Socket = null
     val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM, credentialProvider) {
       override def newProcessor(id: Int, requestChannel: RequestChannel, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
-                                protocol: SecurityProtocol, memoryPool: MemoryPool, isPrivilegedListener: Boolean = false): Processor = {
+                                protocol: SecurityProtocol, memoryPool: MemoryPool): Processor = {
         new Processor(id, time, config.socketRequestMaxBytes, dataPlaneRequestChannel, connectionQuotas,
           config.connectionsMaxIdleMs, config.failedAuthenticationDelayMs, listenerName, protocol, config, metrics,
-          credentialProvider, MemoryPool.NONE, new LogContext(), isPrivilegedListener = isPrivilegedListener) {
+          credentialProvider, MemoryPool.NONE, new LogContext()) {
           override protected[network] def sendResponse(response: RequestChannel.Response, responseSend: Send): Unit = {
             conn.close()
             super.sendResponse(response, responseSend)
@@ -1061,10 +1058,10 @@ class SocketServerTest {
     @volatile var selector: TestableSelector = null
     val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM, credentialProvider) {
       override def newProcessor(id: Int, requestChannel: RequestChannel, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
-                                protocol: SecurityProtocol, memoryPool: MemoryPool, isPrivilegedListener: Boolean = false): Processor = {
+                                protocol: SecurityProtocol, memoryPool: MemoryPool): Processor = {
         new Processor(id, time, config.socketRequestMaxBytes, dataPlaneRequestChannel, connectionQuotas,
           config.connectionsMaxIdleMs, config.failedAuthenticationDelayMs, listenerName, protocol, config, metrics,
-          credentialProvider, memoryPool, new LogContext(), isPrivilegedListener = isPrivilegedListener) {
+          credentialProvider, memoryPool, new LogContext()) {
           override protected[network] def createSelector(channelBuilder: ChannelBuilder): Selector = {
            val testableSelector = new TestableSelector(config, channelBuilder, time, metrics)
            selector = testableSelector
@@ -1476,9 +1473,6 @@ class SocketServerTest {
     props ++= sslServerProps
     val testableServer = new TestableSocketServer(time = time)
     testableServer.startup()
-
-    assertTrue(testableServer.controlPlaneRequestChannelOpt.isEmpty)
-
     val proxyServer = new ProxyServer(testableServer)
     try {
       val testableSelector = testableServer.testableSelector
@@ -1676,75 +1670,6 @@ class SocketServerTest {
     }
   }
 
-
-  @Test
-  def testControlPlaneAsPrivilegedListener(): Unit = {
-    val testProps = new Properties
-    testProps ++= props
-    testProps.put("listeners", "PLAINTEXT://localhost:0,CONTROLLER://localhost:0")
-    testProps.put("listener.security.protocol.map", "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT")
-    testProps.put("control.plane.listener.name", "CONTROLLER")
-    val config = KafkaConfig.fromProps(testProps)
-    withTestableServer(config, { testableServer =>
-      val controlPlaneSocket = connect(testableServer, config.controlPlaneListenerName.get,
-        localAddr = InetAddress.getLocalHost)
-      val sentRequest = sendAndReceiveControllerRequest(controlPlaneSocket, testableServer)
-      assertTrue(sentRequest.context.fromPrivilegedListener)
-
-      val plainSocket = connect(testableServer, localAddr = InetAddress.getLocalHost)
-      val plainRequest = sendAndReceiveRequest(plainSocket, testableServer)
-      assertFalse(plainRequest.context.fromPrivilegedListener)
-    })
-  }
-
-  @Test
-  def testInterBrokerListenerAsPrivilegedListener(): Unit = {
-    val testProps = new Properties
-    testProps ++= props
-    testProps.put("listeners", "EXTERNAL://localhost:0,INTERNAL://localhost:0")
-    testProps.put("listener.security.protocol.map", "EXTERNAL:PLAINTEXT,INTERNAL:PLAINTEXT")
-    testProps.put("inter.broker.listener.name", "INTERNAL")
-    val config = KafkaConfig.fromProps(testProps)
-    withTestableServer(config, { testableServer =>
-      val interBrokerSocket = connect(testableServer, config.interBrokerListenerName,
-        localAddr = InetAddress.getLocalHost)
-      val sentRequest = sendAndReceiveRequest(interBrokerSocket, testableServer)
-      assertTrue(sentRequest.context.fromPrivilegedListener)
-
-      val externalSocket = connect(testableServer, new ListenerName("EXTERNAL"),
-        localAddr = InetAddress.getLocalHost)
-      val externalRequest = sendAndReceiveRequest(externalSocket, testableServer)
-      assertFalse(externalRequest.context.fromPrivilegedListener)
-    })
-  }
-
-  @Test
-  def testControlPlaneTakePrecedenceOverInterBrokerListenerAsPrivilegedListener(): Unit = {
-    val testProps = new Properties
-    testProps ++= props
-    testProps.put("listeners", "EXTERNAL://localhost:0,INTERNAL://localhost:0,CONTROLLER://localhost:0")
-    testProps.put("listener.security.protocol.map", "EXTERNAL:PLAINTEXT,INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT")
-    testProps.put("control.plane.listener.name", "CONTROLLER")
-    testProps.put("inter.broker.listener.name", "INTERNAL")
-    val config = KafkaConfig.fromProps(testProps)
-    withTestableServer(config, { testableServer =>
-      val controlPlaneSocket = connect(testableServer, config.controlPlaneListenerName.get,
-        localAddr = InetAddress.getLocalHost)
-      val controlPlaneRequest = sendAndReceiveControllerRequest(controlPlaneSocket, testableServer)
-      assertTrue(controlPlaneRequest.context.fromPrivilegedListener)
-
-      val interBrokerSocket = connect(testableServer, config.interBrokerListenerName,
-        localAddr = InetAddress.getLocalHost)
-      val interBrokerRequest = sendAndReceiveRequest(interBrokerSocket, testableServer)
-      assertFalse(interBrokerRequest.context.fromPrivilegedListener)
-
-      val externalSocket = connect(testableServer, new ListenerName("EXTERNAL"),
-        localAddr = InetAddress.getLocalHost)
-      val externalRequest = sendAndReceiveRequest(externalSocket, testableServer)
-      assertFalse(externalRequest.context.fromPrivilegedListener)
-    })
-  }
-
   private def sslServerProps: Properties = {
     val trustStoreFile = File.createTempFile("truststore", ".jks")
     val sslProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, interBrokerSecurityProtocol = Some(SecurityProtocol.SSL),
@@ -1820,10 +1745,10 @@ class SocketServerTest {
     @volatile var uncaughtExceptions = 0
 
     override def newProcessor(id: Int, requestChannel: RequestChannel, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
-                              protocol: SecurityProtocol, memoryPool: MemoryPool, isPrivilegedListener: Boolean = false): Processor = {
+                                protocol: SecurityProtocol, memoryPool: MemoryPool): Processor = {
       new Processor(id, time, config.socketRequestMaxBytes, requestChannel, connectionQuotas, config.connectionsMaxIdleMs,
         config.failedAuthenticationDelayMs, listenerName, protocol, config, metrics, credentialProvider,
-        memoryPool, new LogContext(), connectionQueueSize, isPrivilegedListener) {
+        memoryPool, new LogContext(), connectionQueueSize) {
 
         override protected[network] def createSelector(channelBuilder: ChannelBuilder): Selector = {
            val testableSelector = new TestableSelector(config, channelBuilder, time, metrics, metricTags.asScala)

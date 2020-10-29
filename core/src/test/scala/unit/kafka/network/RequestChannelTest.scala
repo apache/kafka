@@ -182,8 +182,7 @@ class RequestChannelTest {
       new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user"),
       ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
       SecurityProtocol.PLAINTEXT,
-      new ClientInformation("name", "version"),
-      false)
+      new ClientInformation("name", "version"))
   }
 
   private def toMap(config: Config): Map[String, String] = {

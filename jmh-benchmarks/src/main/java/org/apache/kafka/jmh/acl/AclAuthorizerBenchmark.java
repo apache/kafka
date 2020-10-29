@@ -96,7 +96,7 @@ public class AclAuthorizerBenchmark {
             1, true, true));
         context = new RequestContext(new RequestHeader(ApiKeys.PRODUCE, Integer.valueOf(1).shortValue(),
             "someclient", 1), "1", InetAddress.getLocalHost(), KafkaPrincipal.ANONYMOUS,
-            ListenerName.normalised("listener"), SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false);
+            ListenerName.normalised("listener"), SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY);
     }
 
     private void setFieldValue(Object obj, String fieldName, Object value) throws Exception {
