@@ -472,26 +472,30 @@ class StreamsUpgradeTest(Test):
                     monitors[first_other_processor] = first_other_monitor
                     monitors[second_other_processor] = second_other_monitor
 
+                    end_of_upgrade_message = "Sent a version 8 subscription and group.s latest commonly supported version is 9 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 9 for next rebalance."
+                    end_of_upgrade_error_message = "Could not detect 'successful version probing and end of rolling upgrade' at upgraded node "
+                    followup_rebalance_message = "Triggering the followup rebalance scheduled for 0 ms."
+                    followup_rebalance_error_message = "Could not detect 'Triggering followup rebalance' at node "
                     if len(self.old_processors) > 0:
-                        log_monitor.wait_until("Sent a version 8 subscription and got version 7 assignment back (successful version probing). Downgrade subscription metadata to commonly supported version 7 and trigger new rebalance.",
+                        log_monitor.wait_until("Sent a version 9 subscription and got version 8 assignment back (successful version probing). Downgrade subscription metadata to commonly supported version 8 and trigger new rebalance.",
                                                timeout_sec=60,
                                                err_msg="Could not detect 'successful version probing' at upgrading node " + str(node.account))
-                        log_monitor.wait_until("Triggering the followup rebalance scheduled for 0 ms.",
+                        log_monitor.wait_until(followup_rebalance_message,
                                                timeout_sec=60,
-                                               err_msg="Could not detect 'Triggering followup rebalance' at upgrading node " + str(node.account))
+                                               err_msg=followup_rebalance_error_message + str(node.account))
                     else:
-                        first_other_monitor.wait_until("Sent a version 7 subscription and group.s latest commonly supported version is 8 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 8 for next rebalance.",
+                        first_other_monitor.wait_until(end_of_upgrade_message,
                                                        timeout_sec=60,
-                                                       err_msg="Never saw output 'Upgrade metadata to version 8' on" + str(first_other_node.account))
-                        first_other_monitor.wait_until("Triggering the followup rebalance scheduled for 0 ms.",
+                                                       err_msg=end_of_upgrade_error_message + str(first_other_node.account))
+                        first_other_monitor.wait_until(followup_rebalance_message,
                                                        timeout_sec=60,
-                                                       err_msg="Could not detect 'Triggering followup rebalance' at upgrading node " + str(node.account))
-                        second_other_monitor.wait_until("Sent a version 7 subscription and group.s latest commonly supported version is 8 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 8 for next rebalance.",
+                                                       err_msg=followup_rebalance_error_message + str(node.account))
+                        second_other_monitor.wait_until(end_of_upgrade_message,
                                                         timeout_sec=60,
-                                                        err_msg="Never saw output 'Upgrade metadata to version 8' on" + str(second_other_node.account))
-                        second_other_monitor.wait_until("Triggering the followup rebalance scheduled for 0 ms.",
+                                                        err_msg=end_of_upgrade_error_message + str(second_other_node.account))
+                        second_other_monitor.wait_until(followup_rebalance_message,
                                                         timeout_sec=60,
-                                                        err_msg="Could not detect 'Triggering followup rebalance' at upgrading node " + str(node.account))
+                                                        err_msg=followup_rebalance_error_message + str(node.account))
 
                     # version probing should trigger second rebalance
                     # now we check that after consecutive rebalances we have synchronized generation
@@ -525,18 +529,18 @@ class StreamsUpgradeTest(Test):
 
 
                     if len(self.old_processors) > 0:
-                        self.verify_metadata_no_upgraded_yet()
+                        self.verify_metadata_no_upgraded_yet(end_of_upgrade_message)
 
         return current_generation
 
     def extract_highest_generation(self, found_generations):
         return extract_generation_id(found_generations[-1])
 
-    def verify_metadata_no_upgraded_yet(self):
+    def verify_metadata_no_upgraded_yet(self, end_of_upgrade_message):
         for p in self.processors:
-            found = list(p.node.account.ssh_capture("grep \"Sent a version 6 subscription and group.s latest commonly supported version is 7 (successful version probing and end of rolling upgrade). Upgrading subscription metadata version to 7 for next rebalance.\" " + p.LOG_FILE, allow_fail=True))
+            found = list(p.node.account.ssh_capture("grep \"" + end_of_upgrade_message + "\" " + p.LOG_FILE, allow_fail=True))
             if len(found) > 0:
-                raise Exception("Kafka Streams failed with 'group member upgraded to metadata 7 too early'")
+                raise Exception("Kafka Streams failed with 'group member upgraded to metadata 8 too early'")
 
     def confirm_topics_on_all_brokers(self, expected_topic_set):
         for node in self.kafka.nodes:
