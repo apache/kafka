@@ -37,7 +37,7 @@ public class ProcessingContextTest {
     }
 
     @Test
-    public void testReportWithTwoReporters() {
+    public void testReportWithMultipleReporters() {
         testReport(2);
     }
 
