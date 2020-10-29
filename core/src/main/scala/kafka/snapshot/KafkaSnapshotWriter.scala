@@ -66,7 +66,7 @@ final class KafkaSnapshotWriter private (fileRecords: FileRecords, snapshotId: O
 }
 
 object KafkaSnapshotWriter {
-  private[this] val PartialSuffix = ".part"
+  private[this] val PartialSuffix = s"$Suffix.part"
 
   def apply(logDir: Path, snapshotId: OffsetAndEpoch): KafkaSnapshotWriter = {
     val fileRecords = FileRecords.open(
@@ -86,6 +86,8 @@ object KafkaSnapshotWriter {
     // Create the snapshot directory if it doesn't exists
     Files.createDirectories(dir)
 
-    Files.createTempFile(dir, filenameFromSnapshotId(snapshotId), PartialSuffix)
+    val prefix = s"${filenameFromSnapshotId(snapshotId)}-"
+
+    Files.createTempFile(dir, prefix, PartialSuffix)
   }
 }

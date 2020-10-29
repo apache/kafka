@@ -43,7 +43,7 @@ final public class BufferedSnapshotWriterTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
         try (BufferedSnapshotWriter<String> snapshot = context.client.createSnapshot(id)) {
-            expected.iterator().forEachRemaining(batch -> {
+            expected.forEach(batch -> {
                 assertDoesNotThrow(() -> snapshot.append(batch));
             });
             snapshot.freeze();
@@ -61,7 +61,7 @@ final public class BufferedSnapshotWriterTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
         try (BufferedSnapshotWriter<String> snapshot = context.client.createSnapshot(id)) {
-            expected.iterator().forEachRemaining(batch -> {
+            expected.forEach(batch -> {
                 assertDoesNotThrow(() -> snapshot.append(batch));
             });
         }
@@ -76,7 +76,7 @@ final public class BufferedSnapshotWriterTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
         try (BufferedSnapshotWriter<String> snapshot = context.client.createSnapshot(id)) {
-            expected.iterator().forEachRemaining(batch -> {
+            expected.forEach(batch -> {
                 assertDoesNotThrow(() -> snapshot.append(batch));
             });
 
@@ -102,10 +102,10 @@ final public class BufferedSnapshotWriterTest {
 
     private void assertSnapshot(List<List<String>> batches, SnapshotReader reader) {
         List<String> expected = new ArrayList<>();
-        batches.iterator().forEachRemaining(expected::addAll);
+        batches.forEach(expected::addAll);
 
         List<String> actual = new ArrayList<>(expected.size());
-        reader.iterator().forEachRemaining(batch -> {
+        reader.forEach(batch -> {
             batch.streamingIterator(new GrowableBufferSupplier()).forEachRemaining(record -> {
                 actual.add(Utils.utf8(record.value()));
             });

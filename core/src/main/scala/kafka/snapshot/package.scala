@@ -22,7 +22,7 @@ import org.apache.kafka.raft.OffsetAndEpoch
 
 package object snapshot {
   private[this] val SnapshotDir = "snapshots"
-  private[this] val Suffix =  ".snapshot"
+  val Suffix =  ".snapshot"
 
   def snapshotDir(logDir: Path): Path = {
     logDir.resolve(SnapshotDir)

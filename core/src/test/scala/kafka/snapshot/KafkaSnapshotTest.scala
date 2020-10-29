@@ -19,8 +19,8 @@ package kafka.snapshot
 import java.nio.ByteBuffer
 import java.nio.file.Files
 import kafka.utils.TestUtils
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.DefaultRecordBatch;
+import org.apache.kafka.common.record.BufferSupplier.GrowableBufferSupplier
+import org.apache.kafka.common.record.CompressionType
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.record.SimpleRecord
 import org.apache.kafka.raft.OffsetAndEpoch
@@ -73,19 +73,10 @@ final class KafkaSnapshotTest {
     TestUtils.resource(KafkaSnapshotReader(tempDir, offsetAndEpoch)) { snapshot =>
       var countBatches = 0
       var countRecords = 0
-      var buffer = ByteBuffer.allocate(0)
       snapshot.forEach { batch =>
         countBatches += 1
 
-        buffer = if (buffer.capacity() < batch.sizeInBytes()) {
-          ByteBuffer.allocate(batch.sizeInBytes)
-        } else {
-          buffer.clear()
-          buffer
-        }
-
-        batch.writeTo(buffer)
-        new DefaultRecordBatch(buffer).forEach { record =>
+        batch.streamingIterator(new GrowableBufferSupplier()).forEachRemaining { record =>
           countRecords += 1
           assertFalse(record.hasKey)
           assertTrue(record.hasValue)
@@ -123,19 +114,10 @@ final class KafkaSnapshotTest {
     TestUtils.resource(KafkaSnapshotReader(tempDir, offsetAndEpoch)) { snapshot =>
       var countBatches = 0
       var countRecords = 0
-      var buffer = ByteBuffer.allocate(0)
       snapshot.forEach { batch =>
         countBatches += 1
 
-        buffer = if (buffer.capacity() < batch.sizeInBytes()) {
-          ByteBuffer.allocate(batch.sizeInBytes)
-        } else {
-          buffer.clear()
-          buffer
-        }
-
-        batch.writeTo(buffer)
-        new DefaultRecordBatch(buffer).forEach { record =>
+        batch.streamingIterator(new GrowableBufferSupplier()).forEachRemaining { record =>
           countRecords += 1
           assertFalse(record.hasKey)
           assertTrue(record.hasValue)
@@ -188,6 +170,33 @@ final class KafkaSnapshotTest {
     // File should exist and the size should be greater than the sum of all the buffers
     assertTrue(Files.exists(snapshotPath(tempDir, offsetAndEpoch)))
     assertTrue(Files.size(snapshotPath(tempDir, offsetAndEpoch)) > bufferSize * batches)
+  }
+
+  @Test
+  def testCreateSnapshotWithSameId(): Unit = {
+    val tempDir = TestUtils.tempDir().toPath
+    val offsetAndEpoch = new OffsetAndEpoch(20L, 2)
+    val bufferSize = 256
+    val batches = 1
+
+    TestUtils.resource(KafkaSnapshotWriter(tempDir, offsetAndEpoch)) { snapshot =>
+      val records = buildRecords(Array(ByteBuffer.wrap(Random.nextBytes(bufferSize))))
+      for (_ <- 0 until batches) {
+        snapshot.append(records)
+      }
+
+      snapshot.freeze()
+    }
+
+    // Create another snapshot with the same id
+    TestUtils.resource(KafkaSnapshotWriter(tempDir, offsetAndEpoch)) { snapshot =>
+      val records = buildRecords(Array(ByteBuffer.wrap(Random.nextBytes(bufferSize))))
+      for (_ <- 0 until batches) {
+        snapshot.append(records)
+      }
+
+      snapshot.freeze()
+    }
   }
 }
 

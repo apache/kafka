@@ -1734,7 +1734,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
     @Override
     public BufferedSnapshotWriter<T> createSnapshot(OffsetAndEpoch snapshotId) {
-        // TODO: this operation should fail if a snapshot with that id already exists
         return new BufferedSnapshotWriter<>(
             log.createSnapshot(snapshotId),
             MAX_BATCH_SIZE,

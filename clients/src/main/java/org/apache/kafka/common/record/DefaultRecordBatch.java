@@ -134,7 +134,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
     private final ByteBuffer buffer;
 
-    public DefaultRecordBatch(ByteBuffer buffer) {
+    DefaultRecordBatch(ByteBuffer buffer) {
         this.buffer = buffer;
     }
 
