@@ -28,7 +28,8 @@
   // Version 7 offsetCommitRequest supports a new field called groupInstanceId to indicate member identity across restarts.
   //
   // Version 8 is the first flexible version.
-  "validVersions": "0-8",
+  // From version 9 an OffsetCommitResponse will be treated as a HeartbeatResponse as well
+  "validVersions": "0-9",
   "flexibleVersions": "8+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "3+", "ignorable": true,
@@ -44,6 +45,7 @@
         { "name": "ErrorCode", "type": "int16", "versions": "0+",
           "about": "The error code, or 0 if there was no error." }
       ]}
-    ]}
+    ]},
+    {"name": "RebalanceInProgress", "type": "bool", "versions": "9+", "ignorable": true}
   ]
 }

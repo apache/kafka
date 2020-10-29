@@ -286,12 +286,12 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
       val tp = new TopicPartition("topic", 0)
       val offsets = immutable.Map(tp -> OffsetAndMetadata(1, "", Time.SYSTEM.milliseconds()))
       groupCoordinator.handleCommitOffsets(member.groupId, member.memberId,
-        member.groupInstanceId, member.generationId, offsets, responseCallback)
+        member.groupInstanceId, member.generationId, offsets, alsoHeartbeat = false, responseCallback)
       replicaManager.tryCompleteActions()
     }
     override def awaitAndVerify(member: GroupMember): Unit = {
-       val offsets = await(member, 500)
-       offsets.foreach { case (_, error) => assertEquals(Errors.NONE, error) }
+       val offsetsAndHeartbeat = await(member, 500)
+       offsetsAndHeartbeat._1.foreach { case (_, error) => assertEquals(Errors.NONE, error) }
     }
   }
 
@@ -308,7 +308,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
         val offsetsPartitions = (0 to numPartitions).map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, _))
         groupCoordinator.groupManager.scheduleHandleTxnCompletion(producerId,
           offsetsPartitions.map(_.partition).toSet, isCommit = random.nextBoolean)
-        responseCallback(errors)
+        responseCallback((errors ,false))
       }
       lock.foreach(_.lock())
       try {
@@ -373,8 +373,8 @@ object GroupCoordinatorConcurrencyTest {
   type HeartbeatCallback = Errors => Unit
   type OffsetFetchCallbackParams = (Errors, Map[TopicPartition, OffsetFetchResponse.PartitionData])
   type OffsetFetchCallback = (Errors, Map[TopicPartition, OffsetFetchResponse.PartitionData]) => Unit
-  type CommitOffsetCallbackParams = Map[TopicPartition, Errors]
-  type CommitOffsetCallback = Map[TopicPartition, Errors] => Unit
+  type CommitOffsetCallbackParams = (Map[TopicPartition, Errors], Boolean)
+  type CommitOffsetCallback = ((Map[TopicPartition, Errors], Boolean)) => Unit
   type LeaveGroupCallbackParams = LeaveGroupResult
   type LeaveGroupCallback = LeaveGroupResult => Unit
   type CompleteTxnCallbackParams = Errors

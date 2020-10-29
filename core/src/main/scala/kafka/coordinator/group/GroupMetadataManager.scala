@@ -334,15 +334,29 @@ class GroupMetadataManager(brokerId: Int,
       responseCallback = callback)
   }
 
-  /**
-   * Store offsets by appending it to the replicated log and then inserting to cache
-   */
   def storeOffsets(group: GroupMetadata,
                    consumerId: String,
                    offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
                    responseCallback: immutable.Map[TopicPartition, Errors] => Unit,
                    producerId: Long = RecordBatch.NO_PRODUCER_ID,
                    producerEpoch: Short = RecordBatch.NO_PRODUCER_EPOCH): Unit = {
+
+    def responseCallbackAdaptor(commitStatus: (immutable.Map[TopicPartition, Errors], Boolean)): Unit = {
+      responseCallback(commitStatus._1)
+    }
+    storeOffsetsAndCheckReblance(group, consumerId, offsetMetadata, responseCallbackAdaptor, producerId, producerEpoch)
+  }
+
+  /**
+   * Store offsets by appending it to the replicated log and then inserting to cache
+   */
+  def storeOffsetsAndCheckReblance(group: GroupMetadata,
+                                   consumerId: String,
+                                   offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
+                                   responseCallback: ((immutable.Map[TopicPartition, Errors], Boolean)) => Unit,
+                                   producerId: Long = RecordBatch.NO_PRODUCER_ID,
+                                   producerEpoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
+                                   reblancing: Boolean = false): Unit = {
     // first filter out partitions with offset metadata size exceeding limit
     val filteredOffsetMetadata = offsetMetadata.filter { case (_, offsetAndMetadata) =>
       validateOffsetMetadataLength(offsetAndMetadata.metadata)
@@ -360,7 +374,7 @@ class GroupMetadataManager(brokerId: Int,
     if (filteredOffsetMetadata.isEmpty) {
       // compute the final error codes for the commit response
       val commitStatus = offsetMetadata.map { case (k, _) => k -> Errors.OFFSET_METADATA_TOO_LARGE }
-      responseCallback(commitStatus)
+      responseCallback(commitStatus, reblancing)
       None
     } else {
       getMagic(partitionFor(group.groupId)) match {
@@ -456,7 +470,7 @@ class GroupMetadataManager(brokerId: Int,
             }
 
             // finally trigger the callback logic passed from the API layer
-            responseCallback(commitStatus)
+            responseCallback(commitStatus, reblancing)
           }
 
           if (isTxnOffsetCommit) {
@@ -476,7 +490,7 @@ class GroupMetadataManager(brokerId: Int,
           val commitStatus = offsetMetadata.map { case (topicPartition, _) =>
             (topicPartition, Errors.NOT_COORDINATOR)
           }
-          responseCallback(commitStatus)
+          responseCallback(commitStatus, reblancing)
           None
       }
     }

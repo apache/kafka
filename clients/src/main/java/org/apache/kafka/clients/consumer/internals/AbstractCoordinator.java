@@ -1474,7 +1474,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
     }
 
-    // For testing only below
+    // For testing below and offset commit task
     final Heartbeat heartbeat() {
         return heartbeat;
     }

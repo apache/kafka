@@ -1156,8 +1156,24 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         log.trace("Sending OffsetCommit request with {} to coordinator {}", offsets, coordinator);
 
-        return client.send(coordinator, builder)
+        heartbeat().sentHeartbeat(time.milliseconds());
+
+        RequestFuture<Void> future = client.send(coordinator, builder)
                 .compose(new OffsetCommitResponseHandler(offsets, generation));
+
+        // every successful offset commit request is also a successful heart beat
+        future.addListener(new RequestFutureListener<Void>() {
+            @Override
+            public void onSuccess(Void value) {
+                heartbeat().receiveHeartbeat();
+            }
+
+            @Override
+            public void onFailure(RuntimeException e) {
+                heartbeat().failHeartbeat();
+            }
+        });
+        return future;
     }
 
     private class OffsetCommitResponseHandler extends CoordinatorResponseHandler<OffsetCommitResponse, Void> {
@@ -1173,6 +1189,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             sensors.commitSensor.record(response.requestLatencyMs());
             Set<String> unauthorizedTopics = new HashSet<>();
 
+            if (commitResponse.data().rebalanceInProgress()) {
+                requestRejoin();
+            }
             for (OffsetCommitResponseData.OffsetCommitResponseTopic topic : commitResponse.data().topics()) {
                 for (OffsetCommitResponseData.OffsetCommitResponsePartition partition : topic.partitions()) {
                     TopicPartition tp = new TopicPartition(topic.name(), partition.partitionIndex());
