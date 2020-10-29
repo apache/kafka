@@ -639,7 +639,6 @@ public class KafkaStreamsTest {
         assertThrows(NullPointerException.class, () -> streams.setUncaughtExceptionHandler((StreamsUncaughtExceptionHandler) null));
     }
 
-
     @Test
     public void shouldThrowExceptionSettingStateListenerNotInCreateState() {
         final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);

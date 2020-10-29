@@ -369,7 +369,7 @@ public class KafkaStreams implements AutoCloseable {
                 }
             } else {
                 throw new IllegalStateException("Can only set UncaughtExceptionHandler in CREATED state. " +
-                        "Current state is: " + state);
+                    "Current state is: " + state);
             }
         }
     }

@@ -61,7 +61,6 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.fail;
 
-
 @Category(IntegrationTest.class)
 public class StreamsHandlerIntegrationTest {
     @ClassRule
@@ -83,7 +82,6 @@ public class StreamsHandlerIntegrationTest {
         appId = "appId_" + testId;
         inputTopic = "input" + testId;
         cleanStateBeforeTest(CLUSTER, idempotentTopic, inputTopic);
-
 
         IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, inputTopic);
 
@@ -245,8 +243,6 @@ public class StreamsHandlerIntegrationTest {
         }
     }
 
-
-
     private void produceMessages(final long timestamp, final String streamOneInput, final String msg) {
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
                 streamOneInput,
@@ -258,8 +254,6 @@ public class StreamsHandlerIntegrationTest {
                         new Properties()),
                 timestamp);
     }
-
-
 
     private static class ShutdownProcessor extends AbstractProcessor<String, String> {
 

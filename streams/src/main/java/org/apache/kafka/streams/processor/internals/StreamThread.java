@@ -284,7 +284,6 @@ public class StreamThread extends Thread {
     private final Admin adminClient;
     private final InternalTopologyBuilder builder;
 
-
     private boolean newHandler;
     private StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler;
     private ShutdownErrorHook shutdownErrorHook;
@@ -617,7 +616,6 @@ public class StreamThread extends Thread {
         this.newHandler = true;
     }
 
-
     public void shutdownToError() {
         shutdownErrorHook.shutdown();
     }
@@ -628,7 +626,6 @@ public class StreamThread extends Thread {
         assignmentErrorCode.set(assignorError.code());
         mainConsumer.enforceRebalance();
     }
-
 
     private void handleTaskMigrated(final TaskMigratedException e) {
         log.warn("Detected that the thread is being fenced. " +
