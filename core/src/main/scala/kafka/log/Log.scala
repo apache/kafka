@@ -2073,7 +2073,7 @@ class Log(@volatile private var _dir: File,
         info(s"Truncating to $targetOffset has no effect as the largest offset in the log is ${logEndOffset - 1}")
         false
       } else {
-        info(s"Truncating to offset $targetOffset")
+        info(s"Truncating to offset $targetOffset from the log end offset $logEndOffset")
         lock synchronized {
           checkIfMemoryMappedBufferClosed()
           if (segments.firstEntry.getValue.baseOffset > targetOffset) {
