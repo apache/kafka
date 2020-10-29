@@ -417,7 +417,7 @@ public class SaslServerAuthenticator implements Authenticator {
             ApiKeys apiKey = header.apiKey();
             short version = header.apiVersion();
             RequestContext requestContext = new RequestContext(header, connectionId, clientAddress(),
-                    KafkaPrincipal.ANONYMOUS, listenerName, securityProtocol, ClientInformation.EMPTY);
+                    KafkaPrincipal.ANONYMOUS, listenerName, securityProtocol, ClientInformation.EMPTY, false);
             RequestAndSize requestAndSize = requestContext.parseRequest(requestBuffer);
             if (apiKey != ApiKeys.SASL_AUTHENTICATE) {
                 IllegalSaslStateException e = new IllegalSaslStateException("Unexpected Kafka request of type " + apiKey + " during SASL authentication.");
@@ -503,7 +503,7 @@ public class SaslServerAuthenticator implements Authenticator {
 
 
             RequestContext requestContext = new RequestContext(header, connectionId, clientAddress(),
-                    KafkaPrincipal.ANONYMOUS, listenerName, securityProtocol, ClientInformation.EMPTY);
+                    KafkaPrincipal.ANONYMOUS, listenerName, securityProtocol, ClientInformation.EMPTY, false);
             RequestAndSize requestAndSize = requestContext.parseRequest(requestBuffer);
             if (apiKey == ApiKeys.API_VERSIONS)
                 handleApiVersionsRequest(requestContext, (ApiVersionsRequest) requestAndSize.request);
