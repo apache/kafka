@@ -69,13 +69,4 @@ public interface AuthorizableRequestContext {
      * Returns the correlation id from the request header.
      */
     int correlationId();
-
-    /**
-     * Returns the initial principal name for a forwarded request, or null if the
-     * request is not forwarding. Note that this field should be used only for
-     * audit logging purpose, not for authorization.
-     */
-    default String initialPrincipalName() {
-        return null;
-    }
 }
