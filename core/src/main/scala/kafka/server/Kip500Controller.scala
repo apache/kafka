@@ -150,8 +150,12 @@ class Kip500Controller(val config: KafkaConfig,
       metrics = new Metrics(metricConfig, reporters, time, true, metricsContext)
       AppInfoParser.registerAppInfo(KafkaBroker.metricsPrefix,
         config.controllerId.toString, metrics, time.milliseconds())
-      KafkaBroker.notifyClusterListeners(clusterId,
-        kafkaMetricsReporters ++ metrics.reporters.asScala)
+      if (kafkaMetricsReporters == null) {
+        KafkaBroker.notifyClusterListeners(clusterId, metrics.reporters.asScala)
+      } else {
+        KafkaBroker.notifyClusterListeners(clusterId,
+          kafkaMetricsReporters ++ metrics.reporters.asScala)
+      }
 
       logManager = new LocalLogManager(new LogContext(),
         config.controllerId, config.metadataLogDir, "", 10)

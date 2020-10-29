@@ -17,11 +17,9 @@
 
 package kafka.testkit;
 
-import kafka.metrics.KafkaMetricsReporter;
 import kafka.server.KafkaConfig;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,7 +35,6 @@ import kafka.server.Kip500Controller;
 import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
 import scala.compat.java8.OptionConverters;
-import scala.jdk.javaapi.CollectionConverters;
 
 public class KafkaClusterTestKit implements AutoCloseable {
     public static class Builder {
@@ -77,8 +74,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     KafkaConfig config = new KafkaConfig(controllerProps, false,
                         OptionConverters.toScala(Optional.empty()));
                     controllers.put(i, new Kip500Controller(config, time,
-                        OptionConverters.toScala(Optional.of(String.format("controller%d_", i))),
-                        CollectionConverters.<KafkaMetricsReporter>asScala(Collections.emptyList()).toSeq()));
+                        OptionConverters.toScala(Optional.of(String.format("controller%d_", i))), null));
                 }
             } catch (Exception e) {
                 if (executorService != null) {
