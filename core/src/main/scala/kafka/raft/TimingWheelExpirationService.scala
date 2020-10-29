@@ -18,7 +18,6 @@ package kafka.raft
 
 import java.util.concurrent.CompletableFuture
 
-import kafka.raft.TimingWheelExpirationService.TimerTaskCompletableFuture
 import kafka.utils.ShutdownableThread
 import kafka.utils.timer.{Timer, TimerTask}
 import org.apache.kafka.common.errors.TimeoutException
