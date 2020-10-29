@@ -197,7 +197,7 @@ public interface Authorizer extends Configurable, Closeable {
 
             switch (binding.pattern().patternType()) {
                 case LITERAL:
-                    if (binding.pattern().name() == ResourcePattern.WILDCARD_RESOURCE)
+                    if (binding.pattern().name().equals(ResourcePattern.WILDCARD_RESOURCE))
                         return AuthorizationResult.ALLOWED;
                     List<Action> action = Collections.singletonList(new Action(
                         op, binding.pattern(), 1, false, false));
