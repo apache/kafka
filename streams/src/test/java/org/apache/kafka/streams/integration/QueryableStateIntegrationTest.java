@@ -236,6 +236,7 @@ public class QueryableStateIntegrationTest {
             kafkaStreams.close(ofSeconds(30));
         }
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
+        CLUSTER.deleteAllTopicsAndWait(0L);
     }
 
     /**
@@ -475,8 +476,6 @@ public class QueryableStateIntegrationTest {
                 exception.getMessage(),
                 is("Cannot get state store no-table because no such store is registered in the topology.")
             );
-        } finally {
-            CLUSTER.deleteAllTopicsAndWait(0L);
         }
     }
 
@@ -525,8 +524,6 @@ public class QueryableStateIntegrationTest {
                         " [class org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStore]."
                 )
             );
-        } finally {
-            CLUSTER.deleteAllTopicsAndWait(0L);
         }
     }
 
