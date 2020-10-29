@@ -25,7 +25,6 @@ import org.apache.kafka.connect.source.SourceRecord;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
@@ -149,8 +148,8 @@ class ProcessingContext implements AutoCloseable {
 
         List<Future<RecordMetadata>> futures = reporters.stream()
                 .map(r -> r.report(this))
-                .filter(Future::isDone)
-                .collect(Collectors.toCollection(LinkedList::new));
+                .filter(f -> !f.isDone())
+                .collect(Collectors.toList());
         if (futures.isEmpty()) {
             return CompletableFuture.completedFuture(null);
         }
