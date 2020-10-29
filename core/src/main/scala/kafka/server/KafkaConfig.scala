@@ -1870,7 +1870,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
         s" authentication responses from timing out")
 
     if (processRoles.isEmpty) {
-      if (zkConnect.isEmpty) {
+      if (zkConnect == null) {
         throw new ConfigException("Missing required configuration \"zookeeper.connect\" which has no default value.")
       }
       // validate controller.listener.name config
