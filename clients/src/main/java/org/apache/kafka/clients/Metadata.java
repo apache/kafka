@@ -236,6 +236,8 @@ public class Metadata implements Closeable {
         if (isClosed())
             throw new IllegalStateException("Update requested after metadata close");
 
+        validateCluster(response.clusterId());
+
         if (requestVersion == this.requestVersion)
             this.needUpdate = false;
         else
@@ -261,6 +263,35 @@ public class Metadata implements Closeable {
         clusterResourceListeners.onUpdate(cache.cluster().clusterResource());
 
         log.debug("Updated cluster metadata updateVersion {} to {}", this.updateVersion, this.cache);
+    }
+
+    private void validateCluster(String newClusterId) {
+        String previousClusterId = this.cache.cluster().clusterResource().clusterId();
+
+        if (previousClusterId != null && newClusterId != null && !previousClusterId.equals(newClusterId)) {
+            // kafka cluster id is unique.
+            // On client side, the cluster id in Metadata is only null during bootstrap, and client is
+            // expected to talk to the same cluster during its life cycle. Therefore if cluster id changes
+            // during metadata update, meaning this metadata update response is from a different cluster,
+            // client should reject this response and not update cached cluster to the wrong cluster
+
+            // Since removing brokers and adding to another cluster can be common operation,
+            // it might be more suitable to just throw an exception for update and fail this update operation
+            // instead of bringing down the client completely, so that the metadata can be updated later from
+            // other brokers in the same cluster.
+
+            // this code path will only get executed when all brokers in original cluster has been removed and
+            // one/some brokers have been added to another. If only some of the original brokers were removed/added
+            // to another cluster, the client should get updated metadata with valid brokers from other hosts.
+            // so we can just throw an exception and close the network client
+
+            log.error("Received metadata from a different cluster {}, current cluster {} has no valid brokers anymore,"
+                + "please reboot the producer/consumer", newClusterId, previousClusterId);
+
+            throw new StaleClusterMetadataException(
+                "Trying to access a different cluster " + newClusterId + ", previous connected cluster " + previousClusterId);
+
+        }
     }
 
     private void maybeSetMetadataError(Cluster cluster) {

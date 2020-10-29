@@ -1182,7 +1182,7 @@ public class FetcherTest {
     public void testEpochSetInFetchRequest() {
         buildFetcher();
         subscriptions.assignFromUser(singleton(tp0));
-        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1,
+        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith(null, 1,
                 Collections.emptyMap(), Collections.singletonMap(topicName, 4), tp -> 99);
         client.updateMetadata(metadataResponse);
 
@@ -2460,7 +2460,7 @@ public class FetcherTest {
             Errors.LEADER_NOT_AVAILABLE, Errors.FENCED_LEADER_EPOCH, Errors.UNKNOWN_LEADER_EPOCH);
 
         final int newLeaderEpoch = 3;
-        MetadataResponse updatedMetadata = TestUtils.metadataUpdateWith("dummy", 3,
+        MetadataResponse updatedMetadata = TestUtils.metadataUpdateWith(null, 3,
             singletonMap(topicName, Errors.NONE), singletonMap(topicName, 4), tp -> newLeaderEpoch);
 
         Node originalLeader = initialUpdateResponse.cluster().leaderFor(tp1);
@@ -2560,7 +2560,7 @@ public class FetcherTest {
         client.updateMetadata(initialUpdateResponse);
 
         // Metadata update with leader epochs
-        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1,
+        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith(null, 1,
                 Collections.emptyMap(), Collections.singletonMap(topicName, 4), tp -> 99);
         client.updateMetadata(metadataResponse);
 
@@ -3541,7 +3541,7 @@ public class FetcherTest {
         // Initialize the epoch=1
         Map<String, Integer> partitionCounts = new HashMap<>();
         partitionCounts.put(tp0.topic(), 4);
-        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts, tp -> 1);
+        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith(null, 1, Collections.emptyMap(), partitionCounts, tp -> 1);
         metadata.update(metadataResponse, 0L);
 
         // Seek
@@ -3572,7 +3572,7 @@ public class FetcherTest {
 
         final int epochOne = 1;
 
-        metadata.update(TestUtils.metadataUpdateWith("dummy", 1,
+        metadata.update(TestUtils.metadataUpdateWith(null, 1,
                 Collections.emptyMap(), partitionCounts, tp -> epochOne), 0L);
 
         Node node = metadata.fetch().nodes().get(0);
@@ -3619,7 +3619,7 @@ public class FetcherTest {
         final int epochTwo = 2;
 
         // Start with metadata, epoch=1
-        metadata.update(TestUtils.metadataUpdateWith("dummy", 1,
+        metadata.update(TestUtils.metadataUpdateWith(null, 1,
                 Collections.emptyMap(), partitionCounts, tp -> epochOne), 0L);
 
         // Offset validation requires OffsetForLeaderEpoch request v3 or higher
@@ -3633,7 +3633,7 @@ public class FetcherTest {
         subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(0, Optional.of(epochOne), leaderAndEpoch));
 
         // Update metadata to epoch=2, enter validation
-        metadata.update(TestUtils.metadataUpdateWith("dummy", 1,
+        metadata.update(TestUtils.metadataUpdateWith(null, 1,
                 Collections.emptyMap(), partitionCounts, tp -> epochTwo), 0L);
         fetcher.validateOffsetsIfNeeded();
 
@@ -3651,7 +3651,7 @@ public class FetcherTest {
 
         final int epochOne = 1;
 
-        metadata.update(TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts, tp -> epochOne), 0L);
+        metadata.update(TestUtils.metadataUpdateWith(null, 1, Collections.emptyMap(), partitionCounts, tp -> epochOne), 0L);
 
         // Offset validation requires OffsetForLeaderEpoch request v3 or higher
         Node node = metadata.fetch().nodes().get(0);
@@ -3693,7 +3693,7 @@ public class FetcherTest {
         final int epochThree = 3;
 
         // Start with metadata, epoch=1
-        metadata.update(TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts, tp -> epochOne), 0L);
+        metadata.update(TestUtils.metadataUpdateWith(null, 1, Collections.emptyMap(), partitionCounts, tp -> epochOne), 0L);
 
         // Offset validation requires OffsetForLeaderEpoch request v3 or higher
         Node node = metadata.fetch().nodes().get(0);
@@ -3704,7 +3704,7 @@ public class FetcherTest {
         subscriptions.seekValidated(tp0, new SubscriptionState.FetchPosition(0, Optional.of(epochOne), leaderAndEpoch));
 
         // Update metadata to epoch=2, enter validation
-        metadata.update(TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts, tp -> epochTwo), 0L);
+        metadata.update(TestUtils.metadataUpdateWith(null, 1, Collections.emptyMap(), partitionCounts, tp -> epochTwo), 0L);
         fetcher.validateOffsetsIfNeeded();
         assertTrue(subscriptions.awaitingValidation(tp0));
 
@@ -3762,7 +3762,7 @@ public class FetcherTest {
         // Initialize the epoch=2
         Map<String, Integer> partitionCounts = new HashMap<>();
         partitionCounts.put(tp0.topic(), 4);
-        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts, tp -> 2);
+        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith(null, 1, Collections.emptyMap(), partitionCounts, tp -> 2);
         metadata.update(metadataResponse, 0L);
 
         // Offset validation requires OffsetForLeaderEpoch request v3 or higher
