@@ -106,6 +106,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
+import static org.apache.kafka.streams.StreamsConfig.APPLICATION_ID_CONFIG;
 import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.AT_LEAST_ONCE;
 import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
 import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
@@ -244,6 +245,24 @@ public class TopologyTestDriver implements Closeable {
         @Override
         public void onRestoreEnd(final TopicPartition topicPartition, final String storeName, final long totalRestored) {}
     };
+
+    private static Properties defaultTestProps;
+
+    static {
+        defaultTestProps = new Properties();
+        defaultTestProps.put(APPLICATION_ID_CONFIG, "dummy-app-id");
+        defaultTestProps.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9091");
+    }
+
+    /**
+     * Create a new test diver instance.
+     * Default test properties are used to initialize the driver instance
+     *
+     * @param topology the topology to be tested
+     */
+    public TopologyTestDriver(final Topology topology) {
+        this(topology, defaultTestProps, null);
+    }
 
     /**
      * Create a new test diver instance.
