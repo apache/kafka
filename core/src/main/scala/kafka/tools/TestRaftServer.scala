@@ -317,7 +317,6 @@ class RaftSocketServer(
     listenerName: ListenerName,
     securityProtocol: SecurityProtocol,
     memoryPool: MemoryPool,
-    isPrivilegedListener: Boolean
   ): Processor = {
     new Processor(id,
       time,
@@ -332,9 +331,7 @@ class RaftSocketServer(
       metrics,
       credentialProvider,
       memoryPool,
-      logContext,
-      isPrivilegedListener = isPrivilegedListener
-    ) {
+      logContext) {
       // We extend this API to skip the check for only enabled APIs. This
       // gets us access to Vote, BeginQuorumEpoch, etc. which are not usable
       // from the Kafka broker yet.
