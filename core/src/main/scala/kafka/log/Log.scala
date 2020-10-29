@@ -2073,20 +2073,24 @@ class Log(@volatile private var _dir: File,
         info(s"Truncating to $targetOffset has no effect as the largest offset in the log is ${logEndOffset - 1}")
         false
       } else {
-        info(s"Truncating to offset $targetOffset from the log end offset $logEndOffset")
+        var bytesTruncated = 0L
+        val originalLogEndOffset = logEndOffset
         lock synchronized {
           checkIfMemoryMappedBufferClosed()
           if (segments.firstEntry.getValue.baseOffset > targetOffset) {
             truncateFullyAndStartAt(targetOffset)
+            bytesTruncated += logSegments.map(_.size).sum
           } else {
             val deletable = logSegments.filter(segment => segment.baseOffset > targetOffset)
-            removeAndDeleteSegments(deletable, asyncDelete = true, LogTruncation)
-            activeSegment.truncateTo(targetOffset)
+            bytesTruncated += removeAndDeleteSegments(deletable, asyncDelete = true, LogTruncation)
+            bytesTruncated += activeSegment.truncateTo(targetOffset)
             updateLogEndOffset(targetOffset)
             updateLogStartOffset(math.min(targetOffset, this.logStartOffset))
             leaderEpochCache.foreach(_.truncateFromEnd(targetOffset))
             loadProducerState(targetOffset, reloadFromCleanShutdown = false)
           }
+          info(s"Truncated to offset $targetOffset from the log end offset $originalLogEndOffset " +
+            s"with ${originalLogEndOffset - targetOffset} messages and $bytesTruncated bytes truncated")
           true
         }
       }
@@ -2203,10 +2207,12 @@ class Log(@volatile private var _dir: File,
    *
    * @param segments The log segments to schedule for deletion
    * @param asyncDelete Whether the segment files should be deleted asynchronously
+   * @return the total number of bytes deleted
    */
   private def removeAndDeleteSegments(segments: Iterable[LogSegment],
                                       asyncDelete: Boolean,
-                                      reason: SegmentDeletionReason): Unit = {
+                                      reason: SegmentDeletionReason): Long = {
+    var bytesDeleted = 0L
     if (segments.nonEmpty) {
       lock synchronized {
         // As most callers hold an iterator into the `segments` collection and `removeAndDeleteSegment` mutates it by
@@ -2216,10 +2222,12 @@ class Log(@volatile private var _dir: File,
         reason.logReason(this, toDelete)
         toDelete.foreach { segment =>
           this.segments.remove(segment.baseOffset)
+          bytesDeleted += segment.size
         }
         deleteSegmentFiles(toDelete, asyncDelete)
       }
     }
+    bytesDeleted
   }
 
   /**
