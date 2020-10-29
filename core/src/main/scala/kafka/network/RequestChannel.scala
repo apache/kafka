@@ -27,7 +27,6 @@ import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.KafkaConfig
 import kafka.utils.{Logging, NotNothing, Pool}
-import kafka.utils.Implicits._
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.memory.MemoryPool
@@ -395,10 +394,9 @@ class RequestChannel(val queueSize: Int,
   def receiveRequest(): RequestChannel.BaseRequest =
     requestQueue.take()
 
-  def updateErrorMetrics(apiKey: ApiKeys, errors: collection.Map[Errors, Integer]): Unit = {
-    errors.forKeyValue { (error, count) =>
-      metrics(apiKey.name).markErrorMeter(error, count)
-    }
+  def updateErrorMetrics(apiKey: ApiKeys, errors: java.util.Map[Errors, Integer]): Unit = {
+    val m = metrics(apiKey.name)
+    errors.forEach((error, count) => m.markErrorMeter(error, count))
   }
 
   def clear(): Unit = {

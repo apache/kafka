@@ -26,8 +26,6 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse}
 import org.apache.kafka.common.utils.Time
 
-import scala.jdk.CollectionConverters._
-
 /**
  * Simple request handler implementation for use by [[TestRaftServer]].
  */
@@ -81,14 +79,14 @@ class TestRaftRequestHandler(
   private def closeConnection(request: RequestChannel.Request, errorCounts: java.util.Map[Errors, Integer]): Unit = {
     // This case is used when the request handler has encountered an error, but the client
     // does not expect a response (e.g. when produce request has acks set to 0)
-    requestChannel.updateErrorMetrics(request.header.apiKey, errorCounts.asScala)
+    requestChannel.updateErrorMetrics(request.header.apiKey, errorCounts)
     requestChannel.sendResponse(new RequestChannel.CloseConnectionResponse(request))
   }
 
   private def sendResponse(request: RequestChannel.Request,
                            responseOpt: Option[AbstractResponse]): Unit = {
     // Update error metrics for each error code in the response including Errors.NONE
-    responseOpt.foreach(response => requestChannel.updateErrorMetrics(request.header.apiKey, response.errorCounts.asScala))
+    responseOpt.foreach(response => requestChannel.updateErrorMetrics(request.header.apiKey, response.errorCounts))
 
     val response = responseOpt match {
       case Some(response) =>
