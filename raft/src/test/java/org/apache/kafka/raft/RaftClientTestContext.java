@@ -44,6 +44,7 @@ import org.apache.kafka.common.requests.BeginQuorumEpochRequest;
 import org.apache.kafka.common.requests.BeginQuorumEpochResponse;
 import org.apache.kafka.common.requests.DescribeQuorumResponse;
 import org.apache.kafka.common.requests.EndQuorumEpochRequest;
+import org.apache.kafka.common.requests.EndQuorumEpochResponse;
 import org.apache.kafka.common.requests.VoteRequest;
 import org.apache.kafka.common.requests.VoteResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -624,6 +625,19 @@ final class RaftClientTestContext {
 
     private static InetSocketAddress mockAddress(int id) {
         return new InetSocketAddress("localhost", 9990 + id);
+    }
+
+    EndQuorumEpochResponseData endEpochResponse(
+        int epoch,
+        OptionalInt leaderId
+    ) {
+        return EndQuorumEpochResponse.singletonResponse(
+            Errors.NONE,
+            metadataPartition,
+            Errors.NONE,
+            epoch,
+            leaderId.orElse(-1)
+        );
     }
 
     EndQuorumEpochRequestData endEpochRequest(
