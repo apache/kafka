@@ -76,4 +76,5 @@ public class InitProducerIdRequest extends AbstractRequest {
     protected InitProducerIdRequestData data() {
         return data;
     }
+    
 }
