@@ -380,7 +380,7 @@ public class QuorumState {
             throw new IllegalStateException("Cannot become leader without majority votes granted");
 
         // Note that the leader does not retain the high watermark that was known
-        // in the previous state. The reason it does not is to protect the monotonicity
+        // in the previous state. The reason for this is to protect the monotonicity
         // of the global high watermark, which is exposed through the leader. The
         // only way a new leader can be sure that the high watermark is increasing
         // monotonically is to wait until a majority of the voters have reached the

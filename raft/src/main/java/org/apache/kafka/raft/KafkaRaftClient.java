@@ -257,7 +257,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private void maybeFireHandleCommit(List<ListenerContext> listenerContexts, long highWatermark) {
-        // TODO: When there are multiple listeners, we can cache reads to save some work
         for (ListenerContext listenerContext : listenerContexts) {
             OptionalLong nextExpectedOffsetOpt = listenerContext.nextExpectedOffset();
             if (!nextExpectedOffsetOpt.isPresent()) {
@@ -287,9 +286,9 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private void maybeFireHandleClaim(LeaderState state) {
-        for (ListenerContext listenerContext : listenerContexts) {
-            int leaderEpoch = state.epoch();
+        int leaderEpoch = state.epoch();
 
+        for (ListenerContext listenerContext : listenerContexts) {
             // We can fire `handleClaim` as soon as the listener has caught
             // up to the start of the leader epoch. This guarantees that the
             // state machine has seen the full committed state before it becomes
@@ -1848,6 +1847,12 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             }
         }
 
+        /**
+         * This API is used for committed records that have been received through
+         * replication. In general, followers will write new data to disk before they
+         * know whether it has been committed. Rather than retaining the uncommitted
+         * data in memory, we let the state machine read the records from disk.
+         */
         public void fireHandleCommit(long baseOffset, Records records) {
             BufferSupplier bufferSupplier = BufferSupplier.create();
             RecordsBatchReader<T> reader = new RecordsBatchReader<>(baseOffset, records,
@@ -1855,6 +1860,12 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             fireHandleCommit(reader);
         }
 
+        /**
+         * This API is used for committed records originating from {@link #scheduleAppend(int, List)}
+         * on this instance. In this case, we are able to save the original record objects,
+         * which saves the need to read them back from disk. This is a nice optimization
+         * for the leader which is typically doing more work than all of the followers.
+         */
         public void fireHandleCommit(long baseOffset, int epoch, List<T> records) {
             BatchReader.Batch<T> batch = new BatchReader.Batch<>(baseOffset, epoch, records);
             MemoryBatchReader<T> reader = new MemoryBatchReader<>(Collections.singletonList(batch), this);

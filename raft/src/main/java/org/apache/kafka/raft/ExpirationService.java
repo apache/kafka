@@ -20,9 +20,9 @@ import java.util.concurrent.CompletableFuture;
 
 public interface ExpirationService {
     /**
-     * Get a new completable future which will automatically expire with a
-     * {@link org.apache.kafka.common.errors.TimeoutException} after the provided
-     * timeout passes if it is not completed before then through some other means.
+     * Get a new completable future which will automatically fail exceptionally with a
+     * {@link org.apache.kafka.common.errors.TimeoutException} if not completed before
+     * the provided time limit expires.
      *
      * @param timeoutMs the duration in milliseconds before the future is completed exceptionally
      * @param <T> arbitrary future type (the service must set no expectation on the this type)

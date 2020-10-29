@@ -33,7 +33,8 @@ public class MemoryBatchReader<T> implements BatchReader<T> {
         CloseListener<BatchReader<T>> closeListener
     ) {
         if (batches.isEmpty()) {
-            throw new IllegalArgumentException();
+            throw new IllegalArgumentException("MemoryBatchReader requires at least " +
+                "one batch to iterate, but an empty list was provided");
         }
         this.closeListener = closeListener;
         this.iterator = batches.iterator();

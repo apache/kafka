@@ -25,6 +25,8 @@ import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.raft.ExpirationService
 
 object TimingWheelExpirationService {
+  private val WorkTimeoutMs: Long = 200L
+
   class TimerTaskCompletableFuture[T](override val delayMs: Long) extends CompletableFuture[T] with TimerTask {
     override def run(): Unit = {
       completeExceptionally(new TimeoutException(
@@ -34,6 +36,8 @@ object TimingWheelExpirationService {
 }
 
 class TimingWheelExpirationService(timer: Timer) extends ExpirationService {
+  import TimingWheelExpirationService._
+
   private val expirationReaper = new ExpiredOperationReaper()
 
   expirationReaper.start()
@@ -51,7 +55,7 @@ class TimingWheelExpirationService(timer: Timer) extends ExpirationService {
     name = "raft-expiration-reaper", isInterruptible = false) {
 
     override def doWork(): Unit = {
-      timer.advanceClock(200L)
+      timer.advanceClock(WorkTimeoutMs)
     }
   }
 
