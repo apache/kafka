@@ -17,6 +17,7 @@ import java.util.Properties
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeUnit
 
+import kafka.server.ClientQuotaManager.DefaultTags
 import kafka.utils.TestUtils
 import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.message.CreatePartitionsRequestData
@@ -24,6 +25,7 @@ import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartiti
 import org.apache.kafka.common.message.CreateTopicsRequestData
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.DeleteTopicsRequestData
+import org.apache.kafka.common.metrics.KafkaMetric
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.quota.ClientQuotaAlteration
@@ -39,8 +41,10 @@ import org.apache.kafka.common.requests.DeleteTopicsResponse
 import org.apache.kafka.common.security.auth.AuthenticationContext
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder
+import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
 
@@ -80,6 +84,8 @@ object ControllerMutationQuotaTest {
   val TopicsWith30Partitions = Map(Topic1 -> 30, Topic2 -> 30)
   val TopicsWith31Partitions = Map(Topic1 -> 31, Topic2 -> 31)
 
+  val ControllerQuotaSamples = 10
+  val ControllerQuotaWindowSizeSeconds = 1
   val ControllerMutationRate = 2.0
 }
 
@@ -94,9 +100,9 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     properties.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
     properties.put(KafkaConfig.PrincipalBuilderClassProp,
       classOf[ControllerMutationQuotaTest.TestPrincipalBuilder].getName)
-    // We use the default number of samples and window size.
-    properties.put(KafkaConfig.NumControllerQuotaSamplesProp, "11")
-    properties.put(KafkaConfig.ControllerQuotaWindowSizeSecondsProp, "1")
+    // Specify number of samples and window size.
+    properties.put(KafkaConfig.NumControllerQuotaSamplesProp, ControllerQuotaSamples.toString)
+    properties.put(KafkaConfig.ControllerQuotaWindowSizeSecondsProp, ControllerQuotaWindowSizeSeconds.toString)
   }
 
   @Before
@@ -110,17 +116,40 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
 
   @Test
   def testSetUnsetQuota(): Unit = {
+    val rate = 1.5
     val principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "User")
     // Default Value
     waitUserQuota(principal.getName, Long.MaxValue)
     // Define a new quota
-    defineUserQuota(principal.getName, Some(ControllerMutationRate))
+    defineUserQuota(principal.getName, Some(rate))
     // Check it
-    waitUserQuota(principal.getName, ControllerMutationRate)
+    waitUserQuota(principal.getName, rate)
     // Remove it
     defineUserQuota(principal.getName, None)
     // Back to the default
     waitUserQuota(principal.getName, Long.MaxValue)
+  }
+
+  @Test
+  def testQuotaMetric(): Unit = {
+    asPrincipal(ThrottledPrincipal) {
+      // Metric is lazily created
+      assertTrue(quotaMetric(principal.getName).isEmpty)
+
+      // Create a topic to create the metrics
+      val (_, errors) = createTopics(Map("topic" -> 1), StrictDeleteTopicsRequestVersion)
+      assertEquals(Set(Errors.NONE), errors.values.toSet)
+
+      // Metric must be there with the correct config
+      waitQuotaMetric(principal.getName, ControllerMutationRate)
+
+      // Update quota
+      defineUserQuota(ThrottledPrincipal.getName, Some(ControllerMutationRate * 2))
+      waitUserQuota(ThrottledPrincipal.getName, ControllerMutationRate * 2)
+
+      // Metric must be there with the updated config
+      waitQuotaMetric(principal.getName, ControllerMutationRate * 2)
+    }
   }
 
   @Test
@@ -129,7 +158,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
       // Create two topics worth of 30 partitions each. As we use a strict quota, we
       // expect one to be created and one to be rejected.
       // Theoretically, the throttle time should be below or equal to:
-      // ((30 / 10) - 2) / 2 * 10 = 5s
+      // -(-10) / 2 = 5s
       val (throttleTimeMs1, errors1) = createTopics(TopicsWith30Partitions, StrictCreateTopicsRequestVersion)
       assertThrottleTime(5000, throttleTimeMs1)
       // Ordering is not guaranteed so we only check the errors
@@ -152,7 +181,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
       // Create two topics worth of 30 partitions each. As we use a permissive quota, we
       // expect both topics to be created.
       // Theoretically, the throttle time should be below or equal to:
-      // ((60 / 10) - 2) / 2 * 10 = 20s
+      // -(-40) / 2 = 20s
       val (throttleTimeMs, errors) = createTopics(TopicsWith30Partitions, PermissiveCreateTopicsRequestVersion)
       assertThrottleTime(20000, throttleTimeMs)
       assertEquals(Map(Topic1 -> Errors.NONE, Topic2 -> Errors.NONE), errors)
@@ -180,7 +209,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
       // Delete two topics worth of 30 partitions each. As we use a strict quota, we
       // expect the first topic to be deleted and the second to be rejected.
       // Theoretically, the throttle time should be below or equal to:
-      // ((30 / 10) - 2) / 2 * 10 = 5s
+      // -(-10) / 2 = 5s
       val (throttleTimeMs1, errors1) = deleteTopics(TopicsWith30Partitions, StrictDeleteTopicsRequestVersion)
       assertThrottleTime(5000, throttleTimeMs1)
       // Ordering is not guaranteed so we only check the errors
@@ -207,7 +236,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
       // Delete two topics worth of 30 partitions each. As we use a permissive quota, we
       // expect both topics to be deleted.
       // Theoretically, the throttle time should be below or equal to:
-      // ((60 / 10) - 2) / 2 * 10 = 20s
+      // -(-40) / 2 = 20s
       val (throttleTimeMs, errors) = deleteTopics(TopicsWith30Partitions, PermissiveDeleteTopicsRequestVersion)
       assertThrottleTime(20000, throttleTimeMs)
       assertEquals(Map(Topic1 -> Errors.NONE, Topic2 -> Errors.NONE), errors)
@@ -237,7 +266,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
       // Add 30 partitions to each topic. As we use a strict quota, we
       // expect the first topic to be extended and the second to be rejected.
       // Theoretically, the throttle time should be below or equal to:
-      // ((30 / 10) - 2) / 2 * 10 = 5s
+      // -(-10) / 2 = 5s
       val (throttleTimeMs1, errors1) = createPartitions(TopicsWith31Partitions, StrictCreatePartitionsRequestVersion)
       assertThrottleTime(5000, throttleTimeMs1)
       // Ordering is not guaranteed so we only check the errors
@@ -264,7 +293,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
       // Create two topics worth of 30 partitions each. As we use a permissive quota, we
       // expect both topics to be created.
       // Theoretically, the throttle time should be below or equal to:
-      // ((60 / 10) - 2) / 2 * 10 = 20s
+      // -(-40) / 2 = 20s
       val (throttleTimeMs, errors) = createPartitions(TopicsWith31Partitions, PermissiveCreatePartitionsRequestVersion)
       assertThrottleTime(20000, throttleTimeMs)
       assertEquals(Map(Topic1 -> Errors.NONE, Topic2 -> Errors.NONE), errors)
@@ -341,6 +370,31 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
       actualQuota = quotaManager.quota(user, "").bound()
       expectedQuota == actualQuota
     }, s"Quota of $user is not $expectedQuota but $actualQuota")
+  }
+
+  private def quotaMetric(user: String): Option[KafkaMetric] = {
+    val metrics = servers.head.metrics
+    val metricName = metrics.metricName(
+      "tokens",
+      QuotaType.ControllerMutation.toString,
+      "Tracking remaining tokens in the token bucket per user/client-id",
+      Map(DefaultTags.User -> user, DefaultTags.ClientId -> "").asJava)
+    Option(servers.head.metrics.metric(metricName))
+  }
+
+  private def waitQuotaMetric(user: String, expectedQuota: Double): Unit = {
+    TestUtils.retry(JTestUtils.DEFAULT_MAX_WAIT_MS) {
+      quotaMetric(user) match {
+        case Some(metric) =>
+          val config = metric.config()
+          assertEquals(expectedQuota, config.quota().bound(), 0.1)
+          assertEquals(ControllerQuotaSamples, config.samples())
+          assertEquals(ControllerQuotaWindowSizeSeconds * 1000, config.timeWindowMs())
+
+        case None =>
+          fail(s"Quota metric of $user is not defined")
+      }
+    }
   }
 
   private def alterClientQuotas(request: Map[ClientQuotaEntity, Map[String, Option[Double]]]): Map[ClientQuotaEntity, KafkaFutureImpl[Void]] = {

@@ -34,6 +34,7 @@ import static org.apache.kafka.streams.state.internals.OffsetCheckpoint.writeEnt
 import static org.apache.kafka.streams.state.internals.OffsetCheckpoint.writeIntLine;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
@@ -104,14 +105,15 @@ public class OffsetCheckpointTest {
     public void shouldReadAndWriteSentinelOffset() throws IOException {
         final File f = TestUtils.tempFile();
         final OffsetCheckpoint checkpoint = new OffsetCheckpoint(f);
+        final long sentinelOffset = -4L;
 
         try {
             final Map<TopicPartition, Long> offsetsToWrite = new HashMap<>();
-            offsetsToWrite.put(new TopicPartition(topic, 1), -2L);
+            offsetsToWrite.put(new TopicPartition(topic, 1), sentinelOffset);
             checkpoint.write(offsetsToWrite);
 
             final Map<TopicPartition, Long> readOffsets = checkpoint.read();
-            assertThat(readOffsets.get(new TopicPartition(topic, 1)), equalTo(-2L));
+            assertThat(readOffsets.get(new TopicPartition(topic, 1)), equalTo(sentinelOffset));
         } finally {
             checkpoint.delete();
         }
@@ -132,6 +134,17 @@ public class OffsetCheckpointTest {
         } finally {
             checkpoint.delete();
         }
+    }
+
+    @Test
+    public void shouldThrowIOExceptionWhenWritingToNotExistedFile() {
+        final Map<TopicPartition, Long> offsetsToWrite = Collections.singletonMap(new TopicPartition(topic, 0), 0L);
+
+        final File notExistedFile = new File("/not_existed_dir/not_existed_file");
+        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(notExistedFile);
+        
+        final IOException e = assertThrows(IOException.class, () -> checkpoint.write(offsetsToWrite));
+        assertThat(e.getMessage(), containsString("No such file or directory"));
     }
 
     /**

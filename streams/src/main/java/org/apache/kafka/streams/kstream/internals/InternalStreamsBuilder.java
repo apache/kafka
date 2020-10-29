@@ -31,7 +31,6 @@ import org.apache.kafka.streams.kstream.internals.graph.StateStoreNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamSourceNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.TableSourceNode;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -128,7 +127,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             .orElseGenerateWithPrefix(this, KTableImpl.SOURCE_NAME);
 
         final KTableSource<K, V> tableSource = new KTableSource<>(materialized.storeName(), materialized.queryableStoreName());
-        final ProcessorParameters<K, V> processorParameters = new ProcessorParameters<>(tableSource, tableSourceName);
+        final ProcessorParameters<K, V, ?, ?> processorParameters = new ProcessorParameters<>(tableSource, tableSourceName);
 
         final TableSourceNode<K, V> tableSourceNode = TableSourceNode.<K, V>tableSourceNodeBuilder()
             .withTopic(topic)
@@ -171,7 +170,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         final String storeName = materialized.storeName();
         final KTableSource<K, V> tableSource = new KTableSource<>(storeName, storeName);
 
-        final ProcessorParameters<K, V> processorParameters = new ProcessorParameters<>(tableSource, processorName);
+        final ProcessorParameters<K, V, ?, ?> processorParameters = new ProcessorParameters<>(tableSource, processorName);
 
         final TableSourceNode<K, V> tableSourceNode = TableSourceNode.<K, V>tableSourceNodeBuilder()
             .withTopic(topic)
@@ -201,12 +200,12 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         addGraphNode(root, new StateStoreNode<>(builder));
     }
 
-    public synchronized <K, V> void addGlobalStore(final StoreBuilder<?> storeBuilder,
-                                                   final String sourceName,
-                                                   final String topic,
-                                                   final ConsumedInternal<K, V> consumed,
-                                                   final String processorName,
-                                                   final ProcessorSupplier<K, V> stateUpdateSupplier) {
+    public synchronized <KIn, VIn> void addGlobalStore(final StoreBuilder<?> storeBuilder,
+                                                       final String sourceName,
+                                                       final String topic,
+                                                       final ConsumedInternal<KIn, VIn> consumed,
+                                                       final String processorName,
+                                                       final org.apache.kafka.streams.processor.api.ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
 
         final StreamsGraphNode globalStoreNode = new GlobalStoreNode<>(
             storeBuilder,
@@ -220,10 +219,10 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         addGraphNode(root, globalStoreNode);
     }
 
-    public synchronized <K, V> void addGlobalStore(final StoreBuilder<?> storeBuilder,
-                                                   final String topic,
-                                                   final ConsumedInternal<K, V> consumed,
-                                                   final ProcessorSupplier<K, V> stateUpdateSupplier) {
+    public synchronized <KIn, VIn> void addGlobalStore(final StoreBuilder<?> storeBuilder,
+                                                       final String topic,
+                                                       final ConsumedInternal<KIn, VIn> consumed,
+                                                       final org.apache.kafka.streams.processor.api.ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
         // explicitly disable logging for global stores
         storeBuilder.withLoggingDisabled();
         final String sourceName = newProcessorName(KStreamImpl.SOURCE_NAME);
@@ -386,6 +385,11 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                     parentNode.removeChild(repartitionNodeToBeReplaced);
                 }
                 repartitionNodeToBeReplaced.clearChildren();
+
+                // if replaced repartition node is part of any copartition group,
+                // we need to update it with the new node name so that co-partitioning won't break.
+                internalTopologyBuilder.maybeUpdateCopartitionSourceGroups(repartitionNodeToBeReplaced.nodeName(),
+                                                                           optimizedSingleRepartition.nodeName());
 
                 LOG.debug("Updated node {} children {}", optimizedSingleRepartition, optimizedSingleRepartition.children());
             }

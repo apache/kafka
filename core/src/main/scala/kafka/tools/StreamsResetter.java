@@ -42,13 +42,11 @@ import scala.collection.JavaConverters;
 
 import java.io.IOException;
 import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -103,13 +101,13 @@ public class StreamsResetter {
     private static OptionSpec<String> fromFileOption;
     private static OptionSpec<Long> shiftByOption;
     private static OptionSpecBuilder dryRunOption;
-    private static OptionSpec helpOption;
-    private static OptionSpec versionOption;
+    private static OptionSpec<Void> helpOption;
+    private static OptionSpec<Void> versionOption;
     private static OptionSpecBuilder executeOption;
     private static OptionSpec<String> commandConfigOption;
-    private static OptionSpec forceOption;
+    private static OptionSpecBuilder forceOption;
 
-    private static String usage = "This tool helps to quickly reset an application in order to reprocess "
+    private final static String USAGE = "This tool helps to quickly reset an application in order to reprocess "
             + "its data from scratch.\n"
             + "* This tool resets offsets of input topics to the earliest available offset and it skips to the end of "
             + "intermediate topics (topics that are input and output topics, e.g., used by deprecated through() method).\n"
@@ -193,11 +191,7 @@ public class StreamsResetter {
         if (!members.isEmpty()) {
             if (options.has(forceOption)) {
                 System.out.println("Force deleting all active members in the group: " + groupId);
-                try {
-                    adminClient.removeMembersFromConsumerGroup(groupId, new RemoveMembersFromConsumerGroupOptions()).all().get();
-                } catch (Exception e) {
-                    throw e;
-                }
+                adminClient.removeMembersFromConsumerGroup(groupId, new RemoveMembersFromConsumerGroupOptions()).all().get();
             } else {
                 throw new IllegalStateException("Consumer group '" + groupId + "' is still active "
                         + "and has following members: " + members + ". "
@@ -264,7 +258,7 @@ public class StreamsResetter {
         try {
             options = optionParser.parse(args);
             if (args.length == 0 || options.has(helpOption)) {
-                CommandLineUtils.printUsageAndDie(optionParser, usage);
+                CommandLineUtils.printUsageAndDie(optionParser, USAGE);
             }
             if (options.has(versionOption)) {
                 CommandLineUtils.printVersionAndDie();
@@ -308,7 +302,7 @@ public class StreamsResetter {
             JavaConverters.asScalaSetConverter(invalidOptions).asScala());
     }
 
-    private int maybeResetInputAndSeekToEndIntermediateTopicOffsets(final Map consumerConfig,
+    private int maybeResetInputAndSeekToEndIntermediateTopicOffsets(final Map<Object, Object> consumerConfig,
                                                                     final boolean dryRun)
         throws IOException, ParseException {
 
@@ -450,7 +444,7 @@ public class StreamsResetter {
                 shiftOffsetsBy(client, inputTopicPartitions, options.valueOf(shiftByOption));
             } else if (options.has(toDatetimeOption)) {
                 final String ts = options.valueOf(toDatetimeOption);
-                final long timestamp = getDateTime(ts);
+                final long timestamp = Utils.getDateTime(ts);
                 resetToDatetime(client, inputTopicPartitions, timestamp);
             } else if (options.has(byDurationOption)) {
                 final String duration = options.valueOf(byDurationOption);
@@ -567,30 +561,6 @@ public class StreamsResetter {
         }
     }
 
-    // visible for testing
-    public long getDateTime(String timestamp) throws ParseException {
-        final String[] timestampParts = timestamp.split("T");
-        if (timestampParts.length < 2) {
-            throw new ParseException("Error parsing timestamp. It does not contain a 'T' according to ISO8601 format", timestamp.length());
-        }
-
-        final String secondPart = timestampParts[1];
-        if (secondPart == null || secondPart.isEmpty()) {
-            throw new ParseException("Error parsing timestamp. Time part after 'T' is null or empty", timestamp.length());
-        }
-
-        if (!(secondPart.contains("+") || secondPart.contains("-") || secondPart.contains("Z"))) {
-            timestamp = timestamp + "Z";
-        }
-
-        try {
-            final Date date = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX").parse(timestamp);
-            return date.getTime();
-        } catch (final ParseException e) {
-            final Date date = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX").parse(timestamp);
-            return date.getTime();
-        }
-    }
 
     private Map<TopicPartition, Long> parseResetPlan(final String resetPlanCsv) throws ParseException {
         final Map<TopicPartition, Long> topicPartitionAndOffset = new HashMap<>();

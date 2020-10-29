@@ -126,7 +126,7 @@ public class MockClient implements KafkaClient {
         return connectionDelay(node, now);
     }
 
-    public void blackout(Node node, long durationMs) {
+    public void backoff(Node node, long durationMs) {
         connectionState(node.idString()).backoff(time.milliseconds() + durationMs);
     }
 
@@ -143,15 +143,15 @@ public class MockClient implements KafkaClient {
         connectionState(node.idString()).setReadyDelayed(time.milliseconds() + durationMs);
     }
 
-    public void authenticationFailed(Node node, long blackoutMs) {
+    public void authenticationFailed(Node node, long backoffMs) {
         pendingAuthenticationErrors.remove(node);
         authenticationErrors.put(node, (AuthenticationException) Errors.SASL_AUTHENTICATION_FAILED.exception());
         disconnect(node.idString());
-        blackout(node, blackoutMs);
+        backoff(node, backoffMs);
     }
 
-    public void createPendingAuthenticationError(Node node, long blackoutMs) {
-        pendingAuthenticationErrors.put(node, blackoutMs);
+    public void createPendingAuthenticationError(Node node, long backoffMs) {
+        pendingAuthenticationErrors.put(node, backoffMs);
     }
 
     @Override
@@ -190,12 +190,12 @@ public class MockClient implements KafkaClient {
              pendingAuthenticationErrors.entrySet().iterator(); authErrorIter.hasNext(); ) {
             Map.Entry<Node, Long> entry = authErrorIter.next();
             Node node = entry.getKey();
-            long blackoutMs = entry.getValue();
+            long backoffMs = entry.getValue();
             if (node.idString().equals(request.destination())) {
                 authErrorIter.remove();
                 // Set up a disconnected ClientResponse and create an authentication error
                 // for the affected node.
-                authenticationFailed(node, blackoutMs);
+                authenticationFailed(node, backoffMs);
                 AbstractRequest.Builder<?> builder = request.requestBuilder();
                 short version = nodeApiVersions.latestUsableVersion(request.apiKey(), builder.oldestAllowedVersion(),
                     builder.latestAllowedVersion());
@@ -310,6 +310,14 @@ public class MockClient implements KafkaClient {
 
     public Queue<ClientRequest> requests() {
         return this.requests;
+    }
+
+    public Queue<ClientResponse> responses() {
+        return this.responses;
+    }
+
+    public Queue<FutureResponse> futureResponses() {
+        return this.futureResponses;
     }
 
     public void respond(AbstractResponse response) {
@@ -554,6 +562,7 @@ public class MockClient implements KafkaClient {
      * to inspect the request body for the type of the request or for specific fields that should be set,
      * and to fail the test if it doesn't match.
      */
+    @FunctionalInterface
     public interface RequestMatcher {
         boolean matches(AbstractRequest body);
     }

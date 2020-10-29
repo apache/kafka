@@ -27,6 +27,11 @@ public interface FieldType {
         private static final String NAME = "bool";
 
         @Override
+        public String getBoxedJavaType(HeaderGenerator headerGenerator) {
+            return "Boolean";
+        }
+
+        @Override
         public Optional<Integer> fixedLength() {
             return Optional.of(1);
         }
@@ -40,6 +45,11 @@ public interface FieldType {
     final class Int8FieldType implements FieldType {
         static final Int8FieldType INSTANCE = new Int8FieldType();
         private static final String NAME = "int8";
+
+        @Override
+        public String getBoxedJavaType(HeaderGenerator headerGenerator) {
+            return "Byte";
+        }
 
         @Override
         public Optional<Integer> fixedLength() {
@@ -57,6 +67,11 @@ public interface FieldType {
         private static final String NAME = "int16";
 
         @Override
+        public String getBoxedJavaType(HeaderGenerator headerGenerator) {
+            return "Short";
+        }
+
+        @Override
         public Optional<Integer> fixedLength() {
             return Optional.of(2);
         }
@@ -70,6 +85,11 @@ public interface FieldType {
     final class Int32FieldType implements FieldType {
         static final Int32FieldType INSTANCE = new Int32FieldType();
         private static final String NAME = "int32";
+
+        @Override
+        public String getBoxedJavaType(HeaderGenerator headerGenerator) {
+            return "Integer";
+        }
 
         @Override
         public Optional<Integer> fixedLength() {
@@ -87,6 +107,11 @@ public interface FieldType {
         private static final String NAME = "int64";
 
         @Override
+        public String getBoxedJavaType(HeaderGenerator headerGenerator) {
+            return "Long";
+        }
+
+        @Override
         public Optional<Integer> fixedLength() {
             return Optional.of(8);
         }
@@ -100,6 +125,12 @@ public interface FieldType {
     final class UUIDFieldType implements FieldType {
         static final UUIDFieldType INSTANCE = new UUIDFieldType();
         private static final String NAME = "uuid";
+
+        @Override
+        public String getBoxedJavaType(HeaderGenerator headerGenerator) {
+            headerGenerator.addImport(MessageGenerator.UUID_CLASS);
+            return "UUID";
+        }
 
         @Override
         public Optional<Integer> fixedLength() {
@@ -122,6 +153,11 @@ public interface FieldType {
         }
 
         @Override
+        public String getBoxedJavaType(HeaderGenerator headerGenerator) {
+            return "Double";
+        }
+
+        @Override
         public boolean isFloat() {
             return true;
         }
@@ -135,6 +171,11 @@ public interface FieldType {
     final class StringFieldType implements FieldType {
         static final StringFieldType INSTANCE = new StringFieldType();
         private static final String NAME = "string";
+
+        @Override
+        public String getBoxedJavaType(HeaderGenerator headerGenerator) {
+            return "String";
+        }
 
         @Override
         public boolean serializationIsDifferentInFlexibleVersions() {
@@ -162,12 +203,49 @@ public interface FieldType {
         private static final String NAME = "bytes";
 
         @Override
+        public String getBoxedJavaType(HeaderGenerator headerGenerator) {
+            headerGenerator.addImport(MessageGenerator.BYTE_BUFFER_CLASS);
+            return "ByteBuffer";
+        }
+
+        @Override
         public boolean serializationIsDifferentInFlexibleVersions() {
             return true;
         }
 
         @Override
         public boolean isBytes() {
+            return true;
+        }
+
+        @Override
+        public boolean canBeNullable() {
+            return true;
+        }
+
+        @Override
+        public String toString() {
+            return NAME;
+        }
+    }
+
+    final class RecordsFieldType implements FieldType {
+        static final RecordsFieldType INSTANCE = new RecordsFieldType();
+        private static final String NAME = "records";
+
+        @Override
+        public String getBoxedJavaType(HeaderGenerator headerGenerator) {
+            headerGenerator.addImport(MessageGenerator.BASE_RECORDS_CLASS);
+            return "BaseRecords";
+        }
+
+        @Override
+        public boolean serializationIsDifferentInFlexibleVersions() {
+            return true;
+        }
+
+        @Override
+        public boolean isRecords() {
             return true;
         }
 
@@ -190,6 +268,11 @@ public interface FieldType {
         }
 
         @Override
+        public String getBoxedJavaType(HeaderGenerator headerGenerator) {
+            return type;
+        }
+
+        @Override
         public boolean serializationIsDifferentInFlexibleVersions() {
             return true;
         }
@@ -197,6 +280,10 @@ public interface FieldType {
         @Override
         public boolean isStruct() {
             return true;
+        }
+
+        public String typeName() {
+            return type;
         }
 
         @Override
@@ -215,6 +302,11 @@ public interface FieldType {
         @Override
         public boolean serializationIsDifferentInFlexibleVersions() {
             return true;
+        }
+
+        @Override
+        public String getBoxedJavaType(HeaderGenerator headerGenerator) {
+            throw new UnsupportedOperationException();
         }
 
         @Override
@@ -267,6 +359,8 @@ public interface FieldType {
                 return StringFieldType.INSTANCE;
             case BytesFieldType.NAME:
                 return BytesFieldType.INSTANCE;
+            case RecordsFieldType.NAME:
+                return RecordsFieldType.INSTANCE;
             default:
                 if (string.startsWith(ARRAY_PREFIX)) {
                     String elementTypeString = string.substring(ARRAY_PREFIX.length());
@@ -287,6 +381,8 @@ public interface FieldType {
                 }
         }
     }
+
+    String getBoxedJavaType(HeaderGenerator headerGenerator);
 
     /**
      * Returns true if this is an array type.
@@ -320,6 +416,13 @@ public interface FieldType {
      * Returns true if this is a bytes type.
      */
     default boolean isBytes() {
+        return false;
+    }
+
+    /**
+     * Returns true if this is a records type
+     */
+    default boolean isRecords() {
         return false;
     }
 

@@ -176,7 +176,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       k -> v.keys.toSeq
     }
     val brokers = (0 until brokerCount).map(Integer.valueOf)
-    val logDirInfosByBroker = client.describeLogDirs(brokers.asJava).all.get
+    val logDirInfosByBroker = client.describeLogDirs(brokers.asJava).allDescriptions.get
 
     (0 until brokerCount).foreach { brokerId =>
       val server = servers.find(_.config.brokerId == brokerId).get
@@ -1044,6 +1044,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
       def createProperties(groupInstanceId: String): Properties = {
         val newConsumerConfig = new Properties(consumerConfig)
+        // We need to disable the auto commit because after the members got removed from group, the offset commit
+        // will cause the member rejoining and the test will be flaky (check ConsumerCoordinator#OffsetCommitResponseHandler)
+        newConsumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
         newConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
         newConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
         if (groupInstanceId != EMPTY_GROUP_INSTANCE_ID) {

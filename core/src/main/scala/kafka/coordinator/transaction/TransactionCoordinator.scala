@@ -211,7 +211,7 @@ class TransactionCoordinator(brokerId: Int,
       Left(Errors.CONCURRENT_TRANSACTIONS)
     }
     else if (!expectedProducerIdAndEpoch.forall(isValidProducerId)) {
-      Left(Errors.INVALID_PRODUCER_EPOCH)
+      Left(Errors.PRODUCER_FENCED)
     } else {
       // caller should have synchronized on txnMetadata already
       txnMetadata.state match {
@@ -278,7 +278,7 @@ class TransactionCoordinator(brokerId: Int,
             if (txnMetadata.producerId != producerId) {
               Left(Errors.INVALID_PRODUCER_ID_MAPPING)
             } else if (txnMetadata.producerEpoch != producerEpoch) {
-              Left(Errors.INVALID_PRODUCER_EPOCH)
+              Left(Errors.PRODUCER_FENCED)
             } else if (txnMetadata.pendingTransitionInProgress) {
               // return a retriable exception to let the client backoff and retry
               Left(Errors.CONCURRENT_TRANSACTIONS)
@@ -311,6 +311,7 @@ class TransactionCoordinator(brokerId: Int,
    * @param coordinatorEpoch The partition coordinator (or leader) epoch from the received LeaderAndIsr request
    */
   def onElection(txnTopicPartitionId: Int, coordinatorEpoch: Int): Unit = {
+    info(s"Elected as the txn coordinator for partition $txnTopicPartitionId at epoch $coordinatorEpoch")
     // The operations performed during immigration must be resilient to any previous errors we saw or partial state we
     // left off during the unloading phase. Ensure we remove all associated state for this partition before we continue
     // loading it.
@@ -329,6 +330,7 @@ class TransactionCoordinator(brokerId: Int,
    *                         are resigning after receiving a StopReplica request from the controller
    */
   def onResignation(txnTopicPartitionId: Int, coordinatorEpoch: Option[Int]): Unit = {
+    info(s"Resigned as the txn coordinator for partition $txnTopicPartitionId at epoch $coordinatorEpoch")
     coordinatorEpoch match {
       case Some(epoch) =>
         txnManager.removeTransactionsForTxnTopicPartition(txnTopicPartitionId, epoch)
@@ -382,7 +384,7 @@ class TransactionCoordinator(brokerId: Int,
               Left(Errors.INVALID_PRODUCER_ID_MAPPING)
             // Strict equality is enforced on the client side requests, as they shouldn't bump the producer epoch.
             else if ((isFromClient && producerEpoch != txnMetadata.producerEpoch) || producerEpoch < txnMetadata.producerEpoch)
-              Left(Errors.INVALID_PRODUCER_EPOCH)
+              Left(Errors.PRODUCER_FENCED)
             else if (txnMetadata.pendingTransitionInProgress && txnMetadata.pendingState.get != PrepareEpochFence)
               Left(Errors.CONCURRENT_TRANSACTIONS)
             else txnMetadata.state match {
@@ -456,7 +458,7 @@ class TransactionCoordinator(brokerId: Int,
                       if (txnMetadata.producerId != producerId)
                         Left(Errors.INVALID_PRODUCER_ID_MAPPING)
                       else if (txnMetadata.producerEpoch != producerEpoch)
-                        Left(Errors.INVALID_PRODUCER_EPOCH)
+                        Left(Errors.PRODUCER_FENCED)
                       else if (txnMetadata.pendingTransitionInProgress)
                         Left(Errors.CONCURRENT_TRANSACTIONS)
                       else txnMetadata.state match {
@@ -539,7 +541,7 @@ class TransactionCoordinator(brokerId: Int,
           s"${txnIdAndPidEpoch.transactionalId} due to timeout")
 
       case error@(Errors.INVALID_PRODUCER_ID_MAPPING |
-                  Errors.INVALID_PRODUCER_EPOCH |
+                  Errors.PRODUCER_FENCED |
                   Errors.CONCURRENT_TRANSACTIONS) =>
         debug(s"Rollback of ongoing transaction for transactionalId ${txnIdAndPidEpoch.transactionalId} " +
           s"has been cancelled due to error $error")

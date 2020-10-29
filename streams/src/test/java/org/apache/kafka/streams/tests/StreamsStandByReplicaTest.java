@@ -43,12 +43,11 @@ import java.util.Set;
 
 public class StreamsStandByReplicaTest {
 
-    @SuppressWarnings("deprecation") // TODO revisit in follow up PR
     public static void main(final String[] args) throws IOException {
         if (args.length < 2) {
             System.err.println("StreamsStandByReplicaTest are expecting two parameters: " +
                 "propFile, additionalConfigs; but only see " + args.length + " parameter");
-            System.exit(1);
+            Exit.exit(1);
         }
 
         System.out.println("StreamsTest instance started");
@@ -61,7 +60,7 @@ public class StreamsStandByReplicaTest {
 
         if (kafka == null) {
             System.err.println("No bootstrap kafka servers specified in " + StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
-            System.exit(1);
+            Exit.exit(1);
         }
         
         streamsProperties.put(StreamsConfig.APPLICATION_ID_CONFIG, "kafka-streams-standby-tasks");
@@ -75,7 +74,7 @@ public class StreamsStandByReplicaTest {
         if (additionalConfigs == null) {
             System.err.println("additional configs are not provided");
             System.err.flush();
-            System.exit(1);
+            Exit.exit(1);
         }
 
         final Map<String, String> updated = SystemTestUtil.parseConfigs(additionalConfigs);
@@ -92,7 +91,7 @@ public class StreamsStandByReplicaTest {
                 sinkTopic1,
                 sinkTopic2));
             System.err.flush();
-            System.exit(1);
+            Exit.exit(1);
         }
 
         streamsProperties.putAll(updated);
@@ -104,7 +103,7 @@ public class StreamsStandByReplicaTest {
                                              StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG),
                                              StreamsConfig.producerPrefix(ProducerConfig.MAX_BLOCK_MS_CONFIG)));
 
-            System.exit(1);
+            Exit.exit(1);
         }
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -159,7 +158,6 @@ public class StreamsStandByReplicaTest {
         streams.close(Duration.ofSeconds(10));
     }
 
-    @SuppressWarnings("deprecation") // TODO revisit in follow up PR
     private static boolean confirmCorrectConfigs(final Properties properties) {
         return properties.containsKey(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) &&
                properties.containsKey(StreamsConfig.producerPrefix(ProducerConfig.RETRIES_CONFIG)) &&
