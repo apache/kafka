@@ -24,7 +24,7 @@ import java.util.concurrent.locks.Lock
 
 import com.yammer.metrics.core.Meter
 import kafka.api._
-import kafka.cluster.{BrokerEndPoint, Partition}
+import kafka.cluster.{Broker, BrokerEndPoint, Partition}
 import kafka.common.RecordValidationException
 import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log._
@@ -241,6 +241,7 @@ class ReplicaManager(val config: KafkaConfig,
   )
   private val replicaStateChangeLock = new Object
   val replicaFetcherManager = createReplicaFetcherManager(metrics, time, threadNamePrefix, quotaManagers.follower)
+  def getReplicaFetcherManager(): ReplicaFetcherManager = replicaFetcherManager
   val replicaAlterLogDirsManager = createReplicaAlterLogDirsManager(quotaManagers.alterLogDirs, brokerTopicStats)
   private val highWatermarkCheckPointThreadStarted = new AtomicBoolean(false)
   @volatile var highWatermarkCheckpoints: Map[String, OffsetCheckpointFile] = logManager.liveLogDirs.map(dir =>
@@ -1316,6 +1317,13 @@ class ReplicaManager(val config: KafkaConfig,
   def becomeLeaderOrFollower(correlationId: Int,
                              leaderAndIsrRequest: LeaderAndIsrRequest,
                              onLeadershipChange: (Iterable[Partition], Iterable[Partition]) => Unit): LeaderAndIsrResponse = {
+    becomeLeaderOrFollower(correlationId, leaderAndIsrRequest, onLeadershipChange, metadataCache.getAliveBrokers)
+  }
+
+  def becomeLeaderOrFollower(correlationId: Int,
+                             leaderAndIsrRequest: LeaderAndIsrRequest,
+                             onLeadershipChange: (Iterable[Partition], Iterable[Partition]) => Unit,
+                             aliveBrokers: Seq[Broker]): LeaderAndIsrResponse = {
     val startMs = time.milliseconds()
     replicaStateChangeLock synchronized {
       val controllerId = leaderAndIsrRequest.controllerId
@@ -1407,7 +1415,7 @@ class ReplicaManager(val config: KafkaConfig,
             Set.empty[Partition]
           val partitionsBecomeFollower = if (partitionsToBeFollower.nonEmpty)
             makeFollowers(controllerId, controllerEpoch, partitionsToBeFollower, correlationId, responseMap,
-              highWatermarkCheckpoints)
+              highWatermarkCheckpoints, aliveBrokers)
           else
             Set.empty[Partition]
 
@@ -1593,7 +1601,8 @@ class ReplicaManager(val config: KafkaConfig,
                             partitionStates: Map[Partition, LeaderAndIsrPartitionState],
                             correlationId: Int,
                             responseMap: mutable.Map[TopicPartition, Errors],
-                            highWatermarkCheckpoints: OffsetCheckpoints) : Set[Partition] = {
+                            highWatermarkCheckpoints: OffsetCheckpoints,
+                            aliveBrokers: Seq[Broker]) : Set[Partition] = {
     val traceLoggingEnabled = stateChangeLogger.isTraceEnabled
     partitionStates.forKeyValue { (partition, partitionState) =>
       if (traceLoggingEnabled)
@@ -1609,7 +1618,7 @@ class ReplicaManager(val config: KafkaConfig,
       partitionStates.forKeyValue { (partition, partitionState) =>
         val newLeaderBrokerId = partitionState.leader
         try {
-          metadataCache.getAliveBrokers.find(_.id == newLeaderBrokerId) match {
+          aliveBrokers.find(_.id == newLeaderBrokerId) match {
             // Only change partition state when the leader is available
             case Some(_) =>
               if (partition.makeFollower(partitionState, highWatermarkCheckpoints))
@@ -1665,7 +1674,7 @@ class ReplicaManager(val config: KafkaConfig,
       } else {
         // we do not need to check if the leader exists again since this has been done at the beginning of this process
         val partitionsToMakeFollowerWithLeaderAndOffset = partitionsToMakeFollower.map { partition =>
-          val leader = metadataCache.getAliveBrokers.find(_.id == partition.leaderReplicaIdOpt.get).get
+          val leader = aliveBrokers.find(_.id == partition.leaderReplicaIdOpt.get).get
             .brokerEndPoint(config.interBrokerListenerName)
           val fetchOffset = partition.localLogOrException.highWatermark
           partition.topicPartition -> InitialFetchState(leader, partition.getLeaderEpoch, fetchOffset)

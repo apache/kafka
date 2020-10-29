@@ -33,9 +33,10 @@ import kafka.log.{LogConfig, LogManager}
 import kafka.metrics.{KafkaMetricsGroup, KafkaMetricsReporter, KafkaYammerMetrics, LinuxIoMetricsCollector}
 import kafka.network.SocketServer
 import kafka.security.CredentialProvider
+import kafka.server.metadata.BrokerMetadataListener
 import kafka.utils._
 import kafka.zk.{BrokerInfo, KafkaZkClient}
-import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ManualMetadataUpdater, NetworkClient, NetworkClientUtils, CommonClientConfigs}
+import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, CommonClientConfigs, ManualMetadataUpdater, NetworkClient, NetworkClientUtils}
 import org.apache.kafka.common.internals.ClusterResourceListeners
 import org.apache.kafka.common.message.ControlledShutdownRequestData
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics, MetricsReporter, _}
@@ -177,6 +178,8 @@ abstract class KafkaBroker(val config: KafkaConfig,
   var transactionCoordinator: TransactionCoordinator = null
 
   var kafkaController: KafkaController = null
+
+  var brokerMetadataListener: BrokerMetadataListener = null
 
   var brokerToControllerChannelManager: BrokerToControllerChannelManager = null
 
@@ -343,6 +346,12 @@ abstract class KafkaBroker(val config: KafkaConfig,
         // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
         transactionCoordinator = TransactionCoordinator(config, replicaManager, new KafkaScheduler(threads = 1, threadNamePrefix = "transaction-log-manager-"), zkClient, metrics, metadataCache, Time.SYSTEM)
         transactionCoordinator.startup()
+
+        brokerMetadataListener = new BrokerMetadataListener(
+          config, time,
+          BrokerMetadataListener.defaultProcessors(
+            config, clusterId, metadataCache, groupCoordinator, quotaManagers, replicaManager, transactionCoordinator))
+        brokerMetadataListener.start()
 
         /* Get the authorizer and initialize it if one is specified.*/
         authorizer = config.authorizer
@@ -664,6 +673,9 @@ abstract class KafkaBroker(val config: KafkaConfig,
       if (shutdownLatch.getCount > 0 && isShuttingDown.compareAndSet(false, true)) {
         CoreUtils.swallow(controlledShutdown(), this)
         brokerState.newState(BrokerShuttingDown)
+
+        if (brokerMetadataListener != null)
+          brokerMetadataListener.close()
 
         if (dynamicConfigManager != null)
           CoreUtils.swallow(dynamicConfigManager.shutdown(), this)

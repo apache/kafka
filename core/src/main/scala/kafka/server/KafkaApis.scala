@@ -27,7 +27,6 @@ import java.util.concurrent.atomic.AtomicInteger
 import kafka.admin.{AdminUtils, RackAwareMode}
 import kafka.api.ElectLeadersRequestOps
 import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0, KAFKA_2_3_IV0}
-import kafka.cluster.Partition
 import kafka.common.OffsetAndMetadata
 import kafka.controller.{KafkaController, ReplicaAssignment}
 import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult, LeaveGroupResult, SyncGroupResult}
@@ -90,7 +89,6 @@ import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.util.{Failure, Success, Try}
 import kafka.coordinator.group.GroupOverview
 
-
 /**
  * Logic to handle the various Kafka requests
  */
@@ -115,7 +113,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val brokerFeatures: BrokerFeatures,
                 val finalizedFeatureCache: FinalizedFeatureCache) extends ApiRequestHandler with Logging {
 
-  val apisUtils = new ApisUtils(requestChannel, authorizer, quotas, time)
+  val apisUtils = new ApisUtils(requestChannel, authorizer, quotas, time, Some(groupCoordinator), Some(txnCoordinator))
 
   type FetchResponseStats = Map[TopicPartition, RecordConversionStats]
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
@@ -221,25 +219,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     val correlationId = request.header.correlationId
     val leaderAndIsrRequest = request.body[LeaderAndIsrRequest]
 
-    def onLeadershipChange(updatedLeaders: Iterable[Partition], updatedFollowers: Iterable[Partition]): Unit = {
-      // for each new leader or follower, call coordinator to handle consumer group migration.
-      // this callback is invoked under the replica state change lock to ensure proper order of
-      // leadership changes
-      updatedLeaders.foreach { partition =>
-        if (partition.topic == GROUP_METADATA_TOPIC_NAME)
-          groupCoordinator.onElection(partition.partitionId)
-        else if (partition.topic == TRANSACTION_STATE_TOPIC_NAME)
-          txnCoordinator.onElection(partition.partitionId, partition.getLeaderEpoch)
-      }
-
-      updatedFollowers.foreach { partition =>
-        if (partition.topic == GROUP_METADATA_TOPIC_NAME)
-          groupCoordinator.onResignation(partition.partitionId)
-        else if (partition.topic == TRANSACTION_STATE_TOPIC_NAME)
-          txnCoordinator.onResignation(partition.partitionId, Some(partition.getLeaderEpoch))
-      }
-    }
-
     apisUtils.authorizeClusterOperation(request, CLUSTER_ACTION)
     if (isBrokerEpochStale(leaderAndIsrRequest.brokerEpoch)) {
       // When the broker restarts very quickly, it is possible for this broker to receive request intended
@@ -248,7 +227,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         s"${leaderAndIsrRequest.brokerEpoch} smaller than the current broker epoch ${controller.brokerEpoch}")
       apisUtils.sendResponseExemptThrottle(request, leaderAndIsrRequest.getErrorResponse(0, Errors.STALE_BROKER_EPOCH.exception))
     } else {
-      val response = replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest, onLeadershipChange)
+      val response = replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest, apisUtils.onLeadershipChange)
       apisUtils.sendResponseExemptThrottle(request, response)
     }
   }

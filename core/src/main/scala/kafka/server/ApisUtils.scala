@@ -20,12 +20,16 @@ package kafka.server
 import java.lang.{Byte => JByte}
 import java.util.Collections
 
+import kafka.cluster.Partition
+import kafka.coordinator.group.GroupCoordinator
+import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.network.RequestChannel
 import kafka.security.authorizer.AclEntry
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.errors.ClusterAuthorizationException
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.Send
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, RequestContext}
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
@@ -42,7 +46,9 @@ import scala.jdk.CollectionConverters._
 class ApisUtils(val requestChannel: RequestChannel,
                 val authorizer: Option[Authorizer],
                 val quotas: QuotaManagers,
-                val time: Time) extends Logging {
+                val time: Time,
+                val groupCoordinator: Option[GroupCoordinator] = None,
+                val txnCoordinator: Option[TransactionCoordinator] = None) extends Logging {
 
   // private package for testing
   def authorize(requestContext: RequestContext,
@@ -164,5 +170,27 @@ class ApisUtils(val requestChannel: RequestChannel,
   def sendNoOpResponseExemptThrottle(request: RequestChannel.Request): Unit = {
     quotas.request.maybeRecordExempt(request)
     requestChannel.sendResponse(request, None, None)
+  }
+
+  def onLeadershipChange(updatedLeaders: Iterable[Partition], updatedFollowers: Iterable[Partition]): Unit = {
+    if (groupCoordinator.isEmpty || txnCoordinator.isEmpty) {
+      throw new IllegalStateException("Need both group and txn coordinators")
+    }
+    // for each new leader or follower, call coordinator to handle consumer group migration.
+    // this callback is invoked under the replica state change lock to ensure proper order of
+    // leadership changes
+    updatedLeaders.foreach { partition =>
+      if (partition.topic == Topic.GROUP_METADATA_TOPIC_NAME)
+        groupCoordinator.get.onElection(partition.partitionId)
+      else if (partition.topic == Topic.TRANSACTION_STATE_TOPIC_NAME)
+        txnCoordinator.get.onElection(partition.partitionId, partition.getLeaderEpoch)
+    }
+
+    updatedFollowers.foreach { partition =>
+      if (partition.topic == Topic.GROUP_METADATA_TOPIC_NAME)
+        groupCoordinator.get.onResignation(partition.partitionId)
+      else if (partition.topic == Topic.TRANSACTION_STATE_TOPIC_NAME)
+        txnCoordinator.get.onResignation(partition.partitionId, Some(partition.getLeaderEpoch))
+    }
   }
 }
