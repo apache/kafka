@@ -994,16 +994,59 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testAuthorizeAnyUnrelatedDenyWontDominateAllow(): Unit = {
-    testAuthorizeAnyUnrelatedDenyWontDominateAllow(aclAuthorizer)
+  def testAuthorizeAnyDurability(): Unit = {
+    testAuthorizeAnyDurability(aclAuthorizer)
+  }
+
+  @Test
+  def testAuthorizeAnyDurabilityInterfaceDefault(): Unit = {
+    testAuthorizeAnyDurability(mockAuthorizer)
+  }
+
+  private def testAuthorizeAnyDurability(authorizer: Authorizer): Unit = {
+    val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1")
+    val host1 = InetAddress.getByName("192.168.1.1")
+    val resource1 = new ResourcePattern(TOPIC, "sb1" + UUID.randomUUID(), LITERAL)
+    val denyRead = new AccessControlEntry(user1.toString, host1.getHostAddress, READ, DENY)
+    val allowRead = new AccessControlEntry(user1.toString, host1.getHostAddress, READ, ALLOW)
+    val u1h1Context = newRequestContext(user1, host1)
+
+    for (_ <- 1 to 10) {
+      assertFalse("User1 from host1 should not have READ access to any topic when no ACL exists",
+        authorizeAny(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+
+      addAcls(authorizer, Set(allowRead), resource1)
+      assertTrue("User1 from host1 now should have READ access to at least one topic",
+        authorizeAny(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+
+      for (_ <- 1 to 10) {
+        addAcls(authorizer, Set(denyRead), resource1)
+        assertFalse("User1 from host1 now should not have READ access to any topic",
+          authorizeAny(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+
+        removeAcls(aclAuthorizer, Set(denyRead), resource1)
+        addAcls(authorizer, Set(allowRead), resource1)
+        assertTrue("User1 from host1 now should have READ access to at least one topic",
+          authorizeAny(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+      }
+
+      removeAcls(authorizer, Set(allowRead), resource1)
+      assertFalse("User1 from host1 now should not have READ access to any topic",
+        authorizeAny(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+    }
+  }
+
+  @Test
+  def testAuthorizeAnyIsolationUnrelatedDenyWontDominateAllow(): Unit = {
+    testAuthorizeAnyIsolationUnrelatedDenyWontDominateAllow(aclAuthorizer)
   }
 
   @Test
   def testAuthorizeAnyUnrelatedDenyWontDominateAllowInterfaceDefault(): Unit = {
-    testAuthorizeAnyUnrelatedDenyWontDominateAllow(mockAuthorizer)
+    testAuthorizeAnyIsolationUnrelatedDenyWontDominateAllow(mockAuthorizer)
   }
 
-  private def testAuthorizeAnyUnrelatedDenyWontDominateAllow(authorizer: Authorizer): Unit = {
+  private def testAuthorizeAnyIsolationUnrelatedDenyWontDominateAllow(authorizer: Authorizer): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1")
     val user2 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user2")
     val host1 = InetAddress.getByName("192.168.1.1")
@@ -1071,7 +1114,16 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testAuthorizeAnyWildcardDenyDominate(): Unit = {
+  def testAuthorizeAnyWildcardResourceDenyDominate(): Unit = {
+    testAuthorizeAnyWildcardResourceDenyDominate(aclAuthorizer)
+  }
+
+  @Test
+  def testAuthorizeAnyWildcardResourceDenyDominateInterfaceDefault(): Unit = {
+    testAuthorizeAnyWildcardResourceDenyDominate(mockAuthorizer)
+  }
+
+  private def testAuthorizeAnyWildcardResourceDenyDominate(authorizer: Authorizer): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1")
     val host1 = InetAddress.getByName("192.168.1.1")
     val wildcard = new ResourcePattern(GROUP, ResourcePattern.WILDCARD_RESOURCE, LITERAL)
@@ -1096,16 +1148,16 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testAuthorizeAnyPrefixedDenyDominate(): Unit = {
-    testAuthorizeAnyPrefixedDenyDominate(aclAuthorizer)
+  def testAuthorizeAnyPrefixedResourceDenyDominate(): Unit = {
+    testAuthorizeAnyPrefixedResourceDenyDominate(aclAuthorizer)
   }
 
   @Test
   def testAuthorizeAnyPrefixedDenyDominateInterfaceDefault(): Unit = {
-    testAuthorizeAnyPrefixedDenyDominate(mockAuthorizer)
+    testAuthorizeAnyPrefixedResourceDenyDominate(mockAuthorizer)
   }
 
-  private def testAuthorizeAnyPrefixedDenyDominate(authorizer: Authorizer): Unit = {
+  private def testAuthorizeAnyPrefixedResourceDenyDominate(authorizer: Authorizer): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1")
     val host1 = InetAddress.getByName("192.168.1.1")
     val a = new ResourcePattern(GROUP, "a", PREFIXED)
@@ -1137,6 +1189,37 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     addAcls(authorizer, Set(allowAce), ab)
     assertFalse("User1 from host1 still should not have READ access to any group",
       authorizeAny(authorizer, u1h1Context, READ, ResourceType.GROUP))
+  }
+
+  @Test
+  def testAuthorizeAnyWithAllOperationAce(): Unit = {
+    testAuthorizeAnyWithAllOperationAce(aclAuthorizer)
+  }
+
+  @Test
+  def testAuthorizeAnyWithAllOperationAceInterfaceDefault(): Unit = {
+    testAuthorizeAnyWithAllOperationAce(mockAuthorizer)
+  }
+
+  private def testAuthorizeAnyWithAllOperationAce(authorizer: Authorizer): Unit = {
+    val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1")
+    val host1 = InetAddress.getByName("192.168.1.1")
+    val resource1 = new ResourcePattern(TOPIC, "sb1" + UUID.randomUUID(), LITERAL)
+    val denyAll = new AccessControlEntry(user1.toString, host1.getHostAddress, ALL, DENY)
+    val allowAll = new AccessControlEntry(user1.toString, host1.getHostAddress, ALL, ALLOW)
+    val denyWrite = new AccessControlEntry(user1.toString, host1.getHostAddress, WRITE, DENY)
+    val u1h1Context = newRequestContext(user1, host1)
+
+    assertFalse("User1 from host1 should not have READ access to any topic when no ACL exists",
+      authorizeAny(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+
+    addAcls(authorizer, Set(denyWrite, allowAll), resource1)
+    assertTrue("User1 from host1 now should have READ access to at least one topic",
+      authorizeAny(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+
+    addAcls(authorizer, Set(denyAll), resource1)
+    assertFalse("User1 from host1 now should not have READ access to any topic",
+      authorizeAny(authorizer, u1h1Context, READ, ResourceType.TOPIC))
   }
 
   @Test
