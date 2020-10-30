@@ -385,7 +385,7 @@ class LogManager(logDirs: Seq[File],
       }
 
       offlineDirs.foreach { case (dir, e) =>
-        logDirFailureChannel.maybeAddOfflineLogDir(dir, s"Error while deleting the clean shutdown file in dir $dir", e)
+        logDirFailureChannel.maybeAddOfflineLogDir(dir, s"Error while loading log dir $dir", e)
       }
     } catch {
       case e: ExecutionException =>
