@@ -176,7 +176,9 @@ class ApiVersionTest {
     val response = ApiVersion.apiVersionsResponse(
       10,
       RecordBatch.MAGIC_VALUE_V2,
-      Features.emptySupportedFeatures())
+      Features.emptySupportedFeatures(),
+      forwardingEnabled = false
+    )
     response.data.apiKeys().forEach(
       version => {
         val apiKeys = ApiKeys.forId(version.apiKey())
@@ -241,7 +243,8 @@ class ApiVersionTest {
     val response = ApiVersion.apiVersionsResponse(
       10,
       RecordBatch.MAGIC_VALUE_V1,
-      Features.emptySupportedFeatures
+      Features.emptySupportedFeatures,
+      forwardingEnabled = false
     )
     verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1)
     assertEquals(10, response.throttleTimeMs)
@@ -288,9 +291,29 @@ class ApiVersionTest {
     val response = ApiVersion.apiVersionsResponse(
       AbstractResponse.DEFAULT_THROTTLE_TIME,
       RecordBatch.CURRENT_MAGIC_VALUE,
-      Features.emptySupportedFeatures
+      Features.emptySupportedFeatures,
+      forwardingEnabled = true
     )
     assertEquals(new util.HashSet[ApiKeys](ApiKeys.enabledApis), apiKeysInResponse(response))
+    assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs)
+    assertTrue(response.data.supportedFeatures.isEmpty)
+    assertTrue(response.data.finalizedFeatures.isEmpty)
+    assertEquals(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH, response.data.finalizedFeaturesEpoch)
+  }
+
+  @Test
+  def shouldNotReturnEnvelopeApiKeyWhenForwardingIsNotEnabled(): Unit = {
+    val response = ApiVersion.apiVersionsResponse(
+      AbstractResponse.DEFAULT_THROTTLE_TIME,
+      RecordBatch.CURRENT_MAGIC_VALUE,
+      Features.emptySupportedFeatures,
+      forwardingEnabled = false
+    )
+
+    val expectedApiKeys = ApiKeys.enabledApis
+    expectedApiKeys.removeIf(key => key.id == ApiKeys.ENVELOPE.id)
+    assertEquals(new util.HashSet[ApiKeys](expectedApiKeys), apiKeysInResponse(response))
+
     assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs)
     assertTrue(response.data.supportedFeatures.isEmpty)
     assertTrue(response.data.finalizedFeatures.isEmpty)

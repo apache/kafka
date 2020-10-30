@@ -126,7 +126,9 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def validateForwardRequest(request: RequestChannel.Request): Unit = {
-    if (!request.context.fromPrivilegedListener ||
+    if (!config.forwardingEnabled) {
+      throw new InvalidRequestException(s"The handling of forwarding request $request is not enabled on this broker.")
+    } else if (!request.context.fromPrivilegedListener ||
       !authorize(request.envelopeContext.get.brokerContext, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
       // If the designated forwarding request is not coming from a privileged listener, or
       // it fails CLUSTER_ACTION permission, we would fail the authorization.
@@ -142,7 +144,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   private def maybeForward(request: RequestChannel.Request,
                            handler: RequestChannel.Request => Unit): Unit = {
-    if (request.envelopeContext.isEmpty && !controller.isActive && isForwardingEnabled(request)) {
+    if (!request.isForwarded() && !controller.isActive && isForwardingEnabled(request)) {
       forwardingManager.forwardRequest(sendResponseMaybeThrottle, request)
     } else {
       // When the KIP-500 mode is off or the principal serde is undefined, forwarding is not supported,
@@ -162,7 +164,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       trace(s"Handling request:${request.requestDesc(true)} from connection ${request.context.connectionId};" +
         s"securityProtocol:${request.context.securityProtocol},principal:${request.context.principal}")
 
-      if (request.envelopeContext.isDefined)
+      if (request.isForwarded())
         validateForwardRequest(request)
 
       request.header.apiKey match {
@@ -1778,11 +1780,13 @@ class KafkaApis(val requestChannel: RequestChannel,
             config.interBrokerProtocolVersion.recordVersion.value,
             supportedFeatures,
             finalizedFeatures.features,
-            finalizedFeatures.epoch)
+            finalizedFeatures.epoch,
+            config.forwardingEnabled)
           case None => ApiVersion.apiVersionsResponse(
             requestThrottleMs,
             config.interBrokerProtocolVersion.recordVersion.value,
-            supportedFeatures)
+            supportedFeatures,
+            config.forwardingEnabled)
         }
       }
     }
@@ -1802,7 +1806,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           s"${request.header.correlationId} to client ${request.header.clientId}.")
         responseBody
       }
-      sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, createResponse, None)
+      sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, createResponse)
     }
 
     val createTopicsRequest = request.body[CreateTopicsRequest]
@@ -1881,7 +1885,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           s"client ${request.header.clientId}.")
         responseBody
       }
-      sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, createResponse, onComplete = None)
+      sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, createResponse)
     }
 
     if (!controller.isActive) {
@@ -1928,7 +1932,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         trace(s"Sending delete topics response $responseBody for correlation id ${request.header.correlationId} to client ${request.header.clientId}.")
         responseBody
       }
-      sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, createResponse, onComplete = None)
+      sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, createResponse)
     }
 
     val deleteTopicRequest = request.body[DeleteTopicsRequest]
@@ -2721,7 +2725,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     sendResponseMaybeThrottle(request, requestThrottleMs => new IncrementalAlterConfigsResponse(
-      requestThrottleMs, (authorizedResult ++ unauthorizedResult).asJava), None)
+      requestThrottleMs, (authorizedResult ++ unauthorizedResult).asJava))
   }
 
   def handleDescribeConfigsRequest(request: RequestChannel.Request): Unit = {
@@ -3296,19 +3300,18 @@ class KafkaApis(val requestChannel: RequestChannel,
   // Throttle the channel if the request quota is enabled but has been violated. Regardless of throttling, send the
   // response immediately.
   private def sendResponseMaybeThrottle(request: RequestChannel.Request,
-                                        createResponse: Int => AbstractResponse,
-                                        onComplete: Option[Send => Unit] = None): Unit = {
+                                        createResponse: Int => AbstractResponse): Unit = {
     val throttleTimeMs = maybeRecordAndGetThrottleTimeMs(request)
     // Only throttle non-forwarded requests
-    if (request.envelopeContext.isEmpty)
+    if (!request.isForwarded())
       quotas.request.throttle(request, throttleTimeMs, requestChannel.sendResponse)
-    sendResponse(request, Some(createResponse(throttleTimeMs)), onComplete)
+    sendResponse(request, Some(createResponse(throttleTimeMs)), None)
   }
 
   private def sendErrorResponseMaybeThrottle(request: RequestChannel.Request, error: Throwable): Unit = {
     val throttleTimeMs = maybeRecordAndGetThrottleTimeMs(request)
     // Only throttle non-forwarded requests or cluster authorization failures
-    if (error.isInstanceOf[ClusterAuthorizationException] || request.envelopeContext.isEmpty)
+    if (error.isInstanceOf[ClusterAuthorizationException] || !request.isForwarded())
       quotas.request.throttle(request, throttleTimeMs, requestChannel.sendResponse)
     sendErrorOrCloseConnection(request, error, throttleTimeMs)
   }
@@ -3325,14 +3328,13 @@ class KafkaApis(val requestChannel: RequestChannel,
    */
   private def sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota: ControllerMutationQuota,
                                                            request: RequestChannel.Request,
-                                                           createResponse: Int => AbstractResponse,
-                                        onComplete: Option[Send => Unit]): Unit = {
+                                                           createResponse: Int => AbstractResponse): Unit = {
     val timeMs = time.milliseconds
     val controllerThrottleTimeMs = controllerMutationQuota.throttleTime
     val requestThrottleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request, timeMs)
     val maxThrottleTimeMs = Math.max(controllerThrottleTimeMs, requestThrottleTimeMs)
     // Only throttle non-forwarded requests
-    if (maxThrottleTimeMs > 0 && request.envelopeContext.isEmpty) {
+    if (maxThrottleTimeMs > 0 && !request.isForwarded()) {
       request.apiThrottleTimeMs = maxThrottleTimeMs
       if (controllerThrottleTimeMs > requestThrottleTimeMs) {
         quotas.controllerMutation.throttle(request, controllerThrottleTimeMs, requestChannel.sendResponse)
@@ -3341,7 +3343,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    sendResponse(request, Some(createResponse(maxThrottleTimeMs)), onComplete)
+    sendResponse(request, Some(createResponse(maxThrottleTimeMs)), None)
   }
 
   private def sendResponseExemptThrottle(request: RequestChannel.Request,

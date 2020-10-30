@@ -20,7 +20,7 @@ package kafka.api
 import org.apache.kafka.common.config.ConfigDef.Validator
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{RecordBatch, RecordVersion}
 import org.apache.kafka.common.requests.{AbstractResponse, ApiVersionsResponse}
 import org.apache.kafka.common.requests.ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE
@@ -142,12 +142,15 @@ object ApiVersion {
 
   def apiVersionsResponse(throttleTimeMs: Int,
                           maxMagic: Byte,
-                          latestSupportedFeatures: Features[SupportedVersionRange]): ApiVersionsResponse = {
-    apiVersionsResponse(throttleTimeMs,
+                          latestSupportedFeatures: Features[SupportedVersionRange],
+                          forwardingEnabled: Boolean): ApiVersionsResponse = {
+    apiVersionsResponse(
+      throttleTimeMs,
       maxMagic,
       latestSupportedFeatures,
       Features.emptyFinalizedFeatures,
-      ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH
+      ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
+      forwardingEnabled
     )
   }
 
@@ -155,10 +158,14 @@ object ApiVersion {
                           maxMagic: Byte,
                           latestSupportedFeatures: Features[SupportedVersionRange],
                           finalizedFeatures: Features[FinalizedVersionRange],
-                          finalizedFeaturesEpoch: Long): ApiVersionsResponse = {
+                          finalizedFeaturesEpoch: Long,
+                          forwardingEnabled: Boolean = false): ApiVersionsResponse = {
     // If we bump any forwarding RPC in the future, we would add filtering logic
     // to default API key version ranges.
     val apiKeys = ApiVersionsResponse.defaultApiKeys(maxMagic)
+    if (!forwardingEnabled) {
+      apiKeys.remove(apiKeys.find(ApiKeys.ENVELOPE.id))
+    }
 
     if (maxMagic == RecordBatch.CURRENT_MAGIC_VALUE &&
       throttleTimeMs == AbstractResponse.DEFAULT_THROTTLE_TIME)

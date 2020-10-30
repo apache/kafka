@@ -58,7 +58,7 @@ import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartit
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.{ClientInformation, ListenerName, Send}
+import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
@@ -565,10 +565,8 @@ class KafkaApisTest {
     EasyMock.expect(clientResponse.responseBody).andReturn(alterConfigsResponse)
 
     EasyMock.expect(forwardingManager.forwardRequest(
-      anyObject[(RequestChannel.Request, Int => AbstractResponse,
-        Option[Send => Unit]) => Unit](),
-      EasyMock.eq(request),
-      anyObject()
+      anyObject[(RequestChannel.Request, Int => AbstractResponse) => Unit](),
+      EasyMock.eq(request)
     )).once()
 
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel,
@@ -694,10 +692,8 @@ class KafkaApisTest {
     EasyMock.expect(clientResponse.responseBody).andReturn(incrementalAlterConfigsResponse)
 
     EasyMock.expect(forwardingManager.forwardRequest(
-      anyObject[(RequestChannel.Request, Int => AbstractResponse,
-        Option[Send => Unit]) => Unit](),
-      EasyMock.eq(request),
-      anyObject()
+      anyObject[(RequestChannel.Request, Int => AbstractResponse) => Unit](),
+      EasyMock.eq(request)
     )).once()
 
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel,
@@ -784,10 +780,8 @@ class KafkaApisTest {
     expectNoThrottling()
 
     EasyMock.expect(forwardingManager.forwardRequest(
-      anyObject[(RequestChannel.Request, Int => AbstractResponse,
-        Option[Send => Unit]) => Unit](),
-      EasyMock.eq(request),
-      anyObject()
+      anyObject[(RequestChannel.Request, Int => AbstractResponse) => Unit](),
+      EasyMock.eq(request)
     )).once()
 
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel,
@@ -933,10 +927,8 @@ class KafkaApisTest {
     EasyMock.expect(clientResponse.responseBody).andReturn(createTopicsResponse)
 
     EasyMock.expect(forwardingManager.forwardRequest(
-      anyObject[(RequestChannel.Request, Int => AbstractResponse,
-        Option[Send => Unit]) => Unit](),
-      EasyMock.eq(request),
-      anyObject()
+      anyObject[(RequestChannel.Request, Int => AbstractResponse) => Unit](),
+      EasyMock.eq(request)
     )).once()
 
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel,

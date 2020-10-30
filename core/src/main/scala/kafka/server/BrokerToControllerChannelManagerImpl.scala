@@ -39,10 +39,8 @@ trait BrokerToControllerChannelManager {
   def sendRequest(request: AbstractRequest.Builder[_ <: AbstractRequest],
                   callback: RequestCompletionHandler): Unit
 
-  def forwardRequest(responseToOriginalClient: (RequestChannel.Request, Int => AbstractResponse,
-                       Option[Send => Unit]) => Unit,
-                     originalRequest: RequestChannel.Request,
-                     callback: Option[Send => Unit] = Option.empty): Unit
+  def forwardRequest(responseToOriginalClient: (RequestChannel.Request, Int => AbstractResponse) => Unit,
+                     originalRequest: RequestChannel.Request): Unit
 
   def start(): Unit
 
@@ -138,14 +136,13 @@ class BrokerToControllerChannelManagerImpl(metadataCache: kafka.server.MetadataC
     requestThread.wakeup()
   }
 
-  override def forwardRequest(responseToOriginalClient: (RequestChannel.Request, Int =>
-                                AbstractResponse, Option[Send => Unit]) => Unit,
-                              request: RequestChannel.Request,
-                              callback: Option[Send => Unit] = Option.empty): Unit = {
+  override def forwardRequest(responseToOriginalClient: (RequestChannel.Request, Int => AbstractResponse) => Unit,
+                              request: RequestChannel.Request): Unit = {
     val serializedPrincipal = request.principalSerde.get.serialize(request.context.principal)
-    request.buffer.flip
+    val forwardRequestBuffer = request.buffer.duplicate()
+    forwardRequestBuffer.flip()
     val envelopeRequest = new EnvelopeRequest.Builder(
-      request.buffer,
+      forwardRequestBuffer,
       serializedPrincipal,
       request.context.clientAddress.getAddress
     )
@@ -154,12 +151,15 @@ class BrokerToControllerChannelManagerImpl(metadataCache: kafka.server.MetadataC
       (response: ClientResponse) => responseToOriginalClient(
         request, _ => {
           val envelopeResponse = response.responseBody.asInstanceOf[EnvelopeResponse]
-          if (envelopeResponse.error() != Errors.NONE) {
+          val internalError = envelopeResponse.error()
+          if (internalError!= Errors.NONE) {
+            debug(s"Encountered error $internalError during request forwarding, returning unknown server " +
+              s"error to the client to indicate that the failure is caused by the inter-broker communication.")
             request.body[AbstractRequest].getErrorResponse(Errors.UNKNOWN_SERVER_ERROR.exception())
           } else {
             AbstractResponse.deserializeBody(envelopeResponse.embedResponseData, request.header)
           }
-        }, callback)))
+        })))
     requestThread.wakeup()
   }
 }

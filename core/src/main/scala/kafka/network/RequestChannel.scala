@@ -117,6 +117,8 @@ object RequestChannel extends Logging {
       releaseBuffer()
     }
 
+    def isForwarded(): Boolean = envelopeContext.isDefined
+
     def buildResponse(abstractResponse: AbstractResponse,
                       error: Errors): Send = {
       envelopeContext match {
