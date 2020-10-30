@@ -163,7 +163,6 @@ class KafkaNetworkChannelTest {
         BeginQuorumEpochRequest.singletonRequest(topicPartition, clusterId, leaderEpoch, leaderId)
 
       case ApiKeys.END_QUORUM_EPOCH =>
-        val replicaId = 1
         EndQuorumEpochRequest.singletonRequest(topicPartition, clusterId, leaderId,
           leaderEpoch, Collections.singletonList(2))
 
