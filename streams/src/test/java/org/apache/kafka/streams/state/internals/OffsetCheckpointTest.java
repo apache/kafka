@@ -75,7 +75,7 @@ public class OffsetCheckpointTest {
         final File f = new File(TestUtils.tempDirectory().getAbsolutePath(), "kafka.tmp");
         final OffsetCheckpoint checkpoint = new OffsetCheckpoint(f);
 
-        checkpoint.write(Collections.<TopicPartition, Long>emptyMap());
+        checkpoint.write(Collections.emptyMap());
 
         assertFalse(f.exists());
 
@@ -83,6 +83,25 @@ public class OffsetCheckpointTest {
 
         // deleting a non-exist checkpoint file should be fine
         checkpoint.delete();
+    }
+
+    @Test
+    public void shouldDeleteExistingCheckpointWhenNoOffsets() throws IOException {
+        final File file = TestUtils.tempFile();
+        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(file);
+
+        final Map<TopicPartition, Long> offsets = Collections.singletonMap(new TopicPartition(topic, 0), 1L);
+
+        checkpoint.write(offsets);
+
+        assertTrue(file.exists());
+        assertEquals(offsets, checkpoint.read());
+
+        checkpoint.write(Collections.emptyMap());
+
+        assertFalse(file.exists());
+
+        assertEquals(Collections.<TopicPartition, Long>emptyMap(), checkpoint.read());
     }
 
     @Test
