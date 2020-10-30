@@ -92,9 +92,8 @@ public class OffsetMapBenchmark {
     private String nextRandomString(int length) {
         int leftLimit = 97; // letter 'a'
         int rightLimit = 122; // letter 'z'
-        int targetStringLength = 10;
         return random.ints(leftLimit, rightLimit + 1)
-            .limit(targetStringLength)
+            .limit(length)
             .collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append)
             .toString();
     }
