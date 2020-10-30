@@ -651,16 +651,17 @@ public final class QuorumController implements Controller {
         queue.beginShutdown("QuorumController#beginShutdown");
     }
 
-    @Override
-    public void close() throws InterruptedException {
-        queue.close();
-    }
-
     public int nodeId() {
         return nodeId;
     }
 
-    long curClaimEpoch() {
+    @Override
+    public long curClaimEpoch() {
         return curClaimEpoch;
+    }
+
+    @Override
+    public void close() throws InterruptedException {
+        queue.close();
     }
 }

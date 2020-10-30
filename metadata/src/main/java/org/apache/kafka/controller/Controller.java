@@ -127,6 +127,12 @@ public interface Controller extends AutoCloseable {
     void beginShutdown();
 
     /**
+     * If this controller is active, this is the non-negative controller epoch.
+     * Otherwise, this is -1.
+     */
+    long curClaimEpoch();
+
+    /**
      * Blocks until we have shut down and freed all resources.
      */
     void close() throws InterruptedException;

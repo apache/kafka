@@ -185,7 +185,9 @@ class Kip500Controller(val config: KafkaConfig,
         quotaManagers,
         time,
         supportedFeatures,
-        controller)
+        controller,
+        config,
+        metaProperties)
       controllerApisHandlerPool = new KafkaRequestHandlerPool(config.controllerId,
         socketServer.dataPlaneRequestChannel,
         controllerApis,

@@ -21,13 +21,15 @@ import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.acl.AclOperation.CLUSTER_ACTION
+import org.apache.kafka.common.acl.AclOperation.{CLUSTER_ACTION, DESCRIBE}
 import org.apache.kafka.common.errors.ApiException
 import org.apache.kafka.common.internals.FatalExitError
-import org.apache.kafka.common.message.ApiVersionsResponseData
+import org.apache.kafka.common.message.{ApiVersionsResponseData, MetadataResponseData}
 import org.apache.kafka.common.message.ApiVersionsResponseData.{ApiVersionsResponseKey, FinalizedFeatureKey, SupportedFeatureKey}
+import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseBroker
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{AlterIsrRequest, ApiVersionsRequest, ApiVersionsResponse}
+import org.apache.kafka.common.requests.{AlterIsrRequest, ApiVersionsRequest, ApiVersionsResponse, MetadataRequest, MetadataResponse}
+import org.apache.kafka.common.resource.Resource
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType.CLUSTER
 import org.apache.kafka.common.utils.Time
@@ -49,9 +51,11 @@ class ControllerApis(val requestChannel: RequestChannel,
                      val quotas: QuotaManagers,
                      val time: Time,
                      val supportedFeatures: Map[String, VersionRange],
-                     val controller: Controller) extends ApiRequestHandler with Logging {
+                     val controller: Controller,
+                     val config: KafkaConfig,
+                     val metaProperties: MetaProperties) extends ApiRequestHandler with Logging {
 
-  val apisUtil = new ApisUtils(requestChannel, authorizer, quotas, time)
+  val apisUtils = new ApisUtils(requestChannel, authorizer, quotas, time)
 
   val supportedApiKeys = Set(
     ApiKeys.METADATA,
@@ -91,6 +95,7 @@ class ControllerApis(val requestChannel: RequestChannel,
   override def handle(request: RequestChannel.Request): Unit = {
     try {
       request.header.apiKey match {
+        case ApiKeys.METADATA => handleMetadataRequest(request)
         case ApiKeys.API_VERSIONS => handleApiVersionsRequest(request)
         case ApiKeys.ALTER_ISR => handleAlterIsrRequest(request)
           // TODO other APIs
@@ -98,7 +103,7 @@ class ControllerApis(val requestChannel: RequestChannel,
       }
     } catch {
       case e: FatalExitError => throw e
-      case e: Throwable => apisUtil.handleError(request, e)
+      case e: Throwable => apisUtils.handleError(request, e)
     } finally {
 
     }
@@ -145,16 +150,50 @@ class ControllerApis(val requestChannel: RequestChannel,
     FutureConverters.toScala(controller.finalizedFeatures()).onComplete(
       result => result match {
         case Success(features) =>
-          apisUtil.sendResponseMaybeThrottle(request,
+          apisUtils.sendResponseMaybeThrottle(request,
             requestThrottleMs => createResponseCallback(features, requestThrottleMs))
-        case Failure(e) => apisUtil.handleError(request, e)
+        case Failure(e) => apisUtils.handleError(request, e)
       }
     )
   }
 
+  def handleMetadataRequest(request: RequestChannel.Request): Unit = {
+    val metadataRequest = request.body[MetadataRequest]
+    def createResponseCallback(requestThrottleMs: Int): MetadataResponse = {
+      val metadataResponseData = new MetadataResponseData()
+      metadataResponseData.setThrottleTimeMs(requestThrottleMs)
+      config.controllerConnectNodes.foreach {
+        case node => metadataResponseData.brokers().add(
+          new MetadataResponseBroker().setHost(node.host()).
+            setNodeId(node.id()).setPort(node.port()).setRack(node.rack()))
+      }
+      metadataResponseData.setClusterId(metaProperties.clusterId.toString)
+      // TODO: get a better estimate of the current active controller from Raft or somewhere.
+      if (controller.curClaimEpoch() > 0) {
+        metadataResponseData.setControllerId(config.controllerId)
+      } else {
+        metadataResponseData.setControllerId(-1)
+      }
+      val clusterAuthorizedOperations = if (metadataRequest.data.includeClusterAuthorizedOperations) {
+        if (apisUtils.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME)) {
+          apisUtils.authorizedOperations(request, Resource.CLUSTER)
+        } else {
+          0
+        }
+      } else {
+        Int.MinValue
+      }
+      // TODO: fill in information about the metadata topic
+      metadataResponseData.setClusterAuthorizedOperations(clusterAuthorizedOperations)
+      new MetadataResponse(metadataResponseData)
+    }
+    apisUtils.sendResponseMaybeThrottle(request,
+      requestThrottleMs => createResponseCallback(requestThrottleMs))
+  }
+
   def handleAlterIsrRequest(request: RequestChannel.Request): Unit = {
     val alterIsrRequest = request.body[AlterIsrRequest]
-    if (!apisUtil.authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
+    if (!apisUtils.authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
       val isrsToAlter = mutable.Map[TopicPartition, LeaderAndIsr]()
       alterIsrRequest.data.topics.forEach { topicReq =>
         topicReq.partitions.forEach { partitionReq =>

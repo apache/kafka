@@ -29,7 +29,7 @@ import kafka.security.authorizer.AuthorizerUtils
 import kafka.utils.CoreUtils
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.common.Reconfigurable
+import org.apache.kafka.common.{Node, Reconfigurable}
 import org.apache.kafka.common.config.SecurityConfig
 import org.apache.kafka.common.config.ConfigDef.{ConfigKey, ValidList}
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
@@ -1903,6 +1903,38 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
       if (isController) {
         require(controllerId >= 0, "controller.id must be equal or greater than 0")
       }
+    }
+  }
+
+  val controllerConnectNodes: Seq[Node] = {
+    controllerConnect.asScala.map { case input =>
+      val atIndex = input.indexOf('@')
+      if (atIndex < 0) {
+        throw new RuntimeException("Invalid controller node specification '" + input +
+          "': failed to find an at sign.")
+      }
+      val idString = input.substring(0, atIndex)
+      val id = try {
+        idString.toInt
+      } catch {
+        case e: NumberFormatException => throw new RuntimeException("Invalid controller " +
+          "node specification '" + input + "': failed to parse id.", e)
+      }
+      val hostPort = input.substring(atIndex + 1)
+      val colonIndex = hostPort.indexOf(':')
+      if (colonIndex < 0) {
+        throw new RuntimeException("Invalid controller node specification '" + input +
+          "': failed to find a colon.")
+      }
+      val host = hostPort.substring(0, colonIndex)
+      val portString = hostPort.substring(colonIndex + 1)
+      val port = try {
+        portString.toInt
+      } catch {
+        case e: NumberFormatException => throw new RuntimeException("Invalid controller " +
+          "node specification '" + input + "': failed to parse numeric port.", e)
+      }
+      new Node(id, host, port, null)
     }
   }
 }
