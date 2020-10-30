@@ -49,7 +49,6 @@ import java.util.stream.Collectors;
  *    Unattached: After learning of a new election with a higher epoch
  *    Candidate: After expiration of the election timeout
  *    Leader: After receiving a majority of votes
- *    Resigned: When shutting down gracefully
  *
  * Leader =>
  *    Unattached: After learning of a new election with a higher epoch
@@ -150,21 +149,20 @@ public class QuorumState {
             initialState = new ResignedState(
                 time,
                 localId,
+                election.epoch,
+                voters,
                 randomElectionTimeoutMs(),
-                election,
                 Collections.emptyList()
             );
         } else if (election.isVotedCandidate(localId)) {
-            // If we were previously a candidate, then we will start out as resigned
-            // in the same epoch. This is mainly just to ensure a consistent state
-            // machine following restart since we will have resigned if we were a
-            // candidate at the time of shutdown.
-            initialState = new ResignedState(
+            initialState = new CandidateState(
                 time,
                 localId,
-                randomElectionTimeoutMs(),
-                election,
-                Collections.emptyList()
+                election.epoch,
+                voters,
+                Optional.empty(),
+                1,
+                randomElectionTimeoutMs()
             );
         } else if (election.hasVoted()) {
             initialState = new VotedState(
@@ -242,18 +240,19 @@ public class QuorumState {
     }
 
     public void transitionToResigned(List<Integer> preferredSuccessors) {
-        if (!isLeader() && !isCandidate()) {
+        if (!isLeader()) {
             throw new IllegalStateException("Invalid transition to Resigned state from " + state);
         }
 
-        // The Resigned state is a soft state which does not affect the current
-        // persisted election status.
-        ElectionState currentElection = state.election();
+        // The Resigned state is a soft state which does not need to be persisted.
+        // A leader will always be re-initialized in this state.
+        int epoch = state.epoch();
         this.state = new ResignedState(
             time,
             localId,
+            epoch,
+            voters,
             randomElectionTimeoutMs(),
-            currentElection,
             preferredSuccessors
         );
         log.info("Completed transition to {}", state);

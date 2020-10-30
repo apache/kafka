@@ -38,17 +38,17 @@ class ResignedStateTest {
         int remoteId = 1;
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(localId, remoteId);
-        ElectionState election = ElectionState.withVotedCandidate(epoch, localId, voters);
 
         ResignedState state = new ResignedState(
             time,
             localId,
+            epoch,
+            voters,
             electionTimeoutMs,
-            election,
             Collections.emptyList()
         );
 
-        assertEquals(election, state.election());
+        assertEquals(ElectionState.withElectedLeader(epoch, localId, voters), state.election());
         assertEquals(epoch, state.epoch());
 
         assertEquals(Collections.singleton(remoteId), state.unackedVoters());

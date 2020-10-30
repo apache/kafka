@@ -756,31 +756,26 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             request.topics().get(0).partitions().get(0);
 
         int requestEpoch = partitionRequest.leaderEpoch();
-        int requestReplicaId = partitionRequest.replicaId();
+        int requestLeaderId = partitionRequest.leaderId();
 
-        Optional<Errors> errorOpt = validateVoterOnlyRequest(requestReplicaId, requestEpoch);
+        Optional<Errors> errorOpt = validateVoterOnlyRequest(requestLeaderId, requestEpoch);
         if (errorOpt.isPresent()) {
             return buildEndQuorumEpochResponse(errorOpt.get());
         }
-
-        OptionalInt requestLeaderId = optionalLeaderId(partitionRequest.leaderId());
-        maybeTransition(requestLeaderId, requestEpoch, currentTimeMs);
+        maybeTransition(OptionalInt.of(requestLeaderId), requestEpoch, currentTimeMs);
 
         if (quorum.isFollower()) {
             FollowerState state = quorum.followerStateOrThrow();
-            if (state.leaderId() == requestReplicaId) {
+            if (state.leaderId() == requestLeaderId) {
                 List<Integer> preferredSuccessors = partitionRequest.preferredSuccessors();
                 if (!preferredSuccessors.contains(quorum.localId)) {
                     return buildEndQuorumEpochResponse(Errors.INCONSISTENT_VOTER_SET);
                 }
                 long electionBackoffMs = endEpochElectionBackoff(preferredSuccessors);
+                logger.debug("Overriding follower fetch timeout to {} after receiving " +
+                    "EndQuorumEpoch request from leader {} in epoch {}", electionBackoffMs,
+                    requestLeaderId, requestEpoch);
                 state.overrideFetchTimeout(currentTimeMs, electionBackoffMs);
-            }
-        } else if (quorum.isVoted()) {
-            VotedState state = quorum.votedStateOrThrow();
-            if (state.votedId() == requestReplicaId) {
-                long electionBackoffMs = binaryExponentialElectionBackoffMs(1);
-                state.overrideElectionTimeout(currentTimeMs, electionBackoffMs);
             }
         }
         return buildEndQuorumEpochResponse(Errors.NONE);
@@ -1385,13 +1380,14 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         return connection.remainingRequestTimeMs(currentTimeMs);
     }
 
-    private EndQuorumEpochRequestData buildEndQuorumEpochRequest(List<Integer> preferredSuccessors) {
+    private EndQuorumEpochRequestData buildEndQuorumEpochRequest(
+        ResignedState state
+    ) {
         return EndQuorumEpochRequest.singletonRequest(
             log.topicPartition(),
-            quorum.localId,
             quorum.epoch(),
-            quorum.leaderIdOrNil(),
-            preferredSuccessors
+            quorum.localId,
+            state.preferredSuccessors()
         );
     }
 
@@ -1519,15 +1515,14 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private long pollResigned(long currentTimeMs) throws IOException {
-        GracefulShutdown shutdown = this.shutdown.get();
         ResignedState state = quorum.resignedStateOrThrow();
-
         long endQuorumBackoffMs = maybeSendRequests(
             currentTimeMs,
             state.unackedVoters(),
-            () -> buildEndQuorumEpochRequest(state.preferredSuccessors())
+            () -> buildEndQuorumEpochRequest(state)
         );
 
+        GracefulShutdown shutdown = this.shutdown.get();
         final long stateTimeoutMs;
         if (shutdown != null) {
             // If we are shutting down, then we will remain in the resigned state
@@ -1535,7 +1530,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             stateTimeoutMs = shutdown.remainingTimeMs();
         } else if (state.hasElectionTimeoutExpired(currentTimeMs)) {
             transitionToCandidate(currentTimeMs);
-            stateTimeoutMs = 0;
+            stateTimeoutMs = 0L;
         } else {
             stateTimeoutMs = state.remainingElectionTimeMs(currentTimeMs);
         }
@@ -1567,15 +1562,34 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         return Math.min(timeUntilFlush, timeUntilSend);
     }
 
-    private long pollCandidate(long currentTimeMs) throws IOException {
-        GracefulShutdown shutdown = this.shutdown.get();
-        if (shutdown != null) {
-            transitionToResigned(Collections.emptyList());
-            return 0L;
+    private long maybeSendVoteRequests(
+        CandidateState state,
+        long currentTimeMs
+    ) {
+        // Continue sending Vote requests as long as we still have a chance to win the election
+        if (!state.isVoteRejected()) {
+            return maybeSendRequests(
+                currentTimeMs,
+                state.unrecordedVoters(),
+                this::buildVoteRequest
+            );
         }
+        return Long.MAX_VALUE;
+    }
 
+    private long pollCandidate(long currentTimeMs) throws IOException {
         CandidateState state = quorum.candidateStateOrThrow();
-        if (state.isBackingOff()) {
+        GracefulShutdown shutdown = this.shutdown.get();
+
+        if (shutdown != null) {
+            // If we happen to shutdown while we are a candidate, we will continue
+            // with the current election until one of the following conditions is met:
+            //  1) we are elected as leader (which allows us to resign)
+            //  2) another leader is elected
+            //  3) the shutdown timer expires
+            long minRequestBackoffMs = maybeSendVoteRequests(state, currentTimeMs);
+            return Math.min(shutdown.remainingTimeMs(), minRequestBackoffMs);
+        } else if (state.isBackingOff()) {
             if (state.isBackoffComplete(currentTimeMs)) {
                 logger.info("Re-elect as candidate after election backoff has completed");
                 transitionToCandidate(currentTimeMs);
@@ -1588,16 +1602,9 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 backoffDurationMs);
             state.startBackingOff(currentTimeMs, backoffDurationMs);
             return backoffDurationMs;
-        } else if (!state.isVoteRejected()) {
-            // Continue sending Vote requests as long as we still have a chance to win the election
-            long minRequestBackoffMs = maybeSendRequests(
-                currentTimeMs,
-                state.unrecordedVoters(),
-                this::buildVoteRequest
-            );
-            return Math.min(minRequestBackoffMs, state.remainingElectionTimeMs(currentTimeMs));
         } else {
-            return state.remainingElectionTimeMs(currentTimeMs);
+            long minRequestBackoffMs = maybeSendVoteRequests(state, currentTimeMs);
+            return Math.min(minRequestBackoffMs, state.remainingElectionTimeMs(currentTimeMs));
         }
     }
 
@@ -1613,7 +1620,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private long pollFollowerAsVoter(FollowerState state, long currentTimeMs) throws IOException {
         GracefulShutdown shutdown = this.shutdown.get();
         if (shutdown != null) {
-            // If we are a follower, then we will shutdown immediately. We want to
+            // If we are a follower, then we can shutdown immediately. We want to
             // skip the transition to candidate in any case.
             return 0;
         } else if (state.hasFetchTimeoutExpired(currentTimeMs)) {
@@ -1651,7 +1658,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                     state.leaderId(),
                     this::buildFetchRequest
                 );
-
             }
             return Math.min(backoffMs, state.remainingFetchTimeMs(currentTimeMs));
         }

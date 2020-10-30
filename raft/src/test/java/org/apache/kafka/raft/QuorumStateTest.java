@@ -149,15 +149,17 @@ public class QuorumStateTest {
 
         QuorumState state = buildQuorumState(voters);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
-        assertTrue(state.isResigned());
+        assertTrue(state.isCandidate());
         assertEquals(epoch, state.epoch());
 
-        ResignedState resignedState = state.resignedStateOrThrow();
-        assertEquals(epoch, resignedState.epoch());
-        assertEquals(election, resignedState.election());
-        assertEquals(Utils.mkSet(node1, node2), resignedState.unackedVoters());
+        CandidateState candidateState = state.candidateStateOrThrow();
+        assertEquals(epoch, candidateState.epoch());
+        assertEquals(election, candidateState.election());
+        assertEquals(Utils.mkSet(node1, node2), candidateState.unrecordedVoters());
+        assertEquals(Utils.mkSet(localId), candidateState.grantingVoters());
+        assertEquals(Collections.emptySet(), candidateState.rejectingVoters());
         assertEquals(electionTimeoutMs + jitterMs,
-            resignedState.remainingElectionTimeMs(time.milliseconds()));
+            candidateState.remainingElectionTimeMs(time.milliseconds()));
     }
 
     @Test
@@ -245,13 +247,9 @@ public class QuorumStateTest {
         assertTrue(state.isCandidate());
         assertEquals(1, state.epoch());
 
-        state.transitionToResigned(Collections.singletonList(localId));
-        assertTrue(state.isResigned());
-        ResignedState resignedState = state.resignedStateOrThrow();
-        assertEquals(ElectionState.withVotedCandidate(1, localId, voters),
-            resignedState.election());
-        assertEquals(1, resignedState.epoch());
-        assertEquals(Utils.mkSet(node1, node2), resignedState.unackedVoters());
+        assertThrows(IllegalStateException.class, () ->
+            state.transitionToResigned(Collections.singletonList(localId)));
+        assertTrue(state.isCandidate());
     }
 
     @Test

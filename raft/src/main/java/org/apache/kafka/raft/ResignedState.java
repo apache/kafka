@@ -24,18 +24,23 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * A leader or candidate may gracefully resign in the current epoch by sending
- * an `EndQuorumEpoch` request to all of the voters. This state is used to track
- * delivery of this request. A voter will remain in the `Resigned` state until
- * we either learn about another election, or our own election timeout expires
- * and we become a Candidate.
+ * This state represents a leader which has fenced itself either because it
+ * is shutting down or because it has encountered a soft failure of some sort.
+ * No writes are accepted in this state and we are not permitted to vote for
+ * any other candidate in this epoch.
  *
- * Note that vote requests in the same epoch that we have resigned from must be
- * rejected.
+ * A resigned leader may initiate a new election by sending `EndQuorumEpoch`
+ * requests to all of the voters. This state tracks delivery of this request
+ * in order to prevent unnecessary retries.
+ *
+ * A voter will remain in the `Resigned` state until we either learn about
+ * another election, or our own election timeout expires and we become a
+ * Candidate.
  */
 public class ResignedState implements EpochState {
-    private final ElectionState election;
     private final int localId;
+    private final int epoch;
+    private final Set<Integer> voters;
     private final long electionTimeoutMs;
     private final Set<Integer> unackedVoters;
     private final Timer electionTimer;
@@ -44,13 +49,15 @@ public class ResignedState implements EpochState {
     public ResignedState(
         Time time,
         int localId,
+        int epoch,
+        Set<Integer> voters,
         long electionTimeoutMs,
-        ElectionState election,
         List<Integer> preferredSuccessors
     ) {
         this.localId = localId;
-        this.election = election;
-        this.unackedVoters = new HashSet<>(election.voters());
+        this.epoch = epoch;
+        this.voters = voters;
+        this.unackedVoters = new HashSet<>(voters);
         this.unackedVoters.remove(localId);
         this.electionTimeoutMs = electionTimeoutMs;
         this.electionTimer = time.timer(electionTimeoutMs);
@@ -59,12 +66,12 @@ public class ResignedState implements EpochState {
 
     @Override
     public ElectionState election() {
-        return election;
+        return ElectionState.withElectedLeader(epoch, localId, voters);
     }
 
     @Override
     public int epoch() {
-        return election.epoch;
+        return epoch;
     }
 
     /**
@@ -85,7 +92,7 @@ public class ResignedState implements EpochState {
      * @param voterId the ID of the voter that send the successful response
      */
     public void acknowledgeResignation(int voterId) {
-        if (!election.voters().contains(voterId)) {
+        if (!voters.contains(voterId)) {
             throw new IllegalArgumentException("Attempt to acknowledge delivery of `EndQuorumEpoch` " +
                 "by a non-voter " + voterId);
         }
@@ -125,12 +132,13 @@ public class ResignedState implements EpochState {
 
     @Override
     public String toString() {
-        return "ResignedState{" +
-            "election=" + election +
-            ", localId=" + localId +
+        return "ResignedState(" +
+            "localId=" + localId +
+            ", epoch=" + epoch +
+            ", voters=" + voters +
+            ", electionTimeoutMs=" + electionTimeoutMs +
             ", unackedVoters=" + unackedVoters +
-            ", expirationTimeoutMs=" + electionTimeoutMs +
             ", preferredSuccessors=" + preferredSuccessors +
-            '}';
+            ')';
     }
 }
