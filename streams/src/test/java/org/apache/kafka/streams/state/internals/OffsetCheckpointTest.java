@@ -34,6 +34,7 @@ import static org.apache.kafka.streams.state.internals.OffsetCheckpoint.writeEnt
 import static org.apache.kafka.streams.state.internals.OffsetCheckpoint.writeIntLine;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.is;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
