@@ -251,7 +251,7 @@ public class TopologyTestDriver implements Closeable {
     static {
         defaultTestProps = new Properties();
         defaultTestProps.put(APPLICATION_ID_CONFIG, "dummy-app-id");
-        defaultTestProps.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9091");
+        defaultTestProps.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy");
     }
 
     /**

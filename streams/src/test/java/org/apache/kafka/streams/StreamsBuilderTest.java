@@ -83,10 +83,6 @@ public class StreamsBuilderTest {
 
     @Test
     public void shouldAddGlobalStore() {
-        final Properties properties = new Properties();
-        properties.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "dummy");
-        properties.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy");
-
         final StreamsBuilder builder = new StreamsBuilder();
         builder.addGlobalStore(
             Stores.keyValueStoreBuilder(
@@ -111,7 +107,7 @@ public class StreamsBuilderTest {
                 }
             }
         );
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build())) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic("topic", new StringSerializer(), new StringSerializer());
             inputTopic.pipeInput("hey", "there");

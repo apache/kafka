@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Properties;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.MockTime;
@@ -160,9 +159,6 @@ public class ProcessorNodeTest {
 
     @Test
     public void testTopologyLevelClassCastException() {
-        final Properties props = new Properties();
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "test");
-        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
         // Serdes configuration is missing (default will be used which don't match the DSL below), which will trigger the new exception
         final StreamsBuilder builder = new StreamsBuilder();
 
@@ -172,7 +168,7 @@ public class ProcessorNodeTest {
             });
         final Topology topology = builder.build();
 
-        final TopologyTestDriver testDriver = new TopologyTestDriver(topology, props);
+        final TopologyTestDriver testDriver = new TopologyTestDriver(topology);
         final TestInputTopic<String, String> topic = testDriver.createInputTopic("streams-plaintext-input", new StringSerializer(), new StringSerializer());
 
         final StreamsException se = assertThrows(StreamsException.class, () -> topic.pipeInput("a-key", "a value"));
