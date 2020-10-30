@@ -255,8 +255,8 @@ public class WorkerCoordinatorTest {
             @Override
             public boolean matches(AbstractRequest body) {
                 SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.data.memberId().equals(consumerId) &&
-                        sync.data.generationId() == 1 &&
+                return sync.data().memberId().equals(consumerId) &&
+                        sync.data().generationId() == 1 &&
                         sync.groupAssignments().containsKey(consumerId);
             }
         }, syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", 1L, Collections.singletonList(connectorId1),
@@ -292,9 +292,9 @@ public class WorkerCoordinatorTest {
             @Override
             public boolean matches(AbstractRequest body) {
                 SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.data.memberId().equals(memberId) &&
-                        sync.data.generationId() == 1 &&
-                        sync.data.assignments().isEmpty();
+                return sync.data().memberId().equals(memberId) &&
+                        sync.data().generationId() == 1 &&
+                        sync.data().assignments().isEmpty();
             }
         }, syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", 1L, Collections.<String>emptyList(),
                 Collections.singletonList(taskId1x0), Errors.NONE));
@@ -333,9 +333,9 @@ public class WorkerCoordinatorTest {
             @Override
             public boolean matches(AbstractRequest body) {
                 SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.data.memberId().equals(memberId) &&
-                        sync.data.generationId() == 1 &&
-                        sync.data.assignments().isEmpty();
+                return sync.data().memberId().equals(memberId) &&
+                        sync.data().generationId() == 1 &&
+                        sync.data().assignments().isEmpty();
             }
         };
         client.prepareResponse(matcher, syncGroupResponse(ConnectProtocol.Assignment.CONFIG_MISMATCH, "leader", 10L,
