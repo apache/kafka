@@ -268,10 +268,11 @@ class KafkaConfigTest {
   @Test
   def testControllerListenerName() = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
-    props.put("listeners", "PLAINTEXT://localhost:0,CONTROLPLANE://localhost:4000,CONTROLLER://localhost:5000")
-    props.put("listener.security.protocol.map", "PLAINTEXT:PLAINTEXT,CONTROLPLANE:SSL,CONTROLLER:SASL_SSL")
-    props.put("control.plane.listener.name", "CONTROLPLANE")
-    props.put("controller.listeners", "CONTROLLER")
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:0,CONTROLPLANE://localhost:4000,CONTROLLER://localhost:5000")
+    props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "PLAINTEXT:PLAINTEXT,CONTROLPLANE:SSL,CONTROLLER:SASL_SSL")
+    props.put(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:0,CONTROLPLANE://localhost:4000")
+    props.put(KafkaConfig.ControlPlaneListenerNameProp, "CONTROLPLANE")
+    props.put(KafkaConfig.ControllerListenersProp, "CONTROLLER://localhost:5000")
     assertTrue(isValidKafkaConfig(props))
 
     val serverConfig = KafkaConfig.fromProps(props)
@@ -993,4 +994,47 @@ class KafkaConfigTest {
     })
   }
 
+  @Test
+  def assertDistinctControllerAndAdvertisedListeners(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = TestUtils.MockZkPort)
+    val listeners = "PLAINTEXT://A:9092,SSL://B:9093,SASL_SSL://C:9094"
+    props.put(KafkaConfig.ListenersProp, listeners)
+    props.put(KafkaConfig.AdvertisedListenersProp, listeners)
+    // Valid now
+    assertTrue(isValidKafkaConfig(props))
+
+    // Still valid
+    val controllerListeners = "PLAINTEXT://B:9092,SSL://C:9093,SASL_SSL://D:9094"
+    props.put(KafkaConfig.ControllerListenersProp, controllerListeners)
+    assertTrue(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def assertAllControllerListenerCannotBeAdvertised(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = TestUtils.MockZkPort)
+    val listeners = "PLAINTEXT://A:9092,SSL://B:9093,SASL_SSL://C:9094"
+    props.put(KafkaConfig.ListenersProp, listeners)
+    props.put(KafkaConfig.AdvertisedListenersProp, listeners)
+    // Valid now
+    assertTrue(isValidKafkaConfig(props))
+
+    // Invalid now
+    props.put(KafkaConfig.ControllerListenersProp, listeners)
+    assertFalse(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def assertEvenOneControllerListenerCannotBeAdvertised(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = TestUtils.MockZkPort)
+    val listeners = "PLAINTEXT://A:9092,SSL://B:9093,SASL_SSL://C:9094"
+    props.put(KafkaConfig.ListenersProp, listeners)
+    props.put(KafkaConfig.AdvertisedListenersProp, listeners)
+    // Valid now
+    assertTrue(isValidKafkaConfig(props))
+
+    // Invalid now
+    val controllerListeners = "PLAINTEXT://A:9092"
+    props.put(KafkaConfig.ControllerListenersProp, controllerListeners)
+    assertFalse(isValidKafkaConfig(props))
+  }
 }

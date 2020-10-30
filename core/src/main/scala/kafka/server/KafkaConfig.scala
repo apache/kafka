@@ -1065,7 +1065,7 @@ object KafkaConfig {
       .define(AdvertisedListenersProp, STRING, null, HIGH, AdvertisedListenersDoc)
       .define(ListenerSecurityProtocolMapProp, STRING, Defaults.ListenerSecurityProtocolMap, LOW, ListenerSecurityProtocolMapDoc)
       .define(ControlPlaneListenerNameProp, STRING, null, HIGH, controlPlaneListenerNameDoc)
-      .define(ControllerListenersProp, LIST, null, HIGH, ControllerListenersDoc)
+      .define(ControllerListenersProp, STRING, null, HIGH, ControllerListenersDoc)
       .define(SocketSendBufferBytesProp, INT, Defaults.SocketSendBufferBytes, HIGH, SocketSendBufferBytesDoc)
       .define(SocketReceiveBufferBytesProp, INT, Defaults.SocketReceiveBufferBytes, HIGH, SocketReceiveBufferBytesDoc)
       .define(SocketRequestMaxBytesProp, INT, Defaults.SocketRequestMaxBytes, atLeast(1), HIGH, SocketRequestMaxBytesDoc)
@@ -1726,13 +1726,16 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     }
   }
 
-  def controllerListenerNames: Seq[String] = {
-    val controllerListeners = getList(KafkaConfig.ControllerListenersProp)
-    if (controllerListeners == null) {
+  def controllerListeners: Seq[EndPoint] = {
+    val controllerListenersProp = getString(KafkaConfig.ControllerListenersProp)
+    if (controllerListenersProp != null)
+      CoreUtils.listenerListToEndPoints(controllerListenersProp, listenerSecurityProtocolMap, requireDistinctPorts=false)
+    else
       Seq.empty
-    } else {
-      controllerListeners.asScala.toSeq
-    }
+  }
+
+  def controllerListenerNames: Seq[String] = {
+    controllerListeners.map(_.listenerName.value())
   }
 
   def dataPlaneListeners: Seq[EndPoint] = {
@@ -1741,10 +1744,6 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
       name.equals(getString(KafkaConfig.ControlPlaneListenerNameProp)) ||
         controllerListenerNames.contains(name)
     }
-  }
-
-  def controllerListeners: Seq[EndPoint] = {
-    listeners.filter(l => controllerListenerNames.contains(l.listenerName.value()))
   }
 
   // If the user defined advertised listeners, we use those
@@ -1833,6 +1832,9 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
       s"Found ${advertisedListenerNames.map(_.value).mkString(",")}. The valid options based on the current configuration " +
       s"are ${listenerNames.map(_.value).mkString(",")}"
     )
+    // Ensure controller listeners are not in the advertised listeners list
+    require(!controllerListeners.exists(advertisedListeners.contains),
+      s"${KafkaConfig.AdvertisedListenersProp} cannot contain any of ${KafkaConfig.ControllerListenersProp}")
     require(!advertisedListeners.exists(endpoint => endpoint.host=="0.0.0.0"),
       s"${KafkaConfig.AdvertisedListenersProp} cannot use the nonroutable meta-address 0.0.0.0. "+
       s"Use a routable IP address.")
