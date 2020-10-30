@@ -246,7 +246,7 @@ public class TopologyTestDriver implements Closeable {
         public void onRestoreEnd(final TopicPartition topicPartition, final String storeName, final long totalRestored) {}
     };
 
-    private static Properties defaultTestProps;
+    private static final Properties defaultTestProps;
 
     static {
         defaultTestProps = new Properties();
