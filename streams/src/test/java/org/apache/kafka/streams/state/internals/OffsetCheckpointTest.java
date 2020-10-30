@@ -94,14 +94,13 @@ public class OffsetCheckpointTest {
 
         checkpoint.write(offsets);
 
-        assertTrue(file.exists());
-        assertEquals(offsets, checkpoint.read());
+        assertThat(file.exists(), is(true));
+        assertThat(offsets, is(checkpoint.read()));
 
         checkpoint.write(Collections.emptyMap());
 
-        assertFalse(file.exists());
-
-        assertEquals(Collections.<TopicPartition, Long>emptyMap(), checkpoint.read());
+        assertThat(file.exists(), is(false));
+        assertThat(Collections.<TopicPartition, Long>emptyMap(), is(checkpoint.read()));
     }
 
     @Test
