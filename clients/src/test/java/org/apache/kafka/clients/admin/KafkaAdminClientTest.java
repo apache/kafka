@@ -4096,7 +4096,7 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testDescribeFeaturesFailure() throws Exception {
+    public void testDescribeFeaturesFailure() {
         try (final AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().prepareResponse(
                 body -> body instanceof ApiVersionsRequest,
