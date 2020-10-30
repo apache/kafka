@@ -1051,8 +1051,7 @@ class LogTest {
       producerIdExpirationCheckIntervalMs = 30000,
       topicPartition = Log.parseTopicPartitionName(logDir),
       producerStateManager = stateManager,
-      logDirFailureChannel = null,
-      hadCleanShutdown = true)
+      logDirFailureChannel = null)
 
     EasyMock.verify(stateManager)
   }
@@ -1092,8 +1091,7 @@ class LogTest {
       producerIdExpirationCheckIntervalMs = 30000,
       topicPartition = Log.parseTopicPartitionName(logDir),
       producerStateManager = stateManager,
-      logDirFailureChannel = null,
-      hadCleanShutdown = true)
+      logDirFailureChannel = null)
 
     EasyMock.verify(stateManager)
   }

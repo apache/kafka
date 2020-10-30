@@ -325,7 +325,6 @@ class LogManager(logDirs: Seq[File],
         } else {
           // log recovery itself is being performed by `Log` class during initialization
           info(s"Attempting recovery for all logs in $logDirAbsolutePath since no clean shutdown file was found")
-          hadCleanShutdown = false
           brokerState.newState(RecoveringFromUncleanShutdown)
         }
 
