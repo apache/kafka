@@ -26,6 +26,7 @@ from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.version import DEV_BRANCH, LATEST_2_3, LATEST_2_2, LATEST_2_1, LATEST_2_0, LATEST_1_1, LATEST_1_0, LATEST_0_11_0, LATEST_0_10_2, LATEST_0_10_1, LATEST_0_10_0, LATEST_0_9, LATEST_0_8_2, KafkaVersion
 
+from functools import reduce
 from collections import Counter, namedtuple
 import itertools
 import json
@@ -227,9 +228,9 @@ class ConnectDistributedTest(Test):
                        err_msg="Failed to see connector transition to the PAUSED state")
 
         # verify that we do not produce new messages while paused
-        num_messages = len(self.source.sent_messages())
+        num_messages = len(list(self.source.sent_messages()))
         time.sleep(10)
-        assert num_messages == len(self.source.sent_messages()), "Paused source connector should not produce any messages"
+        assert num_messages == len(list(self.source.sent_messages())), "Paused source connector should not produce any messages"
 
         self.cc.resume_connector(self.source.name)
 
@@ -238,7 +239,7 @@ class ConnectDistributedTest(Test):
                        err_msg="Failed to see connector transition to the RUNNING state")
 
         # after resuming, we should see records produced again
-        wait_until(lambda: len(self.source.sent_messages()) > num_messages, timeout_sec=30,
+        wait_until(lambda: len(list(self.source.sent_messages())) > num_messages, timeout_sec=30,
                    err_msg="Failed to produce messages after resuming source connector")
 
     @cluster(num_nodes=5)
@@ -258,7 +259,7 @@ class ConnectDistributedTest(Test):
         self.source = VerifiableSource(self.cc, topic=self.TOPIC)
         self.source.start()
 
-        wait_until(lambda: len(self.source.committed_messages()) > 0, timeout_sec=30,
+        wait_until(lambda: len(list(self.source.committed_messages())) > 0, timeout_sec=30,
                    err_msg="Timeout expired waiting for source task to produce a message")
 
         self.sink = VerifiableSink(self.cc, topics=[self.TOPIC])
@@ -275,9 +276,9 @@ class ConnectDistributedTest(Test):
                        err_msg="Failed to see connector transition to the PAUSED state")
 
         # verify that we do not consume new messages while paused
-        num_messages = len(self.sink.received_messages())
+        num_messages = len(list(self.sink.received_messages()))
         time.sleep(10)
-        assert num_messages == len(self.sink.received_messages()), "Paused sink connector should not consume any messages"
+        assert num_messages == len(list(self.sink.received_messages())), "Paused sink connector should not consume any messages"
 
         self.cc.resume_connector(self.sink.name)
 
@@ -286,7 +287,7 @@ class ConnectDistributedTest(Test):
                        err_msg="Failed to see connector transition to the RUNNING state")
 
         # after resuming, we should see records consumed again
-        wait_until(lambda: len(self.sink.received_messages()) > num_messages, timeout_sec=30,
+        wait_until(lambda: len(list(self.sink.received_messages())) > num_messages, timeout_sec=30,
                    err_msg="Failed to consume messages after resuming sink connector")
 
     @cluster(num_nodes=5)
@@ -420,11 +421,11 @@ class ConnectDistributedTest(Test):
             src_seqnos = [msg['seqno'] for msg in src_messages if msg['task'] == task]
             # Every seqno up to the largest one we ever saw should appear. Each seqno should only appear once because clean
             # bouncing should commit on rebalance.
-            src_seqno_max = max(src_seqnos)
+            src_seqno_max = max(src_seqnos) if len(src_seqnos) else 0
             self.logger.debug("Max source seqno: %d", src_seqno_max)
             src_seqno_counts = Counter(src_seqnos)
             missing_src_seqnos = sorted(set(range(src_seqno_max)).difference(set(src_seqnos)))
-            duplicate_src_seqnos = sorted([seqno for seqno,count in src_seqno_counts.iteritems() if count > 1])
+            duplicate_src_seqnos = sorted(seqno for seqno,count in src_seqno_counts.items() if count > 1)
 
             if missing_src_seqnos:
                 self.logger.error("Missing source sequence numbers for task " + str(task))
@@ -440,11 +441,11 @@ class ConnectDistributedTest(Test):
             sink_seqnos = [msg['seqno'] for msg in sink_messages if msg['task'] == task]
             # Every seqno up to the largest one we ever saw should appear. Each seqno should only appear once because
             # clean bouncing should commit on rebalance.
-            sink_seqno_max = max(sink_seqnos)
+            sink_seqno_max = max(sink_seqnos) if len(sink_seqnos) else 0
             self.logger.debug("Max sink seqno: %d", sink_seqno_max)
             sink_seqno_counts = Counter(sink_seqnos)
             missing_sink_seqnos = sorted(set(range(sink_seqno_max)).difference(set(sink_seqnos)))
-            duplicate_sink_seqnos = sorted([seqno for seqno,count in sink_seqno_counts.iteritems() if count > 1])
+            duplicate_sink_seqnos = sorted(seqno for seqno,count in iter(sink_seqno_counts.items()) if count > 1)
 
             if missing_sink_seqnos:
                 self.logger.error("Missing sink sequence numbers for task " + str(task))

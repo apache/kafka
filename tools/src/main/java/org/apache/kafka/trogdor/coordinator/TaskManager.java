@@ -671,7 +671,7 @@ public final class TaskManager {
     /**
      * Initiate shutdown, but do not wait for it to complete.
      */
-    public void beginShutdown(boolean stopAgents) throws ExecutionException, InterruptedException {
+    public void beginShutdown(boolean stopAgents) {
         if (shutdown.compareAndSet(false, true)) {
             executor.submit(new Shutdown(stopAgents));
         }
@@ -680,7 +680,7 @@ public final class TaskManager {
     /**
      * Wait for shutdown to complete.  May be called prior to beginShutdown.
      */
-    public void waitForShutdown() throws ExecutionException, InterruptedException {
+    public void waitForShutdown() throws InterruptedException {
         while (!executor.awaitTermination(1, TimeUnit.DAYS)) { }
     }
 

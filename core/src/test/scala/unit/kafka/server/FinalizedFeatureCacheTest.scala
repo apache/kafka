@@ -19,98 +19,100 @@ package kafka.server
 
 import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
 import org.junit.Assert.{assertEquals, assertThrows, assertTrue}
-import org.junit.{Before, Test}
+import org.junit.Test
 
 import scala.jdk.CollectionConverters._
 
 class FinalizedFeatureCacheTest {
 
-  @Before
-  def setUp(): Unit = {
-    FinalizedFeatureCache.clear()
-    SupportedFeatures.clear()
-  }
-
   @Test
   def testEmpty(): Unit = {
-    assertTrue(FinalizedFeatureCache.get.isEmpty)
+    assertTrue(new FinalizedFeatureCache(BrokerFeatures.createDefault()).get.isEmpty)
   }
 
   @Test
   def testUpdateOrThrowFailedDueToInvalidEpoch(): Unit = {
     val supportedFeatures = Map[String, SupportedVersionRange](
       "feature_1" -> new SupportedVersionRange(1, 4))
-    SupportedFeatures.update(Features.supportedFeatures(supportedFeatures.asJava))
+    val brokerFeatures = BrokerFeatures.createDefault()
+    brokerFeatures.setSupportedFeatures(Features.supportedFeatures(supportedFeatures.asJava))
 
     val features = Map[String, FinalizedVersionRange](
       "feature_1" -> new FinalizedVersionRange(1, 4))
     val finalizedFeatures = Features.finalizedFeatures(features.asJava)
 
-    FinalizedFeatureCache.updateOrThrow(finalizedFeatures, 10)
-    assertTrue(FinalizedFeatureCache.get.isDefined)
-    assertEquals(finalizedFeatures, FinalizedFeatureCache.get.get.features)
-    assertEquals(10, FinalizedFeatureCache.get.get.epoch)
+    val cache = new FinalizedFeatureCache(brokerFeatures)
+    cache.updateOrThrow(finalizedFeatures, 10)
+    assertTrue(cache.get.isDefined)
+    assertEquals(finalizedFeatures, cache.get.get.features)
+    assertEquals(10, cache.get.get.epoch)
 
     assertThrows(
       classOf[FeatureCacheUpdateException],
-      () => FinalizedFeatureCache.updateOrThrow(finalizedFeatures, 9))
+      () => cache.updateOrThrow(finalizedFeatures, 9))
 
     // Check that the failed updateOrThrow call did not make any mutations.
-    assertTrue(FinalizedFeatureCache.get.isDefined)
-    assertEquals(finalizedFeatures, FinalizedFeatureCache.get.get.features)
-    assertEquals(10, FinalizedFeatureCache.get.get.epoch)
+    assertTrue(cache.get.isDefined)
+    assertEquals(finalizedFeatures, cache.get.get.features)
+    assertEquals(10, cache.get.get.epoch)
   }
 
   @Test
   def testUpdateOrThrowFailedDueToInvalidFeatures(): Unit = {
-    val supportedFeatures = Map[String, SupportedVersionRange](
-      "feature_1" -> new SupportedVersionRange(1, 1))
-    SupportedFeatures.update(Features.supportedFeatures(supportedFeatures.asJava))
+    val supportedFeatures =
+      Map[String, SupportedVersionRange]("feature_1" -> new SupportedVersionRange(1, 1))
+    val brokerFeatures = BrokerFeatures.createDefault()
+    brokerFeatures.setSupportedFeatures(Features.supportedFeatures(supportedFeatures.asJava))
 
     val features = Map[String, FinalizedVersionRange](
       "feature_1" -> new FinalizedVersionRange(1, 2))
     val finalizedFeatures = Features.finalizedFeatures(features.asJava)
 
+    val cache = new FinalizedFeatureCache(brokerFeatures)
     assertThrows(
       classOf[FeatureCacheUpdateException],
-      () => FinalizedFeatureCache.updateOrThrow(finalizedFeatures, 12))
+      () => cache.updateOrThrow(finalizedFeatures, 12))
 
     // Check that the failed updateOrThrow call did not make any mutations.
-    assertTrue(FinalizedFeatureCache.isEmpty)
+    assertTrue(cache.isEmpty)
   }
 
   @Test
   def testUpdateOrThrowSuccess(): Unit = {
-    val supportedFeatures = Map[String, SupportedVersionRange](
-      "feature_1" -> new SupportedVersionRange(1, 4))
-    SupportedFeatures.update(Features.supportedFeatures(supportedFeatures.asJava))
+    val supportedFeatures =
+      Map[String, SupportedVersionRange]("feature_1" -> new SupportedVersionRange(1, 4))
+    val brokerFeatures = BrokerFeatures.createDefault()
+    brokerFeatures.setSupportedFeatures(Features.supportedFeatures(supportedFeatures.asJava))
 
     val features = Map[String, FinalizedVersionRange](
       "feature_1" -> new FinalizedVersionRange(2, 3))
     val finalizedFeatures = Features.finalizedFeatures(features.asJava)
 
-    FinalizedFeatureCache.updateOrThrow(finalizedFeatures, 12)
-    assertTrue(FinalizedFeatureCache.get.isDefined)
-    assertEquals(finalizedFeatures,  FinalizedFeatureCache.get.get.features)
-    assertEquals(12, FinalizedFeatureCache.get.get.epoch)
+    val cache = new FinalizedFeatureCache(brokerFeatures)
+    cache.updateOrThrow(finalizedFeatures, 12)
+    assertTrue(cache.get.isDefined)
+    assertEquals(finalizedFeatures,  cache.get.get.features)
+    assertEquals(12, cache.get.get.epoch)
   }
 
   @Test
   def testClear(): Unit = {
-    val supportedFeatures = Map[String, SupportedVersionRange](
-      "feature_1" -> new SupportedVersionRange(1, 4))
-    SupportedFeatures.update(Features.supportedFeatures(supportedFeatures.asJava))
+    val supportedFeatures =
+      Map[String, SupportedVersionRange]("feature_1" -> new SupportedVersionRange(1, 4))
+    val brokerFeatures = BrokerFeatures.createDefault()
+    brokerFeatures.setSupportedFeatures(Features.supportedFeatures(supportedFeatures.asJava))
 
     val features = Map[String, FinalizedVersionRange](
       "feature_1" -> new FinalizedVersionRange(2, 3))
     val finalizedFeatures = Features.finalizedFeatures(features.asJava)
 
-    FinalizedFeatureCache.updateOrThrow(finalizedFeatures, 12)
-    assertTrue(FinalizedFeatureCache.get.isDefined)
-    assertEquals(finalizedFeatures, FinalizedFeatureCache.get.get.features)
-    assertEquals(12, FinalizedFeatureCache.get.get.epoch)
+    val cache = new FinalizedFeatureCache(brokerFeatures)
+    cache.updateOrThrow(finalizedFeatures, 12)
+    assertTrue(cache.get.isDefined)
+    assertEquals(finalizedFeatures, cache.get.get.features)
+    assertEquals(12, cache.get.get.epoch)
 
-    FinalizedFeatureCache.clear()
-    assertTrue(FinalizedFeatureCache.isEmpty)
+    cache.clear()
+    assertTrue(cache.isEmpty)
   }
 }

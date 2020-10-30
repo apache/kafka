@@ -19,11 +19,12 @@ package org.apache.kafka.common.protocol;
 
 import org.apache.kafka.common.protocol.types.RawTaggedField;
 
+import org.apache.kafka.common.UUID;
+
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 public interface Readable {
     byte readByte();
@@ -34,6 +35,8 @@ public interface Readable {
     void readArray(byte[] arr);
     int readUnsignedVarint();
     ByteBuffer readByteBuffer(int length);
+    int readVarint();
+    long readVarlong();
 
     default String readString(int length) {
         byte[] arr = new byte[length];

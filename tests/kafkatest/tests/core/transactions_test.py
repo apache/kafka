@@ -248,7 +248,7 @@ class TransactionsTest(Test):
             # We reduce the number of seed messages to copy to account for the fewer output
             # partitions, and thus lower parallelism. This helps keep the test
             # time shorter.
-            self.num_seed_messages = self.num_seed_messages / 3
+            self.num_seed_messages = self.num_seed_messages // 3
             self.num_input_partitions = 1
             self.num_output_partitions = 1
 

@@ -402,7 +402,7 @@ class ConnectionQuotasTest {
     futures.foreach(_.get(30, TimeUnit.SECONDS))
 
     // verify that every listener was throttled
-    verifyNonZeroBlockedPercentRecordedOnAllListeners()
+    verifyNonZeroBlockedPercentAndThrottleTimeOnAllListeners()
 
     // while the connection creation rate was throttled,
     // expect all connections got created (not limit on the number of connections)
@@ -532,6 +532,10 @@ class ConnectionQuotasTest {
         listenerConnRateMetric(listenerName.value))
       assertEquals(s"Connection acceptance rate metric for listener ${listenerName.value}",
           0, listenerConnRateMetric(listenerName.value).metricValue.asInstanceOf[Double].toLong)
+      assertNotNull(s"Expected connection-accept-throttle-time metric to exist for listener ${listenerName.value}",
+        listenerConnThrottleMetric(listenerName.value))
+      assertEquals(s"Connection throttle metric for listener ${listenerName.value}",
+        0, listenerConnThrottleMetric(listenerName.value).metricValue.asInstanceOf[Double].toLong)
     }
     verifyNoBlockedPercentRecordedOnAllListeners()
     assertEquals("Broker-wide connection acceptance rate metric",
@@ -544,9 +548,13 @@ class ConnectionQuotasTest {
     }
   }
 
-  private def verifyNonZeroBlockedPercentRecordedOnAllListeners(): Unit = {
+  private def verifyNonZeroBlockedPercentAndThrottleTimeOnAllListeners(): Unit = {
     blockedPercentMeters.foreach { case (name, meter) =>
       assertTrue(s"Expected BlockedPercentMeter metric for $name listener to be recorded", meter.count() > 0)
+    }
+    listeners.values.foreach { listener =>
+      assertTrue(s"Connection throttle metric for listener ${listener.listenerName.value}",
+        listenerConnThrottleMetric(listener.listenerName.value).metricValue.asInstanceOf[Double].toLong > 0)
     }
   }
 
@@ -568,18 +576,26 @@ class ConnectionQuotasTest {
     }
   }
 
+  private def listenerConnThrottleMetric(listener: String) : KafkaMetric = {
+    val metricName = metrics.metricName(
+      "connection-accept-throttle-time",
+      SocketServer.MetricsGroup,
+      Collections.singletonMap(Processor.ListenerMetricTag, listener))
+    metrics.metric(metricName)
+  }
+
   private def listenerConnRateMetric(listener: String) : KafkaMetric = {
     val metricName = metrics.metricName(
-      s"connection-accept-rate",
-      "socket-server-metrics",
-      Collections.singletonMap("listener", listener))
+      "connection-accept-rate",
+      SocketServer.MetricsGroup,
+      Collections.singletonMap(Processor.ListenerMetricTag, listener))
     metrics.metric(metricName)
   }
 
   private def brokerConnRateMetric() : KafkaMetric = {
     val metricName = metrics.metricName(
       s"broker-connection-accept-rate",
-      "socket-server-metrics")
+      SocketServer.MetricsGroup)
     metrics.metric(metricName)
   }
 

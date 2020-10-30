@@ -19,10 +19,15 @@ package org.apache.kafka.clients.producer.internals;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientRequest;
+import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.errors.TransactionAbortedException;
+import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
+import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
@@ -92,6 +97,7 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -100,6 +106,7 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 import static org.mockito.AdditionalMatchers.geq;
@@ -467,7 +474,7 @@ public class SenderTest {
         // Disconnect the target node for the pending produce request. This will ensure that sender will try to
         // expire the batch.
         client.disconnect(clusterNode.idString());
-        client.blackout(clusterNode, 100);
+        client.backoff(clusterNode, 100);
 
         sender.runOnce();  // We should try to flush the batch, but we expire it instead without sending anything.
         assertEquals("Callbacks not invoked for expiry", messagesPerBatch, expiryCallbackCount.get());
@@ -527,6 +534,90 @@ public class SenderTest {
         assertTrue(transactionManager.hasProducerId());
         assertEquals(producerId, transactionManager.producerIdAndEpoch().producerId);
         assertEquals((short) 0, transactionManager.producerIdAndEpoch().epoch);
+    }
+
+    /**
+     * Verifies that InitProducerId of transactional producer succeeds even if metadata requests
+     * are pending with only one bootstrap node available and maxInFlight=1, where multiple
+     * polls are necessary to send requests.
+     */
+    @Test
+    public void testInitProducerIdWithMaxInFlightOne() throws Exception {
+        final long producerId = 123456L;
+        createMockClientWithMaxFlightOneMetadataPending();
+
+        // Initialize transaction manager. InitProducerId will be queued up until metadata response
+        // is processed and FindCoordinator can be sent to `leastLoadedNode`.
+        TransactionManager transactionManager = new TransactionManager(new LogContext(), "testInitProducerIdWithPendingMetadataRequest",
+                60000, 100L, new ApiVersions(), false);
+        setupWithTransactionState(transactionManager, false, null, false);
+        ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId, (short) 0);
+        transactionManager.initializeTransactions();
+        sender.runOnce();
+
+        // Process metadata response, prepare FindCoordinator and InitProducerId responses.
+        // Verify producerId after the sender is run to process responses.
+        MetadataResponse metadataUpdate = TestUtils.metadataUpdateWith(1, Collections.emptyMap());
+        client.respond(metadataUpdate);
+        prepareFindCoordinatorResponse(Errors.NONE);
+        prepareInitProducerResponse(Errors.NONE, producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
+        waitForProducerId(transactionManager, producerIdAndEpoch);
+    }
+
+    /**
+     * Verifies that InitProducerId of idempotent producer succeeds even if metadata requests
+     * are pending with only one bootstrap node available and maxInFlight=1, where multiple
+     * polls are necessary to send requests.
+     */
+    @Test
+    public void testIdempotentInitProducerIdWithMaxInFlightOne() throws Exception {
+        final long producerId = 123456L;
+        createMockClientWithMaxFlightOneMetadataPending();
+
+        // Initialize transaction manager. InitProducerId will be queued up until metadata response
+        // is processed.
+        TransactionManager transactionManager = createTransactionManager();
+        setupWithTransactionState(transactionManager, false, null, false);
+        ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId, (short) 0);
+
+        // Process metadata and InitProducerId responses.
+        // Verify producerId after the sender is run to process responses.
+        MetadataResponse metadataUpdate = TestUtils.metadataUpdateWith(1, Collections.emptyMap());
+        client.respond(metadataUpdate);
+        sender.runOnce();
+        sender.runOnce();
+        client.respond(initProducerIdResponse(producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, Errors.NONE));
+        waitForProducerId(transactionManager, producerIdAndEpoch);
+    }
+
+    /**
+     * Tests the code path where the target node to send FindCoordinator or InitProducerId
+     * is not ready.
+     */
+    @Test
+    public void testNodeNotReady() throws Exception {
+        final long producerId = 123456L;
+        time = new MockTime(10);
+        client = new MockClient(time, metadata);
+
+        TransactionManager transactionManager = new TransactionManager(new LogContext(), "testNodeNotReady",
+                60000, 100L, new ApiVersions(), false);
+        setupWithTransactionState(transactionManager, false, null, true);
+        ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId, (short) 0);
+        transactionManager.initializeTransactions();
+        sender.runOnce();
+
+        Node node = metadata.fetch().nodes().get(0);
+        client.delayReady(node, REQUEST_TIMEOUT + 20);
+        prepareFindCoordinatorResponse(Errors.NONE);
+        sender.runOnce();
+        sender.runOnce();
+        assertNotNull("Coordinator not found", transactionManager.coordinator(CoordinatorType.TRANSACTION));
+
+        client.throttle(node, REQUEST_TIMEOUT + 20);
+        prepareFindCoordinatorResponse(Errors.NONE);
+        prepareInitProducerResponse(Errors.NONE, producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
+        waitForProducerId(transactionManager, producerIdAndEpoch);
     }
 
     @Test
@@ -992,7 +1083,7 @@ public class SenderTest {
         Node node = metadata.fetch().nodes().get(0);
         time.sleep(10000L);
         client.disconnect(node.idString());
-        client.blackout(node, 10);
+        client.backoff(node, 10);
 
         sender.runOnce();
 
@@ -1030,7 +1121,7 @@ public class SenderTest {
         // Note deliveryTimeoutMs is 1500.
         time.sleep(600L);
         client.disconnect(node.idString());
-        client.blackout(node, 10);
+        client.backoff(node, 10);
 
         sender.runOnce(); // now expire the first batch.
         assertFutureFailure(request1, TimeoutException.class);
@@ -1092,7 +1183,7 @@ public class SenderTest {
         Node node = metadata.fetch().nodes().get(0);
         time.sleep(1000L);
         client.disconnect(node.idString());
-        client.blackout(node, 10);
+        client.backoff(node, 10);
 
         sender.runOnce(); // now expire the first batch.
         assertFutureFailure(request1, TimeoutException.class);
@@ -1148,7 +1239,7 @@ public class SenderTest {
         Node node = metadata.fetch().nodes().get(0);
         time.sleep(1000L);
         client.disconnect(node.idString());
-        client.blackout(node, 10);
+        client.backoff(node, 10);
 
         sender.runOnce(); // now expire the first batch.
         assertFutureFailure(request1, TimeoutException.class);
@@ -1180,7 +1271,7 @@ public class SenderTest {
         Node node = metadata.fetch().nodes().get(0);
         time.sleep(15000L);
         client.disconnect(node.idString());
-        client.blackout(node, 10);
+        client.backoff(node, 10);
 
         sender.runOnce(); // now expire the batch.
 
@@ -1725,7 +1816,7 @@ public class SenderTest {
             assertFalse(batchIterator.hasNext());
             assertEquals(expectedSequence, firstBatch.baseSequence());
             return true;
-        }, produceResponse(tp, responseOffset, responseError, 0, logStartOffset));
+        }, produceResponse(tp, responseOffset, responseError, 0, logStartOffset, null));
     }
 
     @Test
@@ -2128,7 +2219,7 @@ public class SenderTest {
 
         time.sleep(deliveryTimeoutMs / 2); // expire the first batch only
 
-        client.respond(produceResponse(tp0, 0L, Errors.NONE, 0, 0L));
+        client.respond(produceResponse(tp0, 0L, Errors.NONE, 0, 0L, null));
         sender.runOnce();  // receive response (offset=0)
         assertEquals(0, client.inFlightRequestCount());
         assertEquals(0, sender.inFlightBatches(tp0).size());
@@ -2208,7 +2299,7 @@ public class SenderTest {
         InOrder inOrder = inOrder(client);
         inOrder.verify(client, atLeastOnce()).ready(any(), anyLong());
         inOrder.verify(client, atLeastOnce()).newClientRequest(anyString(), any(), anyLong(), anyBoolean(), anyInt(),
-                any(), any(), any());
+                any());
         inOrder.verify(client, atLeastOnce()).send(any(), anyLong());
         inOrder.verify(client).poll(eq(0L), anyLong());
         inOrder.verify(client).poll(eq(accumulator.getDeliveryTimeoutMs()), anyLong());
@@ -2359,6 +2450,31 @@ public class SenderTest {
     }
 
     @Test
+    public void testTransactionAbortedExceptionOnAbortWithoutError() throws InterruptedException, ExecutionException {
+        ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
+        TransactionManager txnManager = new TransactionManager(logContext, "testTransactionAbortedExceptionOnAbortWithoutError", 60000, 100, apiVersions, false);
+
+        setupWithTransactionState(txnManager, false, null);
+        doInitTransactions(txnManager, producerIdAndEpoch);
+        // Begin the transaction
+        txnManager.beginTransaction();
+        txnManager.maybeAddPartitionToTransaction(tp0);
+        client.prepareResponse(new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp0, Errors.NONE)));
+        // Run it once so that the partition is added to the transaction.
+        sender.runOnce();
+        // Append a record to the accumulator.
+        FutureRecordMetadata metadata = appendToAccumulator(tp0, time.milliseconds(), "key", "value");
+        // Now abort the transaction manually.
+        txnManager.beginAbort();
+        // Try to send.
+        // This should abort the existing transaction and
+        // drain all the unsent batches with a TransactionAbortedException.
+        sender.runOnce();
+        // Now attempt to fetch the result for the record.
+        TestUtils.assertFutureThrows(metadata, TransactionAbortedException.class);
+    }
+
+    @Test
     public void testDoNotPollWhenNoRequestSent() {
         client = spy(new MockClient(time, metadata));
 
@@ -2404,6 +2520,29 @@ public class SenderTest {
         assertEquals(0, sender.inFlightBatches(tp0).size());
         time.sleep(2000);
         sender.runOnce();
+    }
+
+    @Test
+    public void testDefaultErrorMessage() throws Exception {
+        verifyErrorMessage(produceResponse(tp0, 0L, Errors.INVALID_REQUEST, 0), Errors.INVALID_REQUEST.message());
+    }
+
+    @Test
+    public void testCustomErrorMessage() throws Exception {
+        String errorMessage = "testCustomErrorMessage";
+        verifyErrorMessage(produceResponse(tp0, 0L, Errors.INVALID_REQUEST, 0, -1, errorMessage), errorMessage);
+    }
+
+    private void verifyErrorMessage(ProduceResponse response, String expectedMessage) throws Exception {
+        Future<RecordMetadata> future = appendToAccumulator(tp0, 0L, "key", "value");
+        sender.runOnce(); // connect
+        sender.runOnce(); // send produce request
+        client.respond(response);
+        sender.runOnce();
+        sender.runOnce();
+        ExecutionException e1 = assertThrows(ExecutionException.class, () -> future.get(5, TimeUnit.SECONDS));
+        assertEquals(InvalidRequestException.class, e1.getCause().getClass());
+        assertEquals(expectedMessage, e1.getCause().getMessage());
     }
 
     class AssertEndTxnRequestMatcher implements MockClient.RequestMatcher {
@@ -2501,8 +2640,9 @@ public class SenderTest {
                 null, MAX_BLOCK_TIMEOUT, false, time.milliseconds()).future;
     }
 
-    private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs, long logStartOffset) {
-        ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(error, offset, RecordBatch.NO_TIMESTAMP, logStartOffset);
+    private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs, long logStartOffset, String errorMessage) {
+        ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(error, offset,
+                RecordBatch.NO_TIMESTAMP, logStartOffset, Collections.emptyList(), errorMessage);
         Map<TopicPartition, ProduceResponse.PartitionResponse> partResp = Collections.singletonMap(tp, resp);
         return new ProduceResponse(partResp, throttleTimeMs);
     }
@@ -2518,18 +2658,22 @@ public class SenderTest {
 
     }
     private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs) {
-        return produceResponse(tp, offset, error, throttleTimeMs, -1L);
+        return produceResponse(tp, offset, error, throttleTimeMs, -1L, null);
     }
 
     private TransactionManager createTransactionManager() {
         return new TransactionManager(new LogContext(), null, 0, 100L, new ApiVersions(), false);
     }
-
+    
     private void setupWithTransactionState(TransactionManager transactionManager) {
-        setupWithTransactionState(transactionManager, false, null);
+        setupWithTransactionState(transactionManager, false, null, true);
     }
 
     private void setupWithTransactionState(TransactionManager transactionManager, boolean guaranteeOrder, BufferPool customPool) {
+        setupWithTransactionState(transactionManager, guaranteeOrder, customPool, true);
+    }
+
+    private void setupWithTransactionState(TransactionManager transactionManager, boolean guaranteeOrder, BufferPool customPool, boolean updateMetadata) {
         int deliveryTimeoutMs = 1500;
         long totalSize = 1024 * 1024;
         String metricGrpName = "producer-metrics";
@@ -2544,7 +2688,8 @@ public class SenderTest {
                 Integer.MAX_VALUE, this.senderMetricsRegistry, this.time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, transactionManager, apiVersions);
 
         metadata.add("test", time.milliseconds());
-        this.client.updateMetadata(TestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)));
+        if (updateMetadata)
+            this.client.updateMetadata(TestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)));
     }
 
     private void assertSendFailure(Class<? extends RuntimeException> expectedError) throws Exception {
@@ -2615,4 +2760,43 @@ public class SenderTest {
         }
     }
 
+    private void createMockClientWithMaxFlightOneMetadataPending() {
+        client = new MockClient(time, metadata) {
+            volatile boolean canSendMore = true;
+            @Override
+            public Node leastLoadedNode(long now) {
+                for (Node node : metadata.fetch().nodes()) {
+                    if (isReady(node, now) && canSendMore)
+                        return node;
+                }
+                return null;
+            }
+
+            @Override
+            public List<ClientResponse> poll(long timeoutMs, long now) {
+                canSendMore = inFlightRequestCount() < 1;
+                return super.poll(timeoutMs, now);
+            }
+        };
+
+        // Send metadata request and wait until request is sent. `leastLoadedNode` will be null once
+        // request is in progress since no more requests can be sent to the node. Node will be ready
+        // on the next poll() after response is processed later on in tests which use this method.
+        MetadataRequest.Builder builder = new MetadataRequest.Builder(Collections.emptyList(), false);
+        Node node = metadata.fetch().nodes().get(0);
+        ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true);
+        while (!client.ready(node, time.milliseconds()))
+            client.poll(0, time.milliseconds());
+        client.send(request, time.milliseconds());
+        while (client.leastLoadedNode(time.milliseconds()) != null)
+            client.poll(0, time.milliseconds());
+    }
+
+    private void waitForProducerId(TransactionManager transactionManager, ProducerIdAndEpoch producerIdAndEpoch) {
+        for (int i = 0; i < 5 && !transactionManager.hasProducerId(); i++)
+            sender.runOnce();
+
+        assertTrue(transactionManager.hasProducerId());
+        assertEquals(producerIdAndEpoch, transactionManager.producerIdAndEpoch());
+    }
 }

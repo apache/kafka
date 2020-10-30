@@ -241,7 +241,7 @@ subprojects {
     }
   }
 
-  def shouldUseJUnit5 = it.project.name == 'tools'
+  def shouldUseJUnit5 = ["tools", "raft"].contains(it.project.name)
   def testLoggingEvents = ["passed", "skipped", "failed"]
   def testShowStandardStreams = false
   def testExceptionFormat = 'full'
@@ -472,7 +472,7 @@ subprojects {
       zincVersion = versions.zinc
     }
 
-    task scaladocJar(type:Jar) {
+    task scaladocJar(type:Jar, dependsOn: scaladoc) {
       classifier = 'scaladoc'
       from "$rootDir/LICENSE"
       from "$rootDir/NOTICE"
@@ -482,9 +482,6 @@ subprojects {
     //documentation task should also trigger building scala doc jar
     docsJar.dependsOn scaladocJar
 
-    artifacts {
-      archives scaladocJar
-    }
   }
 
   tasks.withType(ScalaCompile) {
@@ -731,12 +728,21 @@ project(':core') {
   println "Building project 'core' with Scala version ${versions.scala}"
 
   apply plugin: 'scala'
+  
+  // scaladoc generation is configured at the sub-module level with an artifacts
+  // block (cf. see streams-scala). If scaladoc generation is invoked explicitly
+  // for the `core` module, this ensures the generated jar doesn't include scaladoc
+  // files since the `core` module doesn't include public APIs.
+  scaladoc {
+    enabled = false
+  }
   if (userEnableTestCoverage)
     apply plugin: "org.scoverage"
   archivesBaseName = "kafka_${versions.baseScala}"
 
   dependencies {
     compile project(':clients')
+    compile project(':raft')
     compile libs.jacksonDatabind
     compile libs.jacksonModuleScala
     compile libs.jacksonDataformatCsv
@@ -1139,6 +1145,80 @@ project(':clients') {
   }
 }
 
+project(':raft') {
+  archivesBaseName = "kafka-raft"
+
+  dependencies {
+    compile project(':clients')
+    compile libs.slf4jApi
+    compile libs.jacksonDatabind
+
+    testCompile project(':clients')
+    testCompile project(':clients').sourceSets.test.output
+    testCompile libs.junitJupiter
+    testCompile libs.mockitoCore
+
+    testRuntime libs.slf4jlog4j
+  }
+
+  task createVersionFile(dependsOn: determineCommitId) {
+    ext.receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    outputs.file receiptFile
+    outputs.upToDateWhen { false }
+    doLast {
+      def data = [
+        commitId: commitId,
+        version: version,
+      ]
+
+      receiptFile.parentFile.mkdirs()
+      def content = data.entrySet().collect { "$it.key=$it.value" }.sort().join("\n")
+      receiptFile.setText(content, "ISO-8859-1")
+    }
+  }
+
+  task processMessages(type:JavaExec) {
+    main = "org.apache.kafka.message.MessageGenerator"
+    classpath = project(':generator').sourceSets.main.runtimeClasspath
+    args = [ "-p", "org.apache.kafka.raft.generated",
+             "-o", "src/generated/java/org/apache/kafka/raft/generated",
+             "-i", "src/main/resources/common/message",
+             "-m", "MessageDataGenerator", "JsonConverterGenerator"]
+    inputs.dir("src/main/resources/common/message")
+    outputs.dir("src/generated/java/org/apache/kafka/raft/generated")
+  }
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/generated/java", "src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/generated/java", "src/test/java"]
+      }
+    }
+  }
+  
+  compileJava.dependsOn 'processMessages'
+
+  jar {
+    dependsOn createVersionFile
+    from("$buildDir") {
+        include "kafka/$buildVersionFileName"
+    }
+  }
+
+  clean.doFirst {
+    delete "$buildDir/kafka/"
+  }
+
+  javadoc {
+    enabled = false
+  }
+}
+
 project(':tools') {
   archivesBaseName = "kafka-tools"
 
@@ -1329,7 +1409,6 @@ project(':streams:streams-scala') {
   println "Building project 'streams-scala' with Scala version ${versions.scala}"
   apply plugin: 'scala'
   archivesBaseName = "kafka-streams-scala_${versions.baseScala}"
-
   dependencies {
     compile project(':streams')
 
@@ -1365,6 +1444,10 @@ project(':streams:streams-scala') {
 
   jar {
     dependsOn 'copyDependantLibs'
+  }
+
+  artifacts {
+    archives scaladocJar
   }
 
   test.dependsOn(':spotlessScalaCheck')
