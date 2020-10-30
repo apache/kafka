@@ -49,7 +49,7 @@ public class DescribeQuorumRequest extends AbstractRequest {
         }
     }
 
-    public final DescribeQuorumRequestData data;
+    private final DescribeQuorumRequestData data;
 
     private DescribeQuorumRequest(DescribeQuorumRequestData data, short version) {
         super(ApiKeys.DESCRIBE_QUORUM, version);
@@ -69,6 +69,10 @@ public class DescribeQuorumRequest extends AbstractRequest {
                         new DescribeQuorumRequestData.PartitionData()
                             .setPartitionIndex(topicPartition.partition()))
             )));
+    }
+
+    public DescribeQuorumRequestData data() {
+        return data;
     }
 
     @Override

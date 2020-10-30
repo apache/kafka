@@ -41,7 +41,7 @@ import java.util.Map;
  * - {@link Errors#UNKNOWN_TOPIC_OR_PARTITION}
  */
 public class DescribeQuorumResponse extends AbstractResponse {
-    public final DescribeQuorumResponseData data;
+    private final DescribeQuorumResponseData data;
 
     public DescribeQuorumResponse(DescribeQuorumResponseData data) {
         super(ApiKeys.DESCRIBE_QUORUM);

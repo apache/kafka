@@ -38,7 +38,7 @@ import java.util.Map;
  */
 public class EndTxnResponse extends AbstractResponse {
 
-    public final EndTxnResponseData data;
+    private final EndTxnResponseData data;
 
     public EndTxnResponse(EndTxnResponseData data) {
         super(ApiKeys.END_TXN);

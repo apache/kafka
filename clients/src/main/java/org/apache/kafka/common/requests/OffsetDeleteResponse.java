@@ -44,7 +44,7 @@ import java.util.Map;
  */
 public class OffsetDeleteResponse extends AbstractResponse {
 
-    public final OffsetDeleteResponseData data;
+    private final OffsetDeleteResponseData data;
 
     public OffsetDeleteResponse(OffsetDeleteResponseData data) {
         super(ApiKeys.OFFSET_DELETE);

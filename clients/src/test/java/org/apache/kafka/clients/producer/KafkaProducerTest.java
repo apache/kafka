@@ -898,7 +898,7 @@ public class KafkaProducerTest {
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, host1));
         String groupId = "group";
         client.prepareResponse(request ->
-            ((TxnOffsetCommitRequest) request).data.groupId().equals(groupId),
+            ((TxnOffsetCommitRequest) request).data().groupId().equals(groupId),
             txnOffsetsCommitResponse(Collections.singletonMap(
                 new TopicPartition("topic", 0), Errors.NONE)));
         client.prepareResponse(endTxnResponse(Errors.NONE));
@@ -949,7 +949,7 @@ public class KafkaProducerTest {
         int generationId = 5;
         String groupInstanceId = "instance";
         client.prepareResponse(request -> {
-            TxnOffsetCommitRequestData data = ((TxnOffsetCommitRequest) request).data;
+            TxnOffsetCommitRequestData data = ((TxnOffsetCommitRequest) request).data();
             if (maxVersion < 3) {
                 return data.groupId().equals(groupId) &&
                            data.memberId().equals(JoinGroupRequest.UNKNOWN_MEMBER_ID) &&

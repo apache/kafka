@@ -33,16 +33,42 @@ import static org.junit.Assert.assertTrue;
 public class ApiVersionsResponseTest {
 
     @Test
+    public void shouldCreateApiResponseOnlyWithKeysSupportedByMagicValue() {
+        final ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(
+            10,
+            RecordBatch.MAGIC_VALUE_V1,
+            Features.emptySupportedFeatures());
+        verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1);
+        assertEquals(10, response.throttleTimeMs());
+        assertTrue(response.data().supportedFeatures().isEmpty());
+        assertTrue(response.data().finalizedFeatures().isEmpty());
+        assertEquals(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH, response.data().finalizedFeaturesEpoch());
+    }
+
+    @Test
     public void shouldCreateApiResponseThatHasAllApiKeysSupportedByBroker() {
         assertEquals(apiKeysInResponse(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE), new HashSet<>(ApiKeys.enabledApis()));
-        assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.supportedFeatures().isEmpty());
-        assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.finalizedFeatures().isEmpty());
-        assertEquals(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH, ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.finalizedFeaturesEpoch());
+        assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().supportedFeatures().isEmpty());
+        assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().finalizedFeatures().isEmpty());
+        assertEquals(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH, ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().finalizedFeaturesEpoch());
+    }
+
+    @Test
+    public void shouldReturnAllKeysWhenMagicIsCurrentValueAndThrottleMsIsDefaultThrottle() {
+        ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(
+            AbstractResponse.DEFAULT_THROTTLE_TIME,
+            RecordBatch.CURRENT_MAGIC_VALUE,
+            Features.emptySupportedFeatures());
+        assertEquals(new HashSet<>(ApiKeys.enabledApis()), apiKeysInResponse(response));
+        assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs());
+        assertTrue(response.data().supportedFeatures().isEmpty());
+        assertTrue(response.data().finalizedFeatures().isEmpty());
+        assertEquals(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH, response.data().finalizedFeaturesEpoch());
     }
 
     @Test
     public void shouldHaveCorrectDefaultApiVersionsResponse() {
-        Collection<ApiVersionsResponseKey> apiVersions = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.apiKeys();
+        Collection<ApiVersionsResponseKey> apiVersions = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().apiKeys();
         assertEquals("API versions for all API keys must be maintained.", apiVersions.size(), ApiKeys.enabledApis().size());
 
         for (ApiKeys key : ApiKeys.enabledApis()) {
@@ -64,15 +90,49 @@ public class ApiVersionsResponseTest {
             }
         }
 
-        assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.supportedFeatures().isEmpty());
-        assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.finalizedFeatures().isEmpty());
-        assertEquals(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH, ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.finalizedFeaturesEpoch());
+        assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().supportedFeatures().isEmpty());
+        assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().finalizedFeatures().isEmpty());
+        assertEquals(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH, ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().finalizedFeaturesEpoch());
     }
 
+<<<<<<< HEAD
+=======
+    @Test
+    public void shouldReturnFeatureKeysWhenMagicIsCurrentValueAndThrottleMsIsDefaultThrottle() {
+        ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(
+            10,
+            RecordBatch.MAGIC_VALUE_V1,
+            Features.supportedFeatures(Utils.mkMap(Utils.mkEntry("feature", new SupportedVersionRange((short) 1, (short) 4)))),
+            Features.finalizedFeatures(Utils.mkMap(Utils.mkEntry("feature", new FinalizedVersionRange((short) 2, (short) 3)))),
+            10);
+        verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1);
+        assertEquals(10, response.throttleTimeMs());
+
+        assertEquals(1, response.data().supportedFeatures().size());
+        SupportedFeatureKey sKey = response.data().supportedFeatures().find("feature");
+        assertNotNull(sKey);
+        assertEquals(1, sKey.minVersion());
+        assertEquals(4, sKey.maxVersion());
+
+        assertEquals(1, response.data().finalizedFeatures().size());
+        FinalizedFeatureKey fKey = response.data().finalizedFeatures().find("feature");
+        assertNotNull(fKey);
+        assertEquals(2, fKey.minVersionLevel());
+        assertEquals(3, fKey.maxVersionLevel());
+
+        assertEquals(10, response.data().finalizedFeaturesEpoch());
+    }
+    
+    private void verifyApiKeysForMagic(final ApiVersionsResponse response, final byte maxMagic) {
+        for (final ApiVersionsResponseKey version : response.data().apiKeys()) {
+            assertTrue(ApiKeys.forId(version.apiKey()).minRequiredInterBrokerMagic <= maxMagic);
+        }
+    }
+>>>>>>> fd978a9d20... add data accessor and creat tests for manually created data
 
     private Set<ApiKeys> apiKeysInResponse(final ApiVersionsResponse apiVersions) {
         final Set<ApiKeys> apiKeys = new HashSet<>();
-        for (final ApiVersionsResponseKey version : apiVersions.data.apiKeys()) {
+        for (final ApiVersionsResponseKey version : apiVersions.data().apiKeys()) {
             apiKeys.add(ApiKeys.forId(version.apiKey()));
         }
         return apiKeys;

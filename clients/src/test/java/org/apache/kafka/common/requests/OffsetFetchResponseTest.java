@@ -106,7 +106,7 @@ public class OffsetFetchResponseTest {
         OffsetFetchResponse latestResponse = new OffsetFetchResponse(throttleTimeMs, Errors.NONE, partitionDataMap);
 
         for (short version = 0; version <= ApiKeys.OFFSET_FETCH.latestVersion(); version++) {
-            Struct struct = latestResponse.data.toStruct(version);
+            Struct struct = latestResponse.data().toStruct(version);
 
             OffsetFetchResponse oldResponse = OffsetFetchResponse.parse(latestResponse.serialize(version), version);
 
@@ -193,7 +193,7 @@ public class OffsetFetchResponseTest {
                                 .setMetadata(null))
                         ))
                 );
-        assertEquals(expectedData, response.data);
+        assertEquals(expectedData, response.data());
     }
 
     @Test
@@ -226,6 +226,6 @@ public class OffsetFetchResponseTest {
                             .setMetadata(metadata))
                     ))
                 );
-        assertEquals(expectedData, response.data);
+        assertEquals(expectedData, response.data());
     }
 }

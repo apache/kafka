@@ -44,7 +44,7 @@ public class DescribeUserScramCredentialsRequest extends AbstractRequest {
         }
     }
 
-    private DescribeUserScramCredentialsRequestData data;
+    private final DescribeUserScramCredentialsRequestData data;
     private final short version;
 
     private DescribeUserScramCredentialsRequest(DescribeUserScramCredentialsRequestData data, short version) {

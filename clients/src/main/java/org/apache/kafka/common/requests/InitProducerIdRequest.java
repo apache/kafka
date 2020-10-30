@@ -51,7 +51,7 @@ public class InitProducerIdRequest extends AbstractRequest {
         }
     }
 
-    public final InitProducerIdRequestData data;
+    private final InitProducerIdRequestData data;
 
     private InitProducerIdRequest(InitProducerIdRequestData data, short version) {
         super(ApiKeys.INIT_PRODUCER_ID, version);

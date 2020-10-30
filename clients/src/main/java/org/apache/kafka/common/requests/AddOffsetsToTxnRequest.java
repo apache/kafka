@@ -26,7 +26,7 @@ import java.nio.ByteBuffer;
 
 public class AddOffsetsToTxnRequest extends AbstractRequest {
 
-    public AddOffsetsToTxnRequestData data;
+    private final AddOffsetsToTxnRequestData data;
 
     public static class Builder extends AbstractRequest.Builder<AddOffsetsToTxnRequest> {
         public AddOffsetsToTxnRequestData data;

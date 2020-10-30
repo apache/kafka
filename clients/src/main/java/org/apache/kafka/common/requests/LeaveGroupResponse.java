@@ -48,7 +48,7 @@ import java.util.Objects;
  */
 public class LeaveGroupResponse extends AbstractResponse {
 
-    public final LeaveGroupResponseData data;
+    private final LeaveGroupResponseData data;
 
     public LeaveGroupResponse(LeaveGroupResponseData data) {
         super(ApiKeys.LEAVE_GROUP);

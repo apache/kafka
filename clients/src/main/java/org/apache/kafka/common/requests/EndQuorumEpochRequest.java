@@ -47,7 +47,7 @@ public class EndQuorumEpochRequest extends AbstractRequest {
         }
     }
 
-    public final EndQuorumEpochRequestData data;
+    private final EndQuorumEpochRequestData data;
 
     private EndQuorumEpochRequest(EndQuorumEpochRequestData data, short version) {
         super(ApiKeys.END_QUORUM_EPOCH, version);

@@ -39,7 +39,7 @@ import java.util.Map;
  */
 public class AddOffsetsToTxnResponse extends AbstractResponse {
 
-    public AddOffsetsToTxnResponseData data;
+    private final AddOffsetsToTxnResponseData data;
 
     public AddOffsetsToTxnResponse(AddOffsetsToTxnResponseData data) {
         super(ApiKeys.ADD_OFFSETS_TO_TXN);

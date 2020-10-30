@@ -38,7 +38,7 @@ public class DeleteTopicsResponse extends AbstractResponse {
      * INVALID_REQUEST(42)
      * TOPIC_DELETION_DISABLED(73)
      */
-    private DeleteTopicsResponseData data;
+    private final DeleteTopicsResponseData data;
 
     public DeleteTopicsResponse(DeleteTopicsResponseData data) {
         super(ApiKeys.DELETE_TOPICS);

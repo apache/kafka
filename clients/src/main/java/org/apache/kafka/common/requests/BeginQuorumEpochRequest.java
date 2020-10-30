@@ -46,7 +46,7 @@ public class BeginQuorumEpochRequest extends AbstractRequest {
         }
     }
 
-    public final BeginQuorumEpochRequestData data;
+    private final BeginQuorumEpochRequestData data;
 
     private BeginQuorumEpochRequest(BeginQuorumEpochRequestData data, short version) {
         super(ApiKeys.BEGIN_QUORUM_EPOCH, version);

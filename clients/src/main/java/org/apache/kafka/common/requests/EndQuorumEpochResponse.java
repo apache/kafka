@@ -42,7 +42,7 @@ import java.util.Map;
  * - {@link Errors#UNKNOWN_TOPIC_OR_PARTITION}
  */
 public class EndQuorumEpochResponse extends AbstractResponse {
-    public final EndQuorumEpochResponseData data;
+    private final EndQuorumEpochResponseData data;
 
     public EndQuorumEpochResponse(EndQuorumEpochResponseData data) {
         super(ApiKeys.END_QUORUM_EPOCH);

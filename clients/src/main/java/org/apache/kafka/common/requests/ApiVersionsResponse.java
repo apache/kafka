@@ -46,7 +46,7 @@ public class ApiVersionsResponse extends AbstractResponse {
     public static final ApiVersionsResponse DEFAULT_API_VERSIONS_RESPONSE = createApiVersionsResponse(
             DEFAULT_THROTTLE_TIME, RecordBatch.CURRENT_MAGIC_VALUE);
 
-    public final ApiVersionsResponseData data;
+    private final ApiVersionsResponseData data;
 
     public ApiVersionsResponse(ApiVersionsResponseData data) {
         super(ApiKeys.API_VERSIONS);

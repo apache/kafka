@@ -710,8 +710,8 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberSubscriptions, Errors.NONE));
         client.prepareResponse(body -> {
             SyncGroupRequest sync = (SyncGroupRequest) body;
-            return sync.data.memberId().equals(consumerId) &&
-                    sync.data.generationId() == 1 &&
+            return sync.data().memberId().equals(consumerId) &&
+                    sync.data().generationId() == 1 &&
                     sync.groupAssignments().containsKey(consumerId);
         }, syncGroupResponse(assigned, Errors.NONE));
         coordinator.poll(time.timer(Long.MAX_VALUE));
@@ -748,8 +748,8 @@ public class ConsumerCoordinatorTest {
                     1, consumerId, singletonMap(consumerId, oldSubscription), Errors.NONE));
         client.prepareResponse(body -> {
             SyncGroupRequest sync = (SyncGroupRequest) body;
-            return sync.data.memberId().equals(consumerId) &&
-                    sync.data.generationId() == 1 &&
+            return sync.data().memberId().equals(consumerId) &&
+                    sync.data().generationId() == 1 &&
                     sync.groupAssignments().containsKey(consumerId);
         }, syncGroupResponse(oldAssignment, Errors.NONE));
 
@@ -759,8 +759,8 @@ public class ConsumerCoordinatorTest {
                     1, consumerId, singletonMap(consumerId, newSubscription), Errors.NONE));
         client.prepareResponse(body -> {
             SyncGroupRequest sync = (SyncGroupRequest) body;
-            return sync.data.memberId().equals(consumerId) &&
-                    sync.data.generationId() == 1 &&
+            return sync.data().memberId().equals(consumerId) &&
+                    sync.data().generationId() == 1 &&
                     sync.groupAssignments().containsKey(consumerId);
         }, syncGroupResponse(newAssignment, Errors.NONE));
 
@@ -834,8 +834,8 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberSubscriptions, Errors.NONE));
         client.prepareResponse(body -> {
             SyncGroupRequest sync = (SyncGroupRequest) body;
-            return sync.data.memberId().equals(consumerId) &&
-                    sync.data.generationId() == 1 &&
+            return sync.data().memberId().equals(consumerId) &&
+                    sync.data().generationId() == 1 &&
                     sync.groupAssignments().containsKey(consumerId);
         }, syncGroupResponse(assigned, Errors.NONE));
         // expect client to force updating the metadata, if yes gives it both topics
@@ -983,8 +983,8 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
         client.prepareResponse(body -> {
             SyncGroupRequest sync = (SyncGroupRequest) body;
-            return sync.data.memberId().equals(consumerId) &&
-                sync.data.generationId() == 1 &&
+            return sync.data().memberId().equals(consumerId) &&
+                sync.data().generationId() == 1 &&
                 sync.groupAssignments().isEmpty();
         }, syncGroupResponse(singletonList(t1p), Errors.NONE));
 
@@ -1116,8 +1116,8 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
         client.prepareResponse(body -> {
             SyncGroupRequest sync = (SyncGroupRequest) body;
-            return sync.data.memberId().equals(consumerId) &&
-                    sync.data.generationId() == 1 &&
+            return sync.data().memberId().equals(consumerId) &&
+                    sync.data().generationId() == 1 &&
                     sync.groupAssignments().isEmpty();
         }, syncGroupResponse(assigned, Errors.NONE));
 
@@ -1180,8 +1180,8 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
         client.prepareResponse(body -> {
             SyncGroupRequest sync = (SyncGroupRequest) body;
-            return sync.data.memberId().equals(consumerId) &&
-                    sync.data.generationId() == 1 &&
+            return sync.data().memberId().equals(consumerId) &&
+                    sync.data().generationId() == 1 &&
                     sync.groupAssignments().isEmpty();
         }, syncGroupResponse(assigned, Errors.NONE));
         // expect client to force updating the metadata, if yes gives it both topics
@@ -1410,8 +1410,8 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberSubscriptions, Errors.NONE));
         client.prepareResponse(body -> {
             SyncGroupRequest sync = (SyncGroupRequest) body;
-            if (sync.data.memberId().equals(consumerId) &&
-                    sync.data.generationId() == 1 &&
+            if (sync.data().memberId().equals(consumerId) &&
+                    sync.data().generationId() == 1 &&
                     sync.groupAssignments().containsKey(consumerId)) {
                 // trigger the metadata update including both topics after the sync group request has been sent
                 Map<String, Integer> topicPartitionCounts = new HashMap<>();
@@ -2299,8 +2299,8 @@ public class ConsumerCoordinatorTest {
 
         client.prepareResponse(body -> {
             SyncGroupRequest sync = (SyncGroupRequest) body;
-            return sync.data.memberId().equals(consumerId) &&
-                sync.data.generationId() == 1 &&
+            return sync.data().memberId().equals(consumerId) &&
+                sync.data().generationId() == 1 &&
                 sync.groupAssignments().containsKey(consumerId);
         }, syncGroupResponse(singletonList(t1p), Errors.NONE));
         coordinator.poll(time.timer(Long.MAX_VALUE));
@@ -3148,8 +3148,8 @@ public class ConsumerCoordinatorTest {
                         generation, consumerId, singletonMap(consumerId, subscription), Errors.NONE));
         client.prepareResponse(body -> {
             SyncGroupRequest sync = (SyncGroupRequest) body;
-            return sync.data.memberId().equals(consumerId) &&
-                    sync.data.generationId() == generation &&
+            return sync.data().memberId().equals(consumerId) &&
+                    sync.data().generationId() == generation &&
                     sync.groupAssignments().containsKey(consumerId);
         }, syncGroupResponse(assignment, Errors.NONE));
     }

@@ -1623,7 +1623,7 @@ public class TransactionManager {
         @Override
         public void handleResponse(AbstractResponse response) {
             AddOffsetsToTxnResponse addOffsetsToTxnResponse = (AddOffsetsToTxnResponse) response;
-            Errors error = Errors.forCode(addOffsetsToTxnResponse.data.errorCode());
+            Errors error = Errors.forCode(addOffsetsToTxnResponse.data().errorCode());
 
             if (error == Errors.NONE) {
                 log.debug("Successfully added partition for consumer group {} to transaction", builder.data.groupId());

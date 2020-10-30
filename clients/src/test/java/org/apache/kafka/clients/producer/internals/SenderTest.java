@@ -2728,7 +2728,7 @@ public class SenderTest {
 
         client.prepareResponse(
             body -> body instanceof InitProducerIdRequest &&
-                ((InitProducerIdRequest) body).data.transactionalId() == null,
+                ((InitProducerIdRequest) body).data().transactionalId() == null,
             initProducerIdResponse(producerId, producerEpoch, error));
         sender.runOnce();
     }

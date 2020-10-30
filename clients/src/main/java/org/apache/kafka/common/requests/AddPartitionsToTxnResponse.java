@@ -46,7 +46,7 @@ import java.util.Map;
  */
 public class AddPartitionsToTxnResponse extends AbstractResponse {
 
-    public final AddPartitionsToTxnResponseData data;
+    private final AddPartitionsToTxnResponseData data;
 
     private Map<TopicPartition, Errors> cachedErrorsMap = null;
 
@@ -87,6 +87,10 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
         this.data = new AddPartitionsToTxnResponseData()
                         .setThrottleTimeMs(throttleTimeMs)
                         .setResults(topicCollection);
+    }
+
+    public AddPartitionsToTxnResponseData data() {
+        return data;
     }
 
     @Override
