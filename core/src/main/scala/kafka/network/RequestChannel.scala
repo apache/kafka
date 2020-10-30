@@ -202,7 +202,7 @@ object RequestChannel extends Logging {
       }
     }
 
-    trace(s"Processor $processor received request: ${RequestConvertToJson.requestDesc(header, loggableRequest, true).toString}")
+    trace(s"Processor $processor received request: ${RequestConvertToJson.requestDesc(header, loggableRequest, true)}")
 
     def requestThreadTimeNanos: Long = {
       if (apiLocalCompleteTimeNanos == -1L) apiLocalCompleteTimeNanos = Time.SYSTEM.nanoseconds

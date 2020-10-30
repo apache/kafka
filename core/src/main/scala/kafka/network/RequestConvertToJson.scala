@@ -81,7 +81,7 @@ object RequestConvertToJson {
       case req: OffsetDeleteRequest => OffsetDeleteRequestDataJsonConverter.write(req.data, request.version)
       case req: OffsetFetchRequest => OffsetFetchRequestDataJsonConverter.write(req.data, request.version)
       case req: OffsetsForLeaderEpochRequest => offsetsForLeaderEpochRequestNode(req, request.version)
-      case req: ProduceRequest => produceRequestNode(req, request.version, verbose)
+      case req: ProduceRequest => produceRequestNode(req, request.version)
       case req: RenewDelegationTokenRequest => RenewDelegationTokenRequestDataJsonConverter.write(req.data, request.version)
       case req: SaslAuthenticateRequest => SaslAuthenticateRequestDataJsonConverter.write(req.data, request.version)
       case req: SaslHandshakeRequest => SaslHandshakeRequestDataJsonConverter.write(req.data, request.version)
@@ -92,7 +92,8 @@ object RequestConvertToJson {
       case req: UpdateMetadataRequest => UpdateMetadataRequestDataJsonConverter.write(req.data, request.version)
       case req: VoteRequest => VoteRequestDataJsonConverter.write(req.data, request.version)
       case req: WriteTxnMarkersRequest => WriteTxnMarkersRequestDataJsonConverter.write(req.data, request.version)
-      case _ => throw new Exception("Unexpected request type encountered: " + request)
+      case _ => throw new AssertionError(String.format("ApiKey %s is not currently handled in `request`, the " +
+        "code should be updated to do so.", request));
     }
   }
 
@@ -156,7 +157,8 @@ object RequestConvertToJson {
       case res: UpdateMetadataResponse => UpdateMetadataResponseDataJsonConverter.write(res.data, version)
       case res: WriteTxnMarkersResponse => WriteTxnMarkersResponseDataJsonConverter.write(res.data, version)
       case res: VoteResponse => VoteResponseDataJsonConverter.write(res.data, version)
-      case _ => throw new Exception("Unexpected response type encountered: " + response)
+      case _ => throw new AssertionError(String.format("ApiKey %s is not currently handled in `response`, the " +
+        "code should be updated to do so.", response));
     }
   }
 
@@ -243,7 +245,7 @@ object RequestConvertToJson {
   /**
    * Temporary until switch to use the generated schemas.
    */
-  def produceRequestNode(request: ProduceRequest, version: Short, verbose: Boolean): JsonNode = {
+  def produceRequestNode(request: ProduceRequest, version: Short): JsonNode = {
     val node = new ObjectNode(JsonNodeFactory.instance)
     if (version >= 3) {
       if (request.transactionalId == null) {

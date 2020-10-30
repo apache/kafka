@@ -45,8 +45,6 @@ class RequestConvertToJsonTest {
         // match so the struct does not have the correct field names. This is
         // a temporary workaround until ProduceRequest starts using ProduceRequestData
         req = ProduceRequest.Builder.forCurrentMagic(0.toShort, 10000, new util.HashMap[TopicPartition, MemoryRecords]()).build()
-      } else if (key == ApiKeys.DESCRIBE_QUORUM) {
-        req = new DescribeQuorumRequest(new DescribeQuorumRequestData().toStruct(version), version)
       } else {
         val struct = ApiMessageType.fromApiKey(key.id).newRequest().toStruct(version)
         req = AbstractRequest.parseRequest(key, version, struct)
