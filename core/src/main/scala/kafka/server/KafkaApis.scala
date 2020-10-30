@@ -1799,27 +1799,17 @@ class KafkaApis(val requestChannel: RequestChannel,
         topic.setTopicConfigErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
       }
     }
-    val toCreate = mutable.Map[String, CreatableTopic]()
-    createTopicsRequest.data.topics.forEach { topic =>
-      if (results.find(topic.name).errorCode == Errors.NONE.code) {
-        toCreate += topic.name -> topic
-      }
-    }
     if (!controller.isActive) {
-      // don't provide the information that this node is not the controller unless they were authorized
-      // to perform at least one of their requests
-      sendResponseCallback(
-        if (toCreate.isEmpty) {
-          results // they weren't authorized for anything, or the requests were invalid, so send those errors back
-        } else {
-          // they were authorized for something, so send back errors indicating this is not the controller
-          val notControllerResults = new CreatableTopicResultCollection(createTopicsRequest.data.topics.size)
-          createTopicsRequest.data.topics.forEach { topic =>
-            notControllerResults.add(new CreatableTopicResult().setName(topic.name)
-              .setErrorCode(Errors.NOT_CONTROLLER.code))
-          }
-          notControllerResults
-        })
+      // Don't provide the information that this node is not the controller unless they were authorized
+      // to perform at least one of their requests.  So only set NOT_CONTROLLER error for anything that so far has a
+      // success/NONE error code.  Keep the existing error codes that we've determined rather than overwriting them
+      // with NOT_CONTROLLER because that is potentially useful information for the client.
+      results.forEach { topic =>
+        if(topic.errorCode() == Errors.NONE.code()) {
+          topic.setErrorCode(Errors.NOT_CONTROLLER.code)
+        }
+      }
+      sendResponseCallback(results)
     } else {
       def handleCreateTopicsResults(errors: Map[String, ApiError]): Unit = {
         errors.forKeyValue { (topicName, error) =>
@@ -1835,6 +1825,12 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
         }
         sendResponseCallback(results)
+      }
+      val toCreate = mutable.Map[String, CreatableTopic]()
+      createTopicsRequest.data.topics.forEach { topic =>
+        if (results.find(topic.name).errorCode == Errors.NONE.code) {
+          toCreate += topic.name -> topic
+        }
       }
       adminManager.createTopics(
         createTopicsRequest.data.timeoutMs,
@@ -1889,17 +1885,12 @@ class KafkaApis(val requestChannel: RequestChannel,
       queuedForDeletion.map(_.name -> new ApiError(Errors.INVALID_TOPIC_EXCEPTION, "The topic is queued for deletion."))
 
     if (!controller.isActive) {
-      // don't provide the information that this node is not the controller unless they were authorized
-      // to perform at least one of their requests
-      sendResponseCallback(
-        if (valid.isEmpty && errors.filter(tuple => tuple._2.error() == Errors.INVALID_TOPIC_EXCEPTION).isEmpty) {
-          errors.toMap // they weren't authorized for anything, or the requests were invalid, so send those errors back
-        } else {
-          // they were authorized for something, so send back errors indicating this is not the controller
-          createPartitionsRequest.data.topics.asScala.map { topic =>
-            (topic.name, new ApiError(Errors.NOT_CONTROLLER, null))
-          }.toMap
-        })
+      // Don't provide the information that this node is not the controller unless they were authorized
+      // to perform at least one of their requests.  So only set NOT_CONTROLLER error for anything that so far has a
+      // success/NONE error code.  Keep the existing error codes that we've determined rather than overwriting them
+      // with NOT_CONTROLLER because that is potentially useful information for the client.
+      val validMappedToNotControllerError = valid.map(_.name -> new ApiError(Errors.NOT_CONTROLLER, null))
+      sendResponseCallback((errors ++ validMappedToNotControllerError).toMap)
     } else {
       adminManager.createPartitions(
         createPartitionsRequest.data.timeoutMs,
@@ -1955,21 +1946,16 @@ class KafkaApis(val requestChannel: RequestChannel,
            toDelete += topic.name
       }
       if (!controller.isActive) {
-        // don't provide the information that this node is not the controller unless they were authorized
-        // to perform at least one of their requests
-        sendResponseCallback(
-          if (toDelete.isEmpty && !results.asScala.exists(_.errorCode() != Errors.TOPIC_AUTHORIZATION_FAILED.code)) {
-            results // they weren't authorized for anything, so send those errors back
-          } else {
-            // they were authorized for something, so send back errors indicating this is not the controller
-            val notControllerResults = new DeletableTopicResultCollection(deleteTopicRequest.data.topicNames.size)
-            deleteTopicRequest.data.topicNames.forEach { topic =>
-              notControllerResults.add(new DeletableTopicResult()
-                .setName(topic)
-                .setErrorCode(Errors.NOT_CONTROLLER.code))
-            }
-            notControllerResults
-          })
+        // Don't provide the information that this node is not the controller unless they were authorized
+        // to perform at least one of their requests.  So only set NOT_CONTROLLER error for anything that so far has a
+        // success/NONE error code.  Keep the existing error codes that we've determined rather than overwriting them
+        // with NOT_CONTROLLER because that is potentially useful information for the client.
+        results.forEach { topic =>
+          if(topic.errorCode() == Errors.NONE.code()) {
+            topic.setErrorCode(Errors.NOT_CONTROLLER.code)
+          }
+        }
+        sendResponseCallback(results)
       } else {
         // If no authorized topics return immediately
         if(toDelete.isEmpty)

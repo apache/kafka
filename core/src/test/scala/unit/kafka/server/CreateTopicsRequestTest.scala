@@ -40,7 +40,7 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
     super.brokerPropertyOverrides(properties)
     properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[CreateTopicsTest.TestAuthorizer].getName)
     properties.put(KafkaConfig.PrincipalBuilderClassProp,
-      if (testName.getMethodName.endsWith("NotAuthorized")) {
+      if (testName.getMethodName.contains("NotAuthorized")) {
         classOf[CreateTopicsTest.TestPrincipalBuilderReturningUnauthorized].getName
       } else {
         classOf[CreateTopicsTest.TestPrincipalBuilderReturningAuthorized].getName
@@ -155,24 +155,26 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
 
   @Test
   def testNotController(): Unit = {
-    val req = topicsReq(Seq(topicReq("topic1")))
+    val req = topicsReq(Seq(topicReq("topic1"), topicReq("topic2")))
     val response = sendCreateTopicRequest(req, notControllerSocketServer)
-    assertEquals(1, response.errorCounts().get(Errors.NOT_CONTROLLER))
+    assertEquals(2, response.errorCounts().get(Errors.NOT_CONTROLLER))
   }
 
   @Test
-  def testNotAuthorized(): Unit = {
-    val req = topicsReq(Seq(topicReq("topic1")))
+  def testNotAuthorized(): Unit = { // "NotAuthorized" in method name signals authorizer to reject requests
+    val req = topicsReq(Seq(topicReq("topic1"), topicReq("topic2")))
     val response = sendCreateTopicRequest(req)
-    assertEquals(1, response.errorCounts().get(Errors.TOPIC_AUTHORIZATION_FAILED))
+    assertEquals(2, response.errorCounts().get(Errors.TOPIC_AUTHORIZATION_FAILED))
   }
 
   @Test
-  def testNotControllerAndNotAuthorized(): Unit = {
-    // make sure we get the authorization error rather than the not-controller error
-    val req = topicsReq(Seq(topicReq("topic1")))
+  def testNotControllerAndNotAuthorized(): Unit = { // "NotAuthorized" in method name signals authorizer to reject requests
+    // make sure we get the authorization error rather than the not-controller error when not authorized
+    // and the not-controller error only when authorized
+    val req = topicsReq(Seq(topicReq("topic1"), topicReq(CreateTopicsTest.alwaysAuthorizedTopic)))
     val response = sendCreateTopicRequest(req, notControllerSocketServer)
     assertEquals(1, response.errorCounts().get(Errors.TOPIC_AUTHORIZATION_FAILED))
+    assertEquals(1, response.errorCounts().get(Errors.NOT_CONTROLLER))
   }
 
   @Test
@@ -212,13 +214,15 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
 object CreateTopicsTest {
   val UnauthorizedPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Unauthorized")
   val AuthorizedPrincipal = KafkaPrincipal.ANONYMOUS
+  val alwaysAuthorizedTopic = "always_authorized_topic"
 
   class TestAuthorizer extends AclAuthorizer {
     override def authorize(requestContext: AuthorizableRequestContext, actions: util.List[Action]): util.List[AuthorizationResult] = {
-      actions.asScala.map { _ =>
-        if (requestContext.requestType == ApiKeys.CREATE_TOPICS.id && requestContext.principal == UnauthorizedPrincipal)
+      actions.asScala.map { action =>
+        if (requestContext.requestType == ApiKeys.CREATE_TOPICS.id && requestContext.principal == UnauthorizedPrincipal
+          && action.resourcePattern().name() != alwaysAuthorizedTopic) {
           AuthorizationResult.DENIED
-        else
+        } else
           AuthorizationResult.ALLOWED
       }.asJava
     }
