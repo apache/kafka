@@ -177,7 +177,7 @@ class ApiVersionTest {
       10,
       RecordBatch.MAGIC_VALUE_V2,
       Features.emptySupportedFeatures(),
-      forwardingEnabled = false
+      exposeEnvelopeAPI = false
     )
     response.data.apiKeys().forEach(
       version => {
@@ -244,7 +244,7 @@ class ApiVersionTest {
       10,
       RecordBatch.MAGIC_VALUE_V1,
       Features.emptySupportedFeatures,
-      forwardingEnabled = false
+      exposeEnvelopeAPI = false
     )
     verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1)
     assertEquals(10, response.throttleTimeMs)
@@ -292,7 +292,7 @@ class ApiVersionTest {
       AbstractResponse.DEFAULT_THROTTLE_TIME,
       RecordBatch.CURRENT_MAGIC_VALUE,
       Features.emptySupportedFeatures,
-      forwardingEnabled = true
+      exposeEnvelopeAPI = true
     )
     assertEquals(new util.HashSet[ApiKeys](ApiKeys.enabledApis), apiKeysInResponse(response))
     assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs)
@@ -302,12 +302,12 @@ class ApiVersionTest {
   }
 
   @Test
-  def shouldNotReturnEnvelopeApiKeyWhenForwardingIsNotEnabled(): Unit = {
+  def shouldNotReturnEnvelopeApiKeyWhenExposeEnvelopeAPIIsFalse(): Unit = {
     val response = ApiVersion.apiVersionsResponse(
       AbstractResponse.DEFAULT_THROTTLE_TIME,
       RecordBatch.CURRENT_MAGIC_VALUE,
       Features.emptySupportedFeatures,
-      forwardingEnabled = false
+      exposeEnvelopeAPI = false
     )
 
     val expectedApiKeys = ApiKeys.enabledApis

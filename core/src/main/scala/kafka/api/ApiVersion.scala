@@ -143,14 +143,14 @@ object ApiVersion {
   def apiVersionsResponse(throttleTimeMs: Int,
                           maxMagic: Byte,
                           latestSupportedFeatures: Features[SupportedVersionRange],
-                          forwardingEnabled: Boolean): ApiVersionsResponse = {
+                          exposeEnvelopeAPI: Boolean): ApiVersionsResponse = {
     apiVersionsResponse(
       throttleTimeMs,
       maxMagic,
       latestSupportedFeatures,
       Features.emptyFinalizedFeatures,
       ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
-      forwardingEnabled
+      exposeEnvelopeAPI
     )
   }
 
@@ -159,11 +159,11 @@ object ApiVersion {
                           latestSupportedFeatures: Features[SupportedVersionRange],
                           finalizedFeatures: Features[FinalizedVersionRange],
                           finalizedFeaturesEpoch: Long,
-                          forwardingEnabled: Boolean = false): ApiVersionsResponse = {
+                          exposeEnvelopeAPI: Boolean = false): ApiVersionsResponse = {
     // If we bump any forwarding RPC in the future, we would add filtering logic
     // to default API key version ranges.
     val apiKeys = ApiVersionsResponse.defaultApiKeys(maxMagic)
-    if (!forwardingEnabled) {
+    if (!exposeEnvelopeAPI) {
       apiKeys.remove(apiKeys.find(ApiKeys.ENVELOPE.id))
     }
 
