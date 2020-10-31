@@ -125,6 +125,10 @@ class KafkaApis(val requestChannel: RequestChannel,
     info("Shutdown complete.")
   }
 
+  private def buildFailedEnvelopeResponse(request: RequestChannel.Request, error: Errors): Unit = {
+      sendResponse(request, None, None, error)
+  }
+
   private def validateForwardRequest(request: RequestChannel.Request): Boolean = {
     if (!config.forwardingEnabled || !request.context.fromPrivilegedListener) {
      closeConnection(request, Collections.emptyMap())
@@ -132,16 +136,16 @@ class KafkaApis(val requestChannel: RequestChannel,
     } else if (!authorize(request.envelopeContext.get.brokerContext, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
       // If the designated forwarding request is not coming from a privileged listener, or
       // it fails CLUSTER_ACTION permission, we would fail the authorization.
-      throw new ClusterAuthorizationException(s"Envelope request $request is not authorized")
+      buildFailedEnvelopeResponse(request, Errors.CLUSTER_AUTHORIZATION_FAILED)
       false
     } else if (!request.header.apiKey.forwardable) {
-      throw new InvalidRequestException("Given RPC " + request.header.apiKey + " does not support forwarding")
+      buildFailedEnvelopeResponse(request, Errors.INVALID_REQUEST)
       false
     } else if (request.principalSerde.isEmpty) {
-      throw new PrincipalDeserializationFailureException("Principal serde is not defined for forwarding request")
+      buildFailedEnvelopeResponse(request, Errors.PRINCIPAL_DESERIALIZATION_FAILURE)
       false
     } else if (!controller.isActive) {
-      throw new NotControllerException("Non-active controller could not process forward request")
+      buildFailedEnvelopeResponse(request, Errors.NOT_CONTROLLER)
       false
     } else
       true
@@ -3369,7 +3373,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (response == null)
       closeConnection(request, requestBody.errorCounts(error))
     else
-      sendResponse(request, Some(response), None, Errors.forException(error))
+      sendResponse(request, Some(response), None)
   }
 
   private def sendNoOpResponseExemptThrottle(request: RequestChannel.Request): Unit = {
@@ -3387,16 +3391,24 @@ class KafkaApis(val requestChannel: RequestChannel,
   private def sendResponse(request: RequestChannel.Request,
                            responseOpt: Option[AbstractResponse],
                            onComplete: Option[Send => Unit],
-                           error: Errors = Errors.NONE): Unit = {
+                           envelopeLevelError: Errors = Errors.NONE): Unit = {
     // Update error metrics for each error code in the response including Errors.NONE
     responseOpt.foreach(response => requestChannel.updateErrorMetrics(request.header.apiKey, response.errorCounts.asScala))
 
-    val response = responseOpt match {
+    val response = if (envelopeLevelError != Errors.NONE) {
+      val (envelopeResponse, responseString) = request.buildEnvelopeErrorResponse(envelopeLevelError)
+
+      new RequestChannel.SendResponse(
+        request,
+        envelopeResponse,
+        Some(responseString),
+        onComplete
+      )
+    } else responseOpt match {
       case Some(response) =>
-        val responseSend = request.buildResponse(response, error)
         new RequestChannel.SendResponse(
           request,
-          responseSend,
+          request.buildResponse(response),
           request.responseString(response),
           onComplete
         )

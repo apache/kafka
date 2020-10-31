@@ -34,6 +34,10 @@ public class EnvelopeResponse extends AbstractResponse {
                         .setErrorCode(error.code());
     }
 
+    public EnvelopeResponse(Errors error) {
+        this(null, error);
+    }
+
     public EnvelopeResponse(EnvelopeResponseData data) {
         this.data = data;
     }

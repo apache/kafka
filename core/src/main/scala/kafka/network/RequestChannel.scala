@@ -119,13 +119,25 @@ object RequestChannel extends Logging {
 
     def isForwarded: Boolean = envelopeContext.isDefined
 
-    def buildResponse(abstractResponse: AbstractResponse,
-                      error: Errors): Send = {
+    def buildEnvelopeErrorResponse(envelopeLevelError: Errors): (Send, String) = {
+      envelopeContext match {
+        case Some(envelopeContext) =>
+          val envelopeResponse = new EnvelopeResponse(
+            envelopeLevelError
+          )
+
+          (envelopeContext.brokerContext.buildResponse(envelopeResponse), envelopeResponse.toString)
+        case None =>
+          throw new IllegalStateException(s"Undefined envelope context for $envelopeLevelError error response building")
+      }
+    }
+
+    def buildResponse(abstractResponse: AbstractResponse): Send = {
       envelopeContext match {
         case Some(envelopeContext) =>
           val envelopeResponse = new EnvelopeResponse(
             abstractResponse.serialize(header.apiVersion, header.toResponseHeader),
-            error
+            Errors.NONE
           )
 
           envelopeContext.brokerContext.buildResponse(envelopeResponse)

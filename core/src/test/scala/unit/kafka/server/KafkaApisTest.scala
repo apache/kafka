@@ -37,7 +37,7 @@ import kafka.coordinator.group.{GroupCoordinator, GroupSummary, MemberSummary}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.log.AppendOrigin
 import kafka.network.RequestChannel
-import kafka.network.RequestChannel.{EnvelopeContext, SendResponse}
+import kafka.network.RequestChannel.{CloseConnectionResponse, EnvelopeContext, SendResponse}
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.{MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
@@ -416,7 +416,7 @@ class KafkaApisTest {
 
   @Test
   def testEnvelopeRequestWithNotFromPrivilegedListener(): Unit = {
-    testInvalidEnvelopeRequest(Errors.CLUSTER_AUTHORIZATION_FAILED, fromPrivilegedListener = false)
+    testInvalidEnvelopeRequest(Errors.NONE, fromPrivilegedListener = false, shouldCloseConnection = true)
   }
 
   @Test
@@ -432,6 +432,7 @@ class KafkaApisTest {
 
   private def testInvalidEnvelopeRequest(expectedError: Errors,
                                          fromPrivilegedListener: Boolean = true,
+                                         shouldCloseConnection: Boolean = false,
                                          principalSerde: Option[KafkaPrincipalSerde] = kafkaPrincipalSerde,
                                          performAuthorize: Boolean = false,
                                          authorizeResult: AuthorizationResult = AuthorizationResult.ALLOWED,
@@ -473,12 +474,16 @@ class KafkaApisTest {
       envelopeHeader = envelopeHeader)
     createKafkaApis(authorizer = Some(authorizer), enableForwarding = true).handle(request)
 
-    val response = readResponse(ApiKeys.ENVELOPE, envelopeRequest, capturedResponse)
-      .asInstanceOf[EnvelopeResponse]
+    if (shouldCloseConnection) {
+      assertTrue(capturedResponse.getValue.isInstanceOf[CloseConnectionResponse])
+    } else {
+      val response = readResponse(ApiKeys.ENVELOPE, envelopeRequest, capturedResponse)
+        .asInstanceOf[EnvelopeResponse]
 
-    assertEquals(expectedError, response.error())
+      assertEquals(expectedError, response.error())
 
-    verify(authorizer, adminManager)
+      verify(authorizer, adminManager)
+    }
   }
 
   @Test
