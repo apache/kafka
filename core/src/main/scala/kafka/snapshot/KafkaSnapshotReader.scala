@@ -47,12 +47,8 @@ final class KafkaSnapshotReader private (fileRecords: FileRecords, snapshotId: O
     }
   }
 
-  def read(buffer: ByteBuffer, position: Long): Unit =  {
-    if (position.isValidInt) {
-      fileRecords.readInto(buffer, position.toInt)
-    } else {
-      throw new IllegalArgumentException(s"Position $position is larger than the max integer (${Int.MaxValue})")
-    }
+  def read(buffer: ByteBuffer, position: Long): Int =  {
+    fileRecords.channel.read(buffer, position)
   }
 
   def close(): Unit = {

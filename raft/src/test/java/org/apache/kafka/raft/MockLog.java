@@ -31,7 +31,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -507,28 +506,38 @@ public class MockLog implements ReplicatedLog {
         }
 
         @Override
-        public int append(MemoryRecords records) throws IOException {
+        public long sizeInBytes() {
+            return data.position();
+        }
+
+        @Override
+        public int append(MemoryRecords records) {
+            ByteBuffer buffer = records.buffer();
+            copyBuffer(buffer);
+
+            return records.sizeInBytes();
+        }
+
+        @Override
+        public void append(ByteBuffer buffer) {
+            copyBuffer(buffer);
+        }
+
+        private void copyBuffer(ByteBuffer buffer) {
             if (frozen) {
                 throw new RuntimeException("Snapshot is already frozen " + snapshotId);
             }
 
-            if (records.sizeInBytes() == 0) {
-                throw new IllegalArgumentException("Attempt to append an empty record set");
-            }
-
-            ByteBuffer recordBuffer = records.buffer();
-            if (!(data.remaining() >= recordBuffer.remaining())) {
+            if (!(data.remaining() >= buffer.remaining())) {
                 ByteBuffer old = data;
                 old.flip();
 
-                int newSize = Math.max(data.capacity() * 2, data.capacity() + recordBuffer.remaining());
+                int newSize = Math.max(data.capacity() * 2, data.capacity() + buffer.remaining());
                 data = ByteBuffer.allocate(newSize);
 
                 data.put(old);
             }
-            data.put(recordBuffer);
-
-            return records.sizeInBytes();
+            data.put(buffer);
         }
 
         @Override
@@ -537,7 +546,7 @@ public class MockLog implements ReplicatedLog {
         }
 
         @Override
-        public void freeze() throws IOException {
+        public void freeze() {
             frozen = true;
             data.flip();
 
@@ -585,14 +594,14 @@ public class MockLog implements ReplicatedLog {
         }
 
         @Override
-        public void read(ByteBuffer buffer, long position) throws IOException {
+        public int read(ByteBuffer buffer, long position) {
             ByteBuffer copy = data.buffer();
             copy.position((int) position);
             copy.limit((int) position + Math.min(copy.remaining(), buffer.remaining()));
 
             buffer.put(copy);
-            // Flip the buffer because the FileRecords also flips the buffer
-            buffer.flip();
+
+            return copy.remaining();
         }
 
         @Override

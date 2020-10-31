@@ -16,13 +16,15 @@
  */
 package kafka
 
+import java.nio.file.Files
 import java.nio.file.Path
 import java.text.NumberFormat
 import org.apache.kafka.raft.OffsetAndEpoch
 
 package object snapshot {
   private[this] val SnapshotDir = "snapshots"
-  val Suffix =  ".snapshot"
+  private[this] val Suffix =  ".snapshot"
+  private[this] val PartialSuffix = s"$Suffix.part"
 
   def snapshotDir(logDir: Path): Path = {
     logDir.resolve(SnapshotDir)
@@ -42,5 +44,16 @@ package object snapshot {
 
   def moveRename(source: Path, snapshotId: OffsetAndEpoch): Path = {
     source.resolveSibling(filenameFromSnapshotId(snapshotId) + Suffix)
+  }
+
+  def createTempFile(logDir: Path, snapshotId: OffsetAndEpoch): Path = {
+    val dir = snapshotDir(logDir)
+
+    // Create the snapshot directory if it doesn't exists
+    Files.createDirectories(dir)
+
+    val prefix = s"${filenameFromSnapshotId(snapshotId)}-"
+
+    Files.createTempFile(dir, prefix, PartialSuffix)
   }
 }

@@ -17,6 +17,7 @@
 
 package org.apache.kafka.snapshot;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.util.List;
 import org.apache.kafka.common.memory.MemoryPool;
@@ -28,7 +29,7 @@ import org.apache.kafka.raft.internals.BatchAccumulator.CompletedBatch;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 
 // TODO: Write documentation for this type and all of the methods
-final public class BufferedSnapshotWriter<T> implements AutoCloseable {
+final public class BufferedSnapshotWriter<T> implements Closeable {
     final private SnapshotWriter snapshot;
     final private BatchAccumulator<T> accumulator;
     final private Time time;
@@ -89,7 +90,7 @@ final public class BufferedSnapshotWriter<T> implements AutoCloseable {
         accumulator.close();
     }
 
-    public void close() {
+    public void close() throws IOException {
         snapshot.close();
         accumulator.close();
     }

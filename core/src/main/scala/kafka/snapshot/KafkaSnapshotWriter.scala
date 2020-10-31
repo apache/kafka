@@ -16,28 +16,47 @@
  */
 package kafka.snapshot
 
+import java.nio.ByteBuffer
+import java.nio.channels.FileChannel
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.nio.file.StandardOpenOption
 import kafka.utils.Logging
-import org.apache.kafka.common.record.FileRecords
 import org.apache.kafka.common.record.MemoryRecords
+import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.raft.OffsetAndEpoch
 import org.apache.kafka.snapshot.SnapshotWriter
 
-final class KafkaSnapshotWriter private (fileRecords: FileRecords, snapshotId: OffsetAndEpoch) extends SnapshotWriter with Logging {
+final class KafkaSnapshotWriter(
+  path: Path,
+  channel: FileChannel,
+  snapshotId: OffsetAndEpoch
+) extends SnapshotWriter with Logging {
   private[this] var frozen = false
 
   override def snapshotId(): OffsetAndEpoch = {
     snapshotId
   }
 
+  override def sizeInBytes(): Long = {
+    channel.size()
+  }
+
   override def append(records: MemoryRecords): Int = {
     if (frozen) {
-      throw new RuntimeException(s"Append not supported. Snapshot is already frozen: id = $snapshotId; path = ${fileRecords.file}")
+      throw new IllegalStateException(s"Append not supported. Snapshot is already frozen: id = $snapshotId; path = $path")
     }
 
-    fileRecords.append(records)
+    records.writeFullyTo(channel)
+  }
+
+  override def append(buffer: ByteBuffer): Unit = {
+    if (frozen) {
+      throw new IllegalStateException(s"Append not supported. Snapshot is already frozen: id = $snapshotId; path = $path")
+    }
+
+    Utils.writeFully(channel, buffer)
   }
 
   override def isFrozen(): Boolean = {
@@ -45,49 +64,32 @@ final class KafkaSnapshotWriter private (fileRecords: FileRecords, snapshotId: O
   }
 
   override def freeze(): Unit = {
-    fileRecords.close()
+    channel.close()
     frozen = true
 
-    val source = fileRecords.file.toPath
-    val destination = moveRename(source, snapshotId)
-
     // Set readonly and ignore the result
-    if (!fileRecords.file.setReadOnly()) {
-      info(s"Unable to change permission to readonly for snapshot file '${fileRecords.file}'")
+    if (!path.toFile.setReadOnly()) {
+      info(s"Unable to change permission to readonly for internal snapshot file '$path'")
     }
 
-    Files.move(source, destination, StandardCopyOption.ATOMIC_MOVE)
+    val destination = moveRename(path, snapshotId)
+    Files.move(path, destination, StandardCopyOption.ATOMIC_MOVE)
   }
 
   override def close(): Unit = {
-    // If it exist then it means that freeze was not called. Otherwise, this is a noop.
-    fileRecords.deleteIfExists()
+    channel.close()
+    Files.deleteIfExists(path)
   }
 }
 
 object KafkaSnapshotWriter {
-  private[this] val PartialSuffix = s"$Suffix.part"
-
   def apply(logDir: Path, snapshotId: OffsetAndEpoch): KafkaSnapshotWriter = {
-    val fileRecords = FileRecords.open(
-      createTempFile(logDir, snapshotId).toFile,
-      true, // mutable
-      true, // fileAlreadyExists
-      0, // initFileSize
-      false // preallocate
+    val path = createTempFile(logDir, snapshotId)
+
+    new KafkaSnapshotWriter(
+      path,
+      FileChannel.open(path, Utils.mkSet(StandardOpenOption.WRITE, StandardOpenOption.APPEND)),
+      snapshotId
     )
-
-    new KafkaSnapshotWriter(fileRecords, snapshotId)
-  }
-
-  private def createTempFile(logDir: Path, snapshotId: OffsetAndEpoch): Path = {
-    val dir = snapshotDir(logDir)
-
-    // Create the snapshot directory if it doesn't exists
-    Files.createDirectories(dir)
-
-    val prefix = s"${filenameFromSnapshotId(snapshotId)}-"
-
-    Files.createTempFile(dir, prefix, PartialSuffix)
   }
 }

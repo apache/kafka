@@ -37,19 +37,25 @@ final class KafkaSnapshotTest {
     val offsetAndEpoch = new OffsetAndEpoch(10L, 3)
     val bufferSize = 256
     val batches = 10
+    var expectedSize = 0
 
     TestUtils.resource(KafkaSnapshotWriter(tempDir, offsetAndEpoch)) { snapshot =>
+      assertEquals(0, snapshot.sizeInBytes())
+
       val records = buildRecords(Array(ByteBuffer.wrap(Random.nextBytes(bufferSize))))
       for (_ <- 0 until batches) {
         snapshot.append(records)
+        expectedSize += records.sizeInBytes()
       }
+
+      assertEquals(expectedSize, snapshot.sizeInBytes())
 
       snapshot.freeze()
     }
 
-    // File should exist and the size should be greater than the sum of all the buffers
+    // File should exist and the size should be the sum of all the buffers
     assertTrue(Files.exists(snapshotPath(tempDir, offsetAndEpoch)))
-    assertTrue(Files.size(snapshotPath(tempDir, offsetAndEpoch)) > bufferSize * batches)
+    assertEquals(expectedSize, Files.size(snapshotPath(tempDir, offsetAndEpoch)))
   }
 
   @Test
@@ -114,6 +120,55 @@ final class KafkaSnapshotTest {
     TestUtils.resource(KafkaSnapshotReader(tempDir, offsetAndEpoch)) { snapshot =>
       var countBatches = 0
       var countRecords = 0
+      snapshot.forEach { batch =>
+        countBatches += 1
+
+        batch.streamingIterator(new GrowableBufferSupplier()).forEachRemaining { record =>
+          countRecords += 1
+          assertFalse(record.hasKey)
+          assertTrue(record.hasValue)
+          assertEquals(bufferSize, record.value.remaining)
+        }
+      }
+
+      assertEquals(batches, countBatches)
+      assertEquals(batches * batchSize, countRecords)
+    }
+  }
+
+  @Test
+  def testBufferWriteReadSnapshot(): Unit = {
+    val tempDir = TestUtils.tempDir().toPath
+    val offsetAndEpoch = new OffsetAndEpoch(10L, 3)
+    val bufferSize = 256
+    val batchSize = 3
+    val batches = 10
+    var expectedSize = 0
+
+    TestUtils.resource(KafkaSnapshotWriter(tempDir, offsetAndEpoch)) { snapshot =>
+      for (_ <- 0 until batches) {
+        val buffers = for {
+          _ <- 0 until batchSize
+        } yield ByteBuffer.wrap(Random.nextBytes(bufferSize))
+
+        val records = buildRecords(buffers.toArray)
+        snapshot.append(records.buffer())
+        expectedSize += records.sizeInBytes()
+      }
+
+      assertEquals(expectedSize, snapshot.sizeInBytes())
+
+      snapshot.freeze()
+    }
+
+    // File should exist and the size should be the sum of all the buffers
+    assertTrue(Files.exists(snapshotPath(tempDir, offsetAndEpoch)))
+    assertEquals(expectedSize, Files.size(snapshotPath(tempDir, offsetAndEpoch)))
+
+    TestUtils.resource(KafkaSnapshotReader(tempDir, offsetAndEpoch)) { snapshot =>
+      var countBatches = 0
+      var countRecords = 0
+
       snapshot.forEach { batch =>
         countBatches += 1
 

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.snapshot;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Iterator;
@@ -23,7 +24,7 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 
 // TODO: Write documentation for this type and all of the methods
-public interface SnapshotReader extends AutoCloseable, Iterable<RecordBatch> {
+public interface SnapshotReader extends Closeable, Iterable<RecordBatch> {
 
     public OffsetAndEpoch snapshotId();
 
@@ -31,7 +32,5 @@ public interface SnapshotReader extends AutoCloseable, Iterable<RecordBatch> {
 
     public Iterator<RecordBatch> iterator();
 
-    public void read(ByteBuffer buffer, long position) throws IOException;
-
-    public void close();
+    public int read(ByteBuffer buffer, long position) throws IOException;
 }

@@ -17,20 +17,23 @@
 
 package org.apache.kafka.snapshot;
 
+import java.io.Closeable;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.raft.OffsetAndEpoch;
 
 // TODO: Write documentation for this type and all of the methods
-public interface SnapshotWriter extends AutoCloseable {
-
+public interface SnapshotWriter extends Closeable {
     public OffsetAndEpoch snapshotId();
 
+    public long sizeInBytes();
+
     public int append(MemoryRecords records) throws IOException;
+
+    public void append(ByteBuffer buffer) throws IOException;
 
     public boolean isFrozen();
 
     public void freeze() throws IOException;
-
-    public void close();
 }
