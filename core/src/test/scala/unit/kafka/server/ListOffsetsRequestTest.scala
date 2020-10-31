@@ -143,7 +143,10 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     val partitionData = response.topics.asScala.find(_.name == topic).get
       .partitions.asScala.find(_.partitionIndex == partition.partition).get
 
-    (partitionData.offset, partitionData.leaderEpoch)
+    if (version == 0)
+      (partitionData.oldStyleOffsets().asScala.head, partitionData.leaderEpoch)
+    else
+      (partitionData.offset, partitionData.leaderEpoch)
   }
 
   @Test
@@ -180,7 +183,8 @@ class ListOffsetsRequestTest extends BaseRequestTest {
 
     TestUtils.generateAndProduceMessages(servers, topic, 10)
 
-    assertEquals((-1L, -1), fetchOffsetAndEpoch(firstLeaderId, 0L, 0))
+    assertEquals((0L, -1), fetchOffsetAndEpoch(firstLeaderId, ListOffsetRequest.EARLIEST_TIMESTAMP, 0))
+    assertEquals((10L, -1), fetchOffsetAndEpoch(firstLeaderId, ListOffsetRequest.LATEST_TIMESTAMP, 0))
     assertEquals((0L, -1), fetchOffsetAndEpoch(firstLeaderId, 0L, 1))
     assertEquals((0L, -1), fetchOffsetAndEpoch(firstLeaderId, 0L, 2))
     assertEquals((0L, -1), fetchOffsetAndEpoch(firstLeaderId, 0L, 3))

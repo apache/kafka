@@ -42,11 +42,11 @@
         "about": "Each partition in the request.", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",
           "about": "The partition index." },
-        { "name": "CurrentLeaderEpoch", "type": "int32", "versions": "4+", "default": "-1",
+        { "name": "CurrentLeaderEpoch", "type": "int32", "versions": "4+", "default": "-1", "ignorable": true,
           "about": "The current leader epoch." },
         { "name": "Timestamp", "type": "int64", "versions": "0+",
           "about": "The current timestamp." },
-        { "name": "MaxNumOffsets", "type": "int32", "versions": "0",
+        { "name": "MaxNumOffsets", "type": "int32", "versions": "0", "default": "1",
           "about": "The maximum number of offsets to report." }
       ]}
     ]}
