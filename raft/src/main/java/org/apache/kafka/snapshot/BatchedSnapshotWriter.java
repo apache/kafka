@@ -29,12 +29,12 @@ import org.apache.kafka.raft.internals.BatchAccumulator.CompletedBatch;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 
 // TODO: Write documentation for this type and all of the methods
-final public class BufferedSnapshotWriter<T> implements Closeable {
+final public class BatchedSnapshotWriter<T> implements Closeable {
     final private SnapshotWriter snapshot;
     final private BatchAccumulator<T> accumulator;
     final private Time time;
 
-    public BufferedSnapshotWriter(
+    public BatchedSnapshotWriter(
         SnapshotWriter snapshot,
         int maxBatchSize,
         MemoryPool memoryPool,

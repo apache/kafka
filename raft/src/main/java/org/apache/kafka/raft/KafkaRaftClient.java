@@ -56,7 +56,7 @@ import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.BatchMemoryPool;
 import org.apache.kafka.raft.internals.KafkaRaftMetrics;
 import org.apache.kafka.raft.internals.LogOffset;
-import org.apache.kafka.snapshot.BufferedSnapshotWriter;
+import org.apache.kafka.snapshot.BatchedSnapshotWriter;
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -1733,8 +1733,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     @Override
-    public BufferedSnapshotWriter<T> createSnapshot(OffsetAndEpoch snapshotId) {
-        return new BufferedSnapshotWriter<>(
+    public BatchedSnapshotWriter<T> createSnapshot(OffsetAndEpoch snapshotId) {
+        return new BatchedSnapshotWriter<>(
             log.createSnapshot(snapshotId),
             MAX_BATCH_SIZE,
             memoryPool,

@@ -17,7 +17,7 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.record.Records;
-import org.apache.kafka.snapshot.BufferedSnapshotWriter;
+import org.apache.kafka.snapshot.BatchedSnapshotWriter;
 
 import java.io.IOException;
 import java.util.List;
@@ -109,5 +109,5 @@ public interface RaftClient<T> {
      * @return A writable snapshot object. Snapshot are immutable once the return object's freeze
      *         method is called.
      */
-    BufferedSnapshotWriter<T> createSnapshot(OffsetAndEpoch snapshotId);
+    BatchedSnapshotWriter<T> createSnapshot(OffsetAndEpoch snapshotId);
 }

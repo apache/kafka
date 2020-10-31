@@ -24,7 +24,7 @@ import java.util.Random;
 import java.util.Set;
 import org.apache.kafka.common.record.BufferSupplier.GrowableBufferSupplier;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.snapshot.BufferedSnapshotWriter;
+import org.apache.kafka.snapshot.BatchedSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -32,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-final public class BufferedSnapshotWriterTest {
+final public class BatchedSnapshotWriterTest {
     private final int localId = 0;
     private final Set<Integer> voters = Collections.singleton(localId);
 
@@ -42,7 +42,7 @@ final public class BufferedSnapshotWriterTest {
         List<List<String>> expected = buildRecords(3, 3);
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
-        try (BufferedSnapshotWriter<String> snapshot = context.client.createSnapshot(id)) {
+        try (BatchedSnapshotWriter<String> snapshot = context.client.createSnapshot(id)) {
             expected.forEach(batch -> {
                 assertDoesNotThrow(() -> snapshot.append(batch));
             });
@@ -60,7 +60,7 @@ final public class BufferedSnapshotWriterTest {
         List<List<String>> expected = buildRecords(3, 3);
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
-        try (BufferedSnapshotWriter<String> snapshot = context.client.createSnapshot(id)) {
+        try (BatchedSnapshotWriter<String> snapshot = context.client.createSnapshot(id)) {
             expected.forEach(batch -> {
                 assertDoesNotThrow(() -> snapshot.append(batch));
             });
@@ -75,7 +75,7 @@ final public class BufferedSnapshotWriterTest {
         List<List<String>> expected = buildRecords(3, 3);
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
-        try (BufferedSnapshotWriter<String> snapshot = context.client.createSnapshot(id)) {
+        try (BatchedSnapshotWriter<String> snapshot = context.client.createSnapshot(id)) {
             expected.forEach(batch -> {
                 assertDoesNotThrow(() -> snapshot.append(batch));
             });
