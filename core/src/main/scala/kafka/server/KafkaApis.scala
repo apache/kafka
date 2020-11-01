@@ -131,11 +131,12 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   private def validateForwardRequest(request: RequestChannel.Request): Boolean = {
     if (!config.forwardingEnabled || !request.context.fromPrivilegedListener) {
-     closeConnection(request, Collections.emptyMap())
-     false
-    } else if (!authorize(request.envelopeContext.get.brokerContext, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
       // If the designated forwarding request is not coming from a privileged listener, or
-      // it fails CLUSTER_ACTION permission, we would fail the authorization.
+      // forwarding is not enabled yet, we would not handle the request.
+      closeConnection(request, Collections.emptyMap())
+      false
+    } else if (!authorize(request.envelopeContext.get.brokerContext, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
+      // Forwarding request must have CLUSTER_ACTION authorization to reduce the risk of impersonation.
       buildFailedEnvelopeResponse(request, Errors.CLUSTER_AUTHORIZATION_FAILED)
       false
     } else if (!request.header.apiKey.forwardable) {

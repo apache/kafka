@@ -40,6 +40,10 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
         return new NetworkSend(destination, RequestUtils.serialize(header.toStruct(), toStruct(apiVersion)));
     }
 
+    /**
+     * Used for forwarding response serialization, typically {@link #toSend(String, ResponseHeader, short)}
+     * should be used instead.
+     */
     public ByteBuffer serialize(short version, ResponseHeader responseHeader) {
         return RequestUtils.serialize(responseHeader.toStruct(), toStruct(version));
     }
