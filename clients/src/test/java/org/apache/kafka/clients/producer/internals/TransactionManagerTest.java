@@ -3356,7 +3356,16 @@ public class TransactionManagerTest {
     private MockClient.RequestMatcher produceRequestMatcher(final long producerId, final short epoch, TopicPartition tp) {
         return body -> {
             ProduceRequest produceRequest = (ProduceRequest) body;
-            MemoryRecords records = produceRequest.partitionRecordsOrFail().get(tp);
+            MemoryRecords records = produceRequest.dataOrException().topicData()
+                    .stream()
+                    .filter(t -> t.topic().equals(tp.topic()))
+                    .findAny()
+                    .get()
+                    .data()
+                    .stream()
+                    .filter(p -> p.partition() == tp.partition())
+                    .map(p -> (MemoryRecords) p.recordSet())
+                    .findAny().get();
             assertNotNull(records);
             Iterator<MutableRecordBatch> batchIterator = records.batches().iterator();
             assertTrue(batchIterator.hasNext());

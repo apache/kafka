@@ -19,7 +19,11 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.types.ArrayOf;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
@@ -35,6 +39,11 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
+import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
+import static org.apache.kafka.common.protocol.types.Type.INT16;
+import static org.apache.kafka.common.protocol.types.Type.INT32;
+import static org.apache.kafka.common.protocol.types.Type.RECORDS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -52,19 +61,19 @@ public class ProduceRequestTest {
                 (short) 1, 1, 1, simpleRecord);
         final ProduceRequest request = ProduceRequest.Builder.forCurrentMagic((short) -1,
                 10, Collections.singletonMap(new TopicPartition("topic", 1), memoryRecords)).build();
-        assertTrue(request.hasTransactionalRecords());
+        assertTrue(RequestUtils.hasTransactionalRecords(request));
     }
 
     @Test
     public void shouldNotBeFlaggedAsTransactionalWhenNoRecords() throws Exception {
         final ProduceRequest request = createNonIdempotentNonTransactionalRecords();
-        assertFalse(request.hasTransactionalRecords());
+        assertFalse(RequestUtils.hasTransactionalRecords(request));
     }
 
     @Test
     public void shouldNotBeFlaggedAsIdempotentWhenRecordsNotIdempotent() throws Exception {
         final ProduceRequest request = createNonIdempotentNonTransactionalRecords();
-        assertFalse(request.hasTransactionalRecords());
+        assertFalse(RequestUtils.hasTransactionalRecords(request));
     }
 
     @Test
@@ -73,7 +82,7 @@ public class ProduceRequestTest {
                 (short) 1, 1, 1, simpleRecord);
         final ProduceRequest request = ProduceRequest.Builder.forCurrentMagic((short) -1, 10,
                 Collections.singletonMap(new TopicPartition("topic", 1), memoryRecords)).build();
-        assertTrue(request.hasIdempotentRecords());
+        assertTrue(RequestUtils.hasIdempotentRecords(request));
     }
 
     @Test
@@ -200,8 +209,8 @@ public class ProduceRequestTest {
                 recordsByPartition, transactionalId);
 
         final ProduceRequest request = builder.build();
-        assertTrue(request.hasTransactionalRecords());
-        assertTrue(request.hasIdempotentRecords());
+        assertTrue(RequestUtils.hasTransactionalRecords(request));
+        assertTrue(RequestUtils.hasIdempotentRecords(request));
     }
 
     @Test
@@ -223,8 +232,8 @@ public class ProduceRequestTest {
                 recordsByPartition, null);
 
         final ProduceRequest request = builder.build();
-        assertFalse(request.hasTransactionalRecords());
-        assertTrue(request.hasIdempotentRecords());
+        assertFalse(RequestUtils.hasTransactionalRecords(request));
+        assertTrue(RequestUtils.hasIdempotentRecords(request));
     }
 
     private void assertThrowsInvalidRecordExceptionForAllVersions(ProduceRequest.Builder builder) {
@@ -247,5 +256,44 @@ public class ProduceRequestTest {
         final MemoryRecords memoryRecords = MemoryRecords.withRecords(CompressionType.NONE, simpleRecord);
         return ProduceRequest.Builder.forCurrentMagic((short) -1, 10,
                 Collections.singletonMap(new TopicPartition("topic", 1), memoryRecords)).build();
+    }
+
+    /**
+     * the schema in this test is from previous code and the automatic protocol should be compatible to previous schema.
+     */
+    @Test
+    public void testCompatibility() {
+        String acksKeyName = "acks";
+        String timeoutKeyName = "timeout";
+        String topicDataKeyName = "topic_data";
+        String partitionDataKeyName = "data";
+        String recordSetKeyName = "record_set";
+        Schema topicProduceData0 = new Schema(TOPIC_NAME,
+                new Field(partitionDataKeyName, new ArrayOf(new Schema(PARTITION_ID, new Field(recordSetKeyName, RECORDS)))));
+        Schema produceRequestV0 = new Schema(
+                new Field(acksKeyName, INT16),
+                new Field(timeoutKeyName, INT32),
+                new Field(topicDataKeyName, new ArrayOf(topicProduceData0)));
+        Schema produceRequestV1 = produceRequestV0;
+        Schema produceRequestV2 = produceRequestV1;
+        Schema produceRequestV3 = new Schema(
+                new Field.NullableStr("transactional_id", "The transactional id or null if the producer is not transactional"),
+                new Field(acksKeyName, INT16),
+                new Field(timeoutKeyName, INT32),
+                new Field(topicDataKeyName, new ArrayOf(topicProduceData0)));
+        Schema produceRequestV4 = produceRequestV3;
+        Schema produceRequestV5 = produceRequestV4;
+        Schema produceRequestV6 = produceRequestV5;
+        Schema produceRequestV7 = produceRequestV6;
+        Schema produceRequestV8 = produceRequestV7;
+        Schema[] schemaVersions = new Schema[] {
+            produceRequestV0, produceRequestV1, produceRequestV2,
+            produceRequestV3, produceRequestV4, produceRequestV5,
+            produceRequestV6, produceRequestV7, produceRequestV8
+        };
+        int schemaVersion = 0;
+        for (Schema previousSchema : schemaVersions) {
+            SchemaTestUtils.assertEquals(previousSchema, ProduceRequestData.SCHEMAS[schemaVersion++]);
+        }
     }
 }

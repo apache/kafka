@@ -18,10 +18,14 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.Records;
 
 import java.nio.ByteBuffer;
+import java.util.Iterator;
 import java.util.Optional;
+import java.util.function.Predicate;
 
 public final class RequestUtils {
 
@@ -48,4 +52,28 @@ public final class RequestUtils {
         buffer.rewind();
         return buffer;
     }
+
+    public static boolean hasIdempotentRecords(ProduceRequest request) {
+        return anyMatch(request, RecordBatch::hasProducerId);
+    }
+
+    public static boolean hasTransactionalRecords(ProduceRequest request) {
+        return anyMatch(request, RecordBatch::isTransactional);
+    }
+
+    private static boolean anyMatch(ProduceRequest request, Predicate<RecordBatch> predicate) {
+        return request.dataOrException().topicData()
+                .stream()
+                .anyMatch(topicProduceData -> topicProduceData.data()
+                    .stream()
+                    .anyMatch(partitionProduceData -> {
+                        BaseRecords records = partitionProduceData.recordSet();
+                        if (records instanceof Records) {
+                            Iterator<? extends RecordBatch> iterator = ((Records) records).batches().iterator();
+                            return iterator.hasNext() && predicate.test(iterator.next());
+                        } else return false;
+                    }));
+    }
+
+
 }

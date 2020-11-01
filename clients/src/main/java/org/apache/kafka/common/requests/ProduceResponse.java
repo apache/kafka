@@ -29,34 +29,36 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
  * This wrapper supports both v0 and v8 of ProduceResponse.
+ *
+ * Possible error code:
+ *
+ * {@link Errors#CORRUPT_MESSAGE}
+ * {@link Errors#UNKNOWN_TOPIC_OR_PARTITION}
+ * {@link Errors#NOT_LEADER_OR_FOLLOWER}
+ * {@link Errors#MESSAGE_TOO_LARGE}
+ * {@link Errors#INVALID_TOPIC_EXCEPTION}
+ * {@link Errors#RECORD_LIST_TOO_LARGE}
+ * {@link Errors#NOT_ENOUGH_REPLICAS}
+ * {@link Errors#NOT_ENOUGH_REPLICAS_AFTER_APPEND}
+ * {@link Errors#INVALID_REQUIRED_ACKS}
+ * {@link Errors#TOPIC_AUTHORIZATION_FAILED}
+ * {@link Errors#UNSUPPORTED_FOR_MESSAGE_FORMAT}
+ * {@link Errors#INVALID_PRODUCER_EPOCH}
+ * {@link Errors#CLUSTER_AUTHORIZATION_FAILED}
+ * {@link Errors#TRANSACTIONAL_ID_AUTHORIZATION_FAILED}
+ * {@link Errors#INVALID_RECORD}
  */
 public class ProduceResponse extends AbstractResponse {
     public static final long INVALID_OFFSET = -1L;
     private final ProduceResponseData data;
-    private final Map<TopicPartition, PartitionResponse> responses;
 
     public ProduceResponse(ProduceResponseData produceResponseData) {
         this.data = produceResponseData;
-        this.responses = data.responses()
-            .stream()
-            .flatMap(t -> t.partitions()
-                .stream()
-                .map(p -> new AbstractMap.SimpleEntry<>(new TopicPartition(t.name(), p.partitionIndex()),
-                    new PartitionResponse(
-                        Errors.forCode(p.errorCode()),
-                        p.baseOffset(),
-                        p.logAppendTimeMs(),
-                        p.logStartOffset(),
-                        p.recordErrors()
-                            .stream()
-                            .map(e -> new RecordError(e.batchIndex(), e.batchIndexErrorMessage()))
-                            .collect(Collectors.toList()),
-                        p.errorMessage()))))
-            .collect(Collectors.toMap(AbstractMap.SimpleEntry::getKey, AbstractMap.SimpleEntry::getValue));
     }
 
     /**
@@ -73,8 +75,7 @@ public class ProduceResponse extends AbstractResponse {
      * @param throttleTimeMs Time in milliseconds the response was throttled
      */
     public ProduceResponse(Map<TopicPartition, PartitionResponse> responses, int throttleTimeMs) {
-        this.responses = responses;
-        this.data = new ProduceResponseData()
+        this(new ProduceResponseData()
             .setResponses(responses.entrySet()
                 .stream()
                 .collect(Collectors.groupingBy(e -> e.getKey().topic()))
@@ -99,16 +100,42 @@ public class ProduceResponse extends AbstractResponse {
                                 .collect(Collectors.toList())))
                         .collect(Collectors.toList())))
                 .collect(Collectors.toList()))
-            .setThrottleTimeMs(throttleTimeMs);
+            .setThrottleTimeMs(throttleTimeMs));
     }
 
+    /**
+     * Visible for testing.
+     */
     @Override
-    protected Struct toStruct(short version) {
+    public Struct toStruct(short version) {
         return data.toStruct(version);
     }
 
+    public ProduceResponseData data() {
+        return this.data;
+    }
+
+    /**
+     * this method is used by testing only.
+     * TODO: refactor the tests which are using this method and then remove this method from production code.
+     */
     public Map<TopicPartition, PartitionResponse> responses() {
-        return this.responses;
+        return data.responses()
+                .stream()
+                .flatMap(t -> t.partitions()
+                        .stream()
+                        .map(p -> new AbstractMap.SimpleEntry<>(new TopicPartition(t.name(), p.partitionIndex()),
+                                new PartitionResponse(
+                                        Errors.forCode(p.errorCode()),
+                                        p.baseOffset(),
+                                        p.logAppendTimeMs(),
+                                        p.logStartOffset(),
+                                        p.recordErrors()
+                                                .stream()
+                                                .map(e -> new RecordError(e.batchIndex(), e.batchIndexErrorMessage()))
+                                                .collect(Collectors.toList()),
+                                        p.errorMessage()))))
+                .collect(Collectors.toMap(AbstractMap.SimpleEntry::getKey, AbstractMap.SimpleEntry::getValue));
     }
 
     @Override
@@ -119,9 +146,7 @@ public class ProduceResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
-        responses.values().forEach(response ->
-            updateErrorCounts(errorCounts, response.error)
-        );
+        data.responses().forEach(t -> t.partitions().forEach(p -> updateErrorCounts(errorCounts, Errors.forCode(p.errorCode()))));
         return errorCounts;
     }
 
@@ -152,6 +177,24 @@ public class ProduceResponse extends AbstractResponse {
             this.logStartOffset = logStartOffset;
             this.recordErrors = recordErrors;
             this.errorMessage = errorMessage;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            PartitionResponse that = (PartitionResponse) o;
+            return baseOffset == that.baseOffset &&
+                    logAppendTime == that.logAppendTime &&
+                    logStartOffset == that.logStartOffset &&
+                    error == that.error &&
+                    Objects.equals(recordErrors, that.recordErrors) &&
+                    Objects.equals(errorMessage, that.errorMessage);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(error, baseOffset, logAppendTime, logStartOffset, recordErrors, errorMessage);
         }
 
         @Override
@@ -193,6 +236,19 @@ public class ProduceResponse extends AbstractResponse {
             this.message = null;
         }
 
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            RecordError that = (RecordError) o;
+            return batchIndex == that.batchIndex &&
+                    Objects.equals(message, that.message);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(batchIndex, message);
+        }
     }
 
     public static ProduceResponse parse(ByteBuffer buffer, short version) {

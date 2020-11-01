@@ -25,9 +25,9 @@ import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
+import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.CommonFields;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
@@ -198,9 +198,9 @@ public class NetworkClientTest {
         ResponseHeader respHeader =
             new ResponseHeader(request.correlationId(),
                 request.apiKey().responseHeaderVersion(PRODUCE.latestVersion()));
-        Struct resp = new Struct(PRODUCE.responseSchema(PRODUCE.latestVersion()));
-        resp.set("responses", new Object[0]);
-        resp.set(CommonFields.THROTTLE_TIME_MS, 100);
+        Struct resp = new ProduceResponseData()
+                .setThrottleTimeMs(100)
+                .toStruct(ProduceResponseData.HIGHEST_SUPPORTED_VERSION);
         Struct responseHeaderStruct = respHeader.toStruct();
         int size = responseHeaderStruct.sizeOf() + resp.sizeOf();
         ByteBuffer buffer = ByteBuffer.allocate(size);
@@ -511,9 +511,9 @@ public class NetworkClientTest {
         ResponseHeader respHeader =
             new ResponseHeader(request.correlationId(),
                 request.apiKey().responseHeaderVersion(PRODUCE.latestVersion()));
-        Struct resp = new Struct(PRODUCE.responseSchema(PRODUCE.latestVersion()));
-        resp.set("responses", new Object[0]);
-        resp.set(CommonFields.THROTTLE_TIME_MS, 100);
+        Struct resp = new ProduceResponseData()
+                .setThrottleTimeMs(100)
+                .toStruct(ProduceResponseData.HIGHEST_SUPPORTED_VERSION);
         Struct responseHeaderStruct = respHeader.toStruct();
         int size = responseHeaderStruct.sizeOf() + resp.sizeOf();
         ByteBuffer buffer = ByteBuffer.allocate(size);
@@ -607,9 +607,9 @@ public class NetworkClientTest {
     }
 
     private void sendThrottledProduceResponse(int correlationId, int throttleMs) {
-        Struct resp = new Struct(PRODUCE.responseSchema(PRODUCE.latestVersion()));
-        resp.set("responses", new Object[0]);
-        resp.set(CommonFields.THROTTLE_TIME_MS, throttleMs);
+        Struct resp = new ProduceResponseData()
+                .setThrottleTimeMs(throttleMs)
+                .toStruct(ProduceResponseData.HIGHEST_SUPPORTED_VERSION);
         sendResponse(new ResponseHeader(correlationId,
             PRODUCE.responseHeaderVersion(PRODUCE.latestVersion())),
             resp);

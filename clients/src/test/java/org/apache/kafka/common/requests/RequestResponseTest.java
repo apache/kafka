@@ -646,7 +646,7 @@ public class RequestResponseTest {
     @Test
     public void produceRequestToStringTest() {
         ProduceRequest request = createProduceRequest(ApiKeys.PRODUCE.latestVersion());
-        assertEquals(1, request.partitionRecordsOrFail().size());
+        assertEquals(1, request.dataOrException().topicData().size());
         assertFalse(request.toString(false).contains("partitionSizes"));
         assertTrue(request.toString(false).contains("numPartitions=1"));
         assertTrue(request.toString(true).contains("partitionSizes"));
@@ -654,8 +654,8 @@ public class RequestResponseTest {
 
         request.clearPartitionRecords();
         try {
-            request.partitionRecordsOrFail();
-            fail("partitionRecordsOrFail should fail after clearPartitionRecords()");
+            request.dataOrException();
+            fail("dataOrException should fail after clearPartitionRecords()");
         } catch (IllegalStateException e) {
             // OK
         }
@@ -670,7 +670,7 @@ public class RequestResponseTest {
     @Test
     public void produceRequestGetErrorResponseTest() {
         ProduceRequest request = createProduceRequest(ApiKeys.PRODUCE.latestVersion());
-        Set<TopicPartition> partitions = new HashSet<>(request.partitionRecordsOrFail().keySet());
+        Set<TopicPartition> partitions = new HashSet<>(request.partitionSizes.keySet());
 
         ProduceResponse errorResponse = (ProduceResponse) request.getErrorResponse(new NotEnoughReplicasException());
         assertEquals(partitions, errorResponse.responses().keySet());
@@ -1414,7 +1414,7 @@ public class RequestResponseTest {
         byte magic = version == 2 ? RecordBatch.MAGIC_VALUE_V1 : RecordBatch.MAGIC_VALUE_V2;
         MemoryRecords records = MemoryRecords.withRecords(magic, CompressionType.NONE, new SimpleRecord("woot".getBytes()));
         Map<TopicPartition, MemoryRecords> produceData = Collections.singletonMap(new TopicPartition("test", 0), records);
-        return ProduceRequest.Builder.forMagic(magic, (short) 1, 5000, produceData, "transactionalId")
+        return ProduceRequest.Builder.forMagic(magic, (short) 1, 5000, produceData, version >= 3 ? "transactionalId" : null)
                 .build((short) version);
     }
 

@@ -20,25 +20,24 @@ import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.message.ProduceRequestData;
-import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.AbstractMap;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public class ProduceRequest extends AbstractRequest {
@@ -114,11 +113,11 @@ public class ProduceRequest extends AbstractRequest {
                 .entrySet()
                 .stream()
                 .map(e -> new ProduceRequestData.TopicProduceData()
-                    .setName(e.getKey())
-                    .setPartitions(e.getValue().stream()
+                    .setTopic(e.getKey())
+                    .setData(e.getValue().stream()
                         .map(tpAndRecord -> new ProduceRequestData.PartitionProduceData()
-                            .setPartitionIndex(tpAndRecord.getKey().partition())
-                            .setRecords(tpAndRecord.getValue().buffer()))
+                            .setPartition(tpAndRecord.getKey().partition())
+                            .setRecordSet(tpAndRecord.getValue()))
                         .collect(Collectors.toList())))
                 .collect(Collectors.toList());
 
@@ -151,8 +150,6 @@ public class ProduceRequest extends AbstractRequest {
     private final String transactionalId;
     // visible for testing
     final Map<TopicPartition, Integer> partitionSizes;
-    private boolean hasTransactionalRecords = false;
-    private boolean hasIdempotentRecords = false;
     // This is set to null by `clearPartitionRecords` to prevent unnecessary memory retention when a produce request is
     // put in the purgatory (due to client throttling, it can take a while before the response is sent).
     // Care should be taken in methods that use this field.
@@ -161,23 +158,26 @@ public class ProduceRequest extends AbstractRequest {
     public ProduceRequest(ProduceRequestData produceRequestData, short version) {
         super(ApiKeys.PRODUCE, version);
         this.data = produceRequestData;
-        this.data.topicData().forEach(topicProduceData -> topicProduceData.partitions()
-            .forEach(partitionProduceData -> {
-                MemoryRecords records = MemoryRecords.readableRecords(partitionProduceData.records());
-                Iterator<MutableRecordBatch> iterator = records.batches().iterator();
-                MutableRecordBatch entry = iterator.next();
-                hasIdempotentRecords = hasIdempotentRecords || entry.hasProducerId();
-                hasTransactionalRecords = hasTransactionalRecords || entry.isTransactional();
-            }));
         this.acks = data.acks();
         this.timeout = data.timeout();
         this.transactionalId = data.transactionalId();
         this.partitionSizes = data.topicData()
             .stream()
-            .flatMap(e -> e.partitions()
+            .flatMap(e -> e.data()
                 .stream()
-                .map(p -> new AbstractMap.SimpleEntry<>(new TopicPartition(e.name(), p.partitionIndex()), p.records().limit())))
+                .map(p -> new AbstractMap.SimpleEntry<>(new TopicPartition(e.topic(), p.partition()), p.recordSet().sizeInBytes())))
             .collect(Collectors.groupingBy(AbstractMap.SimpleEntry::getKey, Collectors.summingInt(AbstractMap.SimpleEntry::getValue)));
+    }
+
+    /**
+     * @return data or IllegalStateException if the data is removed (to prevent unnecessary memory retention).
+     */
+    public ProduceRequestData dataOrException() {
+        // Store it in a local variable to protect against concurrent updates
+        ProduceRequestData tmp = data;
+        if (tmp == null)
+            throw new IllegalStateException("The partition records are no longer available because clearPartitionRecords() has been invoked.");
+        return tmp;
     }
 
     /**
@@ -185,11 +185,7 @@ public class ProduceRequest extends AbstractRequest {
      */
     @Override
     public Struct toStruct() {
-        // Store it in a local variable to protect against concurrent updates
-        ProduceRequestData tmp = data;
-        if (tmp == null)
-            throw new IllegalStateException("The partition records are no longer available because clearPartitionRecords() has been invoked.");
-        return tmp.toStruct(version());
+        return dataOrException().toStruct(version());
     }
 
     @Override
@@ -211,29 +207,11 @@ public class ProduceRequest extends AbstractRequest {
     @Override
     public ProduceResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         /* In case the producer doesn't actually want any response */
-        if (acks == 0)
-            return null;
-
-        Errors error = Errors.forException(e);
-        return new ProduceResponse(new ProduceResponseData()
-            .setResponses(partitionSizes.keySet()
-                .stream()
-                .collect(Collectors.groupingBy(TopicPartition::topic))
-                .entrySet()
-                .stream()
-                .map(tp -> new ProduceResponseData.TopicProduceResponse()
-                    .setName(tp.getKey())
-                    .setPartitions(tp.getValue().stream().map(p -> new ProduceResponseData.PartitionProduceResponse()
-                        .setPartitionIndex(p.partition())
-                        .setBaseOffset(ProduceResponse.INVALID_OFFSET)
-                        .setErrorCode(error.code())
-                        .setErrorMessage(error.message())
-                        .setLogAppendTimeMs(RecordBatch.NO_TIMESTAMP)
-                        .setLogStartOffset(ProduceResponse.INVALID_OFFSET)
-                        .setRecordErrors(Collections.emptyList()))
-                        .collect(Collectors.toList())))
-                .collect(Collectors.toList()))
-            .setThrottleTimeMs(throttleTimeMs));
+        if (acks == 0) return null;
+        ProduceResponse.PartitionResponse partitionResponse = new ProduceResponse.PartitionResponse(Errors.forException(e));
+        return new ProduceResponse(partitions()
+            .stream()
+            .collect(Collectors.toMap(Function.identity(), ignored -> partitionResponse)), throttleTimeMs);
     }
 
     @Override
@@ -258,43 +236,18 @@ public class ProduceRequest extends AbstractRequest {
         return transactionalId;
     }
 
-    public boolean hasTransactionalRecords() {
-        return hasTransactionalRecords;
-    }
-
-    public boolean hasIdempotentRecords() {
-        return hasIdempotentRecords;
-    }
-
-    /**
-     * convert the generated data to Map<TopicPartition, MemoryRecords>.
-     * Noted that the cost of conversion can be expensive so caller should keep and reuse the returned collection.
-     */
-    public Map<TopicPartition, MemoryRecords> partitionRecordsOrFail() {
-        // Store it in a local variable to protect against concurrent updates
-        ProduceRequestData tmp = data;
-        if (tmp == null)
-            throw new IllegalStateException("The partition records are no longer available because clearPartitionRecords() has been invoked.");
-        Map<TopicPartition, MemoryRecords> partitionRecords = new HashMap<>();
-        tmp.topicData().forEach(tpData -> tpData.partitions().forEach(p -> {
-            TopicPartition tp = new TopicPartition(tpData.name(), p.partitionIndex());
-            partitionRecords.put(tp, MemoryRecords.readableRecords(p.records()));
-        }));
-        return Collections.unmodifiableMap(partitionRecords);
-    }
-
     public void clearPartitionRecords() {
         data = null;
     }
 
-    public static void validateRecords(short version, MemoryRecords records) {
+    public static void validateRecords(short version, Records records) {
         if (version >= 3) {
-            Iterator<MutableRecordBatch> iterator = records.batches().iterator();
+            Iterator<? extends RecordBatch> iterator = records.batches().iterator();
             if (!iterator.hasNext())
                 throw new InvalidRecordException("Produce requests with version " + version + " must have at least " +
                     "one record batch");
 
-            MutableRecordBatch entry = iterator.next();
+            RecordBatch entry = iterator.next();
             if (entry.magic() != RecordBatch.MAGIC_VALUE_V2)
                 throw new InvalidRecordException("Produce requests with version " + version + " are only allowed to " +
                     "contain record batches with magic version 2");
