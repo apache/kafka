@@ -126,7 +126,11 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def buildFailedEnvelopeResponse(request: RequestChannel.Request, error: Errors): Unit = {
-      sendResponse(request, None, None, error)
+    val throttleTimeMs = maybeRecordAndGetThrottleTimeMs(request)
+    // Only throttle cluster authorization failures
+    if (error == Errors.CLUSTER_AUTHORIZATION_FAILED)
+      quotas.request.throttle(request, throttleTimeMs, requestChannel.sendResponse)
+    sendResponse(request, None, None, error)
   }
 
   private def validateForwardRequest(request: RequestChannel.Request): Boolean = {
