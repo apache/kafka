@@ -38,6 +38,7 @@ import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 
 import java.lang.reflect.Field;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -111,8 +112,8 @@ public class TaskAssignorIntegrationTest {
 
             final Field threads = KafkaStreams.class.getDeclaredField("threads");
             threads.setAccessible(true);
-            final StreamThread[] streamThreads = (StreamThread[]) threads.get(kafkaStreams);
-            final StreamThread streamThread = streamThreads[0];
+            final  ArrayList<StreamThread> streamThreads = (ArrayList<StreamThread>) threads.get(kafkaStreams);
+            final StreamThread streamThread = streamThreads.get(0);
 
             final Field mainConsumer = StreamThread.class.getDeclaredField("mainConsumer");
             mainConsumer.setAccessible(true);
