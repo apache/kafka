@@ -24,7 +24,7 @@ import kafka.api.KAFKA_2_7_IV0
 import kafka.utils.TestUtils
 import kafka.zk.{FeatureZNode, FeatureZNodeStatus, ZkVersion}
 import kafka.utils.TestUtils.waitUntilTrue
-import org.apache.kafka.clients.admin.{Admin, DescribeFeaturesOptions, FeatureUpdate, UpdateFeaturesOptions, UpdateFeaturesResult}
+import org.apache.kafka.clients.admin.{Admin, DescribeFeaturesOptions, FeatureUpdate, FinalizedVersions, SupportedVersions, UpdateFeaturesOptions, UpdateFeaturesResult}
 import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.feature.FinalizedVersionRange
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
@@ -101,14 +101,14 @@ class UpdateFeaturesTest extends BaseRequestTest {
     FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
   }
 
-  private def finalizedFeatures(features: java.util.Map[String, org.apache.kafka.clients.admin.FinalizedVersionRange]): Features[FinalizedVersionRange] = {
+  private def finalizedFeatures(features: java.util.Map[String, FinalizedVersions]): Features[FinalizedVersionRange] = {
     Features.finalizedFeatures(features.asScala.map {
       case(name, versionRange) =>
         (name, new FinalizedVersionRange(versionRange.minVersionLevel(), versionRange.maxVersionLevel()))
     }.asJava)
   }
 
-  private def supportedFeatures(features: java.util.Map[String, org.apache.kafka.clients.admin.SupportedVersionRange]): Features[SupportedVersionRange] = {
+  private def supportedFeatures(features: java.util.Map[String, SupportedVersions]): Features[SupportedVersionRange] = {
     Features.supportedFeatures(features.asScala.map {
       case(name, versionRange) =>
         (name, new SupportedVersionRange(versionRange.minVersion(), versionRange.maxVersion()))

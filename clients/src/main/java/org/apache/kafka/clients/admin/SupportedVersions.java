@@ -21,7 +21,7 @@ import java.util.Objects;
 /**
  * Represents a range of versions that a particular broker supports for some feature.
  */
-public class SupportedVersionRange {
+public class SupportedVersions {
     private final short minVersion;
 
     private final short maxVersion;
@@ -35,7 +35,7 @@ public class SupportedVersionRange {
      *
      * @throws IllegalArgumentException   Raised when the condition described above is not met.
      */
-    SupportedVersionRange(final short minVersion, final short maxVersion) {
+    SupportedVersions(final short minVersion, final short maxVersion) {
         if (minVersion < 1 || maxVersion < 1 || maxVersion < minVersion) {
             throw new IllegalArgumentException(
                 String.format(
@@ -65,7 +65,7 @@ public class SupportedVersionRange {
             return false;
         }
 
-        final SupportedVersionRange that = (SupportedVersionRange) other;
+        final SupportedVersions that = (SupportedVersions) other;
         return this.minVersion == that.minVersion && this.maxVersion == that.maxVersion;
     }
 

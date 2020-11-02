@@ -29,15 +29,15 @@ import java.util.Optional;
  */
 public class FeatureMetadata {
 
-    private final Map<String, FinalizedVersionRange> finalizedFeatures;
+    private final Map<String, FinalizedVersions> finalizedFeatures;
 
     private final Optional<Long> finalizedFeaturesEpoch;
 
-    private final Map<String, SupportedVersionRange> supportedFeatures;
+    private final Map<String, SupportedVersions> supportedFeatures;
 
-    FeatureMetadata(final Map<String, FinalizedVersionRange> finalizedFeatures,
+    FeatureMetadata(final Map<String, FinalizedVersions> finalizedFeatures,
                            final Optional<Long> finalizedFeaturesEpoch,
-                           final Map<String, SupportedVersionRange> supportedFeatures) {
+                           final Map<String, SupportedVersions> supportedFeatures) {
         this.finalizedFeatures = new HashMap<>(finalizedFeatures);
         this.finalizedFeaturesEpoch = finalizedFeaturesEpoch;
         this.supportedFeatures = new HashMap<>(supportedFeatures);
@@ -48,7 +48,7 @@ public class FeatureMetadata {
      * feature name and the value being a range of version levels supported by every broker in the
      * cluster.
      */
-    public Map<String, FinalizedVersionRange> finalizedFeatures() {
+    public Map<String, FinalizedVersions> finalizedFeatures() {
         return new HashMap<>(finalizedFeatures);
     }
 
@@ -65,7 +65,7 @@ public class FeatureMetadata {
      * feature name and the value being a range of versions supported by a particular broker in the
      * cluster.
      */
-    public Map<String, SupportedVersionRange> supportedFeatures() {
+    public Map<String, SupportedVersions> supportedFeatures() {
         return new HashMap<>(supportedFeatures);
     }
 
