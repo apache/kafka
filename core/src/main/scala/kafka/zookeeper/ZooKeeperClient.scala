@@ -40,7 +40,7 @@ import scala.collection.Seq
 import scala.collection.mutable.Set
 
 object ZooKeeperClient {
-  val AuthFailedRetryBackoffMs = 100
+  val AuthFailedRetryBackoffMs = 1000
 }
 
 /**
@@ -85,7 +85,7 @@ class ZooKeeperClient(connectString: String,
   private val zNodeChildChangeHandlers = new ConcurrentHashMap[String, ZNodeChildChangeHandler]().asScala
   private val inFlightRequests = new Semaphore(maxInFlightRequests)
   private val stateChangeHandlers = new ConcurrentHashMap[String, StateChangeHandler]().asScala
-  private[zookeeper] val reinitializeScheduler = new KafkaScheduler(threads = 1, "zk-client-reinit-")
+  private[zookeeper] val reinitializeScheduler = new KafkaScheduler(threads = 1, s"zk-client-${threadPrefix}reinit-")
   private var isFirstConnectionEstablished = false
 
   private val metricNames = Set[String]()
@@ -431,6 +431,8 @@ class ZooKeeperClient(connectString: String,
       reinitialize()
     }, delayMs, period = -1L, unit = TimeUnit.MILLISECONDS)
   }
+
+  private def threadPrefix: String = name.map(n => n.replaceAll("\\s", "") + "-").getOrElse("")
 
   // package level visibility for testing only
   private[zookeeper] object ZooKeeperClientWatcher extends Watcher {

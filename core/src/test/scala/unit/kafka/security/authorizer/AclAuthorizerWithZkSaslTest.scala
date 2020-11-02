@@ -90,14 +90,7 @@ class AclAuthorizerWithZkSaslTest extends ZooKeeperTestHarness with SaslSetup {
     aclAuthorizer2.close()
     super.tearDown()
     TestableDigestLoginModule.reset()
-  }
-
-  def jaasSections: collection.Seq[JaasTestUtils.JaasSection] = {
-    val jaasSections = JaasTestUtils.zkSections
-    val serverJaas = jaasSections.filter(_.contextName == "Server")
-    val clientJaas = jaasSections.filter(_.contextName == "Client")
-      .map(section => new TestableJaasSection(section.contextName, section.modules))
-    serverJaas ++ clientJaas
+    System.clearProperty("zookeeper.allowSaslFailedClients")
   }
 
   @Test
@@ -108,20 +101,15 @@ class AclAuthorizerWithZkSaslTest extends ZooKeeperTestHarness with SaslSetup {
   }
 
   @Test
-  def testAclUpdateWithAuthFailureInUpdater(): Unit = {
-    injectTransientAuthenticationFailure(aclAuthorizer)
+  def testAclUpdateWithAuthFailure(): Unit = {
+    injectTransientAuthenticationFailure()
     verifyAclUpdate()
   }
 
-  @Test
-  def testAclUpdateWithAuthFailureInObserver(): Unit = {
-    injectTransientAuthenticationFailure(aclAuthorizer2)
-    verifyAclUpdate()
-  }
-
-  private def injectTransientAuthenticationFailure(authorizer: AclAuthorizer): Unit = {
+  private def injectTransientAuthenticationFailure(): Unit = {
     TestableDigestLoginModule.injectInvalidCredentials()
-    zkClient(authorizer).currentZooKeeper.getTestable.injectSessionExpiration()
+    zkClient(aclAuthorizer).currentZooKeeper.getTestable.injectSessionExpiration()
+    zkClient(aclAuthorizer2).currentZooKeeper.getTestable.injectSessionExpiration()
     executor.schedule((() => TestableDigestLoginModule.reset()): Runnable,
       ZooKeeperClient.AuthFailedRetryBackoffMs * 2, TimeUnit.MILLISECONDS)
   }
@@ -135,7 +123,7 @@ class AclAuthorizerWithZkSaslTest extends ZooKeeperTestHarness with SaslSetup {
       try {
         addAcls(aclAuthorizer, acls, resource)
       } catch {
-        case e: Exception => // Ignore error and retry
+        case _: Exception => // Ignore error and retry
       }
       assertEquals(acls, getAcls(aclAuthorizer, resource))
     }
@@ -168,7 +156,7 @@ class AclAuthorizerWithZkSaslTest extends ZooKeeperTestHarness with SaslSetup {
 }
 
 object TestableDigestLoginModule {
-  var injectedPassword: Option[String] = None
+  @volatile var injectedPassword: Option[String] = None
 
   def reset(): Unit = {
     injectedPassword = None
