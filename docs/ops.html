@@ -22,6 +22,23 @@
 
   This section will review the most common operations you will perform on your Kafka cluster. All of the tools reviewed in this section are available under the <code>bin/</code> directory of the Kafka distribution and each tool will print details on all possible commandline options if it is run with no arguments.
 
+  <h4><a id="basic_ops_common_options" href="#basic_ops_common_options">Common options</a></h4>
+
+  The shell scripts all accept some common options:
+
+  <dl>
+    <dt><code>-daemon</code></dt>
+    <dd>Daemonise the tool using <code>nohup(1)</code> and redirect standard output and standard error. This is necessary, for example, when starting services when logged in via SSH and the service needs to outlive the SSH terminal session.</dd>
+
+    <dt><code>-loggc</code></dt>
+    <dd>Log garbage collection via Oracle/OpenJDK-specific command line options. Alternatively the <code>KAFKA_GC_LOG_OPTS</code> environment variable can be used to configure GC logging.</dd>
+
+    <dt><code>-name <i>servicename</i></code></dt>
+    <dd>Specify a service name used for naming two sorts of log file: When <code>-daemon</code> is given, standard output and standard error will be redirected to <code><i>servicename</i>.out</code>. When <code>-loggc</code> is given the garbage collection logs will be written to <code><i>servicename</i>-gc.log</code></dd>
+  </dl>
+
+  These options are not supported on Windows.
+
   <h4><a id="basic_ops_add_topic" href="#basic_ops_add_topic">Adding and removing topics</a></h4>
 
   You have the option of either adding topics manually or having them be created automatically when data is first published to a non-existent topic. If topics are auto-created then you may want to tune the default <a href="#topicconfigs">topic configurations</a> used for auto-created topics.
