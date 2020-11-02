@@ -41,7 +41,7 @@ class TimingWheelExpirationService(timer: Timer) extends ExpirationService {
 
   expirationReaper.start()
 
-  override def await[T](timeoutMs: Long): CompletableFuture[T] = {
+  override def failAfter[T](timeoutMs: Long): CompletableFuture[T] = {
     val future = new TimerTaskCompletableFuture[T](timeoutMs)
     future.whenComplete { (_, _) =>
       future.cancel()

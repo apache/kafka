@@ -28,5 +28,5 @@ public interface ExpirationService {
      * @param <T> arbitrary future type (the service must set no expectation on the this type)
      * @return the completable future
      */
-    <T> CompletableFuture<T> await(long timeoutMs);
+    <T> CompletableFuture<T> failAfter(long timeoutMs);
 }

@@ -34,7 +34,7 @@ public class MockExpirationService implements ExpirationService, MockTime.Listen
     }
 
     @Override
-    public <T> CompletableFuture<T> await(long timeoutMs) {
+    public <T> CompletableFuture<T> failAfter(long timeoutMs) {
         long deadlineMs = time.milliseconds() + timeoutMs;
         long id = idGenerator.incrementAndGet();
         ExpirationFuture<T> future = new ExpirationFuture<>(id, deadlineMs);

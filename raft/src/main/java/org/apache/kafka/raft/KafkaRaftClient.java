@@ -247,7 +247,15 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         state.highWatermark().ifPresent(highWatermark -> {
             logger.debug("Leader high watermark updated to {}", highWatermark);
             log.updateHighWatermark(highWatermark);
+
+            // After updating the high watermark, we first clear the append
+            // purgatory so that we have an opportunity to route the pending
+            // records still held in memory directory to the listener
             appendPurgatory.maybeComplete(highWatermark.offset, currentTimeMs);
+
+            // It is also possible that the high watermark is being updated
+            // for the first time following the leader election, so we need
+            // to give lagging listeners an opportunity to catch up as well
             maybeFireHandleCommit(highWatermark.offset);
         });
     }
@@ -287,16 +295,9 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
     private void maybeFireHandleClaim(LeaderState state) {
         int leaderEpoch = state.epoch();
-
+        long epochStartOffset = state.epochStartOffset();
         for (ListenerContext listenerContext : listenerContexts) {
-            // We can fire `handleClaim` as soon as the listener has caught
-            // up to the start of the leader epoch. This guarantees that the
-            // state machine has seen the full committed state before it becomes
-            // leader and begins writing to the log.
-            if (leaderEpoch > listenerContext.claimedEpoch
-                && listenerContext.lastAckedOffset() >= state.epochStartOffset()) {
-                listenerContext.fireHandleClaim(leaderEpoch);
-            }
+            listenerContext.maybeFireHandleClaim(leaderEpoch, epochStartOffset);
         }
     }
 
@@ -1028,9 +1029,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 log.truncateToEndOffset(divergingOffsetAndEpoch).ifPresent(truncationOffset -> {
                     logger.info("Truncated to offset {} from Fetch response from leader {}",
                         truncationOffset, quorum.leaderIdOrNil());
-                    // After truncation, we complete all pending reads in order to
-                    // ensure that fetches account for the updated log end offset
-                    fetchPurgatory.completeAll(currentTimeMs);
                 });
             } else {
                 Records records = (Records) partitionResponse.recordSet();
@@ -1810,9 +1808,13 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
     private final class ListenerContext implements CloseListener<BatchReader<T>> {
         private final RaftClient.Listener<T> listener;
+        // This field is used only by the Raft IO thread
+        private int claimedEpoch = 0;
+
+        // These fields are visible to both the Raft IO thread and the listener
+        // and are protected through synchronization on this `ListenerContext` instance
         private BatchReader<T> lastSent = null;
         private long lastAckedOffset = 0;
-        private int claimedEpoch = 0;
 
         private ListenerContext(Listener<T> listener) {
             this.listener = listener;
@@ -1879,9 +1881,15 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             listener.handleCommit(reader);
         }
 
-        void fireHandleClaim(int epoch) {
-            claimedEpoch = epoch;
-            listener.handleClaim(epoch);
+        void maybeFireHandleClaim(int epoch, long epochStartOffset) {
+            // We can fire `handleClaim` as soon as the listener has caught
+            // up to the start of the leader epoch. This guarantees that the
+            // state machine has seen the full committed state before it becomes
+            // leader and begins writing to the log.
+            if (epoch > claimedEpoch && lastAckedOffset >= epochStartOffset) {
+                claimedEpoch = epoch;
+                listener.handleClaim(epoch);
+            }
         }
 
         void fireHandleResign() {

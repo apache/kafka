@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.raft;
 
-import java.io.Closeable;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
@@ -33,7 +32,7 @@ import java.util.OptionalLong;
  *
  * @param <T> record type (see {@link org.apache.kafka.raft.RecordSerde})
  */
-public interface BatchReader<T> extends Iterator<BatchReader.Batch<T>>, Closeable {
+public interface BatchReader<T> extends Iterator<BatchReader.Batch<T>>, AutoCloseable {
 
     /**
      * Get the base offset of the readable batches. Note that this value is a constant

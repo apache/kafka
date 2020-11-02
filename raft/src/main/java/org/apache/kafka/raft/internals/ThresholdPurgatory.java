@@ -37,7 +37,7 @@ public class ThresholdPurgatory<T extends Comparable<T>> implements FuturePurgat
     @Override
     public CompletableFuture<Long> await(T threshold, long maxWaitTimeMs) {
         ThresholdKey<T> key = new ThresholdKey<>(idGenerator.incrementAndGet(), threshold);
-        CompletableFuture<Long> future = expirationService.await(maxWaitTimeMs);
+        CompletableFuture<Long> future = expirationService.failAfter(maxWaitTimeMs);
         thresholdMap.put(key, future);
         future.whenComplete((timeMs, exception) -> thresholdMap.remove(key));
         return future;

@@ -16,9 +16,7 @@
  */
 package org.apache.kafka.raft.internals;
 
-import java.io.Closeable;
-
-public interface CloseListener<T extends Closeable> {
+public interface CloseListener<T extends AutoCloseable> {
 
     void onClose(T closeable);
 
