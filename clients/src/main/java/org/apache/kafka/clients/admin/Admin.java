@@ -1433,7 +1433,7 @@ public interface Admin extends AutoCloseable {
      *   This means there was an unexpected error encountered when the update was applied on
      *   the controller. There is no guarantee on whether the update succeeded or failed. The best
      *   way to find out is to issue a {@link Admin#describeFeatures(DescribeFeaturesOptions)}
-     *   request to the controller to get the latest features.</li>
+     *   request.</li>
      * </ul>
      * <p>
      * This operation is supported by brokers with version 2.7.0 or higher.

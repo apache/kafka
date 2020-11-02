@@ -4350,6 +4350,7 @@ public class KafkaAdminClient extends AdminClient {
                 .hi(password, salt, iterations);
     }
 
+    @Override
     public DescribeFeaturesResult describeFeatures(final DescribeFeaturesOptions options) {
         final KafkaFutureImpl<FeatureMetadata> future = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
