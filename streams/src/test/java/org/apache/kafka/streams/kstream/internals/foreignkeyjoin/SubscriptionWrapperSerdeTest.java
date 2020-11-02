@@ -18,7 +18,7 @@ package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.state.internals.Murmur3;
+import org.apache.kafka.common.utils.Murmur3;
 import org.junit.Test;
 
 import static org.junit.Assert.assertArrayEquals;
