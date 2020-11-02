@@ -1886,7 +1886,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             // up to the start of the leader epoch. This guarantees that the
             // state machine has seen the full committed state before it becomes
             // leader and begins writing to the log.
-            if (epoch > claimedEpoch && lastAckedOffset >= epochStartOffset) {
+            if (epoch > claimedEpoch && lastAckedOffset() >= epochStartOffset) {
                 claimedEpoch = epoch;
                 listener.handleClaim(epoch);
             }
