@@ -250,7 +250,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
             // After updating the high watermark, we first clear the append
             // purgatory so that we have an opportunity to route the pending
-            // records still held in memory directory to the listener
+            // records still held in memory directly to the listener
             appendPurgatory.maybeComplete(highWatermark.offset, currentTimeMs);
 
             // It is also possible that the high watermark is being updated
