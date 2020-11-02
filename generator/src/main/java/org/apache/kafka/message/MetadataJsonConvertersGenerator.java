@@ -19,16 +19,15 @@ package org.apache.kafka.message;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
-import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 
-public final class MetadataRecordTypeGenerator implements TypeClassGenerator {
+public class MetadataJsonConvertersGenerator implements TypeClassGenerator {
     private final HeaderGenerator headerGenerator;
     private final CodeBuffer buffer;
     private final TreeMap<Short, MessageSpec> apis;
 
-    public MetadataRecordTypeGenerator(String packageName) {
+    public MetadataJsonConvertersGenerator(String packageName) {
         this.headerGenerator = new HeaderGenerator(packageName);
         this.apis = new TreeMap<>();
         this.buffer = new CodeBuffer();
@@ -36,7 +35,7 @@ public final class MetadataRecordTypeGenerator implements TypeClassGenerator {
 
     @Override
     public String outputName() {
-        return MessageGenerator.METADATA_RECORD_TYPE_JAVA;
+        return MessageGenerator.METADATA_JSON_CONVERTERS_JAVA;
     }
 
     @Override
@@ -46,135 +45,79 @@ public final class MetadataRecordTypeGenerator implements TypeClassGenerator {
             MessageSpec prevSpec = apis.put(id, spec);
             if (prevSpec != null) {
                 throw new RuntimeException("Duplicate metadata record entry for type " +
-                    id + ". Original claimant: " + prevSpec.name() + ". New " +
-                    "claimant: " + spec.name());
+                        id + ". Original claimant: " + prevSpec.name() + ". New " +
+                        "claimant: " + spec.name());
             }
         }
     }
 
     @Override
     public void generateAndWrite(BufferedWriter writer) throws IOException {
-        generate();
-        write(writer);
-    }
-
-    private void generate() {
-        buffer.printf("public enum MetadataRecordType {%n");
+        buffer.printf("public class MetadataJsonConverters {%n");
         buffer.incrementIndent();
-        generateEnumValues();
+        generateWriteJson();
         buffer.printf("%n");
-        generateInstanceVariables();
+        generateReadJson();
         buffer.printf("%n");
-        generateEnumConstructor();
-        buffer.printf("%n");
-        generateFromApiKey();
-        buffer.printf("%n");
-        generateNewMetadataRecord();
-        buffer.printf("%n");
-        generateAccessor("id", "short");
-        buffer.printf("%n");
-        generateToString();
         buffer.decrementIndent();
         buffer.printf("}%n");
         headerGenerator.generate();
-    }
 
-    private void generateEnumValues() {
-        int numProcessed = 0;
-        for (Map.Entry<Short, MessageSpec> entry : apis.entrySet()) {
-            MessageSpec spec = entry.getValue();
-            String name = spec.name();
-            numProcessed++;
-            buffer.printf("%s(\"%s\", (short) %d)%s%n",
-                MessageGenerator.toSnakeCase(name).toUpperCase(Locale.ROOT),
-                MessageGenerator.capitalizeFirst(name),
-                entry.getKey(),
-                (numProcessed == apis.size()) ? ";" : ",");
-        }
-    }
-
-    private void generateInstanceVariables() {
-        buffer.printf("private final String name;%n");
-        buffer.printf("private final short id;%n");
-    }
-
-    private void generateEnumConstructor() {
-        buffer.printf("MetadataRecordType(String name, short id) {%n");
-        buffer.incrementIndent();
-        buffer.printf("this.name = name;%n");
-        buffer.printf("this.id = id;%n");
-        buffer.decrementIndent();
-        buffer.printf("}%n");
-    }
-
-    private void generateFromApiKey() {
-        buffer.printf("public static MetadataRecordType fromId(short id) {%n");
-        buffer.incrementIndent();
-        buffer.printf("switch (id) {%n");
-        buffer.incrementIndent();
-        for (Map.Entry<Short, MessageSpec> entry : apis.entrySet()) {
-            buffer.printf("case %d:%n", entry.getKey());
-            buffer.incrementIndent();
-            buffer.printf("return %s;%n", MessageGenerator.
-                toSnakeCase(entry.getValue().name()).toUpperCase(Locale.ROOT));
-            buffer.decrementIndent();
-        }
-        buffer.printf("default:%n");
-        buffer.incrementIndent();
-        headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
-        buffer.printf("throw new UnsupportedVersionException(\"Unknown metadata id \"" +
-            " + id);%n");
-        buffer.decrementIndent();
-        buffer.decrementIndent();
-        buffer.printf("}%n");
-        buffer.decrementIndent();
-        buffer.printf("}%n");
-    }
-
-    private void generateNewMetadataRecord() {
-        headerGenerator.addImport(MessageGenerator.API_MESSAGE_CLASS);
-        buffer.printf("public ApiMessage newMetadataRecord() {%n");
-        buffer.incrementIndent();
-        buffer.printf("switch (id) {%n");
-        buffer.incrementIndent();
-        for (Map.Entry<Short, MessageSpec> entry : apis.entrySet()) {
-            buffer.printf("case %d:%n", entry.getKey());
-            buffer.incrementIndent();
-            buffer.printf("return new %s();%n",
-                MessageGenerator.capitalizeFirst(entry.getValue().name()));
-            buffer.decrementIndent();
-        }
-        buffer.printf("default:%n");
-        buffer.incrementIndent();
-        headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
-        buffer.printf("throw new UnsupportedVersionException(\"Unknown metadata id \"" +
-            " + id);%n");
-        buffer.decrementIndent();
-        buffer.decrementIndent();
-        buffer.printf("}%n");
-        buffer.decrementIndent();
-        buffer.printf("}%n");
-    }
-
-    private void generateAccessor(String name, String type) {
-        buffer.printf("public %s %s() {%n", type, name);
-        buffer.incrementIndent();
-        buffer.printf("return this.%s;%n", name);
-        buffer.decrementIndent();
-        buffer.printf("}%n");
-    }
-
-    private void generateToString() {
-        buffer.printf("@Override%n");
-        buffer.printf("public String toString() {%n");
-        buffer.incrementIndent();
-        buffer.printf("return this.name();%n");
-        buffer.decrementIndent();
-        buffer.printf("}%n");
-    }
-
-    private void write(BufferedWriter writer) throws IOException {
         headerGenerator.buffer().write(writer);
         buffer.write(writer);
+    }
+
+    private void generateWriteJson() {
+        headerGenerator.addImport(MessageGenerator.JSON_NODE_CLASS);
+        headerGenerator.addImport(MessageGenerator.API_MESSAGE_CLASS);
+
+        buffer.printf("public static JsonNode writeJson(ApiMessage apiMessage, short apiVersion) {%n");
+        buffer.incrementIndent();
+        buffer.printf("switch (apiMessage.apiKey()) {%n");
+        buffer.incrementIndent();
+        for (Map.Entry<Short, MessageSpec> entry : apis.entrySet()) {
+            String apiMessageClassName = MessageGenerator.capitalizeFirst(entry.getValue().name());
+            buffer.printf("case %d:%n", entry.getKey());
+            buffer.incrementIndent();
+            buffer.printf("return %sJsonConverter.write((%s) apiMessage, apiVersion);%n", apiMessageClassName, apiMessageClassName);
+            buffer.decrementIndent();
+        }
+        buffer.printf("default:%n");
+        buffer.incrementIndent();
+        headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
+        buffer.printf("throw new UnsupportedVersionException(\"Unknown metadata id \"" +
+                " + apiMessage.apiKey());%n");
+        buffer.decrementIndent();
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+    }
+
+    private void generateReadJson() {
+        headerGenerator.addImport(MessageGenerator.JSON_NODE_CLASS);
+        headerGenerator.addImport(MessageGenerator.API_MESSAGE_CLASS);
+
+        buffer.printf("public static ApiMessage readJson(JsonNode json, short apiKey, short apiVersion) {%n");
+        buffer.incrementIndent();
+        buffer.printf("switch (apiKey) {%n");
+        buffer.incrementIndent();
+        for (Map.Entry<Short, MessageSpec> entry : apis.entrySet()) {
+            String apiMessageClassName = MessageGenerator.capitalizeFirst(entry.getValue().name());
+            buffer.printf("case %d:%n", entry.getKey());
+            buffer.incrementIndent();
+            buffer.printf("return %sJsonConverter.read(json, apiVersion);%n", apiMessageClassName);
+            buffer.decrementIndent();
+        }
+        buffer.printf("default:%n");
+        buffer.incrementIndent();
+        headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
+        buffer.printf("throw new UnsupportedVersionException(\"Unknown metadata id \"" +
+                " + apiKey);%n");
+        buffer.decrementIndent();
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+        buffer.decrementIndent();
+        buffer.printf("}%n");
     }
 }

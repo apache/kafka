@@ -1006,7 +1006,7 @@ project(':metadata') {
              "-o", "src/generated/java/org/apache/kafka/common/metadata",
              "-i", "src/main/resources/common/metadata",
              "-m", "MessageDataGenerator", "JsonConverterGenerator",
-             "-t", "MetadataRecordTypeGenerator"
+             "-t", "MetadataRecordTypeGenerator", "MetadataJsonConvertersGenerator"
            ]
     inputs.dir("src/main/resources/common/metadata")
     outputs.dir("src/generated/java/org/apache/kafka/common/metadata")

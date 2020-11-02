@@ -18,12 +18,16 @@
 package kafka.tools
 
 import java.io.{ByteArrayOutputStream, File}
-import java.util.Properties
+import java.nio.ByteBuffer
+import java.util
+import java.util.{Properties, UUID}
 
-import kafka.log.{Log, LogConfig, LogManager}
+import kafka.log.{Log, LogConfig, LogManager, LogTest}
 import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.tools.DumpLogSegments.TimeIndexDumpErrors
 import kafka.utils.{MockTime, TestUtils}
+import org.apache.kafka.common.metadata.{BrokerRecord, IsrChangeRecord, TopicRecord}
+import org.apache.kafka.common.protocol.{ByteBufferAccessor, ObjectSerializationCache}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
@@ -56,9 +60,12 @@ class DumpLogSegmentsTest {
       time = time, brokerTopicStats = new BrokerTopicStats, maxProducerIdExpirationMs = 60 * 60 * 1000,
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
       logDirFailureChannel = new LogDirFailureChannel(10))
+  }
 
+  def addSimpleRecords(): Unit = {
     val now = System.currentTimeMillis()
     val firstBatchRecords = (0 until 10).map { i => new SimpleRecord(now + i * 2, s"message key $i".getBytes, s"message value $i".getBytes)}
+    val batches = new ArrayBuffer[BatchInfo]
     batches += BatchInfo(firstBatchRecords, true, true)
     val secondBatchRecords = (10 until 30).map { i => new SimpleRecord(now + i * 3, s"message key $i".getBytes, null)}
     batches += BatchInfo(secondBatchRecords, true, false)
@@ -83,7 +90,7 @@ class DumpLogSegmentsTest {
 
   @Test
   def testPrintDataLog(): Unit = {
-
+    addSimpleRecords()
     def verifyRecordsInOutput(checkKeysAndValues: Boolean, args: Array[String]): Unit = {
       def isBatch(index: Int): Boolean = {
         var i = 0
@@ -153,6 +160,7 @@ class DumpLogSegmentsTest {
 
   @Test
   def testDumpIndexMismatches(): Unit = {
+    addSimpleRecords()
     val offsetMismatches = mutable.Map[String, List[(Long, Long)]]()
     DumpLogSegments.dumpIndex(new File(indexFilePath), indexSanityOnly = false, verifyOnly = true, offsetMismatches,
       Int.MaxValue)
@@ -161,12 +169,63 @@ class DumpLogSegmentsTest {
 
   @Test
   def testDumpTimeIndexErrors(): Unit = {
+    addSimpleRecords()
     val errors = new TimeIndexDumpErrors
     DumpLogSegments.dumpTimeIndex(new File(timeIndexFilePath), indexSanityOnly = false, verifyOnly = true, errors,
       Int.MaxValue)
     assertEquals(Map.empty, errors.misMatchesForTimeIndexFilesMap)
     assertEquals(Map.empty, errors.outOfOrderTimestamp)
     assertEquals(Map.empty, errors.shallowOffsetNotFound)
+  }
+
+  @Test
+  def testDumpMetadataRecords(): Unit = {
+    val mockTime = new MockTime
+    val logConfig = LogTest.createLogConfig(segmentBytes = 1024 * 1024)
+    val log = LogTest.createLog(logDir, logConfig, new BrokerTopicStats, mockTime.scheduler, mockTime)
+
+    val metadataRecords = Seq(
+      new BrokerRecord().setBrokerId(0).setBrokerEpoch(10),
+      new BrokerRecord().setBrokerId(1).setBrokerEpoch(20),
+      new TopicRecord().setName("test-topic").setDeleting(false).setTopicId(UUID.randomUUID()),
+      new IsrChangeRecord().setTopicId(UUID.randomUUID()).setLeader(1).setPartitionId(0).setLeaderEpoch(100).setIsr(util.Arrays.asList(0, 1, 2))
+    )
+
+    // TODO eventually replace this with whatever production code writes the metadata records to the log
+    val records: Array[SimpleRecord] = metadataRecords.map(message => {
+      val cache = new ObjectSerializationCache
+      val size = message.size(cache, message.highestSupportedVersion)
+      val buf = ByteBuffer.allocate(size + 4)
+      val writer = new ByteBufferAccessor(buf)
+      writer.writeUnsignedVarint(message.apiKey)
+      writer.writeUnsignedVarint(message.highestSupportedVersion)
+      message.write(writer, cache, message.highestSupportedVersion)
+      buf.flip()
+      new SimpleRecord(null, buf.array)
+    }).toArray
+    log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, records:_*), leaderEpoch = 1)
+    log.flush()
+
+    var output = runDumpLogSegments(Array("--cluster-metadata-decoder", "false", "--files", logFilePath))
+    assert(output.contains("TOPIC_RECORD"))
+    assert(output.contains("BROKER_RECORD"))
+
+    output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--no-log-metadata", "false", "--files", logFilePath))
+    assert(output.contains("TOPIC_RECORD"))
+    assert(output.contains("BROKER_RECORD"))
+
+    // Bogus metadata record
+    val buf = ByteBuffer.allocate(4)
+    val writer = new ByteBufferAccessor(buf)
+    writer.writeUnsignedVarint(10000)
+    writer.writeUnsignedVarint(10000)
+    log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(null, buf.array)), leaderEpoch = 2)
+    log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, records:_*), leaderEpoch = 2)
+
+    output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--no-log-metadata", "false", "--files", logFilePath))
+    assert(output.contains("TOPIC_RECORD"))
+    assert(output.contains("BROKER_RECORD"))
+    assert(output.contains("skipping"))
   }
 
   private def runDumpLogSegments(args: Array[String]): String = {

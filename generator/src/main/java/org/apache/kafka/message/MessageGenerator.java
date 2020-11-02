@@ -53,6 +53,8 @@ public final class MessageGenerator {
 
     static final String METADATA_RECORD_TYPE_JAVA = "MetadataRecordType.java";
 
+    static final String METADATA_JSON_CONVERTERS_JAVA = "MetadataJsonConverters.java";
+
     static final String API_MESSAGE_CLASS = "org.apache.kafka.common.protocol.ApiMessage";
 
     static final String MESSAGE_CLASS = "org.apache.kafka.common.protocol.Message";
@@ -167,17 +169,26 @@ public final class MessageGenerator {
         JSON_SERDE.setSerializationInclusion(JsonInclude.Include.NON_EMPTY);
     }
 
-    private static TypeClassGenerator createTypeClassGenerator(String packageName,
-                                                               String type) {
-        if (type == null) return null;
-        switch (type) {
-            case "ApiMessageTypeGenerator":
-                return new ApiMessageTypeGenerator(packageName);
-            case "MetadataRecordTypeGenerator":
-                return new MetadataRecordTypeGenerator(packageName);
-            default:
-                throw new RuntimeException("Unknown type class generator type '" + type + "'");
+    private static List<TypeClassGenerator> createTypeClassGenerators(String packageName,
+                                                                      List<String> types) {
+        if (types == null) return Collections.emptyList();
+        List<TypeClassGenerator> generators = new ArrayList<>();
+        for (String type : types) {
+            switch (type) {
+                case "ApiMessageTypeGenerator":
+                    generators.add(new ApiMessageTypeGenerator(packageName));
+                    break;
+                case "MetadataRecordTypeGenerator":
+                    generators.add(new MetadataRecordTypeGenerator(packageName));
+                    break;
+                case "MetadataJsonConvertersGenerator":
+                    generators.add(new MetadataJsonConvertersGenerator(packageName));
+                    break;
+                default:
+                    throw new RuntimeException("Unknown type class generator type '" + type + "'");
+            }
         }
+        return generators;
     }
 
     private static List<MessageClassGenerator> createMessageClassGenerators(String packageName,
@@ -202,12 +213,13 @@ public final class MessageGenerator {
     public static void processDirectories(String packageName,
                                           String outputDir,
                                           String inputDir,
-                                          String typeClassGeneratorType,
+                                          List<String> typeClassGeneratorTypes,
                                           List<String> messageClassGeneratorTypes) throws Exception {
         Files.createDirectories(Paths.get(outputDir));
         int numProcessed = 0;
-        TypeClassGenerator typeClassGenerator =
-            createTypeClassGenerator(packageName, typeClassGeneratorType);
+
+        List<TypeClassGenerator> typeClassGenerators =
+                createTypeClassGenerators(packageName, typeClassGeneratorTypes);
         HashSet<String> outputFileNames = new HashSet<>();
         try (DirectoryStream<Path> directoryStream = Files
                 .newDirectoryStream(Paths.get(inputDir), JSON_GLOB)) {
@@ -226,15 +238,13 @@ public final class MessageGenerator {
                         }
                     }
                     numProcessed++;
-                    if (typeClassGenerator != null) {
-                        typeClassGenerator.registerMessageType(spec);
-                    }
+                    typeClassGenerators.forEach(generator -> generator.registerMessageType(spec));
                 } catch (Exception e) {
                     throw new RuntimeException("Exception while processing " + inputPath.toString(), e);
                 }
             }
         }
-        if (typeClassGenerator != null) {
+        for (TypeClassGenerator typeClassGenerator : typeClassGenerators) {
             outputFileNames.add(typeClassGenerator.outputName());
             Path factoryOutputPath = Paths.get(outputDir, typeClassGenerator.outputName());
             try (BufferedWriter writer = Files.newBufferedWriter(factoryOutputPath)) {
@@ -338,10 +348,11 @@ public final class MessageGenerator {
             .required(true)
             .metavar("INPUT")
             .help("The input directory to use.");
-        parser.addArgument("--typeclass-generator", "-t")
+        parser.addArgument("--typeclass-generators", "-t")
+            .nargs("+")
             .action(store())
-            .metavar("TYPECLASS_GENERATOR")
-            .help("The type class generator to use, if any.");
+            .metavar("TYPECLASS_GENERATORS")
+            .help("The type class generators to use, if any.");
         parser.addArgument("--message-class-generators", "-m")
             .nargs("+")
             .action(store())
@@ -349,7 +360,7 @@ public final class MessageGenerator {
             .help("The message class generators to use.");
         Namespace res = parser.parseArgsOrFail(args);
         processDirectories(res.getString("package"), res.getString("output"),
-            res.getString("input"), res.getString("typeclass_generator"),
+            res.getString("input"), res.getList("typeclass_generators"),
             res.getList("message_class_generators"));
     }
 }
