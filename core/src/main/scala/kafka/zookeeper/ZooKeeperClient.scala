@@ -39,6 +39,10 @@ import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 import scala.collection.mutable.Set
 
+object ZooKeeperClient {
+  val AuthFailedRetryBackoffMs = 100
+}
+
 /**
  * A ZooKeeper client that encourages pipelined requests.
  *
@@ -82,6 +86,7 @@ class ZooKeeperClient(connectString: String,
   private val inFlightRequests = new Semaphore(maxInFlightRequests)
   private val stateChangeHandlers = new ConcurrentHashMap[String, StateChangeHandler]().asScala
   private[zookeeper] val reinitializeScheduler = new KafkaScheduler(threads = 1, "zk-client-reinit-")
+  private var isFirstConnectionEstablished = false
 
   private val metricNames = Set[String]()
 
@@ -269,6 +274,7 @@ class ZooKeeperClient(connectString: String,
       } else if (state == States.CLOSED) {
         throw new ZooKeeperClientExpiredException("Session expired either before or while waiting for connection")
       }
+      isFirstConnectionEstablished = true
     }
     info("Connected.")
   }
@@ -419,11 +425,11 @@ class ZooKeeperClient(connectString: String,
   }
 
   // Visibility for testing
-  private[zookeeper] def scheduleReinitialize(name: String, message: String): Unit = {
-    reinitializeScheduler.scheduleOnce(name, () => {
+  private[zookeeper] def scheduleReinitialize(name: String, message: String, delayMs: Long): Unit = {
+    reinitializeScheduler.schedule(name, () => {
       info(message)
       reinitialize()
-    })
+    }, delayMs, period = -1L, unit = TimeUnit.MILLISECONDS)
   }
 
   // package level visibility for testing only
@@ -441,13 +447,14 @@ class ZooKeeperClient(connectString: String,
             error("Auth failed.")
             stateChangeHandlers.values.foreach(_.onAuthFailure())
 
-            // If this is during initial startup, the reinitialization scheduler hasn't been started yet.
-            // To support failing fast, allow authorization to fail in that case.
-            if (reinitializeScheduler.isStarted) {
-              scheduleReinitialize("auth-failed", "Reinitializing due to auth failure.")
+            // If this is during initial startup, we fail fast. Otherwise, schedule retry.
+            val initialized = inLock(isConnectedOrExpiredLock) {
+              isFirstConnectionEstablished
             }
+            if (initialized)
+              scheduleReinitialize("auth-failed", "Reinitializing due to auth failure.", ZooKeeperClient.AuthFailedRetryBackoffMs)
           } else if (state == KeeperState.Expired) {
-            scheduleReinitialize("session-expired", "Session expired.")
+            scheduleReinitialize("session-expired", "Session expired.", delayMs = 0L)
           }
         case Some(path) =>
           (event.getType: @unchecked) match {

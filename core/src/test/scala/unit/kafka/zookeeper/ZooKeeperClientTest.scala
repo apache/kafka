@@ -635,7 +635,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
     try {
       zooKeeperClient.reinitializeScheduler.schedule("test", () => semaphore.acquireUninterruptibly(),
         delay = 0, period = -1, TimeUnit.SECONDS)
-      zooKeeperClient.scheduleReinitialize("session-expired", "Session expired.")
+      zooKeeperClient.scheduleReinitialize("session-expired", "Session expired.", delayMs = 0L)
       val closeFuture = closeExecutor.submit(new Runnable {
         override def run(): Unit = {
           zooKeeperClient.close()
