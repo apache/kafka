@@ -185,9 +185,13 @@ public class UpdateMetadataRequestTest {
 
             assertEquals(new HashSet<>(partitionStates), iterableToSet(deserializedRequest.partitionStates()));
             assertEquals(liveBrokers, deserializedRequest.liveBrokers());
-            assertEquals(1, request.controllerId());
-            assertEquals(2, request.controllerEpoch());
-            assertEquals(3, request.brokerEpoch());
+            assertEquals(1, deserializedRequest.controllerId());
+            assertEquals(2, deserializedRequest.controllerEpoch());
+            // Broker epoch is only supported from version 5
+            if (version >= 5)
+                assertEquals(3, deserializedRequest.brokerEpoch());
+            else
+                assertEquals(-1, deserializedRequest.brokerEpoch());
         }
     }
 

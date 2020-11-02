@@ -472,7 +472,7 @@ subprojects {
       zincVersion = versions.zinc
     }
 
-    task scaladocJar(type:Jar) {
+    task scaladocJar(type:Jar, dependsOn: scaladoc) {
       classifier = 'scaladoc'
       from "$rootDir/LICENSE"
       from "$rootDir/NOTICE"
@@ -482,9 +482,6 @@ subprojects {
     //documentation task should also trigger building scala doc jar
     docsJar.dependsOn scaladocJar
 
-    artifacts {
-      archives scaladocJar
-    }
   }
 
   tasks.withType(ScalaCompile) {
@@ -731,6 +728,14 @@ project(':core') {
   println "Building project 'core' with Scala version ${versions.scala}"
 
   apply plugin: 'scala'
+  
+  // scaladoc generation is configured at the sub-module level with an artifacts
+  // block (cf. see streams-scala). If scaladoc generation is invoked explicitly
+  // for the `core` module, this ensures the generated jar doesn't include scaladoc
+  // files since the `core` module doesn't include public APIs.
+  scaladoc {
+    enabled = false
+  }
   if (userEnableTestCoverage)
     apply plugin: "org.scoverage"
   archivesBaseName = "kafka_${versions.baseScala}"
@@ -1404,7 +1409,6 @@ project(':streams:streams-scala') {
   println "Building project 'streams-scala' with Scala version ${versions.scala}"
   apply plugin: 'scala'
   archivesBaseName = "kafka-streams-scala_${versions.baseScala}"
-
   dependencies {
     compile project(':streams')
 
@@ -1440,6 +1444,10 @@ project(':streams:streams-scala') {
 
   jar {
     dependsOn 'copyDependantLibs'
+  }
+
+  artifacts {
+    archives scaladocJar
   }
 
   test.dependsOn(':spotlessScalaCheck')

@@ -352,7 +352,7 @@ public class FetcherTest {
         subscriptions.seek(tp0, 0);
         Node node = initialUpdateResponse.brokers().iterator().next();
 
-        client.blackout(node, 500);
+        client.backoff(node, 500);
         assertEquals(0, fetcher.sendFetches());
 
         time.sleep(500);
@@ -1543,7 +1543,7 @@ public class FetcherTest {
         // Check that we skip sending the ListOffset request when the node is blacked out
         client.updateMetadata(initialUpdateResponse);
         Node node = initialUpdateResponse.brokers().iterator().next();
-        client.blackout(node, 500);
+        client.backoff(node, 500);
         fetcher.resetOffsetsIfNeeded();
         assertEquals(0, consumerClient.pendingRequestCount());
         consumerClient.pollNoWakeup();

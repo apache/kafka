@@ -17,7 +17,6 @@
 package org.apache.kafka.raft;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -32,15 +31,21 @@ public class LeaderState implements EpochState {
     private final int epoch;
     private final long epochStartOffset;
 
-    private Optional<LogOffsetMetadata> highWatermark = Optional.empty();
+    private Optional<LogOffsetMetadata> highWatermark;
     private final Map<Integer, VoterState> voterReplicaStates = new HashMap<>();
     private final Map<Integer, ReplicaState> observerReplicaStates = new HashMap<>();
     private static final long OBSERVER_SESSION_TIMEOUT_MS = 300_000L;
 
-    protected LeaderState(int localId, int epoch, long epochStartOffset, Set<Integer> voters) {
+    protected LeaderState(
+        int localId,
+        int epoch,
+        long epochStartOffset,
+        Set<Integer> voters
+    ) {
         this.localId = localId;
         this.epoch = epoch;
         this.epochStartOffset = epochStartOffset;
+        this.highWatermark = Optional.empty();
 
         for (int voterId : voters) {
             boolean hasEndorsedLeader = voterId == localId;
@@ -114,14 +119,6 @@ public class LeaderState implements EpochState {
         return false;
     }
 
-    private OptionalLong quorumMajorityFetchTimestamp() {
-        // Find the latest timestamp which is fetched by a majority of replicas (the leader counts)
-        ArrayList<ReplicaState> followersByDescendingFetchTimestamp = new ArrayList<>(this.voterReplicaStates.values());
-        followersByDescendingFetchTimestamp.sort(FETCH_TIMESTAMP_COMPARATOR);
-        int indexOfTimestamp = voterReplicaStates.size() / 2;
-        return followersByDescendingFetchTimestamp.get(indexOfTimestamp).lastFetchTimestamp;
-    }
-
     /**
      * Update the local replica state.
      *
@@ -192,6 +189,10 @@ public class LeaderState implements EpochState {
         if (state == null)
             throw new IllegalArgumentException("Unexpected endorsement from non-voter " + remoteNodeId);
         return state;
+    }
+
+    public long epochStartOffset() {
+        return epochStartOffset;
     }
 
     ReplicaState getReplicaState(int remoteNodeId) {
@@ -271,18 +272,6 @@ public class LeaderState implements EpochState {
             this.hasEndorsedLeader = hasEndorsedLeader;
         }
     }
-
-    private static final Comparator<ReplicaState> FETCH_TIMESTAMP_COMPARATOR = (state, that) -> {
-        if (state.lastFetchTimestamp.equals(that.lastFetchTimestamp))
-            return Integer.compare(state.nodeId, that.nodeId);
-        else if (!state.lastFetchTimestamp.isPresent())
-            return 1;
-        else if (!that.lastFetchTimestamp.isPresent())
-            return -1;
-        else
-            return Long.compare(that.lastFetchTimestamp.getAsLong(), state.lastFetchTimestamp.getAsLong());
-    };
-
 
     @Override
     public String toString() {

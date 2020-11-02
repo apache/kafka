@@ -37,22 +37,11 @@ public class RequestHeader implements AbstractRequestResponse {
     }
 
     public RequestHeader(ApiKeys requestApiKey, short requestVersion, String clientId, int correlationId) {
-        this(requestApiKey, requestVersion, clientId, correlationId, null, null);
-    }
-
-    public RequestHeader(ApiKeys requestApiKey,
-                         short requestVersion,
-                         String clientId,
-                         int correlationId,
-                         String initialPrincipalName,
-                         String initialClientId) {
-        this(new RequestHeaderData()
-                 .setRequestApiKey(requestApiKey.id)
-                 .setRequestApiVersion(requestVersion)
-                 .setClientId(clientId)
-                 .setCorrelationId(correlationId)
-                 .setInitialPrincipalName(initialPrincipalName)
-                 .setInitialClientId(initialClientId),
+        this(new RequestHeaderData().
+                setRequestApiKey(requestApiKey.id).
+                setRequestApiVersion(requestVersion).
+                setClientId(clientId).
+                setCorrelationId(correlationId),
             ApiKeys.forId(requestApiKey.id).requestHeaderVersion(requestVersion));
     }
 
@@ -79,14 +68,6 @@ public class RequestHeader implements AbstractRequestResponse {
 
     public String clientId() {
         return data.clientId();
-    }
-
-    public String initialPrincipalName() {
-        return data.initialPrincipalName();
-    }
-
-    public String initialClientId() {
-        return data.initialClientId();
     }
 
     public int correlationId() {
@@ -125,8 +106,6 @@ public class RequestHeader implements AbstractRequestResponse {
                 ", apiVersion=" + apiVersion() +
                 ", clientId=" + clientId() +
                 ", correlationId=" + correlationId() +
-                ", initialPrincipalName=" + initialPrincipalName() +
-                ", initialClientId=" + initialClientId() +
                 ")";
     }
 

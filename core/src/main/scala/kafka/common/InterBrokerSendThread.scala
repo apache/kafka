@@ -63,8 +63,6 @@ abstract class InterBrokerSendThread(name: String,
           now,
           true,
           requestTimeoutMs,
-          null,
-          null,
           completionHandler))
     }
 

@@ -118,6 +118,7 @@ import org.apache.kafka.common.message.DescribeLogDirsRequestData;
 import org.apache.kafka.common.message.DescribeLogDirsRequestData.DescribableLogDirTopic;
 import org.apache.kafka.common.message.DescribeLogDirsResponseData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData;
+import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData.UserName;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.ExpireDelegationTokenRequestData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
@@ -287,6 +288,9 @@ import static org.apache.kafka.common.utils.Utils.closeQuietly;
  * The default implementation of {@link Admin}. An instance of this class is created by invoking one of the
  * {@code create()} methods in {@code AdminClient}. Users should not refer to this class directly.
  *
+ * <p>
+ * This class is thread-safe.
+ * </p>
  * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
@@ -1089,7 +1093,7 @@ public class KafkaAdminClient extends AdminClient {
                     continue;
                 }
                 ClientRequest clientRequest = client.newClientRequest(node.idString(), requestBuilder, now,
-                        true, requestTimeoutMs, null, null, null);
+                        true, requestTimeoutMs, null);
                 log.debug("Sending {} to {}. correlationId={}", requestBuilder, node, clientRequest.correlationId());
                 client.send(clientRequest, now);
                 getOrCreateListValue(callsInFlight, node.idString()).add(call);
@@ -3624,7 +3628,7 @@ public class KafkaAdminClient extends AdminClient {
                             for (ReassignablePartitionResponse partition : topicResponse.partitions()) {
                                 errors.put(
                                         new TopicPartition(topicName, partition.partitionIndex()),
-                                        new ApiError(topLevelError, topLevelError.message()).exception()
+                                        new ApiError(topLevelError, response.data().errorMessage()).exception()
                                 );
                                 receivedResponsesCount += 1;
                             }
@@ -3938,23 +3942,14 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse abstractResponse) {
                 final OffsetCommitResponse response = (OffsetCommitResponse) abstractResponse;
 
-                // If coordinator changed since we fetched it, retry
-                if (ConsumerGroupOperationContext.hasCoordinatorMoved(response)) {
+                Map<Errors, Integer> errorCounts = response.errorCounts();
+                // 1) If coordinator changed since we fetched it, retry
+                // 2) If there is a coordinator error, retry
+                if (ConsumerGroupOperationContext.hasCoordinatorMoved(errorCounts) ||
+                    ConsumerGroupOperationContext.shouldRefreshCoordinator(errorCounts)) {
                     Call call = getAlterConsumerGroupOffsetsCall(context, offsets);
                     rescheduleFindCoordinatorTask(context, () -> call, this);
                     return;
-                }
-
-                // If there is a coordinator error, retry
-                for (OffsetCommitResponseTopic topic : response.data().topics()) {
-                    for (OffsetCommitResponsePartition partition : topic.partitions()) {
-                        Errors error = Errors.forCode(partition.errorCode());
-                        if (ConsumerGroupOperationContext.shouldRefreshCoordinator(error)) {
-                            Call call = getAlterConsumerGroupOffsetsCall(context, offsets);
-                            rescheduleFindCoordinatorTask(context, () -> call, this);
-                            return;
-                        }
-                    }
                 }
 
                 final Map<TopicPartition, Errors> partitions = new HashMap<>();
@@ -4174,10 +4169,22 @@ public class KafkaAdminClient extends AdminClient {
         Call call = new Call("describeUserScramCredentials", calcDeadlineMs(now, options.timeoutMs()),
                 new LeastLoadedNodeProvider()) {
             @Override
-            public DescribeUserScramCredentialsRequest.Builder createRequest(int timeoutMs) {
-                return new DescribeUserScramCredentialsRequest.Builder(
-                        new DescribeUserScramCredentialsRequestData().setUsers(users.stream().map(user ->
-                                new DescribeUserScramCredentialsRequestData.UserName().setName(user)).collect(Collectors.toList())));
+            public DescribeUserScramCredentialsRequest.Builder createRequest(final int timeoutMs) {
+                final DescribeUserScramCredentialsRequestData requestData = new DescribeUserScramCredentialsRequestData();
+
+                if (users != null && !users.isEmpty()) {
+                    final List<UserName> userNames = new ArrayList<>(users.size());
+
+                    for (final String user : users) {
+                        if (user != null) {
+                            userNames.add(new UserName().setName(user));
+                        }
+                    }
+
+                    requestData.setUsers(userNames);
+                }
+
+                return new DescribeUserScramCredentialsRequest.Builder(requestData);
             }
 
             @Override

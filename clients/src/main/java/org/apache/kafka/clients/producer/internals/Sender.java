@@ -444,9 +444,24 @@ public class Sender implements Runnable {
         AbstractRequest.Builder<?> requestBuilder = nextRequestHandler.requestBuilder();
         Node targetNode = null;
         try {
-            targetNode = awaitNodeReady(nextRequestHandler.coordinatorType());
-            if (targetNode == null) {
+            FindCoordinatorRequest.CoordinatorType coordinatorType = nextRequestHandler.coordinatorType();
+            targetNode = coordinatorType != null ?
+                    transactionManager.coordinator(coordinatorType) :
+                    client.leastLoadedNode(time.milliseconds());
+            if (targetNode != null) {
+                if (!awaitNodeReady(targetNode, coordinatorType)) {
+                    log.trace("Target node {} not ready within request timeout, will retry when node is ready.", targetNode);
+                    maybeFindCoordinatorAndRetry(nextRequestHandler);
+                    return true;
+                }
+            } else if (coordinatorType != null) {
+                log.trace("Coordinator not known for {}, will retry {} after finding coordinator.", coordinatorType, requestBuilder.apiKey());
                 maybeFindCoordinatorAndRetry(nextRequestHandler);
+                return true;
+            } else {
+                log.trace("No nodes available to send requests, will poll and retry when until a node is ready.");
+                transactionManager.retry(nextRequestHandler);
+                client.poll(retryBackoffMs, time.milliseconds());
                 return true;
             }
 
@@ -454,8 +469,8 @@ public class Sender implements Runnable {
                 time.sleep(nextRequestHandler.retryBackoffMs());
 
             long currentTimeMs = time.milliseconds();
-            ClientRequest clientRequest = client.newClientRequest(targetNode.idString(), requestBuilder, currentTimeMs, true,
-                    requestTimeoutMs,  null, null, nextRequestHandler);
+            ClientRequest clientRequest = client.newClientRequest(
+                targetNode.idString(), requestBuilder, currentTimeMs, true, requestTimeoutMs, nextRequestHandler);
             log.debug("Sending transactional request {} to node {} with correlation ID {}", requestBuilder, targetNode, clientRequest.correlationId());
             client.send(clientRequest, currentTimeMs);
             transactionManager.setInFlightCorrelationId(clientRequest.correlationId());
@@ -512,21 +527,17 @@ public class Sender implements Runnable {
         return running;
     }
 
-    private Node awaitNodeReady(FindCoordinatorRequest.CoordinatorType coordinatorType) throws IOException {
-        Node node = coordinatorType != null ?
-                transactionManager.coordinator(coordinatorType) :
-                client.leastLoadedNode(time.milliseconds());
-
-        if (node != null && NetworkClientUtils.awaitReady(client, node, time, requestTimeoutMs)) {
+    private boolean awaitNodeReady(Node node, FindCoordinatorRequest.CoordinatorType coordinatorType) throws IOException {
+        if (NetworkClientUtils.awaitReady(client, node, time, requestTimeoutMs)) {
             if (coordinatorType == FindCoordinatorRequest.CoordinatorType.TRANSACTION) {
                 // Indicate to the transaction manager that the coordinator is ready, allowing it to check ApiVersions
                 // This allows us to bump transactional epochs even if the coordinator is temporarily unavailable at
                 // the time when the abortable error is handled
                 transactionManager.handleCoordinatorReady();
             }
-            return node;
+            return true;
         }
-        return null;
+        return false;
     }
 
     /**
@@ -616,7 +627,7 @@ public class Sender implements Runnable {
                 else if (error == Errors.CLUSTER_AUTHORIZATION_FAILED)
                     exception = new ClusterAuthorizationException("The producer is not authorized to do idempotent sends");
                 else
-                    exception = error.exception();
+                    exception = error.exception(response.errorMessage);
                 // tell the user the result of their request. We only adjust sequence numbers if the batch didn't exhaust
                 // its retries -- if it did, we don't know whether the sequence number was accepted or not, and
                 // thus it is not safe to reassign the sequence.
@@ -629,7 +640,7 @@ public class Sender implements Runnable {
                         batch.topicPartition);
                 } else {
                     log.warn("Received invalid metadata error in produce request on partition {} due to {}. Going " +
-                            "to request metadata update now", batch.topicPartition, error.exception().toString());
+                            "to request metadata update now", batch.topicPartition, error.exception(response.errorMessage).toString());
                 }
                 metadata.requestUpdate();
             }
@@ -747,7 +758,7 @@ public class Sender implements Runnable {
 
         String nodeId = Integer.toString(destination);
         ClientRequest clientRequest = client.newClientRequest(nodeId, requestBuilder, now, acks != 0,
-                requestTimeoutMs, null, null, callback);
+                requestTimeoutMs, callback);
         client.send(clientRequest, now);
         log.trace("Sent produce request to {}: {}", nodeId, requestBuilder);
     }

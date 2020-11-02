@@ -219,7 +219,7 @@
         transforms.Filter.predicate=IsFoo
 
         predicates=IsFoo
-        predicates.IsFoo.type=org.apache.kafka.connect.predicates.TopicNameMatches
+        predicates.IsFoo.type=org.apache.kafka.connect.transforms.predicates.TopicNameMatches
         predicates.IsFoo.pattern=foo
     </pre>
         
@@ -236,10 +236,10 @@
         transforms.Extract.negate=true
 
         predicates=IsFoo,IsBar
-        predicates.IsFoo.type=org.apache.kafka.connect.predicates.TopicNameMatches
+        predicates.IsFoo.type=org.apache.kafka.connect.transforms.predicates.TopicNameMatches
         predicates.IsFoo.pattern=foo
 
-        predicates.IsBar.type=org.apache.kafka.connect.predicates.TopicNameMatches
+        predicates.IsBar.type=org.apache.kafka.connect.transforms.predicates.TopicNameMatches
         predicates.IsBar.pattern=bar
     </pre>
 
