@@ -82,12 +82,12 @@ class RequestConvertToJsonTest {
 
     val version: Short = 3
     val request = OffsetsForLeaderEpochRequest.Builder.forConsumer(partitionDataMap).build(version)
-    val manualGenNode = RequestConvertToJson.request(request, false)
+    val actualNode = RequestConvertToJson.request(request, false)
 
-    val requestData = OffsetForLeaderEpochRequestDataJsonConverter.read(manualGenNode, version)
-    val autoGenNode = OffsetForLeaderEpochRequestDataJsonConverter.write(requestData, version)
+    val requestData = OffsetForLeaderEpochRequestDataJsonConverter.read(actualNode, version)
+    val expectedNode = OffsetForLeaderEpochRequestDataJsonConverter.write(requestData, version)
 
-    assertEquals(manualGenNode, autoGenNode)
+    assertEquals(expectedNode, actualNode)
   }
 
   @Test
@@ -100,12 +100,12 @@ class RequestConvertToJsonTest {
 
     val version: Short = 3
     val request = ProduceRequest.Builder.forCurrentMagic(1.toShort, 5000, produceData).build(version)
-    val manualGenNode = RequestConvertToJson.request(request, false)
+    val actualNode = RequestConvertToJson.request(request, false)
 
-    val requestData = ProduceRequestDataJsonConverter.read(manualGenNode, version)
-    val autoGenNode = ProduceRequestDataJsonConverter.write(requestData, version)
+    val requestData = ProduceRequestDataJsonConverter.read(actualNode, version)
+    val expectedNode = ProduceRequestDataJsonConverter.write(requestData, version)
 
-    assertEquals(manualGenNode, autoGenNode)
+    assertEquals(expectedNode, actualNode)
   }
 
   @Test
@@ -115,12 +115,12 @@ class RequestConvertToJsonTest {
 
     val version: Short = 3
     val response = new OffsetsForLeaderEpochResponse(endOffsetMap)
-    val manualGenNode = RequestConvertToJson.response(response, version)
+    val actualNode = RequestConvertToJson.response(response, version)
 
-    val requestData = OffsetForLeaderEpochResponseDataJsonConverter.read(manualGenNode, version)
-    val autoGenNode = OffsetForLeaderEpochResponseDataJsonConverter.write(requestData, version)
+    val requestData = OffsetForLeaderEpochResponseDataJsonConverter.read(actualNode, version)
+    val expectedNode = OffsetForLeaderEpochResponseDataJsonConverter.write(requestData, version)
 
-    assertEquals(manualGenNode, autoGenNode)
+    assertEquals(expectedNode, actualNode)
   }
 
   @Test
@@ -131,11 +131,11 @@ class RequestConvertToJsonTest {
 
     val version: Short = 3
     val response = new ProduceResponse(responseData)
-    val manualGenNode = RequestConvertToJson.response(response, version)
+    val actualNode = RequestConvertToJson.response(response, version)
 
-    val requestData = ProduceResponseDataJsonConverter.read(manualGenNode, version)
-    val autoGenNode = ProduceResponseDataJsonConverter.write(requestData, version)
+    val requestData = ProduceResponseDataJsonConverter.read(actualNode, version)
+    val expectedNode = ProduceResponseDataJsonConverter.write(requestData, version)
 
-    assertEquals(manualGenNode, autoGenNode)
+    assertEquals(expectedNode, actualNode)
   }
 }
