@@ -296,9 +296,15 @@
   <h5><a id="basic_ops_automigrate" href="#basic_ops_automigrate">Automatically migrating data to new machines</a></h5>
   The partition reassignment tool can be used to move some topics off of the current set of brokers to the newly added brokers. This is typically useful while expanding an existing cluster since it is easier to move entire topics to the new set of brokers, than moving one partition at a time. When used to do this, the user should provide a list of topics that should be moved to the new set of brokers and a target list of new brokers. The tool then evenly distributes all partitions for the given list of topics across the new set of brokers. During this move, the replication factor of the topic is kept constant. Effectively the replicas for all partitions for the input list of topics are moved from the old set of brokers to the newly added brokers.
   <p>
-  For instance, the following example will move all partitions for topics foo1,foo2 to the new set of brokers 5,6. At the end of this move, all partitions for topics foo1 and foo2 will <i>only</i> exist on brokers 5,6.
+    For instance, the following example will move all partitions for topics foo1,foo2 to the new set of brokers 5,6. At the end of this move, all partitions for topics foo1 and foo2 will <i>only</i> exist on brokers 5,6.
   <p>
-  Since the tool accepts the input list of topics as a json file, you first need to identify the topics you want to move and create the json file as follows:
+    The "log_dirs" is optional. When it is specified, its length must equal the length of the replicas list. The value in this list can be either "any" or the absolute path of the log directory on the broker.
+  <p>
+    If absolute log directory path is specified, it is currently required that the replica has not already been created on that broker.
+  <p>
+    The replica will then be created in the specified log directory on the broker later.
+  <p>
+    Since the tool accepts the input list of topics as a json file, you first need to identify the topics you want to move and create the json file as follows:
   <pre class="brush: bash;">
   > cat topics-to-move.json
   {"topics": [{"topic": "foo1"},
@@ -312,49 +318,49 @@
   Current partition replica assignment
 
   {"version":1,
-  "partitions":[{"topic":"foo1","partition":2,"replicas":[1,2]},
-                {"topic":"foo1","partition":0,"replicas":[3,4]},
-                {"topic":"foo2","partition":2,"replicas":[1,2]},
-                {"topic":"foo2","partition":0,"replicas":[3,4]},
-                {"topic":"foo1","partition":1,"replicas":[2,3]},
-                {"topic":"foo2","partition":1,"replicas":[2,3]}]
+  "partitions":[{"topic":"foo1","partition":2,"replicas":[1,2], "log_dirs": ["any", "any"]},
+                {"topic":"foo1","partition":0,"replicas":[3,4], "log_dirs": ["any", "any"]},
+                {"topic":"foo2","partition":2,"replicas":[1,2], "log_dirs": ["any", "any"]},
+                {"topic":"foo2","partition":0,"replicas":[3,4], "log_dirs": ["any", "any"]},
+                {"topic":"foo1","partition":1,"replicas":[2,3], "log_dirs": ["any", "any"]},
+                {"topic":"foo2","partition":1,"replicas":[2,3], "log_dirs": ["any", "any"]}]
   }
 
   Proposed partition reassignment configuration
 
   {"version":1,
-  "partitions":[{"topic":"foo1","partition":2,"replicas":[5,6]},
-                {"topic":"foo1","partition":0,"replicas":[5,6]},
-                {"topic":"foo2","partition":2,"replicas":[5,6]},
-                {"topic":"foo2","partition":0,"replicas":[5,6]},
-                {"topic":"foo1","partition":1,"replicas":[5,6]},
-                {"topic":"foo2","partition":1,"replicas":[5,6]}]
+  "partitions":[{"topic":"foo1","partition":2,"replicas":[5,6], "log_dirs": ["any", "any"]},
+                {"topic":"foo1","partition":0,"replicas":[5,6], "log_dirs": ["any", "any"]},
+                {"topic":"foo2","partition":2,"replicas":[5,6], "log_dirs": ["any", "any"]},
+                {"topic":"foo2","partition":0,"replicas":[5,6], "log_dirs": ["any", "any"]},
+                {"topic":"foo1","partition":1,"replicas":[5,6], "log_dirs": ["any", "any"]},
+                {"topic":"foo2","partition":1,"replicas":[5,6], "log_dirs": ["any", "any"]}]
   }
   </pre>
   <p>
-  The tool generates a candidate assignment that will move all partitions from topics foo1,foo2 to brokers 5,6. Note, however, that at this point, the partition movement has not started, it merely tells you the current assignment and the proposed new assignment. The current assignment should be saved in case you want to rollback to it. The new assignment should be saved in a json file (e.g. expand-cluster-reassignment.json) to be input to the tool with the --execute option as follows:
+    The tool generates a candidate assignment that will move all partitions from topics foo1,foo2 to brokers 5,6. Note, however, that at this point, the partition movement has not started, it merely tells you the current assignment and the proposed new assignment. The current assignment should be saved in case you want to rollback to it. The new assignment should be saved in a json file (e.g. expand-cluster-reassignment.json) to be input to the tool with the --execute option as follows:
   <pre class="brush: bash;">
   > bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092 --reassignment-json-file expand-cluster-reassignment.json --execute
   Current partition replica assignment
 
   {"version":1,
-  "partitions":[{"topic":"foo1","partition":2,"replicas":[1,2]},
-                {"topic":"foo1","partition":0,"replicas":[3,4]},
-                {"topic":"foo2","partition":2,"replicas":[1,2]},
-                {"topic":"foo2","partition":0,"replicas":[3,4]},
-                {"topic":"foo1","partition":1,"replicas":[2,3]},
-                {"topic":"foo2","partition":1,"replicas":[2,3]}]
+  "partitions":[{"topic":"foo1","partition":2,"replicas":[1,2], "log_dirs": ["any", "any"]},
+                {"topic":"foo1","partition":0,"replicas":[3,4], "log_dirs": ["any", "any"]},
+                {"topic":"foo2","partition":2,"replicas":[1,2], "log_dirs": ["any", "any"]},
+                {"topic":"foo2","partition":0,"replicas":[3,4], "log_dirs": ["any", "any"]},
+                {"topic":"foo1","partition":1,"replicas":[2,3], "log_dirs": ["any", "any"]},
+                {"topic":"foo2","partition":1,"replicas":[2,3], "log_dirs": ["any", "any"]}]
   }
 
   Save this to use as the --reassignment-json-file option during rollback
   Successfully started reassignment of partitions
   {"version":1,
-  "partitions":[{"topic":"foo1","partition":2,"replicas":[5,6]},
-                {"topic":"foo1","partition":0,"replicas":[5,6]},
-                {"topic":"foo2","partition":2,"replicas":[5,6]},
-                {"topic":"foo2","partition":0,"replicas":[5,6]},
-                {"topic":"foo1","partition":1,"replicas":[5,6]},
-                {"topic":"foo2","partition":1,"replicas":[5,6]}]
+  "partitions":[{"topic":"foo1","partition":2,"replicas":[5,6], "log_dirs": ["any", "any"]},
+                {"topic":"foo1","partition":0,"replicas":[5,6], "log_dirs": ["any", "any"]},
+                {"topic":"foo2","partition":2,"replicas":[5,6], "log_dirs": ["any", "any"]},
+                {"topic":"foo2","partition":0,"replicas":[5,6], "log_dirs": ["any", "any"]},
+                {"topic":"foo1","partition":1,"replicas":[5,6], "log_dirs": ["any", "any"]},
+                {"topic":"foo2","partition":1,"replicas":[5,6], "log_dirs": ["any", "any"]}]
   }
   </pre>
   <p>
