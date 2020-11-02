@@ -224,9 +224,7 @@ public class ConnectSchema implements Schema {
         List<Class<?>> expectedClasses = expectedClassesFor(schema);
 
         if (expectedClasses == null)
-            throw new DataException("Invalid Java object for schema type " + schema.type()
-                    + ": " + value.getClass()
-                    + " for field: \"" + name + "\"");
+            throw new DataException(buildNotFoundExpectedClassExceptionMessage(name, schema, value));
 
         boolean foundMatch = false;
         for (Class<?> expectedClass : expectedClasses) {
@@ -237,9 +235,7 @@ public class ConnectSchema implements Schema {
         }
 
         if (!foundMatch)
-            throw new DataException("Invalid Java object for schema type " + schema.type()
-                    + ": " + value.getClass()
-                    + " for field: \"" + name + "\"");
+            throw new DataException(buildNotFoundExpectedClassExceptionMessage(name, schema, value));
 
         switch (schema.type()) {
             case STRUCT:
@@ -268,6 +264,20 @@ public class ConnectSchema implements Schema {
         if (expectedClasses == null)
             expectedClasses = SCHEMA_TYPE_CLASSES.get(schema.type());
         return expectedClasses;
+    }
+
+    private static String buildNotFoundExpectedClassExceptionMessage(String name, Schema schema, Object value) {
+        return String.format("Invalid Java object for %s: %s for field: \"%s\"",
+            buildSchemaInfo(schema), value.getClass(), name);
+    }
+
+    private static String buildSchemaInfo(Schema schema) {
+        StringBuilder schemaInfo = new StringBuilder("schema");
+        if (schema.name() != null) {
+            schemaInfo.append(" \"").append(schema.name()).append("\"");
+        }
+        schemaInfo.append(" with type ").append(schema.type());
+        return schemaInfo.toString();
     }
 
     /**
