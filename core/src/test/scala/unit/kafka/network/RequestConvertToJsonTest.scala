@@ -28,6 +28,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, TimestampType}
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest.PartitionData
 import org.apache.kafka.common.requests._
+import org.junit.Assert.assertEquals
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -55,7 +56,7 @@ class RequestConvertToJsonTest {
         case _ : AssertionError => unhandledKeys += key.toString
       }
     })
-    assert(unhandledKeys.isEmpty, String.format("%s request keys not handled in RequestConvertToJson", unhandledKeys))
+    assertEquals("Unhandled request keys", ArrayBuffer.empty, unhandledKeys)
   }
 
   @Test
@@ -71,7 +72,7 @@ class RequestConvertToJsonTest {
         case _ : AssertionError => unhandledKeys += key.toString
       }
     })
-    assert(unhandledKeys.isEmpty, String.format("%s response keys not handled in RequestConvertToJson", unhandledKeys))
+    assertEquals("Unhandled response keys", ArrayBuffer.empty, unhandledKeys)
   }
 
   @Test
@@ -86,7 +87,7 @@ class RequestConvertToJsonTest {
     val requestData = OffsetForLeaderEpochRequestDataJsonConverter.read(manualGenNode, version)
     val autoGenNode = OffsetForLeaderEpochRequestDataJsonConverter.write(requestData, version)
 
-    assert(manualGenNode.equals(autoGenNode))
+    assertEquals(manualGenNode, autoGenNode)
   }
 
   @Test
@@ -104,7 +105,7 @@ class RequestConvertToJsonTest {
     val requestData = ProduceRequestDataJsonConverter.read(manualGenNode, version)
     val autoGenNode = ProduceRequestDataJsonConverter.write(requestData, version)
 
-    assert(manualGenNode.equals(autoGenNode))
+    assertEquals(manualGenNode, autoGenNode)
   }
 
   @Test
@@ -119,7 +120,7 @@ class RequestConvertToJsonTest {
     val requestData = OffsetForLeaderEpochResponseDataJsonConverter.read(manualGenNode, version)
     val autoGenNode = OffsetForLeaderEpochResponseDataJsonConverter.write(requestData, version)
 
-    assert(manualGenNode.equals(autoGenNode))
+    assertEquals(manualGenNode, autoGenNode)
   }
 
   @Test
@@ -135,6 +136,6 @@ class RequestConvertToJsonTest {
     val requestData = ProduceResponseDataJsonConverter.read(manualGenNode, version)
     val autoGenNode = ProduceResponseDataJsonConverter.write(requestData, version)
 
-    assert(manualGenNode.equals(autoGenNode))
+    assertEquals(manualGenNode, autoGenNode)
   }
 }
