@@ -20,61 +20,86 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.OptionalInt;
+import java.util.Optional;
+
+import static java.util.Collections.singletonList;
 
 public class ReplicatedCounter implements RaftClient.Listener<Integer> {
-    private final int localBrokerId;
+    private final int nodeId;
     private final Logger log;
     private final RaftClient<Integer> client;
 
     private int committed;
     private int uncommitted;
-    private LeaderAndEpoch currentLeaderAndEpoch = new LeaderAndEpoch(OptionalInt.empty(), 0);
+    private Optional<Integer> claimedEpoch;
 
     public ReplicatedCounter(
-        int localBrokerId,
+        int nodeId,
         RaftClient<Integer> client,
         LogContext logContext
     ) {
-        this.localBrokerId = localBrokerId;
+        this.nodeId = nodeId;
         this.client = client;
         this.log = logContext.logger(ReplicatedCounter.class);
-    }
 
-    public synchronized void poll() {
-        // Check for leader changes
-        LeaderAndEpoch latestLeaderAndEpoch = client.currentLeaderAndEpoch();
-        if (!currentLeaderAndEpoch.equals(latestLeaderAndEpoch)) {
-            this.committed = 0;
-            this.uncommitted = 0;
-            this.currentLeaderAndEpoch = latestLeaderAndEpoch;
-        }
+        this.committed = 0;
+        this.uncommitted = 0;
+        this.claimedEpoch = Optional.empty();
     }
 
     public synchronized boolean isWritable() {
-        // We only accept appends if we are the leader and we have caught up to a position
-        // within the current leader epoch
-        return localBrokerId == currentLeaderAndEpoch.leaderId.orElse(-1);
+        return claimedEpoch.isPresent();
     }
 
     public synchronized void increment() {
-        if (!isWritable())
+        if (!claimedEpoch.isPresent()) {
             throw new KafkaException("Counter is not currently writable");
+        }
+
+        int epoch = claimedEpoch.get();
         uncommitted += 1;
-        Long offset = client.scheduleAppend(currentLeaderAndEpoch.epoch, Collections.singletonList(uncommitted));
+        Long offset = client.scheduleAppend(epoch, singletonList(uncommitted));
         if (offset != null) {
             log.debug("Scheduled append of record {} with epoch {} at offset {}",
-                uncommitted, currentLeaderAndEpoch.epoch, offset);
+                uncommitted, epoch, offset);
         }
     }
 
     @Override
-    public void handleCommit(int epoch, long lastOffset, List<Integer> records) {
-        log.debug("Received commit of records {} with epoch {} at last offset {}",
-            records, epoch, lastOffset);
-        this.committed = records.get(records.size() - 1);
+    public synchronized void handleCommit(BatchReader<Integer> reader) {
+        try {
+            int initialValue = this.committed;
+            while (reader.hasNext()) {
+                BatchReader.Batch<Integer> batch = reader.next();
+                log.debug("Handle commit of batch with records {} at base offset {}",
+                    batch.records(), batch.baseOffset());
+                for (Integer value : batch.records()) {
+                    if (value != this.committed + 1) {
+                        throw new AssertionError("Expected next committed value to be " +
+                            (this.committed + 1) + ", but instead found " + value + " on node " + nodeId);
+                    }
+                    this.committed = value;
+                }
+            }
+            log.debug("Counter incremented from {} to {}", initialValue, committed);
+        } finally {
+            reader.close();
+        }
+    }
+
+    @Override
+    public synchronized void handleClaim(int epoch) {
+        log.debug("Counter uncommitted value initialized to {} after claiming leadership in epoch {}",
+            committed, epoch);
+        this.uncommitted = committed;
+        this.claimedEpoch = Optional.of(epoch);
+    }
+
+    @Override
+    public synchronized void handleResign() {
+        log.debug("Counter uncommitted value reset after resigning leadership");
+        this.uncommitted = -1;
+        this.claimedEpoch = Optional.empty();
     }
 
 }

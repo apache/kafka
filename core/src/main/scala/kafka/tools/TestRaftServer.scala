@@ -19,31 +19,32 @@ package kafka.tools
 
 import java.io.File
 import java.nio.file.Files
-import java.util
-import java.util.concurrent.{CountDownLatch, TimeUnit}
-import java.util.{Collections, OptionalInt, Random}
+import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
+import java.util.concurrent.{CountDownLatch, LinkedBlockingDeque, TimeUnit}
+import java.util.{Collections, Random}
 
-import com.yammer.metrics.core.MetricName
 import joptsimple.OptionException
 import kafka.log.{Log, LogConfig, LogManager}
 import kafka.network.SocketServer
-import kafka.raft.{KafkaFuturePurgatory, KafkaMetadataLog, KafkaNetworkChannel}
+import kafka.raft.{KafkaMetadataLog, KafkaNetworkChannel, TimingWheelExpirationService}
 import kafka.security.CredentialProvider
 import kafka.server.{BrokerTopicStats, KafkaConfig, KafkaRequestHandlerPool, KafkaServer, LogDirFailureChannel}
 import kafka.utils.timer.SystemTimer
 import kafka.utils.{CommandDefaultOptions, CommandLineUtils, CoreUtils, Exit, KafkaScheduler, Logging, ShutdownableThread}
 import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ManualMetadataUpdater, NetworkClient}
-import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.metrics.stats.Percentiles.BucketSizing
+import org.apache.kafka.common.metrics.stats.{Meter, Percentile, Percentiles}
 import org.apache.kafka.common.network.{ChannelBuilders, NetworkReceive, Selectable, Selector}
 import org.apache.kafka.common.protocol.Writable
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
-import org.apache.kafka.raft.internals.LogOffset
-import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, LeaderAndEpoch, QuorumState, RaftClient, RaftConfig, RecordSerde}
+import org.apache.kafka.common.{TopicPartition, protocol}
+import org.apache.kafka.raft.BatchReader.Batch
+import org.apache.kafka.raft.{BatchReader, FileBasedStateStore, KafkaRaftClient, QuorumState, RaftClient, RaftConfig, RecordSerde}
 
 import scala.jdk.CollectionConverters._
 
@@ -105,12 +106,12 @@ class TestRaftServer(
     workloadGenerator = new RaftWorkloadGenerator(
       raftClient,
       time,
-      config.brokerId,
       recordsPerSec = 20000,
       recordSize = 256
     )
 
-    raftClient.initialize(workloadGenerator)
+    raftClient.register(workloadGenerator)
+    raftClient.initialize()
 
     val requestHandler = new TestRaftRequestHandler(
       networkChannel,
@@ -214,14 +215,8 @@ class TestRaftServer(
       new Random()
     )
 
-    val fetchPurgatory = new KafkaFuturePurgatory[LogOffset](
-      config.brokerId,
-      new SystemTimer("raft-fetch-purgatory-reaper"))
-
-    val appendPurgatory = new KafkaFuturePurgatory[LogOffset](
-      config.brokerId,
-      new SystemTimer("raft-append-purgatory-reaper"))
-
+    val expirationTimer = new SystemTimer("raft-expiration-executor")
+    val expirationService = new TimingWheelExpirationService(expirationTimer)
     val serde = new ByteArraySerde
 
     new KafkaRaftClient(
@@ -231,8 +226,7 @@ class TestRaftServer(
       metadataLog,
       quorumState,
       time,
-      fetchPurgatory,
-      appendPurgatory,
+      expirationService,
       logContext
     )
   }
@@ -294,68 +288,124 @@ class TestRaftServer(
   class RaftWorkloadGenerator(
     client: KafkaRaftClient[Array[Byte]],
     time: Time,
-    brokerId: Int,
     recordsPerSec: Int,
     recordSize: Int
-  ) extends ShutdownableThread(name = "raft-workload-generator") with RaftClient.Listener[Array[Byte]] {
+  ) extends ShutdownableThread(name = "raft-workload-generator")
+    with RaftClient.Listener[Array[Byte]] {
 
-    private val stats = new WriteStats(time, printIntervalMs = 5000)
+    sealed trait RaftEvent
+    case class HandleClaim(epoch: Int) extends RaftEvent
+    case object HandleResign extends RaftEvent
+    case class HandleCommit(reader: BatchReader[Array[Byte]]) extends RaftEvent
+    case object Shutdown extends RaftEvent
+
+    private val eventQueue = new LinkedBlockingDeque[RaftEvent]()
+    private val stats = new WriteStats(metrics, time, printIntervalMs = 5000)
     private val payload = new Array[Byte](recordSize)
-    private val pendingAppends = new util.ArrayDeque[PendingAppend]()
+    private val pendingAppends = new LinkedBlockingDeque[PendingAppend]()
+    private val recordCount = new AtomicInteger(0)
+    private val throttler = new ThroughputThrottler(time, recordsPerSec)
 
-    private var latestLeaderAndEpoch = new LeaderAndEpoch(OptionalInt.empty, 0)
-    private var isLeader = false
-    private var throttler: ThroughputThrottler = _
-    private var recordCount = 0
+    private var claimedEpoch: Option[Int] = None
 
-    override def doWork(): Unit = {
-      if (latestLeaderAndEpoch != client.currentLeaderAndEpoch()) {
-        latestLeaderAndEpoch = client.currentLeaderAndEpoch()
-        isLeader = latestLeaderAndEpoch.leaderId.orElse(-1) == brokerId
-        if (isLeader) {
-          pendingAppends.clear()
-          throttler = new ThroughputThrottler(time, recordsPerSec)
-          recordCount = 0
-        }
-      }
+    override def handleClaim(epoch: Int): Unit = {
+      eventQueue.offer(HandleClaim(epoch))
+    }
 
-      if (isLeader) {
-        recordCount += 1
+    override def handleResign(): Unit = {
+      eventQueue.offer(HandleResign)
+    }
 
-        val startTimeMs = time.milliseconds()
-        val sendTimeMs = if (throttler.maybeThrottle(recordCount, startTimeMs)) {
-          time.milliseconds()
-        } else {
-          startTimeMs
-        }
+    override def handleCommit(reader: BatchReader[Array[Byte]]): Unit = {
+      eventQueue.offer(HandleCommit(reader))
+    }
 
-        val offset = client.scheduleAppend(latestLeaderAndEpoch.epoch, Collections.singletonList(payload))
-        if (offset == null) {
-          time.sleep(10)
-        } else {
-          pendingAppends.offer(PendingAppend(latestLeaderAndEpoch.epoch, offset, sendTimeMs))
-        }
+    override def initiateShutdown(): Boolean = {
+      val initiated = super.initiateShutdown()
+      eventQueue.offer(Shutdown)
+      initiated
+    }
+
+    private def sendNow(
+      leaderEpoch: Int,
+      currentTimeMs: Long
+    ): Unit = {
+      recordCount.incrementAndGet()
+
+      val offset = client.scheduleAppend(leaderEpoch, Collections.singletonList(payload))
+      if (offset == null) {
+        time.sleep(10)
       } else {
-        time.sleep(500)
+        pendingAppends.offer(PendingAppend(offset, currentTimeMs))
       }
     }
 
-    override def handleCommit(epoch: Int, lastOffset: Long, records: util.List[Array[Byte]]): Unit = {
-      var offset = lastOffset - records.size() + 1
+    override def doWork(): Unit = {
+      val startTimeMs = time.milliseconds()
+      val eventTimeoutMs = claimedEpoch.map { leaderEpoch =>
+        val throttleTimeMs = throttler.maybeThrottle(recordCount.get() + 1, startTimeMs)
+        if (throttleTimeMs == 0) {
+          sendNow(leaderEpoch, startTimeMs)
+        }
+        throttleTimeMs
+      }.getOrElse(Long.MaxValue)
+
+      eventQueue.poll(eventTimeoutMs, TimeUnit.MILLISECONDS) match {
+        case HandleClaim(epoch) =>
+          claimedEpoch = Some(epoch)
+          throttler.reset()
+          pendingAppends.clear()
+          recordCount.set(0)
+
+        case HandleResign =>
+          claimedEpoch = None
+          pendingAppends.clear()
+
+        case HandleCommit(reader) =>
+          try {
+            while (reader.hasNext) {
+              val batch = reader.next()
+              claimedEpoch.foreach { leaderEpoch =>
+                handleLeaderCommit(leaderEpoch, batch)
+              }
+            }
+          } finally {
+            reader.close()
+          }
+
+        case _ =>
+      }
+    }
+
+    private def handleLeaderCommit(
+      leaderEpoch: Int,
+      batch: Batch[Array[Byte]]
+    ): Unit = {
+      val batchEpoch = batch.epoch()
+      var offset = batch.baseOffset
       val currentTimeMs = time.milliseconds()
 
-      for (record <- records.asScala) {
-        val pendingAppend = pendingAppends.poll()
-        if (pendingAppend.epoch != epoch || pendingAppend.offset!= offset) {
-          throw new IllegalStateException(s"Committed record $record from `handleCommit` does not " +
-            s"match the next expected append $pendingAppend" )
-        } else {
-          val latencyMs = math.max(0, currentTimeMs - pendingAppend.appendTimeMs)
-          stats.record(latencyMs, record.length, currentTimeMs)
+      // We are only interested in batches written during the current leader's
+      // epoch since this allows us to rely on the local clock
+      if (batchEpoch != leaderEpoch) {
+        return
+      }
+
+      for (record <- batch.records.asScala) {
+        val pendingAppend = pendingAppends.peek()
+
+        if (pendingAppend == null || pendingAppend.offset != offset) {
+          throw new IllegalStateException(s"Unexpected append at offset $offset. The " +
+            s"next offset we expected was ${pendingAppend.offset}")
         }
+
+        pendingAppends.poll()
+        val latencyMs = math.max(0, currentTimeMs - pendingAppend.appendTimeMs).toInt
+        stats.record(latencyMs, record.length, currentTimeMs)
         offset += 1
       }
     }
+
   }
 
   class RaftIoThread(
@@ -372,9 +422,9 @@ class TestRaftServer(
       if (super.initiateShutdown()) {
         client.shutdown(5000).whenComplete { (_, exception) =>
           if (exception != null) {
-            error("Shutdown of RaftClient failed", exception)
+            error("Graceful shutdown of RaftClient failed", exception)
           } else {
-            info("Completed shutdown of RaftClient")
+            info("Completed graceful shutdown of RaftClient")
           }
         }
         true
@@ -393,18 +443,15 @@ class TestRaftServer(
 object TestRaftServer extends Logging {
 
   case class PendingAppend(
-    epoch: Int,
     offset: Long,
     appendTimeMs: Long
   ) {
     override def toString: String = {
-      s"PendingAppend(epoch=$epoch, offset=$offset, appendTimeMs=$appendTimeMs)"
+      s"PendingAppend(offset=$offset, appendTimeMs=$appendTimeMs)"
     }
   }
 
   private class ByteArraySerde extends RecordSerde[Array[Byte]] {
-    override def newWriteContext(): AnyRef = null
-
     override def recordSize(data: Array[Byte], context: Any): Int = {
       data.length
     }
@@ -412,54 +459,104 @@ object TestRaftServer extends Logging {
     override def write(data: Array[Byte], context: Any, out: Writable): Unit = {
       out.writeByteArray(data)
     }
+
+    override def read(input: protocol.Readable, size: Int): Array[Byte] = {
+      val data = new Array[Byte](size)
+      input.readArray(data)
+      data
+    }
+  }
+
+  private class LatencyHistogram(
+    metrics: Metrics,
+    name: String,
+    group: String
+  ) {
+    private val sensor = metrics.sensor(name)
+    private val latencyP75Name = metrics.metricName(s"$name.p75", group)
+    private val latencyP99Name = metrics.metricName(s"$name.p99", group)
+    private val latencyP999Name = metrics.metricName(s"$name.p999", group)
+
+    sensor.add(new Percentiles(
+      1000,
+      250.0,
+      BucketSizing.CONSTANT,
+      new Percentile(latencyP75Name, 75),
+      new Percentile(latencyP99Name, 99),
+      new Percentile(latencyP999Name, 99.9)
+    ))
+
+    private val p75 = metrics.metric(latencyP75Name)
+    private val p99 = metrics.metric(latencyP99Name)
+    private val p999 = metrics.metric(latencyP999Name)
+
+    def record(latencyMs: Int): Unit = sensor.record(latencyMs)
+    def currentP75: Double = p75.metricValue.asInstanceOf[Double]
+    def currentP99: Double = p99.metricValue.asInstanceOf[Double]
+    def currentP999: Double = p999.metricValue.asInstanceOf[Double]
+  }
+
+  private class ThroughputMeter(
+    metrics: Metrics,
+    name: String,
+    group: String
+  ) {
+    private val sensor = metrics.sensor(name)
+    private val throughputRateName = metrics.metricName(s"$name.rate", group)
+    private val throughputTotalName = metrics.metricName(s"$name.total", group)
+
+    sensor.add(new Meter(throughputRateName, throughputTotalName))
+
+    private val rate = metrics.metric(throughputRateName)
+
+    def record(bytes: Int): Unit = sensor.record(bytes)
+    def currentRate: Double = rate.metricValue.asInstanceOf[Double]
   }
 
   private class ThroughputThrottler(
     time: Time,
     targetRecordsPerSec: Int
   ) {
-    private val startTimeMs = time.milliseconds()
+    private val startTimeMs = new AtomicLong(time.milliseconds())
 
     require(targetRecordsPerSec > 0)
+
+    def reset(): Unit = {
+      this.startTimeMs.set(time.milliseconds())
+    }
 
     def maybeThrottle(
       currentCount: Int,
       currentTimeMs: Long
-    ): Boolean = {
+    ): Long = {
       val targetDurationMs = math.round(currentCount / targetRecordsPerSec.toDouble * 1000)
       if (targetDurationMs > 0) {
-        val targetDeadlineMs = startTimeMs + targetDurationMs
+        val targetDeadlineMs = startTimeMs.get() + targetDurationMs
         if (targetDeadlineMs > currentTimeMs) {
-          val sleepDurationMs = targetDeadlineMs - currentTimeMs
-          time.sleep(sleepDurationMs)
-          return true
+          val throttleDurationMs = targetDeadlineMs - currentTimeMs
+          return throttleDurationMs
         }
       }
-      false
+      0
     }
   }
 
   private class WriteStats(
+    metrics: Metrics,
     time: Time,
     printIntervalMs: Long
   ) {
     private var lastReportTimeMs = time.milliseconds()
-    private val latency = com.yammer.metrics.Metrics.newHistogram(
-      new MetricName("kafka.raft", "write", "throughput")
-    )
-    private val throughput = com.yammer.metrics.Metrics.newMeter(
-      new MetricName("kafka.raft", "write", "latency"),
-      "records",
-      TimeUnit.SECONDS
-    )
+    private val latency = new LatencyHistogram(metrics, name = "commit.latency", group = "kafka.raft")
+    private val throughput = new ThroughputMeter(metrics, name = "bytes.committed", group = "kafka.raft")
 
     def record(
-      latencyMs: Long,
+      latencyMs: Int,
       bytes: Int,
       currentTimeMs: Long
     ): Unit = {
-      throughput.mark(bytes)
-      latency.update(latencyMs)
+      throughput.record(bytes)
+      latency.record(latencyMs)
 
       if (currentTimeMs - lastReportTimeMs >= printIntervalMs) {
         printSummary()
@@ -468,12 +565,11 @@ object TestRaftServer extends Logging {
     }
 
     private def printSummary(): Unit = {
-      val latencies = latency.getSnapshot
-      println("Throughput (bytes/second): %.2f, Latency (ms): %.1f p50 %.1f p99 %.1f p999".format(
-        throughput.oneMinuteRate,
-        latencies.getMedian,
-        latencies.get99thPercentile,
-        latencies.get999thPercentile,
+      println("Throughput (bytes/second): %.2f, Latency (ms): %.1f p75 %.1f p99 %.1f p999".format(
+        throughput.currentRate,
+        latency.currentP75,
+        latency.currentP99,
+        latency.currentP999
       ))
     }
   }

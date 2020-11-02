@@ -14,13 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.raft;
+package org.apache.kafka.raft.internals;
 
-import org.apache.kafka.common.KafkaException;
+public interface CloseListener<T extends AutoCloseable> {
 
-public class LogTruncationException extends KafkaException {
+    void onClose(T closeable);
 
-    public LogTruncationException(String message) {
-        super(message);
-    }
 }
