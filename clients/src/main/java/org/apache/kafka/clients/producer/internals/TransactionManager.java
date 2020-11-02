@@ -1348,8 +1348,8 @@ public class TransactionManager {
             Errors error = initProducerIdResponse.error();
 
             if (error == Errors.NONE) {
-                ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(initProducerIdResponse.data.producerId(),
-                        initProducerIdResponse.data.producerEpoch());
+                ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(initProducerIdResponse.data().producerId(),
+                        initProducerIdResponse.data().producerEpoch());
                 setProducerIdAndEpoch(producerIdAndEpoch);
                 transitionTo(State.READY);
                 lastError = null;
