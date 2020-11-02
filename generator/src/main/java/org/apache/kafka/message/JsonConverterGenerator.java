@@ -380,8 +380,9 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
                         target.sourceVariable(), target.sourceVariable())));
             }
         } else if (target.field().type().isRecords()) {
-            headerGenerator.addImport(MessageGenerator.BINARY_NODE_CLASS);
-            buffer.printf("%s;%n", target.assignmentStatement("new BinaryNode(new byte[]{})"));
+            headerGenerator.addImport(MessageGenerator.INT_NODE_CLASS);
+            buffer.printf("%s;%n", target.assignmentStatement(
+                    String.format("new IntNode(%s.sizeInBytes())", target.sourceVariable())));
         } else if (target.field().type().isArray()) {
             headerGenerator.addImport(MessageGenerator.ARRAY_NODE_CLASS);
             headerGenerator.addImport(MessageGenerator.JSON_NODE_FACTORY_CLASS);
