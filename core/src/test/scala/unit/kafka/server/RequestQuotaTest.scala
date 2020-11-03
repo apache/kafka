@@ -15,7 +15,6 @@
 package kafka.server
 
 import java.net.InetAddress
-import java.nio.ByteBuffer
 import java.util
 import java.util.concurrent.{Executors, Future, TimeUnit}
 import java.util.{Collections, Optional, Properties}
@@ -596,7 +595,7 @@ class RequestQuotaTest extends BaseRequestTest {
           )
           val embedRequestData = new AlterClientQuotasRequest.Builder(
             List.empty.asJava, false).build().serialize(requestHeader)
-          new EnvelopeRequest.Builder(embedRequestData,
+          new EnvelopeRequest.Builder(embedRequestData, new Array[Byte](0),
             InetAddress.getByName("192.168.1.1").getAddress)
 
         case _ =>
@@ -740,11 +739,11 @@ object RequestQuotaTest {
       principal
     }
 
-    override def serialize(principal: KafkaPrincipal): ByteBuffer = {
-      ByteBuffer.allocate(0)
+    override def serialize(principal: KafkaPrincipal): Array[Byte] = {
+      new Array[Byte](0)
     }
 
-    override def deserialize(bytes: ByteBuffer): KafkaPrincipal = {
+    override def deserialize(bytes: Array[Byte]): KafkaPrincipal = {
       principal
     }
   }

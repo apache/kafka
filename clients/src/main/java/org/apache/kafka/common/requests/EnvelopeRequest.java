@@ -30,17 +30,13 @@ public class EnvelopeRequest extends AbstractRequest {
 
         private final EnvelopeRequestData data;
 
-        public Builder(ByteBuffer requestData, byte[] clientAddress) {
-            this(requestData, null, clientAddress);
-        }
-
         public Builder(ByteBuffer requestData,
-                       ByteBuffer serializedPrincipal,
+                       byte[] serializedPrincipal,
                        byte[] clientAddress) {
             super(ApiKeys.ENVELOPE);
             this.data = new EnvelopeRequestData()
                             .setRequestData(requestData)
-                            .setRequestPrincipal(serializedPrincipal)
+                            .setRequestPrincipal(ByteBuffer.wrap(serializedPrincipal))
                             .setClientHostAddress(clientAddress);
         }
 
@@ -75,10 +71,11 @@ public class EnvelopeRequest extends AbstractRequest {
         return data.clientHostAddress();
     }
 
-    public ByteBuffer principalData() {
-        return data.requestPrincipal();
+    public byte[] principalData() {
+        byte[] serializedPrincipal = new byte[data.requestPrincipal().limit()];
+        data.requestPrincipal().get(serializedPrincipal);
+        return serializedPrincipal;
     }
-
 
     @Override
     protected Struct toStruct() {

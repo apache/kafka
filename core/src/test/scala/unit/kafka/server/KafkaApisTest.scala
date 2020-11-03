@@ -18,7 +18,6 @@
 package kafka.server
 
 import java.net.InetAddress
-import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.util
 import java.util.Arrays.asList
@@ -93,8 +92,8 @@ class KafkaApisTest {
   private val forwardingManager: BrokerToControllerChannelManager = EasyMock.createNiceMock(classOf[BrokerToControllerChannelManager])
   private val hostAddress: Array[Byte] = InetAddress.getByName("192.168.1.1").getAddress
   private val kafkaPrincipalSerde: Option[KafkaPrincipalSerde] = Option(new KafkaPrincipalSerde {
-    override def serialize(principal: KafkaPrincipal): ByteBuffer = null
-    override def deserialize(bytes: ByteBuffer): KafkaPrincipal = null
+    override def serialize(principal: KafkaPrincipal): Array[Byte] = null
+    override def deserialize(bytes: Array[Byte]): KafkaPrincipal = null
   })
   private val zkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
   private val metrics = new Metrics()

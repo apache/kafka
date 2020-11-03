@@ -21,7 +21,6 @@ package kafka.server
 import java.io.{Closeable, File, FileWriter, IOException, Reader, StringReader}
 import java.nio.file.{Files, Paths, StandardCopyOption}
 import java.lang.management.ManagementFactory
-import java.lang.{Boolean => JBoolean}
 import java.security.KeyStore
 import java.time.Duration
 import java.util
@@ -62,9 +61,6 @@ import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.junit.Assert._
-import org.junit.runner.RunWith
-import org.junit.runners.Parameterized
-import org.junit.runners.Parameterized.Parameters
 import org.junit.{After, Before, Ignore, Test}
 import org.scalatest.Assertions.intercept
 
@@ -74,8 +70,12 @@ import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 
-@RunWith(value = classOf[Parameterized])
-class DynamicBrokerReconfigurationTest(quorumBasedController: JBoolean) extends ZooKeeperTestHarness with SaslSetup {
+object DynamicBrokerReconfigurationTest {
+  val SecureInternal = "INTERNAL"
+  val SecureExternal = "EXTERNAL"
+}
+
+class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSetup {
 
   import DynamicBrokerReconfigurationTest._
 
@@ -97,6 +97,9 @@ class DynamicBrokerReconfigurationTest(quorumBasedController: JBoolean) extends 
   private val sslProperties1 = TestUtils.sslConfigs(Mode.SERVER, clientCert = false, Some(trustStoreFile1), "kafka")
   private val sslProperties2 = TestUtils.sslConfigs(Mode.SERVER, clientCert = false, Some(trustStoreFile2), "kafka")
   private val invalidSslProperties = invalidSslConfigs
+
+  def addExtraProps(props: Properties): Unit = {
+  }
 
   @Before
   override def setUp(): Unit = {
@@ -123,7 +126,8 @@ class DynamicBrokerReconfigurationTest(quorumBasedController: JBoolean) extends 
       props.put(KafkaConfig.PasswordEncoderSecretProp, "dynamic-config-secret")
       props.put(KafkaConfig.LogRetentionTimeMillisProp, 1680000000.toString)
       props.put(KafkaConfig.LogRetentionTimeHoursProp, 168.toString)
-      props.put(KafkaConfig.enableMetadataQuorumProp, quorumBasedController)
+      props.put(KafkaConfig.enableMetadataQuorumProp, true)
+      addExtraProps(props)
 
       props ++= sslProperties1
       props ++= securityProps(sslProperties1, KEYSTORE_PROPS, listenerPrefix(SecureInternal))
@@ -1635,12 +1639,12 @@ class DynamicBrokerReconfigurationTest(quorumBasedController: JBoolean) extends 
   }
 
   private abstract class ClientBuilder[T]() {
-    protected var _bootstrapServers: Option[String] = None
-    protected var _listenerName = SecureExternal
-    protected var _securityProtocol = SecurityProtocol.SASL_SSL
-    protected var _saslMechanism = kafkaClientSaslMechanism
-    protected var _clientId = "test-client"
-    protected val _propsOverride: Properties = new Properties
+    private var _bootstrapServers: Option[String] = None
+    private var _listenerName = SecureExternal
+    private var _securityProtocol = SecurityProtocol.SASL_SSL
+    private var _saslMechanism = kafkaClientSaslMechanism
+    private var _clientId = "test-client"
+    private val _propsOverride: Properties = new Properties
 
     def bootstrapServers(bootstrap: String): this.type = { _bootstrapServers = Some(bootstrap); this }
     def listenerName(listener: String): this.type = { _listenerName = listener; this }
@@ -1882,18 +1886,5 @@ class MockFileConfigProvider extends FileConfigProvider {
   @throws(classOf[IOException])
   override def reader(path: String): Reader = {
     new StringReader("key=testKey\npassword=ServerPassword\ninterval=1000\nupdinterval=2000\nstoretype=JKS");
-  }
-}
-
-object DynamicBrokerReconfigurationTest {
-  val SecureInternal = "INTERNAL"
-  val SecureExternal = "EXTERNAL"
-
-  @Parameters(name = "quorumBasedController={0}")
-  def parameters: java.util.Collection[Array[Object]] = {
-    val data = new java.util.ArrayList[Array[Object]]()
-    data.add(Array(JBoolean.TRUE))
-    data.add(Array(JBoolean.FALSE))
-    data
   }
 }

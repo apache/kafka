@@ -18,15 +18,26 @@ package org.apache.kafka.common.security.auth;
 
 import org.apache.kafka.common.errors.SerializationException;
 
-import java.nio.ByteBuffer;
-
 /**
  * Serializer/Deserializer interface for {@link KafkaPrincipal} for the the purpose of inter-broker forwarding.
  * Any serialization/deserialization failure should raise a {@link SerializationException} to be consistent.
  */
 public interface KafkaPrincipalSerde {
 
-    ByteBuffer serialize(KafkaPrincipal principal);
+    /**
+     * Serialize a {@link KafkaPrincipal} into byte array.
+     *
+     * @param principal principal to be serialized
+     * @return serialized bytes
+     * @throws SerializationException
+     */
+    byte[] serialize(KafkaPrincipal principal) throws SerializationException;
 
-    KafkaPrincipal deserialize(ByteBuffer bytes);
+    /**
+     * Deserialize a {@link KafkaPrincipal} from byte array.
+     * @param bytes byte array to be deserialized
+     * @return the deserialized principal
+     * @throws SerializationException
+     */
+    KafkaPrincipal deserialize(byte[] bytes) throws SerializationException;
 }

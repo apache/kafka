@@ -29,7 +29,6 @@ import org.junit.Test;
 import javax.net.ssl.SSLSession;
 import javax.security.sasl.SaslServer;
 import java.net.InetAddress;
-import java.nio.ByteBuffer;
 import java.security.Principal;
 
 import static org.junit.Assert.assertEquals;
@@ -229,7 +228,7 @@ public class DefaultKafkaPrincipalBuilderTest {
         assertEquals(KafkaPrincipal.USER_TYPE, principal.getPrincipalType());
         assertEquals("foo", principal.getName());
 
-        ByteBuffer serializedPrincipal = builder.serialize(principal);
+        byte[] serializedPrincipal = builder.serialize(principal);
         KafkaPrincipal deserializedPrincipal = builder.deserialize(serializedPrincipal);
         assertEquals(principal, deserializedPrincipal);
 

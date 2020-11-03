@@ -168,7 +168,7 @@ public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, Kafk
     }
 
     @Override
-    public ByteBuffer serialize(KafkaPrincipal principal) {
+    public byte[] serialize(KafkaPrincipal principal) {
         DefaultPrincipalData data = new DefaultPrincipalData()
                                         .setType(principal.getPrincipalType())
                                         .setName(principal.getName())
@@ -177,19 +177,19 @@ public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, Kafk
         ByteBuffer buffer = ByteBuffer.allocate(2 + dataStruct.sizeOf());
         buffer.putShort(DefaultPrincipalData.HIGHEST_SUPPORTED_VERSION);
         dataStruct.writeTo(buffer);
-        buffer.flip();
-        return buffer;
+        return buffer.array();
     }
 
     @Override
-    public KafkaPrincipal deserialize(ByteBuffer bytes) {
-        short version = bytes.getShort();
+    public KafkaPrincipal deserialize(byte[] bytes) {
+        ByteBuffer buffer = ByteBuffer.wrap(bytes);
+        short version = buffer.getShort();
         if (version < 0 || version >= DefaultPrincipalData.SCHEMAS.length) {
             throw new SerializationException("Invalid principal data version " + version);
         }
 
         DefaultPrincipalData data = new DefaultPrincipalData(
-            DefaultPrincipalData.SCHEMAS[version].read(bytes),
+            DefaultPrincipalData.SCHEMAS[version].read(buffer),
             version);
         return new KafkaPrincipal(data.type(), data.name(), data.tokenAuthenticated());
     }
