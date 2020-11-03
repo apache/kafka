@@ -78,6 +78,13 @@
           { "name": "LeaderEpoch", "type": "int32", "versions": "12+", "default": "-1",
             "about": "The latest known leader epoch"}
         ]},
+        { "name": "SnapshotId", "type": "SnapshotId",
+          "versions": "12+", "taggedVersions": "12+", "tag": 2,
+          "about": "In the case of fetching an offset less than the LogStartOffset, this is the end offset and epoch that should be used in the FetchSnapshot request.",
+          "fields": [
+            { "name": "EndOffset", "type": "int64", "versions": "0+", "default": "-1" },
+            { "name": "Epoch", "type": "int32", "versions": "0+", "default": "-1" }
+        ]},
         { "name": "AbortedTransactions", "type": "[]AbortedTransaction", "versions": "4+", "nullableVersions": "4+", "ignorable": true,
           "about": "The aborted transactions.",  "fields": [
           { "name": "ProducerId", "type": "int64", "versions": "4+", "entityType": "producerId",

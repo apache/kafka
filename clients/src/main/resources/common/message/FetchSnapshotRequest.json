@@ -20,9 +20,11 @@
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
-    { "name": "ReplicaId", "type": "int32", "versions": "0+",
+    { "name": "ClusterId", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null", "taggedVersions": "0+", "tag": 0,
+      "about": "The clusterId if known. This is used to validate metadata fetches prior to broker registration." },
+    { "name": "ReplicaId", "type": "int32", "versions": "0+", "default": "-1",
       "about": "The broker ID of the follower." },
-    { "name": "MaxBytes", "type": "int32", "versions": "0+",
+    { "name": "MaxBytes", "type": "int32", "versions": "0+", "default": "0x7fffffff",
       "about": "The maximum bytes to fetch from all of the snapshots." },
     { "name": "Topics", "type": "[]TopicSnapshot", "versions": "0+",
       "about": "The topics to fetch.", "fields": [

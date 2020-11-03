@@ -1658,7 +1658,7 @@ public class KafkaRaftClientTest {
 
         int correlationId = context.assertSentFetchRequest(epoch, 3L, lastEpoch);
 
-        FetchResponseData response = context.outOfRangeFetchRecordsResponse(epoch, otherNodeId, 2L,
+        FetchResponseData response = context.divergingFetchResponse(epoch, otherNodeId, 2L,
             lastEpoch, 1L);
         context.deliverResponse(correlationId, otherNodeId, response);
 

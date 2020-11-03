@@ -287,4 +287,7 @@ public class LeaderState implements EpochState {
         return "Leader";
     }
 
+    @Override
+    public void close() {}
+
 }

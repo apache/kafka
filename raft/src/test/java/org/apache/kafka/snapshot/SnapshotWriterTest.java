@@ -100,7 +100,7 @@ final public class SnapshotWriterTest {
         return result;
     }
 
-    private void assertSnapshot(List<List<String>> batches, RawSnapshotReader reader) {
+    public static void assertSnapshot(List<List<String>> batches, RawSnapshotReader reader) {
         List<String> expected = new ArrayList<>();
         batches.forEach(expected::addAll);
 

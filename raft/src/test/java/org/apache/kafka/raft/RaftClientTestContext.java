@@ -544,6 +544,13 @@ public final class RaftClientTestContext {
         return (MemoryRecords) partitionResponse.recordSet();
     }
 
+    RaftRequest.Outbound assertSentFetchSnapshotRequest() {
+        List<RaftRequest.Outbound> sentRequests = channel.drainSentRequests(ApiKeys.FETCH_SNAPSHOT);
+        assertEquals(1, sentRequests.size());
+
+        return sentRequests.get(0);
+    }
+
     Optional<FetchSnapshotResponseData.PartitionSnapshot> assertSentFetchSnapshotResponse(TopicPartition topicPartition) {
         List<RaftResponse.Outbound> sentMessages = channel.drainSentResponses(ApiKeys.FETCH_SNAPSHOT);
         assertEquals(1, sentMessages.size());
@@ -807,7 +814,7 @@ public final class RaftClientTestContext {
         });
     }
 
-    FetchResponseData outOfRangeFetchRecordsResponse(
+    FetchResponseData divergingFetchResponse(
         int epoch,
         int leaderId,
         long divergingEpochEndOffset,

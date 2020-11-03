@@ -28,6 +28,7 @@ import org.apache.kafka.raft.RecordSerde;
 import org.apache.kafka.raft.internals.BatchAccumulator.CompletedBatch;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 
+// TODO: We should add a validate function that can be called before calling freeze
 /**
  * A type for writing a snapshot fora given end offset and epoch.
  *

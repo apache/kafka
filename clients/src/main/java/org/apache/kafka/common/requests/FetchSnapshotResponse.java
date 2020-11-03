@@ -109,5 +109,4 @@ final public class FetchSnapshotResponse extends AbstractResponse {
             .filter(parition -> parition.index() == topicPartition.partition())
             .findAny();
     }
-
 }

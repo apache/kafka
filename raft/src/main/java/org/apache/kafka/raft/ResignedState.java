@@ -141,4 +141,7 @@ public class ResignedState implements EpochState {
             ", preferredSuccessors=" + preferredSuccessors +
             ')';
     }
+
+    @Override
+    public void close() {}
 }

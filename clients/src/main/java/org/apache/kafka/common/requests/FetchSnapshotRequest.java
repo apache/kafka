@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import java.util.Collections;
 import java.util.Optional;
+import java.util.function.UnaryOperator;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.FetchSnapshotRequestData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
@@ -46,24 +47,18 @@ final public class FetchSnapshotRequest extends AbstractRequest {
 
     public static FetchSnapshotRequestData singleton(
         TopicPartition topicPartition,
-        FetchSnapshotRequestData.SnapshotId snapshotId,
-        int maxBytes,
-        long position
+        UnaryOperator<FetchSnapshotRequestData.PartitionSnapshot> operator
     ) {
+        FetchSnapshotRequestData.PartitionSnapshot partitionSnapshot = operator.apply(
+            new FetchSnapshotRequestData.PartitionSnapshot().setIndex(topicPartition.partition())
+        );
+
         return new FetchSnapshotRequestData()
-            .setMaxBytes(maxBytes)
             .setTopics(
                 Collections.singletonList(
                     new FetchSnapshotRequestData.TopicSnapshot()
                         .setName(topicPartition.topic())
-                        .setPartitions(
-                            Collections.singletonList(
-                                new FetchSnapshotRequestData.PartitionSnapshot()
-                                    .setIndex(topicPartition.partition())
-                                    .setSnapshotId(snapshotId)
-                                    .setPosition(position)
-                            )
-                        )
+                        .setPartitions(Collections.singletonList(partitionSnapshot))
                 )
             );
     }
