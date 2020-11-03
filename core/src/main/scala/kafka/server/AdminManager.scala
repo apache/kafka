@@ -513,21 +513,15 @@ class AdminManager(val config: KafkaConfig,
     resource -> ApiError.NONE
   }
 
-  private def alterBrokerConfigs(resource: ConfigResource,
-                                 validateOnly: Boolean,
-                                 configProps: Properties,
-                                 configEntriesMap: Map[String, String]): (ConfigResource, ApiError) = {
+  private def alterBrokerConfigs(resource: ConfigResource, validateOnly: Boolean,
+                                 configProps: Properties, configEntriesMap: Map[String, String]): (ConfigResource, ApiError) = {
     val brokerId = getBrokerId(resource)
     val perBrokerConfig = brokerId.nonEmpty
     this.config.dynamicConfig.validate(configProps, perBrokerConfig)
     validateConfigPolicy(resource, configEntriesMap)
     if (!validateOnly) {
-      if (perBrokerConfig) {
-        val previousConfigProps = config.dynamicConfig.currentDynamicBrokerConfigs
+      if (perBrokerConfig)
         this.config.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(configProps)
-        this.config.dynamicConfig.maybeAugmentSslStorePaths(configProps, previousConfigProps)
-      }
-
       adminZkClient.changeBrokerConfig(brokerId,
         this.config.dynamicConfig.toPersistentProps(configProps, perBrokerConfig))
     }
@@ -553,8 +547,7 @@ class AdminManager(val config: KafkaConfig,
       None
     else {
       val id = resourceNameToBrokerId(resource.name)
-      // Under forwarding, it is possible to handle config changes targeting at brokers other than the controller.
-      if (!config.forwardingEnabled && id != this.config.brokerId)
+      if (id != this.config.brokerId)
         throw new InvalidRequestException(s"Unexpected broker id, expected ${this.config.brokerId}, but received ${resource.name}")
       Some(id)
     }

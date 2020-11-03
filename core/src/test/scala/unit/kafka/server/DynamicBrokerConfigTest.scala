@@ -27,7 +27,6 @@ import org.apache.kafka.common.{Endpoint, Reconfigurable}
 import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.{ConfigException, SslConfigs}
-import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
 import org.apache.kafka.server.authorizer._
 import org.easymock.EasyMock
 import org.junit.Assert._
@@ -35,7 +34,7 @@ import org.junit.Test
 import org.scalatest.Assertions.intercept
 
 import scala.jdk.CollectionConverters._
-import scala.collection.{Set, mutable}
+import scala.collection.Set
 
 class DynamicBrokerConfigTest {
 
@@ -217,8 +216,7 @@ class DynamicBrokerConfigTest {
 
     def updateConfig() = {
       if (perBrokerConfig)
-        config.dynamicConfig.updateBrokerConfig(0,
-          config.dynamicConfig.toPersistentProps(props, perBrokerConfig))
+        config.dynamicConfig.updateBrokerConfig(0, config.dynamicConfig.toPersistentProps(props, perBrokerConfig))
       else
         config.dynamicConfig.updateDefaultConfig(props)
     }
@@ -231,7 +229,7 @@ class DynamicBrokerConfigTest {
         config.dynamicConfig.validate(props, perBrokerConfig)
         fail("Invalid config did not fail validation")
       } catch {
-        case _: Exception => // expected exception
+        case e: Exception => // expected exception
       }
       updateConfig()
       assertEquals(oldValue, config.originals.get(name))
@@ -252,13 +250,13 @@ class DynamicBrokerConfigTest {
       config.dynamicConfig.validate(props, perBrokerConfig = true)
       fail("Invalid config did not fail validation")
     } catch {
-      case _: ConfigException => // expected exception
+      case e: ConfigException => // expected exception
     }
 
     // DynamicBrokerConfig#updateBrokerConfig is used to update configs from ZooKeeper during
     // startup and when configs are updated in ZK. Update should apply valid configs and ignore
     // invalid ones.
-    config.dynamicConfig.updateBrokerConfig(0, config.dynamicConfig.fromPersistentProps(props, true))
+    config.dynamicConfig.updateBrokerConfig(0, props)
     validProps.foreach { case (name, value) => assertEquals(value, config.originals.get(name)) }
     invalidProps.keySet.foreach { name =>
       assertEquals(origProps.get(name), config.originals.get(name))
@@ -392,84 +390,15 @@ class DynamicBrokerConfigTest {
     EasyMock.expect(zkClient.getEntityConfigs(EasyMock.anyString(), EasyMock.anyString())).andReturn(new java.util.Properties()).anyTimes()
     EasyMock.replay(zkClient)
 
-    val oldConfig = KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 9092))
+    val oldConfig =  KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 9092))
     val dynamicBrokerConfig = new DynamicBrokerConfig(oldConfig)
     dynamicBrokerConfig.initialize(zkClient)
     dynamicBrokerConfig.addBrokerReconfigurable(new TestDynamicThreadPool)
 
-    val newProps = new Properties()
-    newProps.put(KafkaConfig.NumIoThreadsProp, "10")
-    newProps.put(KafkaConfig.BackgroundThreadsProp, "100")
-    dynamicBrokerConfig.updateBrokerConfig(0, newProps)
-  }
-
-  @Test
-  def testUpdateBrokerConfigCouldTrimSSLPaths(): Unit = {
-    val (dynamicBrokerConfig, listener) = setupListenerReconfigurables()
-
-    val props = new Properties()
-    props.put(listener.configPrefix +
-      SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, "//path//to//key//store//")
-    props.put(listener.configPrefix +
-      SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, "//path//to//trust//store//")
-
-    dynamicBrokerConfig.updateBrokerConfig(0, props, fromPersisted = true)
-
-    val expectedProps = new Properties()
-    expectedProps.put(listener.configPrefix +
-      SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, "/path/to/key/store/")
-    expectedProps.put(listener.configPrefix +
-      SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, "/path/to/trust/store/")
-
-    props.forEach((key, value) => {
-      assertEquals(expectedProps.get(key), value)
-    })
-  }
-
-  @Test
-  def testAugmentSSLPathsWithNoChange(): Unit = {
-    val (dynamicBrokerConfig, listener) = setupListenerReconfigurables()
-
-    val oldProps = new mutable.HashMap[String, String]
-    oldProps.put(listener.configPrefix +
-      SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, "/path/to/key/store/")
-    oldProps.put(listener.configPrefix +
-      SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, "/path/to/old/trust/store/")
-
-    // The key store path remains the same, so that the trim is only done on key store path
-    val newProps = new Properties()
-    newProps.put(listener.configPrefix +
-      SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, "/path/to/key/store/")
-    newProps.put(listener.configPrefix +
-      SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, "/path/to/new/trust/store/")
-
-    dynamicBrokerConfig.maybeAugmentSslStorePaths(newProps, oldProps)
-
-    val expectedProps = new Properties()
-    expectedProps.put(listener.configPrefix +
-      SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, "//path//to//key//store//")
-    expectedProps.put(listener.configPrefix +
-      SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, "/path/to/new/trust/store/")
-
-    newProps.forEach((key, value) => {
-      assertEquals(expectedProps.get(key), value)
-    })
-  }
-
-  private def setupListenerReconfigurables(): (DynamicBrokerConfig, ListenerName) = {
-    val oldConfig = KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 9092))
-    val dynamicBrokerConfig = new DynamicBrokerConfig(oldConfig)
-    val listener = new ListenerName("listener")
-    val reconfigurable = new ListenerReconfigurable {
-      override def configure(configs: util.Map[String, _]): Unit = {}
-      override def reconfigurableConfigs(): util.Set[String] = Set(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG,
-        SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG).asJava
-      override def validateReconfiguration(configs: util.Map[String, _]): Unit = {}
-      override def reconfigure(configs: util.Map[String, _]): Unit = {}
-      override def listenerName(): ListenerName = listener
-    }
-    dynamicBrokerConfig.addReconfigurable(reconfigurable)
-    (dynamicBrokerConfig, listener)
+    val newprops = new Properties()
+    newprops.put(KafkaConfig.NumIoThreadsProp, "10")
+    newprops.put(KafkaConfig.BackgroundThreadsProp, "100")
+    dynamicBrokerConfig.updateBrokerConfig(0, newprops)
   }
 }
 

@@ -25,7 +25,7 @@ import org.junit.Test
 /**
  * Integration test suite for forwarding mechanism applied on AlterConfigs.
  * This class basically reused everything from {@link DynamicBrokerReconfigurationTest}
- * with the KIP-500 mode enabled for trust store alter test.
+ * with the KIP-500 mode enabled for sasl listener alter test.
  */
 class DynamicBrokerReconfigurationWithForwardingIntegrationTest extends DynamicBrokerReconfigurationTest {
 
@@ -35,7 +35,7 @@ class DynamicBrokerReconfigurationWithForwardingIntegrationTest extends DynamicB
 
   @Test
   @Override
-  override def testTrustStoreAlter(): Unit = {
-     super.testTrustStoreAlter()
+  override def testAddRemoveSaslListeners(): Unit = {
+     super.testAddRemoveSaslListeners()
   }
 }

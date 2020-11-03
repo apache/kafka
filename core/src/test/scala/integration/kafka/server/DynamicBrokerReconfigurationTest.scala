@@ -126,7 +126,6 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       props.put(KafkaConfig.PasswordEncoderSecretProp, "dynamic-config-secret")
       props.put(KafkaConfig.LogRetentionTimeMillisProp, 1680000000.toString)
       props.put(KafkaConfig.LogRetentionTimeHoursProp, 168.toString)
-      props.put(KafkaConfig.EnableMetadataQuorumProp, true)
       addExtraProps(props)
 
       props ++= sslProperties1
@@ -451,8 +450,6 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       StandardCopyOption.REPLACE_EXISTING)
     TestUtils.incrementalAlterConfigs(servers, adminClients.head, oldTruststoreProps, perBrokerConfig = true).all.get()
     verifySslProduceConsume(sslProperties1, "alter-truststore-4")
-    // Sleep a short time to wait for config changes propagation
-    Thread.sleep(1000)
     verifySslProduceConsume(sslProperties2, "alter-truststore-5")
 
     // Update internal keystore/truststore and validate new client connections from broker (e.g. controller).
@@ -1242,9 +1239,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
 
   private def fetchBrokerConfigsFromZooKeeper(server: KafkaServer): Properties = {
     val props = adminZkClient.fetchEntityConfig(ConfigType.Broker, server.config.brokerId.toString)
-    val persistentProps = server.config.dynamicConfig.fromPersistentProps(props, perBrokerConfig = true)
-    server.config.dynamicConfig.trimSslStorePaths(persistentProps)
-    persistentProps
+    server.config.dynamicConfig.fromPersistentProps(props, perBrokerConfig = true)
   }
 
   private def awaitInitialPositions(consumer: KafkaConsumer[_, _]): Unit = {
@@ -1639,12 +1634,12 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   }
 
   private abstract class ClientBuilder[T]() {
-    private var _bootstrapServers: Option[String] = None
-    private var _listenerName = SecureExternal
-    private var _securityProtocol = SecurityProtocol.SASL_SSL
-    private var _saslMechanism = kafkaClientSaslMechanism
-    private var _clientId = "test-client"
-    private val _propsOverride: Properties = new Properties
+    protected var _bootstrapServers: Option[String] = None
+    protected var _listenerName = SecureExternal
+    protected var _securityProtocol = SecurityProtocol.SASL_SSL
+    protected var _saslMechanism = kafkaClientSaslMechanism
+    protected var _clientId = "test-client"
+    protected val _propsOverride: Properties = new Properties
 
     def bootstrapServers(bootstrap: String): this.type = { _bootstrapServers = Some(bootstrap); this }
     def listenerName(listener: String): this.type = { _listenerName = listener; this }
