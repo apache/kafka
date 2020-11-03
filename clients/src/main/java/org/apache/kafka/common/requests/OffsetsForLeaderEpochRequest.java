@@ -57,10 +57,19 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
             this.data = data;
         }
 
-        Builder(short oldestAllowedVersion, short latestAllowedVersion, Map<TopicPartition, PartitionData> epochsByPartition, int replicaId) {
-            super(ApiKeys.OFFSET_FOR_LEADER_EPOCH, oldestAllowedVersion, latestAllowedVersion);
+        public static Builder forConsumer(OffsetForLeaderTopicCollection epochsByPartition) {
+            // Old versions of this API require CLUSTER permission which is not typically granted
+            // to clients. Beginning with version 3, the broker requires only TOPIC Describe
+            // permission for the topic of each requested partition. In order to ensure client
+            // compatibility, we only send this request when we can guarantee the relaxed permissions.
+            OffsetForLeaderEpochRequestData data = new OffsetForLeaderEpochRequestData();
+            data.setReplicaId(CONSUMER_REPLICA_ID);
+            data.setTopics(epochsByPartition);
+            return new Builder((short) 3, ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(), data);
+        }
 
-            data = new OffsetForLeaderEpochRequestData();
+        public static Builder forFollower(short version, Map<TopicPartition, PartitionData> epochsByPartition, int replicaId) {
+            OffsetForLeaderEpochRequestData data = new OffsetForLeaderEpochRequestData();
             data.setReplicaId(replicaId);
 
             epochsByPartition.forEach((partitionKey, partitionValue) -> {
@@ -76,21 +85,7 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
                         .orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
                 );
             });
-        }
-
-        public static Builder forConsumer(OffsetForLeaderTopicCollection epochsByPartition) {
-            // Old versions of this API require CLUSTER permission which is not typically granted
-            // to clients. Beginning with version 3, the broker requires only TOPIC Describe
-            // permission for the topic of each requested partition. In order to ensure client
-            // compatibility, we only send this request when we can guarantee the relaxed permissions.
-            OffsetForLeaderEpochRequestData data = new OffsetForLeaderEpochRequestData();
-            data.setReplicaId(CONSUMER_REPLICA_ID);
-            data.setTopics(epochsByPartition);
-            return new Builder((short) 3, ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(), data);
-        }
-
-        public static Builder forFollower(short version, Map<TopicPartition, PartitionData> epochsByPartition, int replicaId) {
-            return new Builder(version, version, epochsByPartition, replicaId);
+            return new Builder(version, version, data);
         }
 
         @Override
