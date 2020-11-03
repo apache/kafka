@@ -875,11 +875,11 @@ class SocketServerTest {
   @Test
   def testConnectionRatePerIp(): Unit = {
     val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
-    overrideProps.remove("max.connections.per.ip")
+    overrideProps.remove(KafkaConfig.MaxConnectionsPerIpProp)
     overrideProps.put(KafkaConfig.NumQuotaSamplesProp, String.valueOf(2))
     val connectionRate = 5
     val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), new Metrics(), Time.SYSTEM, credentialProvider)
-    overrideServer.connectionQuotas.updateIpConnectionRate(None, Some(connectionRate))
+    overrideServer.connectionQuotas.updateIpConnectionRateQuota(None, Some(connectionRate))
     try {
       overrideServer.startup()
       // make the maximum allowable number of connections
@@ -887,11 +887,11 @@ class SocketServerTest {
       // now try one more (should get throttled)
       var conn = connect(overrideServer)
       val acceptors = overrideServer.dataPlaneAcceptors.asScala.values
-      TestUtils.waitUntilTrue(() => acceptors.exists(_.throttledSockets.asScala.nonEmpty),
+      TestUtils.waitUntilTrue(() => acceptors.exists(_.throttledSockets.nonEmpty),
         "timeout waiting for connection to get throttled",
         1000)
       acceptors.foreach(_.wakeup())
-      TestUtils.waitUntilTrue(() => acceptors.forall(_.throttledSockets.asScala.isEmpty),
+      TestUtils.waitUntilTrue(() => acceptors.forall(_.throttledSockets.isEmpty),
         "timeout waiting for connection to be unthrottled",
         1000)
       verifyRemoteConnectionClosed(conn)
@@ -915,7 +915,7 @@ class SocketServerTest {
     val connectionRate = 5
     val time = new MockTime()
     val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), new Metrics(), time, credentialProvider)
-    overrideServer.connectionQuotas.updateIpConnectionRate(None, Some(connectionRate))
+    overrideServer.connectionQuotas.updateIpConnectionRateQuota(None, Some(connectionRate))
     overrideServer.startup()
     // make the maximum allowable number of connections
     (0 until connectionRate).map(_ => connect(overrideServer))

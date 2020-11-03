@@ -387,9 +387,9 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
   }
 
   /**
-   * validates the IP configs
-   * @param ip
-   * @param configs
+   * Validates the IP configs.
+   * @param ip ip for which configs are being validated
+   * @param configs properties to validate for the IP
    */
   def validateIpConfig(ip: String, configs: Properties): Unit = {
     if (ip != ConfigEntityName.Default && !Utils.validHostPattern(ip))
@@ -400,8 +400,8 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
   /**
    * Update the config for an IP. These overrides will be persisted between sessions, and will override any default
    * IP properties.
-   * @param ip
-   * @param configs
+   * @param ip ip for which configs are being updated
+   * @param configs properties to update for the IP
    */
   def changeIpConfig(ip: String, configs: Properties): Unit = {
     validateIpConfig(ip, configs)

@@ -25,7 +25,7 @@ import java.util.{Collections, Properties}
 import com.yammer.metrics.core.Meter
 import kafka.metrics.KafkaMetricsGroup
 import kafka.network.Processor.ListenerMetricTag
-import kafka.server.KafkaConfig
+import kafka.server.{DynamicConfig, KafkaConfig}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.metrics.{KafkaMetric, MetricConfig, Metrics}
@@ -419,7 +419,7 @@ class ConnectionQuotasTest {
     connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
     addListenersAndVerify(config, connectionQuotas)
     val externalListener = listeners("EXTERNAL")
-    connectionQuotas.updateIpConnectionRate(Some(externalListener.defaultIp.getHostAddress), Some(ipConnectionRateLimit))
+    connectionQuotas.updateIpConnectionRateQuota(Some(externalListener.defaultIp.getHostAddress), Some(ipConnectionRateLimit))
     val numConnections = 200 // should take 8 seconds to create 200 connections with rate = 25/s
     // create connections with the rate < ip quota and verify there is no throttling
     var future = executor.submit((() => acceptConnections(connectionQuotas, externalListener, numConnections,
@@ -451,7 +451,7 @@ class ConnectionQuotasTest {
     connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
     addListenersAndVerify(config, connectionQuotas)
     val externalListener = listeners("EXTERNAL").listenerName
-    connectionQuotas.updateIpConnectionRate(Some(knownHost.getHostAddress), Some(ipConnectionRateLimit))
+    connectionQuotas.updateIpConnectionRateQuota(Some(knownHost.getHostAddress), Some(ipConnectionRateLimit))
     // create connections with the rate > ip quota
     val numConnections = 200
     assertTrue("Expected IP to be throttled by overriden IP rate limit", acceptConnections(connectionQuotas,
@@ -460,7 +460,7 @@ class ConnectionQuotasTest {
       connectionQuotas.get(knownHost) >= ipConnectionRateLimit)
 
     // verify that default quota applies to IPs without a quota override
-    connectionQuotas.updateIpConnectionRate(None, Some(ipConnectionRateLimit))
+    connectionQuotas.updateIpConnectionRateQuota(None, Some(ipConnectionRateLimit))
     val adminListener = listeners("ADMIN").listenerName
     assertTrue("Expected IP to be throttled by default rate limit",
       acceptConnections(connectionQuotas, adminListener, unknownHost, numConnections, connCreateIntervalMs, expectIpThrottle = true))
@@ -480,7 +480,7 @@ class ConnectionQuotasTest {
     connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
     // with a default per-IP limit of 25 and a listener rate of 30, only one IP should be able to saturate their IP rate
     // limit, the other IP will hit listener rate limits and block
-    connectionQuotas.updateIpConnectionRate(None, Some(ipConnectionRateLimit))
+    connectionQuotas.updateIpConnectionRateQuota(None, Some(ipConnectionRateLimit))
     val listenerConfig = Map(KafkaConfig.MaxConnectionCreationRateProp -> listenerRateLimit.toString).asJava
     addListenersAndVerify(config, listenerConfig, connectionQuotas)
     val listener = listeners("EXTERNAL").listenerName
@@ -570,13 +570,55 @@ class ConnectionQuotasTest {
 
   @Test
   def testIpConnectionRateUpdate(): Unit = {
+    val config = KafkaConfig.fromProps(brokerPropsWithDefaultConnectionLimits)
+    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas.addListener(config, listeners("EXTERNAL").listenerName)
+    connectionQuotas.addListener(config, listeners("ADMIN").listenerName)
+    connectionQuotas.addListener(config, listeners("REPLICATION").listenerName)
+    val defaultIpRate = 50
+    val defaultOverrideRate = 20
+    val overrideIpRate = 30
+    val externalListener = listeners("EXTERNAL")
+    val adminListener = listeners("ADMIN")
+    // set a non-unlimited default quota so that we create ip rate sensors/metrics
+    connectionQuotas.updateIpConnectionRateQuota(None, Some(defaultIpRate))
+    connectionQuotas.inc(externalListener.listenerName, externalListener.defaultIp, blockedPercentMeters("EXTERNAL"))
+    connectionQuotas.inc(adminListener.listenerName, adminListener.defaultIp, blockedPercentMeters("ADMIN"))
+
+    // both IPs should have the default rate
+    verifyIpConnectionQuota(externalListener.defaultIp, defaultIpRate)
+    verifyIpConnectionQuota(adminListener.defaultIp, defaultIpRate)
+
+    // external listener should have its in-memory quota and metric config updated
+    connectionQuotas.updateIpConnectionRateQuota(Some(externalListener.defaultIp.getHostAddress), Some(overrideIpRate))
+    verifyIpConnectionQuota(externalListener.defaultIp, overrideIpRate)
+
+    // update default
+    connectionQuotas.updateIpConnectionRateQuota(None, Some(defaultOverrideRate))
+
+    // external listener IP should not have its quota updated to the new default
+    verifyIpConnectionQuota(externalListener.defaultIp, overrideIpRate)
+    // admin listener IP should have its quota updated with to the new default
+    verifyIpConnectionQuota(adminListener.defaultIp, defaultOverrideRate)
+
+    // remove default connection rate quota
+    connectionQuotas.updateIpConnectionRateQuota(None, None)
+    verifyIpConnectionQuota(adminListener.defaultIp, DynamicConfig.Ip.DefaultConnectionCreationRate)
+
+    // remove override for external listener IP
+    connectionQuotas.updateIpConnectionRateQuota(Some(externalListener.defaultIp.getHostAddress), None)
+    verifyIpConnectionQuota(externalListener.defaultIp, DynamicConfig.Ip.DefaultConnectionCreationRate)
+  }
+
+  @Test
+  def testIpConnectionRateQuotaUpdate(): Unit = {
     val ipConnectionRateLimit = 20
     val props = brokerPropsWithDefaultConnectionLimits
     val config = KafkaConfig.fromProps(props)
     connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
     addListenersAndVerify(config, connectionQuotas)
     val externalListener = listeners("EXTERNAL")
-    connectionQuotas.updateIpConnectionRate(Some(externalListener.defaultIp.getHostAddress), Some(ipConnectionRateLimit))
+    connectionQuotas.updateIpConnectionRateQuota(Some(externalListener.defaultIp.getHostAddress), Some(ipConnectionRateLimit))
     // create connections with the rate > ip quota
     val connectionRate = 40
     assertThrows[ConnectionThrottledException] {
@@ -587,7 +629,7 @@ class ConnectionQuotasTest {
 
     // increase ip quota, we should accept connections up to the new quota limit
     val updatedRateLimit = 30
-    connectionQuotas.updateIpConnectionRate(Some(externalListener.defaultIp.getHostAddress), Some(updatedRateLimit))
+    connectionQuotas.updateIpConnectionRateQuota(Some(externalListener.defaultIp.getHostAddress), Some(updatedRateLimit))
     assertThrows[ConnectionThrottledException] {
       acceptConnections(connectionQuotas, externalListener, connectionRate)
     }
@@ -595,7 +637,7 @@ class ConnectionQuotasTest {
       updatedRateLimit, connectionQuotas.get(externalListener.defaultIp))
 
     // remove IP quota, all connections should get accepted
-    connectionQuotas.updateIpConnectionRate(Some(externalListener.defaultIp.getHostAddress), None)
+    connectionQuotas.updateIpConnectionRateQuota(Some(externalListener.defaultIp.getHostAddress), None)
     acceptConnections(connectionQuotas, externalListener, connectionRate)
     assertEquals(s"Number of connections on $externalListener:",
       connectionRate + updatedRateLimit, connectionQuotas.get(externalListener.defaultIp))
@@ -607,7 +649,7 @@ class ConnectionQuotasTest {
       connectionRate, connectionQuotas.get(adminListener.defaultIp))
 
     // set a default IP quota, verify that quota gets propagated
-    connectionQuotas.updateIpConnectionRate(None, Some(ipConnectionRateLimit))
+    connectionQuotas.updateIpConnectionRateQuota(None, Some(ipConnectionRateLimit))
     assertThrows[ConnectionThrottledException] {
       acceptConnections(connectionQuotas, adminListener, connectionRate)
     }
@@ -739,6 +781,23 @@ class ConnectionQuotasTest {
       s"broker-connection-accept-rate",
       SocketServer.MetricsGroup)
     metrics.metric(metricName)
+  }
+
+  private def ipConnRateMetric(ip: String): KafkaMetric = {
+    val metricName = metrics.metricName(
+      s"connection-accept-rate",
+      SocketServer.MetricsGroup,
+      Collections.singletonMap("ip", ip))
+    metrics.metric(metricName)
+  }
+
+  private def verifyIpConnectionQuota(ip: InetAddress, quota: Int): Unit = {
+    // verify connection quota in-memory rate and metric
+    assertEquals(quota, connectionQuotas.connectionRateForIp(ip))
+    Option(ipConnRateMetric(ip.getHostAddress)) match {
+      case Some(metric) => assertEquals(quota, metric.config.quota.bound, 0.1)
+      case None => fail(s"Expected $ip connection rate metric to be defined")
+    }
   }
 
   // this method must be called on a separate thread, because connectionQuotas.inc() may block
