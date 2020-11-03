@@ -103,23 +103,19 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
 
     zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkMaxInFlightRequests,
       Time.SYSTEM, "kafka.test", "AclAuthorizerTest")
-
-    aclAuthorizer.acls(AclBindingFilter.ANY).forEach(bd => {
-      removeAcls(aclAuthorizer, Set(bd.entry), bd.pattern())
-    })
-
-
-    aclAuthorizer2.acls(AclBindingFilter.ANY).forEach(bd => {
-      removeAcls(aclAuthorizer2, Set(bd.entry), bd.pattern())
-    })
-
-    interfaceDefaultAuthorizer.acls(AclBindingFilter.ANY).forEach(bd => {
-      removeAcls(interfaceDefaultAuthorizer, Set(bd.entry), bd.pattern())
-    })
   }
 
   @After
   override def tearDown(): Unit = {
+    aclAuthorizer.acls(AclBindingFilter.ANY).forEach(bd => {
+      removeAcls(aclAuthorizer, Set(bd.entry), bd.pattern())
+    })
+    aclAuthorizer2.acls(AclBindingFilter.ANY).forEach(bd => {
+      removeAcls(aclAuthorizer2, Set(bd.entry), bd.pattern())
+    })
+    interfaceDefaultAuthorizer.acls(AclBindingFilter.ANY).forEach(bd => {
+      removeAcls(interfaceDefaultAuthorizer, Set(bd.entry), bd.pattern())
+    })
     aclAuthorizer.close()
     aclAuthorizer2.close()
     interfaceDefaultAuthorizer.close()
