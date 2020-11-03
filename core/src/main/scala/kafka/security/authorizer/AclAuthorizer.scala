@@ -319,13 +319,17 @@ class AclAuthorizer extends Authorizer with Logging {
   override def authorizeAny(requestContext: AuthorizableRequestContext,
                             op: AclOperation,
                             resourceType: ResourceType): AuthorizationResult = {
-    if (resourceType == ResourceType.ANY) {
-      throw new IllegalArgumentException("Must specify a resource type for authorizeAny")
-    }
+    if (resourceType eq ResourceType.ANY)
+      throw new IllegalArgumentException("Must specify a non-filter resource type for authorizeAny")
 
-    if (resourceType == ResourceType.UNKNOWN) {
+    if (resourceType eq ResourceType.UNKNOWN)
       throw new IllegalArgumentException("Unknown resource type")
-    }
+
+    if (op eq AclOperation.ANY)
+      throw new IllegalArgumentException("Must specify a non-filter operation type for authorizeAny")
+
+    if (op eq AclOperation.UNKNOWN)
+      throw new IllegalArgumentException("Unknown operation type")
 
     val allowResource = matchingResources(
       requestContext.principal().toString,

@@ -52,6 +52,7 @@ import org.scalatest.Assertions.intercept
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
+import scala.collection.mutable.ArrayBuffer
 
 class AclAuthorizerTest extends ZooKeeperTestHarness {
 
@@ -66,7 +67,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
 
   private val aclAuthorizer = new AclAuthorizer
   private val aclAuthorizer2 = new AclAuthorizer
-  private val mockAuthorizer = new MockAuthorizer
+  private val interfaceDefaultAuthorizer = new MockAuthorizer
   private var resource: ResourcePattern = _
   private val superUsers = "User:superuser1; User:superuser2"
   private val username = "alice"
@@ -74,6 +75,8 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
   private val requestContext = newRequestContext(principal, InetAddress.getByName("192.168.0.1"))
   private var config: KafkaConfig = _
   private var zooKeeperClient: ZooKeeperClient = _
+
+  private val aclAdded: ArrayBuffer[(Authorizer, Set[AccessControlEntry], ResourcePattern)] = ArrayBuffer()
 
   class CustomPrincipal(principalType: String, name: String) extends KafkaPrincipal(principalType, name) {
     override def equals(o: scala.Any): Boolean = false
@@ -94,19 +97,32 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     config = KafkaConfig.fromProps(props)
     aclAuthorizer.configure(config.originals)
     aclAuthorizer2.configure(config.originals)
-    MockAuthorizer.authorizer.configure(config.originals)
+    interfaceDefaultAuthorizer.configure(config.originals)
 
     resource = new ResourcePattern(TOPIC, "foo-" + UUID.randomUUID(), LITERAL)
 
     zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkMaxInFlightRequests,
       Time.SYSTEM, "kafka.test", "AclAuthorizerTest")
+
+    aclAuthorizer.acls(AclBindingFilter.ANY).forEach(bd => {
+      removeAcls(aclAuthorizer, Set(bd.entry), bd.pattern())
+    })
+
+
+    aclAuthorizer2.acls(AclBindingFilter.ANY).forEach(bd => {
+      removeAcls(aclAuthorizer2, Set(bd.entry), bd.pattern())
+    })
+
+    interfaceDefaultAuthorizer.acls(AclBindingFilter.ANY).forEach(bd => {
+      removeAcls(interfaceDefaultAuthorizer, Set(bd.entry), bd.pattern())
+    })
   }
 
   @After
   override def tearDown(): Unit = {
     aclAuthorizer.close()
     aclAuthorizer2.close()
-    MockAuthorizer.authorizer.close()
+    interfaceDefaultAuthorizer.close()
     zooKeeperClient.close()
     super.tearDown()
   }
@@ -1000,7 +1016,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
 
   @Test
   def testAuthorizeAnyDurabilityInterfaceDefault(): Unit = {
-    testAuthorizeAnyDurability(mockAuthorizer)
+    testAuthorizeAnyDurability(interfaceDefaultAuthorizer)
   }
 
   private def testAuthorizeAnyDurability(authorizer: Authorizer): Unit = {
@@ -1043,7 +1059,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
 
   @Test
   def testAuthorizeAnyUnrelatedDenyWontDominateAllowInterfaceDefault(): Unit = {
-    testAuthorizeAnyIsolationUnrelatedDenyWontDominateAllow(mockAuthorizer)
+    testAuthorizeAnyIsolationUnrelatedDenyWontDominateAllow(interfaceDefaultAuthorizer)
   }
 
   private def testAuthorizeAnyIsolationUnrelatedDenyWontDominateAllow(authorizer: Authorizer): Unit = {
@@ -1080,9 +1096,6 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
       authorizeAny(authorizer, u1h1Context, READ, ResourceType.CLUSTER))
     assertTrue("User1 from host2 should have READ access to at least one topic",
       authorizeAny(authorizer, u1h2Context, READ, ResourceType.TOPIC))
-    // TODO: Remove below before merge
-    //    assertTrue("User1 from host2 should have READ access to at least one resource of any type",
-    //      authorizeAny(aclAuthorizer, u1h2Context, READ, ResourceType.ANY))
   }
 
   @Test
@@ -1092,7 +1105,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
 
   @Test
   def testAuthorizeAnyDenyTakesPrecedenceInterfaceDefault(): Unit = {
-    testAuthorizeAnyDenyTakesPrecedence(mockAuthorizer)
+    testAuthorizeAnyDenyTakesPrecedence(interfaceDefaultAuthorizer)
   }
 
   private def testAuthorizeAnyDenyTakesPrecedence(authorizer: Authorizer): Unit = {
@@ -1120,7 +1133,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
 
   @Test
   def testAuthorizeAnyWildcardResourceDenyDominateInterfaceDefault(): Unit = {
-    testAuthorizeAnyWildcardResourceDenyDominate(mockAuthorizer)
+    testAuthorizeAnyWildcardResourceDenyDominate(interfaceDefaultAuthorizer)
   }
 
   private def testAuthorizeAnyWildcardResourceDenyDominate(authorizer: Authorizer): Unit = {
@@ -1142,6 +1155,10 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     assertFalse("User1 from host1 now should not have WRITE access to any group",
       authorizeAny(aclAuthorizer, u1h1Context, WRITE, ResourceType.GROUP))
 
+    addAcls(aclAuthorizer, Set(allowAce), wildcard)
+    assertFalse("User1 from host1 still should not have WRITE access to any group",
+      authorizeAny(aclAuthorizer, u1h1Context, WRITE, ResourceType.GROUP))
+
     addAcls(aclAuthorizer, Set(allowAce), literal)
     assertFalse("User1 from host1 still should not have WRITE access to any group",
       authorizeAny(aclAuthorizer, u1h1Context, WRITE, ResourceType.GROUP))
@@ -1154,7 +1171,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
 
   @Test
   def testAuthorizeAnyPrefixedDenyDominateInterfaceDefault(): Unit = {
-    testAuthorizeAnyPrefixedResourceDenyDominate(mockAuthorizer)
+    testAuthorizeAnyPrefixedResourceDenyDominate(interfaceDefaultAuthorizer)
   }
 
   private def testAuthorizeAnyPrefixedResourceDenyDominate(authorizer: Authorizer): Unit = {
@@ -1200,6 +1217,11 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     testAuthorizeAnyWithAllOperationAce(aclAuthorizer)
   }
 
+  @Test
+  def testAuthorizeAnyWithAllOperationAceInterfaceDefault(): Unit = {
+    testAuthorizeAnyWithAllOperationAce(interfaceDefaultAuthorizer)
+  }
+
   private def testAuthorizeAnyWithAllOperationAce(authorizer: Authorizer): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1")
     val host1 = InetAddress.getByName("192.168.1.1")
@@ -1224,6 +1246,11 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
   @Test
   def testAuthorizeAnyWithAllHostAce(): Unit = {
     testAuthorizeAnyWithAllHostAce(aclAuthorizer)
+  }
+
+  @Test
+  def testAuthorizeAnyWithAllHostAceInterfaceDefault(): Unit = {
+    testAuthorizeAnyWithAllHostAce(interfaceDefaultAuthorizer)
   }
 
   private def testAuthorizeAnyWithAllHostAce(authorizer: Authorizer): Unit = {
@@ -1269,6 +1296,11 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
   @Test
   def testAuthorizeAnyWithAllPrincipleAce(): Unit = {
     testAuthorizeAnyWithAllPrincipleAce(aclAuthorizer)
+  }
+
+  @Test
+  def testAuthorizeAnyWithAllPrincipleAceInterfaceDefault(): Unit = {
+    testAuthorizeAnyWithAllPrincipleAce(interfaceDefaultAuthorizer)
   }
 
   private def testAuthorizeAnyWithAllPrincipleAce(authorizer: Authorizer): Unit = {
@@ -1318,7 +1350,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
 
   @Test
   def testAuthorizeAnyDenyOnClusterWillDominateInterfaceDefault(): Unit = {
-    testAuthorizeAnyDenyOnClusterWillDominate(mockAuthorizer)
+    testAuthorizeAnyDenyOnClusterWillDominate(interfaceDefaultAuthorizer)
   }
 
   private def testAuthorizeAnyDenyOnClusterWillDominate(authorizer: Authorizer): Unit = {
@@ -1347,7 +1379,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
 
   @Test
   def testAuthorizeAnyNoAclFoundOverrideInterfaceDefault(): Unit = {
-    testAuthorizeAnyNoAclFoundOverride(mockAuthorizer)
+    testAuthorizeAnyNoAclFoundOverride(interfaceDefaultAuthorizer)
   }
 
   private def testAuthorizeAnyNoAclFoundOverride(authorizer: Authorizer): Unit = {
@@ -1435,6 +1467,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     authorizer.createAcls(requestContext, bindings.toList.asJava).asScala
       .map(_.toCompletableFuture.get)
       .foreach { result => result.exception.ifPresent { e => throw e } }
+    aclAdded += Tuple3(authorizer, aces, resourcePattern)
   }
 
   private def removeAcls(authorizer: Authorizer, aces: Set[AccessControlEntry], resourcePattern: ResourcePattern): Boolean = {

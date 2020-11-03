@@ -163,42 +163,75 @@ public interface Authorizer extends Configurable, Closeable {
      *                       Return {@link AuthorizationResult#DENIED} otherwise.
      */
     default AuthorizationResult authorizeAny(AuthorizableRequestContext requestContext, AclOperation op, ResourceType resourceType) {
-        ResourcePatternFilter resourceFilter = new ResourcePatternFilter(resourceType, null, PatternType.ANY);
+        if (resourceType == ResourceType.ANY) {
+            throw new IllegalArgumentException(
+                "Must specify a non-filter resource type for authorizeAny");
+        }
+
+        if (resourceType == ResourceType.UNKNOWN) {
+            throw new IllegalArgumentException(
+                "Unknown resource type");
+        }
+
+        if (op == AclOperation.ANY) {
+            throw new IllegalArgumentException(
+                "Must specify a non-filter operation type for authorizeAny");
+        }
+
+        if (op == AclOperation.UNKNOWN) {
+            throw new IllegalArgumentException(
+                "Unknown operation type");
+        }
+
+        ResourcePatternFilter resourceTypeFilter = new ResourcePatternFilter(
+            resourceType, null, PatternType.ANY);
         AclBindingFilter aclFilter = new AclBindingFilter(
-            resourceFilter, new AccessControlEntryFilter(
-                requestContext.principal().toString(),
-                requestContext.clientAddress().getHostAddress(),
-                op,
-                AclPermissionType.ANY));
+            resourceTypeFilter, AccessControlEntryFilter.ANY);
 
         Set<String> denyPrefixes = new HashSet<>();
         Set<String> allowPrefixes = new HashSet<>();
+        boolean hasWildCardAllow = false;
 
         for (AclBinding binding : acls(aclFilter)) {
-            if (binding.entry().permissionType() != AclPermissionType.ALLOW) {
-                if (binding.entry().permissionType() == AclPermissionType.DENY) {
-                    switch (binding.pattern().patternType()) {
-                        case LITERAL:
-                            if (binding.pattern().name().equals(ResourcePattern.WILDCARD_RESOURCE))
-                                return AuthorizationResult.DENIED;
-                            if (binding.pattern().resourceType() == ResourceType.CLUSTER &&
-                                binding.pattern().name().equals(Resource.CLUSTER_NAME))
-                                return AuthorizationResult.DENIED;
-                            break;
-                        case PREFIXED:
-                            if (binding.pattern().name().isEmpty())
-                                return AuthorizationResult.DENIED;
-                            denyPrefixes.add(binding.pattern().name());
-                            break;
-                    }
+            if (!binding.entry().host().equals(requestContext.clientAddress().getHostAddress())
+                    && !binding.entry().host().equals("*"))
+                continue;
+
+            if (!binding.entry().principal().equals(requestContext.principal().toString())
+                    && !binding.entry().principal().equals("User:*"))
+                continue;
+
+            if (binding.entry().operation() != op
+                    && binding.entry().operation() != AclOperation.ALL)
+                continue;
+
+            if (binding.entry().permissionType() == AclPermissionType.DENY) {
+                switch (binding.pattern().patternType()) {
+                    case LITERAL:
+                        if (binding.pattern().name().equals(ResourcePattern.WILDCARD_RESOURCE))
+                            return AuthorizationResult.DENIED;
+                        if (binding.pattern().resourceType() == ResourceType.CLUSTER &&
+                            binding.pattern().name().equals(Resource.CLUSTER_NAME))
+                            return AuthorizationResult.DENIED;
+                        break;
+                    case PREFIXED:
+                        if (binding.pattern().name().isEmpty())
+                            return AuthorizationResult.DENIED;
+                        denyPrefixes.add(binding.pattern().name());
+                        break;
                 }
                 continue;
             }
 
+            if (binding.entry().permissionType() != AclPermissionType.ALLOW)
+                continue;
+
             switch (binding.pattern().patternType()) {
                 case LITERAL:
-                    if (binding.pattern().name().equals(ResourcePattern.WILDCARD_RESOURCE))
-                        return AuthorizationResult.ALLOWED;
+                    if (binding.pattern().name().equals(ResourcePattern.WILDCARD_RESOURCE)) {
+                        hasWildCardAllow = true;
+                        continue;
+                    }
                     List<Action> action = Collections.singletonList(new Action(
                         op, binding.pattern(), 1, false, false));
                     if (authorize(requestContext, action).get(0) == AuthorizationResult.ALLOWED) {
@@ -209,6 +242,10 @@ public interface Authorizer extends Configurable, Closeable {
                     allowPrefixes.add(binding.pattern().name());
                     break;
             }
+        }
+
+        if (hasWildCardAllow) {
+            return AuthorizationResult.ALLOWED;
         }
 
         for (String allowed : allowPrefixes) {
