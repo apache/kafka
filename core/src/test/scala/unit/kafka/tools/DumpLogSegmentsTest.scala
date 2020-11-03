@@ -20,12 +20,13 @@ package kafka.tools
 import java.io.{ByteArrayOutputStream, File}
 import java.nio.ByteBuffer
 import java.util
-import java.util.{Properties, UUID}
+import java.util.Properties
 
 import kafka.log.{Log, LogConfig, LogManager, LogTest}
 import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.tools.DumpLogSegments.TimeIndexDumpErrors
 import kafka.utils.{MockTime, TestUtils}
+import org.apache.kafka.common.UUID
 import org.apache.kafka.common.metadata.{BrokerRecord, IsrChangeRecord, TopicRecord}
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, ObjectSerializationCache}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}

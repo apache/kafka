@@ -218,14 +218,13 @@ class ControllerApis(val requestChannel: RequestChannel,
 
   def handleBrokerRegistration(request: RequestChannel.Request): Unit = {
     val registrationRequest = request.body[BrokerRegistrationRequest]
-    if (apisUtils.authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
-      controller.registerBroker(registrationRequest)
-    }
+    apisUtils.authorizeClusterOperation(request, CLUSTER_ACTION)
+    controller.registerBroker(registrationRequest)
   }
 
   def handleBrokerHeartBeatRequest(request: RequestChannel.Request): Unit = {
     val heartbeatRequest = request.body[BrokerHeartbeatRequest]
-    apisUtils.authorizeClusterOperation(request, CLUSTER_ACTION);
+    apisUtils.authorizeClusterOperation(request, CLUSTER_ACTION)
     controller.processBrokerHeartbeat(heartbeatRequest.data)
   }
 }

@@ -18,7 +18,7 @@
 package kafka.server.metadata
 
 import java.util
-import java.util.{Collections, UUID}
+import java.util.Collections
 
 import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, EndPoint}
@@ -31,7 +31,7 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
-import org.apache.kafka.common.{Node, TopicPartition}
+import org.apache.kafka.common.{Node, TopicPartition, UUID}
 import org.apache.kafka.common.metadata.{BrokerRecord, FenceBrokerRecord, IsrChangeRecord, PartitionRecord, RemoveTopicRecord, TopicRecord, UnfenceBrokerRecord}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}

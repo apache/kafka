@@ -18,7 +18,7 @@
 package kafka.server
 
 import java.util
-import java.util.{Collections, UUID}
+import java.util.Collections
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import scala.collection.{Seq, Set, mutable}
@@ -31,7 +31,7 @@ import kafka.utils.Logging
 import kafka.utils.Implicits._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
-import org.apache.kafka.common.{Cluster, Node, PartitionInfo, TopicPartition}
+import org.apache.kafka.common.{Cluster, Node, PartitionInfo, TopicPartition, UUID}
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponsePartition
 import org.apache.kafka.common.network.ListenerName

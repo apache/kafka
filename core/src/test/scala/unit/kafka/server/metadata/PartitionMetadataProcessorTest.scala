@@ -17,13 +17,11 @@
 
 package kafka.server.metadata
 
-import java.util.UUID
-
 import kafka.cluster.{Broker, EndPoint}
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.server.{ClientQuotaManager, ClientRequestQuotaManager, ControllerMutationQuotaManager, KafkaConfig, MetadataCache, QuotaFactory, ReplicaManager}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, UUID}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
 import org.apache.kafka.common.metadata.{BrokerRecord, TopicRecord}
 import org.apache.kafka.common.metadata.BrokerRecord.BrokerEndpointCollection
