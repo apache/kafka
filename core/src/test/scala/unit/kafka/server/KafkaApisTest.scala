@@ -325,7 +325,7 @@ class KafkaApisTest {
 
     val envelopeHeader = new RequestHeader(ApiKeys.ENVELOPE, ApiKeys.ENVELOPE.latestVersion,
       clientId, 0)
-    val envelopeRequest = new EnvelopeRequest.Builder(serializedRequestData, null, hostAddress)
+    val envelopeRequest = new EnvelopeRequest.Builder(serializedRequestData, new Array[Byte](0), hostAddress)
       .build(envelopeHeader.apiVersion)
     val request = buildRequestWithEnvelopeContext(alterConfigsRequest,
       fromPrivilegedListener = true,
@@ -367,7 +367,7 @@ class KafkaApisTest {
 
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, controller)
 
-    val envelopeRequest = new EnvelopeRequest.Builder(serializedRequestData, null, hostAddress)
+    val envelopeRequest = new EnvelopeRequest.Builder(serializedRequestData, new Array[Byte](0), hostAddress)
       .build(ApiKeys.ENVELOPE.latestVersion)
     val request = buildRequest(envelopeRequest, fromPrivilegedListener = true, principalSerde = kafkaPrincipalSerde)
 
@@ -393,7 +393,7 @@ class KafkaApisTest {
     val envelopeHeader = new RequestHeader(ApiKeys.ENVELOPE, ApiKeys.ENVELOPE.latestVersion,
       clientId, 0)
 
-    val envelopeRequest = new EnvelopeRequest.Builder(serializedRequestData, null, hostAddress)
+    val envelopeRequest = new EnvelopeRequest.Builder(serializedRequestData, new Array[Byte](0), hostAddress)
       .build(envelopeHeader.apiVersion)
     val request = buildRequestWithEnvelopeContext(leaveGroupRequest,
       fromPrivilegedListener = true,
@@ -464,7 +464,7 @@ class KafkaApisTest {
       clientId, 0)
     val serializedRequestData = alterConfigsRequest.serialize(requestHeader)
 
-    val envelopeRequest = new EnvelopeRequest.Builder(serializedRequestData, null, hostAddress)
+    val envelopeRequest = new EnvelopeRequest.Builder(serializedRequestData, new Array[Byte](0), hostAddress)
       .build(envelopeHeader.apiVersion)
     val request = buildRequestWithEnvelopeContext(alterConfigsRequest,
       fromPrivilegedListener = fromPrivilegedListener,
