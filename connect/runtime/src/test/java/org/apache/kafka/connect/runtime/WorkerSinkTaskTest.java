@@ -633,6 +633,7 @@ public class WorkerSinkTaskTest {
         PowerMock.replayAll();
 
         workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
         workerTask.execute();
 
         assertEquals(0, workerTask.commitFailures());
