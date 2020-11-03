@@ -18,20 +18,11 @@
 package org.apache.kafka.connect.transforms.util;
 
 public class Hex {
-    private static final char[] HEX_ARRAY = "0123456789abcdef".toCharArray();
-
-    /**
-     * Encodes a byte array as a hexadecimal string.
-     *
-     * @implNote https://stackoverflow.com/a/9855338/1781549
-     */
     public static String encode(final byte[] bytes) {
-        final char[] hexChars = new char[bytes.length * 2];
-        for (int j = 0; j < bytes.length; j++) {
-            final int v = bytes[j] & 0xFF;
-            hexChars[j * 2] = HEX_ARRAY[v >>> 4]; // hi nibble
-            hexChars[j * 2 + 1] = HEX_ARRAY[v & 0x0F]; // lo nibble
+        StringBuilder hashString = new StringBuilder();
+        for (byte b: bytes) {
+            hashString.append(String.format("%02x", b));
         }
-        return new String(hexChars);
+        return hashString.toString();
     }
 }

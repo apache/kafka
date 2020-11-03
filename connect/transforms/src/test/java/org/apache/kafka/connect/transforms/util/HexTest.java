@@ -22,7 +22,7 @@ import static org.junit.Assert.assertEquals;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.List;
@@ -51,7 +51,7 @@ public class HexTest {
         final List<String> strings = Files.readAllLines(Paths.get(resource.toURI()));
         for (final String s : strings) {
             // Use the string as a byte array and hex-encode it.
-            final byte[] bytes = s.getBytes(Charset.defaultCharset());
+            final byte[] bytes = s.getBytes(StandardCharsets.UTF_8);
             final String encoded = Hex.encode(bytes);
             assertEquals(bytes.length * 2, encoded.length());
 
@@ -62,7 +62,7 @@ public class HexTest {
                 final String s1 = new String(encodedChars, i, 2);
                 decodedBytes[i / 2] = (byte) Integer.parseInt(s1, 16);
             }
-            assertEquals(new String(decodedBytes, Charset.defaultCharset()), s);
+            assertEquals(new String(decodedBytes, StandardCharsets.UTF_8), s);
         }
     }
 }

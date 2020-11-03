@@ -17,6 +17,12 @@
 
 package org.apache.kafka.connect.transforms;
 
+import java.nio.charset.Charset;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Field;
@@ -27,14 +33,6 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.transforms.util.Hex;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
-
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Optional;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,7 +41,9 @@ public abstract class Hash<R extends ConnectRecord<R>> implements Transformation
     private static final String FIELD_NAME_CONFIG = "field.name";
     private static final String FIELD_NAME_DOC =
         "The name of the field which value should be hashed. If null or empty, "
-            + "the entire key or value is used (and assumed to be a string). By default is null.";
+            + "the entire key or value is used (and assumed to be a string). By default is null."
+            + "A period can be used to denote a nested path.";
+    //todo support nested paths
     private static final String SKIP_MISSING_OR_NULL_CONFIG = "skip.missing.or.null";
     private static final String SKIP_MISSING_OR_NULL_DOC =
         "In case the value to be hashed is null or missing, "
@@ -51,6 +51,13 @@ public abstract class Hash<R extends ConnectRecord<R>> implements Transformation
     private static final String FUNCTION_CONFIG = "function";
     private static final String FUNCTION_DOC =
         "The name of the hash function to use. The supported values are: md5, sha1, sha256.";
+    private static final String HASH_SALT_CONFIG = "salt";
+    private static final String HASH_SALT_DOC =
+        "Optional value to use for salt when hashing the given field.";
+    private static final String CHARSET_CONFIG = "charset";
+    private static final String CHARSET_DOC =
+        "Character set to use when encoding";
+
     public static final ConfigDef CONFIG_DEF = new ConfigDef().define(
         FIELD_NAME_CONFIG,
         ConfigDef.Type.STRING,
@@ -72,16 +79,31 @@ public abstract class Hash<R extends ConnectRecord<R>> implements Transformation
                 HashFunction.SHA1.toString(),
                 HashFunction.SHA256.toString()),
             ConfigDef.Importance.HIGH,
-            FUNCTION_DOC);
+            FUNCTION_DOC)
+        .define(
+            HASH_SALT_CONFIG,
+            ConfigDef.Type.STRING,
+            "",
+            ConfigDef.Importance.LOW,
+            HASH_SALT_DOC)
+        .define(
+            CHARSET_CONFIG,
+            ConfigDef.Type.STRING,
+            Charset.defaultCharset().toString(),
+            ConfigDef.Importance.LOW,
+            CHARSET_DOC);
     private MessageDigest messageDigest;
     private Optional<String> fieldName;
     private boolean skipMissingOrNull;
+    private Optional<String> hashSalt;
+    private Charset charset;
 
     @Override
     public void configure(final Map<String, ?> props) {
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
         final HashFunction hashFunction = HashFunction.fromString(config.getString(FUNCTION_CONFIG));
         final String rawFieldName = config.getString(FIELD_NAME_CONFIG);
+        final String rawHashSalt = config.getString(HASH_SALT_CONFIG);
 
         if (null == rawFieldName || "".equals(rawFieldName)) {
             fieldName = Optional.empty();
@@ -89,7 +111,14 @@ public abstract class Hash<R extends ConnectRecord<R>> implements Transformation
             fieldName = Optional.of(rawFieldName);
         }
 
+        if (null == rawHashSalt || "".equals(rawHashSalt)) {
+            hashSalt = Optional.empty();
+        } else {
+            hashSalt = Optional.of(rawHashSalt);
+        }
+
         skipMissingOrNull = config.getBoolean(SKIP_MISSING_OR_NULL_CONFIG);
+        charset = Charset.forName(config.getString(CHARSET_CONFIG));
 
         try {
             switch (hashFunction) {
@@ -159,6 +188,7 @@ public abstract class Hash<R extends ConnectRecord<R>> implements Transformation
                                                       final Schema schema,
                                                       final Object value,
                                                       final String fieldName) {
+        //todo maybe support maps?
         if (Schema.Type.STRUCT != schema.type()) {
             throw new DataException(dataPlace() + " schema type must be STRUCT if field name is specified: "
                 + recordStr);
@@ -167,6 +197,12 @@ public abstract class Hash<R extends ConnectRecord<R>> implements Transformation
         if (value == null) {
             throw new DataException(dataPlace() + " can't be null if field name is specified: " + recordStr);
         }
+
+//        Struct updatedRecord;
+//
+//        final List<List<String>> fieldNames =
+//            Arrays.asList(fieldName.split(",")).stream().map(s -> Arrays.asList(s.split("."))).collect(
+//                Collectors.toList());
 
         final Field field = schema.field(fieldName);
         if (field == null) {
@@ -229,8 +265,10 @@ public abstract class Hash<R extends ConnectRecord<R>> implements Transformation
     }
 
     private String hashString(final String string) {
-        // We don't call reset() here because digest() does resetting afterwards.
-        final byte[] digest = messageDigest.digest(string.getBytes(StandardCharsets.UTF_8));
+        messageDigest.reset();
+        this.hashSalt.ifPresent(s -> messageDigest.update(s.getBytes(this.charset)));
+
+        final byte[] digest = messageDigest.digest(string.getBytes(this.charset));
         return Hex.encode(digest);
     }
 
