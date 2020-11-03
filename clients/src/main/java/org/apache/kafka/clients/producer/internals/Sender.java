@@ -563,12 +563,12 @@ public class Sender implements Runnable {
             if (response.hasResponse()) {
                 // TODO: Sender should exercise PartitionProduceResponse rather than ProduceResponse.PartitionResponse
                 ProduceResponse produceResponse = (ProduceResponse) response.responseBody();
-                produceResponse.data().responses().forEach(r -> r.partitions().forEach(p -> {
-                    TopicPartition tp = new TopicPartition(r.name(), p.partitionIndex());
+                produceResponse.data().responses().forEach(r -> r.partitionResponses().forEach(p -> {
+                    TopicPartition tp = new TopicPartition(r.topic(), p.partition());
                     ProduceResponse.PartitionResponse partResp = new ProduceResponse.PartitionResponse(
                             Errors.forCode(p.errorCode()),
                             p.baseOffset(),
-                            p.logAppendTimeMs(),
+                            p.logAppendTime(),
                             p.logStartOffset(),
                             p.recordErrors()
                                 .stream()

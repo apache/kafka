@@ -35,17 +35,17 @@
   "fields": [
     { "name": "Responses", "type": "[]TopicProduceResponse", "versions": "0+",
       "about": "Each produce response", "fields": [
-      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
+      { "name": "Topic", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The topic name" },
-      { "name": "Partitions", "type": "[]PartitionProduceResponse", "versions": "0+",
+      { "name": "PartitionResponses", "type": "[]PartitionProduceResponse", "versions": "0+",
         "about": "Each partition that we produced to within the topic.", "fields": [
-        { "name": "PartitionIndex", "type": "int32", "versions": "0+",
+        { "name": "Partition", "type": "int32", "versions": "0+",
           "about": "The partition index." },
         { "name": "ErrorCode", "type": "int16", "versions": "0+",
           "about": "The error code, or 0 if there was no error." },
         { "name": "BaseOffset", "type": "int64", "versions": "0+",
           "about": "The base offset." },
-        { "name": "LogAppendTimeMs", "type": "int64", "versions": "2+", "default": "-1", "ignorable": true,
+        { "name": "LogAppendTime", "type": "int64", "versions": "2+", "default": "-1", "ignorable": true,
           "about": "The timestamp returned by broker after appending the messages. If CreateTime is used for the topic, the timestamp will be -1.  If LogAppendTime is used for the topic, the timestamp will be the broker local time when the messages are appended." },
         { "name": "LogStartOffset", "type": "int64", "versions": "5+", "default": "-1", "ignorable": true,
           "about": "The log start offset." },

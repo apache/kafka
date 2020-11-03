@@ -680,10 +680,10 @@ public final class MessageTest {
         testAllMessageRoundTrips(new ProduceResponseData()
                                      .setResponses(singletonList(
                                          new ProduceResponseData.TopicProduceResponse()
-                                             .setName(topicName)
-                                             .setPartitions(singletonList(
+                                             .setTopic(topicName)
+                                             .setPartitionResponses(singletonList(
                                                  new ProduceResponseData.PartitionProduceResponse()
-                                                     .setPartitionIndex(partitionIndex)
+                                                     .setPartition(partitionIndex)
                                                      .setErrorCode(errorCode)
                                                      .setBaseOffset(baseOffset))))));
 
@@ -691,13 +691,13 @@ public final class MessageTest {
             () -> new ProduceResponseData()
                       .setResponses(singletonList(
                             new ProduceResponseData.TopicProduceResponse()
-                                .setName(topicName)
-                                .setPartitions(singletonList(
+                                .setTopic(topicName)
+                                .setPartitionResponses(singletonList(
                                      new ProduceResponseData.PartitionProduceResponse()
-                                         .setPartitionIndex(partitionIndex)
+                                         .setPartition(partitionIndex)
                                          .setErrorCode(errorCode)
                                          .setBaseOffset(baseOffset)
-                                         .setLogAppendTimeMs(logAppendTimeMs)
+                                         .setLogAppendTime(logAppendTimeMs)
                                          .setLogStartOffset(logStartOffset)
                                          .setRecordErrors(singletonList(
                                              new ProduceResponseData.BatchIndexAndErrorMessage()
@@ -710,16 +710,16 @@ public final class MessageTest {
             ProduceResponseData responseData = response.get();
 
             if (version < 8) {
-                responseData.responses().get(0).partitions().get(0).setRecordErrors(Collections.emptyList());
-                responseData.responses().get(0).partitions().get(0).setErrorMessage(null);
+                responseData.responses().get(0).partitionResponses().get(0).setRecordErrors(Collections.emptyList());
+                responseData.responses().get(0).partitionResponses().get(0).setErrorMessage(null);
             }
 
             if (version < 5) {
-                responseData.responses().get(0).partitions().get(0).setLogStartOffset(-1);
+                responseData.responses().get(0).partitionResponses().get(0).setLogStartOffset(-1);
             }
 
             if (version < 2) {
-                responseData.responses().get(0).partitions().get(0).setLogAppendTimeMs(-1);
+                responseData.responses().get(0).partitionResponses().get(0).setLogAppendTime(-1);
             }
 
             if (version < 1) {

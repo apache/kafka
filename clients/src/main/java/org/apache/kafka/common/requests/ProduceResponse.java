@@ -82,14 +82,14 @@ public class ProduceResponse extends AbstractResponse {
                 .entrySet()
                 .stream()
                 .map(topicData -> new ProduceResponseData.TopicProduceResponse()
-                    .setName(topicData.getKey())
-                    .setPartitions(topicData.getValue()
+                    .setTopic(topicData.getKey())
+                    .setPartitionResponses(topicData.getValue()
                         .stream()
                         .map(p -> new ProduceResponseData.PartitionProduceResponse()
-                            .setPartitionIndex(p.getKey().partition())
+                            .setPartition(p.getKey().partition())
                             .setBaseOffset(p.getValue().baseOffset)
                             .setLogStartOffset(p.getValue().logStartOffset)
-                            .setLogAppendTimeMs(p.getValue().logAppendTime)
+                            .setLogAppendTime(p.getValue().logAppendTime)
                             .setErrorMessage(p.getValue().errorMessage)
                             .setErrorCode(p.getValue().error.code())
                             .setRecordErrors(p.getValue().recordErrors
@@ -122,13 +122,13 @@ public class ProduceResponse extends AbstractResponse {
     public Map<TopicPartition, PartitionResponse> responses() {
         return data.responses()
                 .stream()
-                .flatMap(t -> t.partitions()
+                .flatMap(t -> t.partitionResponses()
                         .stream()
-                        .map(p -> new AbstractMap.SimpleEntry<>(new TopicPartition(t.name(), p.partitionIndex()),
+                        .map(p -> new AbstractMap.SimpleEntry<>(new TopicPartition(t.topic(), p.partition()),
                                 new PartitionResponse(
                                         Errors.forCode(p.errorCode()),
                                         p.baseOffset(),
-                                        p.logAppendTimeMs(),
+                                        p.logAppendTime(),
                                         p.logStartOffset(),
                                         p.recordErrors()
                                                 .stream()
@@ -146,7 +146,7 @@ public class ProduceResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
-        data.responses().forEach(t -> t.partitions().forEach(p -> updateErrorCounts(errorCounts, Errors.forCode(p.errorCode()))));
+        data.responses().forEach(t -> t.partitionResponses().forEach(p -> updateErrorCounts(errorCounts, Errors.forCode(p.errorCode()))));
         return errorCounts;
     }
 

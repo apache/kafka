@@ -20,6 +20,7 @@ import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.message.ProduceRequestData;
+import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
@@ -37,8 +38,9 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import static org.apache.kafka.common.requests.ProduceResponse.INVALID_OFFSET;
 
 public class ProduceRequest extends AbstractRequest {
 
@@ -208,10 +210,21 @@ public class ProduceRequest extends AbstractRequest {
     public ProduceResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         /* In case the producer doesn't actually want any response */
         if (acks == 0) return null;
-        ProduceResponse.PartitionResponse partitionResponse = new ProduceResponse.PartitionResponse(Errors.forException(e));
-        return new ProduceResponse(partitions()
-            .stream()
-            .collect(Collectors.toMap(Function.identity(), ignored -> partitionResponse)), throttleTimeMs);
+        Errors error = Errors.forException(e);
+        return new ProduceResponse(new ProduceResponseData()
+            .setResponses(data.topicData().stream().map(t -> new ProduceResponseData.TopicProduceResponse()
+                .setPartitionResponses(t.data().stream().map(p -> new ProduceResponseData.PartitionProduceResponse()
+                    .setPartition(p.partition())
+                    .setRecordErrors(Collections.emptyList())
+                    .setBaseOffset(INVALID_OFFSET)
+                    .setLogAppendTime(RecordBatch.NO_TIMESTAMP)
+                    .setLogStartOffset(INVALID_OFFSET)
+                    .setErrorMessage(e.getMessage())
+                    .setErrorCode(error.code()))
+                    .collect(Collectors.toList()))
+                .setTopic(t.topic()))
+                .collect(Collectors.toList()))
+            .setThrottleTimeMs(throttleTimeMs));
     }
 
     @Override

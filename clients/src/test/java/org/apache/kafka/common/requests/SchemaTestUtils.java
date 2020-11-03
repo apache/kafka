@@ -40,11 +40,10 @@ public final class SchemaTestUtils {
             int fieldIndex = 0;
             for (BoundField f : lhsSchema.fields()) {
                 Field previousField = f.def;
-                Field currentField = lhsSchema.fields()[fieldIndex++].def;
+                Field currentField = rhsSchema.fields()[fieldIndex++].def;
                 Assert.assertEquals(previousField.name, currentField.name);
                 assertEquals(previousField.type, currentField.type);
-                Assert.assertEquals(previousField.hasDefaultValue, currentField.hasDefaultValue);
-                Assert.assertEquals(previousField.defaultValue, currentField.defaultValue);
+                // hasDefaultValue and defaultValue are not used by automatic protocol so we don't need to check them.
             }
         } else if (lhs instanceof ArrayOf) {
             assertTrue(rhs instanceof ArrayOf);
