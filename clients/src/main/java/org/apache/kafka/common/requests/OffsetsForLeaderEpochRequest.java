@@ -50,22 +50,43 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
     private final OffsetForLeaderEpochRequestData data;
 
     public static class Builder extends AbstractRequest.Builder<OffsetsForLeaderEpochRequest> {
-        private final Map<TopicPartition, PartitionData> epochsByPartition;
-        private final int replicaId;
+        private final OffsetForLeaderEpochRequestData data;
+
+        Builder(short oldestAllowedVersion, short latestAllowedVersion, OffsetForLeaderEpochRequestData data) {
+            super(ApiKeys.OFFSET_FOR_LEADER_EPOCH, oldestAllowedVersion, latestAllowedVersion);
+            this.data = data;
+        }
 
         Builder(short oldestAllowedVersion, short latestAllowedVersion, Map<TopicPartition, PartitionData> epochsByPartition, int replicaId) {
             super(ApiKeys.OFFSET_FOR_LEADER_EPOCH, oldestAllowedVersion, latestAllowedVersion);
-            this.epochsByPartition = epochsByPartition;
-            this.replicaId = replicaId;
+
+            data = new OffsetForLeaderEpochRequestData();
+            data.setReplicaId(replicaId);
+
+            epochsByPartition.forEach((partitionKey, partitionValue) -> {
+                OffsetForLeaderTopic topic = data.topics().find(partitionKey.topic());
+                if (topic == null) {
+                    topic = new OffsetForLeaderTopic().setName(partitionKey.topic());
+                    data.topics().add(topic);
+                }
+                topic.partitions().add(new OffsetForLeaderPartition()
+                    .setPartitionIndex(partitionKey.partition())
+                    .setLeaderEpoch(partitionValue.leaderEpoch)
+                    .setCurrentLeaderEpoch(partitionValue.currentLeaderEpoch
+                        .orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
+                );
+            });
         }
 
-        public static Builder forConsumer(Map<TopicPartition, PartitionData> epochsByPartition) {
+        public static Builder forConsumer(OffsetForLeaderTopicCollection epochsByPartition) {
             // Old versions of this API require CLUSTER permission which is not typically granted
             // to clients. Beginning with version 3, the broker requires only TOPIC Describe
             // permission for the topic of each requested partition. In order to ensure client
             // compatibility, we only send this request when we can guarantee the relaxed permissions.
-            return new Builder((short) 3, ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(),
-                    epochsByPartition, CONSUMER_REPLICA_ID);
+            OffsetForLeaderEpochRequestData data = new OffsetForLeaderEpochRequestData();
+            data.setReplicaId(CONSUMER_REPLICA_ID);
+            data.setTopics(epochsByPartition);
+            return new Builder((short) 3, ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(), data);
         }
 
         public static Builder forFollower(short version, Map<TopicPartition, PartitionData> epochsByPartition, int replicaId) {
@@ -77,35 +98,12 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
             if (version < oldestAllowedVersion() || version > latestAllowedVersion())
                 throw new UnsupportedVersionException("Cannot build " + this + " with version " + version);
 
-            OffsetForLeaderEpochRequestData data = new OffsetForLeaderEpochRequestData();
-            data.setReplicaId(replicaId);
-
-            OffsetForLeaderTopicCollection topics = new OffsetForLeaderTopicCollection();
-            epochsByPartition.forEach((partitionKey, partitionValue) -> {
-                OffsetForLeaderTopic topic = topics.find(partitionKey.topic());
-                if (topic == null) {
-                    topic = new OffsetForLeaderTopic().setName(partitionKey.topic());
-                    topics.add(topic);
-                }
-                topic.partitions().add(new OffsetForLeaderPartition()
-                    .setPartitionIndex(partitionKey.partition())
-                    .setLeaderEpoch(partitionValue.leaderEpoch)
-                    .setCurrentLeaderEpoch(partitionValue.currentLeaderEpoch
-                        .orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
-                );
-            });
-            data.setTopics(topics);
-
             return new OffsetsForLeaderEpochRequest(data, version);
         }
 
         @Override
         public String toString() {
-            StringBuilder bld = new StringBuilder();
-            bld.append("OffsetsForLeaderEpochRequest(").
-                    append("epochsByPartition=").append(epochsByPartition).
-                    append(")");
-            return bld.toString();
+            return data.toString();
         }
     }
 
@@ -117,6 +115,10 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
     public OffsetsForLeaderEpochRequest(Struct struct, short version) {
         super(ApiKeys.OFFSET_FOR_LEADER_EPOCH, version);
         this.data = new OffsetForLeaderEpochRequestData(struct, version);
+    }
+
+    public OffsetForLeaderEpochRequestData data() {
+        return data;
     }
 
     public Map<TopicPartition, PartitionData> epochsByTopicPartition() {

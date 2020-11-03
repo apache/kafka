@@ -19,7 +19,11 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition;
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic;
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopicCollection;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.EpochEndOffset;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest;
@@ -47,12 +51,23 @@ public class OffsetsForLeaderEpochClient extends AsyncClient<
     @Override
     protected AbstractRequest.Builder<OffsetsForLeaderEpochRequest> prepareRequest(
             Node node, Map<TopicPartition, SubscriptionState.FetchPosition> requestData) {
-        Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData> partitionData = new HashMap<>(requestData.size());
-        requestData.forEach((topicPartition, fetchPosition) -> fetchPosition.offsetEpoch.ifPresent(
-            fetchEpoch -> partitionData.put(topicPartition,
-                new OffsetsForLeaderEpochRequest.PartitionData(fetchPosition.currentLeader.epoch, fetchEpoch))));
-
-        return OffsetsForLeaderEpochRequest.Builder.forConsumer(partitionData);
+        OffsetForLeaderTopicCollection topics = new OffsetForLeaderTopicCollection(requestData.size());
+        requestData.forEach((topicPartition, fetchPosition) ->
+            fetchPosition.offsetEpoch.ifPresent(fetchEpoch -> {
+                OffsetForLeaderTopic topic = topics.find(topicPartition.topic());
+                if (topic == null) {
+                    topic = new OffsetForLeaderTopic().setName(topicPartition.topic());
+                    topics.add(topic);
+                }
+                topic.partitions().add(new OffsetForLeaderPartition()
+                    .setPartitionIndex(topicPartition.partition())
+                    .setLeaderEpoch(fetchEpoch)
+                    .setCurrentLeaderEpoch(fetchPosition.currentLeader.epoch
+                        .orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
+                );
+            })
+        );
+        return OffsetsForLeaderEpochRequest.Builder.forConsumer(topics);
     }
 
     @Override
