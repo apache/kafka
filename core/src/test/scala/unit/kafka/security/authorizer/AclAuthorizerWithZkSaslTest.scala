@@ -62,7 +62,7 @@ class AclAuthorizerWithZkSaslTest extends ZooKeeperTestHarness with SaslSetup {
   @Before
   override def setUp(): Unit = {
     // Allow failed clients to avoid server closing the connection before reporting AuthFailed.
-    System.setProperty("zookeeper.allowSaslFailedClients", "true")
+    // System.setProperty("zookeeper.allowSaslFailedClients", "true")
 
     // Configure ZK SASL with TestableDigestLoginModule for clients to inject failures
     TestableDigestLoginModule.reset()
@@ -90,7 +90,7 @@ class AclAuthorizerWithZkSaslTest extends ZooKeeperTestHarness with SaslSetup {
     aclAuthorizer2.close()
     super.tearDown()
     TestableDigestLoginModule.reset()
-    System.clearProperty("zookeeper.allowSaslFailedClients")
+    // System.clearProperty("zookeeper.allowSaslFailedClients")
   }
 
   @Test
@@ -107,7 +107,7 @@ class AclAuthorizerWithZkSaslTest extends ZooKeeperTestHarness with SaslSetup {
   }
 
   private def injectTransientAuthenticationFailure(): Unit = {
-    TestableDigestLoginModule.injectInvalidCredentials()
+    //TestableDigestLoginModule.injectInvalidCredentials()
     zkClient(aclAuthorizer).currentZooKeeper.getTestable.injectSessionExpiration()
     zkClient(aclAuthorizer2).currentZooKeeper.getTestable.injectSessionExpiration()
     executor.schedule((() => TestableDigestLoginModule.reset()): Runnable,
