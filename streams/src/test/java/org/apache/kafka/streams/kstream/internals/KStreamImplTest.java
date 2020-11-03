@@ -87,6 +87,7 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.emptyMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -1872,8 +1873,7 @@ public class KStreamImplTest {
             IllegalArgumentException.class,
             () -> testStream.flatTransform(() -> transformer)
         );
-        assertThat(exception.getMessage(), equalTo("TransformerSupplier generates single reference. " +
-                "TransformerSupplier#get() must return a new object each time it is called."));
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
     }
 
     @Test
@@ -1883,8 +1883,7 @@ public class KStreamImplTest {
                 IllegalArgumentException.class,
             () -> testStream.flatTransform(() -> transformer, "storeName")
         );
-        assertThat(exception.getMessage(), equalTo("TransformerSupplier generates single reference. " +
-                "TransformerSupplier#get() must return a new object each time it is called."));
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
     }
 
     @Test
@@ -1894,8 +1893,7 @@ public class KStreamImplTest {
                 IllegalArgumentException.class,
             () -> testStream.flatTransform(() -> transformer, Named.as("flatTransformer"))
         );
-        assertThat(exception.getMessage(), equalTo("TransformerSupplier generates single reference. " +
-                "TransformerSupplier#get() must return a new object each time it is called."));
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
     }
 
     @Test
@@ -1905,8 +1903,7 @@ public class KStreamImplTest {
                 IllegalArgumentException.class,
             () -> testStream.flatTransform(() -> transformer, Named.as("flatTransformer"), "storeName")
         );
-        assertThat(exception.getMessage(), equalTo("TransformerSupplier generates single reference. " +
-                "TransformerSupplier#get() must return a new object each time it is called."));
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
     }
 
     @Test
@@ -1996,8 +1993,7 @@ public class KStreamImplTest {
                 IllegalArgumentException.class,
             () -> testStream.transformValues(() -> transformer)
         );
-        assertThat(exception.getMessage(), equalTo("ValueTransformerSupplier generates single reference. " +
-                "ValueTransformerSupplier#get() must return a new object each time it is called."));
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
     }
 
     @Test
@@ -2007,8 +2003,7 @@ public class KStreamImplTest {
                 IllegalArgumentException.class,
             () -> testStream.transformValues(() -> transformer, Named.as("transformer"))
         );
-        assertThat(exception.getMessage(), equalTo("ValueTransformerSupplier generates single reference. " +
-                "ValueTransformerSupplier#get() must return a new object each time it is called."));
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
     }
 
     @Test
@@ -2026,8 +2021,7 @@ public class KStreamImplTest {
                 IllegalArgumentException.class,
             () -> testStream.transformValues(() -> transformer)
         );
-        assertThat(exception.getMessage(), equalTo("ValueTransformerWithKeySupplier generates single reference. " +
-                "ValueTransformerWithKeySupplier#get() must return a new object each time it is called."));
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
     }
 
     @Test
@@ -2037,8 +2031,7 @@ public class KStreamImplTest {
                 IllegalArgumentException.class,
             () -> testStream.transformValues(() -> transformer, Named.as("transformer"))
         );
-        assertThat(exception.getMessage(), equalTo("ValueTransformerWithKeySupplier generates single reference. " +
-                "ValueTransformerWithKeySupplier#get() must return a new object each time it is called."));
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
     }
 
     @Test

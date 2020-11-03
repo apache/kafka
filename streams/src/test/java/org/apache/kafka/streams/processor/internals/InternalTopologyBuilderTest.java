@@ -53,6 +53,7 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -188,9 +189,7 @@ public class InternalTopologyBuilderTest {
                 IllegalArgumentException.class,
             () -> builder.addProcessor("processor", () -> processor, (String) null)
         );
-        assertThat(exception.getMessage(), equalTo(
-                "ProcessorSupplier generates single reference. ProcessorSupplier#get() must return " +
-                "a new object each time it is called."));
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
     }
 
     @Test
@@ -208,9 +207,7 @@ public class InternalTopologyBuilderTest {
                         "global-processor",
                 () -> processor)
         );
-        assertThat(exception.getMessage(), equalTo(
-                "ProcessorSupplier generates single reference. ProcessorSupplier#get() must return " +
-                "a new object each time it is called."));
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
     }
 
     @Test
