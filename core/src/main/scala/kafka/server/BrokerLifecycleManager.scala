@@ -31,7 +31,7 @@ import org.apache.kafka.common.message.BrokerRegistrationRequestData.{FeatureCol
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{BrokerHeartbeatRequest, BrokerHeartbeatResponse, BrokerRegistrationRequest, BrokerRegistrationResponse}
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.metadata
+import org.apache.kafka.{metadata => jmetadata}
 
 import scala.concurrent.{Await, Promise}
 import scala.concurrent.duration._
@@ -56,10 +56,10 @@ trait BrokerLifecycleManager {
   // Note: This does not enforce any specific order of the state transitions. The target
   //       state is sent out as enqueued.
   // Returns a promise that indicates success if completed w/o exception
-  def enqueue(state: metadata.BrokerState): Promise[Unit]
+  def enqueue(state: jmetadata.BrokerState): Promise[Unit]
 
   // Current broker state
-  def brokerState: metadata.BrokerState
+  def brokerState: jmetadata.BrokerState
 
   // Last successful heartbeat time
   def lastSuccessfulHeartbeatTime: Long
@@ -87,13 +87,13 @@ trait BrokerLifecycleManager {
 class BrokerLifecycleManagerImpl(val brokerMetadataListener: BrokerMetadataListener, val config: KafkaConfig, val controllerChannelManager: BrokerToControllerChannelManager, val scheduler: Scheduler, val time: Time, val brokerID: Int, val rack: String, val metadataOffset: () => Long, val brokerEpoch: () => Long) extends BrokerLifecycleManager with Logging with KafkaMetricsGroup {
 
   // Request queue
-  private val requestQueue: util.Queue[(metadata.BrokerState, Promise[Unit])] = new ConcurrentLinkedQueue[(metadata.BrokerState, Promise[Unit])]()
+  private val requestQueue: util.Queue[(jmetadata.BrokerState, Promise[Unit])] = new ConcurrentLinkedQueue[(jmetadata.BrokerState, Promise[Unit])]()
 
   // Scheduler task
   private var schedulerTask: Option[ScheduledFuture[_]] = None
 
   // Broker states - Current and Target/Next
-  private var currentState: metadata.BrokerState = _
+  private var currentState: jmetadata.BrokerState = _
   private val pendingHeartbeat = new AtomicBoolean(false)
 
   // Metrics - Histogram of broker heartbeat request/response time
@@ -131,7 +131,7 @@ class BrokerLifecycleManagerImpl(val brokerMetadataListener: BrokerMetadataListe
   override def start(listeners: ListenerCollection, features: FeatureCollection): Unit = {
     // FIXME: Handle broker registration inconsistencies where the controller successfully registers the broker but the
     //        broker times-out/fails on the RPC. Retrying today, would lead to a DuplicateBrokerRegistrationException
-    currentState = metadata.BrokerState.NOT_RUNNING
+    currentState = jmetadata.BrokerState.NOT_RUNNING
 
     // Initiate broker registration
     val brokerRegistrationData = new BrokerRegistrationRequestData()
@@ -148,25 +148,25 @@ class BrokerLifecycleManagerImpl(val brokerMetadataListener: BrokerMetadataListe
           val body = response.responseBody().asInstanceOf[BrokerRegistrationResponse].data
           Errors.forCode(body.errorCode()) match {
             case Errors.DUPLICATE_BROKER_REGISTRATION =>
-              currentState = metadata.BrokerState.NOT_RUNNING
+              currentState = jmetadata.BrokerState.NOT_RUNNING
               promise.tryFailure(Errors.DUPLICATE_BROKER_REGISTRATION.exception())
             case Errors.NONE =>
               // TODO: Is this the correct next state?
-              currentState = metadata.BrokerState.RECOVERING_FROM_UNCLEAN_SHUTDOWN
+              currentState = jmetadata.BrokerState.RECOVERING_FROM_UNCLEAN_SHUTDOWN
               // Registration success; notify the BrokerMetadataListener
               brokerMetadataListener.put(OutOfBandRegisterLocalBrokerEvent(body.brokerEpoch))
               promise.trySuccess(())
             case _ =>
               // Unhandled error
-              currentState = metadata.BrokerState.NOT_RUNNING
+              currentState = jmetadata.BrokerState.NOT_RUNNING
               promise.tryFailure(Errors.forCode(body.errorCode()).exception())
           }
         case Some(throwable) =>
-          currentState = metadata.BrokerState.NOT_RUNNING
+          currentState = jmetadata.BrokerState.NOT_RUNNING
           promise.tryFailure(throwable)
       }
     }
-    currentState = metadata.BrokerState.REGISTERING
+    currentState = jmetadata.BrokerState.REGISTERING
     controllerChannelManager.sendRequest(new BrokerRegistrationRequest.Builder(brokerRegistrationData), responseHandler)
 
     // Wait for broker registration
@@ -192,7 +192,7 @@ class BrokerLifecycleManagerImpl(val brokerMetadataListener: BrokerMetadataListe
    * @return Promise[Unit] - To wait for success/failure of the state change
    *
    */
-  override def enqueue(state: metadata.BrokerState): Promise[Unit] = {
+  override def enqueue(state: jmetadata.BrokerState): Promise[Unit] = {
     // TODO: Ignore requests if requested state is the same as the current state?
     val promise = Promise[Unit]()
     requestQueue.add((state, promise))
@@ -274,7 +274,7 @@ class BrokerLifecycleManagerImpl(val brokerMetadataListener: BrokerMetadataListe
         if (timeSinceLastHeartbeat > config.registrationLeaseTimeoutMs) {
           error(s"Last successful heartbeat was $timeSinceLastHeartbeat ms ago")
           // Fence ourselves; notify the BrokerMetadataListener
-          currentState = metadata.BrokerState.FENCED
+          currentState = jmetadata.BrokerState.FENCED
           brokerMetadataListener.put(OutOfBandFenceLocalBrokerEvent(brokerEpoch()))
           // FIXME: What is the preferred action here? Do we wait for an external actor queue a state change
           //       request?
@@ -295,7 +295,7 @@ class BrokerLifecycleManagerImpl(val brokerMetadataListener: BrokerMetadataListe
    * @param requestState - Tuple of the target state and the associated pending promise
    *
    */
-  private def sendHeartbeat(requestState: (metadata.BrokerState, Promise[Unit])): Unit = {
+  private def sendHeartbeat(requestState: (jmetadata.BrokerState, Promise[Unit])): Unit = {
 
     val sendTime = time.nanoseconds
 
@@ -345,7 +345,7 @@ class BrokerLifecycleManagerImpl(val brokerMetadataListener: BrokerMetadataListe
       error(s"Broker heartbeat failure: $errorMsg")
       Some(errorMsg)
     } else {
-      currentState = metadata.BrokerState.fromValue(response.data().nextState())
+      currentState = jmetadata.BrokerState.fromValue(response.data().nextState())
       _lastSuccessfulHeartbeatTime = time.nanoseconds
       None
     }
@@ -356,7 +356,7 @@ class BrokerLifecycleManagerImpl(val brokerMetadataListener: BrokerMetadataListe
    *
    * @return
    */
-  override def brokerState: metadata.BrokerState = currentState
+  override def brokerState: jmetadata.BrokerState = currentState
 
   /**
    * Last successful heartbeat time in nanoseconds; using the JVM's high-resolution timer
