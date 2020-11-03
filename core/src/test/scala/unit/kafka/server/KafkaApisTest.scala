@@ -36,7 +36,6 @@ import kafka.network.RequestChannel.{CloseConnectionResponse, SendResponse}
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.{MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
-import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.common.acl.AclOperation
@@ -44,6 +43,7 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.internals.{KafkaFutureImpl, Topic}
 import org.apache.kafka.common.memory.MemoryPool
+import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.ListOffsetRequestData.{ListOffsetPartition, ListOffsetTopic}
@@ -501,54 +501,28 @@ class KafkaApisTest {
 
   @Test
   def testAlterConfigsWithForwarding(): Unit = {
-    val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
+    val requestBuilder = new AlterConfigsRequest.Builder(Collections.emptyMap(), false)
+    testForwardableAPI(ApiKeys.ALTER_CONFIGS, requestBuilder)
+  }
 
-    val authorizedTopic = "authorized-topic"
-    val unauthorizedTopic = "unauthorized-topic"
-    val (authorizedResource, unauthorizedResource) =
-      createConfigsWithAuthorization(authorizer, authorizedTopic, unauthorizedTopic)
-
-    val configs = Map(
-      authorizedResource -> new AlterConfigsRequest.Config(
-        Seq(new AlterConfigsRequest.ConfigEntry("foo", "bar")).asJava),
-      unauthorizedResource -> new AlterConfigsRequest.Config(
-        Seq(new AlterConfigsRequest.ConfigEntry("foo-1", "bar-1")).asJava)
-    )
-
-    val topicHeader = new RequestHeader(ApiKeys.ALTER_CONFIGS, ApiKeys.ALTER_CONFIGS.latestVersion,
+  private def testForwardableAPI(apiKey: ApiKeys, requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]): Unit = {
+    val topicHeader = new RequestHeader(apiKey, apiKey.latestVersion,
       clientId, 0)
 
-    val alterConfigsRequest = new AlterConfigsRequest.Builder(configs.asJava, false)
-      .build(topicHeader.apiVersion)
-    val request = buildRequest(alterConfigsRequest)
+    val request = buildRequest(requestBuilder.build(topicHeader.apiVersion))
 
     EasyMock.expect(controller.isActive).andReturn(false)
 
     expectNoThrottling()
-
-    val clientResponse: ClientResponse = EasyMock.createNiceMock(classOf[ClientResponse])
-
-    val validResponse = new AlterConfigsResponseData.AlterConfigsResourceResponse()
-      .setErrorCode(Errors.NONE.code)
-      .setErrorMessage(null)
-      .setResourceName(authorizedTopic)
-      .setResourceType(ResourceType.TOPIC.code)
-
-    val alterConfigsResponse = new AlterConfigsResponse(
-      new AlterConfigsResponseData()
-        .setResponses(List(validResponse).asJava))
-
-    EasyMock.expect(clientResponse.responseBody).andReturn(alterConfigsResponse)
 
     EasyMock.expect(forwardingManager.forwardRequest(
       EasyMock.eq(request),
       anyObject[AbstractResponse => Unit]()
     )).once()
 
-    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel,
-      authorizer, controller, forwardingManager, clientResponse)
+    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, controller, forwardingManager)
 
-    createKafkaApis(authorizer = Some(authorizer), enableForwarding = true).handle(request)
+    createKafkaApis(enableForwarding = true).handle(request)
 
     EasyMock.verify(controller, forwardingManager)
   }
@@ -634,50 +608,9 @@ class KafkaApisTest {
 
   @Test
   def testIncrementalAlterConfigsWithForwarding(): Unit = {
-    val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
-
-    val authorizedTopic = "authorized-topic"
-    val unauthorizedTopic = "unauthorized-topic"
-    val (authorizedResource, unauthorizedResource) =
-      createConfigsWithAuthorization(authorizer, authorizedTopic, unauthorizedTopic)
-
-    EasyMock.expect(controller.isActive).andReturn(false)
-
-    expectNoThrottling()
-
-    val topicHeader = new RequestHeader(ApiKeys.INCREMENTAL_ALTER_CONFIGS, ApiKeys.INCREMENTAL_ALTER_CONFIGS.latestVersion,
-      clientId, 0)
-
-    val incrementalAlterConfigsRequest = getIncrementalAlterConfigRequestBuilder(
-      Seq(authorizedResource, unauthorizedResource))
-      .build(topicHeader.apiVersion)
-    val request = buildRequest(incrementalAlterConfigsRequest)
-
-    val clientResponse: ClientResponse = EasyMock.createNiceMock(classOf[ClientResponse])
-
-    val validResponse = new IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse()
-      .setErrorCode(Errors.NONE.code)
-      .setErrorMessage(null)
-      .setResourceName(authorizedTopic)
-      .setResourceType(ResourceType.TOPIC.code)
-
-    val incrementalAlterConfigsResponse = new IncrementalAlterConfigsResponse(
-      new IncrementalAlterConfigsResponseData()
-        .setResponses(List(validResponse).asJava))
-
-    EasyMock.expect(clientResponse.responseBody).andReturn(incrementalAlterConfigsResponse)
-
-    EasyMock.expect(forwardingManager.forwardRequest(
-      EasyMock.eq(request),
-      anyObject[AbstractResponse => Unit]()
-    )).once()
-
-    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel,
-      authorizer, controller, forwardingManager, clientResponse)
-
-    createKafkaApis(authorizer = Some(authorizer), enableForwarding = true).handle(request)
-
-    EasyMock.verify(controller, forwardingManager)
+    val requestBuilder = new IncrementalAlterConfigsRequest.Builder(
+      new IncrementalAlterConfigsRequestData())
+    testForwardableAPI(ApiKeys.INCREMENTAL_ALTER_CONFIGS, requestBuilder)
   }
 
   private def getIncrementalAlterConfigRequestBuilder(configResources: Seq[ConfigResource]): IncrementalAlterConfigsRequest.Builder = {
@@ -736,35 +669,8 @@ class KafkaApisTest {
 
   @Test
   def testAlterClientQuotasWithForwarding(): Unit = {
-    val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
-
-    authorizeResource(authorizer, AclOperation.ALTER_CONFIGS, ResourceType.CLUSTER,
-      Resource.CLUSTER_NAME, AuthorizationResult.ALLOWED)
-
-    val quotaEntity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, "user"))
-    val quotas = Seq(new ClientQuotaAlteration(quotaEntity, Seq.empty.asJavaCollection))
-
-    val requestHeader = new RequestHeader(ApiKeys.ALTER_CLIENT_QUOTAS, ApiKeys.ALTER_CLIENT_QUOTAS.latestVersion,
-      clientId, 0)
-
-    val request = buildRequest(new AlterClientQuotasRequest.Builder(quotas.asJavaCollection, false)
-      .build(requestHeader.apiVersion))
-
-    EasyMock.expect(controller.isActive).andReturn(false)
-
-    expectNoThrottling()
-
-    EasyMock.expect(forwardingManager.forwardRequest(
-      EasyMock.eq(request),
-      anyObject[AbstractResponse => Unit](),
-    )).once()
-
-    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel,
-      authorizer, controller, forwardingManager)
-
-    createKafkaApis(authorizer = Some(authorizer), enableForwarding = true).handle(request)
-
-    EasyMock.verify(controller, forwardingManager)
+    val requestBuilder = new AlterClientQuotasRequest.Builder(List.empty.asJava, false)
+    testForwardableAPI(ApiKeys.ALTER_CLIENT_QUOTAS, requestBuilder)
   }
 
   private def verifyAlterClientQuotaResult(alterClientQuotasRequest: AlterClientQuotasRequest,
@@ -852,66 +758,12 @@ class KafkaApisTest {
 
   @Test
   def testCreateTopicsWithForwarding(): Unit = {
-    val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
-
-    val authorizedTopic = "authorized-topic"
-    val unauthorizedTopic = "unauthorized-topic"
-
-    authorizeResource(authorizer, AclOperation.CREATE, ResourceType.CLUSTER,
-      Resource.CLUSTER_NAME, AuthorizationResult.DENIED, logIfDenied = false)
-
-    createCombinedTopicAuthorization(authorizer, AclOperation.CREATE,
-      authorizedTopic, unauthorizedTopic)
-
-    val requestHeader = new RequestHeader(ApiKeys.CREATE_TOPICS, ApiKeys.CREATE_TOPICS.latestVersion,
-      clientId, 0)
-
-    EasyMock.expect(controller.isActive).andReturn(false)
-
-    expectNoThrottling()
-
-    val topics = new CreateTopicsRequestData.CreatableTopicCollection(2)
-    val topicToCreate = new CreateTopicsRequestData.CreatableTopic()
-      .setName(authorizedTopic)
-    topics.add(topicToCreate)
-
-    val topicToFilter = new CreateTopicsRequestData.CreatableTopic()
-      .setName(unauthorizedTopic)
-    topics.add(topicToFilter)
-
-    val timeout = 10
-    val createTopicsRequest = new CreateTopicsRequest.Builder(
-      new CreateTopicsRequestData()
-        .setTimeoutMs(timeout)
-        .setValidateOnly(false)
-        .setTopics(topics))
-      .build(requestHeader.apiVersion)
-    val request = buildRequest(createTopicsRequest)
-
-    val clientResponse: ClientResponse = EasyMock.createNiceMock(classOf[ClientResponse])
-
-    val authorizedTopicCollection = new CreateTopicsResponseData.CreatableTopicResultCollection(2)
-    authorizedTopicCollection.add(new CreateTopicsResponseData.CreatableTopicResult()
-      .setName(authorizedTopic)
-      .setErrorCode(Errors.NONE.code))
-    val createTopicsResponse = new CreateTopicsResponse(
-      new CreateTopicsResponseData()
-        .setTopics(authorizedTopicCollection)
-    )
-
-    EasyMock.expect(clientResponse.responseBody).andReturn(createTopicsResponse)
-
-    EasyMock.expect(forwardingManager.forwardRequest(
-      EasyMock.eq(request),
-      anyObject[AbstractResponse => Unit]()
-    )).once()
-
-    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel,
-      authorizer, controller, forwardingManager, clientResponse)
-
-    createKafkaApis(authorizer = Some(authorizer), enableForwarding = true).handle(request)
-
-    EasyMock.verify(controller, forwardingManager)
+    val requestBuilder = new CreateTopicsRequest.Builder(
+      new CreateTopicsRequestData().setTopics(
+        new CreatableTopicCollection(Collections.singleton(
+          new CreatableTopic().setName("topic").setNumPartitions(1).
+            setReplicationFactor(1.toShort)).iterator())))
+    testForwardableAPI(ApiKeys.CREATE_TOPICS, requestBuilder)
   }
 
   private def createTopicAuthorization(authorizer: Authorizer,
@@ -963,6 +815,66 @@ class KafkaApisTest {
     }.toMap
 
     assertEquals(expectedResults, responseMap)
+  }
+
+  @Test
+  def testCreateAclWithForwarding(): Unit = {
+    val requestBuilder = new CreateAclsRequest.Builder(new CreateAclsRequestData())
+    testForwardableAPI(ApiKeys.CREATE_ACLS, requestBuilder)
+  }
+
+  @Test
+  def testDeleteAclWithForwarding(): Unit = {
+    val requestBuilder = new DeleteAclsRequest.Builder(new DeleteAclsRequestData())
+    testForwardableAPI(ApiKeys.DELETE_ACLS, requestBuilder)
+  }
+
+  @Test
+  def testCreateDelegationTokenWithForwarding(): Unit = {
+    val requestBuilder = new CreateDelegationTokenRequest.Builder(new CreateDelegationTokenRequestData())
+    testForwardableAPI(ApiKeys.CREATE_DELEGATION_TOKEN, requestBuilder)
+  }
+
+  @Test
+  def testRenewDelegationTokenWithForwarding(): Unit = {
+    val requestBuilder = new RenewDelegationTokenRequest.Builder(new RenewDelegationTokenRequestData())
+    testForwardableAPI(ApiKeys.RENEW_DELEGATION_TOKEN, requestBuilder)
+  }
+
+  @Test
+  def testExpireDelegationTokenWithForwarding(): Unit = {
+    val requestBuilder = new ExpireDelegationTokenRequest.Builder(new ExpireDelegationTokenRequestData())
+    testForwardableAPI(ApiKeys.EXPIRE_DELEGATION_TOKEN, requestBuilder)
+  }
+
+  @Test
+  def testAlterPartitionReassignmentsWithForwarding(): Unit = {
+    val requestBuilder = new AlterPartitionReassignmentsRequest.Builder(new AlterPartitionReassignmentsRequestData())
+    testForwardableAPI(ApiKeys.ALTER_PARTITION_REASSIGNMENTS, requestBuilder)
+  }
+
+  @Test
+  def testCreatePartitionsWithForwarding(): Unit = {
+    val requestBuilder = new CreatePartitionsRequest.Builder(new CreatePartitionsRequestData())
+    testForwardableAPI(ApiKeys.CREATE_PARTITIONS, requestBuilder)
+  }
+
+  @Test
+  def testDeleteTopicsWithForwarding(): Unit = {
+    val requestBuilder = new DeleteTopicsRequest.Builder(new DeleteTopicsRequestData())
+    testForwardableAPI(ApiKeys.DELETE_TOPICS, requestBuilder)
+  }
+
+  @Test
+  def testUpdateFeaturesWithForwarding(): Unit = {
+    val requestBuilder = new UpdateFeaturesRequest.Builder(new UpdateFeaturesRequestData())
+    testForwardableAPI(ApiKeys.UPDATE_FEATURES, requestBuilder)
+  }
+
+  @Test
+  def testAlterScramWithForwarding(): Unit = {
+    val requestBuilder = new AlterUserScramCredentialsRequest.Builder(new AlterUserScramCredentialsRequestData())
+    testForwardableAPI(ApiKeys.ALTER_USER_SCRAM_CREDENTIALS, requestBuilder)
   }
 
   @Test
