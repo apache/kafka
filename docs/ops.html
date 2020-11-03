@@ -85,7 +85,7 @@
   The rack awareness feature spreads replicas of the same partition across different racks. This extends the guarantees Kafka provides for broker-failure to cover rack-failure, limiting the risk of data loss should all the brokers on a rack fail at once. The feature can also be applied to other broker groupings such as availability zones in EC2.
   <p></p>
   You can specify that a broker belongs to a particular rack by adding a property to the broker config:
-  <pre class="language-text">   broker.rack=my-rack-id</code></pre>
+  <pre class="language-text"><code class="language-text">  broker.rack=my-rack-id</code></pre>
   When a topic is <a href="#basic_ops_add_topic">created</a>, <a href="#basic_ops_modify_topic">modified</a> or replicas are <a href="#basic_ops_cluster_expansion">redistributed</a>, the rack constraint will be honoured, ensuring replicas span as many racks as they can (a partition will span min(#racks, replication-factor) different racks).
   <p></p>
   The algorithm used to assign replicas to brokers ensures that the number of leaders per broker will be constant, regardless of how brokers are distributed across racks. This ensures balanced throughput.
@@ -1564,7 +1564,7 @@
   Use the following configuration option to specify which metrics
   you want collected:
 
-<pre>metrics.recording.level="info"</code></pre>
+<pre><code>metrics.recording.level="info"</code></pre>
 
 <h5 class="anchor-heading"><a id="kafka_streams_client_monitoring" class="anchor-link"></a><a href="#kafka_streams_client_monitoring">Client Metrics</a></h5>
 All of the following metrics have a recording level of <code>info</code>:
