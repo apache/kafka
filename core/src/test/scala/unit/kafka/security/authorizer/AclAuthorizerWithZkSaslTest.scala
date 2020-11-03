@@ -85,12 +85,12 @@ class AclAuthorizerWithZkSaslTest extends ZooKeeperTestHarness with SaslSetup {
 
   @After
   override def tearDown(): Unit = {
+    System.clearProperty("zookeeper.allowSaslFailedClients")
+    TestableDigestLoginModule.reset()
     executor.shutdownNow()
     aclAuthorizer.close()
     aclAuthorizer2.close()
     super.tearDown()
-    TestableDigestLoginModule.reset()
-    System.clearProperty("zookeeper.allowSaslFailedClients")
   }
 
   @Test
@@ -170,7 +170,8 @@ object TestableDigestLoginModule {
 class TestableDigestLoginModule extends DigestLoginModule {
   override def initialize(subject: Subject, callbackHandler: CallbackHandler, sharedState: util.Map[String, _], options: util.Map[String, _]): Unit = {
     super.initialize(subject, callbackHandler, sharedState, options)
-    TestableDigestLoginModule.injectedPassword.foreach { newPassword =>
+    val injectedPassword = TestableDigestLoginModule.injectedPassword
+    injectedPassword.foreach { newPassword =>
       val oldPassword = subject.getPrivateCredentials.asScala.head
       subject.getPrivateCredentials.add(newPassword)
       subject.getPrivateCredentials.remove(oldPassword)
