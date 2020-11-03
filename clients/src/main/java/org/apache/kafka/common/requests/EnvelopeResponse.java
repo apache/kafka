@@ -42,7 +42,7 @@ public class EnvelopeResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public ByteBuffer embedResponseData() {
+    public ByteBuffer responseData() {
         return data.responseData();
     }
 

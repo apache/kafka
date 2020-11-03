@@ -19,11 +19,11 @@ package org.apache.kafka.common.errors;
 /**
  * Exception used to indicate a kafka principal deserialization failure during request forwarding.
  */
-public class PrincipalDeserializationFailureException extends AuthorizationException {
+public class PrincipalDeserializationException extends ApiException {
 
     private static final long serialVersionUID = 1L;
 
-    public PrincipalDeserializationFailureException(String message) {
+    public PrincipalDeserializationException(String message) {
         super(message);
     }
 }

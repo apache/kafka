@@ -36,7 +36,7 @@ import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData._
 import org.apache.kafka.common.network.Send
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
-import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde}
+import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Sanitizer, Time}
 
 import scala.annotation.nowarn
@@ -76,22 +76,13 @@ object RequestChannel extends Logging {
     }
   }
 
-  class EnvelopeContext(val brokerContext: RequestContext,
-                        @volatile private var originalRequestBuffer: ByteBuffer) {
-    def release(memoryPool: MemoryPool): Unit = {
-      memoryPool.release(originalRequestBuffer)
-      originalRequestBuffer = null
-    }
-  }
-
   class Request(val processor: Int,
                 val context: RequestContext,
                 val startTimeNanos: Long,
                 memoryPool: MemoryPool,
                 @volatile var buffer: ByteBuffer,
                 metrics: RequestChannel.Metrics,
-                val envelopeContext: Option[EnvelopeContext] = None,
-                val principalSerde: Option[KafkaPrincipalSerde] = None) extends BaseRequest {
+                val envelope: Option[RequestChannel.Request] = None) extends BaseRequest {
     // These need to be volatile because the readers are in the network thread and the writers are in the request
     // handler threads or the purgatory threads
     @volatile var requestDequeueTimeNanos = -1L
@@ -117,30 +108,16 @@ object RequestChannel extends Logging {
       releaseBuffer()
     }
 
-    def isForwarded: Boolean = envelopeContext.isDefined
+    def isForwarded: Boolean = envelope.isDefined
 
-    def buildEnvelopeErrorResponse(envelopeLevelError: Errors): (Send, String) = {
-      envelopeContext match {
-        case Some(envelopeContext) =>
-          val envelopeResponse = new EnvelopeResponse(
-            envelopeLevelError
-          )
-
-          (envelopeContext.brokerContext.buildResponse(envelopeResponse), envelopeResponse.toString)
-        case None =>
-          throw new IllegalStateException(s"Undefined envelope context for $envelopeLevelError error response building")
-      }
-    }
-
-    def buildResponse(abstractResponse: AbstractResponse): Send = {
-      envelopeContext match {
-        case Some(envelopeContext) =>
+    def buildResponseSend(abstractResponse: AbstractResponse): Send = {
+      envelope match {
+        case Some(request) =>
           val envelopeResponse = new EnvelopeResponse(
             abstractResponse.serialize(header.apiVersion, header.toResponseHeader),
             Errors.NONE
           )
-
-          envelopeContext.brokerContext.buildResponse(envelopeResponse)
+          request.context.buildResponse(envelopeResponse)
         case None =>
           context.buildResponse(abstractResponse)
       }
@@ -148,31 +125,25 @@ object RequestChannel extends Logging {
 
     def responseString(response: AbstractResponse): Option[String] = {
       if (RequestChannel.isRequestLoggingEnabled)
-        Some(envelopeContext match {
-          case Some(envelopeContext) =>
-            response.toString(envelopeContext.brokerContext.apiVersion)
-          case None =>
-            response.toString(context.apiVersion)
-        })
+        Some(response.toString(context.apiVersion))
       else
         None
     }
 
     def headerForLoggingOrThrottling(): RequestHeader = {
-      envelopeContext match {
-        case Some(envelopeContext) =>
-          envelopeContext.brokerContext.header
+      envelope match {
+        case Some(request) =>
+          request.context.header
         case None =>
           context.header
       }
     }
 
     def requestDesc(details: Boolean): String = {
-      val redirectDescription = if(envelopeContext.isDefined)
-        s"Redirected request: ${envelopeContext.get.brokerContext.header} "
-      else ""
-
-      s"$redirectDescription$header -- ${loggableRequest.toString(details)}"
+      val forwardDescription = envelope.map { request =>
+        s"Forwarded request: ${request.context} "
+      }.getOrElse("")
+      s"$forwardDescription$header -- ${loggableRequest.toString(details)}"
     }
 
     def body[T <: AbstractRequest](implicit classTag: ClassTag[T], @nowarn("cat=unused") nn: NotNothing[T]): T = {
@@ -317,9 +288,9 @@ object RequestChannel extends Logging {
     }
 
     def releaseBuffer(): Unit = {
-      envelopeContext match {
-        case Some(envelopeContext) =>
-          envelopeContext.release(memoryPool)
+      envelope match {
+        case Some(request) =>
+          request.releaseBuffer()
         case None =>
           if (buffer != null) {
             memoryPool.release(buffer)
@@ -333,7 +304,8 @@ object RequestChannel extends Logging {
       s"session=$session, " +
       s"listenerName=${context.listenerName}, " +
       s"securityProtocol=${context.securityProtocol}, " +
-      s"buffer=$buffer)"
+      s"buffer=$buffer, " +
+      s"envelope=$envelope)"
 
   }
 

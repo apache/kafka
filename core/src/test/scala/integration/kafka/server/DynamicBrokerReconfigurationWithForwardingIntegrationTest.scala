@@ -30,7 +30,7 @@ import org.junit.Test
 class DynamicBrokerReconfigurationWithForwardingIntegrationTest extends DynamicBrokerReconfigurationTest {
 
   override def addExtraProps(props: Properties): Unit = {
-    props.put(KafkaConfig.enableMetadataQuorumProp, true)
+    props.put(KafkaConfig.EnableMetadataQuorumProp, true)
   }
 
   @Test

@@ -47,7 +47,7 @@ public class AbstractResponseTest {
         );
 
         CreateTopicsResponse extractedResponse = (CreateTopicsResponse) CreateTopicsResponse.deserializeBody(
-            envelopeResponse.embedResponseData(), header);
+            envelopeResponse.responseData(), header);
         assertEquals(createTopicsResponse.data(), extractedResponse.data());
     }
 }

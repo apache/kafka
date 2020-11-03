@@ -24,8 +24,8 @@ import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.record.{RecordBatch, RecordVersion}
 import org.apache.kafka.common.requests.{AbstractResponse, ApiVersionsResponse}
 import org.apache.kafka.common.utils.Utils
-import org.junit.Test
 import org.junit.Assert._
+import org.junit.Test
 
 import scala.jdk.CollectionConverters._
 
@@ -172,79 +172,12 @@ class ApiVersionTest {
   }
 
   @Test
-  def testInterBrokerProtocolVersionConstraint(): Unit = {
-    val response = ApiVersion.apiVersionsResponse(
-      10,
-      RecordBatch.MAGIC_VALUE_V2,
-      Features.emptySupportedFeatures(),
-      exposeEnvelopeAPI = false
-    )
-    response.data.apiKeys().forEach(
-      version => {
-        val apiKeys = ApiKeys.forId(version.apiKey())
-        apiKeys match {
-          case ApiKeys.ALTER_CONFIGS =>
-            verifyIBPVersionConstraint(apiKeys, 1)
-
-          case ApiKeys.INCREMENTAL_ALTER_CONFIGS =>
-            verifyIBPVersionConstraint(apiKeys, 1)
-
-          case ApiKeys.ALTER_CLIENT_QUOTAS =>
-            verifyIBPVersionConstraint(apiKeys, 0)
-
-          case ApiKeys.CREATE_ACLS =>
-            verifyIBPVersionConstraint(apiKeys, 2)
-
-          case ApiKeys.DELETE_ACLS =>
-            verifyIBPVersionConstraint(apiKeys, 2)
-
-          case ApiKeys.CREATE_DELEGATION_TOKEN =>
-            verifyIBPVersionConstraint(apiKeys, 2)
-
-          case ApiKeys.RENEW_DELEGATION_TOKEN =>
-            verifyIBPVersionConstraint(apiKeys, 2)
-
-          case ApiKeys.EXPIRE_DELEGATION_TOKEN =>
-            verifyIBPVersionConstraint(apiKeys, 2)
-
-          case ApiKeys.ALTER_PARTITION_REASSIGNMENTS =>
-            verifyIBPVersionConstraint(apiKeys, 0)
-
-          case ApiKeys.CREATE_PARTITIONS =>
-            verifyIBPVersionConstraint(apiKeys, 3)
-
-          case ApiKeys.CREATE_TOPICS =>
-            verifyIBPVersionConstraint(apiKeys, 6)
-
-          case ApiKeys.DELETE_TOPICS =>
-            verifyIBPVersionConstraint(apiKeys, 5)
-
-          case ApiKeys.UPDATE_FEATURES =>
-            verifyIBPVersionConstraint(apiKeys, 0)
-
-          case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS =>
-            verifyIBPVersionConstraint(apiKeys, 0)
-
-          case _ =>
-        }
-      }
-    )
-  }
-
-  private def verifyIBPVersionConstraint(apiKeys: ApiKeys, expectedVersion: Short): Unit = {
-    assertEquals(s"The latest version of RPC $apiKeys does not match " +
-      s"expected version $expectedVersion. If you recently " +
-      s"bumped this RPC version, you should also bump IBP and update this test correspondingly.",
-      expectedVersion, apiKeys.latestVersion())
-  }
-
-  @Test
   def shouldCreateApiResponseOnlyWithKeysSupportedByMagicValue(): Unit = {
     val response = ApiVersion.apiVersionsResponse(
       10,
       RecordBatch.MAGIC_VALUE_V1,
       Features.emptySupportedFeatures,
-      exposeEnvelopeAPI = false
+      exposeEnvelopeApi = false
     )
     verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1)
     assertEquals(10, response.throttleTimeMs)
@@ -262,7 +195,8 @@ class ApiVersionTest {
         Utils.mkMap(Utils.mkEntry("feature", new SupportedVersionRange(1.toShort, 4.toShort)))),
       Features.finalizedFeatures(
         Utils.mkMap(Utils.mkEntry("feature", new FinalizedVersionRange(2.toShort, 3.toShort)))),
-      10
+      10,
+      false
     )
 
     verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1)
@@ -292,7 +226,7 @@ class ApiVersionTest {
       AbstractResponse.DEFAULT_THROTTLE_TIME,
       RecordBatch.CURRENT_MAGIC_VALUE,
       Features.emptySupportedFeatures,
-      exposeEnvelopeAPI = true
+      exposeEnvelopeApi = true
     )
     assertEquals(new util.HashSet[ApiKeys](ApiKeys.enabledApis), apiKeysInResponse(response))
     assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs)
@@ -307,7 +241,7 @@ class ApiVersionTest {
       AbstractResponse.DEFAULT_THROTTLE_TIME,
       RecordBatch.CURRENT_MAGIC_VALUE,
       Features.emptySupportedFeatures,
-      exposeEnvelopeAPI = false
+      exposeEnvelopeApi = false
     )
 
     val expectedApiKeys = ApiKeys.enabledApis

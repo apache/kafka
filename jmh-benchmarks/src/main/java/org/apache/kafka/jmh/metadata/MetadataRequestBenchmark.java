@@ -207,7 +207,7 @@ public class MetadataRequestBenchmark {
         RequestContext context = new RequestContext(header, "1", null, principal,
             ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
             SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false);
-        return new RequestChannel.Request(1, context, 0, MemoryPool.NONE, buffer, requestChannelMetrics, Option.empty(), Option.empty());
+        return new RequestChannel.Request(1, context, 0, MemoryPool.NONE, buffer, requestChannelMetrics, Option.empty());
     }
 
     @Benchmark

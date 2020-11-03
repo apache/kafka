@@ -180,6 +180,7 @@ public interface KafkaClient extends Closeable {
 
     /**
      * Create a new ClientRequest.
+     *
      * @param nodeId the node to send to
      * @param requestBuilder the request builder to use
      * @param createdTimeMs the time in milliseconds to use as the creation time of the request

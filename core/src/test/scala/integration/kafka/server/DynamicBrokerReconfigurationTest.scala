@@ -126,7 +126,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       props.put(KafkaConfig.PasswordEncoderSecretProp, "dynamic-config-secret")
       props.put(KafkaConfig.LogRetentionTimeMillisProp, 1680000000.toString)
       props.put(KafkaConfig.LogRetentionTimeHoursProp, 168.toString)
-      props.put(KafkaConfig.enableMetadataQuorumProp, true)
+      props.put(KafkaConfig.EnableMetadataQuorumProp, true)
       addExtraProps(props)
 
       props ++= sslProperties1

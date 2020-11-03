@@ -125,50 +125,54 @@ class KafkaApis(val requestChannel: RequestChannel,
     info("Shutdown complete.")
   }
 
-  private def buildFailedEnvelopeResponse(request: RequestChannel.Request, error: Errors): Unit = {
-    val throttleTimeMs = maybeRecordAndGetThrottleTimeMs(request)
-    // Only throttle cluster authorization failures
-    if (error == Errors.CLUSTER_AUTHORIZATION_FAILED)
-      quotas.request.throttle(request, throttleTimeMs, requestChannel.sendResponse)
-    sendResponse(request, None, None, error)
-  }
+  private def maybeHandleInvalidEnvelope(
+    envelope: RequestChannel.Request,
+    forwardedApiKey: ApiKeys
+  ): Boolean = {
+    def sendEnvelopeError(error: Errors): Unit = {
+      sendErrorResponseMaybeThrottle(envelope, error.exception)
+    }
 
-  private def validateForwardRequest(request: RequestChannel.Request): Boolean = {
-    if (!config.forwardingEnabled || !request.context.fromPrivilegedListener) {
+    if (!config.forwardingEnabled || !envelope.context.fromPrivilegedListener) {
       // If the designated forwarding request is not coming from a privileged listener, or
       // forwarding is not enabled yet, we would not handle the request.
-      closeConnection(request, Collections.emptyMap())
-      false
-    } else if (!authorize(request.envelopeContext.get.brokerContext, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
-      // Forwarding request must have CLUSTER_ACTION authorization to reduce the risk of impersonation.
-      buildFailedEnvelopeResponse(request, Errors.CLUSTER_AUTHORIZATION_FAILED)
-      false
-    } else if (!request.header.apiKey.forwardable) {
-      buildFailedEnvelopeResponse(request, Errors.INVALID_REQUEST)
-      false
-    } else if (request.principalSerde.isEmpty) {
-      buildFailedEnvelopeResponse(request, Errors.PRINCIPAL_DESERIALIZATION_FAILURE)
-      false
-    } else if (!controller.isActive) {
-      buildFailedEnvelopeResponse(request, Errors.NOT_CONTROLLER)
-      false
-    } else
+      closeConnection(envelope, Collections.emptyMap())
       true
+    } else if (!authorize(envelope.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
+      // Forwarding request must have CLUSTER_ACTION authorization to reduce the risk of impersonation.
+      sendEnvelopeError(Errors.CLUSTER_AUTHORIZATION_FAILED)
+      true
+    } else if (!forwardedApiKey.forwardable) {
+      sendEnvelopeError(Errors.INVALID_REQUEST)
+      true
+    } else if (!controller.isActive) {
+      sendEnvelopeError(Errors.NOT_CONTROLLER)
+      true
+    } else {
+      false
+    }
   }
 
-  private def maybeForward(request: RequestChannel.Request,
-                           handler: RequestChannel.Request => Unit): Unit = {
+  private def isForwardingEnabled(request: RequestChannel.Request): Boolean = {
+    config.forwardingEnabled && request.context.principalSerde.isPresent
+  }
+
+  private def maybeForward(
+    request: RequestChannel.Request,
+    handler: RequestChannel.Request => Unit
+  ): Unit = {
+    def responseCallback(response: AbstractResponse): Unit = {
+      sendForwardedResponse(request, response)
+    }
+
     if (!request.isForwarded && !controller.isActive && isForwardingEnabled(request)) {
-      forwardingManager.forwardRequest(sendResponseMaybeThrottle, request)
+      forwardingManager.forwardRequest(request, responseCallback)
     } else {
       // When the KIP-500 mode is off or the principal serde is undefined, forwarding is not supported,
       // therefore requests are handled directly.
       handler(request)
     }
   }
-
-  private def isForwardingEnabled(request: RequestChannel.Request): Boolean =
-    config.forwardingEnabled && request.principalSerde.isDefined
 
   /**
    * Top-level method that handles all requests and multiplexes to the right api
@@ -178,73 +182,76 @@ class KafkaApis(val requestChannel: RequestChannel,
       trace(s"Handling request:${request.requestDesc(true)} from connection ${request.context.connectionId};" +
         s"securityProtocol:${request.context.securityProtocol},principal:${request.context.principal}")
 
-      val isValidRequest = !request.isForwarded || validateForwardRequest(request)
-      if (isValidRequest) {
-        request.header.apiKey match {
-          case ApiKeys.PRODUCE => handleProduceRequest(request)
-          case ApiKeys.FETCH => handleFetchRequest(request)
-          case ApiKeys.LIST_OFFSETS => handleListOffsetRequest(request)
-          case ApiKeys.METADATA => handleTopicMetadataRequest(request)
-          case ApiKeys.LEADER_AND_ISR => handleLeaderAndIsrRequest(request)
-          case ApiKeys.STOP_REPLICA => handleStopReplicaRequest(request)
-          case ApiKeys.UPDATE_METADATA => handleUpdateMetadataRequest(request)
-          case ApiKeys.CONTROLLED_SHUTDOWN => handleControlledShutdownRequest(request)
-          case ApiKeys.OFFSET_COMMIT => handleOffsetCommitRequest(request)
-          case ApiKeys.OFFSET_FETCH => handleOffsetFetchRequest(request)
-          case ApiKeys.FIND_COORDINATOR => handleFindCoordinatorRequest(request)
-          case ApiKeys.JOIN_GROUP => handleJoinGroupRequest(request)
-          case ApiKeys.HEARTBEAT => handleHeartbeatRequest(request)
-          case ApiKeys.LEAVE_GROUP => handleLeaveGroupRequest(request)
-          case ApiKeys.SYNC_GROUP => handleSyncGroupRequest(request)
-          case ApiKeys.DESCRIBE_GROUPS => handleDescribeGroupRequest(request)
-          case ApiKeys.LIST_GROUPS => handleListGroupsRequest(request)
-          case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
-          case ApiKeys.API_VERSIONS => handleApiVersionsRequest(request)
-          case ApiKeys.CREATE_TOPICS => maybeForward(request, handleCreateTopicsRequest)
-          case ApiKeys.DELETE_TOPICS => handleDeleteTopicsRequest(request)
-          case ApiKeys.DELETE_RECORDS => handleDeleteRecordsRequest(request)
-          case ApiKeys.INIT_PRODUCER_ID => handleInitProducerIdRequest(request)
-          case ApiKeys.OFFSET_FOR_LEADER_EPOCH => handleOffsetForLeaderEpochRequest(request)
-          case ApiKeys.ADD_PARTITIONS_TO_TXN => handleAddPartitionToTxnRequest(request)
-          case ApiKeys.ADD_OFFSETS_TO_TXN => handleAddOffsetsToTxnRequest(request)
-          case ApiKeys.END_TXN => handleEndTxnRequest(request)
-          case ApiKeys.WRITE_TXN_MARKERS => handleWriteTxnMarkersRequest(request)
-          case ApiKeys.TXN_OFFSET_COMMIT => handleTxnOffsetCommitRequest(request)
-          case ApiKeys.DESCRIBE_ACLS => handleDescribeAcls(request)
-          case ApiKeys.CREATE_ACLS => handleCreateAcls(request)
-          case ApiKeys.DELETE_ACLS => handleDeleteAcls(request)
-          case ApiKeys.ALTER_CONFIGS => maybeForward(request, handleAlterConfigsRequest)
-          case ApiKeys.DESCRIBE_CONFIGS => handleDescribeConfigsRequest(request)
-          case ApiKeys.ALTER_REPLICA_LOG_DIRS => handleAlterReplicaLogDirsRequest(request)
-          case ApiKeys.DESCRIBE_LOG_DIRS => handleDescribeLogDirsRequest(request)
-          case ApiKeys.SASL_AUTHENTICATE => handleSaslAuthenticateRequest(request)
-          case ApiKeys.CREATE_PARTITIONS => handleCreatePartitionsRequest(request)
-          case ApiKeys.CREATE_DELEGATION_TOKEN => handleCreateTokenRequest(request)
-          case ApiKeys.RENEW_DELEGATION_TOKEN => handleRenewTokenRequest(request)
-          case ApiKeys.EXPIRE_DELEGATION_TOKEN => handleExpireTokenRequest(request)
-          case ApiKeys.DESCRIBE_DELEGATION_TOKEN => handleDescribeTokensRequest(request)
-          case ApiKeys.DELETE_GROUPS => handleDeleteGroupsRequest(request)
-          case ApiKeys.ELECT_LEADERS => handleElectReplicaLeader(request)
-          case ApiKeys.INCREMENTAL_ALTER_CONFIGS => maybeForward(request, handleIncrementalAlterConfigsRequest)
-          case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => handleAlterPartitionReassignmentsRequest(request)
-          case ApiKeys.LIST_PARTITION_REASSIGNMENTS => handleListPartitionReassignmentsRequest(request)
-          case ApiKeys.OFFSET_DELETE => handleOffsetDeleteRequest(request)
-          case ApiKeys.DESCRIBE_CLIENT_QUOTAS => handleDescribeClientQuotasRequest(request)
-          case ApiKeys.ALTER_CLIENT_QUOTAS => maybeForward(request, handleAlterClientQuotasRequest)
-          case ApiKeys.DESCRIBE_USER_SCRAM_CREDENTIALS => handleDescribeUserScramCredentialsRequest(request)
-          case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS => handleAlterUserScramCredentialsRequest(request)
-          case ApiKeys.ALTER_ISR => handleAlterIsrRequest(request)
-          case ApiKeys.UPDATE_FEATURES => handleUpdateFeatures(request)
-          case ApiKeys.ENVELOPE => throw new IllegalStateException(
-            "Envelope request should not be handled directly in top level API")
-
-          // Until we are ready to integrate the Raft layer, these APIs are treated as
-          // unexpected and we just close the connection.
-          case ApiKeys.VOTE => closeConnection(request, util.Collections.emptyMap())
-          case ApiKeys.BEGIN_QUORUM_EPOCH => closeConnection(request, util.Collections.emptyMap())
-          case ApiKeys.END_QUORUM_EPOCH => closeConnection(request, util.Collections.emptyMap())
-          case ApiKeys.DESCRIBE_QUORUM => closeConnection(request, util.Collections.emptyMap())
+      request.envelope.foreach { envelope =>
+        if (maybeHandleInvalidEnvelope(envelope, request.header.apiKey)) {
+          return
         }
+      }
+
+      request.header.apiKey match {
+        case ApiKeys.PRODUCE => handleProduceRequest(request)
+        case ApiKeys.FETCH => handleFetchRequest(request)
+        case ApiKeys.LIST_OFFSETS => handleListOffsetRequest(request)
+        case ApiKeys.METADATA => handleTopicMetadataRequest(request)
+        case ApiKeys.LEADER_AND_ISR => handleLeaderAndIsrRequest(request)
+        case ApiKeys.STOP_REPLICA => handleStopReplicaRequest(request)
+        case ApiKeys.UPDATE_METADATA => handleUpdateMetadataRequest(request)
+        case ApiKeys.CONTROLLED_SHUTDOWN => handleControlledShutdownRequest(request)
+        case ApiKeys.OFFSET_COMMIT => handleOffsetCommitRequest(request)
+        case ApiKeys.OFFSET_FETCH => handleOffsetFetchRequest(request)
+        case ApiKeys.FIND_COORDINATOR => handleFindCoordinatorRequest(request)
+        case ApiKeys.JOIN_GROUP => handleJoinGroupRequest(request)
+        case ApiKeys.HEARTBEAT => handleHeartbeatRequest(request)
+        case ApiKeys.LEAVE_GROUP => handleLeaveGroupRequest(request)
+        case ApiKeys.SYNC_GROUP => handleSyncGroupRequest(request)
+        case ApiKeys.DESCRIBE_GROUPS => handleDescribeGroupRequest(request)
+        case ApiKeys.LIST_GROUPS => handleListGroupsRequest(request)
+        case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
+        case ApiKeys.API_VERSIONS => handleApiVersionsRequest(request)
+        case ApiKeys.CREATE_TOPICS => maybeForward(request, handleCreateTopicsRequest)
+        case ApiKeys.DELETE_TOPICS => handleDeleteTopicsRequest(request)
+        case ApiKeys.DELETE_RECORDS => handleDeleteRecordsRequest(request)
+        case ApiKeys.INIT_PRODUCER_ID => handleInitProducerIdRequest(request)
+        case ApiKeys.OFFSET_FOR_LEADER_EPOCH => handleOffsetForLeaderEpochRequest(request)
+        case ApiKeys.ADD_PARTITIONS_TO_TXN => handleAddPartitionToTxnRequest(request)
+        case ApiKeys.ADD_OFFSETS_TO_TXN => handleAddOffsetsToTxnRequest(request)
+        case ApiKeys.END_TXN => handleEndTxnRequest(request)
+        case ApiKeys.WRITE_TXN_MARKERS => handleWriteTxnMarkersRequest(request)
+        case ApiKeys.TXN_OFFSET_COMMIT => handleTxnOffsetCommitRequest(request)
+        case ApiKeys.DESCRIBE_ACLS => handleDescribeAcls(request)
+        case ApiKeys.CREATE_ACLS => handleCreateAcls(request)
+        case ApiKeys.DELETE_ACLS => handleDeleteAcls(request)
+        case ApiKeys.ALTER_CONFIGS => maybeForward(request, handleAlterConfigsRequest)
+        case ApiKeys.DESCRIBE_CONFIGS => handleDescribeConfigsRequest(request)
+        case ApiKeys.ALTER_REPLICA_LOG_DIRS => handleAlterReplicaLogDirsRequest(request)
+        case ApiKeys.DESCRIBE_LOG_DIRS => handleDescribeLogDirsRequest(request)
+        case ApiKeys.SASL_AUTHENTICATE => handleSaslAuthenticateRequest(request)
+        case ApiKeys.CREATE_PARTITIONS => handleCreatePartitionsRequest(request)
+        case ApiKeys.CREATE_DELEGATION_TOKEN => handleCreateTokenRequest(request)
+        case ApiKeys.RENEW_DELEGATION_TOKEN => handleRenewTokenRequest(request)
+        case ApiKeys.EXPIRE_DELEGATION_TOKEN => handleExpireTokenRequest(request)
+        case ApiKeys.DESCRIBE_DELEGATION_TOKEN => handleDescribeTokensRequest(request)
+        case ApiKeys.DELETE_GROUPS => handleDeleteGroupsRequest(request)
+        case ApiKeys.ELECT_LEADERS => handleElectReplicaLeader(request)
+        case ApiKeys.INCREMENTAL_ALTER_CONFIGS => maybeForward(request, handleIncrementalAlterConfigsRequest)
+        case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => handleAlterPartitionReassignmentsRequest(request)
+        case ApiKeys.LIST_PARTITION_REASSIGNMENTS => handleListPartitionReassignmentsRequest(request)
+        case ApiKeys.OFFSET_DELETE => handleOffsetDeleteRequest(request)
+        case ApiKeys.DESCRIBE_CLIENT_QUOTAS => handleDescribeClientQuotasRequest(request)
+        case ApiKeys.ALTER_CLIENT_QUOTAS => maybeForward(request, handleAlterClientQuotasRequest)
+        case ApiKeys.DESCRIBE_USER_SCRAM_CREDENTIALS => handleDescribeUserScramCredentialsRequest(request)
+        case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS => handleAlterUserScramCredentialsRequest(request)
+        case ApiKeys.ALTER_ISR => handleAlterIsrRequest(request)
+        case ApiKeys.UPDATE_FEATURES => handleUpdateFeatures(request)
+        case ApiKeys.ENVELOPE => throw new IllegalStateException(
+          "Envelope request should not be handled directly in top level API")
+
+        // Until we are ready to integrate the Raft layer, these APIs are treated as
+        // unexpected and we just close the connection.
+        case ApiKeys.VOTE => closeConnection(request, util.Collections.emptyMap())
+        case ApiKeys.BEGIN_QUORUM_EPOCH => closeConnection(request, util.Collections.emptyMap())
+        case ApiKeys.END_QUORUM_EPOCH => closeConnection(request, util.Collections.emptyMap())
+        case ApiKeys.DESCRIBE_QUORUM => closeConnection(request, util.Collections.emptyMap())
       }
     } catch {
       case e: FatalExitError => throw e
@@ -3311,6 +3318,17 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendErrorResponseExemptThrottle(request, e)
   }
 
+  private def sendForwardedResponse(
+    request: RequestChannel.Request,
+    response: AbstractResponse
+  ): Unit = {
+    // For forwarded requests, we take the throttle time from the broker that
+    // the request was forwarded to
+    val throttleTimeMs = response.throttleTimeMs()
+    quotas.request.throttle(request, throttleTimeMs, requestChannel.sendResponse)
+    sendResponse(request, Some(response), None)
+  }
+
   // Throttle the channel if the request quota is enabled but has been violated. Regardless of throttling, send the
   // response immediately.
   private def sendResponseMaybeThrottle(request: RequestChannel.Request,
@@ -3395,25 +3413,15 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   private def sendResponse(request: RequestChannel.Request,
                            responseOpt: Option[AbstractResponse],
-                           onComplete: Option[Send => Unit],
-                           envelopeLevelError: Errors = Errors.NONE): Unit = {
+                           onComplete: Option[Send => Unit]): Unit = {
     // Update error metrics for each error code in the response including Errors.NONE
     responseOpt.foreach(response => requestChannel.updateErrorMetrics(request.header.apiKey, response.errorCounts.asScala))
 
-    val response = if (envelopeLevelError != Errors.NONE) {
-      val (envelopeResponse, responseString) = request.buildEnvelopeErrorResponse(envelopeLevelError)
-
-      new RequestChannel.SendResponse(
-        request,
-        envelopeResponse,
-        Some(responseString),
-        onComplete
-      )
-    } else responseOpt match {
+    val response = responseOpt match {
       case Some(response) =>
         new RequestChannel.SendResponse(
           request,
-          request.buildResponse(response),
+          request.buildResponseSend(response),
           request.responseString(response),
           onComplete
         )

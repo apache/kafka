@@ -20,8 +20,7 @@ package kafka.network
 import java.io.IOException
 import java.net._
 import java.nio.ByteBuffer
-import java.nio.channels._
-import java.nio.channels.{Selector => NSelector}
+import java.nio.channels.{Selector => NSelector, _}
 import java.util
 import java.util.Optional
 import java.util.concurrent._
@@ -29,32 +28,31 @@ import java.util.concurrent.atomic._
 
 import kafka.cluster.{BrokerEndPoint, EndPoint}
 import kafka.metrics.KafkaMetricsGroup
-import kafka.network
-import kafka.network.RequestChannel.{CloseConnectionResponse, EndThrottlingResponse, EnvelopeContext, NoOpResponse, SendResponse, StartThrottlingResponse}
 import kafka.network.Processor._
+import kafka.network.RequestChannel.{CloseConnectionResponse, EndThrottlingResponse, NoOpResponse, SendResponse, StartThrottlingResponse}
 import kafka.network.SocketServer._
 import kafka.security.CredentialProvider
 import kafka.server.{BrokerReconfigurable, KafkaConfig}
-import kafka.utils._
 import kafka.utils.Implicits._
+import kafka.utils._
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.errors.InvalidRequestException
-import org.apache.kafka.common.{Endpoint, KafkaException, MetricName, Reconfigurable}
 import org.apache.kafka.common.memory.{MemoryPool, SimpleMemoryPool}
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.stats.{Avg, CumulativeSum, Meter, Rate}
-import org.apache.kafka.common.network.{ChannelBuilder, ChannelBuilders, ClientInformation, KafkaChannel, ListenerName, ListenerReconfigurable, NetworkReceive, Selectable, Send, Selector => KSelector}
 import org.apache.kafka.common.network.KafkaChannel.ChannelMuteEvent
-import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.requests.{ApiVersionsRequest, EnvelopeRequest, RequestContext, RequestHeader}
-import org.apache.kafka.common.security.auth.{KafkaPrincipalSerde, SecurityProtocol}
+import org.apache.kafka.common.network.{ChannelBuilder, ChannelBuilders, ClientInformation, KafkaChannel, ListenerName, ListenerReconfigurable, Selectable, Send, Selector => KSelector}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.requests.{ApiVersionsRequest, EnvelopeRequest, EnvelopeResponse, RequestContext, RequestHeader}
+import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.utils.{KafkaThread, LogContext, Time}
+import org.apache.kafka.common.{Endpoint, KafkaException, MetricName, Reconfigurable}
 import org.slf4j.event.Level
 
 import scala.collection._
-import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{ArrayBuffer, Buffer}
 import scala.compat.java8.OptionConverters._
+import scala.jdk.CollectionConverters._
 import scala.util.control.ControlThrowable
 
 /**
@@ -975,28 +973,39 @@ private[kafka] class Processor(val id: Int,
                   channel.principal, listenerName, securityProtocol,
                   channel.channelMetadataRegistry.clientInformation, isPrivilegedListener)
 
-                val req =
-                  if (header.apiKey == ApiKeys.ENVELOPE) {
-                    parseEnvelopeRequest(receive, nowNanos, connectionId, context, channel.principalSerde.asScala)
-                  } else {
-                    new RequestChannel.Request(processor = id, context = context,
-                      startTimeNanos = nowNanos, memoryPool, receive.payload, requestChannel.metrics, None,
-                      channel.principalSerde.asScala)
-                  }
+                var req = new RequestChannel.Request(processor = id, context = context,
+                  startTimeNanos = nowNanos, memoryPool, receive.payload, requestChannel.metrics, None)
 
-                // KIP-511: ApiVersionsRequest is intercepted here to catch the client software name
-                // and version. It is done here to avoid wiring things up to the api layer.
-                if (header.apiKey == ApiKeys.API_VERSIONS) {
-                  val apiVersionsRequest = req.body[ApiVersionsRequest]
-                  if (apiVersionsRequest.isValid) {
-                    channel.channelMetadataRegistry.registerClientInformation(new ClientInformation(
-                      apiVersionsRequest.data.clientSoftwareName,
-                      apiVersionsRequest.data.clientSoftwareVersion))
+                if (req.header.apiKey == ApiKeys.ENVELOPE) {
+                  // Override the request context with the forwarded request context.
+                  // The envelope's context will be preserved in the forwarded context
+
+                  req = parseForwardedPrincipal(req, channel.principalSerde.asScala) match {
+                    case Some(forwardedPrincipal) =>
+                      buildForwardedRequestContext(req, forwardedPrincipal)
+
+                    case None =>
+                      val envelopeResponse = new EnvelopeResponse(Errors.PRINCIPAL_DESERIALIZATION_FAILURE)
+                      sendEnvelopeResponse(req, envelopeResponse)
+                      null
                   }
                 }
-                requestChannel.sendRequest(req)
-                selector.mute(connectionId)
-                handleChannelMuteEvent(connectionId, ChannelMuteEvent.REQUEST_RECEIVED)
+
+                if (req != null) {
+                  // KIP-511: ApiVersionsRequest is intercepted here to catch the client software name
+                  // and version. It is done here to avoid wiring things up to the api layer.
+                  if (header.apiKey == ApiKeys.API_VERSIONS) {
+                    val apiVersionsRequest = req.body[ApiVersionsRequest]
+                    if (apiVersionsRequest.isValid) {
+                      channel.channelMetadataRegistry.registerClientInformation(new ClientInformation(
+                        apiVersionsRequest.data.clientSoftwareName,
+                        apiVersionsRequest.data.clientSoftwareVersion))
+                    }
+                  }
+                  requestChannel.sendRequest(req)
+                  selector.mute(connectionId)
+                  handleChannelMuteEvent(connectionId, ChannelMuteEvent.REQUEST_RECEIVED)
+                }
               }
             }
           case None =>
@@ -1013,32 +1022,64 @@ private[kafka] class Processor(val id: Int,
     selector.clearCompletedReceives()
   }
 
-  private def parseEnvelopeRequest(receive: NetworkReceive,
-                                   nowNanos: Long,
-                                   connectionId: String,
-                                   context: RequestContext,
-                                   principalSerde: Option[KafkaPrincipalSerde]) = {
-    val envelopeRequest = context.parseRequest(receive.payload).request.asInstanceOf[EnvelopeRequest]
+  private def sendEnvelopeResponse(
+    envelopeRequest: RequestChannel.Request,
+    envelopeResponse: EnvelopeResponse
+  ): Unit = {
+    val envelopResponseSend = envelopeRequest.context.buildResponse(envelopeResponse)
+    enqueueResponse(new RequestChannel.SendResponse(
+      envelopeRequest,
+      envelopResponseSend,
+      None,
+      None
+    ))
+  }
 
-    val originalHeader = RequestHeader.parse(envelopeRequest.requestData)
-    // Leave the principal null here is ok since we will fail the request during Kafka API handling.
-    val originalPrincipal = if (principalSerde.isDefined)
-      principalSerde.get.deserialize(envelopeRequest.principalData)
-    else
-      null
+  private def parseForwardedPrincipal(
+    envelopeRequest: RequestChannel.Request,
+    principalSerde: Option[KafkaPrincipalSerde]
+  ): Option[KafkaPrincipal] = {
+    val envelope = envelopeRequest.body[EnvelopeRequest]
+    try {
+      principalSerde.map { serde =>
+        serde.deserialize(envelope.principalData())
+      }
+    } catch {
+      case e: Exception =>
+        warn(s"Failed to deserialize principal from envelope request $envelope", e)
+        None
+    }
+  }
 
-    val originalClientAddress = InetAddress.getByAddress(envelopeRequest.clientAddress)
-    val originalContext = new RequestContext(originalHeader, connectionId,
-      originalClientAddress, originalPrincipal, listenerName,
-      securityProtocol, context.clientInformation, isPrivilegedListener)
+  private def buildForwardedRequestContext(
+    envelopeRequest: RequestChannel.Request,
+    forwardedPrincipal: KafkaPrincipal
+  ): RequestChannel.Request = {
+    val envelope = envelopeRequest.body[EnvelopeRequest]
+    val forwardedRequestBuffer = envelope.requestData.duplicate()
+    val forwardedHeader = parseRequestHeader(forwardedRequestBuffer)
+    val forwardedClientAddress = InetAddress.getByAddress(envelope.clientAddress)
 
-    val envelopeContext = new EnvelopeContext(
-      brokerContext = context,
-      receive.payload)
+    val forwardedContext = new RequestContext(
+      forwardedHeader,
+      envelopeRequest.context.connectionId,
+      forwardedClientAddress,
+      forwardedPrincipal,
+      listenerName,
+      securityProtocol,
+      ClientInformation.EMPTY,
+      isPrivilegedListener
+    )
 
-    new network.RequestChannel.Request(processor = id, context = originalContext,
-      startTimeNanos = nowNanos, memoryPool, envelopeRequest.requestData, requestChannel.metrics,
-      Option(envelopeContext), principalSerde)
+    new RequestChannel.Request(
+      processor = id,
+      context = forwardedContext,
+      startTimeNanos = envelopeRequest.startTimeNanos,
+      memoryPool,
+      forwardedRequestBuffer,
+      requestChannel.metrics,
+      Some(envelopeRequest)
+    )
   }
 
   private def processCompletedSends(): Unit = {
