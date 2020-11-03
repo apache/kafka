@@ -86,18 +86,16 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
   override def setUp(): Unit = {
     super.setUp()
 
+    val authorizers = Seq(aclAuthorizer, aclAuthorizer2, MockAuthorizer.authorizer)
+
     // Increase maxUpdateRetries to avoid transient failures
-    aclAuthorizer.maxUpdateRetries = Int.MaxValue
-    aclAuthorizer2.maxUpdateRetries = Int.MaxValue
-    MockAuthorizer.authorizer.maxUpdateRetries = Int.MaxValue
+    authorizers.foreach(a => a.maxUpdateRetries = Int.MaxValue)
 
     val props = TestUtils.createBrokerConfig(0, zkConnect)
     props.put(AclAuthorizer.SuperUsersProp, superUsers)
 
     config = KafkaConfig.fromProps(props)
-    aclAuthorizer.configure(config.originals)
-    aclAuthorizer2.configure(config.originals)
-    interfaceDefaultAuthorizer.configure(config.originals)
+    authorizers.foreach(a => a.configure(config.originals))
 
     resource = new ResourcePattern(TOPIC, "foo-" + UUID.randomUUID(), LITERAL)
 
@@ -107,18 +105,15 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
 
   @After
   override def tearDown(): Unit = {
-    aclAuthorizer.acls(AclBindingFilter.ANY).forEach(bd => {
-      removeAcls(aclAuthorizer, Set(bd.entry), bd.pattern())
+    val authorizers = Seq(aclAuthorizer, aclAuthorizer2, interfaceDefaultAuthorizer)
+    authorizers.foreach(a => {
+      a.acls(AclBindingFilter.ANY).forEach(bd => {
+        removeAcls(aclAuthorizer, Set(bd.entry), bd.pattern())
+      })
     })
-    aclAuthorizer2.acls(AclBindingFilter.ANY).forEach(bd => {
-      removeAcls(aclAuthorizer2, Set(bd.entry), bd.pattern())
+    authorizers.foreach(a => {
+      a.close()
     })
-    interfaceDefaultAuthorizer.acls(AclBindingFilter.ANY).forEach(bd => {
-      removeAcls(interfaceDefaultAuthorizer, Set(bd.entry), bd.pattern())
-    })
-    aclAuthorizer.close()
-    aclAuthorizer2.close()
-    interfaceDefaultAuthorizer.close()
     zooKeeperClient.close()
     super.tearDown()
   }
