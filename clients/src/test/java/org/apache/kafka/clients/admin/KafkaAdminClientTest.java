@@ -4096,24 +4096,16 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testDescribeFeaturesHandleNotControllerException() throws Exception {
+    public void testDescribeFeaturesFailure() {
         try (final AdminClientUnitTestEnv env = mockClientEnv()) {
-            env.kafkaClient().prepareResponseFrom(
-                prepareApiVersionsResponseForDescribeFeatures(Errors.NOT_CONTROLLER),
-                env.cluster().nodeById(0));
-            env.kafkaClient().prepareResponse(MetadataResponse.prepareResponse(env.cluster().nodes(),
-                env.cluster().clusterResource().clusterId(),
-                1,
-                Collections.emptyList()));
-            env.kafkaClient().prepareResponseFrom(
-                prepareApiVersionsResponseForDescribeFeatures(Errors.NONE),
-                env.cluster().nodeById(1));
+            env.kafkaClient().prepareResponse(
+                body -> body instanceof ApiVersionsRequest,
+                prepareApiVersionsResponseForDescribeFeatures(Errors.INVALID_REQUEST));
             final DescribeFeaturesOptions options = new DescribeFeaturesOptions();
-            options.sendRequestToController(true);
             options.timeoutMs(10000);
-            final KafkaFuture<FeatureMetadata> future
-                = env.adminClient().describeFeatures(options).featureMetadata();
-            future.get();
+            final KafkaFuture<FeatureMetadata> future = env.adminClient().describeFeatures(options).featureMetadata();
+            final ExecutionException e = assertThrows(ExecutionException.class, () -> future.get());
+            assertEquals(e.getCause().getClass(), Errors.INVALID_REQUEST.exception().getClass());
         }
     }
 

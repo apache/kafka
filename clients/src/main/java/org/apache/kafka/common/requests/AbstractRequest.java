@@ -255,6 +255,8 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return new BeginQuorumEpochRequest(struct, apiVersion);
             case END_QUORUM_EPOCH:
                 return new EndQuorumEpochRequest(struct, apiVersion);
+            case DESCRIBE_QUORUM:
+                return new DescribeQuorumRequest(struct, apiVersion);
             case ALTER_ISR:
                 return new AlterIsrRequest(new AlterIsrRequestData(struct, apiVersion), apiVersion);
             case UPDATE_FEATURES:

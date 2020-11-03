@@ -40,7 +40,6 @@ public class RequestContext implements AuthorizableRequestContext {
     public final ListenerName listenerName;
     public final SecurityProtocol securityProtocol;
     public final ClientInformation clientInformation;
-    public final boolean fromPrivilegedListener;
 
     public RequestContext(RequestHeader header,
                           String connectionId,
@@ -48,8 +47,7 @@ public class RequestContext implements AuthorizableRequestContext {
                           KafkaPrincipal principal,
                           ListenerName listenerName,
                           SecurityProtocol securityProtocol,
-                          ClientInformation clientInformation,
-                          boolean fromPrivilegedListener) {
+                          ClientInformation clientInformation) {
         this.header = header;
         this.connectionId = connectionId;
         this.clientAddress = clientAddress;
@@ -57,7 +55,6 @@ public class RequestContext implements AuthorizableRequestContext {
         this.listenerName = listenerName;
         this.securityProtocol = securityProtocol;
         this.clientInformation = clientInformation;
-        this.fromPrivilegedListener = fromPrivilegedListener;
     }
 
     public RequestAndSize parseRequest(ByteBuffer buffer) {
@@ -77,9 +74,7 @@ public class RequestContext implements AuthorizableRequestContext {
                         ", apiVersion: " + header.apiVersion() +
                         ", connectionId: " + connectionId +
                         ", listenerName: " + listenerName +
-                        ", principal: " + principal +
-                        ", initialPrincipal: " + initialPrincipalName() +
-                        ", initialClientId: " + header.initialClientId(), ex);
+                        ", principal: " + principal, ex);
             }
         }
     }
@@ -138,10 +133,5 @@ public class RequestContext implements AuthorizableRequestContext {
     @Override
     public int correlationId() {
         return header.correlationId();
-    }
-
-    @Override
-    public String initialPrincipalName() {
-        return header.initialPrincipalName();
     }
 }

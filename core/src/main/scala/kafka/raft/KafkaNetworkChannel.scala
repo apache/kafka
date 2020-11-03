@@ -107,7 +107,7 @@ class KafkaNetworkChannel(time: Time,
     val correlationId = req.correlationId
     val createdTimeMs = req.createdTimeMs
     new ClientRequest(destination, request, correlationId, clientId, createdTimeMs, true,
-      requestTimeoutMs, null, null, null)
+      requestTimeoutMs, null)
   }
 
   override def send(message: RaftMessage): Unit = {

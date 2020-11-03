@@ -231,6 +231,8 @@ case object SegmentDeletion extends LogStartOffsetIncrementReason {
  * @param time The time instance used for checking the clock
  * @param maxProducerIdExpirationMs The maximum amount of time to wait before a producer id is considered expired
  * @param producerIdExpirationCheckIntervalMs How often to check for producer ids which need to be expired
+ * @param hadCleanShutdown boolean flag to indicate if the Log had a clean/graceful shutdown last time. true means
+ *                         clean shutdown whereas false means a crash.
  */
 @threadsafe
 class Log(@volatile private var _dir: File,
@@ -244,7 +246,8 @@ class Log(@volatile private var _dir: File,
           val producerIdExpirationCheckIntervalMs: Int,
           val topicPartition: TopicPartition,
           val producerStateManager: ProducerStateManager,
-          logDirFailureChannel: LogDirFailureChannel) extends Logging with KafkaMetricsGroup {
+          logDirFailureChannel: LogDirFailureChannel,
+          private val hadCleanShutdown: Boolean = true) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.Log._
 
@@ -318,7 +321,7 @@ class Log(@volatile private var _dir: File,
     // during log recovery may have deleted some files without the Log.producerStateManager instance witnessing the
     // deletion.
     producerStateManager.removeStraySnapshots(segments.values().asScala.map(_.baseOffset).toSeq)
-    loadProducerState(logEndOffset, reloadFromCleanShutdown = hasCleanShutdownFile)
+    loadProducerState(logEndOffset, reloadFromCleanShutdown = hadCleanShutdown)
   }
 
   def dir: File = _dir
@@ -804,9 +807,9 @@ class Log(@volatile private var _dir: File,
    * logs are loaded.
    * @throws LogSegmentOffsetOverflowException if we encountered a legacy segment with offset overflow
    */
-  private def recoverLog(): Long = {
+  private[log] def recoverLog(): Long = {
     // if we have the clean shutdown marker, skip recovery
-    if (!hasCleanShutdownFile) {
+    if (!hadCleanShutdown) {
       // okay we need to actually recover this log
       val unflushed = logSegments(this.recoveryPoint, Long.MaxValue).iterator
       var truncated = false
@@ -974,11 +977,6 @@ class Log(@volatile private var _dir: File,
       producerId -> lastRecord
     }
   }
-
-  /**
-   * Check if we have the "clean shutdown" file
-   */
-  private def hasCleanShutdownFile: Boolean = new File(dir.getParentFile, CleanShutdownFile).exists()
 
   /**
    * The number of segments in the log.
@@ -2487,11 +2485,12 @@ object Log {
             time: Time = Time.SYSTEM,
             maxProducerIdExpirationMs: Int,
             producerIdExpirationCheckIntervalMs: Int,
-            logDirFailureChannel: LogDirFailureChannel): Log = {
+            logDirFailureChannel: LogDirFailureChannel,
+            lastShutdownClean: Boolean = true): Log = {
     val topicPartition = Log.parseTopicPartitionName(dir)
     val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
     new Log(dir, config, logStartOffset, recoveryPoint, scheduler, brokerTopicStats, time, maxProducerIdExpirationMs,
-      producerIdExpirationCheckIntervalMs, topicPartition, producerStateManager, logDirFailureChannel)
+      producerIdExpirationCheckIntervalMs, topicPartition, producerStateManager, logDirFailureChannel, lastShutdownClean)
   }
 
   /**

@@ -252,7 +252,8 @@ class LogManager(logDirs: Seq[File],
   // Only for testing
   private[log] def hasLogsToBeDeleted: Boolean = !logsToBeDeleted.isEmpty
 
-  private def loadLog(logDir: File,
+  private[log] def loadLog(logDir: File,
+                      hadCleanShutdown: Boolean,
                       recoveryPoints: Map[TopicPartition, Long],
                       logStartOffsets: Map[TopicPartition, Long]): Log = {
     val topicPartition = Log.parseTopicPartitionName(logDir)
@@ -270,7 +271,8 @@ class LogManager(logDirs: Seq[File],
       scheduler = scheduler,
       time = time,
       brokerTopicStats = brokerTopicStats,
-      logDirFailureChannel = logDirFailureChannel)
+      logDirFailureChannel = logDirFailureChannel,
+      lastShutdownClean = hadCleanShutdown)
 
     if (logDir.getName.endsWith(Log.DeleteDirSuffix)) {
       addLogToBeDeleted(log)
@@ -298,16 +300,17 @@ class LogManager(logDirs: Seq[File],
   /**
    * Recover and load all logs in the given data directories
    */
-  private def loadLogs(): Unit = {
+  private[log] def loadLogs(): Unit = {
     info(s"Loading logs from log dirs $liveLogDirs")
     val startMs = time.hiResClockMs()
     val threadPools = ArrayBuffer.empty[ExecutorService]
     val offlineDirs = mutable.Set.empty[(String, IOException)]
-    val jobs = mutable.Map.empty[File, Seq[Future[_]]]
+    val jobs = ArrayBuffer.empty[Seq[Future[_]]]
     var numTotalLogs = 0
 
     for (dir <- liveLogDirs) {
       val logDirAbsolutePath = dir.getAbsolutePath
+      var hadCleanShutdown: Boolean = false
       try {
         val pool = Executors.newFixedThreadPool(numRecoveryThreadsPerDataDir)
         threadPools.append(pool)
@@ -315,6 +318,10 @@ class LogManager(logDirs: Seq[File],
         val cleanShutdownFile = new File(dir, Log.CleanShutdownFile)
         if (cleanShutdownFile.exists) {
           info(s"Skipping recovery for all logs in $logDirAbsolutePath since clean shutdown file was found")
+          // Cache the clean shutdown status and use that for rest of log loading workflow. Delete the CleanShutdownFile
+          // so that if broker crashes while loading the log, it is considered hard shutdown during the next boot up. KAFKA-10471
+          cleanShutdownFile.delete()
+          hadCleanShutdown = true
         } else {
           // log recovery itself is being performed by `Log` class during initialization
           info(s"Attempting recovery for all logs in $logDirAbsolutePath since no clean shutdown file was found")
@@ -349,7 +356,7 @@ class LogManager(logDirs: Seq[File],
               debug(s"Loading log $logDir")
 
               val logLoadStartMs = time.hiResClockMs()
-              val log = loadLog(logDir, recoveryPoints, logStartOffsets)
+              val log = loadLog(logDir, hadCleanShutdown, recoveryPoints, logStartOffsets)
               val logLoadDurationMs = time.hiResClockMs() - logLoadStartMs
               val currentNumLoaded = numLogsLoaded.incrementAndGet()
 
@@ -364,7 +371,7 @@ class LogManager(logDirs: Seq[File],
           runnable
         }
 
-        jobs(cleanShutdownFile) = jobsForDir.map(pool.submit)
+        jobs += jobsForDir.map(pool.submit)
       } catch {
         case e: IOException =>
           offlineDirs.add((logDirAbsolutePath, e))
@@ -373,19 +380,12 @@ class LogManager(logDirs: Seq[File],
     }
 
     try {
-      for ((cleanShutdownFile, dirJobs) <- jobs) {
+      for (dirJobs <- jobs) {
         dirJobs.foreach(_.get)
-        try {
-          cleanShutdownFile.delete()
-        } catch {
-          case e: IOException =>
-            offlineDirs.add((cleanShutdownFile.getParent, e))
-            error(s"Error while deleting the clean shutdown file $cleanShutdownFile", e)
-        }
       }
 
       offlineDirs.foreach { case (dir, e) =>
-        logDirFailureChannel.maybeAddOfflineLogDir(dir, s"Error while deleting the clean shutdown file in dir $dir", e)
+        logDirFailureChannel.maybeAddOfflineLogDir(dir, s"Error while loading log dir $dir", e)
       }
     } catch {
       case e: ExecutionException =>

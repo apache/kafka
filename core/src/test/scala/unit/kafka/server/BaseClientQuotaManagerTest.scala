@@ -60,7 +60,7 @@ class BaseClientQuotaManagerTest {
   }
 
   protected def buildRequest[T <: AbstractRequest](builder: AbstractRequest.Builder[T],
-                                                   listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)): (T, RequestChannel.Request) = {
+                                                 listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)): (T, RequestChannel.Request) = {
 
     val request = builder.build()
     val buffer = request.serialize(new RequestHeader(builder.apiKey, request.version, "", 0))
@@ -69,7 +69,7 @@ class BaseClientQuotaManagerTest {
     // read the header from the buffer first so that the body can be read next from the Request constructor
     val header = RequestHeader.parse(buffer)
     val context = new RequestContext(header, "1", InetAddress.getLocalHost, KafkaPrincipal.ANONYMOUS,
-      listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false)
+      listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY)
     (request, new RequestChannel.Request(processor = 1, context = context, startTimeNanos =  0, MemoryPool.NONE, buffer,
       requestChannelMetrics))
   }
