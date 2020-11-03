@@ -30,13 +30,14 @@ public class FollowerState implements EpochState {
     private final int leaderId;
     private final Set<Integer> voters;
     private final Timer fetchTimer;
-    private OptionalLong highWatermark;
+    private Optional<LogOffsetMetadata> highWatermark;
 
     public FollowerState(
         Time time,
         int epoch,
         int leaderId,
         Set<Integer> voters,
+        Optional<LogOffsetMetadata> highWatermark,
         int fetchTimeoutMs
     ) {
         this.fetchTimeoutMs = fetchTimeoutMs;
@@ -44,7 +45,7 @@ public class FollowerState implements EpochState {
         this.leaderId = leaderId;
         this.voters = voters;
         this.fetchTimer = time.timer(fetchTimeoutMs);
-        this.highWatermark = OptionalLong.empty();
+        this.highWatermark = highWatermark;
     }
 
     @Override
@@ -97,7 +98,7 @@ public class FollowerState implements EpochState {
                 " with unknown value");
 
         if (this.highWatermark.isPresent()) {
-            long previousHighWatermark = this.highWatermark.getAsLong();
+            long previousHighWatermark = this.highWatermark.get().offset;
             long updatedHighWatermark = highWatermark.getAsLong();
 
             if (updatedHighWatermark < 0)
@@ -108,17 +109,15 @@ public class FollowerState implements EpochState {
                 return false;
         }
 
-        this.highWatermark = highWatermark;
+        this.highWatermark = highWatermark.isPresent() ?
+            Optional.of(new LogOffsetMetadata(highWatermark.getAsLong())) :
+            Optional.empty();
         return true;
     }
 
     @Override
     public Optional<LogOffsetMetadata> highWatermark() {
-        if (highWatermark.isPresent()) {
-            return Optional.of(new LogOffsetMetadata(highWatermark.getAsLong()));
-        } else {
-            return Optional.empty();
-        }
+        return highWatermark;
     }
 
     @Override

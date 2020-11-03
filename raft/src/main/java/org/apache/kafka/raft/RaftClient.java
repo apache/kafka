@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.record.Records;
-
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -26,30 +24,53 @@ public interface RaftClient<T> {
 
     interface Listener<T> {
         /**
-         * Callback which is invoked when records written through {@link #scheduleAppend(int, List)}
-         * become committed.
+         * Callback which is invoked for all records committed to the log.
+         * It is the responsibility of the caller to invoke {@link BatchReader#close()}
+         * after consuming the reader.
          *
          * Note that there is not a one-to-one correspondence between writes through
          * {@link #scheduleAppend(int, List)} and this callback. The Raft implementation
          * is free to batch together the records from multiple append calls provided
          * that batch boundaries are respected. This means that each batch specified
          * through {@link #scheduleAppend(int, List)} is guaranteed to be a subset of
-         * a batch passed to {@link #handleCommit(int, long, List)}.
+         * a batch provided by the {@link BatchReader}.
          *
-         * @param epoch the epoch in which the write was accepted
-         * @param lastOffset the offset of the last record in the record list
-         * @param records the set of records that were committed
+         * @param reader reader instance which must be iterated and closed
          */
-        void handleCommit(int epoch, long lastOffset, List<T> records);
+        void handleCommit(BatchReader<T> reader);
+
+        /**
+         * Invoked after this node has become a leader. This is only called after
+         * all commits up to the start of the leader's epoch have been sent to
+         * {@link #handleCommit(BatchReader)}.
+         *
+         * After becoming a leader, the client is eligible to write to the log
+         * using {@link #scheduleAppend(int, List)}.
+         *
+         * @param epoch the claimed leader epoch
+         */
+        default void handleClaim(int epoch) {}
+
+        /**
+         * Invoked after a leader has stepped down. This callback may or may not
+         * fire before the next leader has been elected.
+         */
+        default void handleResign() {}
     }
 
     /**
-     * Initialize the client. This should only be called once and it must be
-     * called before any of the other APIs can be invoked.
+     * Initialize the client. This should only be called once on startup.
      *
      * @throws IOException For any IO errors during initialization
      */
-    void initialize(Listener<T> listener) throws IOException;
+    void initialize() throws IOException;
+
+    /**
+     * Register a listener to get commit/leader notifications.
+     *
+     * @param listener the listener
+     */
+    void register(Listener<T> listener);
 
     /**
      * Append a list of records to the log. The write will be scheduled for some time
@@ -70,27 +91,6 @@ public interface RaftClient<T> {
      *         being reached).
      */
     Long scheduleAppend(int epoch, List<T> records);
-
-    /**
-     * Read a set of records from the log. Note that it is the responsibility of the state machine
-     * to filter control records added by the Raft client itself.
-     *
-     * If the fetch offset is no longer valid, then the future will be completed exceptionally
-     * with a {@link LogTruncationException}.
-     *
-     * @param position The position to fetch from
-     * @param isolation The isolation level to apply to the read
-     * @param maxWaitTimeMs The maximum time to wait for new data to become available before completion
-     * @return The record set, which may be empty if fetching from the end of the log
-     */
-    CompletableFuture<Records> read(OffsetAndEpoch position, Isolation isolation, long maxWaitTimeMs);
-
-    /**
-     * Get the current leader (if known) and the current epoch.
-     *
-     * @return Current leader and epoch information
-     */
-    LeaderAndEpoch currentLeaderAndEpoch();
 
     /**
      * Shutdown the client.

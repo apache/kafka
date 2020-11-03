@@ -132,6 +132,7 @@ public class QuorumState {
                 time,
                 logEndOffsetAndEpoch.epoch,
                 voters,
+                Optional.empty(),
                 randomElectionTimeoutMs()
             );
         } else if (election.isLeader(localId)) {
@@ -143,14 +144,16 @@ public class QuorumState {
                 time,
                 election.epoch,
                 voters,
+                Optional.empty(),
                 randomElectionTimeoutMs()
             );
-        } else if (election.isCandidate(localId)) {
+        } else if (election.isVotedCandidate(localId)) {
             initialState = new CandidateState(
                 time,
                 localId,
                 election.epoch,
                 voters,
+                Optional.empty(),
                 1,
                 randomElectionTimeoutMs()
             );
@@ -160,6 +163,7 @@ public class QuorumState {
                 election.epoch,
                 election.votedId(),
                 voters,
+                Optional.empty(),
                 randomElectionTimeoutMs()
             );
         } else if (election.hasLeader()) {
@@ -168,6 +172,7 @@ public class QuorumState {
                 election.epoch,
                 election.leaderId(),
                 voters,
+                Optional.empty(),
                 fetchTimeoutMs
             );
         } else {
@@ -175,6 +180,7 @@ public class QuorumState {
                 time,
                 election.epoch,
                 voters,
+                Optional.empty(),
                 randomElectionTimeoutMs()
             );
         }
@@ -254,6 +260,7 @@ public class QuorumState {
             time,
             epoch,
             voters,
+            state.highWatermark(),
             electionTimeoutMs
         ));
     }
@@ -296,6 +303,7 @@ public class QuorumState {
             epoch,
             candidateId,
             voters,
+            state.highWatermark(),
             randomElectionTimeoutMs()
         ));
     }
@@ -330,6 +338,7 @@ public class QuorumState {
             epoch,
             leaderId,
             voters,
+            state.highWatermark(),
             fetchTimeoutMs
         ));
     }
@@ -352,6 +361,7 @@ public class QuorumState {
             localId,
             newEpoch,
             voters,
+            state.highWatermark(),
             retries,
             electionTimeoutMs
         ));
@@ -368,6 +378,17 @@ public class QuorumState {
         CandidateState candidateState = candidateStateOrThrow();
         if (!candidateState.isVoteGranted())
             throw new IllegalStateException("Cannot become leader without majority votes granted");
+
+        // Note that the leader does not retain the high watermark that was known
+        // in the previous state. The reason for this is to protect the monotonicity
+        // of the global high watermark, which is exposed through the leader. The
+        // only way a new leader can be sure that the high watermark is increasing
+        // monotonically is to wait until a majority of the voters have reached the
+        // starting offset of the new epoch. The downside of this is that the local
+        // state machine is temporarily stalled by the advancement of the global
+        // high watermark even though it only depends on local monotonicity. We
+        // could address this problem by decoupling the local high watermark, but
+        // we typically expect the state machine to be caught up anyway.
 
         transitionTo(new LeaderState(
             localId,

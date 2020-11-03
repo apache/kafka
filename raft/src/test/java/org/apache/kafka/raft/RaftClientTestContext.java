@@ -16,36 +16,18 @@
  */
 package org.apache.kafka.raft;
 
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.OptionalInt;
-import java.util.Random;
-import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
-import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
+import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
-import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.message.LeaderChangeMessage;
+import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.metrics.Metrics;
@@ -58,7 +40,6 @@ import org.apache.kafka.common.record.ControlRecordUtils;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.Records;
-import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.requests.BeginQuorumEpochRequest;
 import org.apache.kafka.common.requests.BeginQuorumEpochResponse;
 import org.apache.kafka.common.requests.DescribeQuorumResponse;
@@ -68,14 +49,37 @@ import org.apache.kafka.common.requests.VoteResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.raft.internals.BatchBuilder;
 import org.apache.kafka.raft.internals.StringSerde;
 import org.apache.kafka.test.TestUtils;
 import org.mockito.Mockito;
+
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.OptionalLong;
+import java.util.Random;
+import java.util.Set;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
 import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 final class RaftClientTestContext {
+    private static final StringSerde STRING_SERDE = new StringSerde();
+
     final TopicPartition metadataPartition = Builder.METADATA_PARTITION;
     final int electionBackoffMaxMs = Builder.ELECTION_BACKOFF_MAX_MS;
     final int electionTimeoutMs = Builder.DEFAULT_ELECTION_TIMEOUT_MS;
@@ -107,6 +111,7 @@ final class RaftClientTestContext {
         private static final int RETRY_BACKOFF_MS = 50;
         private static final int DEFAULT_APPEND_LINGER_MS = 0;
 
+        private final MockTime time = new MockTime();
         private final QuorumStateStore quorumStateStore = new MockQuorumStateStore();
         private final Random random = Mockito.spy(new Random(1));
         private final MockLog log = new MockLog(METADATA_PARTITION);
@@ -152,13 +157,13 @@ final class RaftClientTestContext {
             return this;
         }
 
-        Builder updateLog(Consumer<MockLog> consumer) {
-            consumer.accept(log);
+        Builder appendToLog(long baseOffset, int epoch, List<String> records) {
+            MemoryRecords batch = buildBatch(time.milliseconds(), baseOffset, epoch, records);
+            log.appendAsLeader(batch, epoch);
             return this;
         }
 
         RaftClientTestContext build() throws IOException {
-            MockTime time = new MockTime();
             Metrics metrics = new Metrics(time);
             MockNetworkChannel channel = new MockNetworkChannel();
             LogContext logContext = new LogContext();
@@ -174,15 +179,14 @@ final class RaftClientTestContext {
                 ));
 
             KafkaRaftClient<String> client = new KafkaRaftClient<>(
-                new StringSerde(),
+                STRING_SERDE,
                 channel,
                 log,
                 quorum,
                 memoryPool,
                 time,
                 metrics,
-                new MockFuturePurgatory<>(time),
-                new MockFuturePurgatory<>(time),
+                new MockExpirationService(time),
                 voterAddresses,
                 ELECTION_BACKOFF_MAX_MS,
                 RETRY_BACKOFF_MS,
@@ -193,7 +197,8 @@ final class RaftClientTestContext {
                 random
             );
 
-            client.initialize(listener);
+            client.register(listener);
+            client.initialize();
 
             return new RaftClientTestContext(
                 localId,
@@ -231,6 +236,39 @@ final class RaftClientTestContext {
         this.listener = listener;
     }
 
+    MemoryRecords buildBatch(
+        long baseOffset,
+        int epoch,
+        List<String> records
+    ) {
+        return buildBatch(time.milliseconds(), baseOffset, epoch, records);
+    }
+
+    static MemoryRecords buildBatch(
+        long timestamp,
+        long baseOffset,
+        int epoch,
+        List<String> records
+    ) {
+        ByteBuffer buffer = ByteBuffer.allocate(512);
+        BatchBuilder<String> builder = new BatchBuilder<>(
+            buffer,
+            STRING_SERDE,
+            CompressionType.NONE,
+            baseOffset,
+            timestamp,
+            false,
+            epoch,
+            512
+        );
+
+        for (String record : records) {
+            builder.appendRecord(record, null);
+        }
+
+        return builder.build();
+    }
+
     static RaftClientTestContext initializeAsLeader(int localId, Set<Integer> voters, int epoch) throws Exception {
         if (epoch <= 0) {
             throw new IllegalArgumentException("Cannot become leader in epoch " + epoch);
@@ -246,10 +284,27 @@ final class RaftClientTestContext {
     }
 
     void becomeLeader() throws Exception {
-        int currentEpoch = client.currentLeaderAndEpoch().epoch;
+        int currentEpoch = currentEpoch();
         time.sleep(electionTimeoutMs * 2);
         expectAndGrantVotes(currentEpoch + 1);
         expectBeginEpoch(currentEpoch + 1);
+    }
+
+    OptionalInt currentLeader() {
+        return currentLeaderAndEpoch().leaderId;
+    }
+
+    int currentEpoch() {
+        return currentLeaderAndEpoch().epoch;
+    }
+
+    LeaderAndEpoch currentLeaderAndEpoch() {
+        try {
+            ElectionState election = quorumStateStore.readElectionState();
+            return new LeaderAndEpoch(election.leaderIdOpt, election.epoch);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     void expectAndGrantVotes(
@@ -475,44 +530,6 @@ final class RaftClientTestContext {
         return (MemoryRecords) partitionResponse.recordSet();
     }
 
-    void validateLocalRead(
-        OffsetAndEpoch fetchOffsetAndEpoch,
-        Isolation isolation,
-        String[] expectedRecords
-    ) throws Exception {
-        CompletableFuture<Records> future = client.read(fetchOffsetAndEpoch, isolation, 0L);
-        assertTrue(future.isDone());
-        assertMatchingRecords(expectedRecords, future.get());
-    }
-
-    void validateLocalRead(
-        OffsetAndEpoch fetchOffsetAndEpoch,
-        Isolation isolation,
-        SimpleRecord[] expectedRecords
-    ) throws Exception {
-        CompletableFuture<Records> future = client.read(fetchOffsetAndEpoch, isolation, 0L);
-        assertTrue(future.isDone());
-        assertMatchingRecords(expectedRecords, future.get());
-    }
-
-    void fetchFromLeader(
-        int leaderId,
-        int epoch,
-        OffsetAndEpoch fetchOffsetAndEpoch,
-        SimpleRecord[] records,
-        long highWatermark
-    ) throws Exception {
-        pollUntilSend();
-        int fetchCorrelationId = assertSentFetchRequest(epoch,
-            fetchOffsetAndEpoch.offset, fetchOffsetAndEpoch.epoch);
-        Records fetchedRecords = MemoryRecords.withRecords(fetchOffsetAndEpoch.offset,
-            CompressionType.NONE, epoch, records);
-        FetchResponseData fetchResponse = fetchResponse(
-            epoch, leaderId, fetchedRecords, highWatermark, Errors.NONE);
-        deliverResponse(fetchCorrelationId, leaderId, fetchResponse);
-        client.poll();
-    }
-
     void buildFollowerSet(
         int epoch,
         int closeFollower,
@@ -680,20 +697,6 @@ final class RaftClientTestContext {
         }
     }
 
-    static void assertMatchingRecords(
-        SimpleRecord[] expected,
-        Records actual
-    ) {
-        List<Record> recordList = Utils.toList(actual.records());
-        assertEquals(expected.length, recordList.size());
-        for (int i = 0; i < expected.length; i++) {
-            Record record = recordList.get(i);
-            assertEquals(
-                expected[i], new SimpleRecord(record),
-                "Record at offset " + record.offset() + " does not match expected");
-        }
-    }
-
     static void verifyLeaderChangeMessage(
         int leaderId,
         List<Integer> voters,
@@ -789,17 +792,88 @@ final class RaftClientTestContext {
     }
 
     static class MockListener implements RaftClient.Listener<String> {
-        final LinkedHashMap<OffsetAndEpoch, List<String>> commits = new LinkedHashMap<>();
+        private final List<BatchReader.Batch<String>> commits = new ArrayList<>();
+        private final Map<Integer, Long> claimedEpochStartOffsets = new HashMap<>();
+        private OptionalInt currentClaimedEpoch = OptionalInt.empty();
 
-        @Override
-        public void handleCommit(int epoch, long lastOffset, List<String> records) {
-            OffsetAndEpoch offsetAndEpoch = new OffsetAndEpoch(lastOffset, epoch);
-            if (commits.containsKey(offsetAndEpoch)) {
-                throw new AssertionError("Found duplicate append at " + offsetAndEpoch);
-            }
-            commits.put(offsetAndEpoch, records);
+        int numCommittedBatches() {
+            return commits.size();
         }
 
+        Long claimedEpochStartOffset(int epoch) {
+            return claimedEpochStartOffsets.get(epoch);
+        }
+
+        BatchReader.Batch<String> lastCommit() {
+            if (commits.isEmpty()) {
+                return null;
+            } else {
+                return commits.get(commits.size() - 1);
+            }
+        }
+
+        OptionalLong lastCommitOffset() {
+            if (commits.isEmpty()) {
+                return OptionalLong.empty();
+            } else {
+                return OptionalLong.of(commits.get(commits.size() - 1).lastOffset());
+            }
+        }
+
+        OptionalInt currentClaimedEpoch() {
+            return currentClaimedEpoch;
+        }
+
+        List<String> commitWithBaseOffset(long baseOffset) {
+            return commits.stream()
+                .filter(batch -> batch.baseOffset() == baseOffset)
+                .findFirst()
+                .map(batch -> batch.records())
+                .orElse(null);
+        }
+
+        List<String> commitWithLastOffset(long lastOffset) {
+            return commits.stream()
+                .filter(batch -> batch.lastOffset() == lastOffset)
+                .findFirst()
+                .map(batch -> batch.records())
+                .orElse(null);
+        }
+
+        @Override
+        public void handleClaim(int epoch) {
+            // We record the next expected offset as the claimed epoch's start
+            // offset. This is useful to verify that the `handleClaim` callback
+            // was not received early.
+            long claimedEpochStartOffset = lastCommitOffset().isPresent() ?
+                lastCommitOffset().getAsLong() + 1 : 0L;
+            this.currentClaimedEpoch = OptionalInt.of(epoch);
+            this.claimedEpochStartOffsets.put(epoch, claimedEpochStartOffset);
+        }
+
+        @Override
+        public void handleResign() {
+            this.currentClaimedEpoch = OptionalInt.empty();
+        }
+
+        @Override
+        public void handleCommit(BatchReader<String> reader) {
+            try {
+                while (reader.hasNext()) {
+                    long nextOffset = lastCommitOffset().isPresent() ?
+                        lastCommitOffset().getAsLong() + 1 : 0L;
+                    BatchReader.Batch<String> batch = reader.next();
+                    // We expect monotonic offsets, but not necessarily sequential
+                    // offsets since control records will be filtered.
+                    assertTrue(batch.baseOffset() >= nextOffset,
+                        "Received non-monotonic commit " + batch +
+                            ". We expected an offset at least as large as " + nextOffset);
+                    commits.add(batch);
+                }
+            } finally {
+                reader.close();
+            }
+        }
     }
 
 }

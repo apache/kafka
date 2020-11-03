@@ -16,12 +16,17 @@
  */
 package org.apache.kafka.raft;
 
-import java.util.Locale;
+import java.util.concurrent.CompletableFuture;
 
-public enum AckMode {
-    LEADER, QUORUM;
-
-    public static AckMode forConfig(String config) {
-        return AckMode.valueOf(config.toUpperCase(Locale.ROOT));
-    }
+public interface ExpirationService {
+    /**
+     * Get a new completable future which will automatically fail exceptionally with a
+     * {@link org.apache.kafka.common.errors.TimeoutException} if not completed before
+     * the provided time limit expires.
+     *
+     * @param timeoutMs the duration in milliseconds before the future is completed exceptionally
+     * @param <T> arbitrary future type (the service must set no expectation on the this type)
+     * @return the completable future
+     */
+    <T> CompletableFuture<T> failAfter(long timeoutMs);
 }
