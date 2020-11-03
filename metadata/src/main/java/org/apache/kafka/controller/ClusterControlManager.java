@@ -187,7 +187,7 @@ public class ClusterControlManager {
             state.leaseStartNs = nowNs;
         }
         // TODO: check targetState, currentMetadataOffset.
-        // Send back the correct broker state here, rather than always sending RUNNING
+        // TODO: Send back the correct broker state here, rather than always sending RUNNING
         return new HeartbeatReply(BrokerState.RUNNING, leaseDurationNs);
     }
 

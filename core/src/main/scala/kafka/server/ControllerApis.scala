@@ -28,7 +28,7 @@ import org.apache.kafka.common.message.{ApiVersionsResponseData, MetadataRespons
 import org.apache.kafka.common.message.ApiVersionsResponseData.{ApiVersionsResponseKey, FinalizedFeatureKey, SupportedFeatureKey}
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseBroker
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{AlterIsrRequest, ApiVersionsRequest, ApiVersionsResponse, MetadataRequest, MetadataResponse}
+import org.apache.kafka.common.requests.{AlterIsrRequest, ApiVersionsRequest, ApiVersionsResponse, BrokerHeartbeatRequest, BrokerRegistrationRequest, MetadataRequest, MetadataResponse}
 import org.apache.kafka.common.resource.Resource
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType.CLUSTER
@@ -88,8 +88,8 @@ class ControllerApis(val requestChannel: RequestChannel,
     //ApiKeys.DESCRIBE_QUORUM
     ApiKeys.ALTER_ISR,
     //ApiKeys.UPDATE_FEATURES
-    //ApiKeys.BROKER_REGISTRATION
-    //ApiKeys.BROKER_HEARTBEAT
+    ApiKeys.BROKER_REGISTRATION,
+    ApiKeys.BROKER_HEARTBEAT
   )
 
   override def handle(request: RequestChannel.Request): Unit = {
@@ -98,6 +98,8 @@ class ControllerApis(val requestChannel: RequestChannel,
         case ApiKeys.METADATA => handleMetadataRequest(request)
         case ApiKeys.API_VERSIONS => handleApiVersionsRequest(request)
         case ApiKeys.ALTER_ISR => handleAlterIsrRequest(request)
+        case ApiKeys.BROKER_HEARTBEAT => handleBrokerHeartBeatRequest(request)
+        case ApiKeys.BROKER_REGISTRATION => handleBrokerRegistration(request)
           // TODO other APIs
         case _ => throw new ApiException(s"Unsupported ApiKey ${request.context.header.apiKey()}")
       }
@@ -212,5 +214,18 @@ class ControllerApis(val requestChannel: RequestChannel,
         alterIsrRequest.data().brokerEpoch(),
         isrsToAlter.asJava)
     }
+  }
+
+  def handleBrokerRegistration(request: RequestChannel.Request): Unit = {
+    val registrationRequest = request.body[BrokerRegistrationRequest]
+    if (apisUtils.authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
+      controller.registerBroker(registrationRequest)
+    }
+  }
+
+  def handleBrokerHeartBeatRequest(request: RequestChannel.Request): Unit = {
+    val heartbeatRequest = request.body[BrokerHeartbeatRequest]
+    apisUtils.authorizeClusterOperation(request, CLUSTER_ACTION);
+    controller.processBrokerHeartbeat(heartbeatRequest.data)
   }
 }
