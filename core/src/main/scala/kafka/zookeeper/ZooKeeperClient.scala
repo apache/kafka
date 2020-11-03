@@ -26,6 +26,7 @@ import com.yammer.metrics.core.MetricName
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.CoreUtils.{inLock, inReadLock, inWriteLock}
 import kafka.utils.{KafkaScheduler, Logging}
+import kafka.zookeeper.ZooKeeperClient._
 import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.AsyncCallback.{Children2Callback, DataCallback, StatCallback}
 import org.apache.zookeeper.KeeperException.Code
@@ -40,7 +41,7 @@ import scala.collection.Seq
 import scala.collection.mutable.Set
 
 object ZooKeeperClient {
-  val AuthFailedRetryBackoffMs = 1000
+  val RetryBackoffMs = 1000
 }
 
 /**
@@ -389,7 +390,7 @@ class ZooKeeperClient(connectString: String,
           } catch {
             case e: Exception =>
               info("Error when recreating ZooKeeper, retrying after a short sleep", e)
-              Thread.sleep(1000)
+              Thread.sleep(RetryBackoffMs)
           }
         }
       }
@@ -454,7 +455,7 @@ class ZooKeeperClient(connectString: String,
               isFirstConnectionEstablished
             }
             if (initialized)
-              scheduleReinitialize("auth-failed", "Reinitializing due to auth failure.", ZooKeeperClient.AuthFailedRetryBackoffMs)
+              scheduleReinitialize("auth-failed", "Reinitializing due to auth failure.", RetryBackoffMs)
           } else if (state == KeeperState.Expired) {
             scheduleReinitialize("session-expired", "Session expired.", delayMs = 0L)
           }

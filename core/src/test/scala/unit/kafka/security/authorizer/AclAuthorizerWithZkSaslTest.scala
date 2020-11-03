@@ -111,7 +111,7 @@ class AclAuthorizerWithZkSaslTest extends ZooKeeperTestHarness with SaslSetup {
     zkClient(aclAuthorizer).currentZooKeeper.getTestable.injectSessionExpiration()
     zkClient(aclAuthorizer2).currentZooKeeper.getTestable.injectSessionExpiration()
     executor.schedule((() => TestableDigestLoginModule.reset()): Runnable,
-      ZooKeeperClient.AuthFailedRetryBackoffMs * 2, TimeUnit.MILLISECONDS)
+      ZooKeeperClient.RetryBackoffMs * 2, TimeUnit.MILLISECONDS)
   }
 
   private def verifyAclUpdate(): Unit = {
