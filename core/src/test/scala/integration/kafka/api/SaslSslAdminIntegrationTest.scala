@@ -360,8 +360,6 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
 
     // Test that we cannot create or delete ACLs when ALTER is denied.
     authorizationAdmin.addClusterAcl(DENY, ALTER)
-    // CLUSTER_ACTION shall also be forbid since the request goes to privilege listener
-    authorizationAdmin.addClusterAcl(DENY, CLUSTER_ACTION)
     testAclGet(expectAuth = true)
     testAclCreateGetDelete(expectAuth = false)
 

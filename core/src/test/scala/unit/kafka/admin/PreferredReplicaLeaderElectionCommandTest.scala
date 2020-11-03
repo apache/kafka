@@ -26,7 +26,6 @@ import scala.collection.Seq
 import kafka.common.AdminCommandFailedException
 import kafka.security.authorizer.AclAuthorizer
 import kafka.server.{KafkaConfig, KafkaServer}
-import kafka.utils.TestUtils.createBrokerConfig
 import kafka.utils.{Logging, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.TopicPartition
@@ -55,15 +54,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
 
   private def createTestTopicAndCluster(topicPartition: Map[TopicPartition, List[Int]],
                                         authorizer: Option[String] = None): Unit = {
-    val brokerConfigs = (0 until 3).map { node =>
-      val brokerConfig = createBrokerConfig(node, zkConnect, enableControlledShutdown = false)
-      brokerConfig.put("listener.security.protocol.map", "EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT")
-      brokerConfig.put("inter.broker.listener.name", "EXTERNAL")
-      brokerConfig.put("control.plane.listener.name", "CONTROLLER")
-      brokerConfig.put("listeners", "EXTERNAL://localhost:0,CONTROLLER://localhost:0,PLAINTEXT://localhost:0")
-      brokerConfig
-    }
-
+    val brokerConfigs = TestUtils.createBrokerConfigs(3, zkConnect, false)
     brokerConfigs.foreach(p => p.setProperty("auto.leader.rebalance.enable", "false"))
     authorizer match {
       case Some(className) =>

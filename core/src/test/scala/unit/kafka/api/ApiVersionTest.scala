@@ -123,7 +123,7 @@ class ApiVersionTest {
       apiVersion.id
     })
 
-    val uniqueIds: Predef.Set[Int] = allIds.toSet
+    val uniqueIds: Set[Int] = allIds.toSet
 
     assertEquals(allIds.size, uniqueIds.size)
   }
