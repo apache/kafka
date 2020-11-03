@@ -210,13 +210,8 @@ public interface Authorizer extends Configurable, Closeable {
                     case LITERAL:
                         if (binding.pattern().name().equals(ResourcePattern.WILDCARD_RESOURCE))
                             return AuthorizationResult.DENIED;
-                        if (binding.pattern().resourceType() == ResourceType.CLUSTER &&
-                            binding.pattern().name().equals(Resource.CLUSTER_NAME))
-                            return AuthorizationResult.DENIED;
                         break;
                     case PREFIXED:
-                        if (binding.pattern().name().isEmpty())
-                            return AuthorizationResult.DENIED;
                         denyPrefixes.add(binding.pattern().name());
                         break;
                 }

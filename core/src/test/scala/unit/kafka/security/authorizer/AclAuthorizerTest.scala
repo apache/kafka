@@ -38,7 +38,7 @@ import org.apache.kafka.common.network.ClientInformation
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
-import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourcePatternFilter, ResourceType}
+import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType}
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourcePattern.WILDCARD_RESOURCE
 import org.apache.kafka.common.resource.ResourceType._
@@ -1332,35 +1332,6 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     addAcls(authorizer, Set(denyAllUser), resource2)
     assertFalse("User2 from host1 now shouldn't have READ access to any topic",
       authorizeAny(authorizer, u2h1Context, READ, ResourceType.TOPIC))
-  }
-
-  @Test
-  def testAuthorizeAnyDenyOnClusterWillDominate(): Unit = {
-    testAuthorizeAnyDenyOnClusterWillDominate(aclAuthorizer)
-  }
-
-  @Test
-  def testAuthorizeAnyDenyOnClusterWillDominateInterfaceDefault(): Unit = {
-    testAuthorizeAnyDenyOnClusterWillDominate(interfaceDefaultAuthorizer)
-  }
-
-  private def testAuthorizeAnyDenyOnClusterWillDominate(authorizer: Authorizer): Unit = {
-    val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1")
-    val host1 = InetAddress.getByName("192.168.1.1")
-    val wildcard = new ResourcePattern(CLUSTER, ResourcePattern.WILDCARD_RESOURCE, LITERAL)
-    val literal = new ResourcePattern(CLUSTER, Resource.CLUSTER_NAME, LITERAL)
-
-    val u1h1Context = newRequestContext(user1, host1)
-    val allowAce = new AccessControlEntry(user1.toString, host1.getHostAddress, WRITE, ALLOW)
-    val denyAce = new AccessControlEntry(user1.toString, host1.getHostAddress, WRITE, DENY)
-
-    addAcls(authorizer, Set(allowAce), wildcard)
-    assertTrue("User1 from host1 should have WRITE access to the cluster",
-      authorizeAny(authorizer, u1h1Context, WRITE, ResourceType.CLUSTER))
-
-    addAcls(authorizer, Set(denyAce), literal)
-    assertFalse("User1 from host1 now should not have WRITE access to the cluster",
-      authorizeAny(authorizer, u1h1Context, WRITE, ResourceType.CLUSTER))
   }
 
   @Test

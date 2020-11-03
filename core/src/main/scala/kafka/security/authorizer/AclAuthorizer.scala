@@ -349,10 +349,7 @@ class AclAuthorizer extends Authorizer with Logging {
     for (rp <- denyResource) {
       // We assume that there should be only one cluster resource,
       // whose literal name is Resource.CLUSTER_NAME
-      if (rp.resourceType() == ResourceType.CLUSTER) {
-        return AuthorizationResult.DENIED
-      }
-      if (canDenyAnyAllow(rp)) {
+      if (canDenyAll(rp)) {
         return AuthorizationResult.DENIED
       }
     }
@@ -399,13 +396,8 @@ class AclAuthorizer extends Authorizer with Logging {
   }
 
 
-  private def canDenyAnyAllow(rp: ResourcePattern): Boolean = {
-    if (rp.patternType() == PatternType.LITERAL && rp.name() == ResourcePattern.WILDCARD_RESOURCE)
-      return true
-    if (rp.patternType() == PatternType.PREFIXED && rp.name().isEmpty)
-      return true
-    false
-  }
+  private def canDenyAll(rp: ResourcePattern): Boolean =
+    rp.patternType() == PatternType.LITERAL && rp.name() == ResourcePattern.WILDCARD_RESOURCE
 
   private def denyDominatePrefixAllow(prefixAllow: String,
                                       denyResource: Set[ResourcePattern]): Boolean = {

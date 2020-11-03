@@ -241,12 +241,7 @@ class AuthorizerWrapper(private[kafka] val baseAuthorizer: kafka.security.auth.A
     (binding.entry().operation() == op
       || binding.entry().operation() == AclOperation.ALL)
 
-  def canDenyAll(pattern: ResourcePattern): Boolean = {
-    pattern.patternType() match {
-      case PatternType.LITERAL => pattern.name().equals(ResourcePattern.WILDCARD_RESOURCE)
-      case PatternType.PREFIXED => pattern.name().isEmpty
-      case _ => false
-    }
-  }
+  def canDenyAll(pattern: ResourcePattern): Boolean =
+    pattern.patternType() == PatternType.LITERAL && pattern.name().equals(ResourcePattern.WILDCARD_RESOURCE)
 
 }
