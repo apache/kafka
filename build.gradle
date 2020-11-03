@@ -515,7 +515,7 @@ subprojects {
     // Kafka project in that case.
     List<String> inlineFrom
     if (project.name.equals('core'))
-      inlineFrom = ["-opt-inline-from:scala.**", "-opt-inline-from:kafka.**", "-opt-inline-from:org.apache.kafka.**"]
+      inlineFrom = ["-opt-inline-from:scala.util.Either.**", "-opt-inline-from:scala.Option.**", "-opt-inline-from:kafka.**", "-opt-inline-from:org.apache.kafka.**"]
     else
       inlineFrom = ["-opt-inline-from:org.apache.kafka.**"]
 
