@@ -20,7 +20,7 @@ package kafka.server
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.acl.AclOperation.{CLUSTER_ACTION, DESCRIBE}
 import org.apache.kafka.common.errors.ApiException
 import org.apache.kafka.common.internals.FatalExitError
@@ -53,7 +53,8 @@ class ControllerApis(val requestChannel: RequestChannel,
                      val supportedFeatures: Map[String, VersionRange],
                      val controller: Controller,
                      val config: KafkaConfig,
-                     val metaProperties: MetaProperties) extends ApiRequestHandler with Logging {
+                     val metaProperties: MetaProperties,
+                     val controllerNodes: Seq[Node]) extends ApiRequestHandler with Logging {
 
   val apisUtils = new ApisUtils(requestChannel, authorizer, quotas, time)
 
@@ -164,7 +165,7 @@ class ControllerApis(val requestChannel: RequestChannel,
     def createResponseCallback(requestThrottleMs: Int): MetadataResponse = {
       val metadataResponseData = new MetadataResponseData()
       metadataResponseData.setThrottleTimeMs(requestThrottleMs)
-      config.controllerConnectNodes.foreach {
+      controllerNodes.foreach {
         case node => metadataResponseData.brokers().add(
           new MetadataResponseBroker().setHost(node.host()).
             setNodeId(node.id()).setPort(node.port()).setRack(node.rack()))
