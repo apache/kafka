@@ -25,6 +25,8 @@ import scala.jdk.CollectionConverters._
 
 abstract class AbstractApiVersionsRequestTest extends BaseRequestTest {
 
+  private val internalApiKeys = Set(ApiKeys.ENVELOPE)
+
   def sendUnsupportedApiVersionRequest(request: ApiVersionsRequest): ApiVersionsResponse = {
     val overrideHeader = nextRequestHeader(ApiKeys.API_VERSIONS, Short.MaxValue)
     val socket = connect(anySocketServer)
@@ -35,13 +37,15 @@ abstract class AbstractApiVersionsRequestTest extends BaseRequestTest {
   }
 
   def validateApiVersionsResponse(apiVersionsResponse: ApiVersionsResponse): Unit = {
-    assertEquals("API keys in ApiVersionsResponse must match API keys supported by broker.", ApiKeys.enabledApis().size, apiVersionsResponse.data.apiKeys().size())
+    assertEquals("API keys in ApiVersionsResponse must match API keys supported by broker.", ApiKeys.enabledApis().size - internalApiKeys.size, apiVersionsResponse.data.apiKeys().size())
     for (expectedApiVersion: ApiVersionsResponseKey <- ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.apiKeys().asScala) {
-      val actualApiVersion = apiVersionsResponse.apiVersion(expectedApiVersion.apiKey)
-      assertNotNull(s"API key ${actualApiVersion.apiKey} is supported by broker, but not received in ApiVersionsResponse.", actualApiVersion)
-      assertEquals("API key must be supported by the broker.", expectedApiVersion.apiKey, actualApiVersion.apiKey)
-      assertEquals(s"Received unexpected min version for API key ${actualApiVersion.apiKey}.", expectedApiVersion.minVersion, actualApiVersion.minVersion)
-      assertEquals(s"Received unexpected max version for API key ${actualApiVersion.apiKey}.", expectedApiVersion.maxVersion, actualApiVersion.maxVersion)
+      if (!internalApiKeys.contains(ApiKeys.forId(expectedApiVersion.apiKey()))) {
+        val actualApiVersion = apiVersionsResponse.apiVersion(expectedApiVersion.apiKey)
+        assertNotNull(s"API key ${actualApiVersion.apiKey} is supported by broker, but not received in ApiVersionsResponse.", actualApiVersion)
+        assertEquals("API key must be supported by the broker.", expectedApiVersion.apiKey, actualApiVersion.apiKey)
+        assertEquals(s"Received unexpected min version for API key ${actualApiVersion.apiKey}.", expectedApiVersion.minVersion, actualApiVersion.minVersion)
+        assertEquals(s"Received unexpected max version for API key ${actualApiVersion.apiKey}.", expectedApiVersion.maxVersion, actualApiVersion.maxVersion)
+      }
     }
   }
 }
