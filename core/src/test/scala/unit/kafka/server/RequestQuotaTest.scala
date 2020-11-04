@@ -80,7 +80,6 @@ class RequestQuotaTest extends BaseRequestTest {
     properties.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
     properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[RequestQuotaTest.TestAuthorizer].getName)
     properties.put(KafkaConfig.PrincipalBuilderClassProp, classOf[RequestQuotaTest.TestPrincipalBuilder].getName)
-    properties.put(KafkaConfig.EnableMetadataQuorumProp, true.toString)
   }
 
   @Before
