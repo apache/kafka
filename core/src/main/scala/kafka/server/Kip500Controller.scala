@@ -162,8 +162,13 @@ class Kip500Controller(val config: KafkaConfig,
 
       tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
       credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
-      socketServer = new SocketServer(config, metrics, time, credentialProvider, false,
-        Some(new LogContext(s"[SocketServer controllerId=${config.controllerId}] ")))
+      socketServer = new SocketServer(config,
+        metrics,
+        time,
+        credentialProvider,
+        Some(config.controllerId),
+        Some(new LogContext(s"[SocketServer controllerId=${config.controllerId}] ")),
+        false)
       socketServer.startup(startProcessingRequests = false)
 
       val configDefs = Map(ConfigResource.Type.BROKER -> KafkaConfig.configDef,
