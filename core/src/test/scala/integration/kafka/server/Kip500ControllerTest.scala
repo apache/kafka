@@ -16,14 +16,37 @@
  */
 package kafka.server
 
-import kafka.testkit.KafkaClusterTestKit
-import org.junit.Test
+import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
+import org.apache.kafka.clients.admin.Admin
+import org.junit.rules.Timeout
+import org.junit.{Rule, Test}
 
 class Kip500ControllerTest {
+  @Rule
+  def globalTimeout = Timeout.millis(120000)
+
   @Test
   def testCreateControllerAndClose(): Unit = {
-    val cluster = new KafkaClusterTestKit.Builder().setNumControllers(1).build()
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().setNumControllerNodes(1).build()).build()
     try {
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testCreateControllersAndSendMetadataRequest(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().setNumControllerNodes(3).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      val adminClient = Admin.create(cluster.clientProperties())
+      try {
+      } finally  {
+        adminClient.close()
+      }
     } finally {
       cluster.close()
     }

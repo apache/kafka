@@ -18,6 +18,7 @@
 package kafka.server
 
 import java.util
+import java.util.concurrent.CompletableFuture
 
 import kafka.metrics.{KafkaMetricsReporter, KafkaYammerMetrics}
 import kafka.utils.{Logging, Mx4jLoader}
@@ -42,13 +43,16 @@ object KafkaServerManager extends Logging {
       if (roles.asScala.distinct.length != roles.size()) {
         throw new RuntimeException(s"Duplicate role names found in roles config ${roles}")
       }
+      if (config.controllerConnect.isEmpty) {
+        throw new RuntimeException(s"You must specify a value for ${KafkaConfig.ControllerConnectProp}")
+      }
       roles.asScala.foreach(role => role match {
         case "broker" =>
           kip500Broker = Some(new Kip500Broker(config, time,
             threadNamePrefix, kafkaMetricsReporters))
         case "controller" =>
           controller = Some(new Kip500Controller(config, time, threadNamePrefix,
-            kafkaMetricsReporters))
+            kafkaMetricsReporters, CompletableFuture.completedFuture(config.controllerConnect)))
         case _ =>
           throw new RuntimeException("Unknown process role " + role)
       })

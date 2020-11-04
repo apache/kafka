@@ -69,7 +69,8 @@ private[kafka] case class ControllerAuthorizerInfo(clusterResource: ClusterResou
 class Kip500Controller(val config: KafkaConfig,
                        val time: Time, 
                        val threadNamePrefix: Option[String],
-                       val kafkaMetricsReporters: Seq[KafkaMetricsReporter])
+                       val kafkaMetricsReporters: Seq[KafkaMetricsReporter],
+                       val controllerConnectFuture: CompletableFuture[String])
                           extends Logging with KafkaMetricsGroup {
   import Kip500Controller._
 
@@ -85,6 +86,7 @@ class Kip500Controller(val config: KafkaConfig,
   var tokenCache: DelegationTokenCache = null
   var credentialProvider: CredentialProvider = null
   var socketServer: SocketServer = null
+  val socketServerFirstBoundPortFuture = new CompletableFuture[Integer]()
   var controller: Controller = null
   val supportedFeatures: Map[String, VersionRange] = Map()
   var quotaManagers: QuotaManagers = null
@@ -150,12 +152,8 @@ class Kip500Controller(val config: KafkaConfig,
       metrics = new Metrics(metricConfig, reporters, time, true, metricsContext)
       AppInfoParser.registerAppInfo(KafkaBroker.metricsPrefix,
         config.controllerId.toString, metrics, time.milliseconds())
-      if (kafkaMetricsReporters == null) {
-        KafkaBroker.notifyClusterListeners(clusterId, metrics.reporters.asScala)
-      } else {
-        KafkaBroker.notifyClusterListeners(clusterId,
-          kafkaMetricsReporters ++ metrics.reporters.asScala)
-      }
+      KafkaBroker.notifyClusterListeners(clusterId,
+        kafkaMetricsReporters ++ metrics.reporters.asScala)
 
       logManager = new LocalLogManager(new LogContext(),
         config.controllerId, config.metadataLogDir, "", 10)
@@ -170,14 +168,12 @@ class Kip500Controller(val config: KafkaConfig,
         Some(new LogContext(s"[SocketServer controllerId=${config.controllerId}] ")),
         false)
       socketServer.startup(false, None, config.controllerListeners)
+      socketServerFirstBoundPortFuture.complete(new Integer(socketServer.boundPort(
+        config.controllerListeners.head.listenerName)))
 
       val configDefs = Map(ConfigResource.Type.BROKER -> KafkaConfig.configDef,
         ConfigResource.Type.TOPIC -> LogConfig.configDefCopy).toMap.asJava
-      val threadNamePrefixAsString = if (threadNamePrefix.isEmpty) {
-        ""
-      } else {
-        threadNamePrefix.get
-      }
+      val threadNamePrefixAsString = threadNamePrefix.getOrElse("")
       controller = new QuorumController.Builder(config.controllerId).
         setTime(time).
         setConfigDefs(configDefs).
@@ -185,6 +181,8 @@ class Kip500Controller(val config: KafkaConfig,
         setLogManager(logManager).
         build()
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
+      val controllerNodes =
+        KafkaConfig.controllerConnectStringsToNodes(controllerConnectFuture.get())
       controllerApis = new ControllerApis(socketServer.dataPlaneRequestChannel,
         authorizer,
         quotaManagers,
@@ -193,7 +191,7 @@ class Kip500Controller(val config: KafkaConfig,
         controller,
         config,
         metaProperties,
-        Seq.empty)
+        controllerNodes.toSeq)
       controllerApisHandlerPool = new KafkaRequestHandlerPool(config.controllerId,
         socketServer.dataPlaneRequestChannel,
         controllerApis,
@@ -227,6 +225,7 @@ class Kip500Controller(val config: KafkaConfig,
         CoreUtils.swallow(quotaManagers.shutdown(), this)
       if (controller != null)
         controller.close()
+      socketServerFirstBoundPortFuture.completeExceptionally(new RuntimeException("shutting down"))
     } catch {
       case e: Throwable =>
         fatal("Fatal error during controller shutdown.", e)

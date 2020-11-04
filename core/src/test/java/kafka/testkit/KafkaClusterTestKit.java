@@ -17,33 +17,82 @@
 
 package kafka.testkit;
 
+import kafka.metrics.KafkaMetricsReporter;
 import kafka.server.KafkaConfig;
 
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.PrintStream;
+import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Properties;
+import java.util.TreeMap;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import kafka.server.KafkaConfig$;
 import kafka.server.Kip500Controller;
+import kafka.tools.StorageTool;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.test.TestUtils;
+import scala.collection.JavaConverters;
 import scala.compat.java8.OptionConverters;
 
+@SuppressWarnings("deprecation") // Needed for Scala 2.12 compatibility
 public class KafkaClusterTestKit implements AutoCloseable {
+    /**
+     * This class manages a future which is completed with the proper value for
+     * controller.connect once the randomly assigned ports for all the controllers are
+     * known.
+     */
+    private static class ControllerConnectFutureManager implements AutoCloseable {
+        private final int expectedControllers;
+        private final CompletableFuture<String> future = new CompletableFuture<>();
+        private final Map<Integer, Integer> controllerPorts = new TreeMap<>();
+
+        ControllerConnectFutureManager(int expectedControllers) {
+            this.expectedControllers = expectedControllers;
+        }
+
+        synchronized void registerPort(int nodeId, int port) {
+            controllerPorts.put(nodeId, port);
+            if (controllerPorts.size() >= expectedControllers) {
+                future.complete(controllerPorts.entrySet().stream().
+                    map(e -> String.format("%d@localhost:%d", e.getKey(), e.getValue())).
+                    collect(Collectors.joining(",")));
+            }
+        }
+
+        void fail(Throwable e) {
+            future.completeExceptionally(e);
+        }
+
+        @Override
+        public void close() {
+            future.cancel(true);
+        }
+    }
+
     public static class Builder {
-        private int numControllers = 0;
+        private final TestKitNodes nodes;
         private Map<String, String> configProps = new HashMap<>();
 
-        public Builder setNumControllers(int numControllers) {
-            this.numControllers = numControllers;
-            return this;
+        public Builder(TestKitNodes nodes) {
+            this.nodes = nodes;
         }
 
         public Builder setConfigProp(String key, String value) {
@@ -51,30 +100,49 @@ public class KafkaClusterTestKit implements AutoCloseable {
             return this;
         }
 
-        public KafkaClusterTestKit build() throws InterruptedException {
-            if (numControllers == 0) {
-                throw new RuntimeException("Currently, we only support clusters " +
-                        "where there is at least one kip-500 controller.");
-            } else {
-                if (!configProps.containsKey(KafkaConfig$.MODULE$.ProcessRolesProp())) {
-                    configProps.put(KafkaConfig$.MODULE$.ProcessRolesProp(), "controller");
-                }
-            }
-
+        public KafkaClusterTestKit build() throws Exception {
             Map<Integer, Kip500Controller> controllers = new HashMap<>();
             ExecutorService executorService = null;
+            ControllerConnectFutureManager connectFutureManager =
+                new ControllerConnectFutureManager(nodes.controllerNodes().size());
+            File baseDirectory = null;
             try {
-                executorService = Executors.newFixedThreadPool(numControllers,
+                baseDirectory = TestUtils.tempDirectory();
+                executorService = Executors.newFixedThreadPool(4,
                     ThreadUtils.createThreadFactory("KafkaClusterTestKit%d", false));
                 Time time = Time.SYSTEM;
-                for (int i = 0; i < numControllers; i++) {
-                    Map<String, String> controllerProps = new HashMap<>(configProps);
-                    controllerProps.put(KafkaConfig$.MODULE$.ControllerIdProp(),
-                        Integer.toString(i));
-                    KafkaConfig config = new KafkaConfig(controllerProps, false,
+                for (ControllerNode node : nodes.controllerNodes().values()) {
+                    Map<String, String> props = new HashMap<>(configProps);
+                    props.put(KafkaConfig$.MODULE$.ProcessRolesProp(), "controller");
+                    props.put(KafkaConfig$.MODULE$.ControllerIdProp(),
+                        Integer.toString(node.id()));
+                    props.put(KafkaConfig$.MODULE$.MetadataLogDirProp(),
+                        Paths.get(baseDirectory.getAbsolutePath(),
+                            node.logDirectories().get(0)).toAbsolutePath().toString());
+                    props.put(KafkaConfig$.MODULE$.ListenerSecurityProtocolMapProp(),
+                        "CONTROLLER:PLAINTEXT");
+                    props.put(KafkaConfig$.MODULE$.ListenersProp(),
+                        "CONTROLLER://localhost:0");
+                    props.put(KafkaConfig$.MODULE$.ControllerListenerNamesProp(),
+                        "CONTROLLER");
+                    // Note: we can't accurately set controller.connect yet, since we don't
+                    // yet know what ports each controller will pick.  Set it to an
+                    // empty string for now as a placeholder.
+                    props.put(KafkaConfig$.MODULE$.ControllerConnectProp(), "");
+                    KafkaConfig config = new KafkaConfig(props, false,
                         OptionConverters.toScala(Optional.empty()));
-                    controllers.put(i, new Kip500Controller(config, time,
-                        OptionConverters.toScala(Optional.of(String.format("controller%d_", i))), null));
+                    Kip500Controller controller = new Kip500Controller(config, time,
+                        OptionConverters.toScala(Optional.of(String.format("controller%d_", node.id()))),
+                        JavaConverters.asScala(new ArrayList<KafkaMetricsReporter>()).toSeq(),
+                        connectFutureManager.future);
+                    controllers.put(node.id(), controller);
+                    controller.socketServerFirstBoundPortFuture().whenComplete((port, e) -> {
+                        if (e != null) {
+                            connectFutureManager.fail(e);
+                        } else {
+                            connectFutureManager.registerPort(node.id(), port);
+                        }
+                    });
                 }
             } catch (Exception e) {
                 if (executorService != null) {
@@ -84,19 +152,70 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 for (Kip500Controller controller : controllers.values()) {
                     controller.shutdown();
                 }
+                connectFutureManager.close();
+                if (baseDirectory != null) {
+                    Utils.delete(baseDirectory);
+                }
                 throw e;
             }
-            return new KafkaClusterTestKit(executorService, controllers);
+            return new KafkaClusterTestKit(executorService, nodes, controllers,
+                connectFutureManager, baseDirectory);
         }
     }
 
     private final ExecutorService executorService;
+    private final TestKitNodes nodes;
     private final Map<Integer, Kip500Controller> controllers;
+    private final ControllerConnectFutureManager controllerConnectFutureManager;
+    private final File baseDirectory;
 
     private KafkaClusterTestKit(ExecutorService executorService,
-                                Map<Integer, Kip500Controller> controllers) {
+                                TestKitNodes nodes,
+                                Map<Integer, Kip500Controller> controllers,
+                                ControllerConnectFutureManager controllerConnectFutureManager,
+                                File baseDirectory) {
         this.executorService = executorService;
+        this.nodes = nodes;
         this.controllers = controllers;
+        this.controllerConnectFutureManager = controllerConnectFutureManager;
+        this.baseDirectory = baseDirectory;
+    }
+
+    public void format() throws Exception {
+        List<Future<?>> futures = new ArrayList<>();
+        try {
+            for (Map.Entry<Integer, Kip500Controller> entry : controllers.entrySet()) {
+                int nodeId = entry.getKey();
+                Kip500Controller controller = entry.getValue();
+                futures.add(executorService.submit(() -> {
+                    try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
+                        try (PrintStream out = new PrintStream(stream)) {
+                            StorageTool.formatCommand(out,
+                                JavaConverters.asScala(Collections.singletonList(
+                                    controller.config().metadataLogDir())).toSeq(),
+                                OptionConverters.toScala(Optional.of(
+                                    nodes.controllerNodes().get(nodeId).incarnationId().toString())),
+                                nodes.clusterId().toString(),
+                                false);
+                        } finally {
+                            for (String line : stream.toString().split(String.format("%n"))) {
+                                controller.info(() -> line);
+                            }
+                        }
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                }));
+            }
+            for (Future<?> future: futures) {
+                future.get();
+            }
+        } catch (Exception e) {
+            for (Future<?> future: futures) {
+                future.cancel(true);
+            }
+            throw e;
+        }
     }
 
     public void startup() throws ExecutionException, InterruptedException {
@@ -118,10 +237,32 @@ public class KafkaClusterTestKit implements AutoCloseable {
         }
     }
 
+    public Properties clientProperties() throws ExecutionException, InterruptedException {
+        Properties properties = new Properties();
+        if (!controllers.isEmpty()) {
+            List<Node> controllerNodes = JavaConverters.asJava(
+                KafkaConfig$.MODULE$.controllerConnectStringsToNodes(
+                    controllerConnectFutureManager.future.get()));
+            StringBuilder bld = new StringBuilder();
+            String prefix = "";
+            for (Node node : controllerNodes) {
+                bld.append(prefix).append(node.id()).append('@');
+                bld.append(node.host()).append(":").append(node.port());
+                prefix = ",";
+            }
+            properties.setProperty(KafkaConfig$.MODULE$.ControllerConnectProp(), bld.toString());
+            properties.setProperty("bootstrap.servers",
+                controllerNodes.stream().map(n -> n.host() + ":" + n.port()).
+                    collect(Collectors.joining(",")));
+        }
+        return properties;
+    }
+
     @Override
-    public void close() throws ExecutionException, InterruptedException {
+    public void close() throws Exception {
         List<Future<?>> futures = new ArrayList<>();
         try {
+            controllerConnectFutureManager.close();
             for (Kip500Controller controller : controllers.values()) {
                 futures.add(executorService.submit(() -> {
                     controller.shutdown();
@@ -130,6 +271,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             for (Future<?> future: futures) {
                 future.get();
             }
+            Utils.delete(baseDirectory);
         } catch (Exception e) {
             for (Future<?> future: futures) {
                 future.cancel(true);
