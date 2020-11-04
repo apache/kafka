@@ -495,7 +495,7 @@ class DefaultMessageFormatter extends MessageFormatter {
     headersDeserializer = getPropertyIfExists(configs, "headers.deserializer", getDeserializerProperty(false))
   }
 
-  def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
+  override def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
 
     def writeSeparator(columnSeparator: Boolean): Unit = {
       if (columnSeparator)
@@ -611,7 +611,7 @@ class LoggingMessageFormatter extends MessageFormatter with LazyLogging {
 
   override def configure(configs: Map[String, _]): Unit = defaultWriter.configure(configs)
 
-  def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
+  override def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
     import consumerRecord._
     defaultWriter.writeTo(consumerRecord, output)
     logger.info({if (timestampType != TimestampType.NO_TIMESTAMP_TYPE) s"$timestampType:$timestamp, " else ""} +
