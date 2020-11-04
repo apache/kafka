@@ -316,17 +316,17 @@ class AclAuthorizer extends Authorizer with Logging {
   // TODO: 1. Discuss how to log audit message
   // TODO: 2. Discuss if we need a trie to optimize（mainly for the O(n^2) loop but I think
   //  in most of the cases it would be O(1) because denyDominatePrefixAllow should be rare
-  override def authorizeAny(requestContext: AuthorizableRequestContext,
-                            op: AclOperation,
-                            resourceType: ResourceType): AuthorizationResult = {
+  override def authorizeByResourceType(requestContext: AuthorizableRequestContext,
+                                       op: AclOperation,
+                                       resourceType: ResourceType): AuthorizationResult = {
     if (resourceType eq ResourceType.ANY)
-      throw new IllegalArgumentException("Must specify a non-filter resource type for authorizeAny")
+      throw new IllegalArgumentException("Must specify a non-filter resource type for authorizeByResourceType")
 
     if (resourceType eq ResourceType.UNKNOWN)
       throw new IllegalArgumentException("Unknown resource type")
 
     if (op eq AclOperation.ANY)
-      throw new IllegalArgumentException("Must specify a non-filter operation type for authorizeAny")
+      throw new IllegalArgumentException("Must specify a non-filter operation type for authorizeByResourceType")
 
     if (op eq AclOperation.UNKNOWN)
       throw new IllegalArgumentException("Unknown operation type")

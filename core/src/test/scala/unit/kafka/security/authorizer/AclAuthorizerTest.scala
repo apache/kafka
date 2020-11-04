@@ -1020,26 +1020,26 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
 
     for (_ <- 1 to 10) {
       assertFalse("User1 from host1 should not have READ access to any topic when no ACL exists",
-        authorizeAny(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+        authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
 
       addAcls(authorizer, Set(allowRead), resource1)
       assertTrue("User1 from host1 now should have READ access to at least one topic",
-        authorizeAny(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+        authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
 
       for (_ <- 1 to 10) {
         addAcls(authorizer, Set(denyRead), resource1)
         assertFalse("User1 from host1 now should not have READ access to any topic",
-          authorizeAny(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+          authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
 
         removeAcls(aclAuthorizer, Set(denyRead), resource1)
         addAcls(authorizer, Set(allowRead), resource1)
         assertTrue("User1 from host1 now should have READ access to at least one topic",
-          authorizeAny(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+          authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
       }
 
       removeAcls(authorizer, Set(allowRead), resource1)
       assertFalse("User1 from host1 now should not have READ access to any topic",
-        authorizeAny(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+        authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
     }
   }
 
@@ -1078,15 +1078,15 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     val u1h2Context = newRequestContext(user1, host2)
 
     assertFalse("User1 from host1 should not have READ access to any topic",
-      authorizeAny(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
     assertFalse("User1 from host2 should not have READ access to any consumer group",
-      authorizeAny(authorizer, u1h1Context, READ, ResourceType.GROUP))
+      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.GROUP))
     assertFalse("User1 from host2 should not have READ access to any topic",
-      authorizeAny(authorizer, u1h1Context, READ, ResourceType.TRANSACTIONAL_ID))
+      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TRANSACTIONAL_ID))
     assertFalse("User1 from host2 should not have READ access to any topic",
-      authorizeAny(authorizer, u1h1Context, READ, ResourceType.CLUSTER))
+      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.CLUSTER))
     assertTrue("User1 from host2 should have READ access to at least one topic",
-      authorizeAny(authorizer, u1h2Context, READ, ResourceType.TOPIC))
+      authorizeByResourceType(authorizer, u1h2Context, READ, ResourceType.TOPIC))
   }
 
   @Test
@@ -1110,11 +1110,11 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
 
     addAcls(authorizer, Set(acl1), resource1)
     assertTrue("User1 from host1 should have WRITE access to at least one topic",
-      authorizeAny(authorizer, u1h1Context, WRITE, ResourceType.TOPIC))
+      authorizeByResourceType(authorizer, u1h1Context, WRITE, ResourceType.TOPIC))
 
     addAcls(authorizer, Set(acl2), resource1)
     assertFalse("User1 from host1 should not have WRITE access to any topic",
-      authorizeAny(authorizer, u1h1Context, WRITE, ResourceType.TOPIC))
+      authorizeByResourceType(authorizer, u1h1Context, WRITE, ResourceType.TOPIC))
   }
 
   @Test
@@ -1140,19 +1140,19 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
 
     addAcls(aclAuthorizer, Set(allowAce), prefixed)
     assertTrue("User1 from host1 should have WRITE access to at least one group",
-      authorizeAny(aclAuthorizer, u1h1Context, WRITE, ResourceType.GROUP))
+      authorizeByResourceType(aclAuthorizer, u1h1Context, WRITE, ResourceType.GROUP))
 
     addAcls(aclAuthorizer, Set(denyAce), wildcard)
     assertFalse("User1 from host1 now should not have WRITE access to any group",
-      authorizeAny(aclAuthorizer, u1h1Context, WRITE, ResourceType.GROUP))
+      authorizeByResourceType(aclAuthorizer, u1h1Context, WRITE, ResourceType.GROUP))
 
     addAcls(aclAuthorizer, Set(allowAce), wildcard)
     assertFalse("User1 from host1 still should not have WRITE access to any group",
-      authorizeAny(aclAuthorizer, u1h1Context, WRITE, ResourceType.GROUP))
+      authorizeByResourceType(aclAuthorizer, u1h1Context, WRITE, ResourceType.GROUP))
 
     addAcls(aclAuthorizer, Set(allowAce), literal)
     assertFalse("User1 from host1 still should not have WRITE access to any group",
-      authorizeAny(aclAuthorizer, u1h1Context, WRITE, ResourceType.GROUP))
+      authorizeByResourceType(aclAuthorizer, u1h1Context, WRITE, ResourceType.GROUP))
   }
 
   @Test
@@ -1180,23 +1180,23 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
 
     addAcls(authorizer, Set(allowAce), abcde)
     assertTrue("User1 from host1 should have READ access to at least one group",
-      authorizeAny(authorizer, u1h1Context, READ, ResourceType.GROUP))
+      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.GROUP))
 
     addAcls(authorizer, Set(denyAce), abcd)
     assertFalse("User1 from host1 now should not have READ access to any group",
-      authorizeAny(authorizer, u1h1Context, READ, ResourceType.GROUP))
+      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.GROUP))
 
     addAcls(authorizer, Set(allowAce), abc)
     assertTrue("User1 from host1 now should have READ access to any group",
-      authorizeAny(authorizer, u1h1Context, READ, ResourceType.GROUP))
+      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.GROUP))
 
     addAcls(authorizer, Set(denyAce), a)
     assertFalse("User1 from host1 now should not have READ access to any group",
-      authorizeAny(authorizer, u1h1Context, READ, ResourceType.GROUP))
+      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.GROUP))
 
     addAcls(authorizer, Set(allowAce), ab)
     assertFalse("User1 from host1 still should not have READ access to any group",
-      authorizeAny(authorizer, u1h1Context, READ, ResourceType.GROUP))
+      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.GROUP))
   }
 
 
@@ -1223,15 +1223,15 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     val u1h1Context = newRequestContext(user1, host1)
 
     assertFalse("User1 from host1 should not have READ access to any topic when no ACL exists",
-      authorizeAny(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
 
     addAcls(authorizer, Set(denyWrite, allowAll), resource1)
     assertTrue("User1 from host1 now should have READ access to at least one topic",
-      authorizeAny(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
 
     addAcls(authorizer, Set(denyAll), resource1)
     assertFalse("User1 from host1 now should not have READ access to any topic",
-      authorizeAny(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
   }
 
   @Test
@@ -1259,29 +1259,29 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     val u1h2Context = newRequestContext(user1, host2)
 
     assertFalse("User1 from host1 should not have READ access to any topic when no ACL exists",
-      authorizeAny(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
 
     addAcls(authorizer, Set(allowHost1), resource1)
     assertTrue("User1 from host1 should now have READ access to at least one topic",
-      authorizeAny(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
 
     addAcls(authorizer, Set(denyAllHost), resource1)
     assertFalse("User1 from host1 now shouldn't have READ access to any topic",
-      authorizeAny(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
 
     addAcls(authorizer, Set(denyHost1), resource2)
     assertFalse("User1 from host1 still should not have READ access to any topic",
-      authorizeAny(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
     assertFalse("User1 from host2 should not have READ access to any topic",
-      authorizeAny(authorizer, u1h2Context, READ, ResourceType.TOPIC))
+      authorizeByResourceType(authorizer, u1h2Context, READ, ResourceType.TOPIC))
 
     addAcls(authorizer, Set(allowAllHost), resource2)
     assertTrue("User1 from host2 should now have READ access to at least one topic",
-      authorizeAny(authorizer, u1h2Context, READ, ResourceType.TOPIC))
+      authorizeByResourceType(authorizer, u1h2Context, READ, ResourceType.TOPIC))
 
     addAcls(authorizer, Set(denyAllHost), resource2)
     assertFalse("User1 from host2 now shouldn't have READ access to any topic",
-      authorizeAny(authorizer, u1h2Context, READ, ResourceType.TOPIC))
+      authorizeByResourceType(authorizer, u1h2Context, READ, ResourceType.TOPIC))
   }
 
   @Test
@@ -1309,29 +1309,29 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     val u2h1Context = newRequestContext(user2, host1)
 
     assertFalse("User1 from host1 should not have READ access to any topic when no ACL exists",
-      authorizeAny(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
 
     addAcls(authorizer, Set(allowUser1), resource1)
     assertTrue("User1 from host1 should now have READ access to at least one topic",
-      authorizeAny(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
 
     addAcls(authorizer, Set(denyAllUser), resource1)
     assertFalse("User1 from host1 now shouldn't have READ access to any topic",
-      authorizeAny(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
 
     addAcls(authorizer, Set(denyUser1), resource2)
     assertFalse("User1 from host1 still should not have READ access to any topic",
-      authorizeAny(authorizer, u1h1Context, READ, ResourceType.TOPIC))
+      authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
     assertFalse("User2 from host1 should not have READ access to any topic",
-      authorizeAny(authorizer, u2h1Context, READ, ResourceType.TOPIC))
+      authorizeByResourceType(authorizer, u2h1Context, READ, ResourceType.TOPIC))
 
     addAcls(authorizer, Set(allowAllUser), resource2)
     assertTrue("User2 from host1 should now have READ access to at least one topic",
-      authorizeAny(authorizer, u2h1Context, READ, ResourceType.TOPIC))
+      authorizeByResourceType(authorizer, u2h1Context, READ, ResourceType.TOPIC))
 
     addAcls(authorizer, Set(denyAllUser), resource2)
     assertFalse("User2 from host1 now shouldn't have READ access to any topic",
-      authorizeAny(authorizer, u2h1Context, READ, ResourceType.TOPIC))
+      authorizeByResourceType(authorizer, u2h1Context, READ, ResourceType.TOPIC))
   }
 
   @Test
@@ -1354,10 +1354,10 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
       testAuthorizer.configure(cfg.originals)
       assertTrue("If allow.everyone.if.no.acl.found = true, " +
         "caller should have read access to at least one topic",
-        authorizeAny(testAuthorizer, requestContext, READ, resource.resourceType()))
+        authorizeByResourceType(testAuthorizer, requestContext, READ, resource.resourceType()))
       assertTrue("If allow.everyone.if.no.acl.found = true, " +
         "caller should have write access to at least one topic",
-        authorizeAny(testAuthorizer, requestContext, WRITE, resource.resourceType()))
+        authorizeByResourceType(testAuthorizer, requestContext, WRITE, resource.resourceType()))
     } finally {
       testAuthorizer.close()
     }
@@ -1420,8 +1420,8 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     authorizer.authorize(requestContext, List(action).asJava).asScala.head == AuthorizationResult.ALLOWED
   }
 
-  private def authorizeAny(authorizer: Authorizer, requestContext: RequestContext, operation: AclOperation, resourceType: ResourceType) : Boolean = {
-    authorizer.authorizeAny(requestContext, operation, resourceType) == AuthorizationResult.ALLOWED
+  private def authorizeByResourceType(authorizer: Authorizer, requestContext: RequestContext, operation: AclOperation, resourceType: ResourceType) : Boolean = {
+    authorizer.authorizeByResourceType(requestContext, operation, resourceType) == AuthorizationResult.ALLOWED
   }
 
   private def addAcls(authorizer: Authorizer, aces: Set[AccessControlEntry], resourcePattern: ResourcePattern): Unit = {

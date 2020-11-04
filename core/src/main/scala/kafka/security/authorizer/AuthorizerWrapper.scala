@@ -180,17 +180,17 @@ class AuthorizerWrapper(private[kafka] val baseAuthorizer: kafka.security.auth.A
     baseAuthorizer.close()
   }
 
-  override def authorizeAny(requestContext: AuthorizableRequestContext,
-                            op: AclOperation,
-                            resourceType: ResourceType): AuthorizationResult = {
+  override def authorizeByResourceType(requestContext: AuthorizableRequestContext,
+                                       op: AclOperation,
+                                       resourceType: ResourceType): AuthorizationResult = {
     if (resourceType == ResourceType.ANY)
-      throw new IllegalArgumentException("Must specify a non-filter resource type for authorizeAny")
+      throw new IllegalArgumentException("Must specify a non-filter resource type for authorizeByResourceType")
 
     if (resourceType == ResourceType.UNKNOWN)
       throw new IllegalArgumentException("Unknown resource type")
 
     if (op == AclOperation.ANY)
-      throw new IllegalArgumentException("Must specify a non-filter operation type for authorizeAny")
+      throw new IllegalArgumentException("Must specify a non-filter operation type for authorizeByResourceType")
 
     if (op == AclOperation.UNKNOWN)
       throw new IllegalArgumentException("Unknown operation type")
@@ -198,7 +198,7 @@ class AuthorizerWrapper(private[kafka] val baseAuthorizer: kafka.security.auth.A
     if (shouldAllowEveryoneIfNoAclIsFound && !denyAllResource(requestContext, op, resourceType)) {
       AuthorizationResult.ALLOWED
     } else {
-      super.authorizeAny(requestContext, op, resourceType)
+      super.authorizeByResourceType(requestContext, op, resourceType)
     }
   }
 

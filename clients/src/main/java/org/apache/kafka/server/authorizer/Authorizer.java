@@ -162,10 +162,10 @@ public interface Authorizer extends Configurable, Closeable {
      *                       given ACL operation on at least one resource of the given type.
      *                       Return {@link AuthorizationResult#DENIED} otherwise.
      */
-    default AuthorizationResult authorizeAny(AuthorizableRequestContext requestContext, AclOperation op, ResourceType resourceType) {
+    default AuthorizationResult authorizeByResourceType(AuthorizableRequestContext requestContext, AclOperation op, ResourceType resourceType) {
         if (resourceType == ResourceType.ANY) {
             throw new IllegalArgumentException(
-                "Must specify a non-filter resource type for authorizeAny");
+                "Must specify a non-filter resource type for authorizeByResourceType");
         }
 
         if (resourceType == ResourceType.UNKNOWN) {
@@ -175,7 +175,7 @@ public interface Authorizer extends Configurable, Closeable {
 
         if (op == AclOperation.ANY) {
             throw new IllegalArgumentException(
-                "Must specify a non-filter operation type for authorizeAny");
+                "Must specify a non-filter operation type for authorizeByResourceType");
         }
 
         if (op == AclOperation.UNKNOWN) {
