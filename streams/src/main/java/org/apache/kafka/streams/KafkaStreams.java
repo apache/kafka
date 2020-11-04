@@ -375,7 +375,7 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     /**
-     * Set the handler invoked when a {@link StreamsConfig#NUM_STREAM_THREADS_CONFIG internal thread}
+     * Set the handler invoked when an {@link StreamsConfig#NUM_STREAM_THREADS_CONFIG internal thread}
      * throws an unexpected exception.
      * These might be exceptions indicating rare bugs in Kafka Streams, or they
      * might be exceptions thrown by your code, for example a NullPointerException thrown from your processor
@@ -384,9 +384,9 @@ public class KafkaStreams implements AutoCloseable {
      * Note, this handler must be threadsafe, since it will be shared among all threads, and invoked from any
      * thread that encounters such an exception.
      *
-     * @param streamsUncaughtExceptionHandler the uncaught exception handler of type {@link StreamsUncaughtExceptionHandler} for all internal threads; {@code null} deletes the current handler
+     * @param streamsUncaughtExceptionHandler the uncaught exception handler of type {@link StreamsUncaughtExceptionHandler} for all internal threads
      * @throws IllegalStateException if this {@code KafkaStreams} instance is not in state {@link State#CREATED CREATED}.
-     * @throws NullPointerException @NotNull if streamsUncaughtExceptionHandler is null.
+     * @throws NullPointerException if streamsUncaughtExceptionHandler is null.
      */
     public void setUncaughtExceptionHandler(final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
         final StreamsUncaughtExceptionHandler handler = exception -> handleStreamsUncaughtException(exception, streamsUncaughtExceptionHandler);
@@ -410,20 +410,17 @@ public class KafkaStreams implements AutoCloseable {
                                                                                                          final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
         final StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse action = streamsUncaughtExceptionHandler.handle(e);
         switch (action) {
-//            case REPLACE_STREAM_THREAD:
-//                log.error("Encountered the following exception during processing " +
-//                        "and the the stream thread will be replaced: ", e);
-//            this.addStreamsThread();
-//                break;
             case SHUTDOWN_CLIENT:
                 log.error("Encountered the following exception during processing " +
-                        "and the client is going to shut down: ", e);
+                        "and the registered exception handler opted to \" + action + \"." +
+                        " The streams client is going to shut down now. ", e);
                 close(Duration.ZERO);
                 break;
             case SHUTDOWN_APPLICATION:
                 if (e instanceof Error) {
-                    log.error("This option requires the thread to stay running to start the shutdown." +
-                            "Therefore it is not suitable for Error types.");
+                    log.error("This option requires running threads to shut down the application." +
+                            "but the uncaught exception was an Error, which means this runtime is no " +
+                            "longer in a well-defined state. Attempting to send the shutdown command anyway.", e);
                 }
                 for (final StreamThread streamThread: threads) {
                     streamThread.sendShutdownRequest(AssignorError.SHUTDOWN_REQUESTED);
@@ -1071,10 +1068,9 @@ public class KafkaStreams implements AutoCloseable {
 
     private void closeToError() {
         if (!setState(State.ERROR)) {
-            // if transition failed, it means it was either in PENDING_SHUTDOWN
-            // or NOT_RUNNING already; just check that all threads have been stopped
-            log.info("Can not close to error");
+            log.info("Can not transition to error from state " + state());
         } else {
+            log.info("Transitioning to ERROR state");
             stateDirCleaner.shutdownNow();
             if (rocksDBMetricsRecordingService != null) {
                 rocksDBMetricsRecordingService.shutdownNow();
