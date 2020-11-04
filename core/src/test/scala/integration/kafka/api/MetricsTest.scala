@@ -181,7 +181,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
   }
 
   private def verifyBrokerAuthenticationMetrics(server: KafkaBroker): Unit = {
-    val metrics = server.metrics.metrics
+    val metrics = server.metrics().metrics
     TestUtils.waitUntilTrue(() =>
       maxKafkaMetricValue("failed-authentication-total", metrics, "Broker", Some("socket-server-metrics")) > 0,
       "failed-authentication-total not updated")
