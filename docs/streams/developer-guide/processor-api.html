@@ -467,6 +467,11 @@
                 indicating that the state store cannot be found. If the state store is not associated with the processor
                 in the <code class="docutils literal"><span class="pre">Topology</span></code> code, accessing it in the processor&#8217;s <code class="docutils literal"><span class="pre">init()</span></code> method will also throw an exception at
                 runtime, indicating the state store is not accessible from this processor.</p>
+            <p>Note that the <code class="docutils literal"><span class="pre">Topology#addProcessor</span></code> function takes a <code class="docutils literal"><span class="pre">ProcessorSupplier</span></code> as argument, and that the supplier pattern requires that a new
+                <code class="docutils literal"><span class="pre">Processor</span></code> instance is returned each time <code class="docutils literal"><span class="pre">ProcessorSupplier#get()</span></code> is called. Creating a single <code class="docutils literal"><span class="pre">Processor</span></code>
+                object and returning the same object reference in <code class="docutils literal"><span class="pre">ProcessorSupplier#get()</span></code> would be a violation of the supplier pattern and leads to runtime exceptions.
+                So remember not to provide a singleton <code class="docutils literal"><span class="pre">Processor</span></code> instance to <code class="docutils literal"><span class="pre">Topology</span></code>. The
+                <code class="docutils literal"><span class="pre">ProcessorSupplier</span></code> should always generate a new instance each time <code class="docutils literal"><span class="pre">ProcessorSupplier#get()</span></code> gets called.</p>
             <p>Now that you have fully defined your processor topology in your application, you can proceed to
                 <a class="reference internal" href="running-app.html#streams-developer-guide-execution"><span class="std std-ref">running the Kafka Streams application</span></a>.</p>
         </div>
