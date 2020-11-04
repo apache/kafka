@@ -20,7 +20,7 @@ package kafka.api
 import org.apache.kafka.common.config.ConfigDef.Validator
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{RecordBatch, RecordVersion}
 import org.apache.kafka.common.requests.{AbstractResponse, ApiVersionsResponse}
 import org.apache.kafka.common.requests.ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE
@@ -142,15 +142,13 @@ object ApiVersion {
 
   def apiVersionsResponse(throttleTimeMs: Int,
                           maxMagic: Byte,
-                          latestSupportedFeatures: Features[SupportedVersionRange],
-                          exposeEnvelopeApi: Boolean): ApiVersionsResponse = {
+                          latestSupportedFeatures: Features[SupportedVersionRange]): ApiVersionsResponse = {
     apiVersionsResponse(
       throttleTimeMs,
       maxMagic,
       latestSupportedFeatures,
       Features.emptyFinalizedFeatures,
-      ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
-      exposeEnvelopeApi
+      ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH
     )
   }
 
@@ -158,13 +156,8 @@ object ApiVersion {
                           maxMagic: Byte,
                           latestSupportedFeatures: Features[SupportedVersionRange],
                           finalizedFeatures: Features[FinalizedVersionRange],
-                          finalizedFeaturesEpoch: Long,
-                          exposeEnvelopeApi: Boolean): ApiVersionsResponse = {
+                          finalizedFeaturesEpoch: Long): ApiVersionsResponse = {
     val apiKeys = ApiVersionsResponse.defaultApiKeys(maxMagic)
-    if (!exposeEnvelopeApi) {
-      apiKeys.remove(apiKeys.find(ApiKeys.ENVELOPE.id))
-    }
-
     if (maxMagic == RecordBatch.CURRENT_MAGIC_VALUE &&
       throttleTimeMs == AbstractResponse.DEFAULT_THROTTLE_TIME)
       return new ApiVersionsResponse(

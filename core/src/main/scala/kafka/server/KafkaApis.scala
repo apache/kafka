@@ -1801,13 +1801,11 @@ class KafkaApis(val requestChannel: RequestChannel,
             config.interBrokerProtocolVersion.recordVersion.value,
             supportedFeatures,
             finalizedFeatures.features,
-            finalizedFeatures.epoch,
-            config.forwardingEnabled && request.context.fromPrivilegedListener)
+            finalizedFeatures.epoch)
           case None => ApiVersion.apiVersionsResponse(
             requestThrottleMs,
             config.interBrokerProtocolVersion.recordVersion.value,
-            supportedFeatures,
-            config.forwardingEnabled && request.context.fromPrivilegedListener)
+            supportedFeatures)
         }
       }
     }

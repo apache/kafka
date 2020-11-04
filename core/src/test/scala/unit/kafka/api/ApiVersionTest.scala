@@ -176,8 +176,7 @@ class ApiVersionTest {
     val response = ApiVersion.apiVersionsResponse(
       10,
       RecordBatch.MAGIC_VALUE_V1,
-      Features.emptySupportedFeatures,
-      exposeEnvelopeApi = false
+      Features.emptySupportedFeatures
     )
     verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1)
     assertEquals(10, response.throttleTimeMs)
@@ -195,8 +194,7 @@ class ApiVersionTest {
         Utils.mkMap(Utils.mkEntry("feature", new SupportedVersionRange(1.toShort, 4.toShort)))),
       Features.finalizedFeatures(
         Utils.mkMap(Utils.mkEntry("feature", new FinalizedVersionRange(2.toShort, 3.toShort)))),
-      10,
-      false
+      10
     )
 
     verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1)
@@ -225,8 +223,7 @@ class ApiVersionTest {
     val response = ApiVersion.apiVersionsResponse(
       AbstractResponse.DEFAULT_THROTTLE_TIME,
       RecordBatch.CURRENT_MAGIC_VALUE,
-      Features.emptySupportedFeatures,
-      exposeEnvelopeApi = true
+      Features.emptySupportedFeatures
     )
     assertEquals(new util.HashSet[ApiKeys](ApiKeys.enabledApis), apiKeysInResponse(response))
     assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs)
@@ -236,22 +233,21 @@ class ApiVersionTest {
   }
 
   @Test
-  def shouldNotReturnEnvelopeApiKeyWhenExposeEnvelopeAPIIsFalse(): Unit = {
+  def testMetadataQuorumApisAreDisabled(): Unit = {
     val response = ApiVersion.apiVersionsResponse(
       AbstractResponse.DEFAULT_THROTTLE_TIME,
       RecordBatch.CURRENT_MAGIC_VALUE,
-      Features.emptySupportedFeatures,
-      exposeEnvelopeApi = false
+      Features.emptySupportedFeatures
     )
 
-    val expectedApiKeys = ApiKeys.enabledApis
-    expectedApiKeys.removeIf(key => key.id == ApiKeys.ENVELOPE.id)
-    assertEquals(new util.HashSet[ApiKeys](expectedApiKeys), apiKeysInResponse(response))
-
-    assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs)
-    assertTrue(response.data.supportedFeatures.isEmpty)
-    assertTrue(response.data.finalizedFeatures.isEmpty)
-    assertEquals(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH, response.data.finalizedFeaturesEpoch)
+    // Ensure that APIs needed for the internal metadata quorum (KIP-500)
+    // are not exposed through ApiVersions until we are ready for them
+    val exposedApis = apiKeysInResponse(response)
+    assertFalse(exposedApis.contains(ApiKeys.ENVELOPE))
+    assertFalse(exposedApis.contains(ApiKeys.VOTE))
+    assertFalse(exposedApis.contains(ApiKeys.BEGIN_QUORUM_EPOCH))
+    assertFalse(exposedApis.contains(ApiKeys.END_QUORUM_EPOCH))
+    assertFalse(exposedApis.contains(ApiKeys.DESCRIBE_QUORUM))
   }
 
   private def apiKeysInResponse(apiVersions: ApiVersionsResponse) = {
