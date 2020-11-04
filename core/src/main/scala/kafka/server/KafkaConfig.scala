@@ -373,7 +373,7 @@ object KafkaConfig {
   val AdvertisedListenersProp = "advertised.listeners"
   val ListenerSecurityProtocolMapProp = "listener.security.protocol.map"
   val ControlPlaneListenerNameProp = "control.plane.listener.name"
-  val ControllerListenersProp = "controller.listeners"
+  val ControllerListenerNamesProp = "controller.listener.names"
   val SocketSendBufferBytesProp = "socket.send.buffer.bytes"
   val SocketReceiveBufferBytesProp = "socket.receive.buffer.bytes"
   val SocketRequestMaxBytesProp = "socket.request.max.bytes"
@@ -714,7 +714,7 @@ object KafkaConfig {
     "control.plane.listener.name = CONTROLLER\n" +
     "then controller will use \"broker1.example.com:9094\" with security protocol \"SSL\" to connect to the broker.\n" +
     "If not explicitly configured, the default value will be null and there will be no dedicated endpoints for controller connections."
-  val ControllerListenersDoc = "A comma-separated list of the names of the listeners used by the KIP-500 controller. This is required " +
+  val ControllerListenerNamesDoc = "A comma-separated list of the names of the listeners used by the KIP-500 controller. This is required " +
     "if this process is a KIP-500 controller. The legacy controller will not use this configuration."
 
   val SocketSendBufferBytesDoc = "The SO_SNDBUF buffer of the socket server sockets. If the value is -1, the OS default will be used."
@@ -1065,7 +1065,7 @@ object KafkaConfig {
       .define(AdvertisedListenersProp, STRING, null, HIGH, AdvertisedListenersDoc)
       .define(ListenerSecurityProtocolMapProp, STRING, Defaults.ListenerSecurityProtocolMap, LOW, ListenerSecurityProtocolMapDoc)
       .define(ControlPlaneListenerNameProp, STRING, null, HIGH, controlPlaneListenerNameDoc)
-      .define(ControllerListenersProp, STRING, null, HIGH, ControllerListenersDoc)
+      .define(ControllerListenerNamesProp, STRING, null, HIGH, ControllerListenerNamesDoc)
       .define(SocketSendBufferBytesProp, INT, Defaults.SocketSendBufferBytes, HIGH, SocketSendBufferBytesDoc)
       .define(SocketReceiveBufferBytesProp, INT, Defaults.SocketReceiveBufferBytes, HIGH, SocketReceiveBufferBytesDoc)
       .define(SocketRequestMaxBytesProp, INT, Defaults.SocketRequestMaxBytes, atLeast(1), HIGH, SocketRequestMaxBytesDoc)
@@ -1726,17 +1726,11 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     }
   }
 
-  def controllerListeners: Seq[EndPoint] = {
-    val controllerListenersProp = getString(KafkaConfig.ControllerListenersProp)
-    if (controllerListenersProp != null)
-      CoreUtils.listenerListToEndPoints(controllerListenersProp, listenerSecurityProtocolMap, requireDistinctPorts=false)
-    else
-      Seq.empty
-  }
+  def controllerListenerNames: Seq[String] =
+    Option(getString(KafkaConfig.ControllerListenerNamesProp)).getOrElse("").split(",")
 
-  def controllerListenerNames: Seq[String] = {
-    controllerListeners.map(_.listenerName.value())
-  }
+  def controllerListeners: Seq[EndPoint] =
+    listeners.filter(l => controllerListenerNames.contains(l.listenerName.value()))
 
   def dataPlaneListeners: Seq[EndPoint] = {
     listeners.filterNot { listener =>
@@ -1756,7 +1750,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     else if (getString(KafkaConfig.AdvertisedHostNameProp) != null || getInt(KafkaConfig.AdvertisedPortProp) != null)
       CoreUtils.listenerListToEndPoints("PLAINTEXT://" + advertisedHostName + ":" + advertisedPort, listenerSecurityProtocolMap, requireDistinctPorts=false)
     else
-      listeners
+      listeners.filterNot(l => controllerListenerNames.contains(l.listenerName.value()))
   }
 
   private def getInterBrokerListenerNameAndSecurityProtocol: (ListenerName, SecurityProtocol) = {
@@ -1824,17 +1818,20 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
 
     val advertisedListenerNames = advertisedListeners.map(_.listenerName).toSet
     val listenerNames = listeners.map(_.listenerName).toSet
-    require(advertisedListenerNames.contains(interBrokerListenerName),
-      s"${KafkaConfig.InterBrokerListenerNameProp} must be a listener name defined in ${KafkaConfig.AdvertisedListenersProp}. " +
-      s"The valid options based on currently configured listeners are ${advertisedListenerNames.map(_.value).mkString(",")}")
-    require(advertisedListenerNames.subsetOf(listenerNames),
-      s"${KafkaConfig.AdvertisedListenersProp} listener names must be equal to or a subset of the ones defined in ${KafkaConfig.ListenersProp}. " +
-      s"Found ${advertisedListenerNames.map(_.value).mkString(",")}. The valid options based on the current configuration " +
-      s"are ${listenerNames.map(_.value).mkString(",")}"
-    )
+    if (processRoles.isEmpty || processRoles.contains("broker")) {
+      require(advertisedListenerNames.contains(interBrokerListenerName),
+        s"${KafkaConfig.InterBrokerListenerNameProp} must be a listener name defined in ${KafkaConfig.AdvertisedListenersProp}. " +
+          s"The valid options based on currently configured listeners are ${advertisedListenerNames.map(_.value).mkString(",")}")
+      require(advertisedListenerNames.subsetOf(listenerNames),
+        s"${KafkaConfig.AdvertisedListenersProp} listener names must be equal to or a subset of the ones defined in ${KafkaConfig.ListenersProp}. " +
+          s"Found ${advertisedListenerNames.map(_.value).mkString(",")}. The valid options based on the current configuration " +
+          s"are ${listenerNames.map(_.value).mkString(",")}"
+      )
+    }
+
     // Ensure controller listeners are not in the advertised listeners list
     require(!controllerListeners.exists(advertisedListeners.contains),
-      s"${KafkaConfig.AdvertisedListenersProp} cannot contain any of ${KafkaConfig.ControllerListenersProp}")
+      s"${KafkaConfig.AdvertisedListenersProp} cannot contain any of ${KafkaConfig.ControllerListenerNamesProp}")
     require(!advertisedListeners.exists(endpoint => endpoint.host=="0.0.0.0"),
       s"${KafkaConfig.AdvertisedListenersProp} cannot use the nonroutable meta-address 0.0.0.0. "+
       s"Use a routable IP address.")

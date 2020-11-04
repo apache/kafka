@@ -272,7 +272,7 @@ class KafkaConfigTest {
     props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "PLAINTEXT:PLAINTEXT,CONTROLPLANE:SSL,CONTROLLER:SASL_SSL")
     props.put(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:0,CONTROLPLANE://localhost:4000")
     props.put(KafkaConfig.ControlPlaneListenerNameProp, "CONTROLPLANE")
-    props.put(KafkaConfig.ControllerListenersProp, "CONTROLLER://localhost:5000")
+    props.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
     assertTrue(isValidKafkaConfig(props))
 
     val serverConfig = KafkaConfig.fromProps(props)
@@ -666,7 +666,7 @@ class KafkaConfigTest {
         case KafkaConfig.HostNameProp => // ignore string
         case KafkaConfig.AdvertisedHostNameProp => //ignore string
         case KafkaConfig.AdvertisedPortProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
-        case KafkaConfig.ControllerListenersProp => // ignore string
+        case KafkaConfig.ControllerListenerNamesProp => // ignore string
         case KafkaConfig.SocketSendBufferBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.SocketReceiveBufferBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.MaxConnectionsPerIpOverridesProp =>
@@ -999,13 +999,13 @@ class KafkaConfigTest {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = TestUtils.MockZkPort)
     val listeners = "PLAINTEXT://A:9092,SSL://B:9093,SASL_SSL://C:9094"
     props.put(KafkaConfig.ListenersProp, listeners)
-    props.put(KafkaConfig.AdvertisedListenersProp, listeners)
+    props.put(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://A:9092,SSL://B:9093")
     // Valid now
     assertTrue(isValidKafkaConfig(props))
 
     // Still valid
-    val controllerListeners = "PLAINTEXT://B:9092,SSL://C:9093,SASL_SSL://D:9094"
-    props.put(KafkaConfig.ControllerListenersProp, controllerListeners)
+    val controllerListeners = "SASL_SSL"
+    props.put(KafkaConfig.ControllerListenerNamesProp, controllerListeners)
     assertTrue(isValidKafkaConfig(props))
   }
 
@@ -1019,7 +1019,7 @@ class KafkaConfigTest {
     assertTrue(isValidKafkaConfig(props))
 
     // Invalid now
-    props.put(KafkaConfig.ControllerListenersProp, listeners)
+    props.put(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT,SSL,SASL_SSL")
     assertFalse(isValidKafkaConfig(props))
   }
 
@@ -1033,8 +1033,7 @@ class KafkaConfigTest {
     assertTrue(isValidKafkaConfig(props))
 
     // Invalid now
-    val controllerListeners = "PLAINTEXT://A:9092"
-    props.put(KafkaConfig.ControllerListenersProp, controllerListeners)
+    props.put(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
     assertFalse(isValidKafkaConfig(props))
   }
 }
