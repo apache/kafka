@@ -301,7 +301,11 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         // Create and start the socket server acceptor threads so that the bound port is known.
         // Delay starting processors until the end of the initialization sequence to ensure
         // that credentials have been loaded before processing authentications.
-        socketServer = new SocketServer(config, metrics, time, credentialProvider)
+        //
+        // We need to set allowDisabledApis to true in order to make forwarding integration test work
+        // under KIP-500 mode.
+        socketServer = new SocketServer(config, metrics, time, credentialProvider,
+          allowDisabledApis = config.forwardingEnabled)
         socketServer.startup(startProcessingRequests = false)
 
         /* start replica manager */
