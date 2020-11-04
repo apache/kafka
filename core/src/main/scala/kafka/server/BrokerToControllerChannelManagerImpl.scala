@@ -20,23 +20,27 @@ package kafka.server
 import java.util.concurrent.{LinkedBlockingDeque, TimeUnit}
 
 import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
+import kafka.network.RequestChannel
 import kafka.utils.Logging
 import org.apache.kafka.clients._
-import org.apache.kafka.common.requests.AbstractRequest
-import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EnvelopeRequest, EnvelopeResponse}
 import org.apache.kafka.common.security.JaasContext
+import org.apache.kafka.common.utils.{LogContext, Time}
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
+import scala.compat.java8.OptionConverters._
 
 
 trait BrokerToControllerChannelManager {
   def sendRequest(request: AbstractRequest.Builder[_ <: AbstractRequest],
                   callback: RequestCompletionHandler): Unit
+
+  def forwardRequest(request: RequestChannel.Request, responseCallback: AbstractResponse => Unit): Unit
 
   def start(): Unit
 
@@ -55,6 +59,7 @@ class BrokerToControllerChannelManagerImpl(metadataCache: kafka.server.MetadataC
                                            time: Time,
                                            metrics: Metrics,
                                            config: KafkaConfig,
+                                           channelName: String,
                                            threadNamePrefix: Option[String] = None) extends BrokerToControllerChannelManager with Logging {
   private val requestQueue = new LinkedBlockingDeque[BrokerToControllerQueueItem]
   private val logContext = new LogContext(s"[broker-${config.brokerId}-to-controller] ")
@@ -68,6 +73,7 @@ class BrokerToControllerChannelManagerImpl(metadataCache: kafka.server.MetadataC
   override def shutdown(): Unit = {
     requestThread.shutdown()
     requestThread.awaitShutdown()
+    info(s"Broker to controller channel manager for $channelName shutdown")
   }
 
   private[server] def newRequestThread = {
@@ -90,7 +96,7 @@ class BrokerToControllerChannelManagerImpl(metadataCache: kafka.server.MetadataC
         Selector.NO_IDLE_TIMEOUT_MS,
         metrics,
         time,
-        "BrokerToControllerChannel",
+        channelName,
         Map("BrokerId" -> config.brokerId.toString).asJava,
         false,
         channelBuilder,
@@ -129,6 +135,44 @@ class BrokerToControllerChannelManagerImpl(metadataCache: kafka.server.MetadataC
     requestQueue.put(BrokerToControllerQueueItem(request, callback))
     requestThread.wakeup()
   }
+
+  def forwardRequest(
+    request: RequestChannel.Request,
+    responseCallback: AbstractResponse => Unit
+  ): Unit = {
+    val principalSerde = request.context.principalSerde.asScala.getOrElse(
+      throw new IllegalArgumentException(s"Cannot deserialize principal from request $request " +
+        "since there is no serde defined")
+    )
+    val serializedPrincipal = principalSerde.serialize(request.context.principal)
+    val forwardRequestBuffer = request.buffer.duplicate()
+    forwardRequestBuffer.flip()
+    val envelopeRequest = new EnvelopeRequest.Builder(
+      forwardRequestBuffer,
+      serializedPrincipal,
+      request.context.clientAddress.getAddress
+    )
+
+    def onClientResponse(clientResponse: ClientResponse): Unit = {
+      val envelopeResponse = clientResponse.responseBody.asInstanceOf[EnvelopeResponse]
+      val envelopeError = envelopeResponse.error()
+      val response = if (envelopeError != Errors.NONE) {
+        // An envelope error indicates broker misconfiguration (e.g. the principal serde
+        // might not be defined on the receiving broker). In this case, we do not return
+        // the error directly to the client since it would not be expected. Instead we
+        // return `UNKNOWN_SERVER_ERROR` so that the user knows that there is a problem
+        // on the broker.
+        debug(s"Forwarded request $request failed with an error in envelope response $envelopeError")
+        request.body[AbstractRequest].getErrorResponse(Errors.UNKNOWN_SERVER_ERROR.exception())
+      } else {
+        AbstractResponse.deserializeBody(envelopeResponse.responseData, request.header)
+      }
+      responseCallback(response)
+    }
+
+    requestQueue.put(BrokerToControllerQueueItem(envelopeRequest, onClientResponse))
+    requestThread.wakeup()
+  }
 }
 
 case class BrokerToControllerQueueItem(request: AbstractRequest.Builder[_ <: AbstractRequest],
@@ -155,8 +199,9 @@ class BrokerToControllerRequestThread(networkClient: KafkaClient,
       val request = RequestAndCompletionHandler(
         activeController.get,
         topRequest.request,
-        handleResponse(topRequest),
-        )
+        handleResponse(topRequest)
+      )
+
       requestsToSend.enqueue(request)
     }
     requestsToSend

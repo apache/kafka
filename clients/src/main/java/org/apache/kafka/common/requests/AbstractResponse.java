@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.message.EnvelopeResponseData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.AlterIsrResponseData;
 import org.apache.kafka.common.network.NetworkSend;
@@ -40,7 +41,8 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
     }
 
     /**
-     * Visible for testing, typically {@link #toSend(String, ResponseHeader, short)} should be used instead.
+     * Used for forwarding response serialization, typically {@link #toSend(String, ResponseHeader, short)}
+     * should be used instead.
      */
     public ByteBuffer serialize(short version, ResponseHeader responseHeader) {
         return RequestUtils.serialize(responseHeader.toStruct(), toStruct(version));
@@ -85,6 +87,24 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
     }
 
     protected abstract Struct toStruct(short version);
+
+    public ByteBuffer serializeBody(short version) {
+        Struct dataStruct = toStruct(version);
+        ByteBuffer buffer = ByteBuffer.allocate(dataStruct.sizeOf());
+        dataStruct.writeTo(buffer);
+        buffer.flip();
+
+        return buffer;
+    }
+
+    public static AbstractResponse deserializeBody(ByteBuffer byteBuffer, RequestHeader header) {
+        ApiKeys apiKey = header.apiKey();
+        short apiVersion = header.apiVersion();
+
+        ResponseHeader.parse(byteBuffer, apiKey.responseHeaderVersion(apiVersion));
+        Struct struct = apiKey.parseResponse(apiVersion, byteBuffer);
+        return AbstractResponse.parseResponse(apiKey, struct, apiVersion);
+    }
 
     public static AbstractResponse parseResponse(ApiKeys apiKey, Struct struct, short version) {
         switch (apiKey) {
@@ -204,6 +224,8 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return new AlterIsrResponse(new AlterIsrResponseData(struct, version));
             case UPDATE_FEATURES:
                 return new UpdateFeaturesResponse(struct, version);
+            case ENVELOPE:
+                return new EnvelopeResponse(new EnvelopeResponseData(struct, version));
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

@@ -14,14 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients;
+package org.apache.kafka.common.errors;
 
 /**
- * A callback interface for attaching an action to be executed when a request is complete and the corresponding response
- * has been received. This handler will also be invoked if there is a disconnection while handling the request.
+ * Exception used to indicate a kafka principal deserialization failure during request forwarding.
  */
-public interface RequestCompletionHandler {
+public class PrincipalDeserializationException extends ApiException {
 
-    void onComplete(ClientResponse response);
+    private static final long serialVersionUID = 1L;
 
+    public PrincipalDeserializationException(String message) {
+        super(message);
+    }
 }

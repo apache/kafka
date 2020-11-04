@@ -386,7 +386,7 @@ class AdminManager(val config: KafkaConfig,
     resourceToConfigNames.map { case resource =>
 
       def allConfigs(config: AbstractConfig) = {
-        config.originals.asScala.filter(_._2 != null) ++ config.values.asScala
+        config.originals.asScala.filter(_._2 != null) ++ config.nonInternalValues.asScala
       }
       def createResponseConfig(configs: Map[String, Any],
                                createConfigEntry: (String, Any) => DescribeConfigsResponseData.DescribeConfigsResourceResult): DescribeConfigsResponseData.DescribeConfigsResult = {

@@ -20,8 +20,7 @@ package kafka.network
 import java.io.IOException
 import java.net._
 import java.nio.ByteBuffer
-import java.nio.channels._
-import java.nio.channels.{Selector => NSelector}
+import java.nio.channels.{Selector => NSelector, _}
 import java.util
 import java.util.Optional
 import java.util.concurrent._
@@ -29,32 +28,31 @@ import java.util.concurrent.atomic._
 
 import kafka.cluster.{BrokerEndPoint, EndPoint}
 import kafka.metrics.KafkaMetricsGroup
-import kafka.network.RequestChannel.{CloseConnectionResponse, EndThrottlingResponse, NoOpResponse, SendResponse, StartThrottlingResponse}
 import kafka.network.Processor._
+import kafka.network.RequestChannel.{CloseConnectionResponse, EndThrottlingResponse, NoOpResponse, SendResponse, StartThrottlingResponse}
 import kafka.network.SocketServer._
 import kafka.security.CredentialProvider
 import kafka.server.{BrokerReconfigurable, KafkaConfig}
-import kafka.utils._
 import kafka.utils.Implicits._
+import kafka.utils._
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.errors.InvalidRequestException
-import org.apache.kafka.common.{Endpoint, KafkaException, MetricName, Reconfigurable}
 import org.apache.kafka.common.memory.{MemoryPool, SimpleMemoryPool}
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.stats.{Avg, CumulativeSum, Meter, Rate}
-import org.apache.kafka.common.network.ClientInformation
 import org.apache.kafka.common.network.KafkaChannel.ChannelMuteEvent
-import org.apache.kafka.common.network.{ChannelBuilder, ChannelBuilders, KafkaChannel, ListenerName, ListenerReconfigurable, Selectable, Send, Selector => KSelector}
-import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.requests.ApiVersionsRequest
-import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
-import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.network.{ChannelBuilder, ChannelBuilders, ClientInformation, KafkaChannel, ListenerName, ListenerReconfigurable, Selectable, Send, Selector => KSelector}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.requests.{ApiVersionsRequest, EnvelopeRequest, EnvelopeResponse, RequestContext, RequestHeader}
+import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.utils.{KafkaThread, LogContext, Time}
+import org.apache.kafka.common.{Endpoint, KafkaException, MetricName, Reconfigurable}
 import org.slf4j.event.Level
 
 import scala.collection._
-import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{ArrayBuffer, Buffer}
+import scala.compat.java8.OptionConverters._
+import scala.jdk.CollectionConverters._
 import scala.util.control.ControlThrowable
 
 /**
@@ -262,7 +260,8 @@ class SocketServer(val config: KafkaConfig,
     endpointOpt.foreach { endpoint =>
       connectionQuotas.addListener(config, endpoint.listenerName)
       val controlPlaneAcceptor = createAcceptor(endpoint, ControlPlaneMetricPrefix)
-      val controlPlaneProcessor = newProcessor(nextProcessorId, controlPlaneRequestChannelOpt.get, connectionQuotas, endpoint.listenerName, endpoint.securityProtocol, memoryPool)
+      val controlPlaneProcessor = newProcessor(nextProcessorId, controlPlaneRequestChannelOpt.get,
+        connectionQuotas, endpoint.listenerName, endpoint.securityProtocol, memoryPool, isPrivilegedListener = true)
       controlPlaneAcceptorOpt = Some(controlPlaneAcceptor)
       controlPlaneProcessorOpt = Some(controlPlaneProcessor)
       val listenerProcessors = new ArrayBuffer[Processor]()
@@ -285,8 +284,11 @@ class SocketServer(val config: KafkaConfig,
     val listenerName = endpoint.listenerName
     val securityProtocol = endpoint.securityProtocol
     val listenerProcessors = new ArrayBuffer[Processor]()
+    val isPrivilegedListener = controlPlaneRequestChannelOpt.isEmpty && config.interBrokerListenerName == listenerName
+
     for (_ <- 0 until newProcessorsPerListener) {
-      val processor = newProcessor(nextProcessorId, dataPlaneRequestChannel, connectionQuotas, listenerName, securityProtocol, memoryPool)
+      val processor = newProcessor(nextProcessorId, dataPlaneRequestChannel, connectionQuotas,
+        listenerName, securityProtocol, memoryPool, isPrivilegedListener)
       listenerProcessors += processor
       dataPlaneRequestChannel.addProcessor(processor)
       nextProcessorId += 1
@@ -412,7 +414,7 @@ class SocketServer(val config: KafkaConfig,
 
   // `protected` for test usage
   protected[network] def newProcessor(id: Int, requestChannel: RequestChannel, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
-                                      securityProtocol: SecurityProtocol, memoryPool: MemoryPool): Processor = {
+                                      securityProtocol: SecurityProtocol, memoryPool: MemoryPool, isPrivilegedListener: Boolean): Processor = {
     new Processor(id,
       time,
       config.socketRequestMaxBytes,
@@ -427,6 +429,7 @@ class SocketServer(val config: KafkaConfig,
       credentialProvider,
       memoryPool,
       logContext,
+      isPrivilegedListener = isPrivilegedListener,
       allowDisabledApis = allowDisabledApis
     )
   }
@@ -652,8 +655,8 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
   }
 
   /**
-  * Create a server socket to listen for connections on.
-  */
+   * Create a server socket to listen for connections on.
+   */
   private def openServerSocket(host: String, port: Int): ServerSocketChannel = {
     val socketAddress =
       if (host == null || host.trim.isEmpty)
@@ -727,6 +730,12 @@ private[kafka] object Processor {
 /**
  * Thread that processes all requests from a single connection. There are N of these running in parallel
  * each of which has its own selector
+ *
+ * @param isPrivilegedListener The privileged listener flag is used as one factor to determine whether
+ *                             a certain request is forwarded or not. When the control plane is defined,
+ *                             the control plane processor would be fellow broker's choice for sending
+ *                             forwarding requests; if the control plane is not defined, the processor
+ *                             relying on the inter broker listener would be acting as the privileged listener.
  */
 private[kafka] class Processor(val id: Int,
                                time: Time,
@@ -743,6 +752,7 @@ private[kafka] class Processor(val id: Int,
                                memoryPool: MemoryPool,
                                logContext: LogContext,
                                connectionQueueSize: Int = ConnectionQueueSize,
+                               isPrivilegedListener: Boolean = false,
                                allowDisabledApis: Boolean = false) extends AbstractServerThread(connectionQuotas) with KafkaMetricsGroup {
 
   private object ConnectionId {
@@ -772,7 +782,7 @@ private[kafka] class Processor(val id: Int,
   newGauge(IdlePercentMetricName, () => {
     Option(metrics.metric(metrics.metricName("io-wait-ratio", MetricsGroup, metricTags))).fold(0.0)(m =>
       Math.min(m.metricValue.asInstanceOf[Double], 1.0))
-    },
+  },
     // for compatibility, only add a networkProcessor tag to the Yammer Metrics alias (the equivalent Selector metric
     // also includes the listener name)
     Map(NetworkProcessorMetricTag -> id.toString)
@@ -961,22 +971,41 @@ private[kafka] class Processor(val id: Int,
                 val connectionId = receive.source
                 val context = new RequestContext(header, connectionId, channel.socketAddress,
                   channel.principal, listenerName, securityProtocol,
-                  channel.channelMetadataRegistry.clientInformation)
-                val req = new RequestChannel.Request(processor = id, context = context,
-                  startTimeNanos = nowNanos, memoryPool, receive.payload, requestChannel.metrics)
-                // KIP-511: ApiVersionsRequest is intercepted here to catch the client software name
-                // and version. It is done here to avoid wiring things up to the api layer.
-                if (header.apiKey == ApiKeys.API_VERSIONS) {
-                  val apiVersionsRequest = req.body[ApiVersionsRequest]
-                  if (apiVersionsRequest.isValid) {
-                    channel.channelMetadataRegistry.registerClientInformation(new ClientInformation(
-                      apiVersionsRequest.data.clientSoftwareName,
-                      apiVersionsRequest.data.clientSoftwareVersion))
+                  channel.channelMetadataRegistry.clientInformation, isPrivilegedListener, channel.principalSerde)
+
+                var req = new RequestChannel.Request(processor = id, context = context,
+                  startTimeNanos = nowNanos, memoryPool, receive.payload, requestChannel.metrics, None)
+
+                if (req.header.apiKey == ApiKeys.ENVELOPE) {
+                  // Override the request context with the forwarded request context.
+                  // The envelope's context will be preserved in the forwarded context
+
+                  req = parseForwardedPrincipal(req, channel.principalSerde.asScala) match {
+                    case Some(forwardedPrincipal) =>
+                      buildForwardedRequestContext(req, forwardedPrincipal)
+
+                    case None =>
+                      val envelopeResponse = new EnvelopeResponse(Errors.PRINCIPAL_DESERIALIZATION_FAILURE)
+                      sendEnvelopeResponse(req, envelopeResponse)
+                      null
                   }
                 }
-                requestChannel.sendRequest(req)
-                selector.mute(connectionId)
-                handleChannelMuteEvent(connectionId, ChannelMuteEvent.REQUEST_RECEIVED)
+
+                if (req != null) {
+                  // KIP-511: ApiVersionsRequest is intercepted here to catch the client software name
+                  // and version. It is done here to avoid wiring things up to the api layer.
+                  if (header.apiKey == ApiKeys.API_VERSIONS) {
+                    val apiVersionsRequest = req.body[ApiVersionsRequest]
+                    if (apiVersionsRequest.isValid) {
+                      channel.channelMetadataRegistry.registerClientInformation(new ClientInformation(
+                        apiVersionsRequest.data.clientSoftwareName,
+                        apiVersionsRequest.data.clientSoftwareVersion))
+                    }
+                  }
+                  requestChannel.sendRequest(req)
+                  selector.mute(connectionId)
+                  handleChannelMuteEvent(connectionId, ChannelMuteEvent.REQUEST_RECEIVED)
+                }
               }
             }
           case None =>
@@ -991,6 +1020,66 @@ private[kafka] class Processor(val id: Int,
       }
     }
     selector.clearCompletedReceives()
+  }
+
+  private def sendEnvelopeResponse(
+    envelopeRequest: RequestChannel.Request,
+    envelopeResponse: EnvelopeResponse
+  ): Unit = {
+    val envelopResponseSend = envelopeRequest.context.buildResponse(envelopeResponse)
+    enqueueResponse(new RequestChannel.SendResponse(
+      envelopeRequest,
+      envelopResponseSend,
+      None,
+      None
+    ))
+  }
+
+  private def parseForwardedPrincipal(
+    envelopeRequest: RequestChannel.Request,
+    principalSerde: Option[KafkaPrincipalSerde]
+  ): Option[KafkaPrincipal] = {
+    val envelope = envelopeRequest.body[EnvelopeRequest]
+    try {
+      principalSerde.map { serde =>
+        serde.deserialize(envelope.principalData())
+      }
+    } catch {
+      case e: Exception =>
+        warn(s"Failed to deserialize principal from envelope request $envelope", e)
+        None
+    }
+  }
+
+  private def buildForwardedRequestContext(
+    envelopeRequest: RequestChannel.Request,
+    forwardedPrincipal: KafkaPrincipal
+  ): RequestChannel.Request = {
+    val envelope = envelopeRequest.body[EnvelopeRequest]
+    val forwardedRequestBuffer = envelope.requestData.duplicate()
+    val forwardedHeader = parseRequestHeader(forwardedRequestBuffer)
+    val forwardedClientAddress = InetAddress.getByAddress(envelope.clientAddress)
+
+    val forwardedContext = new RequestContext(
+      forwardedHeader,
+      envelopeRequest.context.connectionId,
+      forwardedClientAddress,
+      forwardedPrincipal,
+      listenerName,
+      securityProtocol,
+      ClientInformation.EMPTY,
+      isPrivilegedListener
+    )
+
+    new RequestChannel.Request(
+      processor = id,
+      context = forwardedContext,
+      startTimeNanos = envelopeRequest.startTimeNanos,
+      memoryPool,
+      forwardedRequestBuffer,
+      requestChannel.metrics,
+      Some(envelopeRequest)
+    )
   }
 
   private def processCompletedSends(): Unit = {
@@ -1342,17 +1431,17 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
   private def recordConnectionAndGetThrottleTimeMs(listenerName: ListenerName, timeMs: Long): Long = {
     def recordAndGetListenerThrottleTime(minThrottleTimeMs: Int): Int = {
       maxConnectionsPerListener
-      .get(listenerName)
-      .map { listenerQuota =>
-        val listenerThrottleTimeMs = recordAndGetThrottleTimeMs(listenerQuota.connectionRateSensor, timeMs)
-        val throttleTimeMs = math.max(minThrottleTimeMs, listenerThrottleTimeMs)
-        // record throttle time due to hitting connection rate quota
-        if (throttleTimeMs > 0) {
-          listenerQuota.connectionRateThrottleSensor.record(throttleTimeMs.toDouble, timeMs)
+        .get(listenerName)
+        .map { listenerQuota =>
+          val listenerThrottleTimeMs = recordAndGetThrottleTimeMs(listenerQuota.connectionRateSensor, timeMs)
+          val throttleTimeMs = math.max(minThrottleTimeMs, listenerThrottleTimeMs)
+          // record throttle time due to hitting connection rate quota
+          if (throttleTimeMs > 0) {
+            listenerQuota.connectionRateThrottleSensor.record(throttleTimeMs.toDouble, timeMs)
+          }
+          throttleTimeMs
         }
-        throttleTimeMs
-      }
-      .getOrElse(0)
+        .getOrElse(0)
     }
 
     if (protectedListener(listenerName)) {

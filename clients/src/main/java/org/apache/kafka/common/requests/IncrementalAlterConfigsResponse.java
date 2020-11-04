@@ -25,23 +25,28 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class IncrementalAlterConfigsResponse extends AbstractResponse {
 
-    public static IncrementalAlterConfigsResponseData toResponseData(final int requestThrottleMs,
-                                                                     final Map<ConfigResource, ApiError> results) {
-        IncrementalAlterConfigsResponseData responseData = new IncrementalAlterConfigsResponseData();
-        responseData.setThrottleTimeMs(requestThrottleMs);
-        for (Map.Entry<ConfigResource, ApiError> entry : results.entrySet()) {
-            responseData.responses().add(new AlterConfigsResourceResponse().
-                    setResourceName(entry.getKey().name()).
-                    setResourceType(entry.getKey().type().id()).
-                    setErrorCode(entry.getValue().error().code()).
-                    setErrorMessage(entry.getValue().message()));
-        }
-        return responseData;
+    public IncrementalAlterConfigsResponse(final int requestThrottleMs,
+                                           final Map<ConfigResource, ApiError> results) {
+        final List<AlterConfigsResourceResponse> newResults = new ArrayList<>(results.size());
+        results.forEach(
+            (resource, error) -> newResults.add(
+                new AlterConfigsResourceResponse()
+                    .setErrorCode(error.error().code())
+                    .setErrorMessage(error.message())
+                    .setResourceName(resource.name())
+                    .setResourceType(resource.type().id()))
+        );
+
+        this.data = new IncrementalAlterConfigsResponseData()
+                        .setResponses(newResults)
+                        .setThrottleTimeMs(requestThrottleMs);
     }
 
     public static Map<ConfigResource, ApiError> fromResponseData(final IncrementalAlterConfigsResponseData data) {

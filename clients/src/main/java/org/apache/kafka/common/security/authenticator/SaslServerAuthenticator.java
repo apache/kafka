@@ -52,6 +52,7 @@ import org.apache.kafka.common.requests.SaslHandshakeResponse;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
+import org.apache.kafka.common.security.auth.KafkaPrincipalSerde;
 import org.apache.kafka.common.security.auth.SaslAuthenticationContext;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.kerberos.KerberosError;
@@ -81,6 +82,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 public class SaslServerAuthenticator implements Authenticator {
     // GSSAPI limits requests to 64K, but we allow a bit extra for custom SASL mechanisms
@@ -300,6 +302,11 @@ public class SaslServerAuthenticator implements Authenticator {
     }
 
     @Override
+    public Optional<KafkaPrincipalSerde> principalSerde() {
+        return principalBuilder instanceof KafkaPrincipalSerde ? Optional.of((KafkaPrincipalSerde) principalBuilder) : Optional.empty();
+    }
+
+    @Override
     public boolean complete() {
         return saslState == SaslState.COMPLETE;
     }
@@ -410,7 +417,7 @@ public class SaslServerAuthenticator implements Authenticator {
             ApiKeys apiKey = header.apiKey();
             short version = header.apiVersion();
             RequestContext requestContext = new RequestContext(header, connectionId, clientAddress(),
-                    KafkaPrincipal.ANONYMOUS, listenerName, securityProtocol, ClientInformation.EMPTY);
+                    KafkaPrincipal.ANONYMOUS, listenerName, securityProtocol, ClientInformation.EMPTY, false);
             RequestAndSize requestAndSize = requestContext.parseRequest(requestBuffer);
             if (apiKey != ApiKeys.SASL_AUTHENTICATE) {
                 IllegalSaslStateException e = new IllegalSaslStateException("Unexpected Kafka request of type " + apiKey + " during SASL authentication.");
@@ -496,7 +503,7 @@ public class SaslServerAuthenticator implements Authenticator {
 
 
             RequestContext requestContext = new RequestContext(header, connectionId, clientAddress(),
-                    KafkaPrincipal.ANONYMOUS, listenerName, securityProtocol, ClientInformation.EMPTY);
+                    KafkaPrincipal.ANONYMOUS, listenerName, securityProtocol, ClientInformation.EMPTY, false);
             RequestAndSize requestAndSize = requestContext.parseRequest(requestBuffer);
             if (apiKey == ApiKeys.API_VERSIONS)
                 handleApiVersionsRequest(requestContext, (ApiVersionsRequest) requestAndSize.request);

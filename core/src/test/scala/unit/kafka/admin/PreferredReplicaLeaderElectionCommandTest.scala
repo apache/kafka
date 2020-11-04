@@ -54,7 +54,6 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
 
   private def createTestTopicAndCluster(topicPartition: Map[TopicPartition, List[Int]],
                                         authorizer: Option[String] = None): Unit = {
-
     val brokerConfigs = TestUtils.createBrokerConfigs(3, zkConnect, false)
     brokerConfigs.foreach(p => p.setProperty("auto.leader.rebalance.enable", "false"))
     authorizer match {
@@ -333,11 +332,11 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
       PreferredReplicaLeaderElectionCommand.run(Array(
         "--bootstrap-server", bootstrapServer(),
         "--path-to-json-file", jsonFile.getAbsolutePath))
-      fail();
+      fail()
     } catch {
       case e: AdminCommandFailedException =>
         assertEquals("Not authorized to perform leader election", e.getMessage)
-        assertTrue(e.getCause().isInstanceOf[ClusterAuthorizationException])
+        assertTrue(e.getCause.isInstanceOf[ClusterAuthorizationException])
         // Check we still have the same leader
         assertEquals(leader, awaitLeader(testPartition))
     } finally {
