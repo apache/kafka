@@ -306,8 +306,7 @@ public class StreamThread extends Thread {
                                       final StateRestoreListener userStateRestoreListener,
                                       final int threadIdx,
                                       final ShutdownErrorHook shutdownErrorHook,
-                                      final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler,
-                                      final AtomicInteger assignmentErrorCode) {
+                                      final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
         final String threadId = clientId + "-StreamThread-" + threadIdx;
 
         final String logPrefix = String.format("stream-thread [%s] ", threadId);
@@ -318,7 +317,7 @@ public class StreamThread extends Thread {
         referenceContainer.adminClient = adminClient;
         referenceContainer.streamsMetadataState = streamsMetadataState;
         referenceContainer.time = time;
-        referenceContainer.assignmentErrorCode = assignmentErrorCode;
+        referenceContainer.assignmentErrorCode = new AtomicInteger();
 
         log.info("Creating restore consumer client");
         final Map<String, Object> restoreConsumerConfigs = config.getRestoreConsumerConfigs(getRestoreConsumerClientId(threadId));
@@ -594,7 +593,7 @@ public class StreamThread extends Thread {
                     throw e;
                 }
                 if (Thread.getDefaultUncaughtExceptionHandler() != null && newHandler) {
-                    log.error("Stream's new uncaught exception handler is set as well as the deprecated old handler." +
+                    log.warn("Stream's new uncaught exception handler is set as well as the deprecated old handler." +
                             "The old handler will be ignored as long as a new handler is set.");
                 } else {
                     throw e;

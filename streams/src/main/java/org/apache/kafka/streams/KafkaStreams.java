@@ -91,7 +91,6 @@ import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
 import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
@@ -847,9 +846,8 @@ public class KafkaStreams implements AutoCloseable {
                 stateDirectory,
                 delegatingStateRestoreListener,
                 i + 1,
-                KafkaStreams.this::close,
-                exception -> handleStreamsUncaughtException(exception, e -> SHUTDOWN_CLIENT),
-                new AtomicInteger()
+                KafkaStreams.this::closeToError,
+                exception -> handleStreamsUncaughtException(exception, e -> SHUTDOWN_CLIENT)
             );
             threads.add(streamThread);
             threadState.put(streamThread.getId(), streamThread.state());

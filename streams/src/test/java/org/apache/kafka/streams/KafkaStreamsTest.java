@@ -84,7 +84,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static java.util.Collections.emptyList;
@@ -221,8 +220,7 @@ public class KafkaStreamsTest {
             anyObject(StateRestoreListener.class),
             anyInt(),
             anyObject(StreamThread.ShutdownErrorHook.class),
-            anyObject(StreamsUncaughtExceptionHandler.class),
-            anyObject(AtomicInteger.class)
+            anyObject(StreamsUncaughtExceptionHandler.class)
         )).andReturn(streamThreadOne).andReturn(streamThreadTwo);
 
         EasyMock.expect(StreamThread.eosEnabled(anyObject(StreamsConfig.class))).andReturn(false).anyTimes();

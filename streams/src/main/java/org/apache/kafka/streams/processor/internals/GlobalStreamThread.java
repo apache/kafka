@@ -327,9 +327,7 @@ public class GlobalStreamThread extends Thread {
             } else {
                 throw e;
             }
-            if (this.streamsUncaughtExceptionHandler.handle(e) != StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_APPLICATION) {
-                throw e;
-            } else {
+            if (this.streamsUncaughtExceptionHandler.handle(e) == StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_APPLICATION) {
                 log.warn("Exception in global stream thread cause the application to attempt to shutdown." +
                         " This action will succeed only if there is at least one StreamThread running on ths client");
             }

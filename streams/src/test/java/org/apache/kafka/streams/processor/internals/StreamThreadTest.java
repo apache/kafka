@@ -228,8 +228,8 @@ public class StreamThreadTest {
             new MockStateRestoreListener(),
             threadIdx,
             null,
-            null,
-            new AtomicInteger());
+            null
+        );
     }
 
     private static class StateListenerStub implements StreamThread.StateListener {
@@ -521,8 +521,8 @@ public class StreamThreadTest {
             new MockStateRestoreListener(),
             threadIdx,
             null,
-            null,
-                new AtomicInteger());
+            null
+        );
 
         mockConsumer.enforceRebalance();
         EasyMock.replay(mockConsumer);
@@ -1420,8 +1420,8 @@ public class StreamThreadTest {
             new MockStateRestoreListener(),
             threadIdx,
             null,
-            null,
-            new AtomicInteger());
+            null
+        );
 
         thread.setState(StreamThread.State.STARTING);
         thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
