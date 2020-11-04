@@ -1027,7 +1027,9 @@ object KafkaConfig {
       .define(RequestTimeoutMsProp, INT, Defaults.RequestTimeoutMs, HIGH, RequestTimeoutMsDoc)
       .define(ConnectionSetupTimeoutMsProp, LONG, Defaults.ConnectionSetupTimeoutMs, MEDIUM, ConnectionSetupTimeoutMsDoc)
       .define(ConnectionSetupTimeoutMaxMsProp, LONG, Defaults.ConnectionSetupTimeoutMaxMs, MEDIUM, ConnectionSetupTimeoutMaxMsDoc)
-      .defineInternal(EnableMetadataQuorumProp, BOOLEAN, false, LOW) // The flag to turn on KIP-500 mode to use metadata quorum instead of Zookeeper
+
+      // Experimental flag to turn on APIs required for the internal metadata quorum (KIP-500)
+      .defineInternal(EnableMetadataQuorumProp, BOOLEAN, false, LOW)
 
       /************* Authorizer Configuration ***********/
       .define(AuthorizerClassNameProp, STRING, Defaults.AuthorizerClassName, LOW, AuthorizerClassNameDoc)
@@ -1561,8 +1563,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   /** ********* Feature configuration ***********/
   def isFeatureVersioningSupported = interBrokerProtocolVersion >= KAFKA_2_7_IV0
 
-  /** ********* Forwarding configuration ***********/
-  def forwardingEnabled = getBoolean(KafkaConfig.EnableMetadataQuorumProp)
+  /** ********* Experimental metadata quorum configuration ***********/
+  def metadataQuorumEnabled = getBoolean(KafkaConfig.EnableMetadataQuorumProp)
 
   /** ********* Group coordinator configuration ***********/
   val groupMinSessionTimeoutMs = getInt(KafkaConfig.GroupMinSessionTimeoutMsProp)

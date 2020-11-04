@@ -133,7 +133,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendErrorResponseMaybeThrottle(envelope, error.exception)
     }
 
-    if (!config.forwardingEnabled || !envelope.context.fromPrivilegedListener) {
+    if (!config.metadataQuorumEnabled || !envelope.context.fromPrivilegedListener) {
       // If the designated forwarding request is not coming from a privileged listener, or
       // forwarding is not enabled yet, we would not handle the request.
       closeConnection(envelope, Collections.emptyMap())
@@ -154,7 +154,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def isForwardingEnabled(request: RequestChannel.Request): Boolean = {
-    config.forwardingEnabled && request.context.principalSerde.isPresent
+    config.metadataQuorumEnabled && request.context.principalSerde.isPresent
   }
 
   private def maybeForward(

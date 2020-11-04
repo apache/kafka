@@ -302,10 +302,10 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         // Delay starting processors until the end of the initialization sequence to ensure
         // that credentials have been loaded before processing authentications.
         //
-        // We need to set allowDisabledApis to true in order to make forwarding integration test work
-        // under KIP-500 mode.
+        // Note that we allow the use of disabled APIs when experimental support for
+        // the internal metadata quorum has been enabled
         socketServer = new SocketServer(config, metrics, time, credentialProvider,
-          allowDisabledApis = config.forwardingEnabled)
+          allowDisabledApis = config.metadataQuorumEnabled)
         socketServer.startup(startProcessingRequests = false)
 
         /* start replica manager */
@@ -329,7 +329,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         kafkaController = new KafkaController(config, zkClient, time, metrics, brokerInfo, brokerEpoch, tokenManager, brokerFeatures, featureCache, threadNamePrefix)
         kafkaController.startup()
 
-        if (config.forwardingEnabled) {
+        if (config.metadataQuorumEnabled) {
           /* start forwarding manager */
           forwardingManager = new BrokerToControllerChannelManagerImpl(metadataCache, time, metrics, config, "forwardingChannel", threadNamePrefix)
           forwardingManager.start()
