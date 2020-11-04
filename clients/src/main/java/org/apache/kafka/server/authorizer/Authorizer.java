@@ -188,7 +188,9 @@ public interface Authorizer extends Configurable, Closeable {
         AclBindingFilter aclFilter = new AclBindingFilter(
             resourceTypeFilter, AccessControlEntryFilter.ANY);
 
+        Set<String> denyLiterals = new HashSet<>();
         Set<String> denyPrefixes = new HashSet<>();
+        Set<String> allowLiterals = new HashSet<>();
         Set<String> allowPrefixes = new HashSet<>();
         boolean hasWildCardAllow = false;
 
@@ -210,6 +212,7 @@ public interface Authorizer extends Configurable, Closeable {
                     case LITERAL:
                         if (binding.pattern().name().equals(ResourcePattern.WILDCARD_RESOURCE))
                             return AuthorizationResult.DENIED;
+                            denyLiterals.add(binding.pattern().name());
                         break;
                     case PREFIXED:
                         denyPrefixes.add(binding.pattern().name());
@@ -227,11 +230,7 @@ public interface Authorizer extends Configurable, Closeable {
                         hasWildCardAllow = true;
                         continue;
                     }
-                    List<Action> action = Collections.singletonList(new Action(
-                        op, binding.pattern(), 1, false, false));
-                    if (authorize(requestContext, action).get(0) == AuthorizationResult.ALLOWED) {
-                        return AuthorizationResult.ALLOWED;
-                    }
+                    allowLiterals.add(binding.pattern().name());
                     break;
                 case PREFIXED:
                     allowPrefixes.add(binding.pattern().name());
@@ -243,11 +242,11 @@ public interface Authorizer extends Configurable, Closeable {
             return AuthorizationResult.ALLOWED;
         }
 
-        for (String allowed : allowPrefixes) {
+        for (String allowPrefix : allowPrefixes) {
             StringBuilder sb = new StringBuilder();
             boolean hasDominatedDeny = false;
-            for (int pos = 0; pos < allowed.length(); pos++) {
-                sb.append(allowed.charAt(pos));
+            for (char ch : allowPrefix.toCharArray()) {
+                sb.append(ch);
                 if (denyPrefixes.contains(sb.toString())) {
                     hasDominatedDeny = true;
                     break;
@@ -256,6 +255,23 @@ public interface Authorizer extends Configurable, Closeable {
             if (!hasDominatedDeny)
                 return AuthorizationResult.ALLOWED;
         }
+
+        for (String allowLiteral : allowLiterals) {
+            if (denyLiterals.contains(allowLiteral))
+                continue;
+            StringBuilder sb = new StringBuilder();
+            boolean hasDominatedDeny = false;
+            for (char ch : allowLiteral.toCharArray()) {
+                sb.append(ch);
+                if (denyPrefixes.contains(sb.toString())) {
+                    hasDominatedDeny = true;
+                    break;
+                }
+            }
+            if (!hasDominatedDeny)
+                return AuthorizationResult.ALLOWED;
+        }
+
         return AuthorizationResult.DENIED;
     }
 
