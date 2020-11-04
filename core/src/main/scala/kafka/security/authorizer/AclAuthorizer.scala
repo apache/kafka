@@ -16,7 +16,6 @@
  */
 package kafka.security.authorizer
 
-import java.util.Collections
 import java.{lang, util}
 import java.util.concurrent.{CompletableFuture, CompletionStage}
 
@@ -331,62 +330,44 @@ class AclAuthorizer extends Authorizer with Logging {
     if (op eq AclOperation.UNKNOWN)
       throw new IllegalArgumentException("Unknown operation type")
 
-    val allowResource = matchingResources(
+    val allowPatterns = matchingPatterns(
       requestContext.principal().toString,
       requestContext.clientAddress().getHostAddress,
       op,
+      resourceType,
       AclPermissionType.ALLOW
     )
 
-    val denyResource = matchingResources(
+    val denyPatterns = matchingPatterns(
       requestContext.principal().toString,
       requestContext.clientAddress().getHostAddress,
       op,
+      resourceType,
       AclPermissionType.DENY
     )
 
-
-    for (rp <- denyResource) {
-      // We assume that there should be only one cluster resource,
-      // whose literal name is Resource.CLUSTER_NAME
-      if (canDenyAll(rp)) {
-        return AuthorizationResult.DENIED
-      }
-    }
+    if (denyAll(denyPatterns))
+      return AuthorizationResult.DENIED
 
     if (shouldAllowEveryoneIfNoAclIsFound)
       return AuthorizationResult.ALLOWED
 
-    for (rp <- allowResource) {
-      rp.patternType() match {
-        case PatternType.LITERAL =>
-          // We've checked the potential dominated deny by canDenyAnyAllow
-          if (rp.name() == ResourcePattern.WILDCARD_RESOURCE)
-            return AuthorizationResult.ALLOWED
-          val action = Collections.singletonList(new Action(
-            op, rp, 1, false, false))
-          if (authorize(requestContext, action).get(0) == AuthorizationResult.ALLOWED) {
-            return AuthorizationResult.ALLOWED
-          }
-        case PatternType.PREFIXED =>
-          if (!denyDominatePrefixAllow(rp.name(), denyResource))
-            return AuthorizationResult.ALLOWED
-        case _ =>
-      }
-    }
+    if (allowAny(allowPatterns, denyPatterns))
+      return AuthorizationResult.ALLOWED
 
     AuthorizationResult.DENIED
   }
 
-  def matchingResources(principal: String, host: String, op: AclOperation,
-                        permission: AclPermissionType): Set[ResourcePattern] = {
+  def matchingPatterns(principal: String, host: String, op: AclOperation,
+                       resourceType: ResourceType,
+                       permission: AclPermissionType): Set[ResourcePattern] = {
     var resources = Set[ResourcePattern]()
     for (p <- Set(principal, AclEntry.WildcardPrincipal.toString)) {
       for (h <- Set(host, AclEntry.WildcardHost)) {
         for (o <- Set(op, AclOperation.ALL)) {
           val ace = new AccessControlEntry(p, h, o, permission)
           resourceCache.get(ace) match {
-            case Some(r) => resources ++= r
+            case Some(r) => resources ++= r.filter(r => r.resourceType() == resourceType)
             case None =>
           }
         }
@@ -395,19 +376,45 @@ class AclAuthorizer extends Authorizer with Logging {
     resources
   }
 
+  private def denyAll(denyResources: Set[ResourcePattern]): Boolean =
+    denyResources.exists(rp => denyAll(rp))
 
-  private def canDenyAll(rp: ResourcePattern): Boolean =
+  private def denyAll(rp: ResourcePattern): Boolean =
     rp.patternType() == PatternType.LITERAL && rp.name() == ResourcePattern.WILDCARD_RESOURCE
 
-  private def denyDominatePrefixAllow(prefixAllow: String,
-                                      denyResource: Set[ResourcePattern]): Boolean = {
-    for (rp <- denyResource) {
-      if (rp.patternType() == PatternType.LITERAL && rp.name() == ResourcePattern.WILDCARD_RESOURCE)
-        return true
-      if (rp.patternType() == PatternType.PREFIXED && prefixAllow.startsWith(rp.name()))
-        return true
+  private def allowAny(allowPatterns: Set[ResourcePattern], denyPatterns: Set[ResourcePattern]): Boolean =
+    allowPatterns.exists(pattern => allow(pattern, denyPatterns))
+
+  private def allow(pattern: ResourcePattern, denyPatterns: Set[ResourcePattern]): Boolean = {
+    pattern.patternType() match {
+      case PatternType.LITERAL =>
+        // We've checked the potential dominated wildcard deny by canDenyAnyAllow
+        if (pattern.name() == ResourcePattern.WILDCARD_RESOURCE)
+          return true
+        for (denyPattern <- denyPatterns) {
+          denyPattern.patternType() match {
+            case PatternType.LITERAL =>
+              if (pattern.name().equals(denyPattern.name()))
+                return false
+            case PatternType.PREFIXED =>
+              if (pattern.name().startsWith(denyPattern.name()))
+                return false
+            case _ =>
+          }
+        }
+        true
+      case PatternType.PREFIXED =>
+        for (denyPattern <- denyPatterns) {
+          denyPattern.patternType() match {
+            case PatternType.PREFIXED =>
+              if (pattern.name().startsWith(denyPattern.name()))
+                return false
+            case _ =>
+          }
+        }
+        true
+      case _ => false
     }
-    false
   }
 
   private def authorizeAction(requestContext: AuthorizableRequestContext, action: Action): AuthorizationResult = {
