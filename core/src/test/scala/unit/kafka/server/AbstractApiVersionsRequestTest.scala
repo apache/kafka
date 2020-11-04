@@ -37,8 +37,10 @@ abstract class AbstractApiVersionsRequestTest extends BaseRequestTest {
   }
 
   def validateApiVersionsResponse(apiVersionsResponse: ApiVersionsResponse): Unit = {
+    val enabledPublicApis = ApiKeys.enabledApis()
+    enabledPublicApis.removeAll(internalApiKeys.toList.asJava)
     assertEquals("API keys in ApiVersionsResponse must match API keys supported by broker.",
-      ApiKeys.enabledApis().asScala.toSet.removedAll(internalApiKeys).size, apiVersionsResponse.data.apiKeys().size())
+      enabledPublicApis.size(), apiVersionsResponse.data.apiKeys().size())
     for (expectedApiVersion: ApiVersionsResponseKey <- ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.apiKeys().asScala) {
       if (!internalApiKeys.contains(ApiKeys.forId(expectedApiVersion.apiKey()))) {
         val actualApiVersion = apiVersionsResponse.apiVersion(expectedApiVersion.apiKey)
