@@ -100,7 +100,7 @@ inputTopic.pipeInput("key", 42L);</code></pre>
                 For example, you can validate returned <code>KeyValue</code> with standard assertions
                 if you only care about the key and value, but not the timestamp of the result record.
             </p>
-            <pre class="line-numbers"><code class="language-text">TestOutputTopic&lt;String, Long&gt; outputTopic = testDriver.createOutputTopic("result-topic", stringSerde.deserializer(), longSerde.deserializer());
+            <pre class="line-numbers"><code class="language-text">TestOutputTopic&lt;String, Long&gt; outputTopic = testDriver.createOutputTopic("output-topic", stringSerde.deserializer(), longSerde.deserializer());
 assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue&lt;&gt;("key", 42L)));</code></pre>
             <p>
                 <code>TopologyTestDriver</code> supports punctuations, too.
