@@ -26,6 +26,7 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -133,7 +134,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         OptionConverters.toScala(Optional.empty()));
                     Kip500Controller controller = new Kip500Controller(config, time,
                         OptionConverters.toScala(Optional.of(String.format("controller%d_", node.id()))),
-                        JavaConverters.asScala(new ArrayList<KafkaMetricsReporter>()).toSeq(),
+                        JavaConverters.asScalaBuffer(new ArrayList<KafkaMetricsReporter>()).toSeq(),
                         connectFutureManager.future);
                     controllers.put(node.id(), controller);
                     controller.socketServerFirstBoundPortFuture().whenComplete((port, e) -> {
@@ -191,7 +192,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
                         try (PrintStream out = new PrintStream(stream)) {
                             StorageTool.formatCommand(out,
-                                JavaConverters.asScala(Collections.singletonList(
+                                JavaConverters.asScalaBuffer(Collections.singletonList(
                                     controller.config().metadataLogDir())).toSeq(),
                                 OptionConverters.toScala(Optional.of(
                                     nodes.controllerNodes().get(nodeId).incarnationId().toString())),
@@ -240,7 +241,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
     public Properties clientProperties() throws ExecutionException, InterruptedException {
         Properties properties = new Properties();
         if (!controllers.isEmpty()) {
-            List<Node> controllerNodes = JavaConverters.asJava(
+            Collection<Node> controllerNodes = JavaConverters.asJavaCollection(
                 KafkaConfig$.MODULE$.controllerConnectStringsToNodes(
                     controllerConnectFutureManager.future.get()));
             StringBuilder bld = new StringBuilder();

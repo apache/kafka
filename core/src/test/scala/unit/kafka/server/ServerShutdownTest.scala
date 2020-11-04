@@ -37,6 +37,7 @@ import org.apache.kafka.common.requests.LeaderAndIsrRequest
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{IntegerDeserializer, IntegerSerializer, StringDeserializer, StringSerializer}
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.metadata.BrokerState
 import org.junit.{Before, Test}
 import org.junit.Assert._
 
@@ -169,10 +170,10 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
       // goes wrong so that awaitShutdown doesn't hang
       case e: Exception =>
         assertTrue(s"Unexpected exception $e", exceptionClassTag.runtimeClass.isInstance(e))
-        assertEquals(NotRunning.state, server.brokerState.currentState)
+        assertEquals(BrokerState.NOT_RUNNING, server.currentState())
     }
     finally {
-      if (server.brokerState.currentState != NotRunning.state)
+      if (server.currentState() != BrokerState.NOT_RUNNING)
         server.shutdown()
       server.awaitShutdown()
     }

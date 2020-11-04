@@ -41,12 +41,6 @@ import org.apache.kafka.server.authorizer.{Authorizer, AuthorizerServerInfo}
 import scala.jdk.CollectionConverters._
 
 object Kip500Controller {
-  sealed trait Status
-  case object SHUTDOWN extends Status
-  case object STARTING extends Status
-  case object STARTED extends Status
-  case object SHUTTING_DOWN extends Status
-
   def readMetaProperties(config: KafkaConfig): MetaProperties = {
     val file = new File(config.metadataLogDir, "meta.properties")
     val checkpoint = new BrokerMetadataCheckpoint(file)
@@ -73,10 +67,11 @@ class Kip500Controller(val config: KafkaConfig,
                        val controllerConnectFuture: CompletableFuture[String])
                           extends Logging with KafkaMetricsGroup {
   import Kip500Controller._
+  import kafka.server.KafkaServerManager._
 
   val lock = new ReentrantLock()
   val awaitShutdownCond = lock.newCondition()
-  var status: Status = SHUTDOWN
+  var status: ProcessStatus = KafkaServerManager.SHUTDOWN
 
   var metaProperties: MetaProperties = null
   var linuxIoMetricsCollector: LinuxIoMetricsCollector = null
@@ -93,7 +88,7 @@ class Kip500Controller(val config: KafkaConfig,
   var controllerApis: ControllerApis = null
   var controllerApisHandlerPool: KafkaRequestHandlerPool = null
 
-  private def maybeChangeStatus(from: Status, to: Status): Boolean = {
+  private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
     lock.lock()
     try {
       if (status != from) return false

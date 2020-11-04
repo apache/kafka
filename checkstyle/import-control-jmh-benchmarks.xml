@@ -31,6 +31,7 @@
     <allow pkg="javax.security"/>
     <allow pkg="org.apache.kafka.common"/>
     <allow pkg="org.apache.kafka.clients.producer"/>
+    <allow pkg="org.apache.kafka.metadata" />
     <allow pkg="kafka.cluster"/>
     <allow pkg="kafka.log"/>
     <allow pkg="kafka.server"/>

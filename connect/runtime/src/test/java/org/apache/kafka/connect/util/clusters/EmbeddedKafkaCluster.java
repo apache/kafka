@@ -16,11 +16,9 @@
  */
 package org.apache.kafka.connect.util.clusters;
 
-import kafka.server.BrokerState;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaConfig$;
 import kafka.server.LegacyBroker;
-import kafka.server.RunningAsBroker;
 import kafka.utils.CoreUtils;
 import kafka.utils.TestUtils;
 import kafka.zk.EmbeddedZookeeper;
@@ -47,6 +45,7 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.metadata.BrokerState;
 import org.junit.rules.ExternalResource;
 import org.junit.rules.TemporaryFolder;
 import org.slf4j.Logger;
@@ -249,13 +248,13 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     }
 
     /**
-     * Get the brokers that have a {@link RunningAsBroker} state.
+     * Get the brokers that have a {@link org.apache.kafka.metadata.BrokerState.RUNNING} state.
      *
      * @return the list of {@link LegacyBroker} instances that are running;
      *         never null but  possibly empty
      */
     public Set<LegacyBroker> runningBrokers() {
-        return brokersInState(state -> state.currentState() == RunningAsBroker.state());
+        return brokersInState(state -> state == BrokerState.RUNNING);
     }
 
     /**
@@ -272,7 +271,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
 
     protected boolean hasState(LegacyBroker server, Predicate<BrokerState> desiredState) {
         try {
-            return desiredState.test(server.brokerState());
+            return desiredState.test(server.currentState());
         } catch (Throwable e) {
             // Broker failed to respond.
             return false;

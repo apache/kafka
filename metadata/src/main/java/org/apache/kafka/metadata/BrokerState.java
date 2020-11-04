@@ -27,6 +27,39 @@ import java.util.Map;
  *
  * The numeric values used here are part of Kafka's public API.  They appear in metrics,
  * and are also sent over the wire in some cases.
+ *
+ * For the legacy broker, the expected state transitions are:
+ *
+ *                +-----------+
+ *                |NOT_RUNNING|
+ *                +-----+-----+
+ *                      |
+ *                      v
+ *                +-----+-----+
+ *                |REGISTERING+--+
+ *                +-----+-----+  | +----+------------+
+ *                      |        +-+RecoveringFrom   |
+ *                      v          |UncleanShutdown  |
+ *               +-------+-------+ +-------+---------+
+ *               | RUNNING       |            |
+ *               +-------+-------+<-----------+
+ *                       |
+ *                       v
+ *                +-----+------------+
+ *                |PendingControlled |
+ *                |Shutdown          |
+ *                +-----+------------+
+ *                      |
+ *                      v
+ *               +-----+----------+
+ *               |BrokerShutting  |
+ *               |Down            |
+ *               +-----+----------+
+ *                     |
+ *                     v
+ *               +-----+-----+
+ *               |Not Running|
+ *               +-----------+
  */
 @InterfaceStability.Evolving
 public enum BrokerState {

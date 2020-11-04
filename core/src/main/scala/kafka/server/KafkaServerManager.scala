@@ -71,6 +71,12 @@ object KafkaServerManager extends Logging {
     }
     new KafkaServerManager(config, legacyBroker, kip500Broker, controller)
   }
+
+  sealed trait ProcessStatus
+  case object SHUTDOWN extends ProcessStatus
+  case object STARTING extends ProcessStatus
+  case object STARTED extends ProcessStatus
+  case object SHUTTING_DOWN extends ProcessStatus
 }
 
 /**
