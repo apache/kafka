@@ -26,6 +26,9 @@ import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
+import org.apache.kafka.common.message.BrokerRegistrationRequestData;
+import org.apache.kafka.common.message.CreateTopicsRequestData;
+import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.metadata.BrokerRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
@@ -34,7 +37,6 @@ import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.ApiMessageAndVersion;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
-import org.apache.kafka.common.requests.BrokerRegistrationRequest;
 import org.apache.kafka.common.utils.EventQueue;
 import org.apache.kafka.common.utils.KafkaEventQueue;
 import org.apache.kafka.common.utils.LogContext;
@@ -511,6 +513,12 @@ public final class QuorumController implements Controller {
     private final ClusterControlManager clusterControlManager;
 
     /**
+     * An object which stores the controller's view of topics and partitions.
+     * This must be accessed only by the event queue thread.
+     */
+    private final ReplicationControlManager replicationControlManager;
+
+    /**
      * An object which stores the controller's view of the cluster features.
      * This must be accessed only by the event queue thread.
      */
@@ -560,6 +568,9 @@ public final class QuorumController implements Controller {
         this.purgatory = new ControllerPurgatory();
         this.configurationControlManager =
             new ConfigurationControlManager(snapshotRegistry, configDefs);
+        this.replicationControlManager =
+            new ReplicationControlManager(snapshotRegistry,
+                configurationControlManager);
         this.clusterControlManager =
             new ClusterControlManager(time, snapshotRegistry, 18000, 9000);
         this.featureControlManager =
@@ -582,6 +593,13 @@ public final class QuorumController implements Controller {
     }
 
     @Override
+    public CompletableFuture<CreateTopicsResponseData>
+            createTopics(CreateTopicsRequestData request) {
+        return appendWriteEvent("createTopics", () ->
+            replicationControlManager.createTopics(request));
+    }
+
+    @Override
     public CompletableFuture<Map<ConfigResource, ResultOrError<Map<String, String>>>>
             describeConfigs(Map<ConfigResource, Collection<String>> resources) {
         return appendReadEvent("describeConfigs", () ->
@@ -595,6 +613,12 @@ public final class QuorumController implements Controller {
             new CompletableFuture<>();
         future.completeExceptionally(new UnsupportedVersionException("unimplemented"));
         return future;
+    }
+
+    @Override
+    public CompletableFuture<FeatureManager.FinalizedFeaturesAndEpoch> finalizedFeatures() {
+        return appendReadEvent("getFinalizedFeatures", () ->
+            featureControlManager.finalizedFeaturesAndEpoch(lastCommittedOffset));
     }
 
     @Override
@@ -635,15 +659,9 @@ public final class QuorumController implements Controller {
 
     @Override
     public CompletableFuture<RegistrationReply>
-            registerBroker(BrokerRegistrationRequest request) {
+            registerBroker(BrokerRegistrationRequestData request) {
         return appendWriteEvent("registerBroker", () ->
-            clusterControlManager.registerBroker(request.data(), writeOffset));
-    }
-
-    @Override
-    public CompletableFuture<FeatureManager.FinalizedFeaturesAndEpoch> finalizedFeatures() {
-        return appendReadEvent("getFinalizedFeatures", () ->
-            featureControlManager.finalizedFeaturesAndEpoch(lastCommittedOffset));
+            clusterControlManager.registerBroker(request, writeOffset));
     }
 
     @Override

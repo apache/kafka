@@ -21,9 +21,11 @@ import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
+import org.apache.kafka.common.message.BrokerRegistrationRequestData;
+import org.apache.kafka.common.message.CreateTopicsRequestData;
+import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
-import org.apache.kafka.common.requests.BrokerRegistrationRequest;
 import org.apache.kafka.controller.ClusterControlManager.HeartbeatReply;
 import org.apache.kafka.controller.ClusterControlManager.RegistrationReply;
 import org.apache.kafka.metadata.FeatureManager;
@@ -34,7 +36,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 public interface Controller extends AutoCloseable {
-        /**
+    /**
      * Change partition ISRs.
      *
      * @param brokerId      The ID of the broker making the change.
@@ -45,6 +47,16 @@ public interface Controller extends AutoCloseable {
      */
     CompletableFuture<Map<TopicPartition, Errors>>
         alterIsr(int brokerId, long brokerEpoch, Map<TopicPartition, LeaderAndIsr> changes);
+
+    /**
+     * Create a batch of topics.
+     *
+     * @param request       The CreateTopicsRequest data.
+     *
+     * @return              A future yielding the response.
+     */
+    CompletableFuture<CreateTopicsResponseData>
+        createTopics(CreateTopicsRequestData request);
 
     /**
      * Describe the current configuration of various resources.
@@ -70,6 +82,13 @@ public interface Controller extends AutoCloseable {
      */
     CompletableFuture<Map<TopicPartition, PartitionLeaderElectionResult>>
         electLeaders(int timeoutMs, Set<TopicPartition> parts, boolean unclean);
+
+    /**
+     * Get the current finalized feature ranges for each feature.
+     *
+     * @return              A future yielding the feature ranges.
+     */
+    CompletableFuture<FeatureManager.FinalizedFeaturesAndEpoch> finalizedFeatures();
 
     /**
      * Perform some incremental configuration changes.
@@ -111,14 +130,8 @@ public interface Controller extends AutoCloseable {
      *
      * @return              A future yielding a registration reply.
      */
-    CompletableFuture<RegistrationReply> registerBroker(BrokerRegistrationRequest request);
-
-    /**
-     * Get the current finalized feature ranges for each feature.
-     *
-     * @return              A future yielding the feature ranges.
-     */
-    CompletableFuture<FeatureManager.FinalizedFeaturesAndEpoch> finalizedFeatures();
+    CompletableFuture<RegistrationReply> registerBroker(
+        BrokerRegistrationRequestData request);
 
     /**
      * Begin shutting down, but don't block.  You must still call close to clean up all
