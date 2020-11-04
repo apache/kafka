@@ -1048,7 +1048,7 @@ object KafkaConfig {
       .define(ConnectionSetupTimeoutMsProp, LONG, Defaults.ConnectionSetupTimeoutMs, MEDIUM, ConnectionSetupTimeoutMsDoc)
       .define(ConnectionSetupTimeoutMaxMsProp, LONG, Defaults.ConnectionSetupTimeoutMaxMs, MEDIUM, ConnectionSetupTimeoutMaxMsDoc)
       .define(ProcessRolesProp, LIST, Collections.emptyList(), HIGH, ProcessRolesDoc)
-      .define(ControllerConnectProp, LIST, Collections.emptyList(), HIGH, ControllerConnectDoc)
+      .define(ControllerConnectProp, STRING, null, HIGH, ControllerConnectDoc)
       .define(RegistrationHeartbeatIntervalMsProp, INT, Defaults.RegistrationHeartbeatIntervalMs, MEDIUM, RegistrationHeartbeatIntervalMsDoc)
       .define(RegistrationLeaseTimeoutMsProp, INT, Defaults.RegistrationLeaseTimeoutMs, MEDIUM, RegistrationLeaseTimeoutMsDoc)
       .define(MetadataLogDirProp, STRING, null, HIGH, MetadataLogDirDoc)
@@ -1331,6 +1331,38 @@ object KafkaConfig {
     // If we can't determine the config entry type, treat it as a sensitive config to be safe
     configType.isEmpty || configType.contains(ConfigDef.Type.PASSWORD)
   }
+
+  def controllerConnectStringsToNodes(connectString: String): Seq[Node] = {
+    connectString.split(",").filterNot(_.isEmpty()).map { case input =>
+      val atIndex = input.indexOf('@')
+      if (atIndex < 0) {
+        throw new RuntimeException("Invalid controller node specification '" + input +
+          "': failed to find an at sign.")
+      }
+      val idString = input.substring(0, atIndex)
+      val id = try {
+        idString.toInt
+      } catch {
+        case e: NumberFormatException => throw new RuntimeException("Invalid controller " +
+          "node specification '" + input + "': failed to parse id.", e)
+      }
+      val hostPort = input.substring(atIndex + 1)
+      val colonIndex = hostPort.indexOf(':')
+      if (colonIndex < 0) {
+        throw new RuntimeException("Invalid controller node specification '" + input +
+          "': failed to find a colon.")
+      }
+      val host = hostPort.substring(0, colonIndex)
+      val portString = hostPort.substring(colonIndex + 1)
+      val port = try {
+        portString.toInt
+      } catch {
+        case e: NumberFormatException => throw new RuntimeException("Invalid controller " +
+          "node specification '" + input + "': failed to parse numeric port.", e)
+      }
+      new Node(id, host, port, null)
+    }
+  }
 }
 
 class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigOverride: Option[DynamicBrokerConfig])
@@ -1473,7 +1505,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   val connectionSetupTimeoutMs = getLong(KafkaConfig.ConnectionSetupTimeoutMsProp)
   val connectionSetupTimeoutMaxMs = getLong(KafkaConfig.ConnectionSetupTimeoutMaxMsProp)
   val processRoles = getList(KafkaConfig.ProcessRolesProp)
-  val controllerConnect = getList(KafkaConfig.ControllerConnectProp)
+  val controllerConnect = getString(KafkaConfig.ControllerConnectProp)
   val registrationHeartbeatIntervalMs = getInt(KafkaConfig.RegistrationHeartbeatIntervalMsProp)
   val registrationLeaseTimeoutMs = getInt(KafkaConfig.RegistrationLeaseTimeoutMsProp)
   def metadataLogDir: String = {
@@ -1799,6 +1831,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     }
   }
 
+  val controllerConnectNodes: Seq[Node] = KafkaConfig.controllerConnectStringsToNodes(Option(controllerConnect).getOrElse(""))
+
   validateValues()
 
   private def validateValues(): Unit = {
@@ -1902,38 +1936,6 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
       if (isController) {
         require(controllerId >= 0, "controller.id must be equal or greater than 0")
       }
-    }
-  }
-
-  val controllerConnectNodes: Seq[Node] = {
-    controllerConnect.asScala.map { case input =>
-      val atIndex = input.indexOf('@')
-      if (atIndex < 0) {
-        throw new RuntimeException("Invalid controller node specification '" + input +
-          "': failed to find an at sign.")
-      }
-      val idString = input.substring(0, atIndex)
-      val id = try {
-        idString.toInt
-      } catch {
-        case e: NumberFormatException => throw new RuntimeException("Invalid controller " +
-          "node specification '" + input + "': failed to parse id.", e)
-      }
-      val hostPort = input.substring(atIndex + 1)
-      val colonIndex = hostPort.indexOf(':')
-      if (colonIndex < 0) {
-        throw new RuntimeException("Invalid controller node specification '" + input +
-          "': failed to find a colon.")
-      }
-      val host = hostPort.substring(0, colonIndex)
-      val portString = hostPort.substring(colonIndex + 1)
-      val port = try {
-        portString.toInt
-      } catch {
-        case e: NumberFormatException => throw new RuntimeException("Invalid controller " +
-          "node specification '" + input + "': failed to parse numeric port.", e)
-      }
-      new Node(id, host, port, null)
     }
   }
 }

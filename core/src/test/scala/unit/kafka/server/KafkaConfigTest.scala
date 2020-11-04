@@ -24,6 +24,7 @@ import kafka.cluster.EndPoint
 import kafka.log.LogConfig
 import kafka.message._
 import kafka.utils.{CoreUtils, TestUtils}
+import org.apache.kafka.common.Node
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.metrics.Sensor
 import org.apache.kafka.common.network.ListenerName
@@ -1035,5 +1036,15 @@ class KafkaConfigTest {
     // Invalid now
     props.put(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
     assertFalse(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testControllerConnectStringsToNodes(): Unit = {
+    assertEquals(Seq.empty, KafkaConfig.controllerConnectStringsToNodes(""))
+    assertEquals(Seq(new Node(3000, "example.com", 9093)),
+      KafkaConfig.controllerConnectStringsToNodes("3000@example.com:9093"))
+    assertEquals(Seq(new Node(3000, "example.com", 9093),
+                     new Node(3001, "example.com", 9094)),
+      KafkaConfig.controllerConnectStringsToNodes("3000@example.com:9093,3001@example.com:9094"))
   }
 }
