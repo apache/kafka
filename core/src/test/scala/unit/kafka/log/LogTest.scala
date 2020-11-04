@@ -1370,17 +1370,22 @@ class LogTest {
     log.roll()
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("a".getBytes, "c".getBytes())), producerId = pid1,
       producerEpoch = epoch, sequence = 2), leaderEpoch = 0)
+    log.roll()
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("a".getBytes, "d".getBytes())), producerId = pid1,
+      producerEpoch = epoch, sequence = 3), leaderEpoch = 0)
     log.updateHighWatermark(log.logEndOffset)
     assertEquals("expected a snapshot file per segment base offset, except the first segment", log.logSegments.map(_.baseOffset).toSeq.sorted.drop(1), ProducerStateManager.listSnapshotFiles(logDir).map(_.offset).sorted)
-    assertEquals(2, ProducerStateManager.listSnapshotFiles(logDir).size)
+    assertEquals(3, ProducerStateManager.listSnapshotFiles(logDir).size)
 
-    // Clean segments, this should delete everything except the active segment since there only
-    // exists the key "a".
+    // Clean segments, this should delete the first two segments since although there only exists the key "a", only the first
+    // three segments are considered for cleaning since we do not clean the active segment.
     cleaner.clean(LogToClean(log.topicPartition, log, 0, log.logEndOffset))
     log.deleteOldSegments()
     // Sleep to breach the file delete delay and run scheduled file deletion tasks
     mockTime.sleep(1)
-    assertEquals("expected a snapshot file per segment base offset, excluding the first", log.logSegments.map(_.baseOffset).toSeq.sorted.drop(1), ProducerStateManager.listSnapshotFiles(logDir).map(_.offset).sorted)
+    // We delete the snapshot from the second segment, so now we have 2 snapshot files 
+    assertEquals(2, ProducerStateManager.listSnapshotFiles(logDir).size)
+    assertEquals("expected a snapshot file per segment base offset, excluding the first", log.logSegments.map(_.baseOffset).toSeq.sorted, ProducerStateManager.listSnapshotFiles(logDir).map(_.offset).sorted)
   }
 
   /**
@@ -4704,15 +4709,7 @@ object LogTest {
   def hasOffsetOverflow(log: Log): Boolean = firstOverflowSegment(log).isDefined
 
   def firstOverflowSegment(log: Log): Option[LogSegment] = {
-    def hasOverflow(baseOffset: Long, batch: RecordBatch): Boolean =
-      batch.lastOffset > baseOffset + Int.MaxValue || batch.baseOffset < baseOffset
-
-    for (segment <- log.logSegments) {
-      val overflowBatch = segment.log.batches.asScala.find(batch => hasOverflow(segment.baseOffset, batch))
-      if (overflowBatch.isDefined)
-        return Some(segment)
-    }
-    None
+    log.logSegments.iterator.find(segment => segment.hasOverflow)
   }
 
   private def rawSegment(logDir: File, baseOffset: Long): FileRecords =

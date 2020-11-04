@@ -30,6 +30,7 @@ import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record._
+import org.apache.kafka.common.requests.ListOffsetRequest
 import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
 import org.junit.{After, Test}
@@ -482,9 +483,9 @@ class LogCleanerTest {
 
     // [{Producer1: Commit}, {2}, {3}]
     log.appendAsLeader(commitMarker(1L, producerEpoch), leaderEpoch = 0,
-      origin = AppendOrigin.Coordinator) // offset 1
-    log.appendAsLeader(record(2, 2), leaderEpoch = 0) // offset 2
-    log.appendAsLeader(record(3, 3), leaderEpoch = 0) // offset 3
+      origin = AppendOrigin.Coordinator) // offset 0
+    log.appendAsLeader(record(2, 2), leaderEpoch = 0) // offset 1
+    log.appendAsLeader(record(3, 3), leaderEpoch = 0) // offset 2
     log.roll()
 
     // first time through the control batch is retained as an empty batch
@@ -493,6 +494,8 @@ class LogCleanerTest {
     assertEquals(List(2, 3), LogTest.keysInLog(log))
     assertEquals(List(1, 2), offsetsInLog(log))
     assertEquals(List(0, 1, 2), lastOffsetsPerBatchInLog(log))
+    // We retain the empty batch, so the logStartOffset stays the same.
+    assertEquals(0, log.logStartOffset)
 
     // the empty control batch does not cause an exception when cleaned
     // Expected State: [{Producer1: EmptyBatch}], [{2}, {3}]
@@ -500,6 +503,8 @@ class LogCleanerTest {
     assertEquals(List(2, 3), LogTest.keysInLog(log))
     assertEquals(List(1, 2), offsetsInLog(log))
     assertEquals(List(0, 1, 2), lastOffsetsPerBatchInLog(log))
+    // We retain the empty batch, so the logStartOffset stays the same.
+    assertEquals(0, log.logStartOffset)
   }
 
   @Test
@@ -643,7 +648,7 @@ class LogCleanerTest {
     log.roll()
 
     def assertAbortedTransactionIndexed(): Unit = {
-      val abortedTxns = log.collectAbortedTransactions(0L, 100L)
+      val abortedTxns = log.collectAbortedTransactions(log.logStartOffset, 100L)
       assertEquals(1, abortedTxns.size)
       assertEquals(producerId, abortedTxns.head.producerId)
       assertEquals(0, abortedTxns.head.firstOffset)
@@ -959,7 +964,7 @@ class LogCleanerTest {
 
     def distinctValuesBySegment = log.logSegments.map(s => s.log.records.asScala.map(record => TestUtils.readString(record.value)).toSet.size).toSeq
 
-    val disctinctValuesBySegmentBeforeClean = distinctValuesBySegment
+    val distinctValuesBySegmentBeforeClean = distinctValuesBySegment
     assertTrue("Test is not effective unless each segment contains duplicates. Increase segment size or decrease number of keys.",
       distinctValuesBySegment.reverse.tail.forall(_ > N))
 
@@ -968,8 +973,8 @@ class LogCleanerTest {
     val distinctValuesBySegmentAfterClean = distinctValuesBySegment
 
     assertTrue("The cleanable segments should have fewer number of values after cleaning",
-      disctinctValuesBySegmentBeforeClean.zip(distinctValuesBySegmentAfterClean).take(numCleanableSegments).forall { case (before, after) => after < before })
-    assertTrue("The uncleanable segments should have the same number of values after cleaning", disctinctValuesBySegmentBeforeClean.zip(distinctValuesBySegmentAfterClean)
+      distinctValuesBySegmentBeforeClean.zip(distinctValuesBySegmentAfterClean).take(numCleanableSegments).forall { case (before, after) => after < before })
+    assertTrue("The uncleanable segments should have the same number of values after cleaning", distinctValuesBySegmentBeforeClean.zip(distinctValuesBySegmentAfterClean)
       .slice(numCleanableSegments, numTotalSegments).forall { x => x._1 == x._2 })
   }
 
@@ -1622,6 +1627,69 @@ class LogCleanerTest {
       checkGauge("max-clean-time-secs")
       checkGauge("max-compaction-delay-secs")
     } finally logCleaner.shutdown()
+  }
+  
+  @Test
+  def testSegmentBaseOffsets(): Unit = {
+    val cleaner = makeCleaner(Int.MaxValue)
+
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 256: java.lang.Integer)
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+    
+    log.appendAsLeader(record(1,0), leaderEpoch = 0)
+    log.appendAsLeader(record(1,1), leaderEpoch = 0)
+    log.appendAsLeader(record(1,2), leaderEpoch = 0)
+    
+    log.appendAsLeader(record(1,3), leaderEpoch = 0)
+    log.appendAsLeader(record(1,4), leaderEpoch = 0)
+    log.appendAsLeader(record(2,5), leaderEpoch = 0)
+    
+    log.appendAsLeader(record(2,6), leaderEpoch = 0)
+    log.appendAsLeader(record(2,7), leaderEpoch = 0)
+    log.roll()
+    
+    assertEquals(4, log.logSegments.size)
+    
+    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0, log.activeSegment.baseOffset))
+    
+    // The log cleaner will not delete the first empty segment, but it will update logStartOffset
+    assertEquals(4, log.logSegments.size)
+    assertEquals(4, log.logStartOffset)
+    val offset = log.fetchOffsetByTimestamp(ListOffsetRequest.EARLIEST_TIMESTAMP)
+    assertTrue(offset.isDefined)
+    assertEquals(4L, offset.get.offset)
+    
+    // Each baseOffset of the segment will be the offset of the first record or the original baseOffset if it is empty.
+    val segments = log.logSegments.iterator
+    assertEquals(0, segments.next().baseOffset)
+    assertEquals(4, segments.next().baseOffset)
+    assertEquals(7, segments.next().baseOffset)
+    assertEquals(8, segments.next().baseOffset)
+  }
+
+  @Test
+  def testLogStartOffsetOnDelete(): Unit = {
+    val cleaner = makeCleaner(Int.MaxValue)
+
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+    logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Delete)
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    // Each segment has 14 records.
+    while(log.numberOfSegments < 4)
+      log.appendAsLeader(record(0, log.logEndOffset.toInt), leaderEpoch = 0)
+    log.roll()
+
+    assertEquals(5, log.logSegments.size)
+    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0, log.activeSegment.baseOffset))
+    
+    // The log should start from the fourth segment and its base offset should be 42.
+    assertEquals(42, log.logStartOffset)
+    val offset = log.fetchOffsetByTimestamp(ListOffsetRequest.EARLIEST_TIMESTAMP)
+    assertTrue(offset.isDefined)
+    assertEquals(42L, offset.get.offset)
   }
 
 

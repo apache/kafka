@@ -516,6 +516,7 @@ private[log] class Cleaner(val id: Int,
     info("Beginning cleaning of log %s.".format(cleanable.log.name))
 
     val log = cleanable.log
+    val baseOffset = log.logSegments.head.baseOffset
     val stats = new CleanerStats()
 
     // build the offset map
@@ -537,6 +538,14 @@ private[log] class Cleaner(val id: Int,
       log.config.maxIndexSize, cleanable.firstUncleanableOffset)
     for (group <- groupedSegments)
       cleanSegments(log, group, offsetMap, deleteHorizonMs, stats, transactionMetadata)
+
+    if (baseOffset == log.logStartOffset) {
+      val segments = log.logSegments.iterator
+      var segment = segments.next()
+      while (segment.size == 0 && segments.hasNext)
+        segment = segments.next()
+      log.maybeIncrementLogStartOffset(segment.baseOffset, SegmentCompaction)
+    }
 
     // record buffer utilization
     stats.bufferUtilization = offsetMap.utilization
@@ -572,6 +581,7 @@ private[log] class Cleaner(val id: Int,
       val iter = segments.iterator
       var currentSegmentOpt: Option[LogSegment] = Some(iter.next())
       val lastOffsetOfActiveProducers = log.lastRecordsOfActiveProducers
+      var canUpdateBaseOffset = true
 
       while (currentSegmentOpt.isDefined) {
         val currentSegment = currentSegmentOpt.get
@@ -588,8 +598,8 @@ private[log] class Cleaner(val id: Int,
           s"${if(retainDeletesAndTxnMarkers) "retaining" else "discarding"} deletes.")
 
         try {
-          cleanInto(log.topicPartition, currentSegment.log, cleaned, map, retainDeletesAndTxnMarkers, log.config.maxMessageSize,
-            transactionMetadata, lastOffsetOfActiveProducers, stats)
+          canUpdateBaseOffset = cleanInto(log.topicPartition, currentSegment.log, cleaned, map, retainDeletesAndTxnMarkers, log.config.maxMessageSize,
+            transactionMetadata, lastOffsetOfActiveProducers, stats, canUpdateBaseOffset)
         } catch {
           case e: LogSegmentOffsetOverflowException =>
             // Split the current segment. It's also safest to abort the current cleaning process, so that we retry from
@@ -642,7 +652,8 @@ private[log] class Cleaner(val id: Int,
                              maxLogMessageSize: Int,
                              transactionMetadata: CleanedTransactionMetadata,
                              lastRecordsOfActiveProducers: Map[Long, LastRecord],
-                             stats: CleanerStats): Unit = {
+                             stats: CleanerStats,
+                             canUpdateBaseOffset: Boolean): Boolean = {
     val logCleanerFilter: RecordFilter = new RecordFilter {
       var discardBatchRecords: Boolean = _
 
@@ -684,6 +695,7 @@ private[log] class Cleaner(val id: Int,
     }
 
     var position = 0
+    var newCanUpdateBaseOffset = canUpdateBaseOffset
     while (position < sourceRecords.sizeInBytes) {
       checkDone(topicPartition)
       // read a chunk of messages and copy any that are to be retained to the write buffer to be written out
@@ -711,6 +723,9 @@ private[log] class Cleaner(val id: Int,
           shallowOffsetOfMaxTimestamp = result.shallowOffsetOfMaxTimestamp,
           records = retained)
         throttler.maybeThrottle(outputBuffer.limit())
+        if (newCanUpdateBaseOffset)
+          dest.updateBaseOffset(result.minOffset())
+        newCanUpdateBaseOffset = false
       }
 
       // if we read bytes but didn't get even one complete batch, our I/O buffer is too small, grow it and try again
@@ -719,6 +734,7 @@ private[log] class Cleaner(val id: Int,
         growBuffersOrFail(sourceRecords, position, maxLogMessageSize, records)
     }
     restoreBuffers()
+    newCanUpdateBaseOffset
   }
 
 

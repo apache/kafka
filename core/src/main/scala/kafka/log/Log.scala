@@ -203,6 +203,9 @@ case object LeaderOffsetIncremented extends LogStartOffsetIncrementReason {
 case object SegmentDeletion extends LogStartOffsetIncrementReason {
   override def toString: String = "segment deletion"
 }
+case object SegmentCompaction extends LogStartOffsetIncrementReason {
+    override def toString: String = "segment compaction"
+}
 
 /**
  * An append-only log for storing messages.
@@ -1306,7 +1309,7 @@ class Log(@volatile private var _dir: File,
     // in an unclean manner within log.flush.start.offset.checkpoint.interval.ms. The chance of this happening is low.
     maybeHandleIOException(s"Exception while increasing log start offset for $topicPartition to $newLogStartOffset in dir ${dir.getParent}") {
       lock synchronized {
-        if (newLogStartOffset > highWatermark)
+        if (reason != SegmentCompaction && newLogStartOffset > highWatermark)
           throw new OffsetOutOfRangeException(s"Cannot increment the log start offset to $newLogStartOffset of partition $topicPartition " +
             s"since it is larger than the high watermark $highWatermark")
 

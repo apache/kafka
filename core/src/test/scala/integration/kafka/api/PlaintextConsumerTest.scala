@@ -35,10 +35,9 @@ import org.scalatest.Assertions.intercept
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.Buffer
-import kafka.server.QuotaType
-import kafka.server.KafkaServer
+import kafka.server.{KafkaServer, QuotaType}
 
-import scala.collection.mutable
+import scala.collection.{Seq, mutable}
 
 /* We have some tests in this class instead of `BaseConsumerTest` in order to keep the build time under control. */
 class PlaintextConsumerTest extends BaseConsumerTest {
@@ -1274,6 +1273,52 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(100L, latests.get(t0p0))
     assertEquals(100L, latests.get(t0p1))
     assertEquals(100L, latests.get(t1p0))
+  }
+
+  @Test
+  def testBeginningOffsetsOnCompactedTopic(): Unit = {
+    val topic0 = "topicWithoutCompaction"
+    val topic1 = "topicWithCompaction"
+    val producer = createProducer()
+    // First topic will not have compaction. Simply a sanity test.
+    createTopicAndSendRecords(producer, topicName = topic0, numPartitions = 1, recordsPerPartition = 1000)
+    val props = new Properties()
+    
+    // Second topic will have compaction. 
+    // The first partition will have compaction occur at offset 0 so beginningOffsets should be nonzero.
+    // The second partition will not have compaction occur at offset 0, so beginningOffsets will remain 0.
+    props.setProperty(LogConfig.MaxCompactionLagMsProp, "1")
+    props.setProperty(LogConfig.CleanupPolicyProp, "compact")
+    props.setProperty(LogConfig.MinCleanableDirtyRatioProp, "0.01")
+    props.setProperty(LogConfig.SegmentMsProp, "100")
+    createTopic(topic1, numPartitions = 2, replicationFactor = 1, props)
+    sendDuplicateRecords(producer, numRecords = 1000, 0L, new TopicPartition(topic1, 0))
+    val t1p1 = new TopicPartition(topic1, 1)
+    sendRecords(producer, 1000, t1p1)
+    sendDuplicateRecords(producer, numRecords = 1000, 1000L, new TopicPartition(topic1, 1))
+
+    // Sleep to allow compaction to take place.
+    Thread.sleep(25000)
+
+    val t0p0 = new TopicPartition(topic0, 0)
+    val t1p0 = new TopicPartition(topic1, 0)
+    val partitions = Set(t0p0, t1p0, t1p1).asJava
+    val consumer = createConsumer()
+
+    val zero = long2Long(0L)
+    val timestamps = Map(t0p0 -> zero, t1p0 -> zero, t1p1 -> zero).asJava
+
+    // As stated in KAFKA-7556, beginningOffsets should return the same values as offsetsForTimes with timestamp 0L.
+    val earliests = consumer.beginningOffsets(partitions)
+    val earliestsByDate = consumer.offsetsForTimes(timestamps)
+    
+    assertEquals(earliests.get(t1p0), earliestsByDate.get(t1p0).offset())
+    assertEquals(0L, earliests.get(t0p0))
+    assertNotEquals(0L, earliests.get(t1p0))
+    assertEquals(0L, earliests.get(t1p1))
+    assertEquals(0L, earliestsByDate.get(t0p0).offset())
+    assertNotEquals(0L, earliestsByDate.get(t1p0).offset())
+    assertEquals(0L, earliestsByDate.get(t1p1).offset())
   }
 
   @Test

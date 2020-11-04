@@ -198,7 +198,7 @@ public class MemoryRecords extends AbstractRecords {
             if (!retainedRecords.isEmpty()) {
                 if (writeOriginalBatch) {
                     batch.writeTo(bufferOutputStream);
-                    filterResult.updateRetainedBatchMetadata(batch, retainedRecords.size(), false);
+                    filterResult.updateRetainedBatchMetadata(batch, retainedRecords.get(0).offset(), retainedRecords.size(), false);
                 } else {
                     MemoryRecordsBuilder builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream);
                     MemoryRecords records = builder.build();
@@ -211,7 +211,7 @@ public class MemoryRecords extends AbstractRecords {
 
                     MemoryRecordsBuilder.RecordsInfo info = builder.info();
                     filterResult.updateRetainedBatchMetadata(info.maxTimestamp, info.shallowOffsetOfMaxTimestamp,
-                            maxOffset, retainedRecords.size(), filteredBatchSize);
+                            maxOffset,  retainedRecords.get(0).offset(), retainedRecords.size(), filteredBatchSize);
                 }
             } else if (batchRetention == BatchRetention.RETAIN_EMPTY) {
                 if (batchMagic < RecordBatch.MAGIC_VALUE_V2)
@@ -222,7 +222,7 @@ public class MemoryRecords extends AbstractRecords {
                         batch.producerEpoch(), batch.baseSequence(), batch.baseOffset(), batch.lastOffset(),
                         batch.partitionLeaderEpoch(), batch.timestampType(), batch.maxTimestamp(),
                         batch.isTransactional(), batch.isControlBatch());
-                filterResult.updateRetainedBatchMetadata(batch, 0, true);
+                filterResult.updateRetainedBatchMetadata(batch, batch.baseOffset(), 0, true);
             }
 
             // If we had to allocate a new buffer to fit the filtered buffer (see KAFKA-5316), return early to
@@ -330,27 +330,31 @@ public class MemoryRecords extends AbstractRecords {
         private int messagesRetained = 0;
         private int bytesRetained = 0;
         private long maxOffset = -1L;
+        private long minOffset = -1L;
         private long maxTimestamp = RecordBatch.NO_TIMESTAMP;
         private long shallowOffsetOfMaxTimestamp = -1L;
+        private boolean offsetDetermined = false;
 
         private FilterResult(ByteBuffer outputBuffer) {
             this.outputBuffer = outputBuffer;
         }
 
-        private void updateRetainedBatchMetadata(MutableRecordBatch retainedBatch, int numMessagesInBatch, boolean headerOnly) {
+        private void updateRetainedBatchMetadata(MutableRecordBatch retainedBatch, long minOffset, int numMessagesInBatch, boolean headerOnly) {
             int bytesRetained = headerOnly ? DefaultRecordBatch.RECORD_BATCH_OVERHEAD : retainedBatch.sizeInBytes();
             updateRetainedBatchMetadata(retainedBatch.maxTimestamp(), retainedBatch.lastOffset(),
-                    retainedBatch.lastOffset(), numMessagesInBatch, bytesRetained);
+                    retainedBatch.lastOffset(), minOffset, numMessagesInBatch, bytesRetained);
         }
 
         private void updateRetainedBatchMetadata(long maxTimestamp, long shallowOffsetOfMaxTimestamp, long maxOffset,
-                                                int messagesRetained, int bytesRetained) {
+                                                long minOffset, int messagesRetained, int bytesRetained) {
             validateBatchMetadata(maxTimestamp, shallowOffsetOfMaxTimestamp, maxOffset);
             if (maxTimestamp > this.maxTimestamp) {
                 this.maxTimestamp = maxTimestamp;
                 this.shallowOffsetOfMaxTimestamp = shallowOffsetOfMaxTimestamp;
             }
             this.maxOffset = Math.max(maxOffset, this.maxOffset);
+            if (!offsetDetermined) this.minOffset = minOffset;
+            this.offsetDetermined = true;
             this.messagesRetained += messagesRetained;
             this.bytesRetained += bytesRetained;
         }
@@ -384,6 +388,10 @@ public class MemoryRecords extends AbstractRecords {
 
         public long maxOffset() {
             return maxOffset;
+        }
+
+        public long minOffset() {
+            return minOffset;
         }
 
         public long maxTimestamp() {
