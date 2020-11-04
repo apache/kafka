@@ -23,7 +23,7 @@ import java.util.concurrent.{ConcurrentLinkedQueue, ScheduledFuture, TimeUnit}
 
 import org.apache.kafka.common.KafkaException
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.metadata.{BrokerMetadataListener, OutOfBandFenceLocalBrokerEvent, OutOfBandRegisterLocalBrokerEvent}
+import kafka.server.metadata.{BrokerMetadataListener, FenceBrokerEvent, RegisterBrokerEvent}
 import kafka.utils.{Logging, Scheduler}
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.message.{BrokerHeartbeatRequestData, BrokerRegistrationRequestData}
@@ -154,7 +154,7 @@ class BrokerLifecycleManagerImpl(val brokerMetadataListener: BrokerMetadataListe
               // TODO: Is this the correct next state?
               currentState = jmetadata.BrokerState.RECOVERING_FROM_UNCLEAN_SHUTDOWN
               // Registration success; notify the BrokerMetadataListener
-              brokerMetadataListener.put(OutOfBandRegisterLocalBrokerEvent(body.brokerEpoch))
+              brokerMetadataListener.put(RegisterBrokerEvent(body.brokerEpoch))
               promise.trySuccess(())
             case _ =>
               // Unhandled error
@@ -275,7 +275,7 @@ class BrokerLifecycleManagerImpl(val brokerMetadataListener: BrokerMetadataListe
           error(s"Last successful heartbeat was $timeSinceLastHeartbeat ms ago")
           // Fence ourselves; notify the BrokerMetadataListener
           currentState = jmetadata.BrokerState.FENCED
-          brokerMetadataListener.put(OutOfBandFenceLocalBrokerEvent(brokerEpoch()))
+          brokerMetadataListener.put(FenceBrokerEvent(brokerEpoch()))
           // FIXME: What is the preferred action here? Do we wait for an external actor queue a state change
           //       request?
           pendingHeartbeat.compareAndSet(true, false)

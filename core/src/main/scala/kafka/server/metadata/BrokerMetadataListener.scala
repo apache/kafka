@@ -18,19 +18,16 @@
 package kafka.server.metadata
 
 import java.util
-import java.util.concurrent.locks.ReentrantLock
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{LinkedBlockingQueue, TimeUnit}
 
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.{KafkaConfig, MetadataCache, QuotaFactory, ReplicaManager}
 import kafka.utils.ShutdownableThread
-import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.protocol.ApiMessage
 import org.apache.kafka.common.utils.Time
-
-import scala.collection.mutable.ListBuffer
+import org.apache.kafka.controller.MetaLogManager
 
 object BrokerMetadataListener {
   val ThreadNamePrefix = "broker-"
@@ -38,6 +35,7 @@ object BrokerMetadataListener {
   val EventQueueTimeMetricName = "EventQueueTimeMs"
   val EventQueueSizeMetricName = "EventQueueSize"
   val ErrorCountMetricName = "ErrorCount"
+  val DefaultEventQueueTimeoutMs = 300000
 
   def defaultProcessors(kafkaConfig: KafkaConfig,
                         clusterId: String,
@@ -54,17 +52,15 @@ object BrokerMetadataListener {
 /**
  * A metadata event appearing either in the metadata log or originating out-of-band from the broker's heartbeat
  */
-sealed trait BrokerMetadataEvent {}
-
-final case object StartupEvent extends BrokerMetadataEvent
+sealed trait BrokerMetadataEvent
 
 /**
  * A batch of messages from the metadata log
  *
  * @param apiMessages the batch of messages
- * @param lastMetadataOffset the metadata offset of the last message in the batch
+ * @param lastOffset the metadata offset of the last message in the batch
  */
-final case class MetadataLogEvent(apiMessages: List[ApiMessage], lastMetadataOffset: Long) extends BrokerMetadataEvent
+final case class MetadataLogEvent(apiMessages: util.List[ApiMessage], lastOffset: Long) extends BrokerMetadataEvent
 
 /**
  * A register-broker event that occurs when the broker heartbeat receives a successful registration response.
@@ -74,7 +70,7 @@ final case class MetadataLogEvent(apiMessages: List[ApiMessage], lastMetadataOff
  *
  * @param brokerEpoch the epoch assigned to the broker by the active controller
  */
-final case class OutOfBandRegisterLocalBrokerEvent(brokerEpoch: Long) extends BrokerMetadataEvent
+final case class RegisterBrokerEvent(brokerEpoch: Long) extends BrokerMetadataEvent
 
 /**
  * A fence-broker event that occurs when either:
@@ -88,63 +84,64 @@ final case class OutOfBandRegisterLocalBrokerEvent(brokerEpoch: Long) extends Br
  *
  * @param brokerEpoch the broker epoch that was fenced
  */
-final case class OutOfBandFenceLocalBrokerEvent(brokerEpoch: Long) extends BrokerMetadataEvent
+final case class FenceBrokerEvent(brokerEpoch: Long) extends BrokerMetadataEvent
 
-/*
- * WakeupEvent is necessary for the case when the event thread is blocked in queue.take() and we need to wake it up.
- * This event has no other semantic meaning and should be ignored when seen.  It is useful in two specific situations:
- * 1) when an out-of-band message is available; and 2) when shutdown needs to occur.  The presence of this message
- * ensures these other messages are seen quickly when no other messages are in the queue.
+/**
+ * Used to wakeup the polling thread in order to shutdown.
  */
-final case object WakeupEvent extends BrokerMetadataEvent
+case object ShutdownEvent extends BrokerMetadataEvent
 
-class QueuedEvent(val event: BrokerMetadataEvent, val enqueueTimeNanos: Long) {
+class QueuedEvent(val event: BrokerMetadataEvent, val enqueueTimeMs: Long) {
   override def toString: String = {
-    s"QueuedEvent(event=$event, enqueueTimeNanos=$enqueueTimeNanos)"
+    s"QueuedEvent(event=$event, enqueueTimeMs=$enqueueTimeMs)"
   }
 }
 
 trait BrokerMetadataProcessor {
-  def processStartup(): Unit
-  def process(metadataLogEvent: MetadataLogEvent): Unit
-  def process(outOfBandRegisterLocalBrokerEvent: OutOfBandRegisterLocalBrokerEvent): Unit
-  def process(outOfBandFenceLocalBrokerEvent: OutOfBandFenceLocalBrokerEvent): Unit
+  def process(event: BrokerMetadataEvent): Unit
 }
 
-class BrokerMetadataListener(config: KafkaConfig,
-                             time: Time,
-                             processors: List[BrokerMetadataProcessor],
-                             eventQueueTimeHistogramTimeoutMs: Long = 300000) extends KafkaMetricsGroup {
+class BrokerMetadataListener(
+  config: KafkaConfig,
+  time: Time,
+  processors: List[BrokerMetadataProcessor],
+  eventQueueTimeoutMs: Long = BrokerMetadataListener.DefaultEventQueueTimeoutMs
+) extends MetaLogManager.Listener with KafkaMetricsGroup  {
+
   if (processors.isEmpty) {
     throw new IllegalArgumentException(s"Empty processors list!")
   }
 
-  private val deque = new util.LinkedList[QueuedEvent]
-  private val dequeLock = new ReentrantLock()
-  private val dequeNonEmptyCondition = dequeLock.newCondition()
-
-  @volatile private var dequeSize: Int = 0
-  @volatile private var errorCount: Int = 0
-
+  private val queue = new LinkedBlockingQueue[QueuedEvent]()
   private val thread = new BrokerMetadataEventThread(
     s"${BrokerMetadataListener.ThreadNamePrefix}${config.brokerId}${BrokerMetadataListener.ThreadNameSuffix}")
 
   // metrics
   private val eventQueueTimeHist = newHistogram(BrokerMetadataListener.EventQueueTimeMetricName)
-  newGauge(BrokerMetadataListener.EventQueueSizeMetricName, () => dequeSize)
-  newGauge(BrokerMetadataListener.ErrorCountMetricName, () => errorCount)
+  newGauge(BrokerMetadataListener.EventQueueSizeMetricName, () => queue.size)
 
   @volatile private var _currentMetadataOffset: Long = -1
 
   def start(): Unit = {
-    put(StartupEvent)
     thread.start()
+  }
+
+  // For testing, it is useful to be able to drain all events synchronously
+  private[metadata] def drain(): Unit = {
+    while (!queue.isEmpty) {
+      thread.doWork()
+    }
+  }
+
+  // For testing, in cases where we want to block synchronously while we wait for an event
+  private[metadata] def poll(): Unit = {
+    thread.doWork()
   }
 
   def close(): Unit = {
     try {
       thread.initiateShutdown()
-      put(WakeupEvent) // wake up the thread in case it is blocked on queue.take()
+      put(ShutdownEvent) // wake up the thread in case it is blocked on queue.take()
       thread.awaitShutdown()
     } finally {
       removeMetric(BrokerMetadataListener.EventQueueTimeMetricName)
@@ -153,40 +150,13 @@ class BrokerMetadataListener(config: KafkaConfig,
     }
   }
 
+  override def handleCommits(lastOffset: Long, messages: util.List[ApiMessage]): Unit = {
+    put(MetadataLogEvent(messages, lastOffset))
+  }
+
   def put(event: BrokerMetadataEvent): QueuedEvent = {
-    val queuedEvent = new QueuedEvent(event, time.nanoseconds())
-    dequeLock.lock()
-    try {
-      event match {
-        case _: OutOfBandRegisterLocalBrokerEvent |
-             _: OutOfBandFenceLocalBrokerEvent =>
-          // we have to check to see if any out-of-band events are already at the front of the deque;
-          // if so, then we need to add this event after those
-          val listBuffer: ListBuffer[QueuedEvent] = new ListBuffer()
-          var nextEvent = deque.peekFirst()
-          while (nextEvent != null && {
-            nextEvent.event match {
-              case _: OutOfBandRegisterLocalBrokerEvent |
-                   _: OutOfBandFenceLocalBrokerEvent => true
-              case _ => false
-            }}) {
-            listBuffer += deque.pollFirst()
-            nextEvent = deque.peekFirst()
-          }
-          // we've removed any out-of-band events that were there
-          // so now add the one we want to add
-          deque.addFirst(queuedEvent)
-          // and then put back any out-of-band events that were there before (keeping their order unchanged)
-          listBuffer.reverseIterator.foreach(eventAlreadyThere => deque.addFirst(eventAlreadyThere))
-        case _ =>
-          // add this non-out-of-band message to the end of the deque
-          deque.addLast(queuedEvent)
-      }
-      dequeNonEmptyCondition.signal()
-      dequeSize += 1
-    } finally {
-      dequeLock.unlock()
-    }
+    val queuedEvent = new QueuedEvent(event, time.milliseconds())
+    queue.put(queuedEvent)
     queuedEvent
   }
 
@@ -195,105 +165,40 @@ class BrokerMetadataListener(config: KafkaConfig,
   private class BrokerMetadataEventThread(name: String) extends ShutdownableThread(name = name, isInterruptible = false) {
     logIdent = s"[BrokerMetadataEventThread] "
 
-    override def doWork(): Unit = {
-      val dequeued: QueuedEvent = pollFromEventQueue()
-      try {
-        dequeued.event match {
-          case StartupEvent =>
-            processors.foreach(processor =>
-              try {
-                processor.processStartup()
-              } catch {
-                case e: FatalExitError => throw e
-                case e: Exception =>
-                  error(s"Uncaught error when processor $processor processed startup event", e)
-                  errorCount += 1
-              })
-          case WakeupEvent => // Ignore since it serves solely to wake us up
-          case metadataLogEvent: MetadataLogEvent =>
-            eventQueueTimeHist.update(TimeUnit.MILLISECONDS.convert(time.nanoseconds() - dequeued.enqueueTimeNanos, TimeUnit.NANOSECONDS))
-
-            val currentOffset = currentMetadataOffset()
-            if (metadataLogEvent.lastMetadataOffset < currentOffset + metadataLogEvent.apiMessages.size) {
-              error(s"Metadata offset of last message in batch of size ${metadataLogEvent.apiMessages.size}" +
-                s" is too small for current metadata offset $currentOffset: ${metadataLogEvent.lastMetadataOffset}")
-              errorCount += 1
-            } else {
-              // Give each processor an opportunity to process the batch.
-
-              // We could introduce queues, run each processor in a separate thread, and pipeline message batches to them.
-              // If we pipeline, then we would probably add a CompletableFuture to the process() method
-              // and we would have a separate thread/queue waiting on each batch's futures to complete before applying the
-              // corresponding metadata offset.
-              processors.foreach(processor =>
-                try {
-                  processor.process(metadataLogEvent) // synchronous, see above for an alternative
-                } catch {
-                  case e: FatalExitError => throw e
-                  case e: Exception =>
-                    error(s"Uncaught error when processor $processor processed metadata log event: $metadataLogEvent", e)
-                    errorCount += 1
-                })
-              // set the new offset now that all processors have processed the metadata log event
-              if (isTraceEnabled) {
-                trace(s"Setting current metadata offset to ${metadataLogEvent.lastMetadataOffset} after processing metadata log messages: ${metadataLogEvent.apiMessages}")
-              }
-              _currentMetadataOffset = metadataLogEvent.lastMetadataOffset
-            }
-          case outOfBandRegisterLocalBrokerEvent: OutOfBandRegisterLocalBrokerEvent =>
-            processors.foreach(processor =>
-              try {
-                processor.process(outOfBandRegisterLocalBrokerEvent)
-              } catch {
-                case e: FatalExitError => throw e
-                case e: Exception =>
-                  error(s"Uncaught error when processor $processor processed out-of-band register-broker event: $outOfBandRegisterLocalBrokerEvent", e)
-                  errorCount += 1
-              })
-          case outOfBandFenceLocalBrokerEvent: OutOfBandFenceLocalBrokerEvent =>
-            processors.foreach(processor =>
-              try {
-                processor.process(outOfBandFenceLocalBrokerEvent)
-              } catch {
-                case e: FatalExitError => throw e
-                case e: Exception =>
-                  error(s"Uncaught error when processor $processor processed out-of-band fence-broker event: $outOfBandFenceLocalBrokerEvent", e)
-                  errorCount += 1
-              })
-        }
-      } catch {
-        case e: FatalExitError => throw e
-        case e: Exception =>
-          error(s"Uncaught error when processing dequeued event: $dequeued", e)
-          errorCount += 1
-      }
+    private def process(event: BrokerMetadataEvent): Unit = {
+      processors.foreach(_.process(event))
     }
 
-    private def pollFromEventQueue(): QueuedEvent = {
-      dequeLock.lock()
-      try {
-        var nanosRemaining = TimeUnit.NANOSECONDS.convert(eventQueueTimeHistogramTimeoutMs, TimeUnit.MILLISECONDS)
-        while (deque.isEmpty()) { // takes care of spurious wakeups
-          val hasRecordedValue = eventQueueTimeHist.count() > 0
-          if (!hasRecordedValue) {
-            // wait indefinitely for something to appear
-            dequeNonEmptyCondition.await()
-          } else {
-            if (nanosRemaining <= 0) {
-              // no time left, so clear the histogram and wait indefinitely
-              eventQueueTimeHist.clear()
-              dequeNonEmptyCondition.await()
-            } else {
-              // wait only up until the timeout so we can clear the histogram if nothing appears
-              nanosRemaining = dequeNonEmptyCondition.awaitNanos(nanosRemaining)
-            }
+    override def doWork(): Unit = {
+      val dequeued = queue.poll(eventQueueTimeoutMs, TimeUnit.MILLISECONDS)
+      if (dequeued == null) {
+        // Clear the histogram after a timeout without any activity. This
+        // ensures that the histogram does not continue to report stale telemetry.
+        eventQueueTimeHist.clear()
+        return
+      }
+
+      val currentTimeMs = time.milliseconds()
+      eventQueueTimeHist.update(math.max(0, currentTimeMs - dequeued.enqueueTimeMs))
+
+      trace(s"Processing event ${dequeued.event}")
+      dequeued.event match {
+        case ShutdownEvent =>
+          // Do nothing since we are shutting down
+
+        case logEvent: MetadataLogEvent =>
+          if (logEvent.lastOffset < _currentMetadataOffset + logEvent.apiMessages.size) {
+            throw new IllegalStateException(s"Non-monotonic offset found in $logEvent. Our " +
+              s"current offset is ${_currentMetadataOffset}.")
           }
-        }
-        dequeSize -= 1
-        deque.poll()
-      } finally {
-        dequeLock.unlock()
+
+          process(logEvent)
+          _currentMetadataOffset = logEvent.lastOffset
+
+        case event =>
+          process(event)
       }
     }
   }
+
 }

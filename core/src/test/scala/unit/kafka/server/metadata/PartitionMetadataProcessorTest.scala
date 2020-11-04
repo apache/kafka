@@ -21,12 +21,13 @@ import kafka.cluster.{Broker, EndPoint}
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.server.{ClientQuotaManager, ClientRequestQuotaManager, ControllerMutationQuotaManager, KafkaConfig, MetadataCache, QuotaFactory, ReplicaManager}
-import org.apache.kafka.common.{TopicPartition, UUID}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
-import org.apache.kafka.common.metadata.{BrokerRecord, TopicRecord}
 import org.apache.kafka.common.metadata.BrokerRecord.BrokerEndpointCollection
+import org.apache.kafka.common.metadata.{BrokerRecord, TopicRecord}
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.protocol.ApiMessage
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.{TopicPartition, UUID}
 import org.apache.kafka.server.quota.ClientQuotaCallback
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.Test
@@ -35,6 +36,7 @@ import org.mockito.Mockito.{mock, times, verify, when}
 import org.scalatest.Matchers.assertThrows
 
 import scala.collection.mutable
+import scala.jdk.CollectionConverters._
 
 class PartitionMetadataProcessorTest {
 
@@ -103,7 +105,7 @@ class PartitionMetadataProcessorTest {
     assertEquals(0, metadataCache.readState().topicIdMap.size)
 
     val initialMetadataOffset = -1
-    processor.process(MetadataLogEvent(List(brokerRecord0, topicRecord0, brokerRecord1), initialMetadataOffset + 10))
+    processor.process(MetadataLogEvent(List[ApiMessage](brokerRecord0, topicRecord0, brokerRecord1).asJava, initialMetadataOffset + 10))
 
     // confirm broker-related changes
     assertEquals(2, metadataCache.readState().aliveBrokers.size)
@@ -169,7 +171,7 @@ class PartitionMetadataProcessorTest {
     assertTrue(metadataCache.readState().partitionStates.get(name0).isDefined)
     assertEquals(1, metadataCache.readState().partitionStates.get(name0).get.size)
 
-    processor.process(MetadataLogEvent(List(topicRecord0Deleting, topicRecord1), initialMetadataOffset + 20))
+    processor.process(MetadataLogEvent(List[ApiMessage](topicRecord0Deleting, topicRecord1).asJava, initialMetadataOffset + 20))
 
     // confirm still no broker-related changes from last update
     assertEquals(2, metadataCache.readState().aliveBrokers.size)
@@ -195,11 +197,11 @@ class PartitionMetadataProcessorTest {
     val initialBrokerEpoch = -1
     assertEquals(initialBrokerEpoch, processor.brokerEpoch)
     val brokerEpoch = 1
-    processor.process(OutOfBandRegisterLocalBrokerEvent(brokerEpoch))
+    processor.process(RegisterBrokerEvent(brokerEpoch))
     assertEquals(brokerEpoch, processor.brokerEpoch)
     assertEquals(brokerEpoch, processor.MetadataMgr().getCurrentBrokerEpochs().get(0).get)
     // test idempotency
-    processor.process(OutOfBandRegisterLocalBrokerEvent(brokerEpoch))
+    processor.process(RegisterBrokerEvent(brokerEpoch))
     assertEquals(brokerEpoch, processor.brokerEpoch)
     assertEquals(brokerEpoch, processor.MetadataMgr().getCurrentBrokerEpochs().get(0).get)
   }
@@ -208,14 +210,14 @@ class PartitionMetadataProcessorTest {
   def testDisallowChangeBrokerEpoch(): Unit = {
     val processor = createSimpleProcessor()
     val brokerEpoch = 1
-    processor.process(OutOfBandRegisterLocalBrokerEvent(brokerEpoch))
-    assertThrows[IllegalArgumentException] { processor.process(OutOfBandRegisterLocalBrokerEvent(brokerEpoch + 1)) }
+    processor.process(RegisterBrokerEvent(brokerEpoch))
+    assertThrows[IllegalArgumentException] { processor.process(RegisterBrokerEvent(brokerEpoch + 1)) }
   }
 
   @Test(expected = classOf[IllegalArgumentException])
   def testDisallowNegativeBrokerEpoch(): Unit = {
     val processor = createSimpleProcessor()
-    processor.process(OutOfBandRegisterLocalBrokerEvent(-1))
+    processor.process(RegisterBrokerEvent(-1))
   }
 
   def createSimpleProcessor(): PartitionMetadataProcessor = {

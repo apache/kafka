@@ -46,16 +46,16 @@ object KafkaServerManager extends Logging {
       if (config.controllerConnect.isEmpty) {
         throw new RuntimeException(s"You must specify a value for ${KafkaConfig.ControllerConnectProp}")
       }
-      roles.asScala.foreach(role => role match {
+      roles.asScala.foreach {
         case "broker" =>
           kip500Broker = Some(new Kip500Broker(config, time,
             threadNamePrefix, kafkaMetricsReporters))
         case "controller" =>
           controller = Some(new Kip500Controller(config, time, threadNamePrefix,
             kafkaMetricsReporters, CompletableFuture.completedFuture(config.controllerConnect)))
-        case _ =>
+        case role =>
           throw new RuntimeException("Unknown process role " + role)
-      })
+      }
       val bld = new StringBuilder
       var prefix = ""
       bld.append("Starting ")

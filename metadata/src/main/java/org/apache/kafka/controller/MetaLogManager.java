@@ -43,26 +43,28 @@ public interface MetaLogManager extends AutoCloseable {
          *
          * @param epoch         The controller epoch that is starting.
          */
-        void handleClaim(long epoch);
+        default void handleClaim(long epoch) {}
 
         /**
          * Called when the MetaLogManager has renounced the leadership.
          *
          * @param epoch         The controller epoch that has ended.
          */
-        void handleRenounce(long epoch);
+        default void handleRenounce(long epoch) {}
 
         /**
          * Called when the MetaLogManager has finished shutting down, and wants to tell its
          * listener that it is safe to shut down as well.
          */
-        void beginShutdown();
+        default void beginShutdown() {}
 
         /**
          * If this listener is currently active, return the controller epoch it is active
          * for.  Otherwise, return -1.
          */
-        long currentClaimEpoch();
+        default long currentClaimEpoch() {
+            return -1L;
+        }
     }
 
     /**

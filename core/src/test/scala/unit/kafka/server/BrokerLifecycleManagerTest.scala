@@ -4,7 +4,7 @@ import java.io.IOException
 import java.util.Properties
 import java.util.concurrent.{Executors, TimeUnit}
 
-import kafka.server.metadata.{BrokerMetadataEvent, BrokerMetadataListener, OutOfBandFenceLocalBrokerEvent, OutOfBandRegisterLocalBrokerEvent, QueuedEvent}
+import kafka.server.metadata.{BrokerMetadataEvent, BrokerMetadataListener, FenceBrokerEvent, RegisterBrokerEvent, QueuedEvent}
 import org.apache.kafka.common.KafkaException
 import kafka.server.{BrokerLifecycleManagerImpl, BrokerToControllerChannelManager, Defaults, KafkaConfig}
 import kafka.utils.{MockTime, TestUtils}
@@ -110,7 +110,7 @@ class BrokerLifecycleManagerTest {
 
     val capturedMetadataEvent = EasyMock.newCapture[BrokerMetadataEvent]()
     EasyMock.expect(brokerMetadataListener.put(EasyMock.capture(capturedMetadataEvent))).andStubReturn(
-      new QueuedEvent(OutOfBandRegisterLocalBrokerEvent(registrationEpoch), time.nanoseconds)
+      new QueuedEvent(RegisterBrokerEvent(registrationEpoch), time.nanoseconds)
     )
 
     // Setup mock heartbeat response
@@ -151,8 +151,8 @@ class BrokerLifecycleManagerTest {
 
     // Verify BrokerMetadataListener notification
     assert(capturedMetadataEvent.hasCaptured)
-    assert(capturedMetadataEvent.getValue.isInstanceOf[OutOfBandRegisterLocalBrokerEvent])
-    assertEquals(capturedMetadataEvent.getValue.asInstanceOf[OutOfBandRegisterLocalBrokerEvent].brokerEpoch, registrationEpoch)
+    assert(capturedMetadataEvent.getValue.isInstanceOf[RegisterBrokerEvent])
+    assertEquals(capturedMetadataEvent.getValue.asInstanceOf[RegisterBrokerEvent].brokerEpoch, registrationEpoch)
 
     // Verify that only a single request was processed per scheduler tick
     EasyMock.verify(brokerToControllerChannel, brokerMetadataListener)
@@ -173,7 +173,7 @@ class BrokerLifecycleManagerTest {
 
     val capturedMetadataEvent = EasyMock.newCapture[BrokerMetadataEvent]()
     EasyMock.expect(brokerMetadataListener.put(EasyMock.capture(capturedMetadataEvent))).andStubReturn(
-      new QueuedEvent(OutOfBandRegisterLocalBrokerEvent(registrationEpoch), time.nanoseconds)
+      new QueuedEvent(RegisterBrokerEvent(registrationEpoch), time.nanoseconds)
     )
 
     // Setup mock heartbeat response
@@ -220,8 +220,8 @@ class BrokerLifecycleManagerTest {
 
     // Verify BrokerMetadataListener notification
     assert(capturedMetadataEvent.hasCaptured)
-    assert(capturedMetadataEvent.getValue.isInstanceOf[OutOfBandRegisterLocalBrokerEvent])
-    assertEquals(capturedMetadataEvent.getValue.asInstanceOf[OutOfBandRegisterLocalBrokerEvent].brokerEpoch, registrationEpoch)
+    assert(capturedMetadataEvent.getValue.isInstanceOf[RegisterBrokerEvent])
+    assertEquals(capturedMetadataEvent.getValue.asInstanceOf[RegisterBrokerEvent].brokerEpoch, registrationEpoch)
 
     // Verify that only a single request was processed per scheduler tick
     EasyMock.verify(brokerToControllerChannel, brokerMetadataListener)
@@ -241,7 +241,7 @@ class BrokerLifecycleManagerTest {
 
     val capturedMetadataEvent = EasyMock.newCapture[BrokerMetadataEvent]()
     EasyMock.expect(brokerMetadataListener.put(EasyMock.capture(capturedMetadataEvent))).andStubReturn(
-      new QueuedEvent(OutOfBandRegisterLocalBrokerEvent(registrationEpoch), time.nanoseconds)
+      new QueuedEvent(RegisterBrokerEvent(registrationEpoch), time.nanoseconds)
     )
 
     // Setup mock heartbeat response
@@ -291,8 +291,8 @@ class BrokerLifecycleManagerTest {
 
     // Verify BrokerMetadataListener notification
     assert(capturedMetadataEvent.hasCaptured)
-    assert(capturedMetadataEvent.getValue.isInstanceOf[OutOfBandRegisterLocalBrokerEvent])
-    assertEquals(capturedMetadataEvent.getValue.asInstanceOf[OutOfBandRegisterLocalBrokerEvent].brokerEpoch, registrationEpoch)
+    assert(capturedMetadataEvent.getValue.isInstanceOf[RegisterBrokerEvent])
+    assertEquals(capturedMetadataEvent.getValue.asInstanceOf[RegisterBrokerEvent].brokerEpoch, registrationEpoch)
 
     // Verify that only a single request was processed per scheduler tick
     EasyMock.verify(brokerToControllerChannel, brokerMetadataListener)
@@ -319,7 +319,7 @@ class BrokerLifecycleManagerTest {
 
     val capturedMetadataEvent = EasyMock.newCapture[BrokerMetadataEvent]()
     EasyMock.expect(brokerMetadataListener.put(EasyMock.capture(capturedMetadataEvent))).andStubReturn(
-      new QueuedEvent(OutOfBandRegisterLocalBrokerEvent(registrationEpoch), time.nanoseconds)
+      new QueuedEvent(RegisterBrokerEvent(registrationEpoch), time.nanoseconds)
     )
 
     // Setup mock heartbeat response
@@ -377,8 +377,8 @@ class BrokerLifecycleManagerTest {
 
     // Verify BrokerMetadataListener notification
     assert(capturedMetadataEvent.hasCaptured)
-    assert(capturedMetadataEvent.getValue.isInstanceOf[OutOfBandRegisterLocalBrokerEvent])
-    assertEquals(capturedMetadataEvent.getValue.asInstanceOf[OutOfBandRegisterLocalBrokerEvent].brokerEpoch, registrationEpoch)
+    assert(capturedMetadataEvent.getValue.isInstanceOf[RegisterBrokerEvent])
+    assertEquals(capturedMetadataEvent.getValue.asInstanceOf[RegisterBrokerEvent].brokerEpoch, registrationEpoch)
 
     // Verify that only a single request was processed per scheduler tick
     EasyMock.verify(brokerToControllerChannel, brokerMetadataListener)
@@ -400,7 +400,7 @@ class BrokerLifecycleManagerTest {
 
     val capturedMetadataEvent = EasyMock.newCapture[BrokerMetadataEvent]()
     EasyMock.expect(brokerMetadataListener.put(EasyMock.capture(capturedMetadataEvent))).andStubReturn(
-      new QueuedEvent(OutOfBandRegisterLocalBrokerEvent(registrationEpoch), time.nanoseconds)
+      new QueuedEvent(RegisterBrokerEvent(registrationEpoch), time.nanoseconds)
     )
 
     // Setup mock heartbeat response
@@ -448,8 +448,8 @@ class BrokerLifecycleManagerTest {
 
     // Verify BrokerMetadataListener notification
     assert(capturedMetadataEvent.hasCaptured)
-    assert(capturedMetadataEvent.getValue.isInstanceOf[OutOfBandRegisterLocalBrokerEvent])
-    assertEquals(capturedMetadataEvent.getValue.asInstanceOf[OutOfBandRegisterLocalBrokerEvent].brokerEpoch, registrationEpoch)
+    assert(capturedMetadataEvent.getValue.isInstanceOf[RegisterBrokerEvent])
+    assertEquals(capturedMetadataEvent.getValue.asInstanceOf[RegisterBrokerEvent].brokerEpoch, registrationEpoch)
 
     // Verify that only a single request was processed per scheduler tick
     EasyMock.verify(brokerToControllerChannel, brokerMetadataListener)
@@ -479,7 +479,7 @@ class BrokerLifecycleManagerTest {
 
     val capturedMetadataEvent = EasyMock.newCapture[BrokerMetadataEvent]()
     EasyMock.expect(brokerMetadataListener.put(EasyMock.capture(capturedMetadataEvent))).andStubReturn(
-      new QueuedEvent(OutOfBandRegisterLocalBrokerEvent(registrationEpoch), time.nanoseconds)
+      new QueuedEvent(RegisterBrokerEvent(registrationEpoch), time.nanoseconds)
     )
 
     // Setup mock heartbeat response
@@ -531,8 +531,8 @@ class BrokerLifecycleManagerTest {
 
     // Verify BrokerMetadataListener notification
     assert(capturedMetadataEvent.hasCaptured)
-    assert(capturedMetadataEvent.getValue.isInstanceOf[OutOfBandRegisterLocalBrokerEvent])
-    assertEquals(capturedMetadataEvent.getValue.asInstanceOf[OutOfBandRegisterLocalBrokerEvent].brokerEpoch, registrationEpoch)
+    assert(capturedMetadataEvent.getValue.isInstanceOf[RegisterBrokerEvent])
+    assertEquals(capturedMetadataEvent.getValue.asInstanceOf[RegisterBrokerEvent].brokerEpoch, registrationEpoch)
 
     // Verify that only a single request was processed per scheduler tick
     EasyMock.verify(brokerToControllerChannel, brokerMetadataListener)
@@ -571,7 +571,7 @@ class BrokerLifecycleManagerTest {
 
     val capturedMetadataEvent = EasyMock.newCapture[BrokerMetadataEvent]()
     EasyMock.expect(brokerMetadataListener.put(EasyMock.capture(capturedMetadataEvent))).andStubReturn(
-      new QueuedEvent(OutOfBandRegisterLocalBrokerEvent(registrationEpoch), time.nanoseconds)
+      new QueuedEvent(RegisterBrokerEvent(registrationEpoch), time.nanoseconds)
     )
 
     // Setup mock heartbeat response
@@ -646,8 +646,8 @@ class BrokerLifecycleManagerTest {
 
     // Verify BrokerMetadataListener notification
     assert(capturedMetadataEvent.hasCaptured)
-    assert(capturedMetadataEvent.getValue.isInstanceOf[OutOfBandFenceLocalBrokerEvent])
-    assertEquals(capturedMetadataEvent.getValue.asInstanceOf[OutOfBandFenceLocalBrokerEvent].brokerEpoch, brokerEpochProvider())
+    assert(capturedMetadataEvent.getValue.isInstanceOf[FenceBrokerEvent])
+    assertEquals(capturedMetadataEvent.getValue.asInstanceOf[FenceBrokerEvent].brokerEpoch, brokerEpochProvider())
 
     // Verify that only a single request was processed per scheduler tick
     EasyMock.verify(brokerToControllerChannel)
@@ -683,7 +683,7 @@ class BrokerLifecycleManagerTest {
 
     val capturedMetadataEvent = EasyMock.newCapture[BrokerMetadataEvent]()
     EasyMock.expect(brokerMetadataListener.put(EasyMock.capture(capturedMetadataEvent))).andStubReturn(
-      new QueuedEvent(OutOfBandRegisterLocalBrokerEvent(registrationEpoch), time.nanoseconds)
+      new QueuedEvent(RegisterBrokerEvent(registrationEpoch), time.nanoseconds)
     )
 
     EasyMock.replay(brokerToControllerChannel, brokerMetadataListener)
@@ -735,7 +735,7 @@ class BrokerLifecycleManagerTest {
 
     val capturedMetadataEvent = EasyMock.newCapture[BrokerMetadataEvent]()
     EasyMock.expect(brokerMetadataListener.put(EasyMock.capture(capturedMetadataEvent))).andStubReturn(
-      new QueuedEvent(OutOfBandRegisterLocalBrokerEvent(registrationEpoch), time.nanoseconds)
+      new QueuedEvent(RegisterBrokerEvent(registrationEpoch), time.nanoseconds)
     )
 
     EasyMock.replay(brokerToControllerChannel, brokerMetadataListener)
@@ -786,7 +786,7 @@ class BrokerLifecycleManagerTest {
 
     val capturedMetadataEvent = EasyMock.newCapture[BrokerMetadataEvent]()
     EasyMock.expect(brokerMetadataListener.put(EasyMock.capture(capturedMetadataEvent))).andStubReturn(
-      new QueuedEvent(OutOfBandRegisterLocalBrokerEvent(registrationEpoch), time.nanoseconds)
+      new QueuedEvent(RegisterBrokerEvent(registrationEpoch), time.nanoseconds)
     )
 
     EasyMock.replay(brokerToControllerChannel, brokerMetadataListener)
@@ -831,7 +831,7 @@ class BrokerLifecycleManagerTest {
 
     val capturedMetadataEvent = EasyMock.newCapture[BrokerMetadataEvent]()
     EasyMock.expect(brokerMetadataListener.put(EasyMock.capture(capturedMetadataEvent))).andStubReturn(
-      new QueuedEvent(OutOfBandRegisterLocalBrokerEvent(registrationEpoch), time.nanoseconds)
+      new QueuedEvent(RegisterBrokerEvent(registrationEpoch), time.nanoseconds)
     )
 
     EasyMock.replay(brokerToControllerChannel, brokerMetadataListener)
@@ -882,7 +882,7 @@ class BrokerLifecycleManagerTest {
 
     val capturedMetadataEvent = EasyMock.newCapture[BrokerMetadataEvent]()
     EasyMock.expect(brokerMetadataListener.put(EasyMock.capture(capturedMetadataEvent))).andStubReturn(
-      new QueuedEvent(OutOfBandRegisterLocalBrokerEvent(registrationEpoch), time.nanoseconds)
+      new QueuedEvent(RegisterBrokerEvent(registrationEpoch), time.nanoseconds)
     )
 
     EasyMock.replay(brokerToControllerChannel, brokerMetadataListener)
