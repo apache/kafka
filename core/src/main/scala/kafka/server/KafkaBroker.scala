@@ -23,6 +23,7 @@ import java.util
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 
+import com.yammer.metrics.{core => yammer}
 import kafka.api.{KAFKA_0_9_0, KAFKA_2_2_IV0, KAFKA_2_4_IV1}
 import kafka.cluster.Broker
 import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException, InconsistentBrokerMetadataException, InconsistentClusterIdException}
@@ -213,15 +214,30 @@ abstract class KafkaBroker(val config: KafkaConfig,
 
   private[kafka] def featureChangeListener = _featureChangeListener
 
-  newGauge("BrokerState", () => brokerState.currentState)
-  newGauge("ClusterId", () => clusterId)
-  newGauge("yammer-metrics-count", () =>  KafkaYammerMetrics.defaultRegistry.allMetrics.size)
+  newKafkaServerGauge("BrokerState", () => brokerState.currentState)
+  newKafkaServerGauge("ClusterId", () => clusterId)
+  newKafkaServerGauge("yammer-metrics-count", () =>  KafkaYammerMetrics.defaultRegistry.allMetrics.size)
 
   val linuxIoMetricsCollector = new LinuxIoMetricsCollector("/proc", time, logger.underlying)
 
   if (linuxIoMetricsCollector.usable()) {
-    newGauge("linux-disk-read-bytes", () => linuxIoMetricsCollector.readBytes())
-    newGauge("linux-disk-write-bytes", () => linuxIoMetricsCollector.writeBytes())
+    newKafkaServerGauge("linux-disk-read-bytes", () => linuxIoMetricsCollector.readBytes())
+    newKafkaServerGauge("linux-disk-write-bytes", () => linuxIoMetricsCollector.writeBytes())
+  }
+
+  // For backwards compatibility, we need to keep older metrics tied
+  // to their original name when this class was named `KafkaServer`
+  private def newKafkaServerGauge[T](
+    metricName: String,
+    gauge: yammer.Gauge[T]
+  ): yammer.Gauge[T] = {
+    val explicitName = explicitMetricName(
+      group = "kafka.server",
+      typeName = "KafkaServer",
+      name = metricName,
+      tags = Map.empty
+    )
+    KafkaYammerMetrics.defaultRegistry().newGauge(explicitName, gauge)
   }
 
   /**
