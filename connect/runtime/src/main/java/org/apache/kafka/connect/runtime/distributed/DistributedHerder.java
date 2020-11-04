@@ -751,14 +751,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     @Override
     public void connectorConfig(String connName, final Callback<Map<String, String>> callback) {
-        // Subset of connectorInfo, so piggy back on that implementation
         log.trace("Submitting connector config read request {}", connName);
-        connectorInfo(connName, (error, result) -> {
-            if (error != null)
-                callback.onCompletion(error, null);
-            else
-                callback.onCompletion(null, result.config());
-        });
+        super.connectorConfig(connName, callback);
     }
 
     @Override

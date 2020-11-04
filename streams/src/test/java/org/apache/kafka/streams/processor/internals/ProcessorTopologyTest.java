@@ -664,23 +664,23 @@ public class ProcessorTopologyTest {
     private Topology createSimpleTopology(final int partition) {
         return topology
             .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-            .addProcessor("processor", define(new ForwardingProcessor()), "source")
+            .addProcessor("processor", () -> (Processor<String, String, String, String>) new ForwardingProcessor(), "source")
             .addSink("sink", OUTPUT_TOPIC_1, constantPartitioner(partition), "processor");
     }
 
     private Topology createTimestampTopology(final int partition) {
         return topology
             .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-            .addProcessor("processor", define(new TimestampProcessor()), "source")
+            .addProcessor("processor", () -> (Processor<String, String, String, String>) new TimestampProcessor(), "source")
             .addSink("sink", OUTPUT_TOPIC_1, constantPartitioner(partition), "processor");
     }
 
     private Topology createMultiProcessorTimestampTopology(final int partition) {
         return topology
             .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-            .addProcessor("processor", define(new FanOutTimestampProcessor("child1", "child2")), "source")
-            .addProcessor("child1", define(new ForwardingProcessor()), "processor")
-            .addProcessor("child2", define(new TimestampProcessor()), "processor")
+            .addProcessor("processor", () -> (Processor<String, String, String, String>) new FanOutTimestampProcessor("child1", "child2"), "source")
+            .addProcessor("child1", () -> (Processor<String, String, String, String>) new ForwardingProcessor(), "processor")
+            .addProcessor("child2", () -> (Processor<String, String, String, String>) new TimestampProcessor(), "processor")
             .addSink("sink1", OUTPUT_TOPIC_1, constantPartitioner(partition), "child1")
             .addSink("sink2", OUTPUT_TOPIC_2, constantPartitioner(partition), "child2");
     }
@@ -736,7 +736,7 @@ public class ProcessorTopologyTest {
 
     private Topology createInternalRepartitioningWithValueTimestampTopology() {
         topology.addSource("source", INPUT_TOPIC_1)
-                .addProcessor("processor", define(new ValueTimestampProcessor()), "source")
+                .addProcessor("processor", () -> (Processor<String, String, String, String>) new ValueTimestampProcessor(), "source")
                 .addSink("sink0", THROUGH_TOPIC_1, "processor")
                 .addSource("source1", THROUGH_TOPIC_1)
                 .addSink("sink1", OUTPUT_TOPIC_1, "source1");
@@ -757,16 +757,16 @@ public class ProcessorTopologyTest {
 
     private Topology createSimpleMultiSourceTopology(final int partition) {
         return topology.addSource("source-1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-                .addProcessor("processor-1", define(new ForwardingProcessor()), "source-1")
+                .addProcessor("processor-1", () -> (Processor<String, String, String, String>) new ForwardingProcessor(), "source-1")
                 .addSink("sink-1", OUTPUT_TOPIC_1, constantPartitioner(partition), "processor-1")
                 .addSource("source-2", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_2)
-                .addProcessor("processor-2", define(new ForwardingProcessor()), "source-2")
+                .addProcessor("processor-2", () -> (Processor<String, String, String, String>) new ForwardingProcessor(), "source-2")
                 .addSink("sink-2", OUTPUT_TOPIC_2, constantPartitioner(partition), "processor-2");
     }
 
     private Topology createAddHeaderTopology() {
         return topology.addSource("source-1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-                .addProcessor("processor-1", define(new AddHeaderProcessor()), "source-1")
+                .addProcessor("processor-1", () -> (Processor<String, String, String, String>) new AddHeaderProcessor(), "source-1")
                 .addSink("sink-1", OUTPUT_TOPIC_1, "processor-1");
     }
 
@@ -950,10 +950,6 @@ public class ProcessorTopologyTest {
     }
 
     private <K, V> org.apache.kafka.streams.processor.ProcessorSupplier<K, V> define(final org.apache.kafka.streams.processor.Processor<K, V> processor) {
-        return () -> processor;
-    }
-
-    private <KIn, VIn, KOut, VOut> ProcessorSupplier<KIn, VIn, KOut, VOut> define(final Processor<KIn, VIn, KOut, VOut> processor) {
         return () -> processor;
     }
 

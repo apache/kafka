@@ -19,6 +19,8 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.test.NoopValueTransformer;
+import org.apache.kafka.test.NoopValueTransformerWithKey;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
@@ -50,10 +52,10 @@ public class AbstractStreamTest {
     @Test
     public void testToInternalValueTransformerSupplierSuppliesNewTransformers() {
         final ValueTransformerSupplier<?, ?> valueTransformerSupplier = createMock(ValueTransformerSupplier.class);
-        expect(valueTransformerSupplier.get()).andReturn(null).times(3);
+        expect(valueTransformerSupplier.get()).andAnswer(NoopValueTransformer::new).atLeastOnce();
+        replay(valueTransformerSupplier);
         final ValueTransformerWithKeySupplier<?, ?, ?> valueTransformerWithKeySupplier =
             AbstractStream.toValueTransformerWithKeySupplier(valueTransformerSupplier);
-        replay(valueTransformerSupplier);
         valueTransformerWithKeySupplier.get();
         valueTransformerWithKeySupplier.get();
         valueTransformerWithKeySupplier.get();
@@ -64,7 +66,7 @@ public class AbstractStreamTest {
     public void testToInternalValueTransformerWithKeySupplierSuppliesNewTransformers() {
         final ValueTransformerWithKeySupplier<?, ?, ?> valueTransformerWithKeySupplier =
             createMock(ValueTransformerWithKeySupplier.class);
-        expect(valueTransformerWithKeySupplier.get()).andReturn(null).times(3);
+        expect(valueTransformerWithKeySupplier.get()).andAnswer(NoopValueTransformerWithKey::new).atLeastOnce();
         replay(valueTransformerWithKeySupplier);
         valueTransformerWithKeySupplier.get();
         valueTransformerWithKeySupplier.get();
