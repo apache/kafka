@@ -145,7 +145,7 @@ public class KafkaStreams implements AutoCloseable {
     private final String clientId;
     private final Metrics metrics;
     private final StreamsConfig config;
-    protected final ArrayList<StreamThread> threads;
+    protected final List<StreamThread> threads;
     private final StateDirectory stateDirectory;
     private final StreamsMetadataState streamsMetadataState;
     private final ScheduledExecutorService stateDirCleaner;
@@ -718,7 +718,7 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         // create the stream thread, global update thread, and cleanup thread
-        threads = new ArrayList<>(numStreamThreads);
+        threads = new LinkedList<>();
         globalTaskTopology = internalTopologyBuilder.buildGlobalStateTopology();
         final boolean hasGlobalTopology = globalTaskTopology != null;
 
@@ -782,12 +782,12 @@ public class KafkaStreams implements AutoCloseable {
                 delegatingStateRestoreListener,
                 i + 1);
             threads.add(i, streamThread);
-            threadState.put(threads.get(i).getId(), threads.get(i).state());
+            threadState.put(streamThread.getId(), streamThread.state());
             storeProviders.add(new StreamThreadStateStoreProvider(threads.get(i)));
         }
 
         ClientMetrics.addNumAliveStreamThreadMetric(streamsMetrics, (metricsConfig, now) ->
-            Math.toIntExact(Arrays.stream(threads.toArray(new StreamThread[numStreamThreads])).filter(thread -> thread.state().isAlive()).count()));
+            Math.toIntExact(threads.stream().filter(thread -> thread.state().isAlive()).count()));
 
         final StreamStateListener streamStateListener = new StreamStateListener(threadState, globalThreadState);
         if (hasGlobalTopology) {
