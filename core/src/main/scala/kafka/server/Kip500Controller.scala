@@ -169,7 +169,7 @@ class Kip500Controller(val config: KafkaConfig,
         Some(config.controllerId),
         Some(new LogContext(s"[SocketServer controllerId=${config.controllerId}] ")),
         false)
-      socketServer.startup(startProcessingRequests = false)
+      socketServer.startup(false, None, config.controllerListeners)
 
       val configDefs = Map(ConfigResource.Type.BROKER -> KafkaConfig.configDef,
         ConfigResource.Type.TOPIC -> LogConfig.configDefCopy).toMap.asJava
