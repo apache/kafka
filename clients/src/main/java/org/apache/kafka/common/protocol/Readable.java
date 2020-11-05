@@ -19,7 +19,7 @@ package org.apache.kafka.common.protocol;
 
 import org.apache.kafka.common.protocol.types.RawTaggedField;
 
-import org.apache.kafka.common.UUID;
+import org.apache.kafka.common.Uuid;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -57,7 +57,7 @@ public interface Readable {
     /**
      * Read a UUID with the most significant digits first.
      */
-    default UUID readUUID() {
-        return new UUID(readLong(), readLong());
+    default Uuid readUUID() {
+        return new Uuid(readLong(), readLong());
     }
 }

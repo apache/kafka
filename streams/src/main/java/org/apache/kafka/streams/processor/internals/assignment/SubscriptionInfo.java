@@ -21,6 +21,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
@@ -86,7 +88,7 @@ public class SubscriptionInfo {
         validateVersions(version, latestSupportedVersion);
         final SubscriptionInfoData data = new SubscriptionInfoData();
         data.setVersion(version);
-        data.setProcessId(new org.apache.kafka.common.UUID(processId.getMostSignificantBits(),
+        data.setProcessId(new Uuid(processId.getMostSignificantBits(),
                 processId.getLeastSignificantBits()));
 
         if (version >= 2) {
