@@ -26,7 +26,6 @@ import scala.collection.Seq
 import kafka.common.AdminCommandFailedException
 import kafka.security.authorizer.AclAuthorizer
 import kafka.server.{KafkaConfig, KafkaServer}
-import kafka.utils.TestUtils.createBrokerConfig
 import kafka.utils.{Logging, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.TopicPartition

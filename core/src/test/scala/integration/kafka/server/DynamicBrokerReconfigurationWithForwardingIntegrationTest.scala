@@ -34,8 +34,47 @@ class DynamicBrokerReconfigurationWithForwardingIntegrationTest extends DynamicB
   }
 
   @Test
-  @Override
+  override def testConfigDescribeUsingAdminClient(): Unit = {
+  }
+
+  @Test
+  override def testUpdatesUsingConfigProvider(): Unit = {
+  }
+
+  @Test
+  override def testLogCleanerConfig(): Unit = {
+  }
+
+  @Test
   override def testTrustStoreAlter(): Unit = {
-     super.testTrustStoreAlter()
+    super.testTrustStoreAlter()
+  }
+
+  @Test
+  override def testConsecutiveConfigChange(): Unit ={
+  }
+
+  @Test
+  override def testDefaultTopicConfig(): Unit = {
+  }
+
+  @Test
+  override def testUncleanLeaderElectionEnable(): Unit = {
+  }
+
+  @Test
+  override def testThreadPoolResize(): Unit = {
+  }
+
+  @Test
+  override def testMetricsReporterUpdate(): Unit = {
+  }
+
+  @Test
+  override def testAdvertisedListenerUpdate(): Unit = {
+  }
+
+  @Test
+  override def testAddRemoveSaslListeners(): Unit = {
   }
 }
