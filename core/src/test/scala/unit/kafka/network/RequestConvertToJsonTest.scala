@@ -67,7 +67,7 @@ class RequestConvertToJsonTest {
       val struct = ApiMessageType.fromApiKey(key.id).newResponse().toStruct(version)
       val res = AbstractResponse.parseResponse(key, struct, version)
       try {
-        RequestConvertToJson.response(res, version)
+        RequestConvertToJson.response(res, version, false)
       } catch {
         case _ : AssertionError => unhandledKeys += key.toString
       }
@@ -82,10 +82,10 @@ class RequestConvertToJsonTest {
 
     val version: Short = 3
     val request = OffsetsForLeaderEpochRequest.Builder.forConsumer(partitionDataMap).build(version)
-    val actualNode = RequestConvertToJson.request(request, false)
+    val actualNode = RequestConvertToJson.request(request, true)
 
-    val requestData = OffsetForLeaderEpochRequestDataJsonConverter.read(actualNode, version)
-    val expectedNode = OffsetForLeaderEpochRequestDataJsonConverter.write(requestData, version)
+    val requestData = OffsetForLeaderEpochRequestDataJsonConverter.read(actualNode, version, true)
+    val expectedNode = OffsetForLeaderEpochRequestDataJsonConverter.write(requestData, version, true)
 
     assertEquals(expectedNode, actualNode)
   }
@@ -100,10 +100,10 @@ class RequestConvertToJsonTest {
 
     val version: Short = 3
     val request = ProduceRequest.Builder.forCurrentMagic(1.toShort, 5000, produceData).build(version)
-    val actualNode = RequestConvertToJson.request(request, false)
+    val actualNode = RequestConvertToJson.request(request, true)
 
-    val requestData = ProduceRequestDataJsonConverter.read(actualNode, version)
-    val expectedNode = ProduceRequestDataJsonConverter.write(requestData, version)
+    val requestData = ProduceRequestDataJsonConverter.read(actualNode, version, true)
+    val expectedNode = ProduceRequestDataJsonConverter.write(requestData, version, true)
 
     assertEquals(expectedNode, actualNode)
   }
@@ -115,10 +115,10 @@ class RequestConvertToJsonTest {
 
     val version: Short = 3
     val response = new OffsetsForLeaderEpochResponse(endOffsetMap)
-    val actualNode = RequestConvertToJson.response(response, version)
+    val actualNode = RequestConvertToJson.response(response, version, true)
 
-    val requestData = OffsetForLeaderEpochResponseDataJsonConverter.read(actualNode, version)
-    val expectedNode = OffsetForLeaderEpochResponseDataJsonConverter.write(requestData, version)
+    val requestData = OffsetForLeaderEpochResponseDataJsonConverter.read(actualNode, version, true)
+    val expectedNode = OffsetForLeaderEpochResponseDataJsonConverter.write(requestData, version, true)
 
     assertEquals(expectedNode, actualNode)
   }
@@ -131,10 +131,10 @@ class RequestConvertToJsonTest {
 
     val version: Short = 3
     val response = new ProduceResponse(responseData)
-    val actualNode = RequestConvertToJson.response(response, version)
+    val actualNode = RequestConvertToJson.response(response, version, true)
 
-    val requestData = ProduceResponseDataJsonConverter.read(actualNode, version)
-    val expectedNode = ProduceResponseDataJsonConverter.write(requestData, version)
+    val requestData = ProduceResponseDataJsonConverter.read(actualNode, version, true)
+    val expectedNode = ProduceResponseDataJsonConverter.write(requestData, version, true)
 
     assertEquals(expectedNode, actualNode)
   }

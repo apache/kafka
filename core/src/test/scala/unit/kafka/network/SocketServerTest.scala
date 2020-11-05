@@ -25,11 +25,6 @@ import java.nio.charset.StandardCharsets
 import java.util
 import java.util.concurrent.{CompletableFuture, ConcurrentLinkedQueue, Executors, TimeUnit}
 import java.util.{Properties, Random}
-<<<<<<< HEAD
-=======
-
-import com.fasterxml.jackson.databind.node.{JsonNodeFactory, ObjectNode, TextNode}
->>>>>>> 1d0de0692c... KAFKA-10525: Emit JSONs with new auto-generated schema
 import com.yammer.metrics.core.{Gauge, Meter}
 
 import javax.net.ssl._
@@ -682,7 +677,7 @@ class SocketServerTest {
       server.dataPlaneRequestChannel.sendResponse(response)
     }
     val throttledChannel = new ThrottledChannel(request, new MockTime(), 100, channelThrottlingCallback)
-    val headerLog = RequestConvertToJson.requestHeaderNode(request.header)
+    val headerLog = RequestConvertToJson.requestHeaderNode(request.header, true)
     val response =
       if (!noOpResponse)
         new RequestChannel.SendResponse(request, send, Some(headerLog), None)

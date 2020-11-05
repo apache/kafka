@@ -394,8 +394,8 @@ public class SimpleExampleMessageTest {
         assertEquals(message.hashCode(), messageFromStruct.hashCode());
 
         // Check JSON serialization
-        JsonNode serializedJson = SimpleExampleMessageDataJsonConverter.write(message, version);
-        SimpleExampleMessageData messageFromJson = SimpleExampleMessageDataJsonConverter.read(serializedJson, version);
+        JsonNode serializedJson = SimpleExampleMessageDataJsonConverter.write(message, version, true);
+        SimpleExampleMessageData messageFromJson = SimpleExampleMessageDataJsonConverter.read(serializedJson, version, true);
         validator.accept(messageFromJson);
         assertEquals(message, messageFromJson);
         assertEquals(message.hashCode(), messageFromJson.hashCode());

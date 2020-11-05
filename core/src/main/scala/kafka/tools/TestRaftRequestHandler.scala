@@ -95,9 +95,10 @@ class TestRaftRequestHandler(
       case Some(response) =>
         val responseSend = request.context.buildResponseSend(response)
         val responseString =
-          if (RequestChannel.isRequestLoggingEnabled) Some(RequestConvertToJson.requestHeaderNode(request.header))
+          if (RequestChannel.isRequestLoggingEnabled) Some(RequestConvertToJson.response(response, request.context.apiVersion, true))
           else None
         new RequestChannel.SendResponse(request, responseSend, responseString, None)
+      case None =>
         new RequestChannel.NoOpResponse(request)
     }
     sendResponse(response)

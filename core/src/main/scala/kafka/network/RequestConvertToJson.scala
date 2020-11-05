@@ -34,136 +34,136 @@ import scala.jdk.CollectionConverters._
 object RequestConvertToJson {
   def request(request: AbstractRequest, verbose: Boolean): JsonNode = {
     request match {
-      case req: AddOffsetsToTxnRequest => AddOffsetsToTxnRequestDataJsonConverter.write(req.data, request.version)
-      case req: AddPartitionsToTxnRequest => AddPartitionsToTxnRequestDataJsonConverter.write(req.data, request.version)
-      case req: AlterClientQuotasRequest => AlterClientQuotasRequestDataJsonConverter.write(req.data, request.version)
-      case req: AlterConfigsRequest => AlterConfigsRequestDataJsonConverter.write(req.data, request.version)
-      case req: AlterIsrRequest => AlterIsrRequestDataJsonConverter.write(req.data, request.version)
-      case req: AlterPartitionReassignmentsRequest => AlterPartitionReassignmentsRequestDataJsonConverter.write(req.data, request.version)
-      case req: AlterReplicaLogDirsRequest => AlterReplicaLogDirsRequestDataJsonConverter.write(req.data, request.version)
-      case res: AlterUserScramCredentialsRequest => AlterUserScramCredentialsRequestDataJsonConverter.write(res.data, request.version)
-      case req: ApiVersionsRequest => ApiVersionsRequestDataJsonConverter.write(req.data, request.version)
-      case req: BeginQuorumEpochRequest => BeginQuorumEpochRequestDataJsonConverter.write(req.data, request.version)
-      case req: ControlledShutdownRequest => ControlledShutdownRequestDataJsonConverter.write(req.data, request.version)
-      case req: CreateAclsRequest => CreateAclsRequestDataJsonConverter.write(req.data, request.version)
-      case req: CreateDelegationTokenRequest => CreateDelegationTokenRequestDataJsonConverter.write(req.data, request.version)
-      case req: CreatePartitionsRequest => CreatePartitionsRequestDataJsonConverter.write(req.data, request.version)
-      case req: CreateTopicsRequest => CreateTopicsRequestDataJsonConverter.write(req.data, request.version)
-      case req: DeleteAclsRequest => DeleteAclsRequestDataJsonConverter.write(req.data, request.version)
-      case req: DeleteGroupsRequest => DeleteGroupsRequestDataJsonConverter.write(req.data, request.version)
-      case req: DeleteRecordsRequest => DeleteRecordsRequestDataJsonConverter.write(req.data, request.version)
-      case req: DeleteTopicsRequest => DeleteTopicsRequestDataJsonConverter.write(req.data, request.version)
-      case req: DescribeAclsRequest => DescribeAclsRequestDataJsonConverter.write(req.data, request.version)
-      case req: DescribeClientQuotasRequest => DescribeClientQuotasRequestDataJsonConverter.write(req.data, request.version)
-      case req: DescribeConfigsRequest => DescribeConfigsRequestDataJsonConverter.write(req.data, request.version)
-      case req: DescribeDelegationTokenRequest => DescribeDelegationTokenRequestDataJsonConverter.write(req.data, request.version)
-      case req: DescribeGroupsRequest => DescribeGroupsRequestDataJsonConverter.write(req.data, request.version)
-      case req: DescribeLogDirsRequest => DescribeLogDirsRequestDataJsonConverter.write(req.data, request.version)
-      case req: DescribeQuorumRequest => DescribeQuorumRequestDataJsonConverter.write(req.data, request.version)
-      case res: DescribeUserScramCredentialsRequest => DescribeUserScramCredentialsRequestDataJsonConverter.write(res.data, request.version)
-      case req: ElectLeadersRequest => ElectLeadersRequestDataJsonConverter.write(req.data, request.version)
-      case req: EndTxnRequest => EndTxnRequestDataJsonConverter.write(req.data, request.version)
-      case req: EndQuorumEpochRequest => EndQuorumEpochRequestDataJsonConverter.write(req.data, request.version)
-      case req: ExpireDelegationTokenRequest => ExpireDelegationTokenRequestDataJsonConverter.write(req.data, request.version)
-      case req: FetchRequest => FetchRequestDataJsonConverter.write(req.data, request.version)
-      case req: FindCoordinatorRequest => FindCoordinatorRequestDataJsonConverter.write(req.data, request.version)
-      case req: HeartbeatRequest => HeartbeatRequestDataJsonConverter.write(req.data, request.version)
-      case req: IncrementalAlterConfigsRequest => IncrementalAlterConfigsRequestDataJsonConverter.write(req.data, request.version)
-      case req: InitProducerIdRequest => InitProducerIdRequestDataJsonConverter.write(req.data, request.version)
-      case req: JoinGroupRequest => JoinGroupRequestDataJsonConverter.write(req.data, request.version)
-      case req: LeaderAndIsrRequest => LeaderAndIsrRequestDataJsonConverter.write(req.data, request.version)
-      case req: LeaveGroupRequest => LeaveGroupRequestDataJsonConverter.write(req.data, request.version)
-      case req: ListGroupsRequest => ListGroupsRequestDataJsonConverter.write(req.data, request.version)
-      case req: ListOffsetRequest => ListOffsetRequestDataJsonConverter.write(req.data, request.version)
-      case req: ListPartitionReassignmentsRequest => ListPartitionReassignmentsRequestDataJsonConverter.write(req.data, request.version)
-      case req: MetadataRequest => MetadataRequestDataJsonConverter.write(req.data, request.version)
-      case req: OffsetCommitRequest => OffsetCommitRequestDataJsonConverter.write(req.data, request.version)
-      case req: OffsetDeleteRequest => OffsetDeleteRequestDataJsonConverter.write(req.data, request.version)
-      case req: OffsetFetchRequest => OffsetFetchRequestDataJsonConverter.write(req.data, request.version)
-      case req: OffsetsForLeaderEpochRequest => offsetsForLeaderEpochRequestNode(req, request.version)
-      case req: ProduceRequest => produceRequestNode(req, request.version)
-      case req: RenewDelegationTokenRequest => RenewDelegationTokenRequestDataJsonConverter.write(req.data, request.version)
-      case req: SaslAuthenticateRequest => SaslAuthenticateRequestDataJsonConverter.write(req.data, request.version)
-      case req: SaslHandshakeRequest => SaslHandshakeRequestDataJsonConverter.write(req.data, request.version)
-      case req: StopReplicaRequest => StopReplicaRequestDataJsonConverter.write(req.data, request.version)
-      case req: SyncGroupRequest => SyncGroupRequestDataJsonConverter.write(req.data, request.version)
-      case req: TxnOffsetCommitRequest => TxnOffsetCommitRequestDataJsonConverter.write(req.data, request.version)
-      case req: UpdateFeaturesRequest => UpdateFeaturesRequestDataJsonConverter.write(req.data, request.version)
-      case req: UpdateMetadataRequest => UpdateMetadataRequestDataJsonConverter.write(req.data, request.version)
-      case req: VoteRequest => VoteRequestDataJsonConverter.write(req.data, request.version)
-      case req: WriteTxnMarkersRequest => WriteTxnMarkersRequestDataJsonConverter.write(req.data, request.version)
-      case _ => throw new AssertionError(s"ApiKey ${request.api} is not currently handled in `request`, the " +
+      case req: AddOffsetsToTxnRequest => AddOffsetsToTxnRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: AddPartitionsToTxnRequest => AddPartitionsToTxnRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: AlterClientQuotasRequest => AlterClientQuotasRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: AlterConfigsRequest => AlterConfigsRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: AlterIsrRequest => AlterIsrRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: AlterPartitionReassignmentsRequest => AlterPartitionReassignmentsRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: AlterReplicaLogDirsRequest => AlterReplicaLogDirsRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case res: AlterUserScramCredentialsRequest => AlterUserScramCredentialsRequestDataJsonConverter.write(res.data, request.version, verbose)
+      case req: ApiVersionsRequest => ApiVersionsRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: BeginQuorumEpochRequest => BeginQuorumEpochRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: ControlledShutdownRequest => ControlledShutdownRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: CreateAclsRequest => CreateAclsRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: CreateDelegationTokenRequest => CreateDelegationTokenRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: CreatePartitionsRequest => CreatePartitionsRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: CreateTopicsRequest => CreateTopicsRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: DeleteAclsRequest => DeleteAclsRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: DeleteGroupsRequest => DeleteGroupsRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: DeleteRecordsRequest => DeleteRecordsRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: DeleteTopicsRequest => DeleteTopicsRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: DescribeAclsRequest => DescribeAclsRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: DescribeClientQuotasRequest => DescribeClientQuotasRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: DescribeConfigsRequest => DescribeConfigsRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: DescribeDelegationTokenRequest => DescribeDelegationTokenRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: DescribeGroupsRequest => DescribeGroupsRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: DescribeLogDirsRequest => DescribeLogDirsRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: DescribeQuorumRequest => DescribeQuorumRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case res: DescribeUserScramCredentialsRequest => DescribeUserScramCredentialsRequestDataJsonConverter.write(res.data, request.version, verbose)
+      case req: ElectLeadersRequest => ElectLeadersRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: EndTxnRequest => EndTxnRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: EndQuorumEpochRequest => EndQuorumEpochRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: ExpireDelegationTokenRequest => ExpireDelegationTokenRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: FetchRequest => FetchRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: FindCoordinatorRequest => FindCoordinatorRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: HeartbeatRequest => HeartbeatRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: IncrementalAlterConfigsRequest => IncrementalAlterConfigsRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: InitProducerIdRequest => InitProducerIdRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: JoinGroupRequest => JoinGroupRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: LeaderAndIsrRequest => LeaderAndIsrRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: LeaveGroupRequest => LeaveGroupRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: ListGroupsRequest => ListGroupsRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: ListOffsetRequest => ListOffsetRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: ListPartitionReassignmentsRequest => ListPartitionReassignmentsRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: MetadataRequest => MetadataRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: OffsetCommitRequest => OffsetCommitRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: OffsetDeleteRequest => OffsetDeleteRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: OffsetFetchRequest => OffsetFetchRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: OffsetsForLeaderEpochRequest => offsetsForLeaderEpochRequestNode(req, request.version, verbose)
+      case req: ProduceRequest => produceRequestNode(req, request.version, verbose)
+      case req: RenewDelegationTokenRequest => RenewDelegationTokenRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: SaslAuthenticateRequest => SaslAuthenticateRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: SaslHandshakeRequest => SaslHandshakeRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: StopReplicaRequest => StopReplicaRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: SyncGroupRequest => SyncGroupRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: TxnOffsetCommitRequest => TxnOffsetCommitRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: UpdateFeaturesRequest => UpdateFeaturesRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: UpdateMetadataRequest => UpdateMetadataRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: VoteRequest => VoteRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case req: WriteTxnMarkersRequest => WriteTxnMarkersRequestDataJsonConverter.write(req.data, request.version, verbose)
+      case _ => throw new IllegalStateException(s"ApiKey ${request.api} is not currently handled in `request`, the " +
         "code should be updated to do so.");
     }
   }
 
-  def response(response: AbstractResponse, version: Short): JsonNode = {
+  def response(response: AbstractResponse, version: Short, verbose: Boolean): JsonNode = {
     response match {
-      case res: AddOffsetsToTxnResponse => AddOffsetsToTxnResponseDataJsonConverter.write(res.data, version)
-      case res: AddPartitionsToTxnResponse => AddPartitionsToTxnResponseDataJsonConverter.write(res.data, version)
-      case res: AlterClientQuotasResponse => AlterClientQuotasResponseDataJsonConverter.write(res.data, version)
-      case res: AlterConfigsResponse => AlterConfigsResponseDataJsonConverter.write(res.data, version)
-      case res: AlterIsrResponse => AlterIsrResponseDataJsonConverter.write(res.data, version)
-      case res: AlterPartitionReassignmentsResponse => AlterPartitionReassignmentsResponseDataJsonConverter.write(res.data, version)
-      case res: AlterReplicaLogDirsResponse => AlterReplicaLogDirsResponseDataJsonConverter.write(res.data, version)
-      case res: AlterUserScramCredentialsResponse => AlterUserScramCredentialsResponseDataJsonConverter.write(res.data, version)
-      case res: ApiVersionsResponse => ApiVersionsResponseDataJsonConverter.write(res.data, version)
-      case res: BeginQuorumEpochResponse => BeginQuorumEpochResponseDataJsonConverter.write(res.data, version)
-      case res: ControlledShutdownResponse => ControlledShutdownResponseDataJsonConverter.write(res.data, version)
-      case res: CreateAclsResponse => CreateAclsResponseDataJsonConverter.write(res.data, version)
-      case res: CreateDelegationTokenResponse => CreateDelegationTokenResponseDataJsonConverter.write(res.data, version)
-      case res: CreatePartitionsResponse => CreatePartitionsResponseDataJsonConverter.write(res.data, version)
-      case res: CreateTopicsResponse => CreateTopicsResponseDataJsonConverter.write(res.data, version)
-      case res: DeleteAclsResponse => DeleteAclsResponseDataJsonConverter.write(res.data, version)
-      case res: DeleteGroupsResponse => DeleteGroupsResponseDataJsonConverter.write(res.data, version)
-      case res: DeleteRecordsResponse => DeleteRecordsResponseDataJsonConverter.write(res.data, version)
-      case res: DeleteTopicsResponse => DeleteTopicsResponseDataJsonConverter.write(res.data, version)
-      case res: DescribeAclsResponse => DescribeAclsResponseDataJsonConverter.write(res.data, version)
-      case res: DescribeClientQuotasResponse => DescribeClientQuotasResponseDataJsonConverter.write(res.data, version)
-      case res: DescribeConfigsResponse => DescribeConfigsResponseDataJsonConverter.write(res.data, version)
-      case res: DescribeDelegationTokenResponse => DescribeDelegationTokenResponseDataJsonConverter.write(res.data, version)
-      case res: DescribeGroupsResponse => DescribeGroupsResponseDataJsonConverter.write(res.data, version)
-      case res: DescribeLogDirsResponse => DescribeLogDirsResponseDataJsonConverter.write(res.data, version)
-      case res: DescribeQuorumResponse => DescribeQuorumResponseDataJsonConverter.write(res.data, version)
-      case res: DescribeUserScramCredentialsResponse => DescribeUserScramCredentialsResponseDataJsonConverter.write(res.data, version)
-      case res: ElectLeadersResponse => ElectLeadersResponseDataJsonConverter.write(res.data, version)
-      case res: EndTxnResponse => EndTxnResponseDataJsonConverter.write(res.data, version)
-      case res: EndQuorumEpochResponse => EndQuorumEpochResponseDataJsonConverter.write(res.data, version)
-      case res: ExpireDelegationTokenResponse => ExpireDelegationTokenResponseDataJsonConverter.write(res.data, version)
-      case res: FetchResponse[_] => FetchResponseDataJsonConverter.write(res.data, version)
-      case res: FindCoordinatorResponse => FindCoordinatorResponseDataJsonConverter.write(res.data, version)
-      case res: HeartbeatResponse => HeartbeatResponseDataJsonConverter.write(res.data, version)
-      case res: IncrementalAlterConfigsResponse => IncrementalAlterConfigsResponseDataJsonConverter.write(res.data, version)
-      case res: InitProducerIdResponse => InitProducerIdResponseDataJsonConverter.write(res.data, version)
-      case res: JoinGroupResponse => JoinGroupResponseDataJsonConverter.write(res.data, version)
-      case res: LeaderAndIsrResponse => LeaderAndIsrResponseDataJsonConverter.write(res.data, version)
-      case res: LeaveGroupResponse => LeaveGroupResponseDataJsonConverter.write(res.data, version)
-      case res: ListGroupsResponse => ListGroupsResponseDataJsonConverter.write(res.data, version)
-      case res: ListOffsetResponse => ListOffsetResponseDataJsonConverter.write(res.data, version)
-      case res: ListPartitionReassignmentsResponse => ListPartitionReassignmentsResponseDataJsonConverter.write(res.data, version)
-      case res: MetadataResponse => MetadataResponseDataJsonConverter.write(res.data, version)
-      case res: OffsetCommitResponse => OffsetCommitResponseDataJsonConverter.write(res.data, version)
-      case res: OffsetDeleteResponse => OffsetDeleteResponseDataJsonConverter.write(res.data, version)
-      case res: OffsetFetchResponse => OffsetFetchResponseDataJsonConverter.write(res.data, version)
-      case res: OffsetsForLeaderEpochResponse => offsetsForLeaderEpochResponseNode(res, version)
-      case res: ProduceResponse => produceResponseNode(res, version)
-      case res: RenewDelegationTokenResponse => RenewDelegationTokenResponseDataJsonConverter.write(res.data, version)
-      case res: SaslAuthenticateResponse => SaslAuthenticateResponseDataJsonConverter.write(res.data, version)
-      case res: SaslHandshakeResponse => SaslHandshakeResponseDataJsonConverter.write(res.data, version)
-      case res: StopReplicaResponse => StopReplicaResponseDataJsonConverter.write(res.data, version)
-      case res: SyncGroupResponse => SyncGroupResponseDataJsonConverter.write(res.data, version)
-      case res: TxnOffsetCommitResponse => TxnOffsetCommitResponseDataJsonConverter.write(res.data, version)
-      case res: UpdateFeaturesResponse => UpdateFeaturesResponseDataJsonConverter.write(res.data, version)
-      case res: UpdateMetadataResponse => UpdateMetadataResponseDataJsonConverter.write(res.data, version)
-      case res: WriteTxnMarkersResponse => WriteTxnMarkersResponseDataJsonConverter.write(res.data, version)
-      case res: VoteResponse => VoteResponseDataJsonConverter.write(res.data, version)
-      case _ => throw new AssertionError(s"ApiKey $response is not currently handled in `response`, the " +
+      case res: AddOffsetsToTxnResponse => AddOffsetsToTxnResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: AddPartitionsToTxnResponse => AddPartitionsToTxnResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: AlterClientQuotasResponse => AlterClientQuotasResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: AlterConfigsResponse => AlterConfigsResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: AlterIsrResponse => AlterIsrResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: AlterPartitionReassignmentsResponse => AlterPartitionReassignmentsResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: AlterReplicaLogDirsResponse => AlterReplicaLogDirsResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: AlterUserScramCredentialsResponse => AlterUserScramCredentialsResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: ApiVersionsResponse => ApiVersionsResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: BeginQuorumEpochResponse => BeginQuorumEpochResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: ControlledShutdownResponse => ControlledShutdownResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: CreateAclsResponse => CreateAclsResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: CreateDelegationTokenResponse => CreateDelegationTokenResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: CreatePartitionsResponse => CreatePartitionsResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: CreateTopicsResponse => CreateTopicsResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: DeleteAclsResponse => DeleteAclsResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: DeleteGroupsResponse => DeleteGroupsResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: DeleteRecordsResponse => DeleteRecordsResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: DeleteTopicsResponse => DeleteTopicsResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: DescribeAclsResponse => DescribeAclsResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: DescribeClientQuotasResponse => DescribeClientQuotasResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: DescribeConfigsResponse => DescribeConfigsResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: DescribeDelegationTokenResponse => DescribeDelegationTokenResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: DescribeGroupsResponse => DescribeGroupsResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: DescribeLogDirsResponse => DescribeLogDirsResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: DescribeQuorumResponse => DescribeQuorumResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: DescribeUserScramCredentialsResponse => DescribeUserScramCredentialsResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: ElectLeadersResponse => ElectLeadersResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: EndTxnResponse => EndTxnResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: EndQuorumEpochResponse => EndQuorumEpochResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: ExpireDelegationTokenResponse => ExpireDelegationTokenResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: FetchResponse[_] => FetchResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: FindCoordinatorResponse => FindCoordinatorResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: HeartbeatResponse => HeartbeatResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: IncrementalAlterConfigsResponse => IncrementalAlterConfigsResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: InitProducerIdResponse => InitProducerIdResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: JoinGroupResponse => JoinGroupResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: LeaderAndIsrResponse => LeaderAndIsrResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: LeaveGroupResponse => LeaveGroupResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: ListGroupsResponse => ListGroupsResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: ListOffsetResponse => ListOffsetResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: ListPartitionReassignmentsResponse => ListPartitionReassignmentsResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: MetadataResponse => MetadataResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: OffsetCommitResponse => OffsetCommitResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: OffsetDeleteResponse => OffsetDeleteResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: OffsetFetchResponse => OffsetFetchResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: OffsetsForLeaderEpochResponse => offsetsForLeaderEpochResponseNode(res, version, verbose)
+      case res: ProduceResponse => produceResponseNode(res, version, verbose)
+      case res: RenewDelegationTokenResponse => RenewDelegationTokenResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: SaslAuthenticateResponse => SaslAuthenticateResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: SaslHandshakeResponse => SaslHandshakeResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: StopReplicaResponse => StopReplicaResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: SyncGroupResponse => SyncGroupResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: TxnOffsetCommitResponse => TxnOffsetCommitResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: UpdateFeaturesResponse => UpdateFeaturesResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: UpdateMetadataResponse => UpdateMetadataResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: WriteTxnMarkersResponse => WriteTxnMarkersResponseDataJsonConverter.write(res.data, version, verbose)
+      case res: VoteResponse => VoteResponseDataJsonConverter.write(res.data, version, verbose)
+      case _ => throw new IllegalStateException(s"ApiKey $response is not currently handled in `response`, the " +
         "code should be updated to do so.");
     }
   }
 
-  def requestHeaderNode(header: RequestHeader): JsonNode = {
-    val node = RequestHeaderDataJsonConverter.write(header.data(), header.headerVersion()).asInstanceOf[ObjectNode]
+  def requestHeaderNode(header: RequestHeader, verbose: Boolean): JsonNode = {
+    val node = RequestHeaderDataJsonConverter.write(header.data(), header.headerVersion(), verbose).asInstanceOf[ObjectNode]
     node.set("requestApiKeyName", new TextNode(header.apiKey.toString))
     node
   }
@@ -171,7 +171,7 @@ object RequestConvertToJson {
   def clientInfoNode(clientInfo: ClientInformation): JsonNode = {
     val node = new ObjectNode(JsonNodeFactory.instance)
     node.set("softwareName", new TextNode(clientInfo.softwareName()))
-    node.set("softwareName", new TextNode(clientInfo.softwareVersion()))
+    node.set("softwareVersion", new TextNode(clientInfo.softwareVersion()))
     node
   }
 
@@ -182,7 +182,7 @@ object RequestConvertToJson {
                          responseSendTimeMs: Double, temporaryMemoryBytes: Long,
                          messageConversionsTimeMs: Double): JsonNode = {
     val node = new ObjectNode(JsonNodeFactory.instance)
-    node.set("requestHeader", requestHeaderNode(header))
+    node.set("requestHeader", requestHeaderNode(header, verbose))
     node.set("request", request(req, verbose))
     node.set("response", res.responseLog.getOrElse(new TextNode("")))
     node.set("connection", new TextNode(context.connectionId))
@@ -206,7 +206,7 @@ object RequestConvertToJson {
 
   def requestDesc(header: RequestHeader, req: AbstractRequest, verbose: Boolean): JsonNode = {
     val node = new ObjectNode(JsonNodeFactory.instance)
-    node.set("requestHeader", requestHeaderNode(header))
+    node.set("requestHeader", requestHeaderNode(header, verbose))
     node.set("request", request(req, verbose))
     node
   }
@@ -214,7 +214,7 @@ object RequestConvertToJson {
   /**
    * Temporary until switch to use the generated schemas.
    */
-  def offsetsForLeaderEpochRequestNode(request: OffsetsForLeaderEpochRequest, version: Short): JsonNode = {
+  def offsetsForLeaderEpochRequestNode(request: OffsetsForLeaderEpochRequest, version: Short, verbose: Boolean): JsonNode = {
     val node = new ObjectNode(JsonNodeFactory.instance)
     if (version >= 3) {
       node.set("replicaId", new IntNode(request.replicaId))
@@ -245,7 +245,7 @@ object RequestConvertToJson {
   /**
    * Temporary until switch to use the generated schemas.
    */
-  def produceRequestNode(request: ProduceRequest, version: Short): JsonNode = {
+  def produceRequestNode(request: ProduceRequest, version: Short, verbose: Boolean): JsonNode = {
     val node = new ObjectNode(JsonNodeFactory.instance)
     if (version >= 3) {
       if (request.transactionalId == null) {
@@ -262,7 +262,7 @@ object RequestConvertToJson {
       val topicNode = new ObjectNode(JsonNodeFactory.instance)
       topicNode.set("name", new TextNode(topicName))
       val partitionsArray = new ArrayNode(JsonNodeFactory.instance)
-      partitions.forEach { (partitionIndex, partitionData)=>
+      partitions.forEach { (partitionIndex, partitionData) =>
         val partitionNode = new ObjectNode(JsonNodeFactory.instance)
         partitionNode.set("partitionIndex", new IntNode(partitionIndex))
         if (partitionData == null)
@@ -281,7 +281,7 @@ object RequestConvertToJson {
   /**
    * Temporary until switch to use the generated schemas.
    */
-  def offsetsForLeaderEpochResponseNode(response: OffsetsForLeaderEpochResponse, version: Short): JsonNode = {
+  def offsetsForLeaderEpochResponseNode(response: OffsetsForLeaderEpochResponse, version: Short, verbose: Boolean): JsonNode = {
     val node = new ObjectNode(JsonNodeFactory.instance)
     if (version >= 2) {
       node.set("throttleTimeMs", new IntNode(response.throttleTimeMs))
@@ -310,7 +310,7 @@ object RequestConvertToJson {
   /**
    * Temporary until switch to use the generated schemas.
    */
-  def produceResponseNode(response: ProduceResponse, version: Short): JsonNode = {
+  def produceResponseNode(response: ProduceResponse, version: Short, verbose: Boolean): JsonNode = {
     val node = new ObjectNode(JsonNodeFactory.instance)
     val topics = CollectionUtils.groupPartitionDataByTopic(response.responses)
     val responsesArray = new ArrayNode(JsonNodeFactory.instance)
