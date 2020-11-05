@@ -17,7 +17,6 @@
 
 package org.apache.kafka.common.protocol;
 
-import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.utils.ByteUtils;
 
@@ -88,16 +87,6 @@ public class RecordsReadable implements Readable {
     @Override
     public long readVarlong() {
         return ByteUtils.readVarlong(buf);
-    }
-
-    public BaseRecords readRecords(int length) {
-        if (length < 0) {
-            // no records
-            return null;
-        } else {
-            ByteBuffer recordsBuffer = readByteBuffer(length);
-            return MemoryRecords.readableRecords(recordsBuffer);
-        }
     }
 
 }

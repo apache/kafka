@@ -17,11 +17,9 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.EnvelopeResponseData;
-import org.apache.kafka.common.message.ResponseHeaderData;
 import org.apache.kafka.common.network.Send;
-import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.network.SendBuilder;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -70,21 +68,7 @@ public class EnvelopeResponse extends AbstractResponse {
 
     @Override
     protected Send toSend(String destination, ResponseHeader header, short apiVersion) {
-        ResponseHeaderData headerData = header.data();
-        short headerVersion = header.headerVersion();
-
-        ObjectSerializationCache serializationCache = new ObjectSerializationCache();
-        int totalSize = headerData.size(serializationCache, headerVersion)
-            + this.data.size(serializationCache, apiVersion);
-        int responseDataSize = this.data.responseData() == null ? 0 : this.data.responseData().remaining();
-        int overheadSize = totalSize - responseDataSize;
-
-        ByteBuffer buffer = ByteBuffer.allocate(overheadSize + 4);
-        SendBuilder builder = new SendBuilder(buffer);
-        builder.writeInt(totalSize);
-        builder.writeApiMessage(headerData, serializationCache, headerVersion);
-        builder.writeApiMessage(this.data, serializationCache, apiVersion);
-        return builder.toSend(destination);
+        return SendBuilder.buildResponseSend(destination, header, this.data, apiVersion);
     }
 
 }

@@ -47,7 +47,11 @@ public interface Message {
      *                      If the specified version is too new to be supported
      *                      by this software.
      */
-    int size(ObjectSerializationCache cache, short version);
+    default int size(ObjectSerializationCache cache, short version) {
+        return messageSize(cache, version).totalSize();
+    }
+
+    MessageSize messageSize(ObjectSerializationCache cache, short version);
 
     /**
      * Writes out this message to the given Writable.

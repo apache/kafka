@@ -115,6 +115,7 @@ public class RecordsWritable implements Writable {
         ByteUtils.writeVarlong(i, buffer);
     }
 
+    @Override
     public void writeRecords(BaseRecords records) {
         flush();
         sendConsumer.accept(records.toSend(dest));

@@ -16,14 +16,19 @@
  */
 package org.apache.kafka.common.network;
 
+import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.common.protocol.MessageSize;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Writable;
+import org.apache.kafka.common.record.BaseRecords;
+import org.apache.kafka.common.record.MultiRecordsSend;
 import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.requests.ResponseHeader;
 import org.apache.kafka.common.utils.ByteUtils;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.ArrayDeque;
+import java.util.Queue;
 
 /**
  * This class provides a way to build {@link Send} objects for network
@@ -37,11 +42,13 @@ import java.util.List;
  * for example usage.
  */
 public class SendBuilder implements Writable {
-    private final List<ByteBuffer> buffers = new ArrayList<>();
+    private final Queue<Send> sends = new ArrayDeque<>();
     private final ByteBuffer buffer;
+    private final String destinationId;
 
-    public SendBuilder(ByteBuffer buffer) {
-        this.buffer = buffer;
+    private SendBuilder(String destinationId, int overheadSize) {
+        this.destinationId = destinationId;
+        this.buffer = ByteBuffer.allocate(overheadSize);
         this.buffer.mark();
     }
 
@@ -52,10 +59,14 @@ public class SendBuilder implements Writable {
         if (latestPosition > buffer.position()) {
             ByteBuffer duplicate = buffer.duplicate();
             duplicate.limit(latestPosition);
-            buffers.add(duplicate);
+            addByteBufferSend(duplicate);
             buffer.position(latestPosition);
             buffer.mark();
         }
+    }
+
+    private void addByteBufferSend(ByteBuffer buffer) {
+        sends.add(new ByteBufferSend(destinationId, buffer));
     }
 
     @Override
@@ -85,8 +96,7 @@ public class SendBuilder implements Writable {
 
     @Override
     public void writeByteArray(byte[] arr) {
-        maybeCloseBlock();
-        buffers.add(ByteBuffer.wrap(arr));
+        buffer.put(arr);
     }
 
     @Override
@@ -97,7 +107,7 @@ public class SendBuilder implements Writable {
     @Override
     public void writeByteBuffer(ByteBuffer buf) {
         maybeCloseBlock();
-        buffers.add(buf);
+        addByteBufferSend(buf);
     }
 
     @Override
@@ -110,10 +120,64 @@ public class SendBuilder implements Writable {
         ByteUtils.writeVarlong(i, buffer);
     }
 
+    @Override
+    public void writeRecords(BaseRecords records) {
+        maybeCloseBlock();
+        sends.add(records.toSend(destinationId));
+    }
+
     public Send toSend(String destination) {
         maybeCloseBlock();
-        ByteBuffer[] buffers = this.buffers.toArray(new ByteBuffer[0]);
-        return new ByteBufferSend(destination, buffers);
+        return new MultiRecordsSend(destination, sends);
+    }
+
+    public static Send buildRequestSend(
+        String destination,
+        RequestHeader header,
+        ApiMessage apiRequest
+    ) {
+        return buildSend(
+            destination,
+            header.data(),
+            header.headerVersion(),
+            apiRequest,
+            header.apiVersion()
+        );
+    }
+
+    public static Send buildResponseSend(
+        String destination,
+        ResponseHeader header,
+        ApiMessage apiResponse,
+        short apiVersion
+    ) {
+        return buildSend(
+            destination,
+            header.data(),
+            header.headerVersion(),
+            apiResponse,
+            apiVersion
+        );
+    }
+
+    private static Send buildSend(
+        String destination,
+        ApiMessage header,
+        short headerVersion,
+        ApiMessage apiMessage,
+        short apiVersion
+    ) {
+        ObjectSerializationCache serializationCache = new ObjectSerializationCache();
+        MessageSize messageSize = apiMessage.messageSize(serializationCache, apiVersion);
+
+        int totalSize = header.size(serializationCache, headerVersion) + messageSize.totalSize();
+        int sizeExcludingZeroCopyFields = totalSize - messageSize.zeroCopySize();
+
+        SendBuilder builder = new SendBuilder(destination, sizeExcludingZeroCopyFields + 4);
+        builder.writeInt(totalSize);
+        builder.writeApiMessage(header, serializationCache, headerVersion);
+        builder.writeApiMessage(apiMessage, serializationCache, apiVersion);
+        return builder.toSend(destination);
     }
 
 }
