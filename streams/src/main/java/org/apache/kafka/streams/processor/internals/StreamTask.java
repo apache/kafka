@@ -817,13 +817,15 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     .filter(e -> e.getValue() != null)
                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
             initializeTaskTime(offsetsAndMetadata);
-        } catch (final TimeoutException e) {
-            log.warn("Encountered {} while trying to fetch committed offsets, will retry initializing the metadata in the next loop." +
-                            "\nConsider overwriting consumer config {} to a larger value to avoid timeout errors",
-                    e.toString(),
-                    ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
+        } catch (final TimeoutException timeoutException) {
+            log.warn(
+                "Encountered {} while trying to fetch committed offsets, will retry initializing the metadata in the next loop." +
+                    "\nConsider overwriting consumer config {} to a larger value to avoid timeout errors",
+                time.toString(),
+                ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
 
-            throw e;
+            // re-throw to trigger `task.timeout.ms`
+            throw timeoutException;
         } catch (final KafkaException e) {
             throw new StreamsException(String.format("task [%s] Failed to initialize offsets for %s", id, inputPartitions()), e);
         }

@@ -351,6 +351,7 @@ public class StreamThread extends Thread {
             log
         );
         final TaskManager taskManager = new TaskManager(
+            time,
             changelogReader,
             processId,
             logPrefix,
