@@ -98,7 +98,7 @@ final public class BatchedSnapshotWriter<T> implements Closeable {
     private void appendBatches(List<CompletedBatch<T>> batches) throws IOException {
         try {
             for (CompletedBatch batch : batches) {
-                snapshot.append(batch.data);
+                snapshot.append(batch.data.buffer());
             }
         } finally {
             batches.forEach(CompletedBatch::release);

@@ -25,10 +25,9 @@ import org.apache.kafka.raft.OffsetAndEpoch;
 
 // TODO: Write documentation for this type and all of the methods
 public interface SnapshotReader extends Closeable, Iterable<RecordBatch> {
-
     public OffsetAndEpoch snapshotId();
 
-    public long sizeInBytes();
+    public long sizeInBytes() throws IOException;
 
     public Iterator<RecordBatch> iterator();
 
