@@ -459,8 +459,8 @@ abstract class AbstractFetcherThread(name: String,
   private def partitionFetchState(tp: TopicPartition, initialFetchState: InitialFetchState, currentState: PartitionFetchState): PartitionFetchState = {
     if (currentState != null && currentState.currentLeaderEpoch == initialFetchState.currentLeaderEpoch) {
       currentState
-    } else if (isTruncationOnFetchSupported && initialFetchState.initOffset >= 0 && initialFetchState.lastFetchedEpoch.nonEmpty &&
-              (currentState == null || currentState.state == Fetching)) {
+    } else if (isTruncationOnFetchSupported && initialFetchState.initOffset >= 0 &&
+               initialFetchState.lastFetchedEpoch.nonEmpty && currentState == null) {
       PartitionFetchState(initialFetchState.initOffset, None, initialFetchState.currentLeaderEpoch,
           state = Fetching, initialFetchState.lastFetchedEpoch)
     } else if (initialFetchState.initOffset < 0) {
@@ -501,12 +501,11 @@ abstract class AbstractFetcherThread(name: String,
       .map { case (topicPartition, currentFetchState) =>
         val maybeTruncationComplete = fetchOffsets.get(topicPartition) match {
           case Some(offsetTruncationState) =>
-            val (state, lastFetchedEpoch) = if (offsetTruncationState.truncationCompleted)
-              (Fetching, latestEpoch(topicPartition))
-            else if (maySkipTruncation && currentFetchState.lastFetchedEpoch.nonEmpty)
-              (Fetching, currentFetchState.lastFetchedEpoch)
+            val state = if ((maySkipTruncation && currentFetchState.lastFetchedEpoch.nonEmpty) || offsetTruncationState.truncationCompleted)
+              Fetching
             else
-              (Truncating, latestEpoch(topicPartition))
+              Truncating
+            val lastFetchedEpoch = latestEpoch(topicPartition)
             PartitionFetchState(offsetTruncationState.offset, currentFetchState.lag,
               currentFetchState.currentLeaderEpoch, currentFetchState.delay, state, lastFetchedEpoch)
           case None => currentFetchState

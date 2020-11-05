@@ -1670,7 +1670,7 @@ class ReplicaManager(val config: KafkaConfig,
           val log = partition.localLogOrException
           val (fetchOffset, lastFetchedEpoch) = initialFetchOffsetAndEpoch(log)
           partition.topicPartition -> InitialFetchState(leader, partition.getLeaderEpoch, fetchOffset, lastFetchedEpoch)
-       }.toMap
+        }.toMap
 
         replicaFetcherManager.addFetcherForPartitions(partitionsToMakeFollowerWithLeaderAndOffset)
       }
