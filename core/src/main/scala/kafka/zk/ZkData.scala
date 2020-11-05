@@ -298,7 +298,7 @@ object TopicZNode {
     }
 
     val topicAssignment = mutable.Map(
-      "version" -> 2,
+      "version" -> 3,
       "topic_id" -> topicId.toString,
       "partitions" -> replicaAssignmentJson.asJava,
       "adding_replicas" -> addingReplicasAssignmentJson.asJava,
