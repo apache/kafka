@@ -31,6 +31,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.test.IntegrationTest;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -54,7 +55,6 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_APPLICATION;
 import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateBeforeTest;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.purgeLocalStreamsState;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -62,27 +62,24 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.fail;
 
 @Category(IntegrationTest.class)
-public class StreamsHandlerIntegrationTest {
+public class StreamsUncaughtExceptionHandlerIntegrationTest {
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
     @Rule
     public TestName testName = new TestName();
 
-    String inputTopic;
-    StreamsBuilder builder;
-    Properties properties;
-    List<String> processorValueCollector;
-    String idempotentTopic = "idempotentTopic";
-    String appId = "";
+    private static String inputTopic;
+    private static StreamsBuilder builder;
+    private static Properties properties;
+    private static List<String> processorValueCollector;
+    private static String appId = "";
 
     @Before
     public void setup() {
         final String testId = safeUniqueTestName(getClass(), testName);
         appId = "appId_" + testId;
         inputTopic = "input" + testId;
-        cleanStateBeforeTest(CLUSTER, idempotentTopic, inputTopic);
-
         IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, inputTopic);
 
         builder  = new StreamsBuilder();
@@ -93,18 +90,14 @@ public class StreamsHandlerIntegrationTest {
         stream.process(() -> new ShutdownProcessor(processorValueCollector), Named.as("process"));
 
         properties  = mkObjectProperties(
-                mkMap(
-                        mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
-                        mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
-                        mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-                        mkEntry(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, "5"),
-                        mkEntry(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, "6"),
-                        mkEntry(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, "7"),
-                        mkEntry(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, "480000"),
-                        mkEntry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2),
-                        mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
-                        mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class)
-                )
+            mkMap(
+                mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
+                mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
+                mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
+                mkEntry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2),
+                mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
+                mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class)
+            )
         );
     }
 
@@ -115,43 +108,31 @@ public class StreamsHandlerIntegrationTest {
 
     @Test
     public void shouldShutdownThreadUsingOldHandler() throws Exception {
-        //
-        //
-        // Also note that this is an integration test because so many components have to come together to
-        // ensure these configurations wind up where they belong, and any number of future code changes
-        // could break this change.
-
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
             final CountDownLatch latch = new CountDownLatch(1);
             final AtomicBoolean flag = new AtomicBoolean(false);
             kafkaStreams.setUncaughtExceptionHandler((t, e) -> flag.set(true));
 
-            kafkaStreams.start();
+            StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
 
             produceMessages(0L, inputTopic, "A");
             latch.await(15, TimeUnit.SECONDS);
 
+            TestUtils.waitForCondition(flag::get, "Handler was called");
             assertThat(processorValueCollector.size(), equalTo(2));
             assertThat(kafkaStreams.state(), equalTo(KafkaStreams.State.ERROR));
-            assertThat("handler was called", flag.get());
         }
     }
 
     @Test
     public void shouldShutdownClient() throws Exception {
-        //
-        //
-        // Also note that this is an integration test because so many components have to come together to
-        // ensure these configurations wind up where they belong, and any number of future code changes
-        // could break this change.
-
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
             final CountDownLatch latch = new CountDownLatch(1);
             kafkaStreams.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
 
             kafkaStreams.setUncaughtExceptionHandler(exception -> SHUTDOWN_CLIENT);
 
-            kafkaStreams.start();
+            StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
 
             produceMessages(0L, inputTopic, "A");
             latch.await(15, TimeUnit.SECONDS);
@@ -163,14 +144,6 @@ public class StreamsHandlerIntegrationTest {
 
     @Test
     public void shouldShutdownApplication() throws Exception {
-        //
-        //
-        // Also note that this is an integration test because so many components have to come together to
-        // ensure these configurations wind up where they belong, and any number of future code changes
-        // could break this change.
-
-        builder.stream(idempotentTopic).filter((k, v) -> true);
-
         final Topology topology = builder.build();
 
         try (final KafkaStreams kafkaStreams = new KafkaStreams(topology, properties)) {
@@ -181,11 +154,9 @@ public class StreamsHandlerIntegrationTest {
             kafkaStreams.setUncaughtExceptionHandler(exception -> SHUTDOWN_APPLICATION);
             kafkaStreams1.setUncaughtExceptionHandler(exception -> SHUTDOWN_APPLICATION);
 
-
             kafkaStreams.start();
             kafkaStreams1.start();
 
-            produceMessages(0L, idempotentTopic, "B");
             produceMessages(0L, inputTopic, "A");
             latch.await(30, TimeUnit.SECONDS);
 
@@ -197,28 +168,16 @@ public class StreamsHandlerIntegrationTest {
 
     @Test
     public void shouldShutdownSingleThreadApplication() throws Exception {
-        //
-        //
-        // Also note that this is an integration test because so many components have to come together to
-        // ensure these configurations wind up where they belong, and any number of future code changes
-        // could break this change.
-
         final Properties properties  = mkObjectProperties(
-                mkMap(
-                        mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
-                        mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
-                        mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-                        mkEntry(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, "5"),
-                        mkEntry(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, "6"),
-                        mkEntry(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, "7"),
-                        mkEntry(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, "480000"),
-                        mkEntry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1),
-                        mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
-                        mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class)
-                )
+            mkMap(
+                mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
+                mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
+                mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
+                mkEntry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1),
+                mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
+                mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class)
+            )
         );
-
-        builder.stream(idempotentTopic).filter((k, v) -> true);
 
         final Topology topology = builder.build();
 
@@ -233,7 +192,6 @@ public class StreamsHandlerIntegrationTest {
             kafkaStreams.start();
             kafkaStreams1.start();
 
-            produceMessages(0L, idempotentTopic, "B");
             produceMessages(0L, inputTopic, "A");
             latch.await(30, TimeUnit.SECONDS);
 

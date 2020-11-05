@@ -61,8 +61,10 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
             log.error("Received error code {}", AssignorError.ASSIGNMENT_ERROR);
             throw new TaskAssignmentException("Hit an unexpected exception during task assignment phase of rebalance");
         } else if (assignmentErrorCode.get() == AssignorError.SHUTDOWN_REQUESTED.code()) {
-            log.error("An application is requesting Shutdown");
+            log.error("A Kafka Streams client in this Kafka Streams application is requesting to shutdown the application");
             streamThread.shutdownToError();
+            taskManager.handleRebalanceComplete();
+            return;
         } else if (assignmentErrorCode.get() != AssignorError.NONE.code()) {
             log.error("Received unknown error code {}", assignmentErrorCode.get());
             throw new TaskAssignmentException("Hit an unrecognized exception during rebalance");

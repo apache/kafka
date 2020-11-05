@@ -22,6 +22,7 @@ import org.apache.kafka.streams.errors.MissingSourceTopicException;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.internals.StreamThread.State;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
+import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
 import org.slf4j.LoggerFactory;
@@ -77,6 +78,18 @@ public class StreamsRebalanceListenerTest {
         taskManager.handleRebalanceComplete();
         replay(taskManager, streamThread);
         assignmentErrorCode.set(AssignorError.VERSION_PROBING.code());
+        streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList());
+        verify(taskManager, streamThread);
+    }
+
+    @Test
+    public void shouldSendShutdown() {
+        streamThread.shutdownToError();
+        EasyMock.expectLastCall();
+        taskManager.handleRebalanceComplete();
+        EasyMock.expectLastCall();
+        replay(taskManager, streamThread);
+        assignmentErrorCode.set(AssignorError.SHUTDOWN_REQUESTED.code());
         streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList());
         verify(taskManager, streamThread);
     }

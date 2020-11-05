@@ -34,7 +34,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
@@ -284,12 +283,15 @@ public class StreamThread extends Thread {
     private final Admin adminClient;
     private final InternalTopologyBuilder builder;
 
-    private boolean newHandler;
-    private StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler;
+    private Handler streamsUncaughtExceptionHandler;
     private ShutdownErrorHook shutdownErrorHook;
     private AtomicInteger assignmentErrorCode;
     public interface ShutdownErrorHook {
         void shutdown();
+    }
+    @FunctionalInterface
+    public interface Handler {
+        boolean handle(Throwable throwable);
     }
 
     public static StreamThread create(final InternalTopologyBuilder builder,
@@ -306,7 +308,7 @@ public class StreamThread extends Thread {
                                       final StateRestoreListener userStateRestoreListener,
                                       final int threadIdx,
                                       final ShutdownErrorHook shutdownErrorHook,
-                                      final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
+                                      final Handler streamsUncaughtExceptionHandler) {
         final String threadId = clientId + "-StreamThread-" + threadIdx;
 
         final String logPrefix = String.format("stream-thread [%s] ", threadId);
@@ -454,7 +456,7 @@ public class StreamThread extends Thread {
                         final AtomicInteger assignmentErrorCode,
                         final AtomicLong nextProbingRebalanceMs,
                         final ShutdownErrorHook shutdownErrorHook,
-                        final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
+                        final Handler streamsUncaughtExceptionHandler) {
         super(threadId);
         this.stateLock = new Object();
 
@@ -474,7 +476,6 @@ public class StreamThread extends Thread {
         this.assignmentErrorCode = assignmentErrorCode;
         this.shutdownErrorHook = shutdownErrorHook;
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
-        this.newHandler = false;
 
         // The following sensors are created here but their references are not stored in this object, since within
         // this object they are not recorded. The sensors are created here so that the stream threads starts with all
@@ -589,16 +590,7 @@ public class StreamThread extends Thread {
             } catch (final TaskMigratedException e) {
                 handleTaskMigrated(e);
             } catch (final Exception e) {
-                if (this.streamsUncaughtExceptionHandler == null) {
-                    throw e;
-                }
-                if (Thread.getDefaultUncaughtExceptionHandler() != null && newHandler) {
-                    log.warn("Stream's new uncaught exception handler is set as well as the deprecated old handler." +
-                            "The old handler will be ignored as long as a new handler is set.");
-                } else {
-                    throw e;
-                }
-                if (this.streamsUncaughtExceptionHandler.handle(e) != StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_APPLICATION) {
+                if (this.streamsUncaughtExceptionHandler.handle(e)) {
                     throw e;
                 }
             }
@@ -610,9 +602,8 @@ public class StreamThread extends Thread {
      *
      * @param streamsUncaughtExceptionHandler the user handler wrapped in shell to execute the action
      */
-    public void setStreamsUncaughtExceptionHandler(final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
+    public void setStreamsUncaughtExceptionHandler(final Handler streamsUncaughtExceptionHandler) {
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
-        this.newHandler = true;
     }
 
     public void shutdownToError() {

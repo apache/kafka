@@ -27,7 +27,6 @@ public interface StreamsUncaughtExceptionHandler {
      * Enumeration that describes the response from the exception handler.
      */
     enum StreamThreadExceptionResponse {
-        //        REPLACE_THREAD(0, "REPLACE_THREAD"),
         SHUTDOWN_CLIENT(1, "SHUTDOWN_KAFKA_STREAMS_CLIENT"),
         SHUTDOWN_APPLICATION(2, "SHUTDOWN_KAFKA_STREAMS_APPLICATION");
 

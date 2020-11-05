@@ -27,7 +27,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.InternalNameProvider;
 import org.apache.kafka.streams.kstream.internals.KTableSource;
@@ -115,7 +114,7 @@ public class GlobalStreamThreadTest {
             time,
             "clientId",
             stateRestoreListener,
-            e -> StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT
+            e -> false
         );
     }
 
@@ -150,7 +149,7 @@ public class GlobalStreamThreadTest {
             time,
             "clientId",
             stateRestoreListener,
-            e -> StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT
+            e -> false
         );
 
         try {

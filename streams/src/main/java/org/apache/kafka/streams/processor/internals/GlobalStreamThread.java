@@ -29,7 +29,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -64,7 +63,7 @@ public class GlobalStreamThread extends Thread {
     private final StreamsMetricsImpl streamsMetrics;
     private final ProcessorTopology topology;
     private volatile StreamsException startupException;
-    private StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler;
+    private StreamThread.Handler streamsUncaughtExceptionHandler;
 
     /**
      * The states that the global stream thread can be in
@@ -126,7 +125,6 @@ public class GlobalStreamThread extends Thread {
     private StreamThread.StateListener stateListener = null;
     private final String logPrefix;
     private final StateRestoreListener stateRestoreListener;
-    private boolean newHandler;
 
     /**
      * Set the {@link StreamThread.StateListener} to be notified when state changes. Note this API is internal to
@@ -203,7 +201,7 @@ public class GlobalStreamThread extends Thread {
                               final Time time,
                               final String threadClientId,
                               final StateRestoreListener stateRestoreListener,
-                              final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
+                              final StreamThread.Handler streamsUncaughtExceptionHandler) {
         super(threadClientId);
         this.time = time;
         this.config = config;
@@ -217,7 +215,6 @@ public class GlobalStreamThread extends Thread {
         this.cache = new ThreadCache(logContext, cacheSizeBytes, this.streamsMetrics);
         this.stateRestoreListener = stateRestoreListener;
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
-        this.newHandler = false;
     }
 
     static class StateConsumer {
@@ -318,18 +315,8 @@ public class GlobalStreamThread extends Thread {
                 recoverableException
             );
         } catch (final Exception e) {
-            if (this.streamsUncaughtExceptionHandler == null) {
+            if (this.streamsUncaughtExceptionHandler.handle(e)) {
                 throw e;
-            }
-            if (Thread.getDefaultUncaughtExceptionHandler() != null && newHandler) {
-                log.error("Stream's new uncaught exception handler is set as well as the deprecated old handler." +
-                        "The old handler will be ignored as long as a new handler is set.");
-            } else {
-                throw e;
-            }
-            if (this.streamsUncaughtExceptionHandler.handle(e) == StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_APPLICATION) {
-                log.warn("Exception in global stream thread cause the application to attempt to shutdown." +
-                        " This action will succeed only if there is at least one StreamThread running on ths client");
             }
         } finally {
             // set the state to pending shutdown first as it may be called due to error;
@@ -353,9 +340,8 @@ public class GlobalStreamThread extends Thread {
         }
     }
 
-    public void setUncaughtExceptionHandler(final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
+    public void setUncaughtExceptionHandler(final StreamThread.Handler streamsUncaughtExceptionHandler) {
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
-        this.newHandler = true;
     }
 
     private StateConsumer initialize() {
