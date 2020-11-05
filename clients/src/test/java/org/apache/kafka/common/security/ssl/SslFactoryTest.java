@@ -35,6 +35,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.auth.SslEngineFactory;
 import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory.FileBasedStore;
 import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory.PemStore;
@@ -519,6 +520,19 @@ public class SslFactoryTest {
         clientSslConfig.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, String.class);
         SslFactory sslFactory = new SslFactory(Mode.CLIENT);
         sslFactory.configure(clientSslConfig);
+    }
+
+    @Test
+    public void testUsedConfigs() throws IOException, GeneralSecurityException {
+        Map<String, Object> serverSslConfig = sslConfigsBuilder(Mode.SERVER)
+                .createNewTrustStore(File.createTempFile("truststore", ".jks"))
+                .useClientCert(false)
+                .build();
+        serverSslConfig.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslUtils.TestSslEngineFactory.class);
+        TestSecurityConfig securityConfig = new TestSecurityConfig(serverSslConfig);
+        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        sslFactory.configure(securityConfig.values());
+        assertFalse(securityConfig.unused().contains(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG));
     }
 
     private KeyStore sslKeyStore(Map<String, Object> sslConfig) {

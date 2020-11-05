@@ -583,6 +583,13 @@ public class AbstractConfig {
     }
 
     /**
+     * @return true if the input map is a recording map. otherwise, false
+     */
+    public static boolean isRecording(Map<String, ?> map) {
+        return map instanceof RecordingMap;
+    }
+
+    /**
      * Marks keys retrieved via `get` as used. This is needed because `Configurable.configure` takes a `Map` instead
      * of an `AbstractConfig` and we can't change that without breaking public API like `Partitioner`.
      */

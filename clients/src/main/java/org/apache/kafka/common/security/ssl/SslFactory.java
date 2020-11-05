@@ -18,6 +18,7 @@ package org.apache.kafka.common.security.ssl;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Reconfigurable;
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
@@ -79,6 +80,7 @@ public class SslFactory implements Reconfigurable, Closeable {
         this.keystoreVerifiableUsingTruststore = keystoreVerifiableUsingTruststore;
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public void configure(Map<String, ?> configs) throws KafkaException {
         if (sslEngineFactory != null) {
@@ -86,7 +88,12 @@ public class SslFactory implements Reconfigurable, Closeable {
         }
         this.endpointIdentification = (String) configs.get(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
 
-        Map<String, Object> nextConfigs = new HashMap<>(configs);
+        // it should keep using the input map if it is recording.
+        // Otherwise, the used configs are not recorded and then AbstractConfig can produce misleading warnings:
+        // "The configuration 'xxx' was supplied but isn't a known config."
+        Map<String, Object> nextConfigs = AbstractConfig.isRecording(configs)
+                ? (Map<String, Object>) configs
+                : new HashMap<>(configs);
         if (clientAuthConfigOverride != null) {
             nextConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, clientAuthConfigOverride);
         }
