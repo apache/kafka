@@ -35,7 +35,8 @@ import scala.jdk.CollectionConverters._
 
 trait BrokerToControllerChannelManager {
   def sendRequest(request: AbstractRequest.Builder[_ <: AbstractRequest],
-                  callback: RequestCompletionHandler): Unit
+                  callback: BrokerToControllerRequestCompletionHandler,
+                  requestTimeout: Long): Unit
 
   def start(): Unit
 
@@ -125,15 +126,25 @@ class BrokerToControllerChannelManagerImpl(metadataCache: kafka.server.MetadataC
   }
 
   override def sendRequest(request: AbstractRequest.Builder[_ <: AbstractRequest],
-                           callback: RequestCompletionHandler): Unit = {
-    requestQueue.put(BrokerToControllerQueueItem(request, callback))
+                           callback: BrokerToControllerRequestCompletionHandler,
+                           requestTimeout: Long): Unit = {
+    requestQueue.put(BrokerToControllerQueueItem(request, callback, time.milliseconds() + requestTimeout))
     requestThread.wakeup()
   }
 
 }
 
+abstract class BrokerToControllerRequestCompletionHandler extends RequestCompletionHandler {
+
+  /**
+   * Fire when the request transmission hits a fatal exception.
+   */
+  def onTimeout(): Unit
+}
+
 case class BrokerToControllerQueueItem(request: AbstractRequest.Builder[_ <: AbstractRequest],
-                                       callback: RequestCompletionHandler)
+                                       callback: BrokerToControllerRequestCompletionHandler,
+                                       deadlineMs: Long)
 
 class BrokerToControllerRequestThread(networkClient: KafkaClient,
                                       metadataUpdater: ManualMetadataUpdater,
@@ -165,7 +176,9 @@ class BrokerToControllerRequestThread(networkClient: KafkaClient,
   }
 
   private[server] def handleResponse(request: BrokerToControllerQueueItem)(response: ClientResponse): Unit = {
-    if (response.wasDisconnected()) {
+    if (isTimedOut(request)) {
+      request.callback.onTimeout()
+    } else if (response.wasDisconnected()) {
       activeController = None
       requestQueue.putFirst(request)
     } else if (response.responseBody().errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
@@ -176,6 +189,10 @@ class BrokerToControllerRequestThread(networkClient: KafkaClient,
     } else {
       request.callback.onComplete(response)
     }
+  }
+
+  private def isTimedOut(request: BrokerToControllerQueueItem): Boolean = {
+    time.milliseconds() > request.deadlineMs
   }
 
   private[server] def backoff(): Unit = pause(100, TimeUnit.MILLISECONDS)

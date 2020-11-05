@@ -26,8 +26,10 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EnvelopeRequest, EnvelopeResponse, RequestHeader}
 
 import scala.compat.java8.OptionConverters._
+import scala.concurrent.TimeoutException
 
-class ForwardingManager(channelManager: BrokerToControllerChannelManager) extends Logging {
+class ForwardingManager(channelManager: BrokerToControllerChannelManager,
+                        requestTimeoutMs: Long) extends Logging {
 
   def forwardRequest(request: RequestChannel.Request,
                      responseCallback: AbstractResponse => Unit): Unit = {
@@ -44,26 +46,34 @@ class ForwardingManager(channelManager: BrokerToControllerChannelManager) extend
       request.context.clientAddress.getAddress
     )
 
-    def onClientResponse(clientResponse: ClientResponse): Unit = {
-      val envelopeResponse = clientResponse.responseBody.asInstanceOf[EnvelopeResponse]
-      val envelopeError = envelopeResponse.error()
-      val requestBody = request.body[AbstractRequest]
+    class ForwardingResponseHandler extends BrokerToControllerRequestCompletionHandler {
+      override def onComplete(clientResponse: ClientResponse): Unit = {
+        val envelopeResponse = clientResponse.responseBody.asInstanceOf[EnvelopeResponse]
+        val envelopeError = envelopeResponse.error()
+        val requestBody = request.body[AbstractRequest]
 
-      val response = if (envelopeError != Errors.NONE) {
-        // An envelope error indicates broker misconfiguration (e.g. the principal serde
-        // might not be defined on the receiving broker). In this case, we do not return
-        // the error directly to the client since it would not be expected. Instead we
-        // return `UNKNOWN_SERVER_ERROR` so that the user knows that there is a problem
-        // on the broker.
-        debug(s"Forwarded request $request failed with an error in the envelope response $envelopeError")
-        requestBody.getErrorResponse(Errors.UNKNOWN_SERVER_ERROR.exception)
-      } else {
-        parseResponse(envelopeResponse.responseData, requestBody, request.header)
+        val response = if (envelopeError != Errors.NONE) {
+          // An envelope error indicates broker misconfiguration (e.g. the principal serde
+          // might not be defined on the receiving broker). In this case, we do not return
+          // the error directly to the client since it would not be expected. Instead we
+          // return `UNKNOWN_SERVER_ERROR` so that the user knows that there is a problem
+          // on the broker.
+          debug(s"Forwarded request $request failed with an error in the envelope response $envelopeError")
+          requestBody.getErrorResponse(Errors.UNKNOWN_SERVER_ERROR.exception)
+        } else {
+          parseResponse(envelopeResponse.responseData, requestBody, request.header)
+        }
+        responseCallback(response)
       }
-      responseCallback(response)
+
+      override def onTimeout(): Unit = {
+        error(s"Forwarding of the request $request failed due to timeout exception")
+        val response = request.body[AbstractRequest].getErrorResponse(new TimeoutException)
+        responseCallback(response)
+      }
     }
 
-    channelManager.sendRequest(envelopeRequest, onClientResponse)
+    channelManager.sendRequest(envelopeRequest, new ForwardingResponseHandler, requestTimeoutMs)
   }
 
   private def parseResponse(

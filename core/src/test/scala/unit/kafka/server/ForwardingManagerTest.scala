@@ -46,7 +46,7 @@ class ForwardingManagerTest {
 
   @Test
   def testResponseCorrelationIdMismatch(): Unit = {
-    val forwardingManager = new ForwardingManager(brokerToController)
+    val forwardingManager = new ForwardingManager(brokerToController, Long.MaxValue)
     val requestCorrelationId = 27
     val envelopeCorrelationId = 39
     val clientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "client")
@@ -65,7 +65,8 @@ class ForwardingManagerTest {
 
     Mockito.when(brokerToController.sendRequest(
       any(classOf[EnvelopeRequest.Builder]),
-      any(classOf[RequestCompletionHandler])
+      any(classOf[BrokerToControllerRequestCompletionHandler]),
+      anyLong()
     )).thenAnswer(invocation => {
       val completionHandler = invocation.getArgument[RequestCompletionHandler](1)
       val response = buildEnvelopeResponse(responseBuffer, envelopeCorrelationId, completionHandler)

@@ -88,20 +88,33 @@ class AlterIsrManagerImpl(val controllerChannelManager: BrokerToControllerChanne
 
   private def sendRequest(inflightAlterIsrItems: Seq[AlterIsrItem]): Unit = {
     val message = buildRequest(inflightAlterIsrItems)
-    def responseHandler(response: ClientResponse): Unit = {
-      try {
-        val body = response.responseBody().asInstanceOf[AlterIsrResponse]
-        handleAlterIsrResponse(body, message.brokerEpoch(), inflightAlterIsrItems)
-      } finally {
-        // Be sure to clear the in-flight flag to allow future AlterIsr requests
-        if (!inflightRequest.compareAndSet(true, false)) {
-          throw new IllegalStateException("AlterIsr response callback called when no requests were in flight")
+
+    def clearInflightRequests(): Unit = {
+      // Be sure to clear the in-flight flag to allow future AlterIsr requests
+      if (!inflightRequest.compareAndSet(true, false)) {
+        throw new IllegalStateException("AlterIsr response callback called when no requests were in flight")
+      }
+    }
+
+    class AlterIsrResponseHandler extends BrokerToControllerRequestCompletionHandler {
+      override def onComplete(response: ClientResponse): Unit = {
+        try {
+          val body = response.responseBody().asInstanceOf[AlterIsrResponse]
+          handleAlterIsrResponse(body, message.brokerEpoch(), inflightAlterIsrItems)
+        } finally {
+          clearInflightRequests()
         }
+      }
+
+      override def onTimeout(): Unit = {
+        warn(s"Encountered request when sending AlterIsr to the controller")
       }
     }
 
     debug(s"Sending AlterIsr to controller $message")
-    controllerChannelManager.sendRequest(new AlterIsrRequest.Builder(message), responseHandler)
+    // We will not timeout AlterISR request, instead letting it retry indefinitely.
+    controllerChannelManager.sendRequest(new AlterIsrRequest.Builder(message),
+      new AlterIsrResponseHandler, Long.MaxValue)
   }
 
   private def buildRequest(inflightAlterIsrItems: Seq[AlterIsrItem]): AlterIsrRequestData = {
