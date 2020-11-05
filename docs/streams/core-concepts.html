@@ -58,7 +58,7 @@
         We first summarize the key concepts of Kafka Streams.
     </p>
 
-    <h3><a id="streams_topology" href="#streams_topology">Stream Processing Topology</a></h3>
+    <h3 class="anchor-heading"><a id="streams_topology" class="anchor-link"></a><a href="#streams_topology">Stream Processing Topology</a></h3>
 
     <ul>
         <li>A <b>stream</b> is the most important abstraction provided by Kafka Streams: it represents an unbounded, continuously updating data set. A stream is an ordered, replayable, and fault-tolerant sequence of immutable data records, where a <b>data record</b> is defined as a key-value pair.</li>
@@ -88,7 +88,7 @@
         At runtime, the logical topology is instantiated and replicated inside the application for parallel processing (see <a href="/{{version}}/documentation/streams/architecture#streams_architecture_tasks"><b>Stream Partitions and Tasks</b></a> for details).
     </p>
 
-    <h3><a id="streams_time" href="#streams_time">Time</a></h3>
+    <h3 class="anchor-heading"><a id="streams_time" class="anchor-link"></a><a href="#streams_time">Time</a></h3>
 
     <p>
         A critical aspect in stream processing is the notion of <b>time</b>, and how it is modeled and integrated.
@@ -157,7 +157,7 @@
 
     </p>
 
-    <h3><a id="streams_concepts_aggregations" href="#streams_concepts_aggregations">Aggregations</a></h3>
+    <h3 class="anchor-heading"><a id="streams_concepts_aggregations" class="anchor-link"></a><a href="#streams_concepts_aggregations">Aggregations</a></h3>
     <p>
         An <strong>aggregation</strong> operation takes one input stream or table, and yields a new table by combining multiple input records into a single output record. Examples of aggregations are computing counts or sum.
     </p>
@@ -166,7 +166,7 @@
         In the <code>Kafka Streams DSL</code>, an input stream of an <code>aggregation</code> can be a KStream or a KTable, but the output stream will always be a KTable. This allows Kafka Streams to update an aggregate value upon the out-of-order arrival of further records after the value was produced and emitted. When such out-of-order arrival happens, the aggregating KStream or KTable emits a new aggregate value. Because the output is a KTable, the new value is considered to overwrite the old value with the same key in subsequent processing steps.
     </p>
 
-    <h3> <a id="streams_concepts_windowing" href="#streams_concepts_windowing">Windowing</a></h3>
+    <h3 class="anchor-heading"><a id="streams_concepts_windowing" class="anchor-link"></a><a href="#streams_concepts_windowing">Windowing</a></h3>
     <p>
         Windowing lets you control how to <em>group records that have the same key</em> for stateful operations such as <code>aggregations</code> or <code>joins</code> into so-called <em>windows</em>. Windows are tracked per record key.
     </p>
@@ -177,7 +177,7 @@
         Out-of-order records are always possible in the real world and should be properly accounted for in your applications. It depends on the effective <code>time semantics </code> how out-of-order records are handled. In the case of processing-time, the semantics are &quot;when the record is being processed&quot;, which means that the notion of out-of-order records is not applicable as, by definition, no record can be out-of-order. Hence, out-of-order records can only be considered as such for event-time. In both cases, Kafka Streams is able to properly handle out-of-order records.
     </p>
 
-    <h3><a id="streams_concepts_duality" href="#streams-concepts-duality">Duality of Streams and Tables</a></h3>
+    <h3 class="anchor-heading"><a id="streams_concepts_duality" class="anchor-link"></a><a href="#streams_concepts_duality">Duality of Streams and Tables</a></h3>
     <p>
         When implementing stream processing use cases in practice, you typically need both <strong>streams</strong> and also <strong>databases</strong>.
         An example use case that is very common in practice is an e-commerce application that enriches an incoming <em>stream</em> of customer
@@ -204,7 +204,7 @@
       Essentially, this duality means that a stream can be viewed as a table, and a table can be viewed as a stream.
   </p>
 
-    <h3><a id="streams_state" href="#streams_state">States</a></h3>
+    <h3 class="anchor-heading"><a id="streams_state" class="anchor-link"></a><a href="#streams_state">States</a></h3>
 
     <p>
         Some stream processing applications don't require state, which means the processing of a message is independent from
@@ -224,7 +224,7 @@
     </p>
     <br>
 
-    <h2><a id="streams_processing_guarantee" href="#streams_processing_guarantee">Processing Guarantees</a></h2>
+    <h2 class="anchor-heading"><a id="streams_processing_guarantee" class="anchor-link"></a><a href="#streams_processing_guarantee">Processing Guarantees</a></h2>
 
     <p>
         In stream processing, one of the most frequently asked question is "does my stream processing system guarantee that each record is processed once and only once, even if some failures are encountered in the middle of processing?"
@@ -254,7 +254,7 @@
         For more information, see the <a href="/{{version}}/documentation/streams/developer-guide/config-streams.html">Kafka Streams Configs</a> section.
     </p>
 
-    <h3><a id="streams_out_of_ordering" href="#streams_out_of_ordering">Out-of-Order Handling</a></h3>
+    <h3 class="anchor-heading"><a id="streams_out_of_ordering" class="anchor-link"></a><a href="#streams_out_of_ordering">Out-of-Order Handling</a></h3>
 
     <p>
         Besides the guarantee that each record will be processed exactly-once, another issue that many stream processing application will face is how to
@@ -293,10 +293,10 @@
 
 <!--#include virtual="../../includes/_header.htm" -->
 <!--#include virtual="../../includes/_top.htm" -->
-<div class="content documentation documentation--current">
+<div class="content documentation ">
     <!--#include virtual="../../includes/_nav.htm" -->
     <div class="right">
-        <!--#include virtual="../../includes/_docs_banner.htm" -->
+        <!--//#include virtual="../../includes/_docs_banner.htm" -->
         <ul class="breadcrumbs">
             <li><a href="/documentation">Documentation</a></li>
             <li><a href="/documentation/streams">Kafka Streams</a></li>
