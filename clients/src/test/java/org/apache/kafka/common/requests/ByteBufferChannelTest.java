@@ -16,13 +16,33 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
 
-class ByteBufferChannelTest {
+import java.nio.ByteBuffer;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+public class ByteBufferChannelTest {
 
     @Test
-    public void testWriteBufferWithNonZeroPosition() {
+    public void testWriteBufferArrayWithNonZeroPosition() {
+        byte[] data = Utils.utf8("hello");
+        ByteBuffer buffer = ByteBuffer.allocate(32);
+        buffer.position(10);
+        buffer.put(data);
 
+        int limit = buffer.position();
+        buffer.position(10);
+        buffer.limit(limit);
+
+        ByteBufferChannel channel = new ByteBufferChannel(buffer.remaining());
+        ByteBuffer[] buffers = new ByteBuffer[] { buffer };
+        channel.write(buffers);
+        channel.close();
+        ByteBuffer channelBuffer = channel.buffer();
+        assertEquals(data.length, channelBuffer.remaining());
+        assertEquals("hello", Utils.utf8(channelBuffer));
     }
 
 }

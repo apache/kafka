@@ -109,7 +109,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
         buffer.printf("%n");
         generateClassToStruct(className, struct, parentVersions);
         buffer.printf("%n");
-        generateFancyClassSize(className, struct, parentVersions);
+        generateClassMessageSize(className, struct, parentVersions);
         if (isSetElement) {
             buffer.printf("%n");
             generateClassEquals(className, struct, true);
@@ -1330,7 +1330,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
         buffer.printf("}%n");
     }
 
-    private void generateFancyClassSize(
+    private void generateClassMessageSize(
         String className,
         StructSpec struct,
         Versions parentVersions
