@@ -33,6 +33,14 @@ public interface Writable {
     void writeVarint(int i);
     void writeVarlong(long i);
 
+    default void writeApiMessage(
+        ApiMessage message,
+        ObjectSerializationCache serializationCache,
+        short version
+    ) {
+        message.write(this, serializationCache, version);
+    }
+
     default void writeUUID(UUID uuid) {
         writeLong(uuid.getMostSignificantBits());
         writeLong(uuid.getLeastSignificantBits());

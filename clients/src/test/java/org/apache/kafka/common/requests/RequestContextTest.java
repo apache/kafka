@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
+import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.network.ClientInformation;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.Send;
@@ -57,7 +58,7 @@ public class RequestContextTest {
         ApiVersionsRequest request = (ApiVersionsRequest) requestAndSize.request;
         assertTrue(request.hasUnsupportedRequestVersion());
 
-        Send send = context.buildResponse(new ApiVersionsResponse(new ApiVersionsResponseData()
+        Send send = context.buildResponseSend(new ApiVersionsResponse(new ApiVersionsResponseData()
             .setThrottleTimeMs(0)
             .setErrorCode(Errors.UNSUPPORTED_VERSION.code())
             .setApiKeys(new ApiVersionsResponseKeyCollection())));
@@ -78,4 +79,30 @@ public class RequestContextTest {
         assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.data.errorCode());
         assertTrue(response.data.apiKeys().isEmpty());
     }
+
+    @Test
+    public void testEnvelopeResponseSerde() throws Exception {
+        CreateTopicsResponseData.CreatableTopicResultCollection collection =
+            new CreateTopicsResponseData.CreatableTopicResultCollection();
+        collection.add(new CreateTopicsResponseData.CreatableTopicResult()
+            .setTopicConfigErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code())
+            .setNumPartitions(5));
+        CreateTopicsResponseData expectedResponse = new CreateTopicsResponseData()
+            .setThrottleTimeMs(10)
+            .setTopics(collection);
+
+        int correlationId = 15;
+        String clientId = "clientId";
+        RequestHeader header = new RequestHeader(ApiKeys.CREATE_TOPICS, ApiKeys.CREATE_TOPICS.latestVersion(),
+            clientId, correlationId);
+
+        RequestContext context = new RequestContext(header, "0", InetAddress.getLocalHost(),
+            KafkaPrincipal.ANONYMOUS, new ListenerName("ssl"), SecurityProtocol.SASL_SSL,
+            ClientInformation.EMPTY, true);
+
+        ByteBuffer buffer = context.buildResponseEnvelopePayload(new CreateTopicsResponse(expectedResponse));
+        CreateTopicsResponse parsedResponse = (CreateTopicsResponse) AbstractResponse.parseResponse(buffer, header);
+        assertEquals(expectedResponse, parsedResponse.data());
+    }
+
 }

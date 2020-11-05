@@ -65,7 +65,7 @@ class ForwardingManager(metadataCache: kafka.server.MetadataCache,
         debug(s"Forwarded request $request failed with an error in envelope response $envelopeError")
         request.body[AbstractRequest].getErrorResponse(Errors.UNKNOWN_SERVER_ERROR.exception())
       } else {
-        AbstractResponse.deserializeBody(envelopeResponse.responseData, request.header)
+        AbstractResponse.parseResponse(envelopeResponse.responseData, request.header)
       }
       responseCallback(response)
     }

@@ -18,8 +18,12 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.EnvelopeRequestData;
 import org.apache.kafka.common.message.EnvelopeResponseData;
+import org.apache.kafka.common.message.RequestHeaderData;
+import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
+import org.apache.kafka.common.network.SendBuilder;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -36,7 +40,7 @@ public class EnvelopeRequest extends AbstractRequest {
             super(ApiKeys.ENVELOPE);
             this.data = new EnvelopeRequestData()
                             .setRequestData(requestData)
-                            .setRequestPrincipal(ByteBuffer.wrap(serializedPrincipal))
+                            .setRequestPrincipal(serializedPrincipal)
                             .setClientHostAddress(clientAddress);
         }
 
@@ -71,10 +75,8 @@ public class EnvelopeRequest extends AbstractRequest {
         return data.clientHostAddress();
     }
 
-    public byte[] principalData() {
-        byte[] serializedPrincipal = new byte[data.requestPrincipal().limit()];
-        data.requestPrincipal().get(serializedPrincipal);
-        return serializedPrincipal;
+    public byte[] requestPrincipal() {
+        return data.requestPrincipal();
     }
 
     @Override
@@ -91,4 +93,31 @@ public class EnvelopeRequest extends AbstractRequest {
     public static EnvelopeRequest parse(ByteBuffer buffer, short version) {
         return new EnvelopeRequest(ApiKeys.ENVELOPE.parseRequest(version, buffer), version);
     }
+
+    public EnvelopeRequestData data() {
+        return data;
+    }
+
+    @Override
+    public Send toSend(String destination, RequestHeader header) {
+        RequestHeaderData headerData = header.data();
+        short headerVersion = header.headerVersion();
+        short apiVersion = header.apiVersion();
+
+        ObjectSerializationCache serializationCache = new ObjectSerializationCache();
+        int totalSize = headerData.size(serializationCache, headerVersion)
+            + this.data.size(serializationCache, apiVersion);
+        int overheadSize = totalSize
+            - this.data.requestData().remaining()
+            - this.data.requestPrincipal().length
+            - this.data.clientHostAddress().length;
+
+        ByteBuffer buffer = ByteBuffer.allocate(overheadSize + 4);
+        SendBuilder builder = new SendBuilder(buffer);
+        builder.writeInt(totalSize);
+        builder.writeApiMessage(headerData, serializationCache, headerVersion);
+        builder.writeApiMessage(this.data, serializationCache, apiVersion);
+        return builder.toSend(destination);
+    }
+
 }

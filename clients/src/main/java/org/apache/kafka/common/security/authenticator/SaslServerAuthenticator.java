@@ -588,7 +588,7 @@ public class SaslServerAuthenticator implements Authenticator {
      * {@link #sendAuthenticationFailureResponse()} is called.
      */
     private void buildResponseOnAuthenticateFailure(RequestContext context, AbstractResponse response) {
-        authenticationFailureSend = context.buildResponse(response);
+        authenticationFailureSend = context.buildResponseSend(response);
     }
 
     /**
@@ -602,7 +602,7 @@ public class SaslServerAuthenticator implements Authenticator {
     }
 
     private void sendKafkaResponse(RequestContext context, AbstractResponse response) throws IOException {
-        sendKafkaResponse(context.buildResponse(response));
+        sendKafkaResponse(context.buildResponseSend(response));
     }
 
     private void sendKafkaResponse(Send send) throws IOException {
