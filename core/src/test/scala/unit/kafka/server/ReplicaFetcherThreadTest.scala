@@ -22,11 +22,12 @@ import java.util.{Collections, Optional}
 
 import kafka.api.{ApiVersion, KAFKA_2_6_IV0}
 import kafka.cluster.{BrokerEndPoint, Partition}
-import kafka.log.{Log, LogManager}
+import kafka.log.{Log, LogAppendInfo, LogManager}
 import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -515,11 +516,12 @@ class ReplicaFetcherThreadTest {
 
   @Test
   def shouldFetchLeaderEpochSecondTimeIfLeaderRepliesWithEpochNotKnownToFollower(): Unit = {
-
     // Create a capture to track what partitions/offsets are truncated
     val truncateToCapture: Capture[Long] = newCapture(CaptureType.ALL)
 
-    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
+    val props = TestUtils.createBrokerConfig(1, "localhost:1234")
+    props.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, KAFKA_2_6_IV0.version)
+    val config = KafkaConfig.fromProps(props)
 
     // Setup all dependencies
     val quota: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
@@ -583,6 +585,107 @@ class ReplicaFetcherThreadTest {
                truncateToCapture.getValues.asScala.contains(102))
     assertTrue("Expected " + t1p0 + " to truncate to offset 101 (truncation offsets: " + truncateToCapture.getValues + ")",
                truncateToCapture.getValues.asScala.contains(101))
+  }
+
+  @Test
+  def shouldTruncateIfLeaderRepliesWithDivergingEpochNotKnownToFollower(): Unit = {
+
+    // Create a capture to track what partitions/offsets are truncated
+    val truncateToCapture: Capture[Long] = newCapture(CaptureType.ALL)
+
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
+
+    // Setup all dependencies
+    val quota: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
+    val logManager: LogManager = createMock(classOf[LogManager])
+    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
+    val log: Log = createNiceMock(classOf[Log])
+    val partition: Partition = createNiceMock(classOf[Partition])
+    val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
+
+    val initialLEO = 200
+    var latestLogEpoch: Option[Int] = Some(5)
+
+    // Stubs
+    expect(partition.truncateTo(capture(truncateToCapture), anyBoolean())).anyTimes()
+    expect(partition.localLogOrException).andReturn(log).anyTimes()
+    expect(log.highWatermark).andReturn(115).anyTimes()
+    expect(log.latestEpoch).andAnswer(() => latestLogEpoch).anyTimes()
+    expect(log.endOffsetForEpoch(4)).andReturn(Some(OffsetAndEpoch(149, 4))).anyTimes()
+    expect(log.endOffsetForEpoch(3)).andReturn(Some(OffsetAndEpoch(129, 2))).anyTimes()
+    expect(log.endOffsetForEpoch(2)).andReturn(Some(OffsetAndEpoch(119, 1))).anyTimes()
+    expect(log.logEndOffset).andReturn(initialLEO).anyTimes()
+    expect(replicaManager.localLogOrException(anyObject(classOf[TopicPartition]))).andReturn(log).anyTimes()
+    expect(replicaManager.logManager).andReturn(logManager).anyTimes()
+    expect(replicaManager.replicaAlterLogDirsManager).andReturn(replicaAlterLogDirsManager).anyTimes()
+    expect(replicaManager.brokerTopicStats).andReturn(mock(classOf[BrokerTopicStats]))
+    stub(partition, replicaManager, log)
+
+    replay(replicaManager, logManager, quota, partition, log)
+
+    // Create the fetcher thread
+    val mockNetwork = new ReplicaFetcherMockBlockingSend(Collections.emptyMap(), brokerEndPoint, new SystemTime())
+    val thread = new ReplicaFetcherThread("bob", 0, brokerEndPoint, config, failedPartitions, replicaManager, new Metrics(), new SystemTime(), quota, Some(mockNetwork)) {
+      override def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: FetchData): Option[LogAppendInfo] = None
+    }
+    thread.addPartitions(Map(t1p0 -> initialFetchState(initialLEO, lastFetchedEpoch = Some(5)), t1p1 -> initialFetchState(initialLEO, lastFetchedEpoch = Some(5))))
+    val partitions = Set(t1p0, t1p1)
+
+    // Loop 1 -- both topic partitions skip epoch fetch and send fetch request since
+    // lastFetchedEpoch is set in initial fetch state.
+    thread.doWork()
+    assertEquals(0, mockNetwork.epochFetchCount)
+    assertEquals(1, mockNetwork.fetchCount)
+    partitions.foreach { tp => assertEquals(Fetching, thread.fetchState(tp).get.state) }
+
+    def partitionData(divergingEpoch: FetchResponseData.EpochEndOffset): FetchResponse.PartitionData[Records] = {
+      new FetchResponse.PartitionData[Records](
+        Errors.NONE, 0, 0, 0, Optional.empty(), Collections.emptyList(),
+        Optional.of(divergingEpoch), MemoryRecords.EMPTY)
+    }
+
+    // Loop 2 should truncate based on diverging epoch and continue to send fetch requests.
+    mockNetwork.setFetchPartitionDataForNextResponse(Map(
+      t1p0 -> partitionData(new FetchResponseData.EpochEndOffset().setEpoch(4).setEndOffset(140)),
+      t1p1 -> partitionData(new FetchResponseData.EpochEndOffset().setEpoch(4).setEndOffset(141))
+    ))
+    latestLogEpoch = Some(4)
+    thread.doWork()
+    assertEquals(0, mockNetwork.epochFetchCount)
+    assertEquals(2, mockNetwork.fetchCount)
+    assertTrue("Expected " + t1p0 + " to truncate to offset 140 (truncation offsets: " + truncateToCapture.getValues + ")",
+      truncateToCapture.getValues.asScala.contains(140))
+    assertTrue("Expected " + t1p1 + " to truncate to offset 141 (truncation offsets: " + truncateToCapture.getValues + ")",
+      truncateToCapture.getValues.asScala.contains(141))
+    partitions.foreach { tp => assertEquals(Fetching, thread.fetchState(tp).get.state) }
+
+    // Loop 3 should truncate because of diverging epoch. Offset truncation is not complete
+    // because divergent epoch is not known to follower. We truncate and stay in Fetching state.
+    mockNetwork.setFetchPartitionDataForNextResponse(Map(
+      t1p0 -> partitionData(new FetchResponseData.EpochEndOffset().setEpoch(3).setEndOffset(130)),
+      t1p1 -> partitionData(new FetchResponseData.EpochEndOffset().setEpoch(3).setEndOffset(131))
+    ))
+    thread.doWork()
+    assertEquals(0, mockNetwork.epochFetchCount)
+    assertEquals(3, mockNetwork.fetchCount)
+    assertTrue("Expected to truncate to offset 129 (truncation offsets: " + truncateToCapture.getValues + ")",
+      truncateToCapture.getValues.asScala.contains(129))
+    partitions.foreach { tp => assertEquals(Fetching, thread.fetchState(tp).get.state) }
+
+    // Loop 4 should truncate because of diverging epoch. Offset truncation is not complete
+    // because divergent epoch is not known to follower. Last fetched epoch cannot be determined
+    // from the log. We truncate and stay in Fetching state.
+    mockNetwork.setFetchPartitionDataForNextResponse(Map(
+      t1p0 -> partitionData(new FetchResponseData.EpochEndOffset().setEpoch(2).setEndOffset(120)),
+      t1p1 -> partitionData(new FetchResponseData.EpochEndOffset().setEpoch(2).setEndOffset(121))
+    ))
+    latestLogEpoch = None
+    thread.doWork()
+    assertEquals(0, mockNetwork.epochFetchCount)
+    assertEquals(4, mockNetwork.fetchCount)
+    assertTrue("Expected to truncate to offset 119 (truncation offsets: " + truncateToCapture.getValues + ")",
+      truncateToCapture.getValues.asScala.contains(119))
+    partitions.foreach { tp => assertEquals(Fetching, thread.fetchState(tp).get.state) }
   }
 
   @Test

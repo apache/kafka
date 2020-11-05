@@ -223,7 +223,7 @@ abstract class AbstractFetcherThread(name: String,
 
       val ResultWithPartitions(fetchOffsets, partitionsWithError) = maybeTruncateToEpochEndOffsets(epochEndOffsets, latestEpochsForPartitions)
       handlePartitionsWithErrors(partitionsWithError, "truncateToEpochEndOffsets")
-      updateFetchOffsetAndMaybeMarkTruncationComplete(fetchOffsets, isTruncationOnFetchSupported)
+      updateFetchOffsetAndMaybeMarkTruncationComplete(fetchOffsets)
     }
   }
 
@@ -231,7 +231,7 @@ abstract class AbstractFetcherThread(name: String,
     inLock(partitionMapLock) {
       val ResultWithPartitions(fetchOffsets, partitionsWithError) = maybeTruncateToEpochEndOffsets(epochEndOffsets, Map.empty)
       handlePartitionsWithErrors(partitionsWithError, "truncateOnFetchResponse")
-      updateFetchOffsetAndMaybeMarkTruncationComplete(fetchOffsets, maySkipTruncation = false)
+      updateFetchOffsetAndMaybeMarkTruncationComplete(fetchOffsets)
     }
   }
 
@@ -251,7 +251,7 @@ abstract class AbstractFetcherThread(name: String,
       }
     }
 
-    updateFetchOffsetAndMaybeMarkTruncationComplete(fetchOffsets, isTruncationOnFetchSupported)
+    updateFetchOffsetAndMaybeMarkTruncationComplete(fetchOffsets)
   }
 
   private def maybeTruncateToEpochEndOffsets(fetchedEpochs: Map[TopicPartition, EpochEndOffset],
@@ -492,20 +492,17 @@ abstract class AbstractFetcherThread(name: String,
     * truncation completed if their offsetTruncationState indicates truncation completed
     *
     * @param fetchOffsets the partitions to update fetch offset and maybe mark truncation complete
-    * @param maySkipTruncation true if we can stay in Fetching mode and perform truncation later based on
-   *                           diverging epochs from fetch responses.
     */
-  private def updateFetchOffsetAndMaybeMarkTruncationComplete(fetchOffsets: Map[TopicPartition, OffsetTruncationState],
-                                                              maySkipTruncation: Boolean): Unit = {
+  private def updateFetchOffsetAndMaybeMarkTruncationComplete(fetchOffsets: Map[TopicPartition, OffsetTruncationState]): Unit = {
     val newStates: Map[TopicPartition, PartitionFetchState] = partitionStates.partitionStateMap.asScala
       .map { case (topicPartition, currentFetchState) =>
         val maybeTruncationComplete = fetchOffsets.get(topicPartition) match {
           case Some(offsetTruncationState) =>
-            val state = if ((maySkipTruncation && currentFetchState.lastFetchedEpoch.nonEmpty) || offsetTruncationState.truncationCompleted)
+            val lastFetchedEpoch = latestEpoch(topicPartition)
+            val state = if (isTruncationOnFetchSupported || offsetTruncationState.truncationCompleted)
               Fetching
             else
               Truncating
-            val lastFetchedEpoch = latestEpoch(topicPartition)
             PartitionFetchState(offsetTruncationState.offset, currentFetchState.lag,
               currentFetchState.currentLeaderEpoch, currentFetchState.delay, state, lastFetchedEpoch)
           case None => currentFetchState
