@@ -1175,18 +1175,44 @@ object LogManager {
             time: Time,
             brokerTopicStats: BrokerTopicStats,
             logDirFailureChannel: LogDirFailureChannel): LogManager = {
+    this(config, initialOfflineDirs, Some(zkClient), brokerState, kafkaScheduler, time, brokerTopicStats, logDirFailureChannel)
+  }
+
+  def apply(config: KafkaConfig,
+            initialOfflineDirs: Seq[String],
+            brokerState: AtomicReference[BrokerState],
+            kafkaScheduler: KafkaScheduler,
+            time: Time,
+            brokerTopicStats: BrokerTopicStats,
+            logDirFailureChannel: LogDirFailureChannel): LogManager = {
+    this(config, initialOfflineDirs, None, brokerState, kafkaScheduler, time, brokerTopicStats, logDirFailureChannel)
+  }
+
+  def apply(config: KafkaConfig,
+            initialOfflineDirs: Seq[String],
+            maybeZkClient: Option[KafkaZkClient],
+            brokerState: AtomicReference[BrokerState],
+            kafkaScheduler: KafkaScheduler,
+            time: Time,
+            brokerTopicStats: BrokerTopicStats,
+            logDirFailureChannel: LogDirFailureChannel): LogManager = {
     val defaultProps = KafkaBroker.copyKafkaConfigToLog(config)
 
     LogConfig.validateValues(defaultProps)
     val defaultLogConfig = LogConfig(defaultProps)
 
-    // read the log configurations from zookeeper
-    val (topicConfigs, failed) = zkClient.getLogConfigs(
-      zkClient.getAllTopicsInCluster(),
-      defaultProps
-    )
-    if (!failed.isEmpty) throw failed.head._2
-
+    val topicConfigs: Map[String, LogConfig] =
+      if (maybeZkClient.isDefined) {
+        // read the log configurations from zookeeper
+        val (topicConfigs, failed) = maybeZkClient.get.getLogConfigs(
+          maybeZkClient.get.getAllTopicsInCluster(),
+          defaultProps
+        )
+        if (!failed.isEmpty) throw failed.head._2
+        topicConfigs
+      } else {
+        Map.empty
+      }
     val cleanerConfig = LogCleaner.cleanerConfig(config)
 
     new LogManager(logDirs = config.logDirs.map(new File(_).getAbsoluteFile),

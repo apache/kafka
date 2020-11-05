@@ -17,13 +17,16 @@
 
 package kafka.server.metadata
 
+import java.util.Properties
+
 import kafka.cluster.{Broker, EndPoint}
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
-import kafka.server.{ClientQuotaManager, ClientRequestQuotaManager, ControllerMutationQuotaManager, KafkaConfig, MetadataCache, QuotaFactory, ReplicaManager}
+import kafka.server.{ClientQuotaManager, ClientRequestQuotaManager, ConfigHandler, ControllerMutationQuotaManager, KafkaConfig, MetadataCache, QuotaFactory, ReplicaManager}
+import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
 import org.apache.kafka.common.metadata.BrokerRecord.BrokerEndpointCollection
-import org.apache.kafka.common.metadata.{BrokerRecord, TopicRecord}
+import org.apache.kafka.common.metadata.{BrokerRecord, ConfigRecord, TopicRecord}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiMessage
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -31,7 +34,7 @@ import org.apache.kafka.common.{TopicPartition, UUID}
 import org.apache.kafka.server.quota.ClientQuotaCallback
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.Test
-import org.mockito.ArgumentMatchers
+import org.mockito.{ArgumentMatchers, Mockito}
 import org.mockito.Mockito.{mock, times, verify, when}
 import org.scalatest.Matchers.assertThrows
 
@@ -66,7 +69,7 @@ class PartitionMetadataProcessorTest {
     when(quotaManagers.controllerMutation).thenReturn(controllerMutationQuotaManager)
 
     val processor = new PartitionMetadataProcessor(
-      kafkaConfig, clusterId, metadataCache, groupCoordinator, quotaManagers, replicaManager, txnCoordinator)
+      kafkaConfig, clusterId, metadataCache, groupCoordinator, quotaManagers, replicaManager, txnCoordinator, Map.empty)
 
     val uuid0 = UUID.randomUUID()
     val name0 = "topic0"
@@ -183,8 +186,8 @@ class PartitionMetadataProcessorTest {
     assertEquals(1, metadataCache.readState().partitionStates.size)
     assertTrue(metadataCache.readState().partitionStates.get(name1).isDefined)
     assertEquals(0, metadataCache.readState().partitionStates.get(name1).get.size)
-    verify(groupCoordinator, times(1)).handleDeletedPartitions(ArgumentMatchers.eq(Seq(new TopicPartition(name0, 0))))
-    verify(clientQuotaCallback, times(1)).updateClusterMetadata(ArgumentMatchers.eq(metadataCache.getClusterMetadata(clusterId, listenerName)))
+    verify(groupCoordinator, times(1)).handleDeletedPartitions(Seq(new TopicPartition(name0, 0)))
+    verify(clientQuotaCallback, times(1)).updateClusterMetadata(metadataCache.getClusterMetadata(clusterId, listenerName))
     verify(fetchClientQuotaManager, times(1)).updateQuotaMetricConfigs()
     verify(requestClientQuotaManager, times(1)).updateQuotaMetricConfigs()
     verify(produceClientQuotaManager, times(1)).updateQuotaMetricConfigs()
@@ -220,6 +223,63 @@ class PartitionMetadataProcessorTest {
     processor.process(RegisterBrokerEvent(-1))
   }
 
+  @Test
+  def testConfigRecords(): Unit = {
+    val kafkaConfig = mock(classOf[KafkaConfig])
+    val clusterId = "clusterId"
+    val groupCoordinator = mock(classOf[GroupCoordinator])
+    val quotaManagers = mock(classOf[QuotaFactory.QuotaManagers])
+    val metadataCache = new MetadataCache(0)
+    val replicaManager = mock(classOf[ReplicaManager])
+    val txnCoordinator = mock(classOf[TransactionCoordinator])
+    val configHandler = mock(classOf[ConfigHandler])
+
+    val resourceType = ConfigResource.Type.BROKER
+    val processor = new PartitionMetadataProcessor(
+      kafkaConfig, clusterId, metadataCache, groupCoordinator, quotaManagers, replicaManager, txnCoordinator,
+      Map(resourceType -> configHandler))
+
+    // set resource1: name=value
+    val resource1 = "1"
+    val name = "name"
+    val value = "value"
+    processor.process(MetadataLogEvent(List[ApiMessage](
+      new ConfigRecord().setResourceType(resourceType.id()).setResourceName(resource1).setName(name).setValue(value)).asJava, 1))
+    val expectedPropsAfterInsert = new Properties()
+    expectedPropsAfterInsert.put(name, value)
+    verify(configHandler, times(1)).processConfigChanges(resource1, expectedPropsAfterInsert)
+
+    // delete the resource1:name config and set resource1:name2=value2 and resource1:name3=<empty string>
+    Mockito.reset(configHandler)
+    val name2 = "name2"
+    val value2 = "value2"
+    val name3 = "name3"
+    val emptyValue = ""
+    processor.process(MetadataLogEvent(List[ApiMessage](
+      new ConfigRecord().setResourceType(resourceType.id()).setResourceName(resource1).setName(name).setValue(null),
+      new ConfigRecord().setResourceType(resourceType.id()).setResourceName(resource1).setName(name2).setValue(value2),
+      new ConfigRecord().setResourceType(resourceType.id()).setResourceName(resource1).setName(name3).setValue(emptyValue)).asJava, 10))
+    val expectedPropsAfterInsertAndDelete = new Properties()
+    expectedPropsAfterInsertAndDelete.put(name2, value2)
+    expectedPropsAfterInsertAndDelete.put(name3, emptyValue)
+    verify(configHandler, times(1)).processConfigChanges(resource1, expectedPropsAfterInsertAndDelete)
+
+    // set resource1:name=value and set resource2:name2=value2
+    Mockito.reset(configHandler)
+    val resource2 = "2"
+    processor.process(MetadataLogEvent(List[ApiMessage](
+      new ConfigRecord().setResourceType(resourceType.id()).setResourceName(resource1).setName(name).setValue(value),
+      new ConfigRecord().setResourceType(resourceType.id()).setResourceName(resource2).setName(name2).setValue(value2)).asJava, 10))
+    val expectedResource1Props = new Properties()
+    expectedResource1Props.put(name, value)
+    expectedResource1Props.put(name2, value2)
+    expectedResource1Props.put(name3, emptyValue)
+    verify(configHandler, times(1)).processConfigChanges(resource1, expectedResource1Props)
+    val expectedResource2Props = new Properties()
+    expectedResource2Props.put(name2, value2)
+    verify(configHandler, times(1)).processConfigChanges(resource2, expectedResource2Props)
+  }
+
   def createSimpleProcessor(): PartitionMetadataProcessor = {
     val kafkaConfig = mock(classOf[KafkaConfig]) // broker ID will be 0
     val clusterId = "clusterId"
@@ -230,6 +290,6 @@ class PartitionMetadataProcessorTest {
     val txnCoordinator = mock(classOf[TransactionCoordinator])
 
     new PartitionMetadataProcessor(
-      kafkaConfig, clusterId, metadataCache, groupCoordinator, quotaManagers, replicaManager, txnCoordinator)
+      kafkaConfig, clusterId, metadataCache, groupCoordinator, quotaManagers, replicaManager, txnCoordinator, Map.empty)
   }
 }

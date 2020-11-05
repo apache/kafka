@@ -18,20 +18,21 @@
 package kafka.server.metadata
 
 import java.util
-import java.util.Collections
+import java.util.{Collections, Properties}
 
 import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, EndPoint}
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
-import kafka.server.{ApisUtils, KafkaConfig, MetadataCache, MetadataSnapshot, QuotaFactory, ReplicaManager}
+import kafka.server.{ApisUtils, ConfigHandler, KafkaConfig, MetadataCache, MetadataSnapshot, QuotaFactory, ReplicaManager}
 import kafka.utils.Implicits.MapExtensionMethods
 import kafka.utils.{CoreUtils, Logging}
+import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
-import org.apache.kafka.common.metadata.{BrokerRecord, FenceBrokerRecord, IsrChangeRecord, PartitionRecord, RemoveTopicRecord, TopicRecord, UnfenceBrokerRecord}
+import org.apache.kafka.common.metadata.{BrokerRecord, ConfigRecord, FenceBrokerRecord, IsrChangeRecord, PartitionRecord, RemoveTopicRecord, TopicRecord, UnfenceBrokerRecord}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.LeaderAndIsrRequest
@@ -68,7 +69,7 @@ import scala.jdk.CollectionConverters._
  *     Create the topic in the metadata with no partitions (yet)
  *
  * Appearance of ConfigRecord in the metadata log
- *     Update config as indicated
+ *     Update configs as indicated
  *
  * Appearance of TopicRecord in the metadata log with Delete=true
  *     Remove all topic-partitions for the indicated topic from the metadata.
@@ -97,6 +98,7 @@ import scala.jdk.CollectionConverters._
  *                      when partition counts change
  * @param replicaManager the replica manager
  * @param txnCoordinator the transaction coordinator
+ * @param configHandlers the config handlers
  */
 class PartitionMetadataProcessor(kafkaConfig: KafkaConfig,
                                  clusterId: String,
@@ -104,12 +106,20 @@ class PartitionMetadataProcessor(kafkaConfig: KafkaConfig,
                                  groupCoordinator: GroupCoordinator,
                                  quotaManagers: QuotaFactory.QuotaManagers,
                                  replicaManager: ReplicaManager,
-                                 txnCoordinator: TransactionCoordinator) extends BrokerMetadataProcessor with Logging {
+                                 txnCoordinator: TransactionCoordinator,
+                                 configHandlers: Map[ConfigResource.Type, ConfigHandler]) extends BrokerMetadataProcessor with Logging {
   // used only for onLeadershipChange()
   private val apisUtils = new ApisUtils(null, None, null, null, Some(groupCoordinator), Some(txnCoordinator))
 
   // visible for testing
   private[metadata] var brokerEpoch: Long = -1
+
+  // Define an immutable map for configs.  Every config change at the topic or broker level effectively results in this
+  // var being set to a new map.  Every instance is immutable, and updates (always performed by the same thread) replace
+  // the var with a completely new value. This means reads (which can occur from any thread) need to grab the value of
+  // this var (into a val) ONCE and retain that read copy for the duration of their operation. Multiple reads of the var
+  // risk getting different values.
+  @volatile private var configMap: Map[ConfigResource, Map[String, String]] = Map.empty
 
   // visible for testing
   private[metadata] object MetadataMgr {
@@ -121,6 +131,72 @@ class PartitionMetadataProcessor(kafkaConfig: KafkaConfig,
 
   // visible for testing
   private[metadata] class MetadataMgr(numBrokersAdding : Int, numTopicsAdding: Int, numBrokersFencing: Int) {
+    // support coalescing multiple config changes together and writing them on-demand
+    val configResourceChanges: mutable.Map[ConfigResource, mutable.Map[String, String]] = mutable.Map.empty
+
+    // must call writeConfigs() to apply these changes
+    def addConfigResourceChange(configResource: ConfigResource, name: String, value: String): Unit = {
+      if (configResource.`type`() == ConfigResource.Type.BROKER && !configResource.isDefault) {
+        configResource.name().toInt // check for valid broker ID and throw NumberFormatException if not
+      }
+      val changesForResource = configResourceChanges.getOrElse(configResource, mutable.Map.empty)
+      val firstChangeForResource = changesForResource.isEmpty
+      changesForResource(name) = value
+      if (firstChangeForResource) {
+        configResourceChanges.put(configResource, changesForResource)
+      }
+    }
+
+    // write all the coalesced config changes and return the affected resources (if any)
+    def writeConfigChangesIfNecessary(): Seq[ConfigResource] = {
+      if (configResourceChanges.isEmpty) {
+        List.empty
+      } else {
+        var configMapToWrite: Map[ConfigResource, Map[String, String]] = configMap
+        configResourceChanges.foreach { case (configResource, changedConfigsForResource) =>
+          val oldConfigsForResource: Map[String, String] = configMapToWrite.getOrElse(configResource, Map.empty)
+          val newConfigsForResource: Map[String, String] = oldConfigsForResource ++ changedConfigsForResource
+          // be sure to remove anything overwritten with a null value -- those are deletes
+          configMapToWrite = configMapToWrite ++ Map(configResource ->
+            newConfigsForResource.filter(tuple => tuple._2 != null))
+        }
+        configMap = configMapToWrite
+        val retval = configResourceChanges.keySet.toSeq
+        configResourceChanges.clear()
+        retval
+      }
+    }
+
+    def allTopicConfigs(): Map[String, Map[String, String]] = {
+      val configs = configMap
+      configs.filter {case (key, _) => key.`type`() == ConfigResource.Type.TOPIC}
+        .map {case (key, nameValuePairsMap) => (key.name(), nameValuePairsMap)}
+    }
+
+    def topicConfigProperties(topicName: String): Properties = {
+      configProperties(new ConfigResource(ConfigResource.Type.TOPIC, topicName))
+    }
+
+    def allBrokerConfigs(): Map[Int, Map[String, String]] = {
+      val configs = configMap
+      configs.filter {case (key, _) => key.`type`() == ConfigResource.Type.BROKER}
+        .map {case (key, nameValuePairsMap) => (key.name().toInt, nameValuePairsMap)}
+    }
+
+    def brokerConfigProperties(brokerId: Int): Properties = {
+      configProperties(new ConfigResource(ConfigResource.Type.BROKER, brokerId.toString))
+    }
+
+    def configProperties(configResource: ConfigResource): Properties = {
+      if (configResource.`type`() != ConfigResource.Type.TOPIC && configResource.`type`() != ConfigResource.Type.BROKER) {
+        throw new IllegalArgumentException(s"Unknown config resource type: ${configResource.`type`()}")
+      }
+      val configs = configMap
+      val retval = new Properties()
+      configs.get(configResource).getOrElse(Map.empty).foreach { case (key, value) => retval.put(key, value) }
+      retval
+    }
+
     // define functions to retrieve and copy stuff on-demand
     private var metadataSnapshot: Option[MetadataSnapshot] = None
     def getMetadataSnapshot(): MetadataSnapshot = {
@@ -317,6 +393,7 @@ class PartitionMetadataProcessor(kafkaConfig: KafkaConfig,
       case _: BrokerRecord | _: UnfenceBrokerRecord => numBrokersAdding += 1
       case _: FenceBrokerRecord => numBrokersFencing += 1
       case topic: TopicRecord => if (!topic.deleting()) numTopicsAdding += 1
+      case _ => // no need to do anything for other record types
     }
 
     val mgr = MetadataMgr(numBrokersAdding, numTopicsAdding: Int, numBrokersFencing)
@@ -332,6 +409,7 @@ class PartitionMetadataProcessor(kafkaConfig: KafkaConfig,
           case removeTopicRecord: RemoveTopicRecord => process(removeTopicRecord, mgr)
           case partitionRecord: PartitionRecord => process(partitionRecord, mgr)
           case isrChangeRecord: IsrChangeRecord => process(isrChangeRecord, mgr)
+          case configRecord: ConfigRecord => process(configRecord, mgr)
         }
       } catch {
         case e: Exception => error(s"Uncaught error processing metadata message: $msg", e)
@@ -372,6 +450,16 @@ class PartitionMetadataProcessor(kafkaConfig: KafkaConfig,
         }
       }
     }
+    // write any pending config changes and react to them accordingly
+    val configResourcesChanged = mgr.writeConfigChangesIfNecessary()
+    configResourcesChanged.foreach(configResource => {
+      val configHandler = configHandlers.get(configResource.`type`())
+      if (configHandler.isEmpty) {
+        warn(s"No config handler for $configResource")
+      } else {
+        configHandler.get.processConfigChanges(configResource.name(), mgr.configProperties(configResource))
+      }
+    })
     // send stop replica as required
     if (mgr.topicPartitionsNeedingStopReplica.nonEmpty) {
       val correlationId = -1 // remove after bridge release
@@ -779,6 +867,18 @@ class PartitionMetadataProcessor(kafkaConfig: KafkaConfig,
    */
   private def process(removeTopic: RemoveTopicRecord, mgr: MetadataMgr): Unit = {
     mgr.getCopiedTopicIdMap().remove(removeTopic.topicId())
+  }
+
+  /**
+   * Handle Config Record
+   *
+   * Update configs as indicated.
+   *
+   * @param config the record to process
+   */
+  private def process(config: ConfigRecord, mgr: MetadataMgr): Unit = {
+    mgr.addConfigResourceChange(new ConfigResource(ConfigResource.Type.forId(config.resourceType()), config.resourceName()),
+      config.name(), config.value())
   }
 
   def process(outOfBandRegisterLocalBrokerEvent: RegisterBrokerEvent): Unit = {

@@ -22,9 +22,11 @@ import java.util.concurrent.{LinkedBlockingQueue, TimeUnit}
 
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
+import kafka.log.LogManager
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.{KafkaConfig, MetadataCache, QuotaFactory, ReplicaManager}
+import kafka.server.{BrokerConfigHandler, ConfigHandler, KafkaConfig, MetadataCache, QuotaFactory, ReplicaManager, TopicConfigHandler}
 import kafka.utils.ShutdownableThread
+import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.protocol.ApiMessage
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.controller.MetaLogManager
@@ -43,9 +45,13 @@ object BrokerMetadataListener {
                         groupCoordinator: GroupCoordinator,
                         quotaManagers: QuotaFactory.QuotaManagers,
                         replicaManager: ReplicaManager,
-                        txnCoordinator: TransactionCoordinator): List[BrokerMetadataProcessor] = {
+                        txnCoordinator: TransactionCoordinator,
+                        logManager: LogManager): List[BrokerMetadataProcessor] = {
+    val configHandlers = Map[ConfigResource.Type, ConfigHandler](
+      ConfigResource.Type.TOPIC -> new TopicConfigHandler(logManager, kafkaConfig, quotaManagers, None),
+      ConfigResource.Type.BROKER -> new BrokerConfigHandler(kafkaConfig, quotaManagers))
     List(new PartitionMetadataProcessor(kafkaConfig, clusterId, metadataCache, groupCoordinator, quotaManagers,
-      replicaManager, txnCoordinator))
+      replicaManager, txnCoordinator, configHandlers))
   }
 }
 

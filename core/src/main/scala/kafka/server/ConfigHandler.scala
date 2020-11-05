@@ -21,7 +21,6 @@ import java.util.Properties
 
 import DynamicConfig.Broker._
 import kafka.api.ApiVersion
-import kafka.controller.KafkaController
 import kafka.log.{LogConfig, LogManager}
 import kafka.security.CredentialProvider
 import kafka.server.Constants._
@@ -49,7 +48,8 @@ trait ConfigHandler {
   * The TopicConfigHandler will process topic config changes in ZK.
   * The callback provides the topic name and the full properties set read from ZK
   */
-class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaConfig, val quotas: QuotaManagers, kafkaController: KafkaController) extends ConfigHandler with Logging  {
+class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaConfig, val quotas: QuotaManagers,
+                         enableUncleanLeaderElectionFunc: Option[String => Unit]) extends ConfigHandler with Logging  {
 
   private def updateLogConfig(topic: String,
                               topicConfig: Properties,
@@ -87,7 +87,7 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
     updateThrottledList(LogConfig.FollowerReplicationThrottledReplicasProp, quotas.follower)
 
     if (Try(topicConfig.getProperty(KafkaConfig.UncleanLeaderElectionEnableProp).toBoolean).getOrElse(false)) {
-      kafkaController.enableTopicUncleanLeaderElection(topic)
+      enableUncleanLeaderElectionFunc.foreach(_(topic))
     }
   }
 

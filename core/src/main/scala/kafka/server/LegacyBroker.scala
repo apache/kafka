@@ -287,7 +287,8 @@ class LegacyBroker(val config: KafkaConfig,
         brokerMetadataListener = new BrokerMetadataListener(
           config, time,
           BrokerMetadataListener.defaultProcessors(
-            config, _clusterId, metadataCache, groupCoordinator, quotaManagers, replicaManager, transactionCoordinator))
+            config, _clusterId, metadataCache, groupCoordinator, quotaManagers, replicaManager, transactionCoordinator,
+            logManager))
         brokerMetadataListener.start()
 
         /* Get the authorizer and initialize it if one is specified.*/
@@ -333,7 +334,7 @@ class LegacyBroker(val config: KafkaConfig,
         config.dynamicConfig.addReconfigurables(this.asInstanceOf[LegacyBroker])
 
         /* start dynamic config manager */
-        dynamicConfigHandlers = Map[String, ConfigHandler](ConfigType.Topic -> new TopicConfigHandler(logManager, config, quotaManagers, kafkaController),
+        dynamicConfigHandlers = Map[String, ConfigHandler](ConfigType.Topic -> new TopicConfigHandler(logManager, config, quotaManagers, Some(kafkaController.enableTopicUncleanLeaderElection)),
                                                            ConfigType.Client -> new ClientIdConfigHandler(quotaManagers),
                                                            ConfigType.User -> new UserConfigHandler(quotaManagers, credentialProvider),
                                                            ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers))
