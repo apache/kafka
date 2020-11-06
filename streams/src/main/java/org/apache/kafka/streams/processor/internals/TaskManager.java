@@ -137,6 +137,10 @@ public class TaskManager {
         return rebalanceInProgress;
     }
 
+    void resizeCache(final long size) {
+        activeTaskCreator.resizeCache(size);
+    }
+
     void handleRebalanceStart(final Set<String> subscribedTopics) {
         builder.addSubscribedTopicsFromMetadata(subscribedTopics, logPrefix);
 
