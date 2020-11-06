@@ -472,12 +472,12 @@
   <p><i>(2) Ensuring Progress:</i></p>
   <p>If the throttle is set too low, in comparison to the incoming write rate, it is possible for replication to not
       make progress. This occurs when:</p>
-  <pre>max(BytesInPerSec) > throttle</code></pre>
+  <pre><code>max(BytesInPerSec) > throttle</code></pre>
   <p>
       Where BytesInPerSec is the metric that monitors the write throughput of producers into each broker. </p>
   <p>The administrator can monitor whether replication is making progress, during the rebalance, using the metric:</p>
 
-  <pre>kafka.server:type=FetcherLagMetrics,name=ConsumerLag,clientId=([-.\w]+),topic=([-.\w]+),partition=([0-9]+)</code></pre>
+  <pre><code>kafka.server:type=FetcherLagMetrics,name=ConsumerLag,clientId=([-.\w]+),topic=([-.\w]+),partition=([0-9]+)</code></pre>
 
   <p>The lag should constantly decrease during replication.  If the metric does not decrease the administrator should
       increase the
@@ -1559,7 +1559,7 @@
   Use the following configuration option to specify which metrics
   you want collected:
 
-<pre>metrics.recording.level="info"</code></pre>
+<pre><code>metrics.recording.level="info"</code></pre>
 
 <h5 class="anchor-heading"><a id="kafka_streams_client_monitoring" class="anchor-link"></a><a href="#kafka_streams_client_monitoring">Client Metrics</a></h5>
 All of the following metrics have a recording level of <code>info</code>:

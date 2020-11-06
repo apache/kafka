@@ -301,7 +301,7 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
         <li><h4 class="anchor-heading"><a id="security_configbroker" class="anchor-link"></a><a href="#security_configbroker">Configuring Kafka Brokers</a></h4>
             Kafka Brokers support listening for connections on multiple ports.
             We need to configure the following property in server.properties, which must have one or more comma-separated values:
-            <pre>listeners</code></pre>
+            <pre><code>listeners</code></pre>
 
             If SSL is not enabled for inter-broker communication (see below for how to enable it), both PLAINTEXT and SSL ports will be necessary.
             <pre class="line-numbers"><code class="language-text">            listeners=PLAINTEXT://host.name:port,SSL://host.name:port</code></pre>
