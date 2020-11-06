@@ -90,7 +90,7 @@ public class Uuid {
     @Override
     public int hashCode() {
         long xor = mostSignificantBits ^ leastSignificantBits;
-        return ((int) (xor >> 32) ^ (int) xor);
+        return (int) (xor >> 32) ^ (int) xor;
     }
 
     /**
