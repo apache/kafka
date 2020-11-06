@@ -615,6 +615,10 @@ public class StreamThread extends Thread {
         }
     }
 
+    public void resizeCache(final long size) {
+        taskManager.resizeCache(size);
+    }
+
     /**
      * One iteration of a thread includes the following steps:
      *

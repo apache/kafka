@@ -160,6 +160,7 @@ public class KafkaStreams implements AutoCloseable {
     private final StreamsMetricsImpl streamsMetrics;
     private final ProcessorTopology taskTopology;
     private final ProcessorTopology globalTaskTopology;
+    private Long totalCacheSize;
 
     GlobalStreamThread globalStreamThread;
     private KafkaStreams.StateListener stateListener;
@@ -821,12 +822,8 @@ public class KafkaStreams implements AutoCloseable {
                 "must subscribe to at least one source topic or global table.");
         }
 
-        long totalCacheSize = config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG);
-        if (totalCacheSize < 0) {
-            totalCacheSize = 0;
-            log.warn("Negative cache size passed in. Reverting to cache size of 0 bytes.");
-        }
-        final long cacheSizePerThread = totalCacheSize / (numStreamThreads + (hasGlobalTopology ? 1 : 0));
+        totalCacheSize = config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG);
+        final long cacheSizePerThread = getCacheSizePreThread(numStreamThreads);
         final boolean hasPersistentStores = taskTopology.hasPersistentLocalStore() ||
                 (hasGlobalTopology && globalTaskTopology.hasPersistentGlobalStore());
 
@@ -900,6 +897,21 @@ public class KafkaStreams implements AutoCloseable {
         oldHandler = false;
         maybeWarnAboutCodeInRocksDBConfigSetter(log, config);
         rocksDBMetricsRecordingService = maybeCreateRocksDBMetricsRecordingService(clientId, config);
+    }
+
+    private long getCacheSizePreThread(final int numStreamThreads) {
+        if (totalCacheSize < 0) {
+            totalCacheSize = 0L;
+            log.warn("Negative cache size passed in. Reverting to cache size of 0 bytes.");
+        }
+        return totalCacheSize / (numStreamThreads + ((globalTaskTopology != null) ? 1 : 0));
+    }
+
+    private void resizeThreadCache(final int numStreamThreads) {
+        final long cacheSizePreThread = getCacheSizePreThread(numStreamThreads);
+        for (final StreamThread streamThread: threads) {
+            streamThread.resizeCache(cacheSizePreThread);
+        }
     }
 
     private ScheduledExecutorService setupStateDirCleaner() {
