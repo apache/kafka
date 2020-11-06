@@ -1361,7 +1361,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
   private[network] val maxConnectionsPerListener = mutable.Map[ListenerName, ListenerConnectionQuota]()
   @volatile private var totalCount = 0
   @volatile private var defaultConnectionRatePerIp = DynamicConfig.Ip.DefaultConnectionCreationRate
-  private val connectionRatePerIp = new ConcurrentHashMap[InetAddress, Int]()
+  private val connectionRatePerIp = mutable.Map[InetAddress, Int]()
   // sensor that tracks broker-wide connection creation rate and limit (quota)
   private val brokerConnectionRateSensor = getOrCreateConnectionRateQuotaSensor(config.maxConnectionCreationRate, BrokerQuotaEntity)
   private val maxThrottleTimeMs = TimeUnit.SECONDS.toMillis(config.quotaWindowSizeSeconds.toLong)
@@ -1422,31 +1422,32 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
     def shouldUpdateQuota(metric: KafkaMetric, quotaLimit: Int) = {
       quotaLimit != metric.config.quota.bound
     }
-
-    ip match {
-      case Some(addr) =>
-        val address = InetAddress.getByName(addr)
-        maxConnectionRate match {
-          case Some(rate) =>
-            info(s"Updating max connection rate override for $address to $rate")
-            connectionRatePerIp.put(address, rate)
-          case None =>
-            info(s"Removing max connection rate override for $address")
-            connectionRatePerIp.remove(address)
-        }
-        updateConnectionRateQuota(connectionRateForIp(address), IpQuotaEntity(address))
-      case None =>
-        defaultConnectionRatePerIp = maxConnectionRate.getOrElse(DynamicConfig.Ip.DefaultConnectionCreationRate)
-        info(s"Updated default max IP connection rate to $defaultConnectionRatePerIp")
-        metrics.metrics.forEach { (metricName, metric) =>
-          if (isIpConnectionRateMetric(metricName)) {
-            val quota = connectionRateForIp(InetAddress.getByName(metricName.tags.get(IpMetricTag)))
-            if (shouldUpdateQuota(metric, quota)) {
-              info(s"Updating existing connection rate quota config for ${metricName.tags} to $quota")
-              metric.config(rateQuotaMetricConfig(quota))
+    counts.synchronized {
+      ip match {
+        case Some(addr) =>
+          val address = InetAddress.getByName(addr)
+          maxConnectionRate match {
+            case Some(rate) =>
+              info(s"Updating max connection rate override for $address to $rate")
+              connectionRatePerIp.put(address, rate)
+            case None =>
+              info(s"Removing max connection rate override for $address")
+              connectionRatePerIp.remove(address)
+          }
+          updateConnectionRateQuota(connectionRateForIp(address), IpQuotaEntity(address))
+        case None =>
+          defaultConnectionRatePerIp = maxConnectionRate.getOrElse(DynamicConfig.Ip.DefaultConnectionCreationRate)
+          info(s"Updated default max IP connection rate to $defaultConnectionRatePerIp")
+          metrics.metrics.forEach { (metricName, metric) =>
+            if (isIpConnectionRateMetric(metricName)) {
+              val quota = connectionRateForIp(InetAddress.getByName(metricName.tags.get(IpMetricTag)))
+              if (shouldUpdateQuota(metric, quota)) {
+                info(s"Updating existing connection rate quota config for ${metricName.tags} to $quota")
+                metric.config(rateQuotaMetricConfig(quota))
+              }
             }
           }
-        }
+      }
     }
   }
 
