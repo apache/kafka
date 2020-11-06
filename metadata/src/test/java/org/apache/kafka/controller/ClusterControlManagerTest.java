@@ -69,7 +69,7 @@ public class ClusterControlManagerTest {
         for (int i = 0; i < 10; i++) {
             assertTrue(clusterControl.isRegistered(i));
         }
-        for (int i = 0 ; i < 100; i++) {
+        for (int i = 0; i < 100; i++) {
             Random random = new Random(123);
             List<Integer> results = clusterControl.chooseRandomRegistered(random, 3);
             HashSet<Integer> seen = new HashSet<>();
