@@ -77,7 +77,7 @@ import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-final class RaftClientTestContext {
+public final class RaftClientTestContext {
     private static final StringSerde STRING_SERDE = new StringSerde();
 
     final TopicPartition metadataPartition = Builder.METADATA_PARTITION;
@@ -90,9 +90,9 @@ final class RaftClientTestContext {
 
     private final QuorumStateStore quorumStateStore;
     final int localId;
-    final KafkaRaftClient<String> client;
+    public final KafkaRaftClient<String> client;
     final Metrics metrics;
-    final MockLog log;
+    public final MockLog log;
     final MockNetworkChannel channel;
     final MockTime time;
     final MockListener listener;
@@ -122,7 +122,7 @@ final class RaftClientTestContext {
         private int appendLingerMs = DEFAULT_APPEND_LINGER_MS;
         private MemoryPool memoryPool = MemoryPool.NONE;
 
-        Builder(int localId, Set<Integer> voters) {
+        public Builder(int localId, Set<Integer> voters) {
             this.voters = voters;
             this.localId = localId;
         }
@@ -163,7 +163,7 @@ final class RaftClientTestContext {
             return this;
         }
 
-        RaftClientTestContext build() throws IOException {
+        public RaftClientTestContext build() throws IOException {
             Metrics metrics = new Metrics(time);
             MockNetworkChannel channel = new MockNetworkChannel();
             LogContext logContext = new LogContext();

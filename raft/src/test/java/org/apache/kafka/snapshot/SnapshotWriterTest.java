@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.raft;
+package org.apache.kafka.snapshot;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -24,15 +24,15 @@ import java.util.Random;
 import java.util.Set;
 import org.apache.kafka.common.record.BufferSupplier.GrowableBufferSupplier;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.snapshot.BatchedSnapshotWriter;
-import org.apache.kafka.snapshot.SnapshotReader;
+import org.apache.kafka.raft.OffsetAndEpoch;
+import org.apache.kafka.raft.RaftClientTestContext;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-final public class BatchedSnapshotWriterTest {
+final public class SnapshotWriterTest {
     private final int localId = 0;
     private final Set<Integer> voters = Collections.singleton(localId);
 
@@ -42,14 +42,14 @@ final public class BatchedSnapshotWriterTest {
         List<List<String>> expected = buildRecords(3, 3);
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
-        try (BatchedSnapshotWriter<String> snapshot = context.client.createSnapshot(id)) {
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(id)) {
             expected.forEach(batch -> {
                 assertDoesNotThrow(() -> snapshot.append(batch));
             });
             snapshot.freeze();
         }
 
-        try (SnapshotReader reader = context.log.readSnapshot(id).get()) {
+        try (RawSnapshotReader reader = context.log.readSnapshot(id).get()) {
             assertSnapshot(expected, reader);
         }
     }
@@ -60,7 +60,7 @@ final public class BatchedSnapshotWriterTest {
         List<List<String>> expected = buildRecords(3, 3);
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
-        try (BatchedSnapshotWriter<String> snapshot = context.client.createSnapshot(id)) {
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(id)) {
             expected.forEach(batch -> {
                 assertDoesNotThrow(() -> snapshot.append(batch));
             });
@@ -75,7 +75,7 @@ final public class BatchedSnapshotWriterTest {
         List<List<String>> expected = buildRecords(3, 3);
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
-        try (BatchedSnapshotWriter<String> snapshot = context.client.createSnapshot(id)) {
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(id)) {
             expected.forEach(batch -> {
                 assertDoesNotThrow(() -> snapshot.append(batch));
             });
@@ -100,7 +100,7 @@ final public class BatchedSnapshotWriterTest {
         return result;
     }
 
-    private void assertSnapshot(List<List<String>> batches, SnapshotReader reader) {
+    private void assertSnapshot(List<List<String>> batches, RawSnapshotReader reader) {
         List<String> expected = new ArrayList<>();
         batches.forEach(expected::addAll);
 

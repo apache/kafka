@@ -26,13 +26,13 @@ import java.nio.file.StandardOpenOption;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.OffsetAndEpoch;
 
-public final class FileSnapshotWriter implements SnapshotWriter {
+public final class FileRawSnapshotWriter implements RawSnapshotWriter {
     private final Path path;
     private final FileChannel channel;
     private final OffsetAndEpoch snapshotId;
     private boolean frozen = false;
 
-    private FileSnapshotWriter(
+    private FileRawSnapshotWriter(
         Path path,
         FileChannel channel,
         OffsetAndEpoch snapshotId
@@ -88,10 +88,10 @@ public final class FileSnapshotWriter implements SnapshotWriter {
         Files.deleteIfExists(path);
     }
 
-    public static FileSnapshotWriter create(Path logDir, OffsetAndEpoch snapshotId) throws IOException {
+    public static FileRawSnapshotWriter create(Path logDir, OffsetAndEpoch snapshotId) throws IOException {
         Path path = Snapshots.createTempFile(logDir, snapshotId);
 
-        return new FileSnapshotWriter(
+        return new FileRawSnapshotWriter(
             path,
             FileChannel.open(path, Utils.mkSet(StandardOpenOption.WRITE, StandardOpenOption.APPEND)),
             snapshotId

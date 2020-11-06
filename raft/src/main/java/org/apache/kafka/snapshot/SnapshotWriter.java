@@ -19,18 +19,89 @@ package org.apache.kafka.snapshot;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.nio.ByteBuffer;
+import java.util.List;
+import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.OffsetAndEpoch;
+import org.apache.kafka.raft.RecordSerde;
+import org.apache.kafka.raft.internals.BatchAccumulator.CompletedBatch;
+import org.apache.kafka.raft.internals.BatchAccumulator;
 
 // TODO: Write documentation for this type and all of the methods
-public interface SnapshotWriter extends Closeable {
-    public OffsetAndEpoch snapshotId();
+final public class SnapshotWriter<T> implements Closeable {
+    final private RawSnapshotWriter snapshot;
+    final private BatchAccumulator<T> accumulator;
+    final private Time time;
 
-    public long sizeInBytes() throws IOException;
+    public SnapshotWriter(
+        RawSnapshotWriter snapshot,
+        int maxBatchSize,
+        MemoryPool memoryPool,
+        Time time,
+        CompressionType compressionType,
+        RecordSerde<T> serde
+    ) {
+        this.snapshot = snapshot;
+        this.time = time;
 
-    public void append(ByteBuffer buffer) throws IOException;
+        this.accumulator = new BatchAccumulator<>(
+            snapshot.snapshotId().epoch,
+            0,
+            Integer.MAX_VALUE,
+            maxBatchSize,
+            memoryPool,
+            time,
+            compressionType,
+            serde
+        );
+    }
 
-    public boolean isFrozen();
+    public OffsetAndEpoch snapshotId() {
+        return snapshot.snapshotId();
+    }
 
-    public void freeze() throws IOException;
+    public boolean isFrozen() {
+        return snapshot.isFrozen();
+    }
+
+    public void append(List<T> records) throws IOException {
+        if (snapshot.isFrozen()) {
+            String message = String.format(
+                "Append not supported. Snapshot is already frozen: id = {}.",
+                snapshot.snapshotId()
+            );
+
+            throw new RuntimeException(message);
+        }
+
+        accumulator.append(snapshot.snapshotId().epoch, records);
+
+        if (!accumulator.needsDrain(time.milliseconds())) {
+            return;
+        }
+
+        appendBatches(accumulator.drain());
+    }
+
+    public void freeze() throws IOException {
+        appendBatches(accumulator.drain());
+        snapshot.freeze();
+        accumulator.close();
+    }
+
+    public void close() throws IOException {
+        snapshot.close();
+        accumulator.close();
+    }
+
+    private void appendBatches(List<CompletedBatch<T>> batches) throws IOException {
+        try {
+            for (CompletedBatch batch : batches) {
+                snapshot.append(batch.data.buffer());
+            }
+        } finally {
+            batches.forEach(CompletedBatch::release);
+        }
+    }
 }

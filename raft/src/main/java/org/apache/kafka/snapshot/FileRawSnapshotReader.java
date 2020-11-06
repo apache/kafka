@@ -26,11 +26,11 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.raft.OffsetAndEpoch;
 
-public final class FileSnapshotReader implements SnapshotReader {
+public final class FileRawSnapshotReader implements RawSnapshotReader {
     private final FileRecords fileRecords;
     private final OffsetAndEpoch snapshotId;
 
-    private FileSnapshotReader(FileRecords fileRecords, OffsetAndEpoch snapshotId) {
+    private FileRawSnapshotReader(FileRecords fileRecords, OffsetAndEpoch snapshotId) {
         this.fileRecords = fileRecords;
         this.snapshotId = snapshotId;
     }
@@ -72,7 +72,7 @@ public final class FileSnapshotReader implements SnapshotReader {
         fileRecords.close();
     }
 
-    public static FileSnapshotReader open(Path logDir, OffsetAndEpoch snapshotId) throws IOException {
+    public static FileRawSnapshotReader open(Path logDir, OffsetAndEpoch snapshotId) throws IOException {
         FileRecords fileRecords = FileRecords.open(
             Snapshots.snapshotPath(logDir, snapshotId).toFile(),
             false, // mutable
@@ -81,6 +81,6 @@ public final class FileSnapshotReader implements SnapshotReader {
             false // preallocate
         );
 
-        return new FileSnapshotReader(fileRecords, snapshotId);
+        return new FileRawSnapshotReader(fileRecords, snapshotId);
     }
 }

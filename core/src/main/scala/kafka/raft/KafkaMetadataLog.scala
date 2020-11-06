@@ -25,10 +25,10 @@ import org.apache.kafka.common.record.{MemoryRecords, Records}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.raft
 import org.apache.kafka.raft.{LogAppendInfo, LogFetchInfo, LogOffsetMetadata, Isolation, ReplicatedLog}
-import org.apache.kafka.snapshot.FileSnapshotReader
-import org.apache.kafka.snapshot.FileSnapshotWriter
-import org.apache.kafka.snapshot.SnapshotReader
-import org.apache.kafka.snapshot.SnapshotWriter
+import org.apache.kafka.snapshot.FileRawSnapshotReader
+import org.apache.kafka.snapshot.FileRawSnapshotWriter
+import org.apache.kafka.snapshot.RawSnapshotReader
+import org.apache.kafka.snapshot.RawSnapshotWriter
 
 import scala.compat.java8.OptionConverters._
 
@@ -146,13 +146,13 @@ class KafkaMetadataLog(
     topicPartition
   }
 
-  override def createSnapshot(snapshotId: raft.OffsetAndEpoch): SnapshotWriter = {
-    FileSnapshotWriter.create(log.dir.toPath, snapshotId)
+  override def createSnapshot(snapshotId: raft.OffsetAndEpoch): RawSnapshotWriter = {
+    FileRawSnapshotWriter.create(log.dir.toPath, snapshotId)
   }
 
-  override def readSnapshot(snapshotId: raft.OffsetAndEpoch): Optional[SnapshotReader] = {
+  override def readSnapshot(snapshotId: raft.OffsetAndEpoch): Optional[RawSnapshotReader] = {
     try {
-      Optional.of(FileSnapshotReader.open(log.dir.toPath, snapshotId))
+      Optional.of(FileRawSnapshotReader.open(log.dir.toPath, snapshotId))
     } catch {
       case e: NoSuchFileException => Optional.empty()
     }

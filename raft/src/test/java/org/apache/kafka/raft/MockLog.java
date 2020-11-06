@@ -28,8 +28,8 @@ import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.snapshot.SnapshotReader;
-import org.apache.kafka.snapshot.SnapshotWriter;
+import org.apache.kafka.snapshot.RawSnapshotReader;
+import org.apache.kafka.snapshot.RawSnapshotWriter;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -51,7 +51,7 @@ public class MockLog implements ReplicatedLog {
 
     private final List<EpochStartOffset> epochStartOffsets = new ArrayList<>();
     private final List<LogBatch> log = new ArrayList<>();
-    private final Map<OffsetAndEpoch, SnapshotReader> snapshots = new HashMap<>();
+    private final Map<OffsetAndEpoch, MockRawSnapshotReader> snapshots = new HashMap<>();
     private final TopicPartition topicPartition;
 
     private long nextId = ID_GENERATOR.getAndIncrement();
@@ -359,12 +359,12 @@ public class MockLog implements ReplicatedLog {
     }
 
     @Override
-    public SnapshotWriter createSnapshot(OffsetAndEpoch snapshotId) {
-        return new MockSnapshotWriter(snapshotId);
+    public RawSnapshotWriter createSnapshot(OffsetAndEpoch snapshotId) {
+        return new MockRawSnapshotWriter(snapshotId);
     }
 
     @Override
-    public Optional<SnapshotReader> readSnapshot(OffsetAndEpoch snapshotId) {
+    public Optional<RawSnapshotReader> readSnapshot(OffsetAndEpoch snapshotId) {
         return Optional.ofNullable(snapshots.get(snapshotId));
     }
 
@@ -489,12 +489,12 @@ public class MockLog implements ReplicatedLog {
         }
     }
 
-    final class MockSnapshotWriter implements SnapshotWriter {
+    final class MockRawSnapshotWriter implements RawSnapshotWriter {
         private final OffsetAndEpoch snapshotId;
         private ByteBuffer data;
         private boolean frozen;
 
-        public MockSnapshotWriter(OffsetAndEpoch snapshotId) {
+        public MockRawSnapshotWriter(OffsetAndEpoch snapshotId) {
             this.snapshotId = snapshotId;
             this.data = ByteBuffer.allocate(0);
             this.frozen = false;
@@ -538,18 +538,18 @@ public class MockLog implements ReplicatedLog {
             frozen = true;
             data.flip();
 
-            snapshots.putIfAbsent(snapshotId, new MockSnapshotReader(snapshotId, data));
+            snapshots.putIfAbsent(snapshotId, new MockRawSnapshotReader(snapshotId, data));
         }
 
         @Override
         public void close() {}
     }
 
-    final static class MockSnapshotReader implements SnapshotReader {
+    final static class MockRawSnapshotReader implements RawSnapshotReader {
         private final OffsetAndEpoch snapshotId;
         private final MemoryRecords data;
 
-        MockSnapshotReader(OffsetAndEpoch snapshotId, ByteBuffer data) {
+        MockRawSnapshotReader(OffsetAndEpoch snapshotId, ByteBuffer data) {
             this.snapshotId = snapshotId;
             this.data = MemoryRecords.readableRecords(data);
         }

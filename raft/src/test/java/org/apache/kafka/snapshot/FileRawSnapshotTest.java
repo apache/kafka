@@ -37,7 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public final class FileSnapshotTest {
+public final class FileRawSnapshotTest {
     @Test
     public void testWritingSnapshot() throws IOException {
         Path tempDir = TestUtils.tempDirectory().toPath();
@@ -46,7 +46,7 @@ public final class FileSnapshotTest {
         int batches = 10;
         int expectedSize = 0;
 
-        try (FileSnapshotWriter snapshot = FileSnapshotWriter.create(tempDir, offsetAndEpoch)) {
+        try (FileRawSnapshotWriter snapshot = FileRawSnapshotWriter.create(tempDir, offsetAndEpoch)) {
             assertEquals(0, snapshot.sizeInBytes());
 
             MemoryRecords records = buildRecords(new ByteBuffer[] {ByteBuffer.wrap(randomBytes(bufferSize))});
@@ -74,7 +74,7 @@ public final class FileSnapshotTest {
 
         ByteBuffer expectedBuffer = ByteBuffer.wrap(randomBytes(bufferSize));
 
-        try (FileSnapshotWriter snapshot = FileSnapshotWriter.create(tempDir, offsetAndEpoch)) {
+        try (FileRawSnapshotWriter snapshot = FileRawSnapshotWriter.create(tempDir, offsetAndEpoch)) {
             MemoryRecords records = buildRecords(new ByteBuffer[] {expectedBuffer});
             for (int i = 0; i < batches; i++) {
                 snapshot.append(records.buffer());
@@ -83,7 +83,7 @@ public final class FileSnapshotTest {
             snapshot.freeze();
         }
 
-        try (FileSnapshotReader snapshot = FileSnapshotReader.open(tempDir, offsetAndEpoch)) {
+        try (FileRawSnapshotReader snapshot = FileRawSnapshotReader.open(tempDir, offsetAndEpoch)) {
             int countBatches = 0;
             int countRecords = 0;
             for (RecordBatch batch : snapshot) {
@@ -115,7 +115,7 @@ public final class FileSnapshotTest {
         int batchSize = 3;
         int batches = 10;
 
-        try (FileSnapshotWriter snapshot = FileSnapshotWriter.create(tempDir, offsetAndEpoch)) {
+        try (FileRawSnapshotWriter snapshot = FileRawSnapshotWriter.create(tempDir, offsetAndEpoch)) {
             for (int i = 0; i < batches; i++) {
                 ByteBuffer[] buffers = IntStream
                     .range(0, batchSize)
@@ -127,7 +127,7 @@ public final class FileSnapshotTest {
             snapshot.freeze();
         }
 
-        try (FileSnapshotReader snapshot = FileSnapshotReader.open(tempDir, offsetAndEpoch)) {
+        try (FileRawSnapshotReader snapshot = FileRawSnapshotReader.open(tempDir, offsetAndEpoch)) {
             int countBatches = 0;
             int countRecords = 0;
             for (RecordBatch batch : snapshot) {
@@ -159,7 +159,7 @@ public final class FileSnapshotTest {
         int batches = 10;
         int expectedSize = 0;
 
-        try (FileSnapshotWriter snapshot = FileSnapshotWriter.create(tempDir, offsetAndEpoch)) {
+        try (FileRawSnapshotWriter snapshot = FileRawSnapshotWriter.create(tempDir, offsetAndEpoch)) {
             for (int i = 0; i < batches; i++) {
                 ByteBuffer[] buffers = IntStream
                     .range(0, batchSize)
@@ -179,7 +179,7 @@ public final class FileSnapshotTest {
         assertTrue(Files.exists(Snapshots.snapshotPath(tempDir, offsetAndEpoch)));
         assertEquals(expectedSize, Files.size(Snapshots.snapshotPath(tempDir, offsetAndEpoch)));
 
-        try (FileSnapshotReader snapshot = FileSnapshotReader.open(tempDir, offsetAndEpoch)) {
+        try (FileRawSnapshotReader snapshot = FileRawSnapshotReader.open(tempDir, offsetAndEpoch)) {
             int countBatches = 0;
             int countRecords = 0;
 
@@ -210,7 +210,7 @@ public final class FileSnapshotTest {
         int bufferSize = 256;
         int batches = 10;
 
-        try (FileSnapshotWriter snapshot = FileSnapshotWriter.create(tempDir, offsetAndEpoch)) {
+        try (FileRawSnapshotWriter snapshot = FileRawSnapshotWriter.create(tempDir, offsetAndEpoch)) {
             MemoryRecords records = buildRecords(new ByteBuffer[] {ByteBuffer.wrap(randomBytes(bufferSize))});
             for (int i = 0; i < batches; i++) {
                 snapshot.append(records.buffer());
@@ -229,7 +229,7 @@ public final class FileSnapshotTest {
         int bufferSize = 256;
         int batches = 10;
 
-        try (FileSnapshotWriter snapshot = FileSnapshotWriter.create(tempDir, offsetAndEpoch)) {
+        try (FileRawSnapshotWriter snapshot = FileRawSnapshotWriter.create(tempDir, offsetAndEpoch)) {
             MemoryRecords records = buildRecords(new ByteBuffer[] {ByteBuffer.wrap(randomBytes(bufferSize))});
             for (int i = 0; i < batches; i++) {
                 snapshot.append(records.buffer());
@@ -252,7 +252,7 @@ public final class FileSnapshotTest {
         int bufferSize = 256;
         int batches = 1;
 
-        try (FileSnapshotWriter snapshot = FileSnapshotWriter.create(tempDir, offsetAndEpoch)) {
+        try (FileRawSnapshotWriter snapshot = FileRawSnapshotWriter.create(tempDir, offsetAndEpoch)) {
             MemoryRecords records = buildRecords(new ByteBuffer[] {ByteBuffer.wrap(randomBytes(bufferSize))});
             for (int i = 0; i < batches; i++) {
                 snapshot.append(records.buffer());
@@ -262,7 +262,7 @@ public final class FileSnapshotTest {
         }
 
         // Create another snapshot with the same id
-        try (FileSnapshotWriter snapshot = FileSnapshotWriter.create(tempDir, offsetAndEpoch)) {
+        try (FileRawSnapshotWriter snapshot = FileRawSnapshotWriter.create(tempDir, offsetAndEpoch)) {
             MemoryRecords records = buildRecords(new ByteBuffer[] {ByteBuffer.wrap(randomBytes(bufferSize))});
             for (int i = 0; i < batches; i++) {
                 snapshot.append(records.buffer());

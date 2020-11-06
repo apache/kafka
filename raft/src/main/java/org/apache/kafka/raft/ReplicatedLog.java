@@ -18,8 +18,8 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.Records;
-import org.apache.kafka.snapshot.SnapshotReader;
-import org.apache.kafka.snapshot.SnapshotWriter;
+import org.apache.kafka.snapshot.RawSnapshotReader;
+import org.apache.kafka.snapshot.RawSnapshotWriter;
 
 import java.io.Closeable;
 import java.util.Optional;
@@ -152,10 +152,10 @@ public interface ReplicatedLog extends Closeable {
     }
 
     // TODO: Write documentation
-    SnapshotWriter createSnapshot(OffsetAndEpoch snapshotId);
+    RawSnapshotWriter createSnapshot(OffsetAndEpoch snapshotId);
 
     // TODO: Write documentation
-    Optional<SnapshotReader> readSnapshot(OffsetAndEpoch snapshotId);
+    Optional<RawSnapshotReader> readSnapshot(OffsetAndEpoch snapshotId);
 
     default void close() {}
 

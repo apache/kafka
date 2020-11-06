@@ -14,22 +14,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.snapshot;
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Iterator;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 
 // TODO: Write documentation for this type and all of the methods
-public interface SnapshotReader extends Closeable, Iterable<RecordBatch> {
+public interface RawSnapshotWriter extends Closeable {
     public OffsetAndEpoch snapshotId();
 
     public long sizeInBytes() throws IOException;
 
-    public Iterator<RecordBatch> iterator();
+    public void append(ByteBuffer buffer) throws IOException;
 
-    public int read(ByteBuffer buffer, long position) throws IOException;
+    public boolean isFrozen();
+
+    public void freeze() throws IOException;
 }
