@@ -27,8 +27,6 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.serialization.Serdes.IntegerSerde;
-import org.apache.kafka.common.serialization.Serdes.StringSerde;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
@@ -36,7 +34,6 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
-import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
@@ -89,7 +86,7 @@ public class InternalTopicIntegrationTest {
 
     @BeforeClass
     public static void startKafkaCluster() throws InterruptedException {
-        CLUSTER.createTopics(DEFAULT_INPUT_TOPIC,DEFAULT_INPUT_TABLE_TOPIC);
+        CLUSTER.createTopics(DEFAULT_INPUT_TOPIC, DEFAULT_INPUT_TABLE_TOPIC);
     }
 
     @Before
@@ -154,11 +151,11 @@ public class InternalTopicIntegrationTest {
         streamsProp.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
         final StreamsBuilder streamsBuilder = new StreamsBuilder();
-        KStream<String, String> inputTopic = streamsBuilder.stream(DEFAULT_INPUT_TOPIC);
-        KTable<String, String> inputTable = streamsBuilder.table(DEFAULT_INPUT_TABLE_TOPIC);
+        final KStream<String, String> inputTopic = streamsBuilder.stream(DEFAULT_INPUT_TOPIC);
+        final KTable<String, String> inputTable = streamsBuilder.table(DEFAULT_INPUT_TABLE_TOPIC);
         inputTopic
             .groupBy(
-                (k, v) -> k.toUpperCase().substring(0, 1),
+                (k, v) -> k,
                 Grouped.with("GroupName", Serdes.String(), Serdes.String())
             )
             .windowedBy(TimeWindows.of(Duration.ofMinutes(10)))
@@ -167,7 +164,7 @@ public class InternalTopicIntegrationTest {
                 (k, v, a) -> a + k)
             .leftJoin(
                 inputTable,
-                (v) -> v,
+                v -> v,
                 (x, y) -> x + y
             );
 

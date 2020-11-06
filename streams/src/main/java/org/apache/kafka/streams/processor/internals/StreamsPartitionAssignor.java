@@ -528,8 +528,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                                                final Map<Integer, TopicsInfo> topicGroups,
                                                                final Cluster metadata) {
         boolean numPartitionsNeeded;
+        boolean progressMadeThisIteration; // avoid infinitely looping without making any progress on unknown repartitions
         do {
             numPartitionsNeeded = false;
+            progressMadeThisIteration = false;
 
             for (final TopicsInfo topicsInfo : topicGroups.values()) {
                 for (final String repartitionSourceTopic : topicsInfo.repartitionSourceTopics.keySet()) {
@@ -575,17 +577,22 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                             }
                         }
 
-                        // if we still have not found the right number of partitions,
-                        // another iteration is needed
                         if (numPartitions == null) {
                             numPartitionsNeeded = true;
+                            log.trace("Unable to determine number of partitions for {}, another iteration is needed",
+                                      repartitionSourceTopic);
                         } else {
                             repartitionTopicMetadata.get(repartitionSourceTopic).setNumberOfPartitions(numPartitions);
+                            progressMadeThisIteration = true;
                         }
                     }
                 }
             }
-        } while (numPartitionsNeeded);
+        } while (numPartitionsNeeded && progressMadeThisIteration);
+
+        if (numPartitionsNeeded) {
+            throw new TaskAssignmentException("Failed to compute number of partitions for all repartition topics");
+        }
     }
 
     /**
