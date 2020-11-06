@@ -59,7 +59,7 @@
       "type": "int8"
     },
     {
-      "name": "shutdownRequested",
+      "name": "errorCode",
       "versions": "9+",
       "type": "int8"
     }

@@ -388,7 +388,7 @@ public class KafkaStreams implements AutoCloseable {
      * @throws NullPointerException if streamsUncaughtExceptionHandler is null.
      */
     public void setUncaughtExceptionHandler(final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
-        final StreamThread.Handler handler = exception -> handleStreamsUncaughtException(exception, streamsUncaughtExceptionHandler);
+        final StreamThread.StreamsUncaughtExceptionHandlerWrapper handler = exception -> handleStreamsUncaughtException(exception, streamsUncaughtExceptionHandler);
         synchronized (stateLock) {
             if (state == State.CREATED) {
                 Objects.requireNonNull(streamsUncaughtExceptionHandler);
@@ -433,9 +433,9 @@ public class KafkaStreams implements AutoCloseable {
                             "longer in a well-defined state. Attempting to send the shutdown command anyway.", e);
                 }
                 if (Thread.currentThread().equals(globalStreamThread) && threads.stream().noneMatch(StreamThread::isRunning)) {
-                    log.error("Exception in global stream thread cause the application to attempt to shutdown." +
-                            " This action will succeed only if there is at least one StreamThread running on ths client." +
-                            " Currently there is no running threads so will now close the client.");
+                    log.error("Exception in global thread caused the application to attempt to shutdown." +
+                            " This action will succeed only if there is at least one StreamThread running on this client." +
+                            " Currently there are no running threads so will now close the client.");
                     close(Duration.ZERO);
                     return false;
                 }
@@ -1129,12 +1129,10 @@ public class KafkaStreams implements AutoCloseable {
 
                 streamsMetrics.removeAllClientLevelMetrics();
                 metrics.close();
-                setState(State.ERROR);
             }, "kafka-streams-close-thread");
 
             shutdownThread.setDaemon(true);
             shutdownThread.start();
-            setState(State.ERROR);
         }
     }
 

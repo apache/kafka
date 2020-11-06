@@ -63,7 +63,7 @@ public class GlobalStreamThread extends Thread {
     private final StreamsMetricsImpl streamsMetrics;
     private final ProcessorTopology topology;
     private volatile StreamsException startupException;
-    private StreamThread.Handler streamsUncaughtExceptionHandler;
+    private StreamThread.StreamsUncaughtExceptionHandlerWrapper streamsUncaughtExceptionHandler;
 
     /**
      * The states that the global stream thread can be in
@@ -201,7 +201,7 @@ public class GlobalStreamThread extends Thread {
                               final Time time,
                               final String threadClientId,
                               final StateRestoreListener stateRestoreListener,
-                              final StreamThread.Handler streamsUncaughtExceptionHandler) {
+                              final StreamThread.StreamsUncaughtExceptionHandlerWrapper streamsUncaughtExceptionHandler) {
         super(threadClientId);
         this.time = time;
         this.config = config;
@@ -340,7 +340,7 @@ public class GlobalStreamThread extends Thread {
         }
     }
 
-    public void setUncaughtExceptionHandler(final StreamThread.Handler streamsUncaughtExceptionHandler) {
+    public void setUncaughtExceptionHandler(final StreamThread.StreamsUncaughtExceptionHandlerWrapper streamsUncaughtExceptionHandler) {
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
     }
 

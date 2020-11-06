@@ -83,11 +83,11 @@ public class SubscriptionInfo {
                             final String userEndPoint,
                             final Map<TaskId, Long> taskOffsetSums,
                             final byte uniqueField,
-                            final byte shutdownRequested) {
+                            final byte errorCode) {
         this(version, latestSupportedVersion, processId, userEndPoint, taskOffsetSums, uniqueField);
 
         if (version >= 9) {
-            data.setShutdownRequested(shutdownRequested);
+            data.setErrorCode(errorCode);
         }
 
     }
@@ -129,8 +129,8 @@ public class SubscriptionInfo {
         this.data = subscriptionInfoData;
     }
 
-    public int shutdownRequested() {
-        return data.shutdownRequested();
+    public int errorCode() {
+        return data.errorCode();
     }
 
     private void setTaskOffsetSumDataFromTaskOffsetSumMap(final Map<TaskId, Long> taskOffsetSums) {

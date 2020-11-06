@@ -219,8 +219,8 @@ public class KafkaStreamsTest {
             anyObject(StateDirectory.class),
             anyObject(StateRestoreListener.class),
             anyInt(),
-            anyObject(StreamThread.ShutdownErrorHook.class),
-            anyObject(StreamThread.Handler.class)
+            anyObject(Runnable.class),
+            anyObject(StreamThread.StreamsUncaughtExceptionHandlerWrapper.class)
         )).andReturn(streamThreadOne).andReturn(streamThreadTwo);
 
         EasyMock.expect(StreamThread.eosEnabled(anyObject(StreamsConfig.class))).andReturn(false).anyTimes();

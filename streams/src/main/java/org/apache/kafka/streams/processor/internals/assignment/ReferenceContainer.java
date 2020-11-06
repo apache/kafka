@@ -30,7 +30,7 @@ public class ReferenceContainer {
     public Admin adminClient;
     public TaskManager taskManager;
     public StreamsMetadataState streamsMetadataState;
-    public AtomicInteger assignmentErrorCode = new AtomicInteger();
+    public final AtomicInteger assignmentErrorCode = new AtomicInteger();
     public final AtomicLong nextScheduledRebalanceMs = new AtomicLong(Long.MAX_VALUE);
     public Time time;
 }

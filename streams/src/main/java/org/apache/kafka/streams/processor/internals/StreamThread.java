@@ -283,14 +283,12 @@ public class StreamThread extends Thread {
     private final Admin adminClient;
     private final InternalTopologyBuilder builder;
 
-    private Handler streamsUncaughtExceptionHandler;
-    private ShutdownErrorHook shutdownErrorHook;
+    private StreamsUncaughtExceptionHandlerWrapper streamsUncaughtExceptionHandler;
+    private Runnable shutdownErrorHook;
     private AtomicInteger assignmentErrorCode;
-    public interface ShutdownErrorHook {
-        void shutdown();
-    }
+
     @FunctionalInterface
-    public interface Handler {
+    public interface StreamsUncaughtExceptionHandlerWrapper {
         boolean handle(Throwable throwable);
     }
 
@@ -307,8 +305,8 @@ public class StreamThread extends Thread {
                                       final StateDirectory stateDirectory,
                                       final StateRestoreListener userStateRestoreListener,
                                       final int threadIdx,
-                                      final ShutdownErrorHook shutdownErrorHook,
-                                      final Handler streamsUncaughtExceptionHandler) {
+                                      final Runnable shutdownErrorHook,
+                                      final StreamsUncaughtExceptionHandlerWrapper streamsUncaughtExceptionHandler) {
         final String threadId = clientId + "-StreamThread-" + threadIdx;
 
         final String logPrefix = String.format("stream-thread [%s] ", threadId);
@@ -319,7 +317,6 @@ public class StreamThread extends Thread {
         referenceContainer.adminClient = adminClient;
         referenceContainer.streamsMetadataState = streamsMetadataState;
         referenceContainer.time = time;
-        referenceContainer.assignmentErrorCode = new AtomicInteger();
 
         log.info("Creating restore consumer client");
         final Map<String, Object> restoreConsumerConfigs = config.getRestoreConsumerConfigs(getRestoreConsumerClientId(threadId));
@@ -455,8 +452,8 @@ public class StreamThread extends Thread {
                         final LogContext logContext,
                         final AtomicInteger assignmentErrorCode,
                         final AtomicLong nextProbingRebalanceMs,
-                        final ShutdownErrorHook shutdownErrorHook,
-                        final Handler streamsUncaughtExceptionHandler) {
+                        final Runnable shutdownErrorHook,
+                        final StreamsUncaughtExceptionHandlerWrapper streamsUncaughtExceptionHandler) {
         super(threadId);
         this.stateLock = new Object();
 
@@ -602,17 +599,17 @@ public class StreamThread extends Thread {
      *
      * @param streamsUncaughtExceptionHandler the user handler wrapped in shell to execute the action
      */
-    public void setStreamsUncaughtExceptionHandler(final Handler streamsUncaughtExceptionHandler) {
+    public void setStreamsUncaughtExceptionHandler(final StreamsUncaughtExceptionHandlerWrapper streamsUncaughtExceptionHandler) {
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
     }
 
     public void shutdownToError() {
-        shutdownErrorHook.shutdown();
+        shutdownErrorHook.run();
     }
 
     public void sendShutdownRequest(final AssignorError assignorError) {
         log.warn("Detected that shutdown was requested. " +
-                "The all clients in this app will now begin to shutdown");
+                "All clients in this app will now begin to shutdown");
         assignmentErrorCode.set(assignorError.code());
         mainConsumer.enforceRebalance();
     }

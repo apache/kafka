@@ -316,7 +316,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final Subscription subscription = entry.getValue();
             final SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
             final int usedVersion = info.version();
-            if (info.shutdownRequested() == AssignorError.SHUTDOWN_REQUESTED.code()) {
+            if (info.errorCode() == AssignorError.SHUTDOWN_REQUESTED.code()) {
                 shutdownRequested = true;
             }
 
