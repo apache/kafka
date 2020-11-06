@@ -1084,7 +1084,7 @@ public class KafkaStreams implements AutoCloseable {
 
     private void closeToError() {
         if (!setState(State.ERROR)) {
-            log.info("Can not transition to error from state " + state());
+            log.info("Skipping shutdown since we are already in " + state());
         } else {
             log.info("Transitioning to ERROR state");
             stateDirCleaner.shutdownNow();
