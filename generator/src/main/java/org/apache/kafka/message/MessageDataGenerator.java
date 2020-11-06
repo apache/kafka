@@ -1570,7 +1570,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                         headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
                         buffer.printf("_cache.setArraySizeInBytes(%s, _arraySize);%n",
                             field.camelCaseName());
-                        buffer.printf("_arraySize.addBytes(ByteUtils.sizeOfUnsignedVarint(_arraySize.totalSize()));%n");
+                        buffer.printf("_size.addBytes(ByteUtils.sizeOfUnsignedVarint(_arraySize.totalSize()));%n");
                         buffer.printf("_size.add(_arraySize);%n");
                     } else {
                         buffer.printf("_size.add(_arraySize);%n");

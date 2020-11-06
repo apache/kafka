@@ -19,7 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.network.Send;
-import org.apache.kafka.common.network.SendBuilder;
+import org.apache.kafka.common.protocol.SendBuilder;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.RecordsReadable;

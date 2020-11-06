@@ -37,7 +37,7 @@ public class ByteBufferChannelTest {
         buffer.limit(limit);
 
         ByteBufferChannel channel = new ByteBufferChannel(buffer.remaining());
-        ByteBuffer[] buffers = new ByteBuffer[] { buffer };
+        ByteBuffer[] buffers = new ByteBuffer[] {buffer};
         channel.write(buffers);
         channel.close();
         ByteBuffer channelBuffer = channel.buffer();

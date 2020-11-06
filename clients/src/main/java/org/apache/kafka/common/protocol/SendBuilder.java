@@ -14,12 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.network;
+package org.apache.kafka.common.protocol;
 
-import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.common.protocol.MessageSize;
-import org.apache.kafka.common.protocol.ObjectSerializationCache;
-import org.apache.kafka.common.protocol.Writable;
+import org.apache.kafka.common.network.ByteBufferSend;
+import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.MultiRecordsSend;
 import org.apache.kafka.common.requests.RequestHeader;

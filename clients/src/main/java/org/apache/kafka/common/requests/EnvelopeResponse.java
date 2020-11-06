@@ -18,7 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.EnvelopeResponseData;
 import org.apache.kafka.common.network.Send;
-import org.apache.kafka.common.network.SendBuilder;
+import org.apache.kafka.common.protocol.SendBuilder;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 

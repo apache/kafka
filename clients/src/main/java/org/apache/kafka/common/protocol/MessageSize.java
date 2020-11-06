@@ -19,7 +19,7 @@ package org.apache.kafka.common.protocol;
 /**
  * Helper class which facilitates zero-copy network transmission.
  *
- * See {@link org.apache.kafka.common.network.SendBuilder}
+ * See {@link SendBuilder}
  */
 public class MessageSize {
     private int totalSize = 0;
