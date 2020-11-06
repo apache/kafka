@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.integration;
 
+import java.time.Duration;
 import kafka.log.LogConfig;
 import kafka.utils.MockTime;
 import org.apache.kafka.clients.admin.Admin;
@@ -26,6 +27,8 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serdes.IntegerSerde;
+import org.apache.kafka.common.serialization.Serdes.StringSerde;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
@@ -33,7 +36,10 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
+import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
@@ -59,6 +65,8 @@ import java.util.concurrent.TimeUnit;
 
 import static java.time.Duration.ofMillis;
 import static java.time.Duration.ofSeconds;
+import static java.util.Collections.singletonList;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForCompletion;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -73,6 +81,7 @@ public class InternalTopicIntegrationTest {
 
     private static final String APP_ID = "internal-topics-integration-test";
     private static final String DEFAULT_INPUT_TOPIC = "inputTopic";
+    private static final String DEFAULT_INPUT_TABLE_TOPIC = "inputTable";
 
     private final MockTime mockTime = CLUSTER.time;
 
@@ -80,7 +89,7 @@ public class InternalTopicIntegrationTest {
 
     @BeforeClass
     public static void startKafkaCluster() throws InterruptedException {
-        CLUSTER.createTopics(DEFAULT_INPUT_TOPIC);
+        CLUSTER.createTopics(DEFAULT_INPUT_TOPIC,DEFAULT_INPUT_TABLE_TOPIC);
     }
 
     @Before
@@ -133,6 +142,37 @@ public class InternalTopicIntegrationTest {
         final Properties adminClientConfig = new Properties();
         adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         return Admin.create(adminClientConfig);
+    }
+
+    /*
+     * This test just ensures that that the assignor does not get stuck during partition number resolution
+     *  for internal repartition topics. See KAFKA-10689
+     */
+    @Test
+    public void shouldGetToRunningWithWindowedTableInFKJ() throws Exception {
+        final String appID = APP_ID + "-windowed-FKJ";
+        streamsProp.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
+
+        final StreamsBuilder streamsBuilder = new StreamsBuilder();
+        KStream<String, String> inputTopic = streamsBuilder.stream(DEFAULT_INPUT_TOPIC);
+        KTable<String, String> inputTable = streamsBuilder.table(DEFAULT_INPUT_TABLE_TOPIC);
+        inputTopic
+            .groupBy(
+                (k, v) -> k.toUpperCase().substring(0, 1),
+                Grouped.with("GroupName", Serdes.String(), Serdes.String())
+            )
+            .windowedBy(TimeWindows.of(Duration.ofMinutes(10)))
+            .aggregate(
+                () -> "",
+                (k, v, a) -> a + k)
+            .leftJoin(
+                inputTable,
+                (v) -> v,
+                (x, y) -> x + y
+            );
+
+        final KafkaStreams streams = new KafkaStreams(streamsBuilder.build(), streamsProp);
+        startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(60));
     }
 
     @Test
