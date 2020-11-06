@@ -261,4 +261,6 @@
               files="(LocalLogManager).java"/>
     <suppress checks="MethodLength"
               files="(LocalLogManager).java"/>
+    <suppress checks="CyclomaticComplexity"
+              files="(ReplicationControlManager).java"/>
 </suppressions>

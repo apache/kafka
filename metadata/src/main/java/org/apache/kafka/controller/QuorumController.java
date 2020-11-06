@@ -55,6 +55,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -513,16 +514,16 @@ public final class QuorumController implements Controller {
     private final ClusterControlManager clusterControl;
 
     /**
-     * An object which stores the controller's view of topics and partitions.
-     * This must be accessed only by the event queue thread.
-     */
-    private final ReplicationControlManager replicationControl;
-
-    /**
      * An object which stores the controller's view of the cluster features.
      * This must be accessed only by the event queue thread.
      */
     private final FeatureControlManager featureControl;
+
+    /**
+     * An object which stores the controller's view of topics and partitions.
+     * This must be accessed only by the event queue thread.
+     */
+    private final ReplicationControlManager replicationControl;
 
     /**
      * The interface that we use to mutate the Raft log.
@@ -566,15 +567,14 @@ public final class QuorumController implements Controller {
         this.snapshotRegistry = new SnapshotRegistry(logContext, -1);
         snapshotRegistry.createSnapshot(-1);
         this.purgatory = new ControllerPurgatory();
-        this.configurationControl =
-            new ConfigurationControlManager(snapshotRegistry, configDefs);
-        this.replicationControl =
-            new ReplicationControlManager(snapshotRegistry,
-                configurationControl);
+        this.configurationControl = new ConfigurationControlManager(snapshotRegistry,
+            configDefs);
         this.clusterControl =
             new ClusterControlManager(time, snapshotRegistry, 18000, 9000);
         this.featureControl =
             new FeatureControlManager(supportedFeatures, snapshotRegistry);
+        this.replicationControl = new ReplicationControlManager(snapshotRegistry,
+            new Random(), configurationControl, clusterControl);
         this.logManager = logManager;
         this.metaLogListener = new MetaLogListener();
         this.curClaimEpoch = -1L;
