@@ -90,7 +90,7 @@ public class FileBasedStateStore implements QuorumStateStore {
             }
 
             final short dataVersion = dataVersionNode.shortValue();
-            return QuorumStateDataJsonConverter.read(dataObject, dataVersion, true);
+            return QuorumStateDataJsonConverter.read(dataObject, dataVersion);
         }
     }
 
@@ -140,7 +140,7 @@ public class FileBasedStateStore implements QuorumStateStore {
                  new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))) {
             short version = state.highestSupportedVersion();
 
-            ObjectNode jsonState = (ObjectNode) QuorumStateDataJsonConverter.write(state, version, true);
+            ObjectNode jsonState = (ObjectNode) QuorumStateDataJsonConverter.write(state, version);
             jsonState.set(DATA_VERSION, new ShortNode(version));
             writer.write(jsonState.toString());
             writer.flush();

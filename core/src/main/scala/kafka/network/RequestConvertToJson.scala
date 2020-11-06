@@ -162,9 +162,16 @@ object RequestConvertToJson {
     }
   }
 
-  def requestHeaderNode(header: RequestHeader, verbose: Boolean): JsonNode = {
-    val node = RequestHeaderDataJsonConverter.write(header.data(), header.headerVersion(), verbose).asInstanceOf[ObjectNode]
+  def requestHeaderNode(header: RequestHeader): JsonNode = {
+    val node = RequestHeaderDataJsonConverter.write(header.data(), header.headerVersion(), false).asInstanceOf[ObjectNode]
     node.set("requestApiKeyName", new TextNode(header.apiKey.toString))
+    node
+  }
+
+  def requestDesc(header: RequestHeader, req: AbstractRequest): JsonNode = {
+    val node = new ObjectNode(JsonNodeFactory.instance)
+    node.set("requestHeader", requestHeaderNode(header))
+    node.set("request", request(req, false))
     node
   }
 
@@ -176,14 +183,12 @@ object RequestConvertToJson {
   }
 
   def requestDescMetrics(header: RequestHeader, res: Response, req: AbstractRequest,
-                         context: RequestContext, session: Session, verbose: Boolean,
+                         context: RequestContext, session: Session,
                          totalTimeMs: Double, requestQueueTimeMs: Double, apiLocalTimeMs: Double,
                          apiRemoteTimeMs: Double, apiThrottleTimeMs: Long, responseQueueTimeMs: Double,
                          responseSendTimeMs: Double, temporaryMemoryBytes: Long,
                          messageConversionsTimeMs: Double): JsonNode = {
-    val node = new ObjectNode(JsonNodeFactory.instance)
-    node.set("requestHeader", requestHeaderNode(header, verbose))
-    node.set("request", request(req, verbose))
+    val node = requestDesc(header, req).asInstanceOf[ObjectNode]
     node.set("response", res.responseLog.getOrElse(new TextNode("")))
     node.set("connection", new TextNode(context.connectionId))
     node.set("totalTimeMs", new DoubleNode(totalTimeMs))
@@ -201,13 +206,6 @@ object RequestConvertToJson {
       node.set("temporaryMemoryBytes", new LongNode(temporaryMemoryBytes))
     if (messageConversionsTimeMs > 0)
       node.set("messageConversionsTime", new DoubleNode(messageConversionsTimeMs))
-    node
-  }
-
-  def requestDesc(header: RequestHeader, req: AbstractRequest, verbose: Boolean): JsonNode = {
-    val node = new ObjectNode(JsonNodeFactory.instance)
-    node.set("requestHeader", requestHeaderNode(header, verbose))
-    node.set("request", request(req, verbose))
     node
   }
 
@@ -245,7 +243,7 @@ object RequestConvertToJson {
   /**
    * Temporary until switch to use the generated schemas.
    */
-  def produceRequestNode(request: ProduceRequest, version: Short, verbose: Boolean): JsonNode = {
+  def produceRequestNode(request: ProduceRequest, version: Short, serializeRecords: Boolean): JsonNode = {
     val node = new ObjectNode(JsonNodeFactory.instance)
     if (version >= 3) {
       if (request.transactionalId == null) {
@@ -265,10 +263,14 @@ object RequestConvertToJson {
       partitions.forEach { (partitionIndex, partitionData) =>
         val partitionNode = new ObjectNode(JsonNodeFactory.instance)
         partitionNode.set("partitionIndex", new IntNode(partitionIndex))
-        if (partitionData == null)
+        if (partitionData == null) {
           partitionNode.set("records", NullNode.instance)
-        else
-          partitionNode.set("records", new BinaryNode(util.Arrays.copyOf(partitionData.buffer().array(), partitionData.validBytes())))
+        } else {
+          if (serializeRecords)
+            partitionNode.set("records", new BinaryNode(util.Arrays.copyOf(partitionData.buffer().array(), partitionData.validBytes())))
+          else
+            partitionNode.set("records", new IntNode(partitionData.validBytes()))
+        }
         partitionsArray.add(partitionNode)
       }
       topicNode.set("partitions", partitionsArray)

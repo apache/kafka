@@ -217,6 +217,6 @@ public class MetadataRequestBenchmark {
 
     @Benchmark
     public String testRequestToJson() {
-        return RequestConvertToJson.requestDesc(allTopicMetadataRequest.header(), allTopicMetadataRequest.loggableRequest(), false).toString();
+        return RequestConvertToJson.requestDesc(allTopicMetadataRequest.header(), allTopicMetadataRequest.loggableRequest()).toString();
     }
 }

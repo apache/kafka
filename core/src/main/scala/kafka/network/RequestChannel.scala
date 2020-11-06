@@ -202,7 +202,7 @@ object RequestChannel extends Logging {
       }
     }
 
-    trace(s"Processor $processor received request: ${RequestConvertToJson.requestDesc(header, loggableRequest, true)}")
+    trace(s"Processor $processor received request: ${RequestConvertToJson.requestDesc(header, loggableRequest)}")
 
     def requestThreadTimeNanos: Long = {
       if (apiLocalCompleteTimeNanos == -1L) apiLocalCompleteTimeNanos = Time.SYSTEM.nanoseconds
@@ -263,9 +263,8 @@ object RequestChannel extends Logging {
       recordNetworkThreadTimeCallback.foreach(record => record(networkThreadTimeNanos))
 
       if (isRequestLoggingEnabled) {
-        val detailsEnabled = requestLogger.underlying.isTraceEnabled
         val desc = RequestConvertToJson.requestDescMetrics(header, response, loggableRequest,
-          context, session, detailsEnabled,
+          context, session,
           totalTimeMs, requestQueueTimeMs, apiLocalTimeMs,
           apiRemoteTimeMs, apiThrottleTimeMs, responseQueueTimeMs,
           responseSendTimeMs, temporaryMemoryBytes,

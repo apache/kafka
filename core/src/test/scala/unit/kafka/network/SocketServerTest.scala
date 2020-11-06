@@ -25,8 +25,9 @@ import java.nio.charset.StandardCharsets
 import java.util
 import java.util.concurrent.{CompletableFuture, ConcurrentLinkedQueue, Executors, TimeUnit}
 import java.util.{Properties, Random}
-import com.yammer.metrics.core.{Gauge, Meter}
 
+import com.fasterxml.jackson.databind.node.{JsonNodeFactory, ObjectNode, TextNode}
+import com.yammer.metrics.core.{Gauge, Meter}
 import javax.net.ssl._
 import kafka.metrics.KafkaYammerMetrics
 import kafka.security.CredentialProvider
@@ -677,7 +678,7 @@ class SocketServerTest {
       server.dataPlaneRequestChannel.sendResponse(response)
     }
     val throttledChannel = new ThrottledChannel(request, new MockTime(), 100, channelThrottlingCallback)
-    val headerLog = RequestConvertToJson.requestHeaderNode(request.header, true)
+    val headerLog = RequestConvertToJson.requestHeaderNode(request.header)
     val response =
       if (!noOpResponse)
         new RequestChannel.SendResponse(request, send, Some(headerLog), None)

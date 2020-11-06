@@ -54,7 +54,7 @@ class RequestChannelTest {
       val loggableAlterConfigs = alterConfigs.loggableRequest.asInstanceOf[AlterConfigsRequest]
       val loggedConfig = loggableAlterConfigs.configs.get(resource)
       assertEquals(expectedValues, toMap(loggedConfig))
-      val alterConfigsDesc = RequestConvertToJson.requestDesc(alterConfigs.header, alterConfigs.loggableRequest, true).toString
+      val alterConfigsDesc = RequestConvertToJson.requestDesc(alterConfigs.header, alterConfigs.loggableRequest).toString
       assertFalse(s"Sensitive config logged $alterConfigsDesc", alterConfigsDesc.contains(sensitiveValue))
     }
 
@@ -118,7 +118,7 @@ class RequestChannelTest {
       val loggableAlterConfigs = alterConfigs.loggableRequest.asInstanceOf[IncrementalAlterConfigsRequest]
       val loggedConfig = loggableAlterConfigs.data.resources.find(resource.`type`.id, resource.name).configs
       assertEquals(expectedValues, toMap(loggedConfig))
-      val alterConfigsDesc = RequestConvertToJson.requestDesc(alterConfigs.header, alterConfigs.loggableRequest, true).toString
+      val alterConfigsDesc = RequestConvertToJson.requestDesc(alterConfigs.header, alterConfigs.loggableRequest).toString
       assertFalse(s"Sensitive config logged $alterConfigsDesc", alterConfigsDesc.contains(sensitiveValue))
     }
 
