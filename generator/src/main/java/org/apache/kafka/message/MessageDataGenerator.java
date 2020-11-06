@@ -974,7 +974,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                                             field.camelCaseName());
                                     } else if (field.type().isArray()) {
                                         headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
-                                        buffer.printf("_writable.writeUnsignedVarint(_cache.getArraySizeInBytes(this.%s).totalSize());%n",
+                                        buffer.printf("_writable.writeUnsignedVarint(_cache.getArraySizeInBytes(this.%s));%n",
                                             field.camelCaseName());
                                         generateVariableLengthWriter(fieldFlexibleVersions(field),
                                             field.camelCaseName(),
@@ -1338,9 +1338,8 @@ public final class MessageDataGenerator implements MessageClassGenerator {
         headerGenerator.addImport(MessageGenerator.OBJECT_SERIALIZATION_CACHE_CLASS);
         headerGenerator.addImport(MessageGenerator.MESSAGE_SIZE_CLASS);
         buffer.printf("@Override%n");
-        buffer.printf("public MessageSize messageSize(ObjectSerializationCache _cache, short _version) {%n");
+        buffer.printf("public void messageSize(MessageSize _size, ObjectSerializationCache _cache, short _version) {%n");
         buffer.incrementIndent();
-        buffer.printf("MessageSize _size = new MessageSize();%n");
         buffer.printf("int _numTaggedFields = 0;%n");
         VersionConditional.forVersions(parentVersions, struct.versions()).
             allowMembershipCheckAlwaysFalse(false).
@@ -1386,7 +1385,6 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                 buffer.printf("_size.addBytes(ByteUtils.sizeOfUnsignedVarint(_numTaggedFields));%n");
             }).
             generate(buffer);
-        buffer.printf("return _size;%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
     }
@@ -1403,31 +1401,31 @@ public final class MessageDataGenerator implements MessageClassGenerator {
             generateStringToBytes(fieldName);
             VersionConditional.forVersions(flexibleVersions, versions).
                 ifNotMember(__ -> {
-                    buffer.printf("_arraySize.addBytes(_stringBytes.length + 2);%n");
+                    buffer.printf("_size.addBytes(_stringBytes.length + 2);%n");
                 }).
                 ifMember(__ -> {
                     headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
-                    buffer.printf("_arraySize.addBytes(_stringBytes.length + " +
+                    buffer.printf("_size.addBytes(_stringBytes.length + " +
                         "ByteUtils.sizeOfUnsignedVarint(_stringBytes.length + 1));%n");
                 }).
                 generate(buffer);
         } else if (type instanceof FieldType.BytesFieldType) {
             // TODO: Should we have a check for zerocopy here?
 
-            buffer.printf("_arraySize.addBytes(%s.length);%n", fieldName);
+            buffer.printf("_size.addBytes(%s.length);%n", fieldName);
             VersionConditional.forVersions(flexibleVersions, versions).
                 ifNotMember(__ -> {
-                    buffer.printf("_arraySize.addBytes(4);%n");
+                    buffer.printf("_size.addBytes(4);%n");
                 }).
                 ifMember(__ -> {
                     headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
-                    buffer.printf("_arraySize.addBytes(" +
+                    buffer.printf("_size.addBytes(" +
                             "ByteUtils.sizeOfUnsignedVarint(%s.length + 1));%n",
                         fieldName);
                 }).
                 generate(buffer);
         } else if (type instanceof FieldType.StructType) {
-            buffer.printf("_arraySize.add(%s.messageSize(_cache, _version));%n", fieldName);
+            buffer.printf("%s.messageSize(_size, _cache, _version);%n", fieldName);
         } else {
             throw new RuntimeException("Unsupported type " + type);
         }
@@ -1534,21 +1532,21 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                         }).
                         generate(buffer);
                 } else if (field.type().isArray()) {
-                    buffer.printf("MessageSize _arraySize = new MessageSize();%n");
+                    buffer.printf("int _sizeBeforeArray = _size.totalSize();%n");
                     VersionConditional.forVersions(fieldFlexibleVersions(field), possibleVersions).
                         ifMember(__ -> {
                             headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
-                            buffer.printf("_arraySize.addBytes(ByteUtils.sizeOfUnsignedVarint(%s.size() + 1));%n",
+                            buffer.printf("_size.addBytes(ByteUtils.sizeOfUnsignedVarint(%s.size() + 1));%n",
                                 field.camelCaseName());
                         }).
                         ifNotMember(__ -> {
-                            buffer.printf("_arraySize.addBytes(4);%n");
+                            buffer.printf("_size.addBytes(4);%n");
                         }).
                         generate(buffer);
                     FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
                     FieldType elementType = arrayType.elementType();
                     if (elementType.fixedLength().isPresent()) {
-                        buffer.printf("_arraySize.addBytes(%s.size() * %d);%n",
+                        buffer.printf("_size.addBytes(%s.size() * %d);%n",
                             field.camelCaseName(),
                             elementType.fixedLength().get());
                     } else if (elementType instanceof FieldType.ArrayType) {
@@ -1568,42 +1566,40 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                     }
                     if (tagged) {
                         headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
+                        buffer.printf("int _arraySize = _size.totalSize() - _sizeBeforeArray;%n");
                         buffer.printf("_cache.setArraySizeInBytes(%s, _arraySize);%n",
                             field.camelCaseName());
-                        buffer.printf("_size.addBytes(ByteUtils.sizeOfUnsignedVarint(_arraySize.totalSize()));%n");
-                        buffer.printf("_size.add(_arraySize);%n");
-                    } else {
-                        buffer.printf("_size.add(_arraySize);%n");
+                        buffer.printf("_size.addBytes(ByteUtils.sizeOfUnsignedVarint(_arraySize));%n");
                     }
                 } else if (field.type().isBytes()) {
-                    buffer.printf("MessageSize _bytesSize = new MessageSize();%n");
+                    buffer.printf("int _sizeBeforeBytes = _size.totalSize();%n");
                     if (field.zeroCopy()) {
-                        buffer.printf("_bytesSize.addZeroCopyBytes(%s.remaining());%n", field.camelCaseName());
+                        buffer.printf("_size.addZeroCopyBytes(%s.remaining());%n", field.camelCaseName());
                     } else {
-                        buffer.printf("_bytesSize.addBytes(%s.length);%n", field.camelCaseName());
+                        buffer.printf("_size.addBytes(%s.length);%n", field.camelCaseName());
                     }
                     VersionConditional.forVersions(fieldFlexibleVersions(field), possibleVersions).
                         ifMember(__ -> {
                             headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
                             if (field.zeroCopy()) {
-                                buffer.printf("_bytesSize.addBytes(" +
+                                buffer.printf("_size.addBytes(" +
                                         "ByteUtils.sizeOfUnsignedVarint(%s.remaining() + 1));%n", field.camelCaseName());
                             } else {
-                                buffer.printf("_bytesSize.addBytes(ByteUtils.sizeOfUnsignedVarint(%s.length + 1));%n",
+                                buffer.printf("_size.addBytes(ByteUtils.sizeOfUnsignedVarint(%s.length + 1));%n",
                                     field.camelCaseName());
                             }
                         }).
                         ifNotMember(__ -> {
-                            buffer.printf("_bytesSize.addBytes(4);%n");
+                            buffer.printf("_size.addBytes(4);%n");
                         }).
                         generate(buffer);
                     if (tagged) {
                         headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
-                        buffer.printf("_size.addBytes(ByteUtils.sizeOfUnsignedVarint(_bytesSize.totalSize()));%n");
+                        buffer.printf("int _bytesSize = _size.totalSize() - _sizeBeforeBytes;%n");
+                        buffer.printf("_size.addBytes(ByteUtils.sizeOfUnsignedVarint(_bytesSize));%n");
                     }
-                    buffer.printf("_size.add(_bytesSize);%n");
                 } else if (field.type().isRecords()) {
-                    buffer.printf("_size.addBytes(%s.sizeInBytes());%n", field.camelCaseName());
+                    buffer.printf("_size.addZeroCopyBytes(%s.sizeInBytes());%n", field.camelCaseName());
                     VersionConditional.forVersions(fieldFlexibleVersions(field), possibleVersions).
                         ifMember(__ -> {
                             headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
@@ -1615,11 +1611,13 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                         }).
                         generate(buffer);
                 } else if (field.type().isStruct()) {
-                    buffer.printf("MessageSize _structSize = this.%s.messageSize(_cache, _version);%n", field.camelCaseName());
+                    buffer.printf("int _sizeBeforeStruct = _size.totalSize();%n", field.camelCaseName());
+                    buffer.printf("this.%s.messageSize(_size, _cache, _version);%n", field.camelCaseName());
+                    buffer.printf("int _structSize = _size.totalSize() - _sizeBeforeStruct;%n", field.camelCaseName());
+
                     if (tagged) {
-                        buffer.printf("_size.addBytes(ByteUtils.sizeOfUnsignedVarint(_structSize.totalSize()));%n");
+                        buffer.printf("_size.addBytes(ByteUtils.sizeOfUnsignedVarint(_structSize));%n");
                     }
-                    buffer.printf("_size.add(_structSize);%n");
                 } else {
                     throw new RuntimeException("unhandled type " + field.type());
                 }

@@ -48,10 +48,12 @@ public interface Message {
      *                      by this software.
      */
     default int size(ObjectSerializationCache cache, short version) {
-        return messageSize(cache, version).totalSize();
+        MessageSize size = new MessageSize();
+        messageSize(size, cache, version);
+        return size.totalSize();
     }
 
-    MessageSize messageSize(ObjectSerializationCache cache, short version);
+    void messageSize(MessageSize size, ObjectSerializationCache cache, short version);
 
     /**
      * Writes out this message to the given Writable.

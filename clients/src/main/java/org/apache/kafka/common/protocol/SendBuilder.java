@@ -176,9 +176,12 @@ public class SendBuilder implements Writable {
         short apiVersion
     ) {
         ObjectSerializationCache serializationCache = new ObjectSerializationCache();
-        MessageSize messageSize = apiMessage.messageSize(serializationCache, apiVersion);
+        MessageSize messageSize = new MessageSize();
 
-        int totalSize = header.size(serializationCache, headerVersion) + messageSize.totalSize();
+        header.messageSize(messageSize, serializationCache, headerVersion);
+        apiMessage.messageSize(messageSize, serializationCache, apiVersion);
+
+        int totalSize = messageSize.totalSize();
         int sizeExcludingZeroCopyFields = totalSize - messageSize.zeroCopySize();
 
         SendBuilder builder = new SendBuilder(destination, sizeExcludingZeroCopyFields + 4);
