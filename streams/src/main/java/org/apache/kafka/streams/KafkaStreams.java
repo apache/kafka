@@ -81,6 +81,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
@@ -156,6 +157,10 @@ public class KafkaStreams implements AutoCloseable {
     private final ProcessorTopology taskTopology;
     private final ProcessorTopology globalTaskTopology;
     private Long totalCacheSize;
+    private final UUID processId;
+    private final InternalTopologyBuilder internalTopologyBuilder;
+    private final KafkaClientSupplier clientSupplier;
+    private final DelegatingStateRestoreListener delegatingStateRestoreListener;
 
     GlobalStreamThread globalStreamThread;
     private KafkaStreams.StateListener stateListener;
@@ -661,7 +666,7 @@ public class KafkaStreams implements AutoCloseable {
         this.config = config;
         this.time = time;
         // The application ID is a required config and hence should always have value
-        final UUID processId = UUID.randomUUID();
+        processId = UUID.randomUUID();
         final String userClientId = config.getString(StreamsConfig.CLIENT_ID_CONFIG);
         final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         if (userClientId.length() <= 0) {
@@ -669,10 +674,10 @@ public class KafkaStreams implements AutoCloseable {
         } else {
             clientId = userClientId;
         }
-
+        this.internalTopologyBuilder = internalTopologyBuilder;
         final LogContext logContext = new LogContext(String.format("stream-client [%s] ", clientId));
         this.log = logContext.logger(getClass());
-
+        this.clientSupplier = clientSupplier;
         final MetricConfig metricConfig = new MetricConfig()
             .samples(config.getInt(StreamsConfig.METRICS_NUM_SAMPLES_CONFIG))
             .recordLevel(Sensor.RecordingLevel.forName(config.getString(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG)))
@@ -740,7 +745,7 @@ public class KafkaStreams implements AutoCloseable {
             throw new StreamsException(fatal);
         }
 
-        final StateRestoreListener delegatingStateRestoreListener = new DelegatingStateRestoreListener();
+        delegatingStateRestoreListener = new DelegatingStateRestoreListener();
         GlobalStreamThread.State globalThreadState = null;
         if (hasGlobalTopology) {
             final String globalThreadId = clientId + "-GlobalStreamThread";
@@ -801,6 +806,47 @@ public class KafkaStreams implements AutoCloseable {
 
         maybeWarnAboutCodeInRocksDBConfigSetter(log, config);
         rocksDBMetricsRecordingService = maybeCreateRocksDBMetricsRecordingService(clientId, config);
+    }
+
+    /**
+     * Adds and starts a stream thread in addition to the stream threads that are already running in this
+     * Kafka Streams client.
+     *
+     * Since the number of stream threads increases, the sizes of the caches in the new stream thread
+     * and the existing stream threads are adapted so that the sum of the cache sizes over all stream
+     * threads does not exceed the total cache size specified in configuration
+     * {@code cache.max.bytes.buffering}.
+     *
+     * Stream threads can only be added if this Kafka Streams client is in state RUNNING or REBALANCING.
+     *
+     * @return name of the added stream thread or empty if a new stream thread could not be added
+     */
+    public Optional<String> addStreamThread() {
+        synchronized (stateLock) {
+            if (state == State.RUNNING || state == State.REBALANCING) {
+                final int threadIdx = threads.size() + 1;
+                final long cacheSizePerThread = getCacheSizePerThread(threadIdx);
+                resizeThreadCache(threadIdx);
+                final StreamThread streamThread = StreamThread.create(
+                        internalTopologyBuilder,
+                        config,
+                        clientSupplier,
+                        adminClient,
+                        processId,
+                        clientId,
+                        streamsMetrics,
+                        time,
+                        streamsMetadataState,
+                        cacheSizePerThread,
+                        stateDirectory,
+                        delegatingStateRestoreListener,
+                        threadIdx);
+                threads.add(streamThread);
+                return Optional.of(streamThread.getName());
+            } else {
+                return Optional.empty();
+            }
+        }
     }
 
     private long getCacheSizePerThread(final int numStreamThreads) {
