@@ -112,7 +112,7 @@ public final class MessageGenerator {
 
     static final String OBJECT_SERIALIZATION_CACHE_CLASS = "org.apache.kafka.common.protocol.ObjectSerializationCache";
 
-    static final String MESSAGE_SIZE_CLASS = "org.apache.kafka.common.protocol.MessageSize";
+    static final String MESSAGE_SIZE_ACCUMULATOR_CLASS = "org.apache.kafka.common.protocol.MessageSizeAccumulator";
 
     static final String RAW_TAGGED_FIELD_CLASS = "org.apache.kafka.common.protocol.types.RawTaggedField";
 

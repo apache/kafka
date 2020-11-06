@@ -35,14 +35,6 @@ public interface Writable {
     void writeVarint(int i);
     void writeVarlong(long i);
 
-    default void writeApiMessage(
-        ApiMessage message,
-        ObjectSerializationCache serializationCache,
-        short version
-    ) {
-        message.write(this, serializationCache, version);
-    }
-
     default void writeRecords(BaseRecords records) {
         if (records instanceof MemoryRecords) {
             MemoryRecords memRecords = (MemoryRecords) records;

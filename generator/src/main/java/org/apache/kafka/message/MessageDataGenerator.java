@@ -1336,9 +1336,9 @@ public final class MessageDataGenerator implements MessageClassGenerator {
         Versions parentVersions
     ) {
         headerGenerator.addImport(MessageGenerator.OBJECT_SERIALIZATION_CACHE_CLASS);
-        headerGenerator.addImport(MessageGenerator.MESSAGE_SIZE_CLASS);
+        headerGenerator.addImport(MessageGenerator.MESSAGE_SIZE_ACCUMULATOR_CLASS);
         buffer.printf("@Override%n");
-        buffer.printf("public void messageSize(MessageSize _size, ObjectSerializationCache _cache, short _version) {%n");
+        buffer.printf("public void addSize(MessageSizeAccumulator _size, ObjectSerializationCache _cache, short _version) {%n");
         buffer.incrementIndent();
         buffer.printf("int _numTaggedFields = 0;%n");
         VersionConditional.forVersions(parentVersions, struct.versions()).
@@ -1425,7 +1425,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                 }).
                 generate(buffer);
         } else if (type instanceof FieldType.StructType) {
-            buffer.printf("%s.messageSize(_size, _cache, _version);%n", fieldName);
+            buffer.printf("%s.addSize(_size, _cache, _version);%n", fieldName);
         } else {
             throw new RuntimeException("Unsupported type " + type);
         }
@@ -1612,7 +1612,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                         generate(buffer);
                 } else if (field.type().isStruct()) {
                     buffer.printf("int _sizeBeforeStruct = _size.totalSize();%n", field.camelCaseName());
-                    buffer.printf("this.%s.messageSize(_size, _cache, _version);%n", field.camelCaseName());
+                    buffer.printf("this.%s.addSize(_size, _cache, _version);%n", field.camelCaseName());
                     buffer.printf("int _structSize = _size.totalSize() - _sizeBeforeStruct;%n", field.camelCaseName());
 
                     if (tagged) {

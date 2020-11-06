@@ -17,11 +17,9 @@
 package org.apache.kafka.common.protocol;
 
 /**
- * Helper class which facilitates zero-copy network transmission.
- *
- * See {@link SendBuilder}
+ * Helper class which facilitates zero-copy network transmission. See {@link SendBuilder}.
  */
-public class MessageSize {
+public class MessageSizeAccumulator {
     private int totalSize = 0;
     private int zeroCopySize = 0;
 
@@ -54,7 +52,7 @@ public class MessageSize {
         totalSize += size;
     }
 
-    public void add(MessageSize size) {
+    public void add(MessageSizeAccumulator size) {
         this.totalSize += size.totalSize;
         this.zeroCopySize += size.zeroCopySize;
     }
