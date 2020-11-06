@@ -17,6 +17,7 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 
 import java.util.Objects;
@@ -24,6 +25,10 @@ import java.util.Objects;
 class ResultOrError<T> {
     private final ApiError error;
     private final T result;
+
+    public ResultOrError(Errors error, String message) {
+        this(new ApiError(error, message));
+    }
 
     public ResultOrError(ApiError error) {
         Objects.requireNonNull(error);
