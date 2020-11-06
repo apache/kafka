@@ -14,7 +14,7 @@
 // limitations under the License.
 
 {
-  "apiKey": 10,
+  "apiKey": 12,
   "type": "metadata",
   "name": "FeatureLevelRecord",
   "validVersions": "0",

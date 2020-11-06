@@ -14,7 +14,7 @@
 // limitations under the License.
 
 {
-  "apiKey": 1,
+  "apiKey": 2,
   "type": "metadata",
   "name": "TopicRecord",
   "validVersions": "0",

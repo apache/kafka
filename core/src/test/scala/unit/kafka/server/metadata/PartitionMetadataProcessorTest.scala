@@ -25,8 +25,8 @@ import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.server.{ClientQuotaManager, ClientRequestQuotaManager, ConfigHandler, ControllerMutationQuotaManager, KafkaConfig, MetadataCache, QuotaFactory, ReplicaManager}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
-import org.apache.kafka.common.metadata.BrokerRecord.BrokerEndpointCollection
-import org.apache.kafka.common.metadata.{BrokerRecord, ConfigRecord, TopicRecord}
+import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpointCollection
+import org.apache.kafka.common.metadata.{RegisterBrokerRecord, ConfigRecord, TopicRecord}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiMessage
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -44,7 +44,7 @@ import scala.jdk.CollectionConverters._
 class PartitionMetadataProcessorTest {
 
   @Test
-  def testBrokerRecordsAndTopicRecords(): Unit = {
+  def testRegisterBrokerRecordsAndTopicRecords(): Unit = {
     val kafkaConfig = mock(classOf[KafkaConfig])
     val clusterId = "clusterId"
     val groupCoordinator = mock(classOf[GroupCoordinator])
@@ -83,9 +83,9 @@ class PartitionMetadataProcessorTest {
     val securityProtocolId0: Short = 0
     val securityProtocol0 = SecurityProtocol.values()(securityProtocolId0)
     val brokerEndpoints0 = new BrokerEndpointCollection()
-    val endpoint0 = new BrokerRecord.BrokerEndpoint().setHost(host0).setName(listener0).setPort(port0).setSecurityProtocol(securityProtocolId0)
+    val endpoint0 = new RegisterBrokerRecord.BrokerEndpoint().setHost(host0).setName(listener0).setPort(port0).setSecurityProtocol(securityProtocolId0)
     brokerEndpoints0.add(endpoint0)
-    val brokerRecord0 = new BrokerRecord().setBrokerId(id0).setBrokerEpoch(0).setEndPoints(brokerEndpoints0).setRack(rack0)
+    val brokerRecord0 = new RegisterBrokerRecord().setBrokerId(id0).setBrokerEpoch(0).setEndPoints(brokerEndpoints0).setRack(rack0)
 
     val host1 = "host1"
     val listener1 = "listener1"
@@ -95,9 +95,9 @@ class PartitionMetadataProcessorTest {
     val securityProtocolId1: Short = 1
     val securityProtocol1 = SecurityProtocol.values()(securityProtocolId1)
     val brokerEndpoints1 = new BrokerEndpointCollection()
-    val endpoint1 = new BrokerRecord.BrokerEndpoint().setHost(host1).setName(listener1).setPort(port1).setSecurityProtocol(securityProtocolId1)
+    val endpoint1 = new RegisterBrokerRecord.BrokerEndpoint().setHost(host1).setName(listener1).setPort(port1).setSecurityProtocol(securityProtocolId1)
     brokerEndpoints1.add(endpoint1)
-    val brokerRecord1 = new BrokerRecord().setBrokerId(id1).setBrokerEpoch(1).setEndPoints(brokerEndpoints1).setRack(rack1)
+    val brokerRecord1 = new RegisterBrokerRecord().setBrokerId(id1).setBrokerEpoch(1).setEndPoints(brokerEndpoints1).setRack(rack1)
 
     // there should be no change until we process the message
     // confirm no broker-related changes

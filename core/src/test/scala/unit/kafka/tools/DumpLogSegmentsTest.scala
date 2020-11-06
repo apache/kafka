@@ -27,7 +27,7 @@ import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.tools.DumpLogSegments.TimeIndexDumpErrors
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.UUID
-import org.apache.kafka.common.metadata.{BrokerRecord, IsrChangeRecord, TopicRecord}
+import org.apache.kafka.common.metadata.{RegisterBrokerRecord, IsrChangeRecord, TopicRecord}
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, ObjectSerializationCache}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
@@ -186,8 +186,8 @@ class DumpLogSegmentsTest {
     val log = LogTest.createLog(logDir, logConfig, new BrokerTopicStats, mockTime.scheduler, mockTime)
 
     val metadataRecords = Seq(
-      new BrokerRecord().setBrokerId(0).setBrokerEpoch(10),
-      new BrokerRecord().setBrokerId(1).setBrokerEpoch(20),
+      new RegisterBrokerRecord().setBrokerId(0).setBrokerEpoch(10),
+      new RegisterBrokerRecord().setBrokerId(1).setBrokerEpoch(20),
       new TopicRecord().setName("test-topic").setDeleting(false).setTopicId(UUID.randomUUID()),
       new IsrChangeRecord().setTopicId(UUID.randomUUID()).setLeader(1).setPartitionId(0).setLeaderEpoch(100).setIsr(util.Arrays.asList(0, 1, 2))
     )

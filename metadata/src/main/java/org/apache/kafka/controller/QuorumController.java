@@ -29,10 +29,10 @@ import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
-import org.apache.kafka.common.metadata.BrokerRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.MetadataRecordType;
+import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.ApiMessageAndVersion;
 import org.apache.kafka.common.protocol.Errors;
@@ -452,8 +452,8 @@ public final class QuorumController implements Controller {
     private void replay(ApiMessage message) {
         MetadataRecordType type = MetadataRecordType.fromId(message.apiKey());
         switch (type) {
-            case BROKER_RECORD:
-                clusterControl.replay((BrokerRecord) message);
+            case REGISTER_BROKER_RECORD:
+                clusterControl.replay((RegisterBrokerRecord) message);
                 break;
             case FENCE_BROKER_RECORD:
                 clusterControl.replay((FenceBrokerRecord) message);

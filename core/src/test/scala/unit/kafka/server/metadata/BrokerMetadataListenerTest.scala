@@ -21,7 +21,7 @@ import com.yammer.metrics.core.{Gauge, Histogram, MetricName}
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import org.apache.kafka.common.metadata.BrokerRecord
+import org.apache.kafka.common.metadata.RegisterBrokerRecord
 import org.apache.kafka.common.protocol.ApiMessage
 import org.apache.kafka.common.utils.MockTime
 import org.junit.Assert.{assertEquals, assertTrue, fail}
@@ -68,7 +68,7 @@ class BrokerMetadataListenerTest {
     val processor = new MockMetadataProcessor
     val listener = new BrokerMetadataListener(mock(classOf[KafkaConfig]), new MockTime(), List(processor))
 
-    val metadataLogEvent = MetadataLogEvent(List[ApiMessage](new BrokerRecord()).asJava, 1)
+    val metadataLogEvent = MetadataLogEvent(List[ApiMessage](new RegisterBrokerRecord()).asJava, 1)
     listener.put(metadataLogEvent)
     listener.drain()
     assertEquals(List(metadataLogEvent), processor.processed.toList)
@@ -114,7 +114,7 @@ class BrokerMetadataListenerTest {
     val listener = new BrokerMetadataListener(mock(classOf[KafkaConfig]), new MockTime(), List(processor))
     assertEquals(expectedInitialMetadataOffset, listener.currentMetadataOffset())
 
-    val metadataLogEvent = MetadataLogEvent(List[ApiMessage](new BrokerRecord()).asJava, -1)
+    val metadataLogEvent = MetadataLogEvent(List[ApiMessage](new RegisterBrokerRecord()).asJava, -1)
     listener.put(metadataLogEvent)
 
     intercept[IllegalStateException] {
@@ -193,7 +193,7 @@ class BrokerMetadataListenerTest {
       eventQueueTimeoutMs = 50)
     val histogram = queueTimeHistogram()
 
-    val metadataLogEvent = MetadataLogEvent(List[ApiMessage](new BrokerRecord()).asJava, 1)
+    val metadataLogEvent = MetadataLogEvent(List[ApiMessage](new RegisterBrokerRecord()).asJava, 1)
     listener.put(metadataLogEvent)
     listener.drain()
     assertEquals(1, histogram.count())

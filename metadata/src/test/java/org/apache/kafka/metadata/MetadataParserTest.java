@@ -17,9 +17,9 @@
 
 package org.apache.kafka.metadata;
 
-import org.apache.kafka.common.metadata.BrokerRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
+import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.junit.jupiter.api.Test;
@@ -45,7 +45,7 @@ public class MetadataParserTest {
      */
     @Test
     public void testRoundTrips() {
-        testRoundTrip(new BrokerRecord().setBrokerId(1).setBrokerEpoch(2), (short) 0);
+        testRoundTrip(new RegisterBrokerRecord().setBrokerId(1).setBrokerEpoch(2), (short) 0);
         testRoundTrip(new ConfigRecord().setName("my.config.value").
             setResourceName("foo").setResourceType((byte) 0).setValue("bar"), (short) 0);
     }
@@ -136,7 +136,7 @@ public class MetadataParserTest {
      */
     @Test
     public void testParsingRecordWithGarbageAtEnd() {
-        BrokerRecord message = new BrokerRecord().setBrokerId(1).setBrokerEpoch(2);
+        RegisterBrokerRecord message = new RegisterBrokerRecord().setBrokerId(1).setBrokerEpoch(2);
         ObjectSerializationCache cache = new ObjectSerializationCache();
         int size = MetadataParser.size(message, (short) 0, cache);
         ByteBuffer buffer = ByteBuffer.allocate(size + 1);

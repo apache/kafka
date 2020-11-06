@@ -32,7 +32,7 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
-import org.apache.kafka.common.metadata.{BrokerRecord, ConfigRecord, FenceBrokerRecord, IsrChangeRecord, PartitionRecord, RemoveTopicRecord, TopicRecord, UnfenceBrokerRecord}
+import org.apache.kafka.common.metadata.{ConfigRecord, FenceBrokerRecord, IsrChangeRecord, PartitionRecord, RegisterBrokerRecord, RemoveTopicRecord, TopicRecord, UnfenceBrokerRecord}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.LeaderAndIsrRequest
@@ -51,13 +51,13 @@ import scala.jdk.CollectionConverters._
  *
  * Out-of-band appearance of "register local broker" message from broker heartbeat:
  *     Set the local broker's epoch in the metadata.  We do not yet know the local broker's endpoints/features
- *     (we won't see those until we see the corresponding BrokerRecord in the metadata log).
+ *     (we won't see those until we see the corresponding RegisterBrokerRecord in the metadata log).
  *
  * Out-of-band appearance of "fence local broker" message from broker heartbeat:
  *     Mark the local broker as not being alive, and remove it from all partition leadership (leader will be unknown)
  *     and ISRs (don't stop existing replica fetchers, if any).
  *
- * Appearance of BrokerRecord in the metadata log:
+ * Appearance of RegisterBrokerRecord in the metadata log:
  *     Update metadata about the indicated broker and its endpoints, and mark the broker as being alive.
  *
  * Appearance of FenceBrokerRecord in the metadata log:
@@ -390,7 +390,7 @@ class PartitionMetadataProcessor(kafkaConfig: KafkaConfig,
     var numBrokersFencing = 0
     var numTopicsAdding = 0
     metadataLogEvent.apiMessages.asScala.foreach {
-      case _: BrokerRecord | _: UnfenceBrokerRecord => numBrokersAdding += 1
+      case _: RegisterBrokerRecord | _: UnfenceBrokerRecord => numBrokersAdding += 1
       case _: FenceBrokerRecord => numBrokersFencing += 1
       case topic: TopicRecord => if (!topic.deleting()) numTopicsAdding += 1
       case _ => // no need to do anything for other record types
@@ -402,7 +402,7 @@ class PartitionMetadataProcessor(kafkaConfig: KafkaConfig,
     metadataLogEvent.apiMessages.asScala.foreach { msg =>
       try {
         msg match {
-          case brokerRecord: BrokerRecord => process(brokerRecord, mgr)
+          case brokerRecord: RegisterBrokerRecord => process(brokerRecord, mgr)
           case fenceBroker: FenceBrokerRecord => process(fenceBroker, mgr)
           case unfenceBroker: UnfenceBrokerRecord => process(unfenceBroker, mgr)
           case topicRecord: TopicRecord => process(topicRecord, mgr)
@@ -523,7 +523,7 @@ class PartitionMetadataProcessor(kafkaConfig: KafkaConfig,
    * @param brokerRecord the record to process
    * @param mgr the current state to use
    */
-  private def process(brokerRecord: BrokerRecord, mgr: MetadataMgr): Unit = {
+  private def process(brokerRecord: RegisterBrokerRecord, mgr: MetadataMgr): Unit = {
     val nodes = new util.HashMap[ListenerName, Node]
     val endPoints = new ArrayBuffer[EndPoint]
     val brokerId = brokerRecord.brokerId()

@@ -14,7 +14,7 @@
 // limitations under the License.
 
 {
-  "apiKey": 7,
+  "apiKey": 9,
   "type": "metadata",
   "name": "RemoveTopicRecord",
   "validVersions": "0",

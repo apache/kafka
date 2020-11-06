@@ -14,7 +14,7 @@
 // limitations under the License.
 
 {
-  "apiKey": 8,
+  "apiKey": 10,
   "type": "metadata",
   "name": "DelegationTokenRecord",
   "validVersions": "0",

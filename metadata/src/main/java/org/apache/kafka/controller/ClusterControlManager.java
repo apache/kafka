@@ -22,7 +22,7 @@ import org.apache.kafka.common.errors.DuplicateBrokerRegistrationException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
-import org.apache.kafka.common.metadata.BrokerRecord;
+import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.protocol.ApiMessageAndVersion;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -220,10 +220,11 @@ public class ClusterControlManager {
                     "registered with that broker id.");
             }
         }
-        BrokerRecord record = new BrokerRecord().setBrokerId(brokerId).
+        RegisterBrokerRecord record = new RegisterBrokerRecord().setBrokerId(brokerId).
+            setIncarnationId(request.incarnationId()).
             setBrokerEpoch(writeOffset);
         for (BrokerRegistrationRequestData.Listener listener : request.listeners()) {
-            record.endPoints().add(new BrokerRecord.BrokerEndpoint().
+            record.endPoints().add(new RegisterBrokerRecord.BrokerEndpoint().
                 setHost(listener.host()).
                 setName(listener.name()).
                 setPort(listener.port()).
@@ -239,20 +240,20 @@ public class ClusterControlManager {
         return leaseStartNs + exclusiveLeaseDurationNs;
     }
 
-    public void replay(BrokerRecord record) {
+    public void replay(RegisterBrokerRecord record) {
         int brokerId = record.brokerId();
         long nowNs = time.nanoseconds();
         brokerSoftStates.remove(brokerId);
         brokerSoftStates.put(brokerId, new BrokerSoftState(nowNs));
 
         List<Endpoint> listeners = new ArrayList<>();
-        for (BrokerRecord.BrokerEndpoint endpoint : record.endPoints()) {
+        for (RegisterBrokerRecord.BrokerEndpoint endpoint : record.endPoints()) {
             listeners.add(new Endpoint(endpoint.name(),
                 SecurityProtocol.forId(endpoint.securityProtocol()),
                 endpoint.host(), endpoint.port()));
         }
         Map<String, VersionRange> features = new HashMap<>();
-        for (BrokerRecord.BrokerFeature feature : record.features()) {
+        for (RegisterBrokerRecord.BrokerFeature feature : record.features()) {
             features.put(feature.name(), new VersionRange(
                 feature.minSupportedVersion(), feature.maxSupportedVersion()));
         }

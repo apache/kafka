@@ -17,7 +17,7 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.common.metadata.BrokerRecord;
+import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -40,8 +40,8 @@ public class ClusterControlManagerTest {
         ClusterControlManager clusterControl =
             new ClusterControlManager(time, snapshotRegistry, 1000, 100);
         assertFalse(clusterControl.isRegistered(0));
-        BrokerRecord brokerRecord = new BrokerRecord().setBrokerEpoch(100).setBrokerId(1);
-        brokerRecord.endPoints().add(new BrokerRecord.BrokerEndpoint().
+        RegisterBrokerRecord brokerRecord = new RegisterBrokerRecord().setBrokerEpoch(100).setBrokerId(1);
+        brokerRecord.endPoints().add(new RegisterBrokerRecord.BrokerEndpoint().
             setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
             setPort((short) 9092).
             setName("PLAINTEXT").
@@ -58,8 +58,8 @@ public class ClusterControlManagerTest {
         ClusterControlManager clusterControl =
             new ClusterControlManager(time, snapshotRegistry, 1000, 100);
         for (int i = 0; i < 10; i++) {
-            BrokerRecord brokerRecord = new BrokerRecord().setBrokerEpoch(100).setBrokerId(i);
-            brokerRecord.endPoints().add(new BrokerRecord.BrokerEndpoint().
+            RegisterBrokerRecord brokerRecord = new RegisterBrokerRecord().setBrokerEpoch(100).setBrokerId(i);
+            brokerRecord.endPoints().add(new RegisterBrokerRecord.BrokerEndpoint().
                 setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
                 setPort((short) 9092).
                 setName("PLAINTEXT").

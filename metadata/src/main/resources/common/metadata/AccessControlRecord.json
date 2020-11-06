@@ -14,7 +14,7 @@
 // limitations under the License.
 
 {
-  "apiKey": 5,
+  "apiKey": 6,
   "type": "metadata",
   "name": "AccessControlRecord",
   "validVersions": "0",

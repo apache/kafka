@@ -14,7 +14,7 @@
 // limitations under the License.
 
 {
-  "apiKey": 2,
+  "apiKey": 3,
   "type": "metadata",
   "name": "PartitionRecord",
   "validVersions": "0",

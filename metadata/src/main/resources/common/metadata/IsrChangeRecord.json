@@ -14,7 +14,7 @@
 // limitations under the License.
 
 {
-  "apiKey": 4,
+  "apiKey": 5,
   "type": "metadata",
   "name": "IsrChangeRecord",
   "validVersions": "0",

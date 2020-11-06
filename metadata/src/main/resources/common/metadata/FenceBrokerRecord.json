@@ -14,7 +14,7 @@
 // limitations under the License.
 
 {
-  "apiKey": 6,
+  "apiKey": 7,
   "type": "metadata",
   "name": "FenceBrokerRecord",
   "validVersions": "0",

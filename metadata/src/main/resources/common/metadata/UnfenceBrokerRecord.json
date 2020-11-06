@@ -14,7 +14,7 @@
 // limitations under the License.
 
 {
-  "apiKey": 11,
+  "apiKey": 8,
   "type": "metadata",
   "name": "UnfenceBrokerRecord",
   "validVersions": "0",

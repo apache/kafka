@@ -14,7 +14,7 @@
 // limitations under the License.
 
 {
-  "apiKey": 3,
+  "apiKey": 4,
   "type": "metadata",
   "name": "ConfigRecord",
   "validVersions": "0",

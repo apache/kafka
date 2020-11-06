@@ -17,7 +17,7 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.common.metadata.BrokerRecord;
+import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.protocol.ApiMessageAndVersion;
 import org.apache.kafka.controller.LocalLogManager.LeaderInfo;
 import org.apache.kafka.controller.LocalLogManager.LockRegistry;
@@ -192,9 +192,9 @@ public class LocalLogManagerTest {
             LocalLogManager activeLogManager = env.logManagers().get(leaderInfo.nodeId());
             long epoch = activeLogManager.listener().currentClaimEpoch();
             List<ApiMessageAndVersion> messages = Arrays.asList(
-                new ApiMessageAndVersion(new BrokerRecord().setBrokerId(0), (short) 0),
-                new ApiMessageAndVersion(new BrokerRecord().setBrokerId(1), (short) 0),
-                new ApiMessageAndVersion(new BrokerRecord().setBrokerId(2), (short) 0));
+                new ApiMessageAndVersion(new RegisterBrokerRecord().setBrokerId(0), (short) 0),
+                new ApiMessageAndVersion(new RegisterBrokerRecord().setBrokerId(1), (short) 0),
+                new ApiMessageAndVersion(new RegisterBrokerRecord().setBrokerId(2), (short) 0));
             activeLogManager.scheduleWrite(epoch, messages);
             for (LocalLogManager logManager : env.logManagers()) {
                 waitForLastCommittedOffset(2, logManager);
