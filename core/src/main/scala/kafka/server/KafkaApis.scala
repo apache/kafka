@@ -610,7 +610,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       mergedResponseStatus.forKeyValue { (topicPartition, status) =>
         if (status.error != Errors.NONE) {
           if (status.error == Errors.PRODUCER_FENCED) {
-            // Produce request should always return the INVALID_PRODUCER_EPOCH to as
+            // Produce request should always return the INVALID_PRODUCER_EPOCH as
             // partition leader does not hold the source of truth for txn state.
             status.error = Errors.INVALID_PRODUCER_EPOCH
           }
