@@ -266,14 +266,17 @@ public class AbstractCoordinatorTest {
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.GROUP_AUTHORIZATION_FAILED));
 
-        long initialTimeMs = mockTime.milliseconds();
+        long startMs = mockTime.milliseconds();
         assertThrows(GroupAuthorizationException.class, () ->
                 coordinator.ensureCoordinatorReady(mockTime.timer(Long.MAX_VALUE)));
+        long timeTakenMs = mockTime.milliseconds() - startMs;
+        assertTrue("Back off not applied: " + timeTakenMs, timeTakenMs >= RETRY_BACKOFF_MS);
 
+        startMs = mockTime.milliseconds();
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(mockTime.timer(Long.MAX_VALUE));
-        long timeTakenMs = mockTime.milliseconds() - initialTimeMs;
-        assertTrue("Back off not applied: " + timeTakenMs, timeTakenMs >= RETRY_BACKOFF_MS);
+        timeTakenMs = mockTime.milliseconds() - startMs;
+        assertTrue("Back off applied too many times: " + timeTakenMs, timeTakenMs < RETRY_BACKOFF_MS);
     }
 
     @Test
