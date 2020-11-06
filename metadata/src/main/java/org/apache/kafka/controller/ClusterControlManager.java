@@ -36,9 +36,11 @@ import org.apache.kafka.timeline.TimelineHashMap;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Random;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
@@ -271,5 +273,35 @@ public class ClusterControlManager {
                 " instead of the expected values");
         }
         brokerSoftStates.remove(brokerId);
+    }
+
+    /**
+     * Returns true if the given broker id is registered.
+     */
+    public boolean isRegistered(int brokerId) {
+        return brokerRegistrations.containsKey(brokerId);
+    }
+
+    public List<Integer> chooseRandomRegistered(Random random, int numBrokers) {
+        if (brokerRegistrations.size() < numBrokers) {
+            throw new RuntimeException("there are only " + brokerRegistrations.size() +
+                " registered brokers");
+        }
+        List<Integer> choices = new ArrayList<>();
+        // TODO: rack-awareness
+        List<Integer> indexes = new ArrayList<>();
+        for (int i = 0; i < numBrokers; i++) {
+            indexes.add(random.nextInt(numBrokers - i));
+        }
+        indexes.sort(Integer::compareTo);
+        Iterator<Integer> iter = brokerRegistrations.keySet().iterator();
+        for (int i = 0; choices.size() < indexes.size(); i++) {
+            int brokerId = iter.next();
+            if (indexes.get(choices.size()) + choices.size() == i) {
+                choices.add(brokerId);
+            }
+        }
+        Collections.shuffle(choices);
+        return choices;
     }
 }
