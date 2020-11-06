@@ -452,17 +452,17 @@ public final class QuorumController implements Controller {
         MetadataRecordType type = MetadataRecordType.fromId(message.apiKey());
         switch (type) {
             case BROKER_RECORD:
-                clusterControlManager.replay((BrokerRecord) message);
+                clusterControl.replay((BrokerRecord) message);
                 break;
             case FENCE_BROKER_RECORD:
-                clusterControlManager.replay((FenceBrokerRecord) message);
+                clusterControl.replay((FenceBrokerRecord) message);
                 break;
             case TOPIC_RECORD:
                 throw new RuntimeException("Unhandled record type " + type);
             case PARTITION_RECORD:
                 throw new RuntimeException("Unhandled record type " + type);
             case CONFIG_RECORD:
-                configurationControlManager.replay((ConfigRecord) message);
+                configurationControl.replay((ConfigRecord) message);
                 break;
             case ISR_CHANGE_RECORD:
                 throw new RuntimeException("Unhandled record type " + type);
@@ -504,25 +504,25 @@ public final class QuorumController implements Controller {
      * An object which stores the controller's dynamic configuration.
      * This must be accessed only by the event queue thread.
      */
-    private final ConfigurationControlManager configurationControlManager;
+    private final ConfigurationControlManager configurationControl;
 
     /**
      * An object which stores the controller's view of the cluster.
      * This must be accessed only by the event queue thread.
      */
-    private final ClusterControlManager clusterControlManager;
+    private final ClusterControlManager clusterControl;
 
     /**
      * An object which stores the controller's view of topics and partitions.
      * This must be accessed only by the event queue thread.
      */
-    private final ReplicationControlManager replicationControlManager;
+    private final ReplicationControlManager replicationControl;
 
     /**
      * An object which stores the controller's view of the cluster features.
      * This must be accessed only by the event queue thread.
      */
-    private final FeatureControlManager featureControlManager;
+    private final FeatureControlManager featureControl;
 
     /**
      * The interface that we use to mutate the Raft log.
@@ -566,14 +566,14 @@ public final class QuorumController implements Controller {
         this.snapshotRegistry = new SnapshotRegistry(logContext, -1);
         snapshotRegistry.createSnapshot(-1);
         this.purgatory = new ControllerPurgatory();
-        this.configurationControlManager =
+        this.configurationControl =
             new ConfigurationControlManager(snapshotRegistry, configDefs);
-        this.replicationControlManager =
+        this.replicationControl =
             new ReplicationControlManager(snapshotRegistry,
-                configurationControlManager);
-        this.clusterControlManager =
+                configurationControl);
+        this.clusterControl =
             new ClusterControlManager(time, snapshotRegistry, 18000, 9000);
-        this.featureControlManager =
+        this.featureControl =
             new FeatureControlManager(supportedFeatures, snapshotRegistry);
         this.logManager = logManager;
         this.metaLogListener = new MetaLogListener();
@@ -596,14 +596,14 @@ public final class QuorumController implements Controller {
     public CompletableFuture<CreateTopicsResponseData>
             createTopics(CreateTopicsRequestData request) {
         return appendWriteEvent("createTopics", () ->
-            replicationControlManager.createTopics(request));
+            replicationControl.createTopics(request));
     }
 
     @Override
     public CompletableFuture<Map<ConfigResource, ResultOrError<Map<String, String>>>>
             describeConfigs(Map<ConfigResource, Collection<String>> resources) {
         return appendReadEvent("describeConfigs", () ->
-            configurationControlManager.describeConfigs(lastCommittedOffset, resources));
+            configurationControl.describeConfigs(lastCommittedOffset, resources));
     }
 
     @Override
@@ -618,7 +618,7 @@ public final class QuorumController implements Controller {
     @Override
     public CompletableFuture<FeatureManager.FinalizedFeaturesAndEpoch> finalizedFeatures() {
         return appendReadEvent("getFinalizedFeatures", () ->
-            featureControlManager.finalizedFeaturesAndEpoch(lastCommittedOffset));
+            featureControl.finalizedFeaturesAndEpoch(lastCommittedOffset));
     }
 
     @Override
@@ -627,7 +627,7 @@ public final class QuorumController implements Controller {
         boolean validateOnly) {
         return appendWriteEvent("incrementalAlterConfigs", () -> {
             ControllerResult<Map<ConfigResource, ApiError>> result =
-                configurationControlManager.incrementalAlterConfigs(configChanges);
+                configurationControl.incrementalAlterConfigs(configChanges);
             if (validateOnly) {
                 return result.withoutRecords();
             } else {
@@ -641,7 +641,7 @@ public final class QuorumController implements Controller {
         Map<ConfigResource, Map<String, String>> newConfigs, boolean validateOnly) {
         return appendWriteEvent("legacyAlterConfigs", () -> {
             ControllerResult<Map<ConfigResource, ApiError>> result =
-                configurationControlManager.legacyAlterConfigs(newConfigs);
+                configurationControl.legacyAlterConfigs(newConfigs);
             if (validateOnly) {
                 return result.withoutRecords();
             } else {
@@ -654,14 +654,14 @@ public final class QuorumController implements Controller {
     public CompletableFuture<HeartbeatReply>
             processBrokerHeartbeat(BrokerHeartbeatRequestData request) {
         return appendReadEvent("processBrokerHeartbeat", () ->
-            clusterControlManager.processBrokerHeartbeat(request, lastCommittedOffset));
+            clusterControl.processBrokerHeartbeat(request, lastCommittedOffset));
     }
 
     @Override
     public CompletableFuture<RegistrationReply>
             registerBroker(BrokerRegistrationRequestData request) {
         return appendWriteEvent("registerBroker", () ->
-            clusterControlManager.registerBroker(request, writeOffset));
+            clusterControl.registerBroker(request, writeOffset));
     }
 
     @Override
