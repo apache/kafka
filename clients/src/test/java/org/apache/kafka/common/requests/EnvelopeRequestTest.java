@@ -22,6 +22,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder;
+import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -47,20 +48,15 @@ public class EnvelopeRequestTest {
     public void testToSend() throws IOException {
         for (short version = ApiKeys.ENVELOPE.oldestVersion(); version <= ApiKeys.ENVELOPE.latestVersion(); version++) {
             ByteBuffer requestData = ByteBuffer.wrap("foobar".getBytes());
+            RequestHeader header = new RequestHeader(ApiKeys.ENVELOPE, version, "clientId", 15);
             EnvelopeRequest request = new EnvelopeRequest.Builder(
                 requestData,
                 "principal".getBytes(),
                 InetAddress.getLocalHost().getAddress()
             ).build(version);
 
-            RequestHeader header = new RequestHeader(ApiKeys.ENVELOPE, version, "clientId", 15);
-
             Send send = request.toSend("a", header);
-            ByteBufferChannel channel = new ByteBufferChannel(send.size());
-            assertEquals(send.size(), send.writeTo(channel));
-            channel.close();
-
-            ByteBuffer buffer = channel.buffer();
+            ByteBuffer buffer = TestUtils.toBuffer(send);
             assertEquals(send.size() - 4, buffer.getInt());
             assertEquals(header, RequestHeader.parse(buffer));
 

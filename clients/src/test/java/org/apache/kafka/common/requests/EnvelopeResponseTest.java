@@ -21,9 +21,9 @@ import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -31,7 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class EnvelopeResponseTest {
 
     @Test
-    public void testToSend() throws IOException {
+    public void testToSend() {
         for (short version = ApiKeys.ENVELOPE.oldestVersion(); version <= ApiKeys.ENVELOPE.latestVersion(); version++) {
             ByteBuffer responseData = ByteBuffer.wrap("foobar".getBytes());
             EnvelopeResponse response = new EnvelopeResponse(responseData, Errors.NONE);
@@ -39,11 +39,7 @@ class EnvelopeResponseTest {
             ResponseHeader header = new ResponseHeader(15, headerVersion);
 
             Send send = response.toSend("a", header, version);
-            ByteBufferChannel channel = new ByteBufferChannel(send.size());
-            assertEquals(send.size(), send.writeTo(channel));
-            channel.close();
-
-            ByteBuffer buffer = channel.buffer();
+            ByteBuffer buffer = TestUtils.toBuffer(send);
             assertEquals(send.size() - 4, buffer.getInt());
             assertEquals(header, ResponseHeader.parse(buffer, headerVersion));
 

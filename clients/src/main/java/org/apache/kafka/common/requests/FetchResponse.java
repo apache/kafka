@@ -19,10 +19,10 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.network.Send;
-import org.apache.kafka.common.protocol.SendBuilder;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
-import org.apache.kafka.common.protocol.RecordsReadable;
+import org.apache.kafka.common.protocol.SendBuilder;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -320,7 +320,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
 
     public static FetchResponse<MemoryRecords> parse(ByteBuffer buffer, short version) {
         FetchResponseData fetchResponseData = new FetchResponseData();
-        RecordsReadable reader = new RecordsReadable(buffer);
+        ByteBufferAccessor reader = new ByteBufferAccessor(buffer);
         fetchResponseData.read(reader, version);
         return new FetchResponse<>(fetchResponseData);
     }

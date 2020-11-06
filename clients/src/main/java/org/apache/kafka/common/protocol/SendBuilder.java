@@ -29,12 +29,10 @@ import java.util.ArrayDeque;
 import java.util.Queue;
 
 /**
- * This class provides a way to build {@link Send} objects for network
- * transmission from generated {@link org.apache.kafka.common.protocol.ApiMessage}
- * types. Its main advantage over direct {@link ByteBuffer} allocation based on
- * {@link org.apache.kafka.common.protocol.ApiMessage#size(ObjectSerializationCache, short)}
- * is that it avoids copying "bytes" fields. The downside is that it is up to the caller
- * to allocate a buffer which accounts only for the additional request overhead.
+ * This class provides a way to build {@link Send} objects for network transmission
+ * from generated {@link org.apache.kafka.common.protocol.ApiMessage} types without
+ * allocating new space for "zero-copy" fields (see {@link #writeByteBuffer(ByteBuffer)}
+ * and {@link #writeRecords(BaseRecords)}).
  *
  * See {@link org.apache.kafka.common.requests.EnvelopeRequest#toSend(String, RequestHeader)}
  * for example usage.
@@ -44,21 +42,21 @@ public class SendBuilder implements Writable {
     private final ByteBuffer buffer;
     private final String destinationId;
 
-    private SendBuilder(String destinationId, int overheadSize) {
+    SendBuilder(String destinationId, int size) {
         this.destinationId = destinationId;
-        this.buffer = ByteBuffer.allocate(overheadSize);
+        this.buffer = ByteBuffer.allocate(size);
         this.buffer.mark();
     }
 
-    private void maybeCloseBlock() {
+    private void flushCurrentBuffer() {
         int latestPosition = buffer.position();
         buffer.reset();
 
         if (latestPosition > buffer.position()) {
-            ByteBuffer duplicate = buffer.duplicate();
-            duplicate.limit(latestPosition);
-            addByteBufferSend(duplicate);
+            buffer.limit(latestPosition);
+            addByteBufferSend(buffer.slice());
             buffer.position(latestPosition);
+            buffer.limit(buffer.capacity());
             buffer.mark();
         }
     }
@@ -102,10 +100,16 @@ public class SendBuilder implements Writable {
         ByteUtils.writeUnsignedVarint(i, buffer);
     }
 
+    /**
+     * Write a byte buffer. The reference to the underlying buffer will
+     * be retained in the result of {@link #build()}.
+     *
+     * @param buf the buffer to write
+     */
     @Override
     public void writeByteBuffer(ByteBuffer buf) {
-        maybeCloseBlock();
-        addByteBufferSend(buf);
+        flushCurrentBuffer();
+        addByteBufferSend(buf.duplicate());
     }
 
     @Override
@@ -118,15 +122,21 @@ public class SendBuilder implements Writable {
         ByteUtils.writeVarlong(i, buffer);
     }
 
+    /**
+     * Write a record set. The underlying record data will be retained
+     * in the result of {@link #build()}. See {@link BaseRecords#toSend(String)}.
+     *
+     * @param records the records to write
+     */
     @Override
     public void writeRecords(BaseRecords records) {
-        maybeCloseBlock();
+        flushCurrentBuffer();
         sends.add(records.toSend(destinationId));
     }
 
-    public Send toSend(String destination) {
-        maybeCloseBlock();
-        return new MultiRecordsSend(destination, sends);
+    public Send build() {
+        flushCurrentBuffer();
+        return new MultiRecordsSend(destinationId, sends);
     }
 
     public static Send buildRequestSend(
@@ -175,7 +185,7 @@ public class SendBuilder implements Writable {
         builder.writeInt(totalSize);
         builder.writeApiMessage(header, serializationCache, headerVersion);
         builder.writeApiMessage(apiMessage, serializationCache, apiVersion);
-        return builder.toSend(destination);
+        return builder.build();
     }
 
 }
