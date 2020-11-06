@@ -160,7 +160,7 @@ public class ChannelBuilders {
 
     // Visibility for testing
     @SuppressWarnings("unchecked")
-    protected static Map<String, Object> channelBuilderConfigs(final AbstractConfig config, final ListenerName listenerName) {
+    static Map<String, Object> channelBuilderConfigs(final AbstractConfig config, final ListenerName listenerName) {
         Map<String, Object> parsedConfigs;
         if (listenerName == null)
             parsedConfigs = (Map<String, Object>) config.values();
@@ -175,7 +175,9 @@ public class ChannelBuilders {
             // exclude keys like `{mechanism}.some.prop` if "listener.name." prefix is present and key `some.prop` exists in parsed configs.
             .filter(e -> !(listenerName != null && parsedConfigs.containsKey(e.getKey().substring(e.getKey().indexOf('.') + 1))))
             .forEach(e -> parsedConfigs.put(e.getKey(), e.getValue()));
-        return Collections.unmodifiableMap(parsedConfigs);
+        // The callers may add new elements to return map so we should not wrap it to a immutable map. Otherwise,
+        // the callers have to create a new map to carry more elements and then following Get ops are not recorded.
+        return parsedConfigs;
     }
 
     private static void requireNonNullMode(Mode mode, SecurityProtocol securityProtocol) {
