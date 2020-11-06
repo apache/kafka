@@ -244,14 +244,6 @@ public class TopologyTestDriver implements Closeable {
         public void onRestoreEnd(final TopicPartition topicPartition, final String storeName, final long totalRestored) {}
     };
 
-    private static final Properties DEFAULT_TEST_PROPS;
-
-    static {
-        DEFAULT_TEST_PROPS = new Properties();
-        DEFAULT_TEST_PROPS.put(APPLICATION_ID_CONFIG, "dummy-app-id");
-        DEFAULT_TEST_PROPS.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy");
-    }
-
     /**
      * Create a new test diver instance.
      * Default test properties are used to initialize the driver instance
@@ -259,7 +251,7 @@ public class TopologyTestDriver implements Closeable {
      * @param topology the topology to be tested
      */
     public TopologyTestDriver(final Topology topology) {
-        this(topology, DEFAULT_TEST_PROPS);
+        this(topology, new Properties());
     }
 
     /**
