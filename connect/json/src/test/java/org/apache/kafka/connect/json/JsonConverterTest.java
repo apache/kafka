@@ -147,7 +147,7 @@ public class JsonConverterTest {
     @Test
     public void stringToConnectOptional() {
         Schema schema = SchemaBuilder.string().version(1).optional().schema();
-        String msg = "{ \"schema\": { \"type\": \"string\", \"version\": 1, \"optional\": true, \"default\": null }, \"payload\": null }";
+        String msg = "{ \"schema\": { \"type\": \"string\", \"version\": 1, \"optional\": true }, \"payload\": null }";
         SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
         assertEquals(schema, schemaAndValue.schema());
         assertNull(schemaAndValue.value());
