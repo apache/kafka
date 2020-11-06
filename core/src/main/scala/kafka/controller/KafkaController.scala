@@ -2261,7 +2261,7 @@ class KafkaController(val config: KafkaConfig,
     val brokerEpochOpt = controllerContext.liveBrokerIdAndEpochs.get(brokerId)
     if (brokerEpochOpt.isEmpty) {
       info(s"Ignoring AlterIsr due to unknown broker $brokerId")
-      callback.apply(Right(Errors.STALE_BROKER_EPOCH))
+      callback.apply(Right(Errors.UNKNOWN_MEMBER_ID))
       return
     }
 
