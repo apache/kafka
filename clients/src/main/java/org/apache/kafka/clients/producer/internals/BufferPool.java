@@ -112,12 +112,11 @@ public class BufferPool {
                                                + " on memory allocations.");
 
         ByteBuffer buffer = null;
-        this.lock.lock();
 
         if (this.closed) {
-            this.lock.unlock();
             throw new KafkaException("Producer closed while allocating memory");
         }
+        this.lock.lock();
 
         try {
             // check if we have a free buffer of the right size pooled
