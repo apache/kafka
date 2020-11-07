@@ -24,11 +24,13 @@ import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.security.auth.KafkaPrincipalSerde;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
-import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
+import java.util.Optional;
 
 import static org.apache.kafka.common.protocol.ApiKeys.API_VERSIONS;
 
@@ -40,6 +42,8 @@ public class RequestContext implements AuthorizableRequestContext {
     public final ListenerName listenerName;
     public final SecurityProtocol securityProtocol;
     public final ClientInformation clientInformation;
+    public final boolean fromPrivilegedListener;
+    public final Optional<KafkaPrincipalSerde> principalSerde;
 
     public RequestContext(RequestHeader header,
                           String connectionId,
@@ -47,7 +51,28 @@ public class RequestContext implements AuthorizableRequestContext {
                           KafkaPrincipal principal,
                           ListenerName listenerName,
                           SecurityProtocol securityProtocol,
-                          ClientInformation clientInformation) {
+                          ClientInformation clientInformation,
+                          boolean fromPrivilegedListener) {
+        this(header,
+            connectionId,
+            clientAddress,
+            principal,
+            listenerName,
+            securityProtocol,
+            clientInformation,
+            fromPrivilegedListener,
+            Optional.empty());
+    }
+
+    public RequestContext(RequestHeader header,
+                          String connectionId,
+                          InetAddress clientAddress,
+                          KafkaPrincipal principal,
+                          ListenerName listenerName,
+                          SecurityProtocol securityProtocol,
+                          ClientInformation clientInformation,
+                          boolean fromPrivilegedListener,
+                          Optional<KafkaPrincipalSerde> principalSerde) {
         this.header = header;
         this.connectionId = connectionId;
         this.clientAddress = clientAddress;
@@ -55,6 +80,8 @@ public class RequestContext implements AuthorizableRequestContext {
         this.listenerName = listenerName;
         this.securityProtocol = securityProtocol;
         this.clientInformation = clientInformation;
+        this.fromPrivilegedListener = fromPrivilegedListener;
+        this.principalSerde = principalSerde;
     }
 
     public RequestAndSize parseRequest(ByteBuffer buffer) {

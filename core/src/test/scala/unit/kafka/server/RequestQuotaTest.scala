@@ -14,6 +14,7 @@
 
 package kafka.server
 
+import java.net.InetAddress
 import java.util
 import java.util.concurrent.{Executors, Future, TimeUnit}
 import java.util.{Collections, Optional, Properties}
@@ -42,7 +43,7 @@ import org.apache.kafka.common.quota.ClientQuotaFilter
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.{PatternType, ResourceType => AdminResourceType}
-import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder, SecurityProtocol}
+import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.utils.{Sanitizer, SecurityUtils}
 import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicPartition}
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
@@ -585,6 +586,18 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.UPDATE_FEATURES =>
           new UpdateFeaturesRequest.Builder(new UpdateFeaturesRequestData())
 
+        case ApiKeys.ENVELOPE =>
+          val requestHeader = new RequestHeader(
+            ApiKeys.ALTER_CLIENT_QUOTAS,
+            ApiKeys.ALTER_CLIENT_QUOTAS.latestVersion,
+            "client-id",
+            0
+          )
+          val embedRequestData = new AlterClientQuotasRequest.Builder(
+            List.empty.asJava, false).build().serialize(requestHeader)
+          new EnvelopeRequest.Builder(embedRequestData, new Array[Byte](0),
+            InetAddress.getByName("192.168.1.1").getAddress)
+
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }
@@ -721,8 +734,16 @@ object RequestQuotaTest {
       }.asJava
     }
   }
-  class TestPrincipalBuilder extends KafkaPrincipalBuilder {
+  class TestPrincipalBuilder extends KafkaPrincipalBuilder with KafkaPrincipalSerde {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
+      principal
+    }
+
+    override def serialize(principal: KafkaPrincipal): Array[Byte] = {
+      new Array[Byte](0)
+    }
+
+    override def deserialize(bytes: Array[Byte]): KafkaPrincipal = {
       principal
     }
   }

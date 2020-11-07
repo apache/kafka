@@ -798,12 +798,25 @@ object DelegationTokenInfoZNode {
  *             written by the controller to the FeatureZNode only when the broker IBP config
  *             is less than KAFKA_2_7_IV0.
  */
-object FeatureZNodeStatus extends Enumeration {
-  type FeatureZNodeStatus = Value
-  val Disabled, Enabled = Value
+sealed trait FeatureZNodeStatus {
+  def id: Int
+}
 
-  def withNameOpt(value: Int): Option[Value] = {
-    values.find(_.id == value)
+object FeatureZNodeStatus {
+  case object Disabled extends FeatureZNodeStatus {
+    val id: Int = 0
+  }
+
+  case object Enabled extends FeatureZNodeStatus {
+    val id: Int = 1
+  }
+
+  def withNameOpt(id: Int): Option[FeatureZNodeStatus] = {
+    id match {
+      case Disabled.id => Some(Disabled)
+      case Enabled.id => Some(Enabled)
+      case _ => Option.empty
+    }
   }
 }
 
@@ -813,7 +826,7 @@ object FeatureZNodeStatus extends Enumeration {
  * @param status     the status of the ZK node
  * @param features   the cluster-wide finalized features
  */
-case class FeatureZNode(status: FeatureZNodeStatus.FeatureZNodeStatus, features: Features[FinalizedVersionRange]) {
+case class FeatureZNode(status: FeatureZNodeStatus, features: Features[FinalizedVersionRange]) {
 }
 
 object FeatureZNode {

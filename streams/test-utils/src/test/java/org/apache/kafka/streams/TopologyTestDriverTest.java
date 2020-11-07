@@ -75,6 +75,7 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -304,8 +305,22 @@ public class TopologyTestDriverTest {
         @Override
         public Processor<Object, Object, Object, Object> get() {
             final MockProcessor mockProcessor = new MockProcessor(punctuations);
-            mockProcessors.add(mockProcessor);
+
+            // to keep tests simple, ignore calls from ApiUtils.checkSupplier
+            if (!isCheckSupplierCall()) {
+                mockProcessors.add(mockProcessor);
+            }
+
             return mockProcessor;
+        }
+
+        /**
+         * Used to keep tests simple, and ignore calls from {@link org.apache.kafka.streams.internals.ApiUtils#checkSupplier(Supplier)} )}.
+         * @return true if the the stack context is within a {@link org.apache.kafka.streams.internals.ApiUtils#checkSupplier(Supplier)} )} call
+         */
+        public boolean isCheckSupplierCall() {
+            return Arrays.stream(Thread.currentThread().getStackTrace())
+                    .anyMatch(caller -> "org.apache.kafka.streams.internals.ApiUtils".equals(caller.getClassName()) && "checkSupplier".equals(caller.getMethodName()));
         }
     }
 
@@ -1021,7 +1036,7 @@ public class TopologyTestDriverTest {
     @Test
     public void shouldReturnAllStores() {
         final Topology topology = setupSourceSinkTopology();
-        topology.addProcessor("processor", (ProcessorSupplier<Object, Object, Object, Object>) () -> null, "source");
+        topology.addProcessor("processor", new MockProcessorSupplier(), "source");
         topology.addStateStore(
             new KeyValueStoreBuilder<>(
                 Stores.inMemoryKeyValueStore("store"),
@@ -1040,7 +1055,7 @@ public class TopologyTestDriverTest {
             Serdes.ByteArray().deserializer(),
             "globalTopicName",
             "globalProcessorName",
-            (ProcessorSupplier<byte[], byte[], Void, Void>) () -> null);
+            voidProcessorSupplier);
 
         testDriver = new TopologyTestDriver(topology, config);
 
@@ -1232,6 +1247,12 @@ public class TopologyTestDriverTest {
         }
     }
 
+    final ProcessorSupplier<byte[], byte[], Void, Void> voidProcessorSupplier = () -> new Processor<byte[], byte[], Void, Void>() {
+        @Override
+        public void process(final Record<byte[], byte[]> record) {
+        }
+    };
+
     private void addStoresToTopology(final Topology topology,
                                      final boolean persistent,
                                      final String keyValueStoreName,
@@ -1241,6 +1262,7 @@ public class TopologyTestDriverTest {
                                      final String sessionStoreName,
                                      final String globalKeyValueStoreName,
                                      final String globalTimestampedKeyValueStoreName) {
+
         // add state stores
         topology.addStateStore(
             Stores.keyValueStoreBuilder(
@@ -1307,7 +1329,7 @@ public class TopologyTestDriverTest {
             Serdes.ByteArray().deserializer(),
             "topicDummy1",
             "processorDummy1",
-            (ProcessorSupplier<byte[], byte[], Void, Void>) () -> null);
+            voidProcessorSupplier);
         topology.addGlobalStore(
             persistent ?
                 Stores.timestampedKeyValueStoreBuilder(
@@ -1325,7 +1347,7 @@ public class TopologyTestDriverTest {
             Serdes.ByteArray().deserializer(),
             "topicDummy2",
             "processorDummy2",
-            (ProcessorSupplier<byte[], byte[], Void, Void>) () -> null);
+            voidProcessorSupplier);
     }
 
     @Test
@@ -1348,7 +1370,7 @@ public class TopologyTestDriverTest {
             Serdes.ByteArray().deserializer(),
             "globalTopicName",
             "globalProcessorName",
-            (ProcessorSupplier<byte[], byte[], Void, Void>) () -> null);
+            voidProcessorSupplier);
 
         testDriver = new TopologyTestDriver(topology, config);
 

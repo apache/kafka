@@ -39,6 +39,10 @@ public class AlterConfigsResponse extends AbstractResponse {
         this.data = new AlterConfigsResponseData(struct, version);
     }
 
+    public AlterConfigsResponseData data() {
+        return data;
+    }
+
     public Map<ConfigResource, ApiError> errors() {
         return data.responses().stream().collect(Collectors.toMap(
             response -> new ConfigResource(

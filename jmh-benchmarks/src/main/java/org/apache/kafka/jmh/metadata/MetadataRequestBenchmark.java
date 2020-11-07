@@ -23,6 +23,7 @@ import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
 import kafka.server.AdminManager;
 import kafka.server.BrokerFeatures;
+import kafka.server.BrokerToControllerChannelManager;
 import kafka.server.BrokerTopicStats;
 import kafka.server.ClientQuotaManager;
 import kafka.server.ClientRequestQuotaManager;
@@ -97,6 +98,7 @@ public class MetadataRequestBenchmark {
     private AdminManager adminManager = Mockito.mock(AdminManager.class);
     private TransactionCoordinator transactionCoordinator = Mockito.mock(TransactionCoordinator.class);
     private KafkaController kafkaController = Mockito.mock(KafkaController.class);
+    private BrokerToControllerChannelManager brokerToControllerChannelManager = Mockito.mock(BrokerToControllerChannelManager.class);
     private KafkaZkClient kafkaZkClient = Mockito.mock(KafkaZkClient.class);
     private Metrics metrics = new Metrics();
     private int brokerId = 1;
@@ -173,6 +175,7 @@ public class MetadataRequestBenchmark {
             groupCoordinator,
             transactionCoordinator,
             kafkaController,
+            brokerToControllerChannelManager,
             kafkaZkClient,
             brokerId,
             new KafkaConfig(kafkaProps),
@@ -202,8 +205,9 @@ public class MetadataRequestBenchmark {
         RequestHeader header = RequestHeader.parse(buffer);
 
         RequestContext context = new RequestContext(header, "1", null, principal,
-            ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY);
-        return new RequestChannel.Request(1, context, 0, MemoryPool.NONE, buffer, requestChannelMetrics);
+            ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+            SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false);
+        return new RequestChannel.Request(1, context, 0, MemoryPool.NONE, buffer, requestChannelMetrics, Option.empty());
     }
 
     @Benchmark
