@@ -88,6 +88,13 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
         Files.deleteIfExists(path);
     }
 
+    /**
+     * Create a snapshot writer for topic partition log dir and snapshot id.
+     *
+     * @param logDir the directory for the topic partition
+     * @param snapshotId the end offset and epoch for the snapshotId
+     * @throws IOException for any IO error while creating the snapshot
+     */
     public static FileRawSnapshotWriter create(Path logDir, OffsetAndEpoch snapshotId) throws IOException {
         Path path = Snapshots.createTempFile(logDir, snapshotId);
 

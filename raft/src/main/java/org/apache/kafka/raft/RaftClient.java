@@ -103,12 +103,14 @@ public interface RaftClient<T> {
     CompletableFuture<Void> shutdown(int timeoutMs);
 
     /**
-     * Get a writable snapshot file for a given offset and epoch
+     * Create a writable snapshot file for a given offset and epoch.
      *
-     * @param snapshotId The offset and epoch that identifies the snapshot. The RaftClient assumes
-     *        that the snapshot includes the record for offset and epoch in snapshotId.
-     * @return A writable snapshot object. Snapshot are immutable once the return object's freeze
-     *         method is called.
+     * The RaftClient assumes that the snapshot return will contain the records up to but
+     * not including the end offset in the snapshot id. See {@link SnapshotWriter} for
+     * details on how to use this object.
+     *
+     * @param snapshotId the end offset and epoch that identifies the snapshot
+     * @return a writable snapshot
      */
-    SnapshotWriter<T> createSnapshot(OffsetAndEpoch snapshotId);
+    SnapshotWriter<T> createSnapshot(OffsetAndEpoch snapshotId) throws IOException;
 }

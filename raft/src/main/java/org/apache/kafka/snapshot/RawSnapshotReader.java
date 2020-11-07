@@ -19,17 +19,34 @@ package org.apache.kafka.snapshot;
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Iterator;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 
-// TODO: Write documentation for this type and all of the methods
+/**
+ * Interface for reading snapshots as a sequence of records.
+ */
 public interface RawSnapshotReader extends Closeable, Iterable<RecordBatch> {
+    /**
+     * Returns the end offset and epoch for the snapshot.
+     */
     public OffsetAndEpoch snapshotId();
 
+    /**
+     * Returns the number of bytes for the snapshot.
+     *
+     * @throws IOException for any IO error while reading the size
+     */
     public long sizeInBytes() throws IOException;
 
-    public Iterator<RecordBatch> iterator();
-
+    /**
+     * Reads bytes from position into the given buffer.
+     *
+     * It is not guarantee that the given buffer will be filled.
+     *
+     * @param buffer byte buffer to put the read files
+     * @param position the starting position in the snapshot to read
+     * @return the number of bytes read
+     * @throws IOException for any IO error while reading the snapshot
+     */
     public int read(ByteBuffer buffer, long position) throws IOException;
 }

@@ -32,25 +32,25 @@ import java.util.stream.Collectors;
  * This class is responsible for managing the current state of this node and ensuring only
  * valid state transitions.
  *
- * Unattached =>
+ * Unattached transitions to:
  *    Unattached: After learning of a new election with a higher epoch
  *    Voted: After granting a vote to a candidate
  *    Candidate: After expiration of the election timeout
  *    Follower: After discovering a leader with an equal or larger epoch
  *
- * Voted =>
+ * Voted transitions to:
  *    Unattached: After learning of a new election with a higher epoch
  *    Candidate: After expiration of the election timeout
  *
- * Candidate =>
+ * Candidate transitions to:
  *    Unattached: After learning of a new election with a higher epoch
  *    Candidate: After expiration of the election timeout
  *    Leader: After receiving a majority of votes
  *
- * Leader =>
+ * Leader transitions to:
  *    Unattached: After learning of a new election with a higher epoch
  *
- * Follower =>
+ * Follower transitions to:
  *    Unattached: After learning of a new election with a higher epoch
  *    Candidate: After expiration of the fetch timeout
  *    Follower: After discovering a leader with a larger epoch
@@ -59,11 +59,11 @@ import java.util.stream.Collectors;
  * are not possible for observers, so the only transitions that are possible are
  * between Unattached and Follower.
  *
- * Unattached =>
+ * Unattached transitions to:
  *    Unattached: After learning of a new election with a higher epoch
  *    Follower: After discovering a leader with an equal or larger epoch
  *
- * Follower =>
+ * Follower transitions to:
  *    Unattached: After learning of a new election with a higher epoch
  *    Follower: After discovering a leader with a larger epoch
  *

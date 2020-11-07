@@ -72,6 +72,14 @@ public final class FileRawSnapshotReader implements RawSnapshotReader {
         fileRecords.close();
     }
 
+    /**
+     * Opens a snapshot for reading.
+     *
+     * @param logDir the directory for the topic partition
+     * @param snapshotId the end offset and epoch for the snapshotId
+     * @throws java.nio.file.NoSuchFileException if the snapshot doesn't exist
+     * @throws IOException for any IO error while opening the snapshot
+     */
     public static FileRawSnapshotReader open(Path logDir, OffsetAndEpoch snapshotId) throws IOException {
         FileRecords fileRecords = FileRecords.open(
             Snapshots.snapshotPath(logDir, snapshotId).toFile(),

@@ -22,6 +22,7 @@ import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
 
 import java.io.Closeable;
+import java.io.IOException;
 import java.util.Optional;
 import java.util.OptionalLong;
 
@@ -151,11 +152,28 @@ public interface ReplicatedLog extends Closeable {
         return OptionalLong.of(truncationOffset);
     }
 
-    // TODO: Write documentation
-    RawSnapshotWriter createSnapshot(OffsetAndEpoch snapshotId);
+    /**
+     * Create a writable snapshot for the given snapshot id.
+     *
+     * See {@link RawSnapshotWriter} for details on how to use this object.
+     *
+     * @param snapshotId the end offset and epoch that identifies the snapshot
+     * @return a writable snapshot
+     */
+    RawSnapshotWriter createSnapshot(OffsetAndEpoch snapshotId) throws IOException;
 
-    // TODO: Write documentation
-    Optional<RawSnapshotReader> readSnapshot(OffsetAndEpoch snapshotId);
+    /**
+     * Opens a readable snapshot for the given snapshot id.
+     *
+     * Returns an Optional with a readable snapshot, if the snapshot exists, otherwise
+     * returns an empty Optional. See {@link RawSnapshotReader} for details on how to
+     * use this object.
+     *
+     * @param snapshotId the end offset and epoch that identifies the snapshot
+     * @return an Optional with a readable snapshot, if the snapshot exists, otherwise
+     *         returns an empty Optional
+     */
+    Optional<RawSnapshotReader> readSnapshot(OffsetAndEpoch snapshotId) throws IOException;
 
     default void close() {}
 

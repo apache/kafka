@@ -22,15 +22,53 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import org.apache.kafka.raft.OffsetAndEpoch;
 
-// TODO: Write documentation for this type and all of the methods
+/**
+ * Interface for writing snapshot as a sequence of records.
+ */
 public interface RawSnapshotWriter extends Closeable {
+    /**
+     * Returns the end offset and epoch for the snapshot.
+     */
     public OffsetAndEpoch snapshotId();
 
+    /**
+     * Returns the number of bytes for the snapshot.
+     *
+     * @throws IOException for any IO error while reading the size
+     */
     public long sizeInBytes() throws IOException;
 
+    /**
+     * Fully appends the buffer to the snapshot.
+     *
+     * If the method returns without an exception the given buffer was fully writing the
+     * snapshot.
+     *
+     * @param buffer the buffer to append
+     * @throws IOException for any IO error during append
+     */
     public void append(ByteBuffer buffer) throws IOException;
 
+    /**
+     * Returns true if the snapshot has been frozen, otherwise false is returned.
+     *
+     * Modification to the snapshot are not allowed once it is frozen.
+     */
     public boolean isFrozen();
 
+    /**
+     * Freezes the snapshot and marking it as immutable.
+     *
+     * @throws IOException for any IO error during freezing
+     */
     public void freeze() throws IOException;
+
+    /**
+     * Closes the snapshot writer.
+     *
+     * If close is called without first calling freeze the the snapshot is aborted.
+     *
+     * @throws IOException for any IO error during close
+     */
+    public void close() throws IOException;
 }

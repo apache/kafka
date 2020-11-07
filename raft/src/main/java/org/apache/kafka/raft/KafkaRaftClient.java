@@ -1761,7 +1761,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     @Override
-    public SnapshotWriter<T> createSnapshot(OffsetAndEpoch snapshotId) {
+    public SnapshotWriter<T> createSnapshot(OffsetAndEpoch snapshotId) throws IOException {
         return new SnapshotWriter<>(
             log.createSnapshot(snapshotId),
             MAX_BATCH_SIZE,
