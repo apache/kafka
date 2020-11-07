@@ -27,6 +27,17 @@ final class Snapshots {
     private static final String SUFFIX =  ".snapshot";
     private static final String PARTIAL_SUFFIX = String.format("%s.part", SUFFIX);
 
+    private static final NumberFormat OFFSET_FORMATTER = NumberFormat.getInstance();
+    private static final NumberFormat EPOCH_FORMATTER = NumberFormat.getInstance();
+
+    static {
+        OFFSET_FORMATTER.setMinimumIntegerDigits(20);
+        OFFSET_FORMATTER.setGroupingUsed(false);
+
+        EPOCH_FORMATTER.setMinimumIntegerDigits(10);
+        EPOCH_FORMATTER.setGroupingUsed(false);
+    }
+
     static Path snapshotDir(Path logDir) {
         return logDir.resolve(SNAPSHOT_DIR);
     }
@@ -36,11 +47,7 @@ final class Snapshots {
     }
 
     static String filenameFromSnapshotId(OffsetAndEpoch snapshotId) {
-        NumberFormat formatter = NumberFormat.getInstance();
-        formatter.setMinimumIntegerDigits(20);
-        formatter.setGroupingUsed(false);
-
-        return String.format("%s-%s", formatter.format(snapshotId.offset), formatter.format(snapshotId.epoch));
+        return String.format("%s-%s", OFFSET_FORMATTER.format(snapshotId.offset), EPOCH_FORMATTER.format(snapshotId.epoch));
     }
 
     static Path moveRename(Path source, OffsetAndEpoch snapshotId) {
