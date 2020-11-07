@@ -517,7 +517,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
       // Note that authorization to a transactionalId implies ProducerId authorization
 
-    } else if (produceRequest.hasIdempotentRecords && !authorize(request.context, IDEMPOTENT_WRITE, CLUSTER, CLUSTER_NAME)) {
+    } else if (produceRequest.hasIdempotentRecords
+        && !authorize(request.context, IDEMPOTENT_WRITE, CLUSTER, CLUSTER_NAME)
+        && !authorizeByResourceType(request.context, WRITE, TOPIC)) {
       sendErrorResponseMaybeThrottle(request, Errors.CLUSTER_AUTHORIZATION_FAILED.exception)
       return
     }
@@ -2034,7 +2036,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         sendErrorResponseMaybeThrottle(request, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED.exception)
         return
       }
-    } else if (!authorize(request.context, IDEMPOTENT_WRITE, CLUSTER, CLUSTER_NAME)) {
+    } else if (!authorize(request.context, IDEMPOTENT_WRITE, CLUSTER, CLUSTER_NAME)
+        || !authorizeByResourceType(request.context, AclOperation.WRITE, ResourceType.TOPIC)) {
       sendErrorResponseMaybeThrottle(request, Errors.CLUSTER_AUTHORIZATION_FAILED.exception)
       return
     }
@@ -3151,6 +3154,14 @@ class KafkaApis(val requestChannel: RequestChannel,
       val resource = new ResourcePattern(resourceType, resourceName, PatternType.LITERAL)
       val actions = Collections.singletonList(new Action(operation, resource, refCount, logIfAllowed, logIfDenied))
       authZ.authorize(requestContext, actions).get(0) == AuthorizationResult.ALLOWED
+    }
+  }
+
+  private def authorizeByResourceType(requestContext: RequestContext,
+                                      operation: AclOperation,
+                                      resourceType: ResourceType): Boolean = {
+    authorizer.forall { authZ =>
+      authZ.authorizeByResourceType(requestContext, operation, resourceType) == AuthorizationResult.ALLOWED
     }
   }
 

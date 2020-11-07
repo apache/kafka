@@ -29,7 +29,7 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.acl.AclOperation._
-import org.apache.kafka.common.acl.AclPermissionType.ALLOW
+import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig}
@@ -50,7 +50,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, Records, SimpleRecord}
 import org.apache.kafka.common.requests._
-import org.apache.kafka.common.resource.PatternType.LITERAL
+import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourcePatternFilter, ResourceType}
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder, SecurityProtocol}
@@ -1595,14 +1595,18 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @Test
   def testIdempotentProducerNoIdempotentWriteAclInInitProducerId(): Unit = {
     createTopic(topic)
-
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), topicResource)
+    shouldIdempotentProducerFailInInitProducerId(true)
+  }
+
+  def shouldIdempotentProducerFailInInitProducerId(expectAuthException: Boolean): Unit = {
     val producer = buildIdempotentProducer()
     try {
       // the InitProducerId is sent asynchronously, so we expect the error either in the callback
       // or raised from send itself
       producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes)).get()
-      fail("Should have raised ClusterAuthorizationException")
+      if (expectAuthException)
+        fail("Should have raised ClusterAuthorizationException")
     } catch {
       case e: ExecutionException =>
         assertTrue(e.getCause.isInstanceOf[ClusterAuthorizationException])
@@ -1611,7 +1615,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       // the second time, the call to send itself should fail (the producer becomes unusable
       // if no producerId can be obtained)
       producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes)).get()
-      fail("Should have raised ClusterAuthorizationException")
+      if (expectAuthException)
+        fail("Should have raised ClusterAuthorizationException")
     } catch {
       case e: ExecutionException =>
         assertTrue(e.getCause.isInstanceOf[ClusterAuthorizationException])
@@ -1621,18 +1626,20 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @Test
   def testIdempotentProducerNoIdempotentWriteAclInProduce(): Unit = {
     createTopic(topic)
-
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), topicResource)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, IDEMPOTENT_WRITE, ALLOW)), clusterResource)
+    idempotentProducerShouldFailInProduce(() => removeAllClientAcls())
+  }
 
+  def idempotentProducerShouldFailInProduce(removeAclIdempotenceRequired: () => Unit): Unit = {
     val producer = buildIdempotentProducer()
 
     // first send should be fine since we have permission to get a ProducerId
     producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes)).get()
 
     // revoke the IdempotentWrite permission
-    removeAllClientAcls()
-    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), topicResource)
+    removeAclIdempotenceRequired()
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), topicResource)
 
     try {
       // the send should now fail with a cluster auth error
@@ -1773,6 +1780,87 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val response = connectAndReceive[MetadataResponse](request)
     assertEquals(Collections.emptyMap, response.errorCounts)
     assertFalse("Cluster id not returned", response.clusterId.isEmpty)
+  }
+
+  @Test
+  def testAuthorizeAnyDurability(): Unit = {
+    createTopic(topic)
+
+    for (_ <- 1 to 3) {
+      addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), topicResource)
+      shouldIdempotentProducerFailInInitProducerId(true)
+
+      addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), topicResource)
+      shouldIdempotentProducerFailInInitProducerId(false)
+
+      removeAllClientAcls()
+      addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), topicResource)
+      shouldIdempotentProducerFailInInitProducerId(true)
+    }
+  }
+
+  @Test
+  def testAuthorizeAnyIsolationUnrelatedDenyWontDominateAllow(): Unit = {
+    createTopic(topic)
+    createTopic("topic-2")
+    createTopic("to")
+
+    val unrelatedPrincipleString = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "unrelated").toString
+    val unrelatedTopicResource = new ResourcePattern(TOPIC, "topic-2", LITERAL)
+    val unrelatedGroupResource = new ResourcePattern(GROUP, "to", PREFIXED)
+
+    val acl1 = new AccessControlEntry(clientPrincipalString, WildcardHost, READ, DENY)
+    val acl2 = new AccessControlEntry(unrelatedPrincipleString, WildcardHost, READ, DENY)
+    val acl3 = new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, DENY)
+    val acl4 = new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)
+    val acl5 = new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)
+
+    addAndVerifyAcls(Set(acl1, acl4, acl5), topicResource)
+    addAndVerifyAcls(Set(acl2, acl3), unrelatedTopicResource)
+    addAndVerifyAcls(Set(acl2, acl3), unrelatedGroupResource)
+    shouldIdempotentProducerFailInInitProducerId(false)
+  }
+
+  @Test
+  def testAuthorizeAnyDenyTakesPrecedence(): Unit = {
+    createTopic(topic)
+    val allowWriteAce = new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)
+    addAndVerifyAcls(Set(allowWriteAce), topicResource)
+    shouldIdempotentProducerFailInInitProducerId(false)
+
+    val denyWriteAce = new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, DENY)
+    addAndVerifyAcls(Set(denyWriteAce), topicResource)
+    shouldIdempotentProducerFailInInitProducerId(true)
+  }
+
+  @Test
+  def testAuthorizeAnyWildcardResourceDenyDominate(): Unit = {
+    createTopic(topic)
+    val wildcard = new ResourcePattern(TOPIC, ResourcePattern.WILDCARD_RESOURCE, LITERAL)
+    val prefixed = new ResourcePattern(TOPIC, "t", PREFIXED)
+    val literal = new ResourcePattern(TOPIC, topic, LITERAL)
+    val allowWriteAce = new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)
+    val denyWriteAce = new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, DENY)
+
+    addAndVerifyAcls(Set(allowWriteAce), prefixed)
+    addAndVerifyAcls(Set(allowWriteAce), literal)
+    shouldIdempotentProducerFailInInitProducerId(false)
+
+    addAndVerifyAcls(Set(denyWriteAce), wildcard)
+    shouldIdempotentProducerFailInInitProducerId(true)
+  }
+
+  @Test
+  def testAuthorizeAnyPrefixedResourceDenyDominate(): Unit = {
+    createTopic(topic)
+    val prefixed = new ResourcePattern(TOPIC, topic.substring(0, 1), PREFIXED)
+    val literal = new ResourcePattern(TOPIC, topic, LITERAL)
+    val allowWriteAce = new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)
+    val denyWriteAce = new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, DENY)
+
+    addAndVerifyAcls(Set(denyWriteAce), prefixed)
+    addAndVerifyAcls(Set(allowWriteAce), literal)
+    shouldIdempotentProducerFailInInitProducerId(true)
   }
 
   def removeAllClientAcls(): Unit = {
