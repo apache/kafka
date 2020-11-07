@@ -99,12 +99,12 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
-import static org.apache.kafka.streams.StreamsConfig.APPLICATION_ID_CONFIG;
 import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.AT_LEAST_ONCE;
 import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
 import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
@@ -314,7 +314,9 @@ public class TopologyTestDriver implements Closeable {
             configCopy.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-bootstrap-host:0");
         }
         if (!configCopy.containsKey(StreamsConfig.APPLICATION_ID_CONFIG)) {
-            configCopy.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "dummy-topology-test-driver-app-id");
+            // provide randomized dummy app-id if it's not specified
+            configCopy.setProperty(StreamsConfig.APPLICATION_ID_CONFIG,
+                    "dummy-topology-test-driver-app-id-" + ThreadLocalRandom.current().nextInt());
         }
         final StreamsConfig streamsConfig = new ClientUtils.QuietStreamsConfig(configCopy);
         logIfTaskIdleEnabled(streamsConfig);
