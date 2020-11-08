@@ -268,6 +268,19 @@ public class TopologyTestDriver implements Closeable {
 
     /**
      * Create a new test diver instance.
+     * Initialized the internally mocked wall-clock time with {@link System#currentTimeMillis() current system time}.
+     *
+     * @param topology the topology to be tested
+     * @param initialWallClockTimeMs the initial value of internally mocked wall-clock time
+     */
+    public TopologyTestDriver(final Topology topology,
+                              final Instant initialWallClockTimeMs) {
+        this(topology, new Properties(), initialWallClockTimeMs);
+    }
+
+
+    /**
+     * Create a new test diver instance.
      *
      * @deprecated Since 2.4 use {@link #TopologyTestDriver(Topology, Properties, Instant)}
      *
