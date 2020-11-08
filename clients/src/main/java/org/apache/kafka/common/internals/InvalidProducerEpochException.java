@@ -16,14 +16,14 @@
  */
 package org.apache.kafka.common.internals;
 
-import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.errors.ApiException;
 
 /**
  * This exception indicates that the produce request sent to the partition leader
  * contains a non-matching producer epoch. When encountering this exception, the ongoing transaction
  * will be aborted and can be retried.
  */
-public class InvalidProducerEpochException extends RetriableException {
+public class InvalidProducerEpochException extends ApiException {
 
     private static final long serialVersionUID = 1L;
 

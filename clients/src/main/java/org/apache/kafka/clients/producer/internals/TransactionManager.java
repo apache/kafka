@@ -1014,10 +1014,6 @@ public class TransactionManager {
                 requestEpochBumpForPartition(batch.topicPartition);
                 return true;
             }
-        } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
-            // Retry the initProducerId to bump the epoch and continue.
-            requestEpochBumpForPartition(batch.topicPartition);
-            return true;
         } else if (error == Errors.OUT_OF_ORDER_SEQUENCE_NUMBER) {
             if (!hasUnresolvedSequence(batch.topicPartition) &&
                     (batch.sequenceHasBeenReset() || !isNextSequence(batch.topicPartition, batch.baseSequence()))) {
