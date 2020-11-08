@@ -82,14 +82,14 @@ public class ProduceResponse extends AbstractResponse {
                 .entrySet()
                 .stream()
                 .map(topicData -> new ProduceResponseData.TopicProduceResponse()
-                    .setTopic(topicData.getKey())
+                    .setName(topicData.getKey())
                     .setPartitionResponses(topicData.getValue()
                         .stream()
                         .map(p -> new ProduceResponseData.PartitionProduceResponse()
-                            .setPartition(p.getKey().partition())
+                            .setIndex(p.getKey().partition())
                             .setBaseOffset(p.getValue().baseOffset)
                             .setLogStartOffset(p.getValue().logStartOffset)
-                            .setLogAppendTime(p.getValue().logAppendTime)
+                            .setLogAppendTimeMs(p.getValue().logAppendTime)
                             .setErrorMessage(p.getValue().errorMessage)
                             .setErrorCode(p.getValue().error.code())
                             .setRecordErrors(p.getValue().recordErrors
@@ -124,11 +124,11 @@ public class ProduceResponse extends AbstractResponse {
                 .stream()
                 .flatMap(t -> t.partitionResponses()
                         .stream()
-                        .map(p -> new AbstractMap.SimpleEntry<>(new TopicPartition(t.topic(), p.partition()),
+                        .map(p -> new AbstractMap.SimpleEntry<>(new TopicPartition(t.name(), p.index()),
                                 new PartitionResponse(
                                         Errors.forCode(p.errorCode()),
                                         p.baseOffset(),
-                                        p.logAppendTime(),
+                                        p.logAppendTimeMs(),
                                         p.logStartOffset(),
                                         p.recordErrors()
                                                 .stream()

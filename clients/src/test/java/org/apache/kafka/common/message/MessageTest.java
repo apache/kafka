@@ -680,10 +680,10 @@ public final class MessageTest {
         testAllMessageRoundTrips(new ProduceResponseData()
                                      .setResponses(singletonList(
                                          new ProduceResponseData.TopicProduceResponse()
-                                             .setTopic(topicName)
+                                             .setName(topicName)
                                              .setPartitionResponses(singletonList(
                                                  new ProduceResponseData.PartitionProduceResponse()
-                                                     .setPartition(partitionIndex)
+                                                     .setIndex(partitionIndex)
                                                      .setErrorCode(errorCode)
                                                      .setBaseOffset(baseOffset))))));
 
@@ -691,13 +691,13 @@ public final class MessageTest {
             () -> new ProduceResponseData()
                       .setResponses(singletonList(
                             new ProduceResponseData.TopicProduceResponse()
-                                .setTopic(topicName)
+                                .setName(topicName)
                                 .setPartitionResponses(singletonList(
                                      new ProduceResponseData.PartitionProduceResponse()
-                                         .setPartition(partitionIndex)
+                                         .setIndex(partitionIndex)
                                          .setErrorCode(errorCode)
                                          .setBaseOffset(baseOffset)
-                                         .setLogAppendTime(logAppendTimeMs)
+                                         .setLogAppendTimeMs(logAppendTimeMs)
                                          .setLogStartOffset(logStartOffset)
                                          .setRecordErrors(singletonList(
                                              new ProduceResponseData.BatchIndexAndErrorMessage()
@@ -719,7 +719,7 @@ public final class MessageTest {
             }
 
             if (version < 2) {
-                responseData.responses().get(0).partitionResponses().get(0).setLogAppendTime(-1);
+                responseData.responses().get(0).partitionResponses().get(0).setLogAppendTimeMs(-1);
             }
 
             if (version < 1) {

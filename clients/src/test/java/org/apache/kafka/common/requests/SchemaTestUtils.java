@@ -19,7 +19,6 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.BoundField;
-import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Type;
 import org.junit.Assert;
@@ -33,20 +32,14 @@ public final class SchemaTestUtils {
 
     static void assertEquals(Type lhs, Type rhs) {
         if (lhs instanceof Schema) {
-            assertTrue(rhs instanceof Schema);
+            assertTrue("excepted: Schema, actual: " + rhs, rhs instanceof Schema);
             Schema lhsSchema = (Schema) lhs;
             Schema rhsSchema = (Schema) rhs;
             Assert.assertEquals(lhsSchema.numFields(), rhsSchema.numFields());
             int fieldIndex = 0;
-            for (BoundField f : lhsSchema.fields()) {
-                Field previousField = f.def;
-                Field currentField = rhsSchema.fields()[fieldIndex++].def;
-                Assert.assertEquals(previousField.name, currentField.name);
-                assertEquals(previousField.type, currentField.type);
-                // hasDefaultValue and defaultValue are not used by automatic protocol so we don't need to check them.
-            }
+            for (BoundField f : lhsSchema.fields()) assertEquals(f.def.type, rhsSchema.fields()[fieldIndex++].def.type);
         } else if (lhs instanceof ArrayOf) {
-            assertTrue(rhs instanceof ArrayOf);
+            assertTrue("excepted: ArrayOf, actual: " + rhs, rhs instanceof ArrayOf);
             lhs.arrayElementType().ifPresent(lhsType ->
                 rhs.arrayElementType().ifPresent(rhsType -> assertEquals(lhsType, rhsType)));
         } else Assert.assertEquals(lhs, rhs);

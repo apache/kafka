@@ -638,9 +638,9 @@ public class RequestResponseTest {
         produceData.put(tp1, records1);
         ProduceRequest request = ProduceRequest.Builder.forMagic(RecordBatch.MAGIC_VALUE_V2, (short) 1, 5000, produceData, "transactionalId")
             .build((short) 3);
-        assertEquals(2, request.partitionSizes.size());
-        assertEquals(records0.sizeInBytes(), (int) request.partitionSizes.get(tp0));
-        assertEquals(records1.sizeInBytes(), (int) request.partitionSizes.get(tp1));
+        assertEquals(2, request.partitionSizes().size());
+        assertEquals(records0.sizeInBytes(), (int) request.partitionSizes().get(tp0));
+        assertEquals(records1.sizeInBytes(), (int) request.partitionSizes().get(tp1));
     }
 
     @Test
@@ -670,7 +670,7 @@ public class RequestResponseTest {
     @Test
     public void produceRequestGetErrorResponseTest() {
         ProduceRequest request = createProduceRequest(ApiKeys.PRODUCE.latestVersion());
-        Set<TopicPartition> partitions = new HashSet<>(request.partitionSizes.keySet());
+        Set<TopicPartition> partitions = new HashSet<>(request.partitionSizes().keySet());
 
         ProduceResponse errorResponse = (ProduceResponse) request.getErrorResponse(new NotEnoughReplicasException());
         assertEquals(partitions, errorResponse.responses().keySet());

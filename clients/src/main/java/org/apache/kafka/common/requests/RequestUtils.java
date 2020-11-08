@@ -64,10 +64,10 @@ public final class RequestUtils {
     private static boolean anyMatch(ProduceRequest request, Predicate<RecordBatch> predicate) {
         return request.dataOrException().topicData()
                 .stream()
-                .anyMatch(topicProduceData -> topicProduceData.data()
+                .anyMatch(topicProduceData -> topicProduceData.partitionData()
                     .stream()
                     .anyMatch(partitionProduceData -> {
-                        BaseRecords records = partitionProduceData.recordSet();
+                        BaseRecords records = partitionProduceData.records();
                         if (records instanceof Records) {
                             Iterator<? extends RecordBatch> iterator = ((Records) records).batches().iterator();
                             return iterator.hasNext() && predicate.test(iterator.next());

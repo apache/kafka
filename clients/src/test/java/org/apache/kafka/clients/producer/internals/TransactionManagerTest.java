@@ -3358,13 +3358,13 @@ public class TransactionManagerTest {
             ProduceRequest produceRequest = (ProduceRequest) body;
             MemoryRecords records = produceRequest.dataOrException().topicData()
                     .stream()
-                    .filter(t -> t.topic().equals(tp.topic()))
+                    .filter(t -> t.name().equals(tp.topic()))
                     .findAny()
                     .get()
-                    .data()
+                    .partitionData()
                     .stream()
-                    .filter(p -> p.partition() == tp.partition())
-                    .map(p -> (MemoryRecords) p.recordSet())
+                    .filter(p -> p.index() == tp.partition())
+                    .map(p -> (MemoryRecords) p.records())
                     .findAny().get();
             assertNotNull(records);
             Iterator<MutableRecordBatch> batchIterator = records.batches().iterator();

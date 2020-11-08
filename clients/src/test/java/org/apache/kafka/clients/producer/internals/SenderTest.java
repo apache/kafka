@@ -159,9 +159,9 @@ public class SenderTest {
 
     private static Map<TopicPartition, MemoryRecords> partitionRecords(ProduceRequest request) {
         Map<TopicPartition, MemoryRecords> partitionRecords = new HashMap<>();
-        request.dataOrException().topicData().forEach(tpData -> tpData.data().forEach(p -> {
-            TopicPartition tp = new TopicPartition(tpData.topic(), p.partition());
-            partitionRecords.put(tp, (MemoryRecords) p.recordSet());
+        request.dataOrException().topicData().forEach(tpData -> tpData.partitionData().forEach(p -> {
+            TopicPartition tp = new TopicPartition(tpData.name(), p.index());
+            partitionRecords.put(tp, (MemoryRecords) p.records());
         }));
         return Collections.unmodifiableMap(partitionRecords);
     }

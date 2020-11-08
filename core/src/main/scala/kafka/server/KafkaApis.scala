@@ -584,14 +584,16 @@ class KafkaApis(val requestChannel: RequestChannel,
     val nonExistingTopicResponses = mutable.Map[TopicPartition, PartitionResponse]()
     val invalidRequestResponses = mutable.Map[TopicPartition, PartitionResponse]()
     val authorizedRequestInfo = mutable.Map[TopicPartition, MemoryRecords]()
-    val authorizedTopics = filterByAuthorized(request.context, WRITE, TOPIC, produceRequest.dataOrException().topicData().asScala)(_.topic())
+    // cache the result to avoid redundant authorization calls
+    val authorizedTopics = filterByAuthorized(request.context, WRITE, TOPIC,
+      produceRequest.dataOrException().topicData().asScala)(_.name())
 
-    produceRequest.dataOrException().topicData().forEach(topic => topic.data().forEach { partition =>
-      val topicPartition = new TopicPartition(topic.topic(), partition.partition())
+    produceRequest.dataOrException.topicData.forEach(topic => topic.partitionData.forEach { partition =>
+      val topicPartition = new TopicPartition(topic.name, partition.index)
       // This caller assumes the type is MemoryRecords and that is true on current serialization
       // We cast the type to avoid causing big change to code base.
       // TODO: maybe we need to refactor code to avoid this casting
-      val memoryRecords = partition.recordSet().asInstanceOf[MemoryRecords]
+      val memoryRecords = partition.records.asInstanceOf[MemoryRecords]
       if (!authorizedTopics.contains(topicPartition.topic))
         unauthorizedTopicResponses += topicPartition -> new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED)
       else if (!metadataCache.contains(topicPartition))

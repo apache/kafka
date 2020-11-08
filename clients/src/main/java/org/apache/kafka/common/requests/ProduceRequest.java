@@ -33,7 +33,6 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.AbstractMap;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -115,17 +114,17 @@ public class ProduceRequest extends AbstractRequest {
                 .entrySet()
                 .stream()
                 .map(e -> new ProduceRequestData.TopicProduceData()
-                    .setTopic(e.getKey())
-                    .setData(e.getValue().stream()
+                    .setName(e.getKey())
+                    .setPartitionData(e.getValue().stream()
                         .map(tpAndRecord -> new ProduceRequestData.PartitionProduceData()
-                            .setPartition(tpAndRecord.getKey().partition())
-                            .setRecordSet(tpAndRecord.getValue()))
+                            .setIndex(tpAndRecord.getKey().partition())
+                            .setRecords(tpAndRecord.getValue()))
                         .collect(Collectors.toList())))
                 .collect(Collectors.toList());
 
             return new ProduceRequest(new ProduceRequestData()
                 .setAcks(acks)
-                .setTimeout(timeout)
+                .setTimeoutMs(timeout)
                 .setTransactionalId(transactionalId)
                 .setTopicData(tpd), version);
         }
@@ -150,25 +149,36 @@ public class ProduceRequest extends AbstractRequest {
     private final short acks;
     private final int timeout;
     private final String transactionalId;
-    // visible for testing
-    final Map<TopicPartition, Integer> partitionSizes;
     // This is set to null by `clearPartitionRecords` to prevent unnecessary memory retention when a produce request is
     // put in the purgatory (due to client throttling, it can take a while before the response is sent).
     // Care should be taken in methods that use this field.
     private volatile ProduceRequestData data;
+    // the partitionSizes is lazily initialized since it is used by server-side in production.
+    private volatile Map<TopicPartition, Integer> partitionSizes;
 
     public ProduceRequest(ProduceRequestData produceRequestData, short version) {
         super(ApiKeys.PRODUCE, version);
         this.data = produceRequestData;
         this.acks = data.acks();
-        this.timeout = data.timeout();
+        this.timeout = data.timeoutMs();
         this.transactionalId = data.transactionalId();
-        this.partitionSizes = data.topicData()
-            .stream()
-            .flatMap(e -> e.data()
-                .stream()
-                .map(p -> new AbstractMap.SimpleEntry<>(new TopicPartition(e.topic(), p.partition()), p.recordSet().sizeInBytes())))
-            .collect(Collectors.groupingBy(AbstractMap.SimpleEntry::getKey, Collectors.summingInt(AbstractMap.SimpleEntry::getValue)));
+    }
+
+    public Map<TopicPartition, Integer> partitionSizes() {
+        if (partitionSizes != null) return partitionSizes;
+        else {
+            // this method may be called by different thread (see the comment on data)
+            synchronized (this) {
+                if (partitionSizes == null)
+                    partitionSizes = data.topicData()
+                        .stream()
+                        .flatMap(e -> e.partitionData()
+                            .stream()
+                            .map(p -> new AbstractMap.SimpleEntry<>(new TopicPartition(e.name(), p.index()), p.records().sizeInBytes())))
+                        .collect(Collectors.groupingBy(AbstractMap.SimpleEntry::getKey, Collectors.summingInt(AbstractMap.SimpleEntry::getValue)));
+            }
+        }
+        return partitionSizes;
     }
 
     /**
@@ -198,9 +208,9 @@ public class ProduceRequest extends AbstractRequest {
                 .append(",timeout=").append(timeout);
 
         if (verbose)
-            bld.append(",partitionSizes=").append(Utils.mkString(partitionSizes, "[", "]", "=", ","));
+            bld.append(",partitionSizes=").append(Utils.mkString(partitionSizes(), "[", "]", "=", ","));
         else
-            bld.append(",numPartitions=").append(partitionSizes.size());
+            bld.append(",numPartitions=").append(partitionSizes().size());
 
         bld.append("}");
         return bld.toString();
@@ -212,19 +222,19 @@ public class ProduceRequest extends AbstractRequest {
         if (acks == 0) return null;
         Errors error = Errors.forException(e);
         return new ProduceResponse(new ProduceResponseData()
-            .setResponses(partitions().stream().collect(Collectors.groupingBy(TopicPartition::topic)).entrySet()
+            .setResponses(partitionSizes().keySet().stream().collect(Collectors.groupingBy(TopicPartition::topic)).entrySet()
                 .stream()
                 .map(entry -> new ProduceResponseData.TopicProduceResponse()
                     .setPartitionResponses(entry.getValue().stream().map(p -> new ProduceResponseData.PartitionProduceResponse()
-                        .setPartition(p.partition())
+                        .setIndex(p.partition())
                         .setRecordErrors(Collections.emptyList())
                         .setBaseOffset(INVALID_OFFSET)
-                        .setLogAppendTime(RecordBatch.NO_TIMESTAMP)
+                        .setLogAppendTimeMs(RecordBatch.NO_TIMESTAMP)
                         .setLogStartOffset(INVALID_OFFSET)
                         .setErrorMessage(e.getMessage())
                         .setErrorCode(error.code()))
                         .collect(Collectors.toList()))
-                    .setTopic(entry.getKey()))
+                    .setName(entry.getKey()))
                 .collect(Collectors.toList()))
             .setThrottleTimeMs(throttleTimeMs));
     }
@@ -232,11 +242,7 @@ public class ProduceRequest extends AbstractRequest {
     @Override
     public Map<Errors, Integer> errorCounts(Throwable e) {
         Errors error = Errors.forException(e);
-        return Collections.singletonMap(error, partitions().size());
-    }
-
-    private Collection<TopicPartition> partitions() {
-        return partitionSizes.keySet();
+        return Collections.singletonMap(error, partitionSizes().size());
     }
 
     public short acks() {
@@ -253,6 +259,8 @@ public class ProduceRequest extends AbstractRequest {
 
     public void clearPartitionRecords() {
         data = null;
+        // lazily initialize partitionSizes.
+        partitionSizes();
     }
 
     public static void validateRecords(short version, Records records) {
