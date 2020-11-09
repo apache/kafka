@@ -171,7 +171,7 @@ class DelegationTokenManager(val config: KafkaConfig,
   type DescribeResponseCallback = (Errors, List[DelegationToken]) => Unit
 
   val secretKey = {
-    val keyBytes =  if (config.tokenAuthEnabled) config.delegationTokenMasterKey.value.getBytes(StandardCharsets.UTF_8) else null
+    val keyBytes =  if (config.tokenAuthEnabled) config.delegationTokenSecretKey.value.getBytes(StandardCharsets.UTF_8) else null
     if (keyBytes == null || keyBytes.length == 0) null
     else
       createSecretKey(keyBytes)
