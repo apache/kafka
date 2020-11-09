@@ -242,7 +242,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     // Verify that error metric is updated with producer acks=0 when no response is sent
     val producer = createProducer()
     sendRecords(producer, numRecords = 1, recordSize = 100, new TopicPartition("non-existent", 0))
-    verifyYammerMetricRecorded(s"$errorMetricPrefix,request=Metadata,error=LEADER_NOT_AVAILABLE")
+    verifyYammerMetricRecorded(s"$errorMetricPrefix,request=Metadata,error=UNKNOWN_TOPIC_OR_PARTITION")
   }
 
   private def verifyKafkaMetric[T](name: String, metrics: java.util.Map[MetricName, _ <: Metric], entity: String,

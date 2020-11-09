@@ -133,7 +133,6 @@ class BrokerToControllerChannelManagerImpl(
 
   def shutdown(): Unit = {
     requestThread.shutdown()
-    requestThread.awaitShutdown()
     info(s"Broker to controller channel manager for $channelName shutdown")
   }
 
