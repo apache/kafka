@@ -562,6 +562,7 @@ public class Sender implements Runnable {
             // if we have a response, parse it
             if (response.hasResponse()) {
                 // TODO: Sender should exercise PartitionProduceResponse rather than ProduceResponse.PartitionResponse
+                // https://issues.apache.org/jira/browse/KAFKA-10696
                 ProduceResponse produceResponse = (ProduceResponse) response.responseBody();
                 produceResponse.data().responses().forEach(r -> r.partitionResponses().forEach(p -> {
                     TopicPartition tp = new TopicPartition(r.name(), p.index());

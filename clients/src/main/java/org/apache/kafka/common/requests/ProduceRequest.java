@@ -32,8 +32,8 @@ import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
-import java.util.AbstractMap;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -164,18 +164,21 @@ public class ProduceRequest extends AbstractRequest {
         this.transactionalId = data.transactionalId();
     }
 
-    public Map<TopicPartition, Integer> partitionSizes() {
-        if (partitionSizes != null) return partitionSizes;
-        else {
+    // visible for testing
+    Map<TopicPartition, Integer> partitionSizes() {
+        if (partitionSizes == null) {
             // this method may be called by different thread (see the comment on data)
             synchronized (this) {
-                if (partitionSizes == null)
-                    partitionSizes = data.topicData()
-                        .stream()
-                        .flatMap(e -> e.partitionData()
-                            .stream()
-                            .map(p -> new AbstractMap.SimpleEntry<>(new TopicPartition(e.name(), p.index()), p.records().sizeInBytes())))
-                        .collect(Collectors.groupingBy(AbstractMap.SimpleEntry::getKey, Collectors.summingInt(AbstractMap.SimpleEntry::getValue)));
+                if (partitionSizes == null) {
+                    partitionSizes = new HashMap<>();
+                    data.topicData().forEach(topicData ->
+                        topicData.partitionData().forEach(partitionData ->
+                            partitionSizes.compute(new TopicPartition(topicData.name(), partitionData.index()),
+                                (ignored, previousValue) ->
+                                    partitionData.records().sizeInBytes() + (previousValue == null ? 0 : previousValue))
+                        )
+                    );
+                }
             }
         }
         return partitionSizes;
@@ -258,9 +261,9 @@ public class ProduceRequest extends AbstractRequest {
     }
 
     public void clearPartitionRecords() {
-        data = null;
         // lazily initialize partitionSizes.
         partitionSizes();
+        data = null;
     }
 
     public static void validateRecords(short version, Records records) {
