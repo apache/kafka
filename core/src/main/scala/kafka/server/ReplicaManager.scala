@@ -199,6 +199,7 @@ class ReplicaManager(val config: KafkaConfig,
                      delayedDeleteRecordsPurgatoryParam: Option[DelayedOperationPurgatory[DelayedDeleteRecords]] = None,
                      delayedElectLeaderPurgatoryParam: Option[DelayedOperationPurgatory[DelayedElectLeader]] = None,
                      threadNamePrefix: Option[String] = None,
+                     logDirEventManager: LogDirEventManager
                      ) extends Logging with KafkaMetricsGroup {
 
   val delayedProducePurgatory = delayedProducePurgatoryParam.getOrElse(
@@ -296,6 +297,9 @@ class ReplicaManager(val config: KafkaConfig,
     // start ISR expiration thread
     // A follower can lag behind leader for up to config.replicaLagTimeMaxMs x 1.5 before it is removed from ISR
     scheduler.schedule("isr-expiration", maybeShrinkIsr _, period = config.replicaLagTimeMaxMs / 2, unit = TimeUnit.MILLISECONDS)
+    if (config.interBrokerProtocolVersion.isAlterReplicaStateSupported) {
+      logDirEventManager.start()
+    }
     scheduler.schedule("shutdown-idle-replica-alter-log-dirs-thread", shutdownIdleReplicaAlterLogDirsThread _, period = 10000L, unit = TimeUnit.MILLISECONDS)
 
     // If inter-broker protocol (IBP) < 1.0, the controller will send LeaderAndIsrRequest V0 which does not include isNew field.
@@ -1919,9 +1923,12 @@ class ReplicaManager(val config: KafkaConfig,
       warn(s"Broker $localBrokerId stopped fetcher for partitions ${newOfflinePartitions.mkString(",")} and stopped moving logs " +
            s"for partitions ${partitionsWithOfflineFutureReplica.mkString(",")} because they are in the failed log directory $dir.")
     }
+    val topicPartitionsInFailDir = logManager.logsByDir.getOrElse(dir, Map.empty).keySet
     logManager.handleLogDirFailure(dir)
 
-    if (sendZkNotification)
+    if (config.interBrokerProtocolVersion.isAlterReplicaStateSupported)
+      sentLogDirEvent(dir, topicPartitionsInFailDir.toSeq, AlterReplicaStateRequest.OFFLINE_REPLICA_STATE, "these partitions are in failed log directory")
+    else if (sendZkNotification)
       if (zkClient.isEmpty) {
         warn("Unable to propagate log dir failure via Zookeeper in KRaft mode")
       } else {
@@ -2279,6 +2286,33 @@ class ReplicaManager(val config: KafkaConfig,
           stateChangeLogger.error(s"Unable to delete stray replica $topicPartition because " +
             s"we got an unexpected ${e.getClass.getName} exception: ${e.getMessage}", e)
       }
+    }
+  }
+
+  def sentLogDirEvent(dir: String, topicPartitionsInDir:Seq[TopicPartition], newState: Byte, reason: String): Unit = {
+    if (topicPartitionsInDir.nonEmpty) {
+      val logDirEventItem = AlterReplicaStateItem(topicPartitionsInDir.asJava, newState, reason, handleAlterReplicaStateResponse)
+
+      logDirEventManager.handleAlterReplicaStateChanges(logDirEventItem)
+    } else {
+      info(s"Log dir: $dir contains none partitions, ignore log dir event")
+    }
+  }
+
+  /**
+   * Visible for testing
+   * @return true if we need not to retry, which means the response contains no error or only UNKNOWN_TOPIC_OR_PARTITION error
+   */
+  def handleAlterReplicaStateResponse(result: Either[Errors, TopicPartition]): Unit = {
+    result match {
+      case Left(error: Errors) => error match {
+        case Errors.UNKNOWN_TOPIC_OR_PARTITION =>
+          debug(s"Controller failed to update replica state since it doesn't know about this topic or partition, retry")
+        case _ =>
+          warn(s"Failed AlterReplicaState request due to unknown error: $error, retry")
+      }
+      case Right(_) =>
+        info(s"Successfully altered replica state")
     }
   }
 }

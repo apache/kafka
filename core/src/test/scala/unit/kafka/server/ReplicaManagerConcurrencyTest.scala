@@ -168,7 +168,8 @@ class ReplicaManagerConcurrencyTest {
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, ""),
       metadataCache = MetadataCache.kRaftMetadataCache(config.brokerId),
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
-      alterIsrManager = new MockAlterIsrManager(channel)
+      alterIsrManager = new MockAlterIsrManager(channel),
+      logDirEventManager = TestUtils.createMockLogDirEventManager()
     ) {
       override def createReplicaFetcherManager(
         metrics: Metrics,

@@ -129,6 +129,8 @@ class BrokerServer(
 
   var alterIsrManager: AlterIsrManager = null
 
+  var logDirEventManager: LogDirEventManager = null
+
   var autoTopicCreationManager: AutoTopicCreationManager = null
 
   var kafkaScheduler: KafkaScheduler = null
@@ -257,6 +259,21 @@ class BrokerServer(
       )
       alterIsrManager.start()
 
+      val alterReplicaStateChannelManager = new BrokerToControllerChannelManagerImpl(
+        controllerNodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache),
+        time = time,
+        metrics = metrics,
+        config = config,
+        channelName = "alterReplicaStateChannel",
+        threadNamePrefix = threadNamePrefix,
+        retryTimeoutMs = Long.MaxValue)
+      if (config.interBrokerProtocolVersion.isAlterReplicaStateSupported) {
+        alterReplicaStateChannelManager.start()
+      }
+
+      logDirEventManager = new LogDirEventManagerImpl(alterReplicaStateChannelManager, kafkaScheduler, time,
+        config.brokerId, () => lifecycleManager.brokerEpoch)
+
       this._replicaManager = new ReplicaManager(
         config = config,
         metrics = metrics,
@@ -270,7 +287,8 @@ class BrokerServer(
         brokerTopicStats = brokerTopicStats,
         isShuttingDown = isShuttingDown,
         zkClient = None,
-        threadNamePrefix = threadNamePrefix)
+        threadNamePrefix = threadNamePrefix,
+        logDirEventManager = logDirEventManager)
 
       /* start token manager */
       if (config.tokenAuthEnabled) {
@@ -507,6 +525,9 @@ class BrokerServer(
 
       if (clientToControllerChannelManager != null)
         CoreUtils.swallow(clientToControllerChannelManager.shutdown(), this)
+
+      if (logDirEventManager != null)
+        CoreUtils.swallow(logDirEventManager.shutdown(), this)
 
       if (logManager != null)
         CoreUtils.swallow(logManager.shutdown(), this)

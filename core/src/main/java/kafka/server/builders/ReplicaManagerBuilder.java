@@ -26,6 +26,7 @@ import kafka.server.DelayedFetch;
 import kafka.server.DelayedOperationPurgatory;
 import kafka.server.DelayedProduce;
 import kafka.server.KafkaConfig;
+import kafka.server.LogDirEventManager;
 import kafka.server.LogDirFailureChannel;
 import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory.QuotaManagers;
@@ -51,6 +52,7 @@ public class ReplicaManagerBuilder {
     private MetadataCache metadataCache = null;
     private LogDirFailureChannel logDirFailureChannel = null;
     private AlterIsrManager alterIsrManager = null;
+    private LogDirEventManager logDirEventManager = null;
     private BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
     private AtomicBoolean isShuttingDown = new AtomicBoolean(false);
     private Optional<KafkaZkClient> zkClient = Optional.empty();
@@ -145,6 +147,11 @@ public class ReplicaManagerBuilder {
         return this;
     }
 
+    public ReplicaManagerBuilder setLogDirEventManager(LogDirEventManager logDirEventManager) {
+        this.logDirEventManager = logDirEventManager;
+        return this;
+    }
+
     public ReplicaManager build() {
         if (config == null) config = new KafkaConfig(Collections.emptyMap());
         if (metrics == null) metrics = new Metrics();
@@ -168,6 +175,7 @@ public class ReplicaManagerBuilder {
                              OptionConverters.toScala(delayedFetchPurgatory),
                              OptionConverters.toScala(delayedDeleteRecordsPurgatory),
                              OptionConverters.toScala(delayedElectLeaderPurgatory),
-                             OptionConverters.toScala(threadNamePrefix));
+                             OptionConverters.toScala(threadNamePrefix),
+                             logDirEventManager);
     }
 }

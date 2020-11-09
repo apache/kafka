@@ -228,6 +228,7 @@ public class ReplicaFetcherThreadBenchmark {
             setMetadataCache(metadataCache).
             setLogDirFailureChannel(new LogDirFailureChannel(logDirs.size())).
             setAlterIsrManager(TestUtils.createAlterIsrManager()).
+            setLogDirEventManager(TestUtils.createMockLogDirEventManager()).
             build();
         fetcher = new ReplicaFetcherBenchThread(config, replicaManager, pool);
         fetcher.addPartitions(initialFetchStates);

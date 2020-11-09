@@ -49,6 +49,8 @@ import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData;
 import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData.AlterReplicaLogDirTopic;
 import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData.AlterReplicaLogDirTopicCollection;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData;
+import org.apache.kafka.common.message.AlterReplicaStateRequestData;
+import org.apache.kafka.common.message.AlterReplicaStateResponseData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.ApiMessageType;
@@ -1040,6 +1042,7 @@ public class RequestResponseTest {
             case DESCRIBE_TRANSACTIONS: return createDescribeTransactionsRequest(version);
             case LIST_TRANSACTIONS: return createListTransactionsRequest(version);
             case ALLOCATE_PRODUCER_IDS: return createAllocateProducerIdsRequest(version);
+            case ALTER_REPLICA_STATE: return createAlterReplicaStateRequest(version);
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1114,6 +1117,7 @@ public class RequestResponseTest {
             case DESCRIBE_TRANSACTIONS: return createDescribeTransactionsResponse();
             case LIST_TRANSACTIONS: return createListTransactionsResponse();
             case ALLOCATE_PRODUCER_IDS: return createAllocateProducerIdsResponse();
+            case ALTER_REPLICA_STATE: return createAlterReplicaStateResponse();
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -3338,6 +3342,38 @@ public class RequestResponseTest {
                 .setTransactionState("PrepareAbort")
         ));
         return new ListTransactionsResponse(response);
+    }
+
+    private AlterReplicaStateRequest createAlterReplicaStateRequest(short version) {
+        AlterReplicaStateRequestData data = new AlterReplicaStateRequestData()
+                .setBrokerEpoch(123L)
+                .setBrokerId(1)
+                .setNewState(AlterReplicaStateRequest.OFFLINE_REPLICA_STATE)
+                .setReason("unitTest")
+                .setTopics(singletonList(
+                        new AlterReplicaStateRequestData.TopicData()
+                                .setName("topic1")
+                                .setPartitions(singletonList(
+                                        new AlterReplicaStateRequestData.PartitionData()
+                                                .setPartitionIndex(1)
+                                ))));
+        return new AlterReplicaStateRequest.Builder(data).build(version);
+    }
+
+    private AlterReplicaStateResponse createAlterReplicaStateResponse() {
+        AlterReplicaStateResponseData data = new AlterReplicaStateResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setThrottleTimeMs(123)
+                .setTopics(singletonList(
+                        new AlterReplicaStateResponseData.TopicData()
+                                .setName("topic1")
+                                .setPartitions(singletonList(
+                                        new AlterReplicaStateResponseData.PartitionData()
+                                                .setPartitionIndex(1)
+                                                .setErrorCode(Errors.NONE.code())
+                                ))
+                ));
+        return new AlterReplicaStateResponse(data);
     }
 
 }

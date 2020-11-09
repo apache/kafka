@@ -1199,7 +1199,7 @@ class LogManager(logDirs: Seq[File],
   /**
    * Map of log dir to logs by topic and partitions in that dir
    */
-  private def logsByDir: Map[String, Map[TopicPartition, UnifiedLog]] = {
+  private[kafka] def logsByDir: Map[String, Map[TopicPartition, UnifiedLog]] = {
     // This code is called often by checkpoint processes and is written in a way that reduces
     // allocations and CPU with many topic partitions.
     // When changing this code please measure the changes with org.apache.kafka.jmh.server.CheckpointBench

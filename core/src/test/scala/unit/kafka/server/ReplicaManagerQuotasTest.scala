@@ -242,6 +242,7 @@ class ReplicaManagerQuotasTest {
     replay(logManager)
 
     val alterIsrManager: AlterIsrManager = createMock(classOf[AlterIsrManager])
+    val logDirEventManagerManager: LogDirEventManager = TestUtils.createMockLogDirEventManager()
 
     val leaderBrokerId = configs.head.brokerId
     quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
@@ -254,7 +255,8 @@ class ReplicaManagerQuotasTest {
       quotaManagers = quotaManager,
       metadataCache = MetadataCache.zkMetadataCache(leaderBrokerId),
       logDirFailureChannel = new LogDirFailureChannel(configs.head.logDirs.size),
-      alterIsrManager = alterIsrManager)
+      alterIsrManager = alterIsrManager,
+      logDirEventManager = logDirEventManagerManager)
 
     //create the two replicas
     for ((p, _) <- fetchInfo) {
