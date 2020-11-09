@@ -74,6 +74,10 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
         });
     }
 
+    public OffsetForLeaderEpochResponseData data() {
+        return data;
+    }
+
     public Map<TopicPartition, EpochEndOffset> responses() {
         Map<TopicPartition, EpochEndOffset> epochEndOffsetsByPartition = new HashMap<>();
 
