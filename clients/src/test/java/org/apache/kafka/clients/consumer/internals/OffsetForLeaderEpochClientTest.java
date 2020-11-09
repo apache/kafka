@@ -105,7 +105,7 @@ public class OffsetForLeaderEpochClientTest {
         OffsetsForLeaderEpochClient.OffsetForEpochResult result = future.value();
         assertTrue(result.partitionsToRetry().isEmpty());
         assertTrue(result.endOffsets().containsKey(tp0));
-        assertEquals(result.endOffsets().get(tp0).error(), Errors.NONE);
+        assertEquals(result.endOffsets().get(tp0).errorCode(), Errors.NONE.code());
         assertEquals(result.endOffsets().get(tp0).leaderEpoch(), 1);
         assertEquals(result.endOffsets().get(tp0).endOffset(), 10L);
     }

@@ -27,7 +27,6 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetFo
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.AbstractRequest;
-import org.apache.kafka.common.requests.EpochEndOffset;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -81,7 +80,7 @@ public class OffsetsForLeaderEpochClient extends AsyncClient<
         Set<TopicPartition> missingPartitions = new HashSet<>(requestData.keySet());
         Set<TopicPartition> partitionsToRetry = new HashSet<>();
         Set<String> unauthorizedTopics = new HashSet<>();
-        Map<TopicPartition, EpochEndOffset> endOffsets = new HashMap<>();
+        Map<TopicPartition, OffsetForLeaderPartitionResult> endOffsets = new HashMap<>();
 
         for (OffsetForLeaderTopicResult topic : response.data().topics()) {
             for (OffsetForLeaderPartitionResult partition : topic.partitions()) {
@@ -98,8 +97,7 @@ public class OffsetsForLeaderEpochClient extends AsyncClient<
                     case NONE:
                         logger().debug("Handling OffsetsForLeaderEpoch response for {}. Got offset {} for epoch {}.",
                             topicPartition, partition.endOffset(), partition.leaderEpoch());
-                        endOffsets.put(topicPartition, new EpochEndOffset(
-                            error, partition.leaderEpoch(), partition.endOffset()));
+                        endOffsets.put(topicPartition, partition);
                         break;
                     case NOT_LEADER_OR_FOLLOWER:
                     case REPLICA_NOT_AVAILABLE:
@@ -140,15 +138,15 @@ public class OffsetsForLeaderEpochClient extends AsyncClient<
     }
 
     public static class OffsetForEpochResult {
-        private final Map<TopicPartition, EpochEndOffset> endOffsets;
+        private final Map<TopicPartition, OffsetForLeaderPartitionResult> endOffsets;
         private final Set<TopicPartition> partitionsToRetry;
 
-        OffsetForEpochResult(Map<TopicPartition, EpochEndOffset> endOffsets, Set<TopicPartition> partitionsNeedingRetry) {
+        OffsetForEpochResult(Map<TopicPartition, OffsetForLeaderPartitionResult> endOffsets, Set<TopicPartition> partitionsNeedingRetry) {
             this.endOffsets = endOffsets;
             this.partitionsToRetry = partitionsNeedingRetry;
         }
 
-        public Map<TopicPartition, EpochEndOffset> endOffsets() {
+        public Map<TopicPartition, OffsetForLeaderPartitionResult> endOffsets() {
             return endOffsets;
         }
 
