@@ -72,8 +72,8 @@ class IsrExpirationTest {
 
   @After
   def tearDown(): Unit = {
-    replicaManager.shutdown(false)
-    quotaManager.shutdown()
+    Option(replicaManager).foreach(_.shutdown(false))
+    Option(quotaManager).foreach(_.shutdown())
     metrics.close()
   }
 

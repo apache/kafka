@@ -90,7 +90,7 @@ class ReplicaManagerTest {
   @After
   def tearDown(): Unit = {
     TestUtils.clearYammerMetrics()
-    quotaManager.shutdown()
+    Option(quotaManager).foreach(_.shutdown())
     metrics.close()
   }
 
@@ -1894,10 +1894,10 @@ class ReplicaManagerTest {
 
     // each replica manager is for a broker
     val rm0 = new ReplicaManager(config0, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr0,
-      new AtomicBoolean(false), QuotaFactory.instantiate(config0, metrics, time, ""),
+      new AtomicBoolean(false), quotaManager,
       brokerTopicStats1, metadataCache0, new LogDirFailureChannel(config0.logDirs.size), alterIsrManager)
     val rm1 = new ReplicaManager(config1, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr1,
-      new AtomicBoolean(false), QuotaFactory.instantiate(config1, metrics, time, ""),
+      new AtomicBoolean(false), quotaManager,
       brokerTopicStats2, metadataCache1, new LogDirFailureChannel(config1.logDirs.size), alterIsrManager)
 
     (rm0, rm1)
@@ -2137,7 +2137,7 @@ class ReplicaManagerTest {
       val config = KafkaConfig.fromProps(props)
       val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
       new ReplicaManager(config, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr,
-        new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time, ""), new BrokerTopicStats,
+        new AtomicBoolean(false), quotaManager, new BrokerTopicStats,
         new MetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), alterIsrManager) {
         override def getPartitionOrException(topicPartition: TopicPartition): Partition = {
           throw Errors.NOT_LEADER_OR_FOLLOWER.exception()

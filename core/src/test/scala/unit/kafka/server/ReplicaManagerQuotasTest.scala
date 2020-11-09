@@ -265,10 +265,8 @@ class ReplicaManagerQuotasTest {
 
   @After
   def tearDown(): Unit = {
-    if (replicaManager != null)
-      replicaManager.shutdown(false)
-    if (quotaManager != null)
-      quotaManager.shutdown()
+    Option(replicaManager).foreach(_.shutdown(false))
+    Option(quotaManager).foreach(_.shutdown())
     metrics.close()
   }
 

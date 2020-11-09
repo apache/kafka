@@ -123,8 +123,8 @@ class OffsetsForLeaderEpochTest {
 
   @After
   def tearDown(): Unit = {
-    replicaManager.shutdown(checkpointHW = false)
-    quotaManager.shutdown()
+    Option(replicaManager).foreach(_.shutdown(checkpointHW = false))
+    Option(quotaManager).foreach(_.shutdown())
     metrics.close()
   }
 }
