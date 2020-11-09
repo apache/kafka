@@ -14,7 +14,6 @@ package kafka.api
 
 import java.time.Duration
 import java.util
-import java.util
 import java.util.concurrent.ExecutionException
 import java.util.regex.Pattern
 import java.util.{Collections, Optional, Properties}
