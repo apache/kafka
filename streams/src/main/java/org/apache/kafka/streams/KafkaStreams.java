@@ -826,7 +826,6 @@ public class KafkaStreams implements AutoCloseable {
             if (state == State.RUNNING || state == State.REBALANCING) {
                 final int threadIdx = threads.size() + 1;
                 final long cacheSizePerThread = getCacheSizePerThread(threadIdx);
-                resizeThreadCache(threadIdx);
                 final StreamThread streamThread = StreamThread.create(
                         internalTopologyBuilder,
                         config,
@@ -842,6 +841,7 @@ public class KafkaStreams implements AutoCloseable {
                         delegatingStateRestoreListener,
                         threadIdx);
                 threads.add(streamThread);
+                resizeThreadCache(threadIdx);
                 return Optional.of(streamThread.getName());
             } else {
                 return Optional.empty();
