@@ -1453,7 +1453,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
 
   // Visible for testing
   def connectionRateForIp(ip: InetAddress): Int = {
-    connectionRatePerIp.getOrDefault(ip, defaultConnectionRatePerIp)
+    connectionRatePerIp.getOrElse(ip, defaultConnectionRatePerIp)
   }
 
   private[network] def addListener(config: KafkaConfig, listenerName: ListenerName): Unit = {
