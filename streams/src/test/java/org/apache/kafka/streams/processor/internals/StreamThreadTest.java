@@ -951,7 +951,7 @@ public class StreamThreadTest {
             new AtomicInteger(),
             new AtomicLong(Long.MAX_VALUE),
             null,
-            e -> true
+            e -> { }
         ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
         thread.setStateListener(
             (t, newState, oldState) -> {
@@ -1012,7 +1012,15 @@ public class StreamThreadTest {
             new AtomicInteger(),
             new AtomicLong(Long.MAX_VALUE),
             null,
-            e -> true
+            e -> {
+                if (e instanceof RuntimeException) {
+                    throw (RuntimeException) e;
+                } else if (e instanceof Error) {
+                    throw (Error) e;
+                } else {
+                    throw new RuntimeException("Unexpected checked exception caught in the uncaught exception handler", e);
+                }
+            }
         ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
 
         final IllegalStateException thrown = assertThrows(
@@ -1051,7 +1059,7 @@ public class StreamThreadTest {
             new AtomicInteger(),
             new AtomicLong(Long.MAX_VALUE),
             null,
-            e -> true
+            e -> { }
         ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
         thread.shutdown();
         verify(taskManager);
@@ -1083,7 +1091,7 @@ public class StreamThreadTest {
             new AtomicInteger(),
             new AtomicLong(Long.MAX_VALUE),
             null,
-            e -> true
+            e -> { }
         ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
         thread.shutdown();
         // Execute the run method. Verification of the mock will check that shutdown was only done once
@@ -1420,7 +1428,7 @@ public class StreamThreadTest {
             new MockStateRestoreListener(),
             threadIdx,
             null,
-            e -> true
+            e -> { }
         );
 
         thread.setState(StreamThread.State.STARTING);
@@ -1989,7 +1997,7 @@ public class StreamThreadTest {
             new AtomicInteger(),
             new AtomicLong(Long.MAX_VALUE),
             null,
-            e -> true
+            e -> { }
         ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
 
         consumer.schedulePollTask(() -> {
@@ -2035,7 +2043,7 @@ public class StreamThreadTest {
             new AtomicInteger(),
             new AtomicLong(Long.MAX_VALUE),
             null,
-            e -> true
+            e -> { }
         ).updateThreadMetadata(getSharedAdminClientId(CLIENT_ID));
 
         consumer.schedulePollTask(() -> {
@@ -2087,7 +2095,7 @@ public class StreamThreadTest {
             new AtomicInteger(),
             new AtomicLong(Long.MAX_VALUE),
             null,
-            e -> true
+            e -> { }
         ) {
             @Override
             void runOnce() {
@@ -2147,7 +2155,7 @@ public class StreamThreadTest {
             new AtomicInteger(),
             new AtomicLong(Long.MAX_VALUE),
             null,
-            e -> true
+            e -> { }
         ) {
             @Override
             void runOnce() {
@@ -2208,7 +2216,7 @@ public class StreamThreadTest {
             new AtomicInteger(),
             new AtomicLong(Long.MAX_VALUE),
             null,
-            e -> true
+            e -> { }
         );
 
         EasyMock.replay(task1, task2, task3, taskManager);
@@ -2376,7 +2384,7 @@ public class StreamThreadTest {
             new AtomicInteger(),
             new AtomicLong(Long.MAX_VALUE),
             null,
-            e -> true
+            e -> { }
         );
 
         assertThat(dummyProducerMetrics, is(thread.producerMetrics()));
@@ -2412,7 +2420,7 @@ public class StreamThreadTest {
             new AtomicInteger(),
             new AtomicLong(Long.MAX_VALUE),
             null,
-            e -> true
+            e -> { }
         );
         final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<>());
         final Metric testMetric = new KafkaMetric(

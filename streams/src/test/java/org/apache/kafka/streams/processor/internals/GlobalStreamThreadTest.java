@@ -114,7 +114,7 @@ public class GlobalStreamThreadTest {
             time,
             "clientId",
             stateRestoreListener,
-            e -> false
+            e -> { }
         );
     }
 
@@ -149,7 +149,7 @@ public class GlobalStreamThreadTest {
             time,
             "clientId",
             stateRestoreListener,
-            e -> false
+            e -> { }
         );
 
         try {

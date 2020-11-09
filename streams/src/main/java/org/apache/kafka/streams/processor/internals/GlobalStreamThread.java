@@ -63,7 +63,7 @@ public class GlobalStreamThread extends Thread {
     private final StreamsMetricsImpl streamsMetrics;
     private final ProcessorTopology topology;
     private volatile StreamsException startupException;
-    private StreamThread.StreamsUncaughtExceptionHandlerWrapper streamsUncaughtExceptionHandler;
+    private java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler;
 
     /**
      * The states that the global stream thread can be in
@@ -201,7 +201,7 @@ public class GlobalStreamThread extends Thread {
                               final Time time,
                               final String threadClientId,
                               final StateRestoreListener stateRestoreListener,
-                              final StreamThread.StreamsUncaughtExceptionHandlerWrapper streamsUncaughtExceptionHandler) {
+                              final java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler) {
         super(threadClientId);
         this.time = time;
         this.config = config;
@@ -315,9 +315,7 @@ public class GlobalStreamThread extends Thread {
                 recoverableException
             );
         } catch (final Exception e) {
-            if (this.streamsUncaughtExceptionHandler.handle(e)) {
-                throw e;
-            }
+            this.streamsUncaughtExceptionHandler.accept(e);
         } finally {
             // set the state to pending shutdown first as it may be called due to error;
             // its state may already be PENDING_SHUTDOWN so it will return false but we
@@ -340,7 +338,7 @@ public class GlobalStreamThread extends Thread {
         }
     }
 
-    public void setUncaughtExceptionHandler(final StreamThread.StreamsUncaughtExceptionHandlerWrapper streamsUncaughtExceptionHandler) {
+    public void setUncaughtExceptionHandler(final java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler) {
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
     }
 

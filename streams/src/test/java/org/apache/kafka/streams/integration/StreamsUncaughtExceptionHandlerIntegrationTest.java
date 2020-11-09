@@ -62,6 +62,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.fail;
 
 @Category(IntegrationTest.class)
+@SuppressWarnings("deprecation") //Need to call the old handler, will remove those calls when the old handler is removed
 public class StreamsUncaughtExceptionHandlerIntegrationTest {
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);

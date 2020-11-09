@@ -91,6 +91,7 @@ import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
 import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
@@ -353,9 +354,10 @@ public class KafkaStreams implements AutoCloseable {
      * @param uncaughtExceptionHandler the uncaught exception handler for all internal threads; {@code null} deletes the current handler
      * @throws IllegalStateException if this {@code KafkaStreams} instance is not in state {@link State#CREATED CREATED}.
      *
-     * @Deprecated Since 2.8.0. Use {@link KafkaStreams#setUncaughtExceptionHandler(StreamsUncaughtExceptionHandler)} instead.
+     * @deprecated Since 2.8.0. Use {@link KafkaStreams#setUncaughtExceptionHandler(StreamsUncaughtExceptionHandler)} instead.
      *
      */
+    @Deprecated
     public void setUncaughtExceptionHandler(final Thread.UncaughtExceptionHandler uncaughtExceptionHandler) {
         synchronized (stateLock) {
             if (state == State.CREATED) {
@@ -379,6 +381,8 @@ public class KafkaStreams implements AutoCloseable {
      * These might be exceptions indicating rare bugs in Kafka Streams, or they
      * might be exceptions thrown by your code, for example a NullPointerException thrown from your processor
      * logic.
+     * The handler will execute on the thread that produced the exception.
+     * So inorder to get the thread as the java handler type uses use Thread.currentThread()
      * <p>
      * Note, this handler must be threadsafe, since it will be shared among all threads, and invoked from any
      * thread that encounters such an exception.
@@ -388,7 +392,7 @@ public class KafkaStreams implements AutoCloseable {
      * @throws NullPointerException if streamsUncaughtExceptionHandler is null.
      */
     public void setUncaughtExceptionHandler(final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
-        final StreamThread.StreamsUncaughtExceptionHandlerWrapper handler = exception -> handleStreamsUncaughtException(exception, streamsUncaughtExceptionHandler);
+        final Consumer<Throwable> handler = exception -> handleStreamsUncaughtException(exception, streamsUncaughtExceptionHandler);
         synchronized (stateLock) {
             if (state == State.CREATED) {
                 Objects.requireNonNull(streamsUncaughtExceptionHandler);
@@ -405,14 +409,21 @@ public class KafkaStreams implements AutoCloseable {
         }
     }
 
-    private boolean handleStreamsUncaughtExceptionDefaultWrapper(final Throwable throwable) {
+    private void handleStreamsUncaughtExceptionDefaultWrapper(final Throwable throwable) {
         if (Thread.getDefaultUncaughtExceptionHandler() != null) {
-            return true;
+            if (throwable instanceof RuntimeException) {
+                throw (RuntimeException) throwable;
+            } else if (throwable instanceof Error) {
+                throw (Error) throwable;
+            } else {
+                throw new RuntimeException("Unexpected checked exception caught in the uncaught exception handler", throwable);
+            }
+        } else {
+            handleStreamsUncaughtException(throwable, t -> SHUTDOWN_CLIENT);
         }
-        return handleStreamsUncaughtException(throwable, t -> SHUTDOWN_CLIENT);
     }
 
-    private boolean handleStreamsUncaughtException(final Throwable e,
+    private void handleStreamsUncaughtException(final Throwable e,
                                                    final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
         final StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse action = streamsUncaughtExceptionHandler.handle(e);
         if (Thread.getDefaultUncaughtExceptionHandler() != null) {
@@ -437,15 +448,15 @@ public class KafkaStreams implements AutoCloseable {
                             " This action will succeed only if there is at least one StreamThread running on this client." +
                             " Currently there are no running threads so will now close the client.");
                     close(Duration.ZERO);
-                    return false;
+                } else {
+                    for (final StreamThread streamThread : threads) {
+                        streamThread.sendShutdownRequest(AssignorError.SHUTDOWN_REQUESTED);
+                    }
+                    log.error("Encountered the following exception during processing " +
+                            "and the application is going to shut down: ", e);
                 }
-                for (final StreamThread streamThread: threads) {
-                    streamThread.sendShutdownRequest(AssignorError.SHUTDOWN_REQUESTED);
-                }
-                log.error("Encountered the following exception during processing " +
-                        "and the application is going to shut down: ", e);
+                break;
         }
-        return false;
     }
 
 
