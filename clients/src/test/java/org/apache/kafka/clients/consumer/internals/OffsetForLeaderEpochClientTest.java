@@ -169,10 +169,10 @@ public class OffsetForLeaderEpochClientTest {
             TopicPartition tp, Errors error, int leaderEpoch, long endOffset) {
         OffsetForLeaderEpochResponseData data = new OffsetForLeaderEpochResponseData();
         OffsetForLeaderTopicResult topic = new OffsetForLeaderTopicResult()
-            .setName(tp.topic());
+            .setTopic(tp.topic());
         data.topics().add(topic);
         topic.partitions().add(new OffsetForLeaderPartitionResult()
-            .setPartitionIndex(tp.partition())
+            .setPartition(tp.partition())
             .setErrorCode(error.code())
             .setLeaderEpoch(leaderEpoch)
             .setEndOffset(endOffset));

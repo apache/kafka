@@ -63,11 +63,11 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
         offsets.forEach((tp, offset) -> {
             OffsetForLeaderTopicResult topic = data.topics().find(tp.topic());
             if (topic == null) {
-                topic = new OffsetForLeaderTopicResult().setName(tp.topic());
+                topic = new OffsetForLeaderTopicResult().setTopic(tp.topic());
                 data.topics().add(topic);
             }
             topic.partitions().add(new OffsetForLeaderPartitionResult()
-                .setPartitionIndex(tp.partition())
+                .setPartition(tp.partition())
                 .setErrorCode(offset.error().code())
                 .setLeaderEpoch(offset.leaderEpoch())
                 .setEndOffset(offset.endOffset()));
@@ -84,7 +84,7 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
         data.topics().forEach(topic ->
             topic.partitions().forEach(partition ->
                 epochEndOffsetsByPartition.put(
-                    new TopicPartition(topic.name(), partition.partitionIndex()),
+                    new TopicPartition(topic.topic(), partition.partition()),
                     new EpochEndOffset(
                         Errors.forCode(partition.errorCode()),
                         partition.leaderEpoch(),

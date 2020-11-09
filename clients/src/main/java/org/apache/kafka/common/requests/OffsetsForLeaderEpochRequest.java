@@ -75,11 +75,11 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
             epochsByPartition.forEach((partitionKey, partitionValue) -> {
                 OffsetForLeaderTopic topic = data.topics().find(partitionKey.topic());
                 if (topic == null) {
-                    topic = new OffsetForLeaderTopic().setName(partitionKey.topic());
+                    topic = new OffsetForLeaderTopic().setTopic(partitionKey.topic());
                     data.topics().add(topic);
                 }
                 topic.partitions().add(new OffsetForLeaderPartition()
-                    .setPartitionIndex(partitionKey.partition())
+                    .setPartition(partitionKey.partition())
                     .setLeaderEpoch(partitionValue.leaderEpoch)
                     .setCurrentLeaderEpoch(partitionValue.currentLeaderEpoch
                         .orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
@@ -122,7 +122,7 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
         data.topics().forEach(topic ->
             topic.partitions().forEach(partition ->
                 epochsByTopicPartition.put(
-                    new TopicPartition(topic.name(), partition.partitionIndex()),
+                    new TopicPartition(topic.topic(), partition.partition()),
                     new PartitionData(
                         RequestUtils.getLeaderEpoch(partition.currentLeaderEpoch()),
                         partition.leaderEpoch()))));
@@ -150,10 +150,10 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
         OffsetForLeaderEpochResponseData responseData = new OffsetForLeaderEpochResponseData();
         data.topics().forEach(topic -> {
             OffsetForLeaderTopicResult topicData = new OffsetForLeaderTopicResult()
-                .setName(topic.name());
+                .setTopic(topic.topic());
             topic.partitions().forEach(partition ->
                 topicData.partitions().add(new OffsetForLeaderPartitionResult()
-                    .setPartitionIndex(partition.partitionIndex())
+                    .setPartition(partition.partition())
                     .setErrorCode(error.code())
                     .setLeaderEpoch(EpochEndOffset.UNDEFINED_EPOCH)
                     .setEndOffset(EpochEndOffset.UNDEFINED_EPOCH_OFFSET)));

@@ -1799,21 +1799,21 @@ public class RequestResponseTest {
     private OffsetForLeaderTopicCollection createOffsetForLeaderTopicCollection() {
         OffsetForLeaderTopicCollection topics = new OffsetForLeaderTopicCollection();
         topics.add(new OffsetForLeaderTopic()
-            .setName("topic1")
+            .setTopic("topic1")
             .setPartitions(Arrays.asList(
                 new OffsetForLeaderPartition()
-                    .setPartitionIndex(0)
+                    .setPartition(0)
                     .setLeaderEpoch(1)
                     .setCurrentLeaderEpoch(0),
                 new OffsetForLeaderPartition()
-                    .setPartitionIndex(1)
+                    .setPartition(1)
                     .setLeaderEpoch(1)
                     .setCurrentLeaderEpoch(0))));
         topics.add(new OffsetForLeaderTopic()
-            .setName("topic2")
+            .setTopic("topic2")
             .setPartitions(Arrays.asList(
                 new OffsetForLeaderPartition()
-                    .setPartitionIndex(2)
+                    .setPartition(2)
                     .setLeaderEpoch(3)
                     .setCurrentLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH))));
         return topics;

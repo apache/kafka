@@ -351,16 +351,16 @@ public final class MessageTest {
         // Version 2 adds optional current leader epoch
         OffsetForLeaderEpochRequestData.OffsetForLeaderPartition partitionDataNoCurrentEpoch =
                 new OffsetForLeaderEpochRequestData.OffsetForLeaderPartition()
-                        .setPartitionIndex(0)
+                        .setPartition(0)
                         .setLeaderEpoch(3);
         OffsetForLeaderEpochRequestData.OffsetForLeaderPartition partitionDataWithCurrentEpoch =
                 new OffsetForLeaderEpochRequestData.OffsetForLeaderPartition()
-                        .setPartitionIndex(0)
+                        .setPartition(0)
                         .setLeaderEpoch(3)
                         .setCurrentLeaderEpoch(5);
         OffsetForLeaderEpochRequestData data = new OffsetForLeaderEpochRequestData();
         data.topics().add(new OffsetForLeaderEpochRequestData.OffsetForLeaderTopic()
-                .setName("foo")
+                .setTopic("foo")
                 .setPartitions(singletonList(partitionDataNoCurrentEpoch)));
 
         testAllMessageRoundTrips(data);

@@ -57,11 +57,11 @@ public class OffsetsForLeaderEpochClient extends AsyncClient<
             fetchPosition.offsetEpoch.ifPresent(fetchEpoch -> {
                 OffsetForLeaderTopic topic = topics.find(topicPartition.topic());
                 if (topic == null) {
-                    topic = new OffsetForLeaderTopic().setName(topicPartition.topic());
+                    topic = new OffsetForLeaderTopic().setTopic(topicPartition.topic());
                     topics.add(topic);
                 }
                 topic.partitions().add(new OffsetForLeaderPartition()
-                    .setPartitionIndex(topicPartition.partition())
+                    .setPartition(topicPartition.partition())
                     .setLeaderEpoch(fetchEpoch)
                     .setCurrentLeaderEpoch(fetchPosition.currentLeader.epoch
                         .orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
@@ -84,7 +84,7 @@ public class OffsetsForLeaderEpochClient extends AsyncClient<
 
         for (OffsetForLeaderTopicResult topic : response.data().topics()) {
             for (OffsetForLeaderPartitionResult partition : topic.partitions()) {
-                TopicPartition topicPartition = new TopicPartition(topic.name(), partition.partitionIndex());
+                TopicPartition topicPartition = new TopicPartition(topic.topic(), partition.partition());
                 missingPartitions.remove(topicPartition);
 
                 if (!requestData.containsKey(topicPartition)) {
