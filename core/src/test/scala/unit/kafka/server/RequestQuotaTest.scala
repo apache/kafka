@@ -416,9 +416,9 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.OFFSET_FOR_LEADER_EPOCH =>
           val epochs = new OffsetForLeaderTopicCollection()
           epochs.add(new OffsetForLeaderTopic()
-            .setName(tp.topic())
+            .setTopic(tp.topic())
             .setPartitions(List(new OffsetForLeaderPartition()
-              .setPartitionIndex(tp.partition())
+              .setPartition(tp.partition())
               .setLeaderEpoch(0)
               .setCurrentLeaderEpoch(15)).asJava))
           OffsetsForLeaderEpochRequest.Builder.forConsumer(epochs)

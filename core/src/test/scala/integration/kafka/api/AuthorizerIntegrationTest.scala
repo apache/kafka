@@ -334,9 +334,9 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   private def offsetsForLeaderEpochRequest: OffsetsForLeaderEpochRequest = {
     val epochs = new OffsetForLeaderTopicCollection()
     epochs.add(new OffsetForLeaderTopic()
-      .setName(tp.topic())
+      .setTopic(tp.topic())
       .setPartitions(List(new OffsetForLeaderPartition()
-          .setPartitionIndex(tp.partition())
+          .setPartition(tp.partition())
           .setLeaderEpoch(7)
           .setCurrentLeaderEpoch(27)).asJava))
     OffsetsForLeaderEpochRequest.Builder.forConsumer(epochs).build()
