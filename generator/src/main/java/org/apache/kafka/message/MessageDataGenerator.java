@@ -1572,7 +1572,9 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                         buffer.printf("_size.addBytes(ByteUtils.sizeOfUnsignedVarint(_arraySize));%n");
                     }
                 } else if (field.type().isBytes()) {
-                    buffer.printf("int _sizeBeforeBytes = _size.totalSize();%n");
+                    if (tagged) {
+                        buffer.printf("int _sizeBeforeBytes = _size.totalSize();%n");
+                    }
                     if (field.zeroCopy()) {
                         buffer.printf("_size.addZeroCopyBytes(%s.remaining());%n", field.camelCaseName());
                     } else {
