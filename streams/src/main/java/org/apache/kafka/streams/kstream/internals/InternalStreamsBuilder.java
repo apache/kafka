@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import java.util.TreeMap;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
@@ -318,24 +319,22 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     private void mergeDuplicateSourceNodes() {
         final Map<String, StreamSourceNode<?, ?>> topicsToSourceNodes = new HashMap<>();
-        final Map<String, Map<Integer, StreamSourceNode<?, ?>>> patternStringsToSourceNodeMap = new HashMap<>();
+
+        // We don't really care about the order here, but since Pattern does not implement equals() we can't rely on
+        // a regular HashMap and containsKey(Pattern). But for our purposes it's sufficient to compare the compiled
+        // string and flags to determine if two pattern subscriptions can be merged into a single source node
+        final Map<Pattern, StreamSourceNode<?, ?>> patternsToSourceNodes =
+            new TreeMap<>(Comparator.comparing(Pattern::pattern).thenComparing(Pattern::flags));
 
         for (final StreamsGraphNode graphNode : root.children()) {
             if (graphNode instanceof StreamSourceNode) {
                 final StreamSourceNode<?, ?> currentSourceNode = (StreamSourceNode<?, ?>) graphNode;
 
                 if (currentSourceNode.topicPattern() != null) {
-                    final String currentPatternString = currentSourceNode.topicPattern().pattern();
-                    final int currentPatternFlags = currentSourceNode.topicPattern().flags();
-
-                    // Pattern does not implement equals() so we can't just rely on a HashMap and containsKey(Pattern).
-                    // But for our purposes it's sufficient to compare the compiled string and flags to determine if
-                    // two pattern subscriptions can be merged
-                    patternStringsToSourceNodeMap.computeIfAbsent(currentPatternString, (pattern) -> patternStringsToSourceNodeMap.put(pattern, Collections.emptyMap()));
-                    final StreamSourceNode<?, ?> mainSourceNode = patternStringsToSourceNodeMap.get(currentPatternString).get(currentPatternFlags);
-                    if (mainSourceNode == null) {
-                        patternStringsToSourceNodeMap.get(currentPatternString).put(currentPatternFlags, currentSourceNode);
+                    if (!patternsToSourceNodes.containsKey(currentSourceNode.topicPattern())) {
+                        patternsToSourceNodes.put(currentSourceNode.topicPattern(), currentSourceNode);
                     } else {
+                        final StreamSourceNode<?, ?> mainSourceNode = patternsToSourceNodes.get(currentSourceNode.topicPattern());
                         mainSourceNode.merge(currentSourceNode);
                         root.removeChild(graphNode);
                     }

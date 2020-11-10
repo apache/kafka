@@ -17,6 +17,8 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
+import java.util.HashSet;
+import java.util.Set;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.Topology.AutoOffsetReset;
 import org.apache.kafka.streams.errors.TopologyException;
@@ -57,8 +59,8 @@ public class StreamSourceNode<K, V> extends StreamsGraphNode {
         this.consumedInternal = consumedInternal;
     }
 
-    public Collection<String> topicNames() {
-        return new ArrayList<>(topicNames);
+    public Set<String> topicNames() {
+        return new HashSet<>(topicNames);
     }
 
     public Pattern topicPattern() {
