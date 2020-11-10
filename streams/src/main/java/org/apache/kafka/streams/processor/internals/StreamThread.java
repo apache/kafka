@@ -692,6 +692,7 @@ public class StreamThread extends Thread {
                     break;
                 } else if (Math.max(now - lastPollMs, 0) > maxPollTimeMs / 2) {
                     numIterations = numIterations > 1 ? numIterations / 2 : numIterations;
+                    log.info("Pause processing to call poll before we hit the max.poll.interval.ms");
                     break;
                 } else if (punctuated > 0 || committed > 0) {
                     numIterations = numIterations > 1 ? numIterations / 2 : numIterations;
