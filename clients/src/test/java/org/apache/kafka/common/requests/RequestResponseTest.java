@@ -200,7 +200,12 @@ import java.util.Set;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
+import static org.apache.kafka.common.protocol.ApiKeys.DESCRIBE_CONFIGS;
 import static org.apache.kafka.common.protocol.ApiKeys.FETCH;
+import static org.apache.kafka.common.protocol.ApiKeys.JOIN_GROUP;
+import static org.apache.kafka.common.protocol.ApiKeys.LIST_GROUPS;
+import static org.apache.kafka.common.protocol.ApiKeys.LIST_OFFSETS;
+import static org.apache.kafka.common.protocol.ApiKeys.SYNC_GROUP;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.apache.kafka.test.TestUtils.toBuffer;
 import static org.junit.Assert.assertEquals;
@@ -1766,6 +1771,9 @@ public class RequestResponseTest {
         data.responses().add(new DeletableTopicResult()
             .setName("t3")
             .setErrorCode(Errors.NOT_CONTROLLER.code()));
+        data.responses().add(new DeletableTopicResult()
+                .setName("t4")
+                .setErrorCode(Errors.NONE.code()));
         return new DeleteTopicsResponse(data);
     }
 
@@ -1986,7 +1994,7 @@ public class RequestResponseTest {
         return new CreateAclsResponse(new CreateAclsResponseData().setResults(asList(
             new CreateAclsResponseData.AclCreationResult(),
             new CreateAclsResponseData.AclCreationResult()
-                .setErrorCode(Errors.INVALID_REQUEST.code())
+                .setErrorCode(Errors.NONE.code())
                 .setErrorMessage("Foo bar"))));
     }
 
@@ -2306,6 +2314,7 @@ public class RequestResponseTest {
         String topic = "myTopic";
         List<ReplicaElectionResult> electionResults = new ArrayList<>();
         ReplicaElectionResult electionResult = new ReplicaElectionResult();
+        electionResults.add(electionResult);
         electionResult.setTopic(topic);
         // Add partition 1 result
         PartitionResult partitionResult = new PartitionResult();
@@ -2346,7 +2355,7 @@ public class RequestResponseTest {
         data.responses().add(new AlterConfigsResourceResponse()
                 .setResourceName("testtopic")
                 .setResourceType(ResourceType.TOPIC.code())
-                .setErrorCode(Errors.INVALID_REQUEST.code())
+                .setErrorCode(Errors.NONE.code())
                 .setErrorMessage("Duplicate Keys"));
         return new IncrementalAlterConfigsResponse(data);
     }
@@ -2371,7 +2380,7 @@ public class RequestResponseTest {
                         .setPartitions(Collections.singletonList(
                                 new AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse()
                                         .setPartitionIndex(0)
-                                        .setErrorCode(Errors.NO_REASSIGNMENT_IN_PROGRESS.code())
+                                        .setErrorCode(Errors.NONE.code())
                                         .setErrorMessage("No reassignment is in progress for topic topic partition 0")
                                 )
                         )
@@ -2469,7 +2478,7 @@ public class RequestResponseTest {
                         .setPartitions(Collections.singletonList(
                                 new AlterReplicaLogDirsResponseData.AlterReplicaLogDirPartitionResult()
                                         .setPartitionIndex(0)
-                                        .setErrorCode(Errors.LOG_DIR_NOT_FOUND.code())
+                                        .setErrorCode(Errors.NONE.code())
                                 )
                         )
         );
@@ -2496,5 +2505,59 @@ public class RequestResponseTest {
     private AlterClientQuotasResponse createAlterClientQuotasResponse() {
         ClientQuotaEntity entity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, "user"));
         return new AlterClientQuotasResponse(Collections.singletonMap(entity, ApiError.NONE), 0);
+    }
+
+    /**
+     * Check that all error codes in the response get included in {@link AbstractResponse#errorCounts()}.
+     */
+    @Test
+    public void testErrorCountsIncludesNone() {
+        assertEquals(Integer.valueOf(1), createAddOffsetsToTxnResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createAddPartitionsToTxnResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createAlterClientQuotasResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createAlterConfigsResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(2), createAlterPartitionReassignmentsResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createAlterReplicaLogDirsResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createApiVersionResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createControlledShutdownResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(2), createCreateAclsResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createCreatePartitionsResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createCreateTokenResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createCreateTopicResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createDeleteAclsResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createDeleteGroupsResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createDeleteTopicsResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createDescribeAclsResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createDescribeClientQuotasResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(2), createDescribeConfigsResponse(DESCRIBE_CONFIGS.latestVersion()).errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createDescribeGroupResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createDescribeTokenResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(2), createElectLeadersResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createEndTxnResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createExpireTokenResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(3), createFetchResponse(123).errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createFindCoordinatorResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createHeartBeatResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createIncrementalAlterConfigsResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createJoinGroupResponse(JOIN_GROUP.latestVersion()).errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(2), createLeaderAndIsrResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(3), createLeaderEpochResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createLeaveGroupResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createListGroupsResponse(LIST_GROUPS.latestVersion()).errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createListOffsetResponse(LIST_OFFSETS.latestVersion()).errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createListPartitionReassignmentsResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(3), createMetadataResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createOffsetCommitResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(2), createOffsetDeleteResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(3), createOffsetFetchResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createProduceResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createRenewTokenResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createSaslAuthenticateResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createSaslHandshakeResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(2), createStopReplicaResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createSyncGroupResponse(SYNC_GROUP.latestVersion()).errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createTxnOffsetCommitResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createUpdateMetadataResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createWriteTxnMarkersResponse().errorCounts().get(Errors.NONE));
     }
 }
