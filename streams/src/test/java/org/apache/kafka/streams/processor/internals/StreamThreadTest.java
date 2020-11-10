@@ -92,6 +92,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -564,11 +565,15 @@ public class StreamThreadTest {
 
     @Test
     public void shouldRespectNumIterationsInMainLoop() {
-        final MockApiProcessor<byte[], byte[], Object, Object> mockProcessor = new MockApiProcessor<>(PunctuationType.WALL_CLOCK_TIME, 10L);
+        final List<MockApiProcessor<byte[], byte[], Object, Object>> mockProcessors = new LinkedList<>();
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
         internalTopologyBuilder.addProcessor(
             "processor1",
-            (ProcessorSupplier<byte[], byte[], ?, ?>) () -> mockProcessor,
+            (ProcessorSupplier<byte[], byte[], ?, ?>) () -> {
+                final MockApiProcessor<byte[], byte[], Object, Object> processor = new MockApiProcessor<>(PunctuationType.WALL_CLOCK_TIME, 10L);
+                mockProcessors.add(processor);
+                return processor;
+            },
             "source1"
         );
         internalTopologyBuilder.addProcessor(
@@ -651,7 +656,7 @@ public class StreamThreadTest {
 
         assertThat(thread.currentNumIterations(), equalTo(3));
 
-        mockProcessor.requestCommit();
+        mockProcessors.forEach(MockApiProcessor::requestCommit);
         addRecord(mockConsumer, ++offset, 15L);
         thread.runOnce();
 
@@ -2409,11 +2414,10 @@ public class StreamThreadTest {
     }
 
     private void setupInternalTopologyWithoutState() {
-        final MockApiProcessor<byte[], byte[], Object, Object> mockProcessor = new MockApiProcessor<>();
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
         internalTopologyBuilder.addProcessor(
             "processor1",
-            (ProcessorSupplier<byte[], byte[], ?, ?>) () -> mockProcessor,
+            (ProcessorSupplier<byte[], byte[], ?, ?>) () -> new MockApiProcessor<>(),
             "source1"
         );
     }

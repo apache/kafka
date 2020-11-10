@@ -1243,7 +1243,8 @@ public class RequestResponseTest {
                     .setPartitions(Arrays.asList(new ListOffsetPartition()
                             .setPartitionIndex(0)
                             .setTimestamp(1000000L)
-                            .setMaxNumOffsets(10)));
+                            .setMaxNumOffsets(10)
+                            .setCurrentLeaderEpoch(5)));
             return ListOffsetRequest.Builder
                     .forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
                     .setTargetTimes(Collections.singletonList(topic))
@@ -1253,7 +1254,8 @@ public class RequestResponseTest {
                     .setName("test")
                     .setPartitions(Arrays.asList(new ListOffsetPartition()
                             .setPartitionIndex(0)
-                            .setTimestamp(1000000L)));
+                            .setTimestamp(1000000L)
+                            .setCurrentLeaderEpoch(5)));
             return ListOffsetRequest.Builder
                     .forConsumer(true, IsolationLevel.READ_UNCOMMITTED)
                     .setTargetTimes(Collections.singletonList(topic))
@@ -1261,10 +1263,9 @@ public class RequestResponseTest {
         } else if (version >= 2 && version <= 5) {
             ListOffsetPartition partition = new ListOffsetPartition()
                     .setPartitionIndex(0)
-                    .setTimestamp(1000000L);
-            if (version >= 4) {
-                partition.setCurrentLeaderEpoch(5);
-            }
+                    .setTimestamp(1000000L)
+                    .setCurrentLeaderEpoch(5);
+
             ListOffsetTopic topic = new ListOffsetTopic()
                     .setName("test")
                     .setPartitions(Arrays.asList(partition));

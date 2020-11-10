@@ -14,14 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.raft;
+package org.apache.kafka.common.errors;
 
-import java.util.Locale;
+/**
+ * Exception used to indicate a kafka principal deserialization failure during request forwarding.
+ */
+public class PrincipalDeserializationException extends ApiException {
 
-public enum AckMode {
-    LEADER, QUORUM;
+    private static final long serialVersionUID = 1L;
 
-    public static AckMode forConfig(String config) {
-        return AckMode.valueOf(config.toUpperCase(Locale.ROOT));
+    public PrincipalDeserializationException(String message) {
+        super(message);
     }
 }

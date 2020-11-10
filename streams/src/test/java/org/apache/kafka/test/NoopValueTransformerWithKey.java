@@ -17,30 +17,19 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
-import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
-public class SingletonNoOpValueTransformer<K, V> implements ValueTransformerWithKeySupplier<K, V, V> {
-    public ProcessorContext context;
-    private final ValueTransformerWithKey<K, V, V> transformer = new ValueTransformerWithKey<K, V, V>() {
-
-        @Override
-        public void init(final ProcessorContext context) {
-            SingletonNoOpValueTransformer.this.context = context;
-        }
-
-        @Override
-        public V transform(final K readOnlyKey, final V value) {
-            return value;
-        }
-
-        @Override
-        public void close() {
-        }
-    };
+public class NoopValueTransformerWithKey<K, V, VR> implements ValueTransformerWithKey<K, V, VR> {
+    @Override
+    public void init(final ProcessorContext context) {
+    }
 
     @Override
-    public ValueTransformerWithKey<K, V, V> get() {
-        return transformer;
+    public VR transform(final K readOnlyKey, final V value) {
+        return null;
+    }
+
+    @Override
+    public void close() {
     }
 }

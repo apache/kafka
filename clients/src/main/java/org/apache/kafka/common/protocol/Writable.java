@@ -30,6 +30,8 @@ public interface Writable {
     void writeByteArray(byte[] arr);
     void writeUnsignedVarint(int i);
     void writeByteBuffer(ByteBuffer buf);
+    void writeVarint(int i);
+    void writeVarlong(long i);
 
     default void writeUUID(UUID uuid) {
         writeLong(uuid.getMostSignificantBits());

@@ -361,7 +361,6 @@ class GroupMetadataManager(brokerId: Int,
       // compute the final error codes for the commit response
       val commitStatus = offsetMetadata.map { case (k, _) => k -> Errors.OFFSET_METADATA_TOO_LARGE }
       responseCallback(commitStatus)
-      None
     } else {
       getMagic(partitionFor(group.groupId)) match {
         case Some(magicValue) =>
@@ -477,7 +476,6 @@ class GroupMetadataManager(brokerId: Int,
             (topicPartition, Errors.NOT_COORDINATOR)
           }
           responseCallback(commitStatus)
-          None
       }
     }
   }

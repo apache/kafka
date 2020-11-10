@@ -14,13 +14,34 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.raft;
+package org.apache.kafka.raft.internals;
 
-import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.protocol.Readable;
+import org.apache.kafka.common.protocol.Writable;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.raft.RecordSerde;
 
-public class LogTruncationException extends KafkaException {
+public class StringSerde implements RecordSerde<String> {
 
-    public LogTruncationException(String message) {
-        super(message);
+    @Override
+    public int recordSize(String data, Object context) {
+        return recordSize(data);
     }
+
+    public int recordSize(String data) {
+        return Utils.utf8Length(data);
+    }
+
+    @Override
+    public void write(String data, Object context, Writable out) {
+        out.writeByteArray(Utils.utf8(data));
+    }
+
+    @Override
+    public String read(Readable input, int size) {
+        byte[] data = new byte[size];
+        input.readArray(data);
+        return Utils.utf8(data);
+    }
+
 }
