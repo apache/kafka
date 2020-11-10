@@ -318,35 +318,37 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     private void mergeDuplicateSourceNodes() {
         final Map<String, StreamSourceNode<?, ?>> topicsToSourceNodes = new HashMap<>();
-        final Map<Pattern, StreamSourceNode<?, ?>> patternsToSourceNodes = new HashMap<>();
+        final Map<String, StreamSourceNode<?, ?>> patternsToSourceNodes = new HashMap<>();
 
         for (final StreamsGraphNode graphNode : root.children()) {
-            final StreamSourceNode<?, ?> currentSourceNode = (StreamSourceNode<?, ?>) graphNode;
+            if (graphNode instanceof StreamSourceNode) {
+                final StreamSourceNode<?, ?> currentSourceNode = (StreamSourceNode<?, ?>) graphNode;
 
-            if (currentSourceNode.topicPattern() != null) {
-                if (!patternsToSourceNodes.containsKey(currentSourceNode.topicPattern())) {
-                    patternsToSourceNodes.put(currentSourceNode.topicPattern(), currentSourceNode);
-                } else {
-                    final StreamSourceNode<?, ?> mainSourceNode = patternsToSourceNodes.get(currentSourceNode.topicPattern());
-                    mainSourceNode.merge(currentSourceNode);
-                    root.removeChild(graphNode);
-                }
-            } else {
-                for (final String topic : currentSourceNode.topicNames()) {
-                    if (!topicsToSourceNodes.containsKey(topic)) {
-                        topicsToSourceNodes.put(topic, currentSourceNode);
+                if (currentSourceNode.topicPattern() != null) {
+                    if (!patternsToSourceNodes.containsKey(currentSourceNode.topicPattern().pattern())) {
+                        patternsToSourceNodes.put(currentSourceNode.topicPattern().pattern(), currentSourceNode);
                     } else {
-                        final StreamSourceNode<?, ?> mainSourceNode = topicsToSourceNodes.get(topic);
-                        // TODO we only merge source nodes if the subscribed topic(s) are an exact match, so it's still not
-                        // possible to subscribe to topicA in one KStream and topicA + topicB in another. We could achieve
-                        // this by splitting these source nodes into one topic per node and routing to the subscribed children
-                        if (!mainSourceNode.topicNames().equals(currentSourceNode.topicNames())) {
-                            LOG.error("Topic {} was found in  subscription for non-equal source nodes {} and {}",
-                                      topic, mainSourceNode, currentSourceNode);
-                            throw new TopologyException("Two source nodes are subscribed to overlapping but not equal input topics");
-                        }
+                        final StreamSourceNode<?, ?> mainSourceNode = patternsToSourceNodes.get(currentSourceNode.topicPattern().pattern());
                         mainSourceNode.merge(currentSourceNode);
                         root.removeChild(graphNode);
+                    }
+                } else {
+                    for (final String topic : currentSourceNode.topicNames()) {
+                        if (!topicsToSourceNodes.containsKey(topic)) {
+                            topicsToSourceNodes.put(topic, currentSourceNode);
+                        } else {
+                            final StreamSourceNode<?, ?> mainSourceNode = topicsToSourceNodes.get(topic);
+                            // TODO we only merge source nodes if the subscribed topic(s) are an exact match, so it's still not
+                            // possible to subscribe to topicA in one KStream and topicA + topicB in another. We could achieve
+                            // this by splitting these source nodes into one topic per node and routing to the subscribed children
+                            if (!mainSourceNode.topicNames().equals(currentSourceNode.topicNames())) {
+                                LOG.error("Topic {} was found in  subscription for non-equal source nodes {} and {}",
+                                          topic, mainSourceNode, currentSourceNode);
+                                throw new TopologyException("Two source nodes are subscribed to overlapping but not equal input topics");
+                            }
+                            mainSourceNode.merge(currentSourceNode);
+                            root.removeChild(graphNode);
+                        }
                     }
                 }
             }

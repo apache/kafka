@@ -67,6 +67,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class StreamsBuilderTest {
@@ -910,7 +911,19 @@ public class StreamsBuilderTest {
         builder.build();
     }
 
+    @Test
+    public void shouldAllowReadingFromSameCollectionOfTopics() {
+        builder.stream(Collections.singletonList("topic"));
+        builder.stream(Collections.singletonList("topic"));
+        builder.build();
+    }
 
+    @Test
+    public void shouldNotAllowReadingFromOverlappingAndUnequalCollectionOfTopics() {
+        builder.stream(Collections.singletonList("topic"));
+        builder.stream(asList("topic", "otherTopic"));
+        assertThrows(TopologyException.class, builder::build);
+    }
 
     private static void assertNamesForOperation(final ProcessorTopology topology, final String... expected) {
         final List<ProcessorNode<?, ?, ?, ?>> processors = topology.processors();
