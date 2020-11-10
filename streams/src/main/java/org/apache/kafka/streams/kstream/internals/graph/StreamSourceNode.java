@@ -25,7 +25,6 @@ import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
