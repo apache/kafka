@@ -18,7 +18,6 @@ package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.auth.AuthenticationContext;
@@ -106,7 +105,6 @@ public class ChannelBuildersTest {
         // test configs without listener prefix
         securityConfig = new TestSecurityConfig(props);
         configs = ChannelBuilders.channelBuilderConfigs(securityConfig, null);
-        assertTrue(AbstractConfig.isRecording(configs));
 
         assertEquals(configs.get("listener.name.listener1.gssapi.sasl.kerberos.service.name"), "testkafka");
         assertFalse(securityConfig.unused().contains("listener.name.listener1.gssapi.sasl.kerberos.service.name"));

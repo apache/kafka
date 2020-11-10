@@ -271,7 +271,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *
      */
     public KafkaProducer(final Map<String, Object> configs) {
-        this(configs, null, null, null, null, null, Time.SYSTEM);
+        this(configs, null, null);
     }
 
     /**
@@ -288,7 +288,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *                         be called in the producer when the serializer is passed in directly.
      */
     public KafkaProducer(Map<String, Object> configs, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
-        this(configs, keySerializer, valueSerializer, null, null, null, Time.SYSTEM);
+        this(new ProducerConfig(ProducerConfig.appendSerializerToConfig(configs, keySerializer, valueSerializer)),
+                keySerializer, valueSerializer, null, null, null, Time.SYSTEM);
     }
 
     /**
@@ -299,7 +300,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @param properties   The producer configs
      */
     public KafkaProducer(Properties properties) {
-        this(Utils.propsToMap(properties), null, null, null, null, null, Time.SYSTEM);
+        this(properties, null, null);
     }
 
     /**
@@ -314,21 +315,18 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *                         be called in the producer when the serializer is passed in directly.
      */
     public KafkaProducer(Properties properties, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
-        this(Utils.propsToMap(properties), keySerializer, valueSerializer, null, null, null,
-                Time.SYSTEM);
+        this(Utils.propsToMap(properties), keySerializer, valueSerializer);
     }
 
     // visible for testing
     @SuppressWarnings("unchecked")
-    KafkaProducer(Map<String, Object> configs,
+    KafkaProducer(ProducerConfig config,
                   Serializer<K> keySerializer,
                   Serializer<V> valueSerializer,
                   ProducerMetadata metadata,
                   KafkaClient kafkaClient,
                   ProducerInterceptors<K, V> interceptors,
                   Time time) {
-        ProducerConfig config = new ProducerConfig(ProducerConfig.appendSerializerToConfig(configs, keySerializer,
-                valueSerializer));
         try {
             Map<String, Object> userProvidedConfigs = config.originals();
             this.producerConfig = config;

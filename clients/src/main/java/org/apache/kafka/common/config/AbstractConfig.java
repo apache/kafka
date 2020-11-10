@@ -105,7 +105,9 @@ public class AbstractConfig {
                 throw new ConfigException(entry.getKey().toString(), entry.getValue(), "Key must be a string.");
 
         this.originals = resolveConfigVariables(configProviderProps, (Map<String, Object>) originals);
-        this.values = definition.parse(this.originals);
+        // pass a copy to definition.parse. Otherwise, the definition.parse adds all keys of definitions to "used" group
+        // since definition.parse needs to call "RecordingMap#get" when checking all definitions.
+        this.values = definition.parse(new HashMap<>(this.originals));
         this.used = Collections.synchronizedSet(new HashSet<>());
         Map<String, Object> configUpdates = postProcessParsedConfig(Collections.unmodifiableMap(this.values));
         for (Map.Entry<String, Object> update : configUpdates.entrySet()) {
@@ -580,13 +582,6 @@ public class AbstractConfig {
     @Override
     public int hashCode() {
         return originals.hashCode();
-    }
-
-    /**
-     * @return true if the input map is a recording map. otherwise, false
-     */
-    public static boolean isRecording(Map<String, ?> map) {
-        return map instanceof RecordingMap;
     }
 
     /**

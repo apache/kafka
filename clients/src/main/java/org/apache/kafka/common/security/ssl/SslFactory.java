@@ -18,7 +18,6 @@ package org.apache.kafka.common.security.ssl;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Reconfigurable;
-import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
@@ -80,6 +79,15 @@ public class SslFactory implements Reconfigurable, Closeable {
         this.keystoreVerifiableUsingTruststore = keystoreVerifiableUsingTruststore;
     }
 
+    /**
+     * @return true if the input map is a recording map. otherwise, false
+     */
+    static boolean isRecording(Map<String, ?> map) {
+        // AbstractConfig is a public APIs and RecordingMap is a internal class
+        // In order to avoid touching public interface, we just compare the class name here.
+        return map.getClass().getSimpleName().equals("RecordingMap");
+    }
+
     @SuppressWarnings("unchecked")
     @Override
     public void configure(Map<String, ?> configs) throws KafkaException {
@@ -91,7 +99,7 @@ public class SslFactory implements Reconfigurable, Closeable {
         // it should keep using the input map if it is recording.
         // Otherwise, the used configs are not recorded and then AbstractConfig can produce misleading warnings:
         // "The configuration 'xxx' was supplied but isn't a known config."
-        Map<String, Object> nextConfigs = AbstractConfig.isRecording(configs)
+        Map<String, Object> nextConfigs = isRecording(configs)
                 ? (Map<String, Object>) configs
                 : new HashMap<>(configs);
         if (clientAuthConfigOverride != null) {
