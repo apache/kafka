@@ -156,6 +156,9 @@ public class KafkaStreams implements AutoCloseable {
     private final StreamsMetricsImpl streamsMetrics;
     private final ProcessorTopology taskTopology;
     private final ProcessorTopology globalTaskTopology;
+    private final StreamStateListener streamStateListener;
+    private final Map<Long, StreamThread.State> threadState;
+    private final ArrayList<StreamThreadStateStoreProvider> storeProviders;
     private Long totalCacheSize;
     private final UUID processId;
     private final InternalTopologyBuilder internalTopologyBuilder;
@@ -766,8 +769,8 @@ public class KafkaStreams implements AutoCloseable {
         // use client id instead of thread client id since this admin client may be shared among threads
         adminClient = clientSupplier.getAdmin(config.getAdminConfigs(ClientUtils.getSharedAdminClientId(clientId)));
 
-        final Map<Long, StreamThread.State> threadState = new HashMap<>(numStreamThreads);
-        final ArrayList<StreamThreadStateStoreProvider> storeProviders = new ArrayList<>();
+        threadState = new HashMap<>(numStreamThreads);
+        storeProviders = new ArrayList<>();
         for (int i = 0; i < numStreamThreads; i++) {
             final StreamThread streamThread = StreamThread.create(
                 internalTopologyBuilder,
@@ -791,7 +794,7 @@ public class KafkaStreams implements AutoCloseable {
         ClientMetrics.addNumAliveStreamThreadMetric(streamsMetrics, (metricsConfig, now) ->
             Math.toIntExact(threads.stream().filter(thread -> thread.state().isAlive()).count()));
 
-        final StreamStateListener streamStateListener = new StreamStateListener(threadState, globalThreadState);
+        streamStateListener = new StreamStateListener(threadState, globalThreadState);
         if (hasGlobalTopology) {
             globalStreamThread.setStateListener(streamStateListener);
         }
@@ -826,6 +829,7 @@ public class KafkaStreams implements AutoCloseable {
             if (state == State.RUNNING || state == State.REBALANCING) {
                 final int threadIdx = threads.size() + 1;
                 final long cacheSizePerThread = getCacheSizePerThread(threadIdx);
+                resizeThreadCache(threadIdx);
                 final StreamThread streamThread = StreamThread.create(
                         internalTopologyBuilder,
                         config,
@@ -841,7 +845,9 @@ public class KafkaStreams implements AutoCloseable {
                         delegatingStateRestoreListener,
                         threadIdx);
                 threads.add(streamThread);
-                resizeThreadCache(threadIdx);
+                threadState.put(streamThread.getId(), streamThread.state());
+                storeProviders.add(new StreamThreadStateStoreProvider(streamThread));
+                streamThread.setStateListener(streamStateListener);
                 return Optional.of(streamThread.getName());
             } else {
                 return Optional.empty();
