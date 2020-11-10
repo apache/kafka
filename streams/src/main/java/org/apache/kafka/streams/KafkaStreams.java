@@ -160,7 +160,7 @@ public class KafkaStreams implements AutoCloseable {
     private final StreamsMetricsImpl streamsMetrics;
     private final ProcessorTopology taskTopology;
     private final ProcessorTopology globalTaskTopology;
-    private Long totalCacheSize;
+    private final Long totalCacheSize;
 
     GlobalStreamThread globalStreamThread;
     private KafkaStreams.StateListener stateListener;
@@ -900,10 +900,6 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     private long getCacheSizePerThread(final int numStreamThreads) {
-        if (totalCacheSize < 0) {
-            totalCacheSize = 0L;
-            log.warn("Negative cache size passed in. Reverting to cache size of 0 bytes.");
-        }
         return totalCacheSize / (numStreamThreads + ((globalTaskTopology != null) ? 1 : 0));
     }
 

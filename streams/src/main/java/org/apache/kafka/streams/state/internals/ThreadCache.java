@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.CircularIterator;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -75,8 +76,18 @@ public class ThreadCache {
         final boolean shrink = maxCacheSizeBytes < this.maxCacheSizeBytes;
         this.maxCacheSizeBytes = maxCacheSizeBytes;
         if (shrink) {
-            for (final NamedCache cache : caches.values()) {
-                maybeEvict(cache.name());
+            CircularIterator<NamedCache> circularIterator = new CircularIterator<>(caches.values());
+            while (sizeBytes() > maxCacheSizeBytes) {
+                if (!circularIterator.hasNext()) {
+                    log.error("unable to remove any more entries as all caches are empty");
+                    return;
+                }
+                final NamedCache cache = circularIterator.next();
+                if (cache.isEmpty()) {
+                    circularIterator.remove();
+                }
+                cache.evict();
+                numEvicts++;
             }
         }
     }
