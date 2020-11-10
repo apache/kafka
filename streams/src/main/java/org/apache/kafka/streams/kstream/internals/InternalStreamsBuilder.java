@@ -318,17 +318,24 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     private void mergeDuplicateSourceNodes() {
         final Map<String, StreamSourceNode<?, ?>> topicsToSourceNodes = new HashMap<>();
-        final Map<String, StreamSourceNode<?, ?>> patternsToSourceNodes = new HashMap<>();
+        final Map<String, Map<Integer, StreamSourceNode<?, ?>>> patternStringsToSourceNodeMap = new HashMap<>();
 
         for (final StreamsGraphNode graphNode : root.children()) {
             if (graphNode instanceof StreamSourceNode) {
                 final StreamSourceNode<?, ?> currentSourceNode = (StreamSourceNode<?, ?>) graphNode;
 
                 if (currentSourceNode.topicPattern() != null) {
-                    if (!patternsToSourceNodes.containsKey(currentSourceNode.topicPattern().pattern())) {
-                        patternsToSourceNodes.put(currentSourceNode.topicPattern().pattern(), currentSourceNode);
+                    final String currentPatternString = currentSourceNode.topicPattern().pattern();
+                    final int currentPatternFlags = currentSourceNode.topicPattern().flags();
+
+                    // Pattern does not implement equals() so we can't just rely on a HashMap and containsKey(Pattern).
+                    // But for our purposes it's sufficient to compare the compiled string and flags to determine if
+                    // two pattern subscriptions can be merged
+                    patternStringsToSourceNodeMap.computeIfAbsent(currentPatternString, (pattern) -> patternStringsToSourceNodeMap.put(pattern, Collections.emptyMap()));
+                    final StreamSourceNode<?, ?> mainSourceNode = patternStringsToSourceNodeMap.get(currentPatternString).get(currentPatternFlags);
+                    if (mainSourceNode == null) {
+                        patternStringsToSourceNodeMap.get(currentPatternString).put(currentPatternFlags, currentSourceNode);
                     } else {
-                        final StreamSourceNode<?, ?> mainSourceNode = patternsToSourceNodes.get(currentSourceNode.topicPattern().pattern());
                         mainSourceNode.merge(currentSourceNode);
                         root.removeChild(graphNode);
                     }

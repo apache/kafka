@@ -435,11 +435,6 @@ public class TaskManager {
                 partitionToTask.remove(inputPartition);
             }
             for (final TopicPartition topicPartition : topicPartitions) {
-                if (partitionToTask.containsKey(topicPartition)) {
-                    log.warn("Topic {} was assigned to task {} but was already associated with task {}, " +
-                        "it's possible this arose due to multiple matching regex subscriptions in the topology.",
-                             topicPartition, task.id(), partitionToTask.get(topicPartition));
-                }
                 partitionToTask.put(topicPartition, task);
             }
             task.update(topicPartitions, builder.nodeToSourceTopics());
