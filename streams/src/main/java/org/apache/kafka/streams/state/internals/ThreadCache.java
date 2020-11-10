@@ -76,10 +76,10 @@ public class ThreadCache {
         final boolean shrink = maxCacheSizeBytes < this.maxCacheSizeBytes;
         this.maxCacheSizeBytes = maxCacheSizeBytes;
         if (shrink) {
-            CircularIterator<NamedCache> circularIterator = new CircularIterator<>(caches.values());
+            final CircularIterator<NamedCache> circularIterator = new CircularIterator<>(caches.values());
             while (sizeBytes() > maxCacheSizeBytes) {
                 if (!circularIterator.hasNext()) {
-                    log.error("unable to remove any more entries as all caches are empty");
+                    log.error("Unable to remove any more entries as all caches are empty");
                     return;
                 }
                 final NamedCache cache = circularIterator.next();
