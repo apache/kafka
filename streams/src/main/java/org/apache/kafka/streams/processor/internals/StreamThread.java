@@ -692,7 +692,6 @@ public class StreamThread extends Thread {
                     break;
                 } else if (Math.max(now - lastPollMs, 0) > maxPollTimeMs / 2) {
                     numIterations = numIterations > 1 ? numIterations / 2 : numIterations;
-                    log.info("Pause processing to call poll before we hit the max.poll.interval.ms");
                     break;
                 } else if (punctuated > 0 || committed > 0) {
                     numIterations = numIterations > 1 ? numIterations / 2 : numIterations;
@@ -704,6 +703,14 @@ public class StreamThread extends Thread {
             // we record the ratio out of the while loop so that the accumulated latency spans over
             // multiple iterations with reasonably large max.num.records and hence is less vulnerable to outliers
             taskManager.recordTaskProcessRatio(totalProcessLatency, now);
+
+            // Only log this when we actually processed some records to avoid flooding INFO-level logs when there are
+            // no records on the input topics
+            if (totalProcessed > 0) {
+                log.info("Finished processing {} records, going to poll again", totalProcessed);
+            } else {
+                log.debug("Processed zero records, going to poll again");
+            }
         }
 
         now = time.milliseconds();
