@@ -66,6 +66,8 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
 
 public class StateDirectoryTest {
 
@@ -124,10 +126,10 @@ public class StateDirectoryTest {
         try {
             final Set<PosixFilePermission> baseFilePermissions = Files.getPosixFilePermissions(statePath);
             final Set<PosixFilePermission> appFilePermissions = Files.getPosixFilePermissions(basePath);
-            assertEquals(expectedPermissions, baseFilePermissions);
-            assertEquals(expectedPermissions, appFilePermissions);
+            assertThat(expectedPermissions.equals(baseFilePermissions), is(true));
+            assertThat(expectedPermissions.equals(appFilePermissions), is(true));
         } catch (final IOException e) {
-            // okay
+            fail("Should create correct files and set correct permissions");
         }
     }
 
