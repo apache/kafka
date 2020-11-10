@@ -79,7 +79,7 @@ class ForwardingManager(metadataCache: kafka.server.MetadataCache,
   }
 
   override def shutdown(): Unit = {
-    super.shutdown()
     removeMetric(forwardingMetricName)
+    super.shutdown()
   }
 }
