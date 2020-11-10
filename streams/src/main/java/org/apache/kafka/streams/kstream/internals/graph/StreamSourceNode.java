@@ -19,14 +19,19 @@ package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.Topology.AutoOffsetReset;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.regex.Pattern;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class StreamSourceNode<K, V> extends StreamsGraphNode {
+
+    private final Logger log = LoggerFactory.getLogger(StreamSourceNode.class);
 
     private Collection<String> topicNames;
     private Pattern topicPattern;
@@ -76,7 +81,9 @@ public class StreamSourceNode<K, V> extends StreamsGraphNode {
     public void merge(final StreamSourceNode<?, ?> other) {
         final AutoOffsetReset resetPolicy = consumedInternal.offsetResetPolicy();
         if (resetPolicy != null && !resetPolicy.equals(other.consumedInternal().offsetResetPolicy())) {
-            throw new IllegalStateException("Can't configure different offset reset policies on the same input topic");
+            log.error("Tried to merge source nodes {} and {} which are subscribed to the same topic/pattern, but "
+                          + "the offset reset policies do not match", this, other);
+            throw new TopologyException("Can't configure different offset reset policies on the same input topic(s)");
         }
         for (final StreamsGraphNode otherChild : other.children()) {
             // Move children from other to this, these calls take care of resetting the child's parents to this
