@@ -16,12 +16,13 @@
  */
 package org.apache.kafka.common.internals;
 
+import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.errors.ApiException;
 
 /**
  * This exception indicates that the produce request sent to the partition leader
- * contains a non-matching producer epoch. When encountering this exception, the ongoing transaction
- * will be aborted and can be retried.
+ * contains a non-matching producer epoch. When encountering this exception, user should abort the ongoing transaction
+ * by calling {@link KafkaProducer#abortTransaction()} to reinitialize the producer state.
  */
 public class InvalidProducerEpochException extends ApiException {
 

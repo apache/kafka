@@ -1685,13 +1685,13 @@ public class TransactionManagerTest {
         sender.runOnce();
 
         runUntil(responseFuture::isDone);
-        assertFalse(transactionManager.hasError());
+        assertTrue(transactionManager.hasError());
 
-        transactionManager.beginCommit();
+        transactionManager.beginAbort();
 
         TransactionManager.TxnRequestHandler handler = transactionManager.nextRequest(false);
 
-        // First we will get an EndTxn for commit.
+        // First we will get an EndTxn for abort.
         assertNotNull(handler);
         assertTrue(handler.requestBuilder() instanceof EndTxnRequest.Builder);
 
