@@ -1093,7 +1093,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * for(ConsumerRecord<String, String> record: consumer.poll(100))
      *     producer.send(new ProducerRecord("my-topic", record.key(), record.value());
      * producer.flush();
-     * consumer.commit();
+     * consumer.commitSync();
      * }
      * </pre>
      *
