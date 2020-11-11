@@ -65,6 +65,19 @@ public class InsertHeaderTest {
         assertEquals(expect, xformed.headers());
     }
 
+    @Test
+    public void insertionWithByteHeader() {
+        xform.configure(config("inserted", "1"));
+        ConnectHeaders headers = new ConnectHeaders();
+        headers.addString("existing", "existing-value");
+        Headers expect = headers.duplicate().addByte("inserted", (byte) 1);
+
+        SourceRecord original = sourceRecord(headers);
+        SourceRecord xformed = xform.apply(original);
+        assertNonHeaders(original, xformed);
+        assertEquals(expect, xformed.headers());
+    }
+
     private void assertNonHeaders(SourceRecord original, SourceRecord xformed) {
         assertEquals(original.sourcePartition(), xformed.sourcePartition());
         assertEquals(original.sourceOffset(), xformed.sourceOffset());

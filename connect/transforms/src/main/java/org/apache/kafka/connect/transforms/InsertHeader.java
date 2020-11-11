@@ -19,6 +19,8 @@ package org.apache.kafka.connect.transforms;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.data.Values;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
@@ -40,12 +42,12 @@ public class InsertHeader<R extends ConnectRecord<R>> implements Transformation<
 
     private String header;
 
-    private String literalValue;
+    private SchemaAndValue literalValue;
 
     @Override
     public R apply(R record) {
         Headers updatedHeaders = record.headers().duplicate();
-        updatedHeaders.add(header, literalValue, Schema.STRING_SCHEMA);
+        updatedHeaders.add(header, literalValue);
         return record.newRecord(record.topic(), record.kafkaPartition(), record.keySchema(), record.key(),
                 record.valueSchema(), record.value(), record.timestamp(), updatedHeaders);
     }
@@ -65,6 +67,6 @@ public class InsertHeader<R extends ConnectRecord<R>> implements Transformation<
     public void configure(Map<String, ?> props) {
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
         header = config.getString(HEADER_FIELD);
-        literalValue = config.getString(VALUE_LITERAL_FIELD);
+        literalValue = Values.parseString(config.getString(VALUE_LITERAL_FIELD));
     }
 }

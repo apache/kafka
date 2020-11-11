@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.connect.transforms;
 
+import org.apache.kafka.common.cache.Cache;
+import org.apache.kafka.common.cache.LRUCache;
+import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.connector.ConnectRecord;
@@ -33,6 +36,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static java.lang.String.format;
 import static org.apache.kafka.common.config.ConfigDef.NO_DEFAULT_VALUE;
 
 public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transformation<R> {
@@ -40,6 +44,8 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
     public static final String FIELDS_FIELD = "fields";
     public static final String HEADERS_FIELD = "headers";
     public static final String OPERATION_FIELD = "operation";
+    private static final String MOVE_OPERATION = "move";
+    private static final String COPY_OPERATION = "copy";
 
     public static final String OVERVIEW_DOC =
             "Moves or copies fields in the key/value of a record into that record's headers. " +
@@ -60,8 +66,8 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
                             "or <code>copy</code> if the fields are to be copied to the headers (retained in the key/value).");
 
     enum Operation {
-        MOVE("move"),
-        COPY("copy");
+        MOVE(MOVE_OPERATION),
+        COPY(COPY_OPERATION);
 
         private final String name;
 
@@ -71,9 +77,9 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
 
         static Operation fromName(String name) {
             switch (name) {
-                case "move":
+                case MOVE_OPERATION:
                     return MOVE;
-                case "copy":
+                case COPY_OPERATION:
                     return COPY;
                 default:
                     throw new IllegalArgumentException();
@@ -91,6 +97,8 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
 
     private Operation operation;
 
+    private Cache<Schema, Schema> moveSchemaCache = new SynchronizedCache<>(new LRUCache<>(16));
+
     @Override
     public R apply(R record) {
         Object operatingValue = operatingValue(record);
@@ -107,19 +115,21 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
         Headers updatedHeaders = record.headers().duplicate();
         Struct value = Requirements.requireStruct(operatingValue, "header " + operation);
         final Schema updatedSchema;
+        final Struct updatedValue;
         if (operation == Operation.MOVE) {
             updatedSchema = moveSchema(operatingSchema);
+            updatedValue = new Struct(updatedSchema);
+            for (Field field : updatedSchema.fields()) {
+                updatedValue.put(field, value.get(field.name()));
+            }
         } else {
             updatedSchema = operatingSchema;
-        }
-        final Struct updatedValue = new Struct(updatedSchema);
-        for (Field field : updatedSchema.fields()) {
-            updatedValue.put(field, value.get(field.name()));
+            updatedValue = value;
         }
         for (int i = 0; i < fields.size(); i++) {
             String fieldName = fields.get(i);
             String headerName = headers.get(i);
-            Object fieldValue = value.get(fieldName);
+            Object fieldValue = value.schema().field(fieldName) != null ? value.get(fieldName) : null;
             Schema fieldSchema = operatingSchema.field(fieldName).schema();
             updatedHeaders.add(headerName, fieldValue, fieldSchema);
         }
@@ -127,15 +137,18 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
     }
 
     private Schema moveSchema(Schema operatingSchema) {
-        final Schema updatedSchema;
-        final SchemaBuilder builder = SchemaUtil.copySchemaBasics(operatingSchema, SchemaBuilder.struct());
-        for (Field field : operatingSchema.fields()) {
-            if (!fields.contains(field.name())) {
-                builder.field(field.name(), field.schema());
+        Schema moveSchema = this.moveSchemaCache.get(operatingSchema);
+        if (moveSchema == null) {
+            final SchemaBuilder builder = SchemaUtil.copySchemaBasics(operatingSchema, SchemaBuilder.struct());
+            for (Field field : operatingSchema.fields()) {
+                if (!fields.contains(field.name())) {
+                    builder.field(field.name(), field.schema());
+                }
             }
+            moveSchema = builder.build();
+            moveSchemaCache.put(operatingSchema, moveSchema);
         }
-        updatedSchema = builder.build();
-        return updatedSchema;
+        return moveSchema;
     }
 
     private R applySchemaless(R record, Object operatingValue) {
@@ -212,7 +225,8 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
         fields = config.getList(FIELDS_FIELD);
         headers = config.getList(HEADERS_FIELD);
         if (headers.size() != fields.size()) {
-            throw new ConfigException("'fields' config must have the same number of elements as 'headers' config.");
+            throw new ConfigException(format("'%s' config must have the same number of elements as '%s' config.",
+                    FIELDS_FIELD, HEADERS_FIELD));
         }
         operation = Operation.fromName(config.getString(OPERATION_FIELD));
     }
