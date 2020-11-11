@@ -669,7 +669,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(config,
                     GroupRebalanceConfig.ProtocolType.CONSUMER);
 
-            this.groupId = Optional.ofNullable(groupRebalanceConfig.groupId);
+            this.groupId = Optional.ofNullable(groupRebalanceConfig.groupId)
+                    .filter(group -> group.trim().length() > 0);
             this.clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
 
             LogContext logContext;
@@ -733,7 +734,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
             Set<String> metricTags = new HashSet<>();
             metricTags.add(CLIENT_ID_METRIC_TAG);
-            groupId.ifPresent(groupIdValue -> metricTags.add(GROUP_ID_METRIC_TAG));
+            groupId.ifPresent(group -> metricTags.add(GROUP_ID_METRIC_TAG));
             FetcherMetricsRegistry metricsRegistry = new FetcherMetricsRegistry(metricTags, metricGrpPrefix);
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
             IsolationLevel isolationLevel = IsolationLevel.valueOf(
