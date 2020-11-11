@@ -609,12 +609,6 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       mergedResponseStatus.forKeyValue { (topicPartition, status) =>
         if (status.error != Errors.NONE) {
-          if (status.error == Errors.PRODUCER_FENCED) {
-            // Produce request should always return the INVALID_PRODUCER_EPOCH as
-            // partition leader does not hold the source of truth for txn state.
-            status.error = Errors.INVALID_PRODUCER_EPOCH
-          }
-
           errorInResponse = true
           debug("Produce request with correlation id %d from client %s on partition %s failed due to %s".format(
             request.header.correlationId,

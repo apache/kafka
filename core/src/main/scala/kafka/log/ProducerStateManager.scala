@@ -203,7 +203,7 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
       if (origin == AppendOrigin.Replication) {
         warn(message)
       } else {
-        throw new ProducerFencedException(message)
+        throw new InvalidProducerEpochException(message)
       }
     }
   }

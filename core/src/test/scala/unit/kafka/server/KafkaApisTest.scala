@@ -1259,7 +1259,7 @@ class KafkaApisTest {
         EasyMock.capture(responseCallback),
         EasyMock.anyObject(),
         EasyMock.anyObject())
-      ).andAnswer(() => responseCallback.getValue.apply(Map(tp -> new PartitionResponse(Errors.PRODUCER_FENCED))))
+      ).andAnswer(() => responseCallback.getValue.apply(Map(tp -> new PartitionResponse(Errors.INVALID_PRODUCER_EPOCH))))
 
       val capturedResponse = expectNoThrottling()
       EasyMock.expect(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
