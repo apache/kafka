@@ -704,12 +704,14 @@ public class StreamThread extends Thread {
             // multiple iterations with reasonably large max.num.records and hence is less vulnerable to outliers
             taskManager.recordTaskProcessRatio(totalProcessLatency, now);
 
-            // Only log this when we actually processed some records to avoid flooding INFO-level logs when there are
-            // no records on the input topics
+            // Only log this at INFO when we actually processed some records to avoid flooding INFO-level logs when
+            // there are no records on the input topics
             if (totalProcessed > 0) {
-                log.info("Finished processing {} records, going to poll again", totalProcessed);
+                log.info("Processed {} records for tasks {}, polling for more records now",
+                         totalProcessed, taskManager.activeTaskIds());
             } else {
-                log.debug("Processed zero records, going to poll again");
+                log.debug("Processed {} records for tasks {}, polling for more records now",
+                          totalProcessed, taskManager.activeTaskIds());
             }
         }
 
