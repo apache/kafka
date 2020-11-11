@@ -822,7 +822,7 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         totalCacheSize = config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG);
-        final long cacheSizePerThread = getCacheSizePerThread(numStreamThreads);
+        final long cacheSizePerThread = totalCacheSize / (numStreamThreads + ((globalTaskTopology != null) ? 1 : 0));
         final boolean hasPersistentStores = taskTopology.hasPersistentLocalStore() ||
                 (hasGlobalTopology && globalTaskTopology.hasPersistentGlobalStore());
 
@@ -898,12 +898,8 @@ public class KafkaStreams implements AutoCloseable {
         rocksDBMetricsRecordingService = maybeCreateRocksDBMetricsRecordingService(clientId, config);
     }
 
-    private long getCacheSizePerThread(final int numStreamThreads) {
-        return totalCacheSize / (numStreamThreads + ((globalTaskTopology != null) ? 1 : 0));
-    }
-
     private void resizeThreadCache(final int numStreamThreads) {
-        final long cacheSizePreThread = getCacheSizePerThread(numStreamThreads);
+        final long cacheSizePreThread = totalCacheSize / (numStreamThreads + ((globalTaskTopology != null) ? 1 : 0));
         for (final StreamThread streamThread: threads) {
             streamThread.resizeCache(cacheSizePreThread);
         }
