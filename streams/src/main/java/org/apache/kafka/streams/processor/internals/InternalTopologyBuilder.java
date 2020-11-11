@@ -114,8 +114,6 @@ public class InternalTopologyBuilder {
 
     private final Set<Pattern> latestResetPatterns = new HashSet<>();
 
-    private final Set<Pattern> allPatterns = new HashSet<>();
-
     private final QuickUnion<String> nodeGrouper = new QuickUnion<>();
 
     // Used to capture subscribed topics via Patterns discovered during the partition assignment process.
@@ -412,14 +410,7 @@ public class InternalTopologyBuilder {
             }
         }
 
-        for (final Pattern otherPattern : allPatterns) {
-            if (topicPattern.pattern().contains(otherPattern.pattern()) || otherPattern.pattern().contains(topicPattern.pattern())) {
-                throw new TopologyException("Pattern " + topicPattern + " will overlap with another pattern " + otherPattern + " already been registered by another source");
-            }
-        }
-
         maybeAddToResetList(earliestResetPatterns, latestResetPatterns, offsetReset, topicPattern);
-        allPatterns.add(topicPattern);
 
         nodeFactories.put(name, new SourceNodeFactory<>(name, null, topicPattern, timestampExtractor, keyDeserializer, valDeserializer));
         nodeToSourcePatterns.put(name, topicPattern);
