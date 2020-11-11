@@ -731,7 +731,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.metadata.bootstrap(addresses);
             String metricGrpPrefix = "consumer";
 
-            FetcherMetricsRegistry metricsRegistry = new FetcherMetricsRegistry(Collections.singleton(CLIENT_ID_METRIC_TAG), metricGrpPrefix);
+            Set<String> metricTags = new HashSet<>();
+            metricTags.add(CLIENT_ID_METRIC_TAG);
+            groupId.ifPresent(groupIdValue -> metricTags.add(GROUP_ID_METRIC_TAG));
+            FetcherMetricsRegistry metricsRegistry = new FetcherMetricsRegistry(metricTags, metricGrpPrefix);
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
             IsolationLevel isolationLevel = IsolationLevel.valueOf(
                     config.getString(ConsumerConfig.ISOLATION_LEVEL_CONFIG).toUpperCase(Locale.ROOT));
