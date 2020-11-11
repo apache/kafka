@@ -131,7 +131,7 @@ object DynamicConfig {
     val IpConnectionRateOverrideProp = "connection_creation_rate"
     val UnlimitedConnectionCreationRate = Int.MaxValue
     val DefaultConnectionCreationRate = UnlimitedConnectionCreationRate
-    val IpOverrideDoc = "A long representing the upper bound of connections accepted for the specified IP."
+    val IpOverrideDoc = "An int representing the upper bound of connections accepted for the specified IP."
 
     private val ipConfigs = new ConfigDef()
       .define(IpConnectionRateOverrideProp, INT, DefaultConnectionCreationRate, atLeast(0), MEDIUM, IpOverrideDoc)

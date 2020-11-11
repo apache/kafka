@@ -878,7 +878,8 @@ class SocketServerTest {
     overrideProps.remove(KafkaConfig.MaxConnectionsPerIpProp)
     overrideProps.put(KafkaConfig.NumQuotaSamplesProp, String.valueOf(2))
     val connectionRate = 5
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), new Metrics(), Time.SYSTEM, credentialProvider)
+    val time = new MockTime()
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), new Metrics(), time, credentialProvider)
     overrideServer.connectionQuotas.updateIpConnectionRateQuota(None, Some(connectionRate))
     try {
       overrideServer.startup()
@@ -890,13 +891,15 @@ class SocketServerTest {
       TestUtils.waitUntilTrue(() => acceptors.exists(_.throttledSockets.nonEmpty),
         "timeout waiting for connection to get throttled",
         1000)
+      // advance time to unthrottle connections
+      time.sleep(2000)
       acceptors.foreach(_.wakeup())
       TestUtils.waitUntilTrue(() => acceptors.forall(_.throttledSockets.isEmpty),
         "timeout waiting for connection to be unthrottled",
         1000)
       verifyRemoteConnectionClosed(conn)
 
-      // new connection should succeed after previous connection closed
+      // new connection should succeed after previous connection closed, and previous samples have been expired
       conn = connect(overrideServer)
       val serializedBytes = producerRequestBytes()
       sendRequest(conn, serializedBytes)

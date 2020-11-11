@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import java.net.{InetAddress, UnknownHostException}
 import java.util.Properties
 
 import DynamicConfig.Broker._
@@ -190,11 +191,16 @@ class IpConfigHandler(private val connectionQuotas: ConnectionQuotas) extends Co
 
   def processConfigChanges(ip: String, config: Properties): Unit = {
     val ipConnectionRateQuota = Option(config.getProperty(DynamicConfig.Ip.IpConnectionRateOverrideProp)).map(_.toInt)
-    val updatedIp =
-      if (ip != ConfigEntityName.Default)
-        Some(ip)
-      else
+    val updatedIp = {
+      if (ip != ConfigEntityName.Default) {
+        try {
+          Some(InetAddress.getByName(ip))
+        } catch {
+          case _: UnknownHostException => throw new IllegalArgumentException(s"Unable to resolve address $ip")
+        }
+      } else
         None
+    }
     connectionQuotas.updateIpConnectionRateQuota(updatedIp, ipConnectionRateQuota)
   }
 }

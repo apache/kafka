@@ -552,10 +552,11 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
   private val blockedPercentMeter = newMeter(s"${metricPrefix}AcceptorBlockedPercent",
     "blocked time", TimeUnit.NANOSECONDS, Map(ListenerMetricTag -> endPoint.listenerName.value))
   private var currentProcessorIndex = 0
+  private[network] val throttledSockets = new mutable.PriorityQueue[DelayedCloseSocket]()
+
   private[network] case class DelayedCloseSocket(socket: SocketChannel, endThrottleTimeMs: Long) extends Ordered[DelayedCloseSocket] {
     override def compare(that: DelayedCloseSocket): Int = endThrottleTimeMs compare that.endThrottleTimeMs
   }
-  private[network] val throttledSockets = new mutable.PriorityQueue[DelayedCloseSocket]()
 
   private[network] def addProcessors(newProcessors: Buffer[Processor], processorThreadPrefix: String): Unit = synchronized {
     processors ++= newProcessors
@@ -628,6 +629,7 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
       CoreUtils.swallow(serverChannel.close(), this, Level.ERROR)
       CoreUtils.swallow(nioSelector.close(), this, Level.ERROR)
       throttledSockets.foreach(throttledSocket => closeSocket(throttledSocket.socket))
+      throttledSockets.clear()
       shutdownComplete()
     }
   }
@@ -1412,7 +1414,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
    * @param ip ip to update or default if None
    * @param maxConnectionRate new connection rate, or resets entity to default if None
    */
-  def updateIpConnectionRateQuota(ip: Option[String], maxConnectionRate: Option[Int]): Unit = {
+  def updateIpConnectionRateQuota(ip: Option[InetAddress], maxConnectionRate: Option[Int]): Unit = {
     def isIpConnectionRateMetric(metricName: MetricName) = {
       metricName.name == ConnectionRateMetricName &&
       metricName.group == MetricsGroup &&
@@ -1424,8 +1426,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
     }
     counts.synchronized {
       ip match {
-        case Some(addr) =>
-          val address = InetAddress.getByName(addr)
+        case Some(address) =>
           maxConnectionRate match {
             case Some(rate) =>
               info(s"Updating max connection rate override for $address to $rate")
@@ -1583,10 +1584,10 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
   }
 
   /**
-   * To avoid over-recording listener/broker connection rate, we unrecord a listener or broker connection
-   * if the IP gets throttled later.
+   * To avoid over-recording listener/broker connection rate, we un-record a listener and broker connection
+   * if the IP gets throttled.
    *
-   * @param listenerName listener to unrecord connection
+   * @param listenerName listener to un-record connection
    * @param timeMs current time in milliseconds
    */
   private def unrecordListenerConnection(listenerName: ListenerName, timeMs: Long): Unit = {
@@ -1601,7 +1602,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
   /**
    * Calculates the delay needed to bring the observed connection creation rate to the IP limit.
    * If the connection would cause an IP quota violation, un-record the connection for both IP,
-   * and throw ConnectionThrottledException
+   * listener, and broker connection rate and throw a ConnectionThrottledException.
    *
    * @param listenerName listener to unrecord connection if throttled
    * @param address ip address to record connection
