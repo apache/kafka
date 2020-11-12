@@ -168,7 +168,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   var kafkaController: KafkaController = null
 
-  var forwardingManager: BrokerToControllerChannelManager = null
+  var forwardingManager: ForwardingManager = null
 
   var alterIsrChannelManager: BrokerToControllerChannelManager = null
 
@@ -331,7 +331,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
         if (config.metadataQuorumEnabled) {
           /* start forwarding manager */
-          forwardingManager = new BrokerToControllerChannelManagerImpl(metadataCache, time, metrics, config, "forwardingChannel", threadNamePrefix)
+          forwardingManager = new ForwardingManager(metadataCache, time, metrics, config, threadNamePrefix)
           forwardingManager.start()
         }
 

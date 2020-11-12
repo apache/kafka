@@ -20,33 +20,27 @@ package kafka.server
 import java.util.concurrent.{LinkedBlockingDeque, TimeUnit}
 
 import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
-import kafka.network.RequestChannel
 import kafka.utils.Logging
 import org.apache.kafka.clients._
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EnvelopeRequest, EnvelopeResponse}
+import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.utils.{LogContext, Time}
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
-import scala.compat.java8.OptionConverters._
-
 
 trait BrokerToControllerChannelManager {
   def sendRequest(request: AbstractRequest.Builder[_ <: AbstractRequest],
                   callback: RequestCompletionHandler): Unit
 
-  def forwardRequest(request: RequestChannel.Request, responseCallback: AbstractResponse => Unit): Unit
-
   def start(): Unit
 
   def shutdown(): Unit
 }
-
 
 /**
  * This class manages the connection between a broker and the controller. It runs a single
@@ -61,7 +55,7 @@ class BrokerToControllerChannelManagerImpl(metadataCache: kafka.server.MetadataC
                                            config: KafkaConfig,
                                            channelName: String,
                                            threadNamePrefix: Option[String] = None) extends BrokerToControllerChannelManager with Logging {
-  private val requestQueue = new LinkedBlockingDeque[BrokerToControllerQueueItem]
+  protected val requestQueue = new LinkedBlockingDeque[BrokerToControllerQueueItem]
   private val logContext = new LogContext(s"[broker-${config.brokerId}-to-controller] ")
   private val manualMetadataUpdater = new ManualMetadataUpdater()
   private val requestThread = newRequestThread
@@ -133,44 +127,6 @@ class BrokerToControllerChannelManagerImpl(metadataCache: kafka.server.MetadataC
   override def sendRequest(request: AbstractRequest.Builder[_ <: AbstractRequest],
                            callback: RequestCompletionHandler): Unit = {
     requestQueue.put(BrokerToControllerQueueItem(request, callback))
-    requestThread.wakeup()
-  }
-
-  def forwardRequest(
-    request: RequestChannel.Request,
-    responseCallback: AbstractResponse => Unit
-  ): Unit = {
-    val principalSerde = request.context.principalSerde.asScala.getOrElse(
-      throw new IllegalArgumentException(s"Cannot deserialize principal from request $request " +
-        "since there is no serde defined")
-    )
-    val serializedPrincipal = principalSerde.serialize(request.context.principal)
-    val forwardRequestBuffer = request.buffer.duplicate()
-    forwardRequestBuffer.flip()
-    val envelopeRequest = new EnvelopeRequest.Builder(
-      forwardRequestBuffer,
-      serializedPrincipal,
-      request.context.clientAddress.getAddress
-    )
-
-    def onClientResponse(clientResponse: ClientResponse): Unit = {
-      val envelopeResponse = clientResponse.responseBody.asInstanceOf[EnvelopeResponse]
-      val envelopeError = envelopeResponse.error()
-      val response = if (envelopeError != Errors.NONE) {
-        // An envelope error indicates broker misconfiguration (e.g. the principal serde
-        // might not be defined on the receiving broker). In this case, we do not return
-        // the error directly to the client since it would not be expected. Instead we
-        // return `UNKNOWN_SERVER_ERROR` so that the user knows that there is a problem
-        // on the broker.
-        debug(s"Forwarded request $request failed with an error in envelope response $envelopeError")
-        request.body[AbstractRequest].getErrorResponse(Errors.UNKNOWN_SERVER_ERROR.exception())
-      } else {
-        AbstractResponse.deserializeBody(envelopeResponse.responseData, request.header)
-      }
-      responseCallback(response)
-    }
-
-    requestQueue.put(BrokerToControllerQueueItem(envelopeRequest, onClientResponse))
     requestThread.wakeup()
   }
 }

@@ -84,7 +84,7 @@ class KafkaApisTest {
   private val adminManager: AdminManager = EasyMock.createNiceMock(classOf[AdminManager])
   private val txnCoordinator: TransactionCoordinator = EasyMock.createNiceMock(classOf[TransactionCoordinator])
   private val controller: KafkaController = EasyMock.createNiceMock(classOf[KafkaController])
-  private val forwardingManager: BrokerToControllerChannelManager = EasyMock.createNiceMock(classOf[BrokerToControllerChannelManager])
+  private val forwardingManager: ForwardingManager = EasyMock.createNiceMock(classOf[ForwardingManager])
   private val hostAddress: Array[Byte] = InetAddress.getByName("192.168.1.1").getAddress
   private val kafkaPrincipalSerde: Option[KafkaPrincipalSerde] = Option(new KafkaPrincipalSerde {
     override def serialize(principal: KafkaPrincipal): Array[Byte] = null
