@@ -655,6 +655,10 @@ public class Sender implements Runnable {
             this.accumulator.unmutePartition(batch.topicPartition);
     }
 
+    /**
+     * Format the error from a {@link ProduceResponse.PartitionResponse} in a user-friendly string
+     * e.g "NETWORK_EXCEPTION. Error Message: Disconnected from node 0"
+     */
     private String formatErrMsg(ProduceResponse.PartitionResponse response) {
         String errorMessageSuffix = (response.errorMessage == null || response.errorMessage.isEmpty()) ?
                 "" : String.format(". Error Message: %s", response.errorMessage);
