@@ -87,6 +87,6 @@ public class ProduceRequestBenchmark {
 
     @Benchmark
     public String testRequestToJson() {
-        return RequestConvertToJson.request(produceRequest, false).toString();
+        return RequestConvertToJson.request(produceRequest).toString();
     }
 }

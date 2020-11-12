@@ -176,7 +176,7 @@ class RequestChannelTest {
     val alterConfigs = request(new AlterConfigsRequest.Builder(Collections.singletonMap(resource,
       new Config(entries.asJavaCollection)), true).build())
 
-    assertTrue(isValidJson(RequestConvertToJson.request(alterConfigs.loggableRequest, true).toString))
+    assertTrue(isValidJson(RequestConvertToJson.request(alterConfigs.loggableRequest).toString))
   }
 
   private def isValidJson(str: String): Boolean = {

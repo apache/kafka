@@ -22,8 +22,7 @@ import java.nio.ByteBuffer
 import java.util
 import java.util.{Collections, Optional}
 
-import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.node.ObjectNode
+import com.fasterxml.jackson.databind.node.{DoubleNode, LongNode, ObjectNode, TextNode}
 import kafka.network
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.memory.MemoryPool
@@ -45,41 +44,40 @@ class RequestConvertToJsonTest {
   @Test
   def testAllRequestTypesHandled(): Unit = {
     val unhandledKeys = ArrayBuffer[String]()
-    ApiKeys.values().foreach(key => {
+    ApiKeys.values().foreach { key => {
       val version: Short = key.latestVersion()
-      var req: AbstractRequest = null
-      if (key == ApiKeys.PRODUCE) {
+      val req = if (key == ApiKeys.PRODUCE) {
         // There's inconsistency with the toStruct schema in ProduceRequest
         // and ProduceRequestDataJsonConverters where the field names don't
         // match so the struct does not have the correct field names. This is
         // a temporary workaround until ProduceRequest starts using ProduceRequestData
-        req = ProduceRequest.Builder.forCurrentMagic(0.toShort, 10000, new util.HashMap[TopicPartition, MemoryRecords]).build()
+        ProduceRequest.Builder.forCurrentMagic(0.toShort, 10000, new util.HashMap[TopicPartition, MemoryRecords]).build()
       } else {
         val struct = ApiMessageType.fromApiKey(key.id).newRequest().toStruct(version)
-        req = AbstractRequest.parseRequest(key, version, struct)
+        AbstractRequest.parseRequest(key, version, struct)
       }
       try {
-        RequestConvertToJson.request(req, false)
+        RequestConvertToJson.request(req)
       } catch {
         case _ : IllegalStateException => unhandledKeys += key.toString
       }
-    })
+    }}
     assertEquals("Unhandled request keys", ArrayBuffer.empty, unhandledKeys)
   }
 
   @Test
   def testAllResponseTypesHandled(): Unit = {
     val unhandledKeys = ArrayBuffer[String]()
-    ApiKeys.values().foreach(key => {
+    ApiKeys.values().foreach { key => {
       val version: Short = key.latestVersion()
       val struct = ApiMessageType.fromApiKey(key.id).newResponse().toStruct(version)
       val res = AbstractResponse.parseResponse(key, struct, version)
       try {
-        RequestConvertToJson.response(res, version, false)
+        RequestConvertToJson.response(res, version)
       } catch {
         case _ : IllegalStateException => unhandledKeys += key.toString
       }
-    })
+    }}
     assertEquals("Unhandled response keys", ArrayBuffer.empty, unhandledKeys)
   }
 
@@ -90,7 +88,7 @@ class RequestConvertToJsonTest {
 
     val version: Short = ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion
     val request = OffsetsForLeaderEpochRequest.Builder.forConsumer(partitionDataMap).build(version)
-    val actualNode = RequestConvertToJson.request(request, true)
+    val actualNode = RequestConvertToJson.request(request)
 
     val requestData = OffsetForLeaderEpochRequestDataJsonConverter.read(actualNode, version)
     val expectedNode = OffsetForLeaderEpochRequestDataJsonConverter.write(requestData, version, true)
@@ -103,12 +101,11 @@ class RequestConvertToJsonTest {
     val produceDataMap = new util.HashMap[TopicPartition, MemoryRecords]
 
     val version: Short = ApiKeys.PRODUCE.latestVersion
-    val serializeRecords: Boolean = false;
     val request = ProduceRequest.Builder.forMagic(2, 0.toShort, 0, produceDataMap, "").build()
-    val actualNode = RequestConvertToJson.request(request, serializeRecords)
+    val actualNode = RequestConvertToJson.request(request)
 
     val requestData = new ProduceRequestData()
-    val expectedNode = ProduceRequestDataJsonConverter.write(requestData, version, serializeRecords)
+    val expectedNode = ProduceRequestDataJsonConverter.write(requestData, version)
 
     assertEquals(expectedNode, actualNode)
   }
@@ -120,7 +117,7 @@ class RequestConvertToJsonTest {
 
     val version: Short = ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion
     val response = new OffsetsForLeaderEpochResponse(endOffsetMap)
-    val actualNode = RequestConvertToJson.response(response, version, true)
+    val actualNode = RequestConvertToJson.response(response, version)
 
     val requestData = OffsetForLeaderEpochResponseDataJsonConverter.read(actualNode, version)
     val expectedNode = OffsetForLeaderEpochResponseDataJsonConverter.write(requestData, version, true)
@@ -136,7 +133,7 @@ class RequestConvertToJsonTest {
 
     val version: Short = ApiKeys.PRODUCE.latestVersion
     val response = new ProduceResponse(responseData)
-    val actualNode = RequestConvertToJson.response(response, version, true)
+    val actualNode = RequestConvertToJson.response(response, version)
 
     val requestData = ProduceResponseDataJsonConverter.read(actualNode, version)
     val expectedNode = ProduceResponseDataJsonConverter.write(requestData, version, true)
@@ -144,26 +141,49 @@ class RequestConvertToJsonTest {
     assertEquals(expectedNode, actualNode)
   }
 
-  @Test def testFieldsRequestDescMetrics(): Unit = {
-    val expectedFields = Set("requestHeader", "request", "response", "connection",
-      "totalTimeMs", "requestQueueTimeMs", "localTimeMs", "remoteTimeMs", "throttleTimeMs",
-      "responseQueueTimeMs", "sendTimeMs", "securityProtocol", "principal", "listener",
-      "clientInformation", "softwareName", "softwareVersion", "temporaryMemoryBytes", "messageConversionsTime")
-
+  @Test
+  def testRequestDescMetrics(): Unit = {
     val req = request(new AlterIsrRequest(new AlterIsrRequestData(), 0))
     val byteBuffer = req.body[AbstractRequest].serialize(req.header)
     val send = new NetworkSend(req.context.connectionId, byteBuffer)
     val headerLog = RequestConvertToJson.requestHeaderNode(req.header)
     val res = new RequestChannel.SendResponse(req, send, Some(headerLog), None)
 
-    val node = RequestConvertToJson.requestDescMetrics(req.header, res, req.loggableRequest, req.context, req.session,
-      1, 1, 1, 1, 1, 1, 1, 1, 1).asInstanceOf[ObjectNode]
-    val foundFields = getFieldNames(node)
+    val totalTimeMs = 1
+    val requestQueueTimeMs = 2
+    val apiLocalTimeMs = 3
+    val apiRemoteTimeMs = 4
+    val apiThrottleTimeMs = 5
+    val responseQueueTimeMs = 6
+    val responseSendTimeMs = 7
+    val temporaryMemoryBytes = 8
+    val messageConversionsTimeMs = 9
 
-    assertEquals(expectedFields, foundFields)
+    val expectedNode = RequestConvertToJson.requestDesc(req.header, req.loggableRequest).asInstanceOf[ObjectNode]
+    expectedNode.set("response", res.responseLog.getOrElse(new TextNode("")))
+    expectedNode.set("connection", new TextNode(req.context.connectionId))
+    expectedNode.set("totalTimeMs", new DoubleNode(totalTimeMs))
+    expectedNode.set("requestQueueTimeMs", new DoubleNode(requestQueueTimeMs))
+    expectedNode.set("localTimeMs", new DoubleNode(apiLocalTimeMs))
+    expectedNode.set("remoteTimeMs", new DoubleNode(apiRemoteTimeMs))
+    expectedNode.set("throttleTimeMs", new LongNode(apiThrottleTimeMs))
+    expectedNode.set("responseQueueTimeMs", new DoubleNode(responseQueueTimeMs))
+    expectedNode.set("sendTimeMs", new DoubleNode(responseSendTimeMs))
+    expectedNode.set("securityProtocol", new TextNode(req.context.securityProtocol.toString))
+    expectedNode.set("principal", new TextNode(req.session.principal.toString))
+    expectedNode.set("listener", new TextNode(req.context.listenerName.value))
+    expectedNode.set("clientInformation", RequestConvertToJson.clientInfoNode(req.context.clientInformation))
+    expectedNode.set("temporaryMemoryBytes", new LongNode(temporaryMemoryBytes))
+    expectedNode.set("messageConversionsTime", new DoubleNode(messageConversionsTimeMs))
+
+    val actualNode = RequestConvertToJson.requestDescMetrics(req.header, res, req.loggableRequest, req.context, req.session,
+      totalTimeMs, requestQueueTimeMs, apiLocalTimeMs, apiRemoteTimeMs, apiThrottleTimeMs, responseQueueTimeMs,
+      responseSendTimeMs, temporaryMemoryBytes, messageConversionsTimeMs).asInstanceOf[ObjectNode]
+
+    assertEquals(expectedNode, actualNode)
   }
 
-  def request(req: AbstractRequest): RequestChannel.Request = {
+  private def request(req: AbstractRequest): RequestChannel.Request = {
     val buffer = req.serialize(new RequestHeader(req.api, req.version, "client-id", 1))
     val requestContext = newRequestContext(buffer)
     new network.RequestChannel.Request(processor = 1,
@@ -184,16 +204,5 @@ class RequestConvertToJsonTest {
       ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
       SecurityProtocol.PLAINTEXT,
       new ClientInformation("name", "version"))
-  }
-
-  def getFieldNames(node: JsonNode): Set[String] = {
-    var fieldNames = Set[String]()
-    node.fields.forEachRemaining { entry =>
-      fieldNames += entry.getKey
-      if (entry.getValue.isObject && entry.getKey != "request" && entry.getKey != "requestHeader" && entry.getKey != "response") {
-        fieldNames ++= getFieldNames(entry.getValue)
-      }
-    }
-    fieldNames
   }
 }

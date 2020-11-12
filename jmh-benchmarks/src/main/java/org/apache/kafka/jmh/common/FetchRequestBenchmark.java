@@ -129,6 +129,6 @@ public class FetchRequestBenchmark {
 
     @Benchmark
     public String testRequestToJson() {
-        return RequestConvertToJson.request(consumerRequest, false).toString();
+        return RequestConvertToJson.request(consumerRequest).toString();
     }
 }

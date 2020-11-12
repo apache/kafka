@@ -75,6 +75,6 @@ public class ListOffsetRequestBenchmark {
 
     @Benchmark
     public String testRequestToJson() {
-        return RequestConvertToJson.request(offsetRequest, false).toString();
+        return RequestConvertToJson.request(offsetRequest).toString();
     }
 }
