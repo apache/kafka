@@ -75,32 +75,33 @@ public class ProduceResponse extends AbstractResponse {
      * @param throttleTimeMs Time in milliseconds the response was throttled
      */
     public ProduceResponse(Map<TopicPartition, PartitionResponse> responses, int throttleTimeMs) {
-        this(new ProduceResponseData()
-            .setResponses(responses.entrySet()
-                .stream()
-                .collect(Collectors.groupingBy(e -> e.getKey().topic()))
-                .entrySet()
-                .stream()
-                .map(topicData -> new ProduceResponseData.TopicProduceResponse()
-                    .setName(topicData.getKey())
-                    .setPartitionResponses(topicData.getValue()
+        this(toData(responses, throttleTimeMs));
+    }
+
+    private static ProduceResponseData toData(Map<TopicPartition, PartitionResponse> responses, int throttleTimeMs) {
+        ProduceResponseData data = new ProduceResponseData().setThrottleTimeMs(throttleTimeMs);
+        responses.forEach((tp, response) -> {
+            ProduceResponseData.TopicProduceResponse tpr = data.responses().find(tp.topic());
+            if (tpr == null) {
+                tpr = new ProduceResponseData.TopicProduceResponse().setName(tp.topic());
+                data.responses().add(tpr);
+            }
+            tpr.partitionResponses()
+                .add(new ProduceResponseData.PartitionProduceResponse()
+                    .setIndex(tp.partition())
+                    .setBaseOffset(response.baseOffset)
+                    .setLogStartOffset(response.logStartOffset)
+                    .setLogAppendTimeMs(response.logAppendTime)
+                    .setErrorMessage(response.errorMessage)
+                    .setErrorCode(response.error.code())
+                    .setRecordErrors(response.recordErrors
                         .stream()
-                        .map(p -> new ProduceResponseData.PartitionProduceResponse()
-                            .setIndex(p.getKey().partition())
-                            .setBaseOffset(p.getValue().baseOffset)
-                            .setLogStartOffset(p.getValue().logStartOffset)
-                            .setLogAppendTimeMs(p.getValue().logAppendTime)
-                            .setErrorMessage(p.getValue().errorMessage)
-                            .setErrorCode(p.getValue().error.code())
-                            .setRecordErrors(p.getValue().recordErrors
-                                .stream()
-                                .map(e -> new ProduceResponseData.BatchIndexAndErrorMessage()
-                                    .setBatchIndex(e.batchIndex)
-                                    .setBatchIndexErrorMessage(e.message))
-                                .collect(Collectors.toList())))
-                        .collect(Collectors.toList())))
-                .collect(Collectors.toList()))
-            .setThrottleTimeMs(throttleTimeMs));
+                        .map(e -> new ProduceResponseData.BatchIndexAndErrorMessage()
+                            .setBatchIndex(e.batchIndex)
+                            .setBatchIndexErrorMessage(e.message))
+                        .collect(Collectors.toList())));
+        });
+        return data;
     }
 
     /**

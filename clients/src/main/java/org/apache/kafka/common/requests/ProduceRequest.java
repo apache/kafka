@@ -224,22 +224,23 @@ public class ProduceRequest extends AbstractRequest {
         /* In case the producer doesn't actually want any response */
         if (acks == 0) return null;
         Errors error = Errors.forException(e);
-        return new ProduceResponse(new ProduceResponseData()
-            .setResponses(partitionSizes().keySet().stream().collect(Collectors.groupingBy(TopicPartition::topic)).entrySet()
-                .stream()
-                .map(entry -> new ProduceResponseData.TopicProduceResponse()
-                    .setPartitionResponses(entry.getValue().stream().map(p -> new ProduceResponseData.PartitionProduceResponse()
-                        .setIndex(p.partition())
-                        .setRecordErrors(Collections.emptyList())
-                        .setBaseOffset(INVALID_OFFSET)
-                        .setLogAppendTimeMs(RecordBatch.NO_TIMESTAMP)
-                        .setLogStartOffset(INVALID_OFFSET)
-                        .setErrorMessage(e.getMessage())
-                        .setErrorCode(error.code()))
-                        .collect(Collectors.toList()))
-                    .setName(entry.getKey()))
-                .collect(Collectors.toList()))
-            .setThrottleTimeMs(throttleTimeMs));
+        ProduceResponseData data = new ProduceResponseData().setThrottleTimeMs(throttleTimeMs);
+        partitionSizes().forEach((tp, ignored) -> {
+            ProduceResponseData.TopicProduceResponse tpr = data.responses().find(tp.topic());
+            if (tpr == null) {
+                tpr = new ProduceResponseData.TopicProduceResponse().setName(tp.topic());
+                data.responses().add(tpr);
+            }
+            tpr.partitionResponses().add(new ProduceResponseData.PartitionProduceResponse()
+                    .setIndex(tp.partition())
+                    .setRecordErrors(Collections.emptyList())
+                    .setBaseOffset(INVALID_OFFSET)
+                    .setLogAppendTimeMs(RecordBatch.NO_TIMESTAMP)
+                    .setLogStartOffset(INVALID_OFFSET)
+                    .setErrorMessage(e.getMessage())
+                    .setErrorCode(error.code()));
+        });
+        return new ProduceResponse(data);
     }
 
     @Override
