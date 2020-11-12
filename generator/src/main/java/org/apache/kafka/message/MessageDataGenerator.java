@@ -1532,7 +1532,9 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                         }).
                         generate(buffer);
                 } else if (field.type().isArray()) {
-                    buffer.printf("int _sizeBeforeArray = _size.totalSize();%n");
+                    if (tagged) {
+                        buffer.printf("int _sizeBeforeArray = _size.totalSize();%n");
+                    }
                     VersionConditional.forVersions(fieldFlexibleVersions(field), possibleVersions).
                         ifMember(__ -> {
                             headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
