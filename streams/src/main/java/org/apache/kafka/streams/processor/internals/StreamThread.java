@@ -282,12 +282,7 @@ public class StreamThread extends Thread {
     private final Consumer<byte[], byte[]> restoreConsumer;
     private final Admin adminClient;
     private final InternalTopologyBuilder builder;
-    private final CacheResizer cacheResizer;
-
-    private interface CacheResizer {
-        void resizeCache(final long cacheSize);
-    }
-
+    private final java.util.function.Consumer<Long> cacheResizer;
 
     private java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler;
     private Runnable shutdownErrorHook;
@@ -625,7 +620,7 @@ public class StreamThread extends Thread {
     }
 
     public void resizeCache(final long size) {
-        cacheResizer.resizeCache(size);
+        cacheResizer.accept(size);
     }
 
     /**
