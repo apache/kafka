@@ -1362,8 +1362,9 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
   private val listenerCounts = mutable.Map[ListenerName, Int]()
   private[network] val maxConnectionsPerListener = mutable.Map[ListenerName, ListenerConnectionQuota]()
   @volatile private var totalCount = 0
+  // updates to defaultConnectionRatePerIp or connectionRatePerIp must be synchronized on `counts`
   @volatile private var defaultConnectionRatePerIp = DynamicConfig.Ip.DefaultConnectionCreationRate
-  private val connectionRatePerIp = mutable.Map[InetAddress, Int]()
+  private val connectionRatePerIp = new ConcurrentHashMap[InetAddress, Int]()
   // sensor that tracks broker-wide connection creation rate and limit (quota)
   private val brokerConnectionRateSensor = getOrCreateConnectionRateQuotaSensor(config.maxConnectionCreationRate, BrokerQuotaEntity)
   private val maxThrottleTimeMs = TimeUnit.SECONDS.toMillis(config.quotaWindowSizeSeconds.toLong)
@@ -1414,7 +1415,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
    * @param ip ip to update or default if None
    * @param maxConnectionRate new connection rate, or resets entity to default if None
    */
-  def updateIpConnectionRateQuota(ip: Option[InetAddress], maxConnectionRate: Option[Int]): Unit = {
+  def updateIpConnectionRateQuota(ip: Option[InetAddress], maxConnectionRate: Option[Int]): Unit = synchronized {
     def isIpConnectionRateMetric(metricName: MetricName) = {
       metricName.name == ConnectionRateMetricName &&
       metricName.group == MetricsGroup &&
@@ -1424,9 +1425,9 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
     def shouldUpdateQuota(metric: KafkaMetric, quotaLimit: Int) = {
       quotaLimit != metric.config.quota.bound
     }
-    counts.synchronized {
-      ip match {
-        case Some(address) =>
+    ip match {
+      case Some(address) =>
+        counts.synchronized {
           maxConnectionRate match {
             case Some(rate) =>
               info(s"Updating max connection rate override for $address to $rate")
@@ -1435,26 +1436,28 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
               info(s"Removing max connection rate override for $address")
               connectionRatePerIp.remove(address)
           }
-          updateConnectionRateQuota(connectionRateForIp(address), IpQuotaEntity(address))
-        case None =>
+        }
+        updateConnectionRateQuota(connectionRateForIp(address), IpQuotaEntity(address))
+      case None =>
+        counts.synchronized {
           defaultConnectionRatePerIp = maxConnectionRate.getOrElse(DynamicConfig.Ip.DefaultConnectionCreationRate)
-          info(s"Updated default max IP connection rate to $defaultConnectionRatePerIp")
-          metrics.metrics.forEach { (metricName, metric) =>
-            if (isIpConnectionRateMetric(metricName)) {
-              val quota = connectionRateForIp(InetAddress.getByName(metricName.tags.get(IpMetricTag)))
-              if (shouldUpdateQuota(metric, quota)) {
-                info(s"Updating existing connection rate quota config for ${metricName.tags} to $quota")
-                metric.config(rateQuotaMetricConfig(quota))
-              }
+        }
+        info(s"Updated default max IP connection rate to $defaultConnectionRatePerIp")
+        metrics.metrics.forEach { (metricName, metric) =>
+          if (isIpConnectionRateMetric(metricName)) {
+            val quota = connectionRateForIp(InetAddress.getByName(metricName.tags.get(IpMetricTag)))
+            if (shouldUpdateQuota(metric, quota)) {
+              debug(s"Updating existing connection rate quota config for ${metricName.tags} to $quota")
+              metric.config(rateQuotaMetricConfig(quota))
             }
           }
-      }
+        }
     }
   }
 
   // Visible for testing
   def connectionRateForIp(ip: InetAddress): Int = {
-    connectionRatePerIp.getOrElse(ip, defaultConnectionRatePerIp)
+    connectionRatePerIp.getOrDefault(ip, defaultConnectionRatePerIp)
   }
 
   private[network] def addListener(config: KafkaConfig, listenerName: ListenerName): Unit = {
