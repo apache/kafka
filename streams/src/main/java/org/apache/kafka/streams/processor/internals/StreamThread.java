@@ -282,6 +282,12 @@ public class StreamThread extends Thread {
     private final Consumer<byte[], byte[]> restoreConsumer;
     private final Admin adminClient;
     private final InternalTopologyBuilder builder;
+    private final CacheResizer cacheResizer;
+
+    private interface CacheResizer {
+        void resizeCache(final long cacheSize);
+    }
+
 
     private java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler;
     private Runnable shutdownErrorHook;
@@ -395,7 +401,8 @@ public class StreamThread extends Thread {
             referenceContainer.assignmentErrorCode,
             referenceContainer.nextScheduledRebalanceMs,
             shutdownErrorHook,
-            streamsUncaughtExceptionHandler
+            streamsUncaughtExceptionHandler,
+            cache
         );
 
         taskManager.setPartitionResetter(partitions -> streamThread.resetOffsets(partitions, null));
@@ -448,7 +455,8 @@ public class StreamThread extends Thread {
                         final AtomicInteger assignmentErrorCode,
                         final AtomicLong nextProbingRebalanceMs,
                         final Runnable shutdownErrorHook,
-                        final java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler) {
+                        final java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler,
+                        final ThreadCache cache) {
         super(threadId);
         this.stateLock = new Object();
 
@@ -468,6 +476,7 @@ public class StreamThread extends Thread {
         this.assignmentErrorCode = assignmentErrorCode;
         this.shutdownErrorHook = shutdownErrorHook;
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
+        this.cacheResizer = cacheSize -> cache.resize(cacheSize);
 
         // The following sensors are created here but their references are not stored in this object, since within
         // this object they are not recorded. The sensors are created here so that the stream threads starts with all
@@ -616,7 +625,7 @@ public class StreamThread extends Thread {
     }
 
     public void resizeCache(final long size) {
-        taskManager.resizeCache(size);
+        cacheResizer.resizeCache(size);
     }
 
     /**

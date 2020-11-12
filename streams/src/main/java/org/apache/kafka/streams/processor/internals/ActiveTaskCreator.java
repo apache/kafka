@@ -296,7 +296,4 @@ class ActiveTaskCreator {
         return new LogContext(logPrefix);
     }
 
-    public void resizeCache(final long size) {
-        cache.resize(size);
-    }
 }

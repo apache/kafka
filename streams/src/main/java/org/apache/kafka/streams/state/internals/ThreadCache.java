@@ -36,7 +36,7 @@ import java.util.NoSuchElementException;
  */
 public class ThreadCache {
     private final Logger log;
-    private long maxCacheSizeBytes;
+    private volatile long maxCacheSizeBytes;
     private final StreamsMetricsImpl metrics;
     private final Map<String, NamedCache> caches = new HashMap<>();
 
