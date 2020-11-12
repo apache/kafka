@@ -1345,7 +1345,17 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    val completeTopicMetadata = topicMetadata ++ unauthorizedForCreateTopicMetadata ++ unauthorizedForDescribeTopicMetadata
+    val completeTopicMetadata = (if (metadataRequest.isAllTopics) {
+      /*
+       * In fix of KAFKA-10606, we stopped auto topic creation on fetch all metadata, which might introduce
+       * UNKNOWN_TOPIC_OR_PARTITION.
+       * But in previous versions, UNKNOWN_TOPIC_OR_PARTITION won't happen on fetch all metadata, so we filter out
+       * those UNKNOWN_TOPIC_OR_PARTITION during fetch all metadata for backward-compatibility.
+       */
+      topicMetadata.filter(_.errorCode() != Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+    } else {
+      topicMetadata
+    }) ++ unauthorizedForCreateTopicMetadata ++ unauthorizedForDescribeTopicMetadata
 
     val brokers = metadataCache.getAliveBrokers
 
