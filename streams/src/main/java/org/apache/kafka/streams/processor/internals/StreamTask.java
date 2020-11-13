@@ -1135,7 +1135,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             final SourceNode<?, ?, ?, ?> source = topology.source(partition.topic());
             if (source == null) {
                 throw new TopologyException(
-                        "Topic is unkown to the topology. " +
+                        "Topic is unknown to the topology. " +
                                 "This may happen if different KafkaStreams instances of the same application execute different Topologies. " +
                                 "Note that Topologies are only identical if all operators are added in the same order."
                 );
