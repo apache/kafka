@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.protocol.ApiVersion;
 import org.apache.kafka.common.feature.Features;
 import org.apache.kafka.common.feature.FinalizedVersionRange;
 import org.apache.kafka.common.feature.SupportedVersionRange;
@@ -124,6 +125,38 @@ public class ApiVersionsResponse extends AbstractResponse {
                                 .setApiKey(apiKey.id)
                                 .setMinVersion(apiKey.oldestVersion())
                                 .setMaxVersion(apiKey.latestVersion()));
+            }
+        }
+        return apiKeys;
+    }
+
+    public static ApiVersionsResponseKeyCollection commonApiVersionWithActiveController(final byte minMagic,
+                                                                                        final Map<ApiKeys, ApiVersion> activeControllerApiVersions) {
+        ApiVersionsResponseKeyCollection apiKeys = new ApiVersionsResponseKeyCollection();
+        for (ApiKeys apiKey : ApiKeys.enabledApis()) {
+            if (apiKey.minRequiredInterBrokerMagic <= minMagic) {
+                final ApiVersion finalApiVersion;
+                if (apiKey.forwardable) {
+                    if (!activeControllerApiVersions.containsKey(apiKey)) {
+                        // Controller doesn't support this API key.
+                        continue;
+                    } else {
+                        finalApiVersion = ApiVersion.versionsInCommon(apiKey,
+                            activeControllerApiVersions.get(apiKey),
+                            apiKey.oldestVersion(),
+                            apiKey.latestVersion());
+                    }
+                } else {
+                    finalApiVersion = new ApiVersion(
+                        apiKey.id,
+                        apiKey.oldestVersion(),
+                        apiKey.latestVersion());
+                }
+
+                apiKeys.add(new ApiVersionsResponseKey()
+                                .setApiKey(finalApiVersion.apiKey)
+                                .setMinVersion(finalApiVersion.minVersion)
+                                .setMaxVersion(finalApiVersion.maxVersion));
             }
         }
         return apiKeys;

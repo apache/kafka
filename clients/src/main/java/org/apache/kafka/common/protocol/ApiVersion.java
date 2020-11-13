@@ -14,10 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients;
+package org.apache.kafka.common.protocol;
 
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
-import org.apache.kafka.common.protocol.ApiKeys;
 
 /**
  * Represents the min version and max version of an api key.
@@ -52,5 +52,19 @@ public class ApiVersion {
             ", minVersion=" + minVersion +
             ", maxVersion= " + maxVersion +
             ")";
+    }
+
+    public static ApiVersion versionsInCommon(ApiKeys apiKey, ApiVersion supportedVersions,
+                                              short minAllowedVersion, short maxAllowedVersion) {
+        if (supportedVersions == null)
+            throw new UnsupportedVersionException("The broker does not support " + apiKey);
+
+        short minVersion = (short) Math.max(minAllowedVersion, supportedVersions.minVersion);
+        short maxVersion = (short) Math.min(maxAllowedVersion, supportedVersions.maxVersion);
+        if (minVersion > maxVersion)
+            throw new UnsupportedVersionException("The broker does not support " + apiKey +
+                                                      " with version in range [" + minAllowedVersion + "," + maxAllowedVersion + "]. The supported" +
+                                                      " range is [" + supportedVersions.minVersion + "," + supportedVersions.maxVersion + "].");
+        return new ApiVersion(apiKey.id, minVersion, maxVersion);
     }
 }

@@ -19,10 +19,10 @@ package org.apache.kafka.clients;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedList;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ApiVersion;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.ArrayList;
@@ -123,21 +123,15 @@ public class NodeApiVersions {
      * Get the latest version supported by the broker within an allowed range of versions
      */
     public short latestUsableVersion(ApiKeys apiKey, short oldestAllowedVersion, short latestAllowedVersion) {
-        ApiVersion usableVersion = supportedVersions.get(apiKey);
-        if (usableVersion == null)
-            throw new UnsupportedVersionException("The broker does not support " + apiKey);
-        return latestUsableVersion(apiKey, usableVersion, oldestAllowedVersion, latestAllowedVersion);
+        return latestUsableVersion(apiKey, supportedVersions.get(apiKey), oldestAllowedVersion, latestAllowedVersion);
     }
 
-    private short latestUsableVersion(ApiKeys apiKey, ApiVersion supportedVersions,
-                                      short minAllowedVersion, short maxAllowedVersion) {
-        short minVersion = (short) Math.max(minAllowedVersion, supportedVersions.minVersion);
-        short maxVersion = (short) Math.min(maxAllowedVersion, supportedVersions.maxVersion);
-        if (minVersion > maxVersion)
-            throw new UnsupportedVersionException("The broker does not support " + apiKey +
-                    " with version in range [" + minAllowedVersion + "," + maxAllowedVersion + "]. The supported" +
-                    " range is [" + supportedVersions.minVersion + "," + supportedVersions.maxVersion + "].");
-        return maxVersion;
+    private short latestUsableVersion(ApiKeys apiKey,
+                                      ApiVersion supportedVersions,
+                                      short minAllowedVersion,
+                                      short maxAllowedVersion) {
+        return ApiVersion.versionsInCommon(apiKey, supportedVersions,
+            minAllowedVersion, maxAllowedVersion).maxVersion;
     }
 
     /**
@@ -227,4 +221,7 @@ public class NodeApiVersions {
         return supportedVersions.get(apiKey);
     }
 
+    public Map<ApiKeys, ApiVersion> fullApiVersions() {
+        return supportedVersions;
+    }
 }

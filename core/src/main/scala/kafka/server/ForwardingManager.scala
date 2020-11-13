@@ -21,7 +21,7 @@ import java.nio.ByteBuffer
 
 import kafka.network.RequestChannel
 import kafka.utils.Logging
-import org.apache.kafka.clients.ClientResponse
+import org.apache.kafka.clients.{ClientResponse, NodeApiVersions}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EnvelopeRequest, EnvelopeResponse, RequestHeader}
@@ -35,6 +35,8 @@ trait ForwardingManager {
     request: RequestChannel.Request,
     responseCallback: AbstractResponse => Unit
   ): Unit
+
+  def controllerApiVersions(): Option[NodeApiVersions]
 
   def start(): Unit = {}
 
@@ -121,6 +123,9 @@ class ForwardingManagerImpl(
 
     channelManager.sendRequest(envelopeRequest, new ForwardingResponseHandler)
   }
+
+  override def controllerApiVersions(): Option[NodeApiVersions] =
+    channelManager.controllerApiVersions()
 
   private def parseResponse(
     buffer: ByteBuffer,
