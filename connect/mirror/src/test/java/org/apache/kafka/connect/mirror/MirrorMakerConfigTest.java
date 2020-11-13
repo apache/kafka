@@ -28,6 +28,7 @@ import java.util.Set;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Arrays;
+import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -254,6 +255,33 @@ public class MirrorMakerConfigTest {
             "secret2", bProps.get("ssl.key.password"));
         assertEquals("security properties should be transformed in worker producer config",
             "secret2", bProps.get("producer.ssl.key.password"));
+    }
+
+    @Test
+    public void testClusterPairs() {
+        MirrorMakerConfig mirrorConfig = new MirrorMakerConfig(makeProps(
+                "clusters", "a, b, c, d, e, f",
+                "a->b.enabled", "true",
+                "a->c.enabled", "true",
+                "a->d.enabled", "true",
+                "a->e.enabled", "false",
+                "a->f.enabled", "false"));
+        List<SourceAndTarget> clusterPairs = mirrorConfig.clusterPairs();
+        assertEquals("clusterPairs count should match x->y.enabled=true count",
+                3, clusterPairs.size());
+
+        // Link b->a.enabled doesn't exist therefore it must not be in clusterPairs
+        SourceAndTarget sourceAndTarget = new SourceAndTarget("b", "a");
+        assertFalse("disabled/unset link x->y should not be in clusterPairs", clusterPairs.contains(sourceAndTarget));
+    }
+
+    @Test
+    public void testEmptyClusterPairs() {
+        MirrorMakerConfig mirrorConfig = new MirrorMakerConfig(makeProps(
+                "clusters", "a, b, c, d, e, f"));
+        // expect 0 since no link x->y is enabled
+        assertEquals("clusterPairs count should match x->y.enabled=true count",
+                0, mirrorConfig.clusterPairs().size());
     }
 
     public static class FakeConfigProvider implements ConfigProvider {
