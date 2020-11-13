@@ -21,6 +21,7 @@ public final class StreamsAssignmentProtocolVersions {
     public static final int EARLIEST_PROBEABLE_VERSION = 3;
     public static final int LATEST_SUPPORTED_VERSION = 9;
     //When changing the versions update this test: streams_upgrade_test.py::StreamsUpgradeTest.test_version_probing_upgrade
+    //Add add a unit test in SubscriptionInfoTest
 
     private StreamsAssignmentProtocolVersions() {}
 }

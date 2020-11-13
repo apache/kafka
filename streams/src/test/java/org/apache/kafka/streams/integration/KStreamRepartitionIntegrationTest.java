@@ -143,7 +143,6 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @Test
-    @Deprecated //a single thread should no longer die
     public void shouldThrowAnExceptionWhenNumberOfPartitionsOfRepartitionOperationDoNotMatchSourceTopicWhenJoining() throws InterruptedException {
         final int topicBNumberOfPartitions = 6;
         final String inputTopicRepartitionName = "join-repartition-test";
@@ -169,7 +168,6 @@ public class KStreamRepartitionIntegrationTest {
         builder.build(streamsConfiguration);
 
         startStreams(builder, REBALANCING, ERROR, (t, e) -> expectedThrowable.set(e));
-
 
         final String expectedMsg = String.format("Number of partitions [%s] of repartition topic [%s] " +
                                                  "doesn't match number of partitions [%s] of the source topic.",

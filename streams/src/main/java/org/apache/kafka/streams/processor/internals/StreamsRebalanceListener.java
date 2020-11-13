@@ -54,11 +54,13 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
         // org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor.onAssignment
         if (assignmentErrorCode.get() == AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.code()) {
             log.error("Received error code {}", AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA);
+            taskManager.handleRebalanceComplete();
             throw new MissingSourceTopicException("One or more source topics were missing during rebalance");
         } else if (assignmentErrorCode.get() == AssignorError.VERSION_PROBING.code()) {
             log.info("Received version probing code {}", AssignorError.VERSION_PROBING);
         }  else if (assignmentErrorCode.get() == AssignorError.ASSIGNMENT_ERROR.code()) {
             log.error("Received error code {}", AssignorError.ASSIGNMENT_ERROR);
+            taskManager.handleRebalanceComplete();
             throw new TaskAssignmentException("Hit an unexpected exception during task assignment phase of rebalance");
         } else if (assignmentErrorCode.get() == AssignorError.SHUTDOWN_REQUESTED.code()) {
             log.error("A Kafka Streams client in this Kafka Streams application is requesting to shutdown the application");

@@ -571,7 +571,7 @@ public class StreamThread extends Thread {
                             EXACTLY_ONCE_BETA);
 
                 }
-                streamsUncaughtExceptionHandler.accept(e);
+                this.streamsUncaughtExceptionHandler.accept(e);
             } catch (final Throwable e) {
                 this.streamsUncaughtExceptionHandler.accept(e);
             }

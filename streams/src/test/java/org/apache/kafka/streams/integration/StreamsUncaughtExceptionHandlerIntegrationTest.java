@@ -42,12 +42,13 @@ import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -57,6 +58,7 @@ import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.St
 import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.purgeLocalStreamsState;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.fail;
@@ -117,11 +119,10 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
             StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
 
             produceMessages(0L, inputTopic, "A");
-            latch.await(15, TimeUnit.SECONDS);
+            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.ERROR, Duration.ofSeconds(15));
 
             TestUtils.waitForCondition(flag::get, "Handler was called");
             assertThat(processorValueCollector.size(), equalTo(2));
-            assertThat(kafkaStreams.state(), equalTo(KafkaStreams.State.ERROR));
         }
     }
 
@@ -136,10 +137,9 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
             StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
 
             produceMessages(0L, inputTopic, "A");
-            latch.await(15, TimeUnit.SECONDS);
+            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.NOT_RUNNING, Duration.ofSeconds(15));
 
             assertThat(processorValueCollector.size(), equalTo(1));
-            assertThat(kafkaStreams.state(), equalTo(KafkaStreams.State.NOT_RUNNING));
         }
     }
 
@@ -159,26 +159,15 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
             kafkaStreams1.start();
 
             produceMessages(0L, inputTopic, "A");
-            latch.await(30, TimeUnit.SECONDS);
+            waitForApplicationState(Arrays.asList(kafkaStreams, kafkaStreams1), KafkaStreams.State.ERROR, Duration.ofSeconds(30));
 
             assertThat(processorValueCollector.size(), equalTo(1));
-            assertThat(kafkaStreams.state(), equalTo(KafkaStreams.State.ERROR));
-            assertThat(kafkaStreams1.state(), equalTo(KafkaStreams.State.ERROR));
         }
     }
 
     @Test
     public void shouldShutdownSingleThreadApplication() throws Exception {
-        final Properties properties  = mkObjectProperties(
-            mkMap(
-                mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
-                mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
-                mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-                mkEntry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1),
-                mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
-                mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class)
-            )
-        );
+        properties.setProperty(StreamsConfig.NUM_STREAM_THREADS_CONFIG, "1");
 
         final Topology topology = builder.build();
 
@@ -194,11 +183,9 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
             kafkaStreams1.start();
 
             produceMessages(0L, inputTopic, "A");
-            latch.await(30, TimeUnit.SECONDS);
+            waitForApplicationState(Arrays.asList(kafkaStreams, kafkaStreams1), KafkaStreams.State.ERROR, Duration.ofSeconds(30));
 
             assertThat(processorValueCollector.size(), equalTo(1));
-            assertThat(kafkaStreams.state(), equalTo(KafkaStreams.State.ERROR));
-            assertThat(kafkaStreams1.state(), equalTo(KafkaStreams.State.ERROR));
         }
     }
 

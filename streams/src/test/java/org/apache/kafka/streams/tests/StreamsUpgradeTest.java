@@ -160,7 +160,8 @@ public class StreamsUpgradeTest {
                     taskManager.processId(),
                     userEndPoint(),
                     taskManager.getTaskOffsetSums(),
-                    uniqueField
+                    uniqueField,
+                    (byte) 0
                 ).encode();
             } else {
                 return new FutureSubscriptionInfo(
@@ -260,8 +261,9 @@ public class StreamsUpgradeTest {
                                 info.processId(),
                                 info.userEndPoint(),
                                 taskManager().getTaskOffsetSums(),
-                                (byte) 0)
-                                .encode(),
+                                (byte) 0,
+                                (byte) 0
+                            ).encode(),
                             subscription.ownedPartitions()
                         ));
                 }

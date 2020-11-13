@@ -84,19 +84,6 @@ public class SubscriptionInfo {
                             final Map<TaskId, Long> taskOffsetSums,
                             final byte uniqueField,
                             final byte errorCode) {
-        this(version, latestSupportedVersion, processId, userEndPoint, taskOffsetSums, uniqueField);
-
-        if (version >= 9) {
-            data.setErrorCode(errorCode);
-        }
-
-    }
-    public SubscriptionInfo(final int version,
-                            final int latestSupportedVersion,
-                            final UUID processId,
-                            final String userEndPoint,
-                            final Map<TaskId, Long> taskOffsetSums,
-                            final byte uniqueField) {
         validateVersions(version, latestSupportedVersion);
         final SubscriptionInfoData data = new SubscriptionInfoData();
         data.setVersion(version);
@@ -113,6 +100,9 @@ public class SubscriptionInfo {
         }
         if (version >= 8) {
             data.setUniqueField(uniqueField);
+        }
+        if (version >= 9) {
+            data.setErrorCode(errorCode);
         }
 
         this.data = data;

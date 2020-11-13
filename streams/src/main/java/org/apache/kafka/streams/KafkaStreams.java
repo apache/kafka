@@ -164,6 +164,7 @@ public class KafkaStreams implements AutoCloseable {
     GlobalStreamThread globalStreamThread;
     private KafkaStreams.StateListener stateListener;
     private StateRestoreListener globalStateRestoreListener;
+    private boolean oldHanlder;
 
     // container states
     /**
@@ -361,6 +362,7 @@ public class KafkaStreams implements AutoCloseable {
     public void setUncaughtExceptionHandler(final Thread.UncaughtExceptionHandler uncaughtExceptionHandler) {
         synchronized (stateLock) {
             if (state == State.CREATED) {
+                oldHanlder = true;
                 for (final StreamThread thread : threads) {
                     thread.setUncaughtExceptionHandler(uncaughtExceptionHandler);
                 }
@@ -382,7 +384,7 @@ public class KafkaStreams implements AutoCloseable {
      * might be exceptions thrown by your code, for example a NullPointerException thrown from your processor
      * logic.
      * The handler will execute on the thread that produced the exception.
-     * So inorder to get the thread as the java handler type uses use Thread.currentThread()
+     * In order to get the thread uses use Thread.currentThread()
      * <p>
      * Note, this handler must be threadsafe, since it will be shared among all threads, and invoked from any
      * thread that encounters such an exception.
@@ -404,13 +406,13 @@ public class KafkaStreams implements AutoCloseable {
                 }
             } else {
                 throw new IllegalStateException("Can only set UncaughtExceptionHandler in CREATED state. " +
-                        "Current state is: " + state);
+                    "Current state is: " + state);
             }
         }
     }
 
-    private void handleStreamsUncaughtExceptionDefaultWrapper(final Throwable throwable) {
-        if (Thread.getDefaultUncaughtExceptionHandler() != null) {
+    private void defaultStreamsUncaughtExceptionHandler(final Throwable throwable) {
+        if (oldHanlder) {
             if (throwable instanceof RuntimeException) {
                 throw (RuntimeException) throwable;
             } else if (throwable instanceof Error) {
@@ -423,44 +425,41 @@ public class KafkaStreams implements AutoCloseable {
         }
     }
 
-    private void handleStreamsUncaughtException(final Throwable e,
-                                                   final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
-        final StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse action = streamsUncaughtExceptionHandler.handle(e);
-        if (Thread.getDefaultUncaughtExceptionHandler() != null) {
+    private void handleStreamsUncaughtException(final Throwable throwable,
+                                                final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
+        final StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse action = streamsUncaughtExceptionHandler.handle(throwable);
+        if (oldHanlder) {
             log.warn("Stream's new uncaught exception handler is set as well as the deprecated old handler." +
                     "The old handler will be ignored as long as a new handler is set.");
         }
         switch (action) {
             case SHUTDOWN_CLIENT:
                 log.error("Encountered the following exception during processing " +
-                        "and the registered exception handler opted to \" + action + \"." +
-                        " The streams client is going to shut down now. ", e);
+                        "and the registered exception handler opted to " + action + "." +
+                        " The streams client is going to shut down now. ", throwable);
                 close(Duration.ZERO);
                 break;
             case SHUTDOWN_APPLICATION:
-                if (e instanceof Error) {
+                if (throwable instanceof Error) {
                     log.error("This option requires running threads to shut down the application." +
                             "but the uncaught exception was an Error, which means this runtime is no " +
-                            "longer in a well-defined state. Attempting to send the shutdown command anyway.", e);
+                            "longer in a well-defined state. Attempting to send the shutdown command anyway.", throwable);
                 }
                 if (Thread.currentThread().equals(globalStreamThread) && threads.stream().noneMatch(StreamThread::isRunning)) {
                     log.error("Exception in global thread caused the application to attempt to shutdown." +
                             " This action will succeed only if there is at least one StreamThread running on this client." +
                             " Currently there are no running threads so will now close the client.");
-                    close(Duration.ZERO);
+                    close();
                 } else {
                     for (final StreamThread streamThread : threads) {
                         streamThread.sendShutdownRequest(AssignorError.SHUTDOWN_REQUESTED);
                     }
                     log.error("Encountered the following exception during processing " +
-                            "and the application is going to shut down: ", e);
+                            "and the application is going to shut down: ", throwable);
                 }
                 break;
         }
     }
-
-
-
 
     /**
      * Set the listener which is triggered whenever a {@link StateStore} is being restored in order to resume
@@ -850,7 +849,7 @@ public class KafkaStreams implements AutoCloseable {
                 time,
                 globalThreadId,
                 delegatingStateRestoreListener,
-                this::handleStreamsUncaughtExceptionDefaultWrapper
+                this::defaultStreamsUncaughtExceptionHandler
             );
             globalThreadState = globalStreamThread.state();
         }
@@ -876,7 +875,7 @@ public class KafkaStreams implements AutoCloseable {
                 delegatingStateRestoreListener,
                 i + 1,
                 KafkaStreams.this::closeToError,
-                this::handleStreamsUncaughtExceptionDefaultWrapper
+                this::defaultStreamsUncaughtExceptionHandler
             );
             threads.add(streamThread);
             threadState.put(streamThread.getId(), streamThread.state());
@@ -898,7 +897,7 @@ public class KafkaStreams implements AutoCloseable {
         queryableStoreProvider = new QueryableStoreProvider(storeProviders, globalStateStoreProvider);
 
         stateDirCleaner = setupStateDirCleaner();
-
+        oldHanlder = false;
         maybeWarnAboutCodeInRocksDBConfigSetter(log, config);
         rocksDBMetricsRecordingService = maybeCreateRocksDBMetricsRecordingService(clientId, config);
     }
@@ -1029,56 +1028,62 @@ public class KafkaStreams implements AutoCloseable {
         return close(timeoutMs);
     }
 
+    private Thread shutdownHelper(final boolean error) {
+        stateDirCleaner.shutdownNow();
+        if (rocksDBMetricsRecordingService != null) {
+            rocksDBMetricsRecordingService.shutdownNow();
+        }
+
+        // wait for all threads to join in a separate thread;
+        // save the current thread so that if it is a stream thread
+        // we don't attempt to join it and cause a deadlock
+        return new Thread(() -> {
+            // notify all the threads to stop; avoid deadlocks by stopping any
+            // further state reports from the thread since we're shutting down
+            for (final StreamThread thread : threads) {
+                thread.shutdown();
+            }
+
+            for (final StreamThread thread : threads) {
+                try {
+                    if (!thread.isRunning()) {
+                        thread.join();
+                    }
+                } catch (final InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+
+            if (globalStreamThread != null) {
+                globalStreamThread.shutdown();
+            }
+
+            if (globalStreamThread != null && !globalStreamThread.stillRunning()) {
+                try {
+                    globalStreamThread.join();
+                } catch (final InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                globalStreamThread = null;
+            }
+
+            adminClient.close();
+
+            streamsMetrics.removeAllClientLevelMetrics();
+            metrics.close();
+            if (!error) {
+                setState(State.NOT_RUNNING);
+            }
+        }, "kafka-streams-close-thread");
+    }
+
     private boolean close(final long timeoutMs) {
         if (!setState(State.PENDING_SHUTDOWN)) {
             // if transition failed, it means it was either in PENDING_SHUTDOWN
             // or NOT_RUNNING already; just check that all threads have been stopped
             log.info("Already in the pending shutdown state, wait to complete shutdown");
         } else {
-            stateDirCleaner.shutdownNow();
-            if (rocksDBMetricsRecordingService != null) {
-                rocksDBMetricsRecordingService.shutdownNow();
-            }
-
-            // wait for all threads to join in a separate thread;
-            // save the current thread so that if it is a stream thread
-            // we don't attempt to join it and cause a deadlock
-            final Thread shutdownThread = new Thread(() -> {
-                // notify all the threads to stop; avoid deadlocks by stopping any
-                // further state reports from the thread since we're shutting down
-                for (final StreamThread thread : threads) {
-                    thread.shutdown();
-                }
-
-                for (final StreamThread thread : threads) {
-                    try {
-                        if (!thread.isRunning()) {
-                            thread.join();
-                        }
-                    } catch (final InterruptedException ex) {
-                        Thread.currentThread().interrupt();
-                    }
-                }
-
-                if (globalStreamThread != null) {
-                    globalStreamThread.shutdown();
-                }
-
-                if (globalStreamThread != null && !globalStreamThread.stillRunning()) {
-                    try {
-                        globalStreamThread.join();
-                    } catch (final InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    }
-                    globalStreamThread = null;
-                }
-
-                adminClient.close();
-
-                streamsMetrics.removeAllClientLevelMetrics();
-                metrics.close();
-                setState(State.NOT_RUNNING);
-            }, "kafka-streams-close-thread");
+            final Thread shutdownThread = shutdownHelper(false);
 
             shutdownThread.setDaemon(true);
             shutdownThread.start();
@@ -1097,50 +1102,7 @@ public class KafkaStreams implements AutoCloseable {
         if (!setState(State.ERROR)) {
             log.info("Skipping shutdown since we are already in " + state());
         } else {
-            log.info("Transitioning to ERROR state");
-            stateDirCleaner.shutdownNow();
-            if (rocksDBMetricsRecordingService != null) {
-                rocksDBMetricsRecordingService.shutdownNow();
-            }
-
-            // wait for all threads to join in a separate thread;
-            // save the current thread so that if it is a stream thread
-            // we don't attempt to join it and cause a deadlock
-            final Thread shutdownThread = new Thread(() -> {
-                // notify all the threads to stop; avoid deadlocks by stopping any
-                // further state reports from the thread since we're shutting down
-                for (final StreamThread thread : threads) {
-                    thread.shutdown();
-                }
-
-                for (final StreamThread thread : threads) {
-                    try {
-                        if (!thread.isRunning()) {
-                            thread.join();
-                        }
-                    } catch (final InterruptedException ex) {
-                        Thread.currentThread().interrupt();
-                    }
-                }
-
-                if (globalStreamThread != null) {
-                    globalStreamThread.shutdown();
-                }
-
-                if (globalStreamThread != null && !globalStreamThread.stillRunning()) {
-                    try {
-                        globalStreamThread.join();
-                    } catch (final InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    }
-                    globalStreamThread = null;
-                }
-
-                adminClient.close();
-
-                streamsMetrics.removeAllClientLevelMetrics();
-                metrics.close();
-            }, "kafka-streams-close-thread");
+            final Thread shutdownThread = shutdownHelper(true);
 
             shutdownThread.setDaemon(true);
             shutdownThread.start();
