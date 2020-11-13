@@ -93,7 +93,9 @@ public class MirrorMakerConfig extends AbstractConfig {
             for (String target : clusters) {
                 SourceAndTarget sourceAndTarget = new SourceAndTarget(source, target);
                 if (!source.equals(target)) {
-                    pairs.add(sourceAndTarget);
+                    if (this.stringsWithPrefixStripped(source + "->" + target + ".").getOrDefault("enabled","false").equals("true")){
+                        pairs.add(sourceAndTarget);
+                    }
                 }
             }
         }
