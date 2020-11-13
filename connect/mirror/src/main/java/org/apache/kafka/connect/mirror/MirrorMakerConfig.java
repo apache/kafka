@@ -89,12 +89,12 @@ public class MirrorMakerConfig extends AbstractConfig {
     public List<SourceAndTarget> clusterPairs() {
         List<SourceAndTarget> pairs = new ArrayList<>();
         Set<String> clusters = clusters();
+        Map<String, String> originalStrings = originalsStrings();
         for (String source : clusters) {
             for (String target : clusters) {
-                SourceAndTarget sourceAndTarget = new SourceAndTarget(source, target);
                 if (!source.equals(target)) {
-                    if (this.stringsWithPrefixStripped(source + "->" + target + ".").getOrDefault("enabled","false").equals("true")){
-                        pairs.add(sourceAndTarget);
+                    if (originalStrings.getOrDefault(source + "->" + target + ".enabled", "false").equals("true")) {
+                        pairs.add(new SourceAndTarget(source, target));
                     }
                 }
             }
