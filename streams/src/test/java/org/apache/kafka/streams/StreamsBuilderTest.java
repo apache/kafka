@@ -70,6 +70,7 @@ import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class StreamsBuilderTest {
 
@@ -899,24 +900,38 @@ public class StreamsBuilderTest {
     }
 
     @Test
-    public void shouldAllowReadingFromSameTopic() {
+    public void shouldAllowStreamsFromSameTopic() {
         builder.stream("topic");
         builder.stream("topic");
-        builder.build();
+        assertBuildDoesNotThrow(builder);
+    }
+
+    @Test
+    public void shouldAllowTablesFromSameTopic() {
+        builder.table("topic");
+        builder.table("topic");
+        assertBuildDoesNotThrow(builder);
+    }
+
+    @Test
+    public void shouldAllowStreamAndTableFromSameTopic() {
+        builder.stream("topic");
+        builder.table("topic");
+        assertBuildDoesNotThrow(builder);
     }
 
     @Test
     public void shouldAllowSubscribingToSamePattern() {
         builder.stream(Pattern.compile("some-regex"));
         builder.stream(Pattern.compile("some-regex"));
-        builder.build();
+        assertBuildDoesNotThrow(builder);
     }
 
     @Test
     public void shouldAllowReadingFromSameCollectionOfTopics() {
-        builder.stream(Collections.singletonList("topic"));
-        builder.stream(Collections.singletonList("topic"));
-        builder.build();
+        builder.stream(asList("topic1", "topic2"));
+        builder.stream(asList("topic2", "topic1"));
+        assertBuildDoesNotThrow(builder);
     }
 
     @Test
@@ -941,10 +956,32 @@ public class StreamsBuilderTest {
     }
 
     @Test
+    public void shouldThrowWhenSubscribedToATopicWithUnsetAndSetResetPolicies() {
+        builder.stream("another-topic");
+        builder.stream("another-topic", Consumed.with(AutoOffsetReset.LATEST));
+        assertThrows(TopologyException.class, builder::build);
+    }
+
+    @Test
     public void shouldThrowWhenSubscribedToAPatternWithDifferentResetPolicies() {
         builder.stream(Pattern.compile("some-regex"), Consumed.with(AutoOffsetReset.EARLIEST));
         builder.stream(Pattern.compile("some-regex"), Consumed.with(AutoOffsetReset.LATEST));
         assertThrows(TopologyException.class, builder::build);
+    }
+
+    @Test
+    public void shouldThrowWhenSubscribedToAPatternWithSetAndUnsetResetPolicies() {
+        builder.stream(Pattern.compile("some-regex"), Consumed.with(AutoOffsetReset.EARLIEST));
+        builder.stream(Pattern.compile("some-regex"));
+        assertThrows(TopologyException.class, builder::build);
+    }
+
+    private static void assertBuildDoesNotThrow(final StreamsBuilder builder) {
+        try {
+            builder.build();
+        } catch (final TopologyException topologyException) {
+            fail("TopologyException not expected");
+        }
     }
 
     private static void assertNamesForOperation(final ProcessorTopology topology, final String... expected) {

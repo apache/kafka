@@ -78,16 +78,16 @@ public class StreamSourceNode<K, V> extends StreamsGraphNode {
         return consumedInternal.valueSerde();
     }
 
-    // We "merge" source nodes into a single node under the hood if a user tries to read in a source topic multiple times
     public void merge(final StreamSourceNode<?, ?> other) {
         final AutoOffsetReset resetPolicy = consumedInternal.offsetResetPolicy();
-        if (resetPolicy != null && !resetPolicy.equals(other.consumedInternal().offsetResetPolicy())) {
+        final AutoOffsetReset otherResetPolicy = other.consumedInternal().offsetResetPolicy();
+        if (resetPolicy != null && !resetPolicy.equals(otherResetPolicy)
+            || otherResetPolicy != null && !otherResetPolicy.equals(resetPolicy)) {
             log.error("Tried to merge source nodes {} and {} which are subscribed to the same topic/pattern, but "
                           + "the offset reset policies do not match", this, other);
             throw new TopologyException("Can't configure different offset reset policies on the same input topic(s)");
         }
         for (final StreamsGraphNode otherChild : other.children()) {
-            // Move children from other to this, these calls take care of resetting the child's parents to this
             other.removeChild(otherChild);
             addChild(otherChild);
         }
