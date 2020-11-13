@@ -34,10 +34,14 @@ import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.PosixFilePermission;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
@@ -62,6 +66,8 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
 
 public class StateDirectoryTest {
 
@@ -104,6 +110,27 @@ public class StateDirectoryTest {
         assertTrue(stateDir.isDirectory());
         assertTrue(appDir.exists());
         assertTrue(appDir.isDirectory());
+    }
+
+    @Test
+    public void shouldHaveSecurePermissions() {
+        final Set<PosixFilePermission> expectedPermissions = EnumSet.of(
+            PosixFilePermission.OWNER_EXECUTE,
+            PosixFilePermission.GROUP_READ,
+            PosixFilePermission.OWNER_WRITE,
+            PosixFilePermission.GROUP_EXECUTE,
+            PosixFilePermission.OWNER_READ);
+
+        final Path statePath = Paths.get(stateDir.getPath());
+        final Path basePath = Paths.get(appDir.getPath());
+        try {
+            final Set<PosixFilePermission> baseFilePermissions = Files.getPosixFilePermissions(statePath);
+            final Set<PosixFilePermission> appFilePermissions = Files.getPosixFilePermissions(basePath);
+            assertThat(expectedPermissions.equals(baseFilePermissions), is(true));
+            assertThat(expectedPermissions.equals(appFilePermissions), is(true));
+        } catch (final IOException e) {
+            fail("Should create correct files and set correct permissions");
+        }
     }
 
     @Test
