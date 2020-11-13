@@ -564,8 +564,10 @@ public class Sender implements Runnable {
                 for (Map.Entry<TopicPartition, ProduceResponse.PartitionResponse> entry : produceResponse.responses().entrySet()) {
                     TopicPartition tp = entry.getKey();
                     ProduceResponse.PartitionResponse partResp = entry.getValue();
-                    ProducerBatch batch = batches.get(tp);
-                    completeBatch(batch, partResp, correlationId, now);
+                    if (tp != null && partResp != null) {
+                        ProducerBatch batch = batches.get(tp);
+                        completeBatch(batch, partResp, correlationId, now);
+                    }
                 }
                 this.sensors.recordLatency(response.destination(), response.requestLatencyMs());
             } else {
