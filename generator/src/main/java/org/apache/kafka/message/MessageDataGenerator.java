@@ -1410,8 +1410,6 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                 }).
                 generate(buffer);
         } else if (type instanceof FieldType.BytesFieldType) {
-            // TODO: Should we have a check for zerocopy here?
-
             buffer.printf("_size.addBytes(%s.length);%n", fieldName);
             VersionConditional.forVersions(flexibleVersions, versions).
                 ifNotMember(__ -> {
