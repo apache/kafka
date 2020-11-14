@@ -109,7 +109,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
         buffer.printf("%n");
         generateClassToStruct(className, struct, parentVersions);
         buffer.printf("%n");
-        generateClassSize(className, struct, parentVersions);
+        generateClassMessageSize(className, struct, parentVersions);
         if (isSetElement) {
             buffer.printf("%n");
             generateClassEquals(className, struct, true);
@@ -628,18 +628,8 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                 buffer.printf("%snewBytes%s", assignmentPrefix, assignmentSuffix);
             }
         } else if (type.isRecords()) {
-            headerGenerator.addImport(MessageGenerator.RECORDS_READABLE_CLASS);
-            buffer.printf("if (_readable instanceof RecordsReadable) {%n");
-            buffer.incrementIndent();
-            buffer.printf("%s((RecordsReadable) _readable).readRecords(%s)%s",
+            buffer.printf("%s_readable.readRecords(%s)%s",
                 assignmentPrefix, lengthVar, assignmentSuffix);
-            buffer.decrementIndent();
-            buffer.printf("} else {%n");
-            buffer.incrementIndent();
-            buffer.printf("throw new RuntimeException(\"Cannot read records from " +
-                "reader of class: \" + _readable.getClass().getSimpleName());%n");
-            buffer.decrementIndent();
-            buffer.printf("}%n");
         } else if (type.isArray()) {
             FieldType.ArrayType arrayType = (FieldType.ArrayType) type;
             if (isStructArrayWithKeys) {
@@ -1142,16 +1132,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                         buffer.printf("_writable.writeByteArray(%s);%n", name);
                     }
                 } else if (type.isRecords()) {
-                    headerGenerator.addImport(MessageGenerator.RECORDS_WRITABLE_CLASS);
-                    buffer.printf("if (_writable instanceof RecordsWritable) {%n");
-                    buffer.incrementIndent();
-                    buffer.printf("((RecordsWritable) _writable).writeRecords(%s);%n", name);
-                    buffer.decrementIndent();
-                    buffer.printf("} else {%n");
-                    buffer.incrementIndent();
-                    buffer.printf("throw new RuntimeException(\"Cannot write records to writer of class: \" + _writable.getClass().getSimpleName());%n");
-                    buffer.decrementIndent();
-                    buffer.printf("}%n");
+                    buffer.printf("_writable.writeRecords(%s);%n", name);
                 } else if (type.isArray()) {
                     FieldType.ArrayType arrayType = (FieldType.ArrayType) type;
                     FieldType elementType = arrayType.elementType();
@@ -1332,10 +1313,10 @@ public final class MessageDataGenerator implements MessageClassGenerator {
     private void generateFieldToObjectArray(FieldSpec field) {
         FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
         FieldType elementType = arrayType.elementType();
-        String boxdElementType = elementType.isStruct() ? "Struct" :
+        String boxedElementType = elementType.isStruct() ? "Struct" :
             elementType.getBoxedJavaType(headerGenerator);
         buffer.printf("%s[] _nestedObjects = new %s[%s.size()];%n",
-            boxdElementType, boxdElementType, field.camelCaseName());
+            boxedElementType, boxedElementType, field.camelCaseName());
         buffer.printf("int i = 0;%n");
         buffer.printf("for (%s element : this.%s) {%n",
             arrayType.elementType().getBoxedJavaType(headerGenerator), field.camelCaseName());
@@ -1349,13 +1330,17 @@ public final class MessageDataGenerator implements MessageClassGenerator {
         buffer.printf("}%n");
     }
 
-    private void generateClassSize(String className, StructSpec struct,
-                                   Versions parentVersions) {
+    private void generateClassMessageSize(
+        String className,
+        StructSpec struct,
+        Versions parentVersions
+    ) {
         headerGenerator.addImport(MessageGenerator.OBJECT_SERIALIZATION_CACHE_CLASS);
+        headerGenerator.addImport(MessageGenerator.MESSAGE_SIZE_ACCUMULATOR_CLASS);
         buffer.printf("@Override%n");
-        buffer.printf("public int size(ObjectSerializationCache _cache, short _version) {%n");
+        buffer.printf("public void addSize(MessageSizeAccumulator _size, ObjectSerializationCache _cache, short _version) {%n");
         buffer.incrementIndent();
-        buffer.printf("int _size = 0, _numTaggedFields = 0;%n");
+        buffer.printf("int _numTaggedFields = 0;%n");
         VersionConditional.forVersions(parentVersions, struct.versions()).
             allowMembershipCheckAlwaysFalse(false).
             ifNotMember(__ -> {
@@ -1384,9 +1369,9 @@ public final class MessageDataGenerator implements MessageClassGenerator {
         buffer.printf("for (RawTaggedField _field : _unknownTaggedFields) {%n");
         buffer.incrementIndent();
         headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
-        buffer.printf("_size += ByteUtils.sizeOfUnsignedVarint(_field.tag());%n");
-        buffer.printf("_size += ByteUtils.sizeOfUnsignedVarint(_field.size());%n");
-        buffer.printf("_size += _field.size();%n");
+        buffer.printf("_size.addBytes(ByteUtils.sizeOfUnsignedVarint(_field.tag()));%n");
+        buffer.printf("_size.addBytes(ByteUtils.sizeOfUnsignedVarint(_field.size()));%n");
+        buffer.printf("_size.addBytes(_field.size());%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
         buffer.decrementIndent();
@@ -1397,10 +1382,9 @@ public final class MessageDataGenerator implements MessageClassGenerator {
             }).
             ifMember(__ -> {
                 headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
-                buffer.printf("_size += ByteUtils.sizeOfUnsignedVarint(_numTaggedFields);%n");
+                buffer.printf("_size.addBytes(ByteUtils.sizeOfUnsignedVarint(_numTaggedFields));%n");
             }).
             generate(buffer);
-        buffer.printf("return _size;%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
     }
@@ -1417,28 +1401,29 @@ public final class MessageDataGenerator implements MessageClassGenerator {
             generateStringToBytes(fieldName);
             VersionConditional.forVersions(flexibleVersions, versions).
                 ifNotMember(__ -> {
-                    buffer.printf("_arraySize += _stringBytes.length + 2;%n");
+                    buffer.printf("_size.addBytes(_stringBytes.length + 2);%n");
                 }).
                 ifMember(__ -> {
                     headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
-                    buffer.printf("_arraySize += _stringBytes.length + " +
-                        "ByteUtils.sizeOfUnsignedVarint(_stringBytes.length + 1);%n");
+                    buffer.printf("_size.addBytes(_stringBytes.length + " +
+                        "ByteUtils.sizeOfUnsignedVarint(_stringBytes.length + 1));%n");
                 }).
                 generate(buffer);
         } else if (type instanceof FieldType.BytesFieldType) {
+            buffer.printf("_size.addBytes(%s.length);%n", fieldName);
             VersionConditional.forVersions(flexibleVersions, versions).
                 ifNotMember(__ -> {
-                    buffer.printf("_arraySize += %s.length + 4;%n", fieldName);
+                    buffer.printf("_size.addBytes(4);%n");
                 }).
                 ifMember(__ -> {
                     headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
-                    buffer.printf("_arraySize += %s.length + " +
-                        "ByteUtils.sizeOfUnsignedVarint(%s.length + 1);%n",
-                        fieldName, fieldName);
+                    buffer.printf("_size.addBytes(" +
+                            "ByteUtils.sizeOfUnsignedVarint(%s.length + 1));%n",
+                        fieldName);
                 }).
                 generate(buffer);
         } else if (type instanceof FieldType.StructType) {
-            buffer.printf("_arraySize += %s.size(_cache, _version);%n", fieldName);
+            buffer.printf("%s.addSize(_size, _cache, _version);%n", fieldName);
         } else {
             throw new RuntimeException("Unsupported type " + type);
         }
@@ -1463,16 +1448,16 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                 "this.", field.nullableVersions());
             buffer.incrementIndent();
             buffer.printf("_numTaggedFields++;%n");
-            buffer.printf("_size += %d;%n",
+            buffer.printf("_size.addBytes(%d);%n",
                 MessageGenerator.sizeOfUnsignedVarint(field.tag().get()));
             // Account for the tagged field prefix length.
-            buffer.printf("_size += %d;%n",
+            buffer.printf("_size.addBytes(%d);%n",
                 MessageGenerator.sizeOfUnsignedVarint(field.type().fixedLength().get()));
-            buffer.printf("_size += %d;%n", field.type().fixedLength().get());
+            buffer.printf("_size.addBytes(%d);%n", field.type().fixedLength().get());
             buffer.decrementIndent();
             buffer.printf("}%n");
         } else {
-            buffer.printf("_size += %d;%n", field.type().fixedLength().get());
+            buffer.printf("_size.addBytes(%d);%n", field.type().fixedLength().get());
         }
     }
 
@@ -1489,12 +1474,12 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                         ifMember(__ -> {
                             if (tagged) {
                                 buffer.printf("_numTaggedFields++;%n");
-                                buffer.printf("_size += %d;%n",
+                                buffer.printf("_size.addBytes(%d);%n",
                                     MessageGenerator.sizeOfUnsignedVarint(field.tag().get()));
-                                buffer.printf("_size += %d;%n", MessageGenerator.sizeOfUnsignedVarint(
+                                buffer.printf("_size.addBytes(%d);%n", MessageGenerator.sizeOfUnsignedVarint(
                                     MessageGenerator.sizeOfUnsignedVarint(0)));
                             }
-                            buffer.printf("_size += %d;%n", MessageGenerator.sizeOfUnsignedVarint(0));
+                            buffer.printf("_size.addBytes(%d);%n", MessageGenerator.sizeOfUnsignedVarint(0));
                         }).
                         ifNotMember(__ -> {
                             if (tagged) {
@@ -1502,9 +1487,9 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                                     " should not be present in non-flexible versions.");
                             }
                             if (field.type().isString()) {
-                                buffer.printf("_size += 2;%n");
+                                buffer.printf("_size.addBytes(2);%n");
                             } else {
-                                buffer.printf("_size += 4;%n");
+                                buffer.printf("_size.addBytes(4);%n");
                             }
                         }).
                         generate(buffer);
@@ -1518,7 +1503,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                         buffer.incrementIndent();
                     }
                     buffer.printf("_numTaggedFields++;%n");
-                    buffer.printf("_size += %d;%n",
+                    buffer.printf("_size.addBytes(%d);%n",
                         MessageGenerator.sizeOfUnsignedVarint(field.tag().get()));
                 }
                 if (field.type().isString()) {
@@ -1529,11 +1514,11 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                             if (tagged) {
                                 buffer.printf("int _stringPrefixSize = " +
                                     "ByteUtils.sizeOfUnsignedVarint(_stringBytes.length + 1);%n");
-                                buffer.printf("_size += _stringBytes.length + _stringPrefixSize + " +
-                                    "ByteUtils.sizeOfUnsignedVarint(_stringPrefixSize);%n");
+                                buffer.printf("_size.addBytes(_stringBytes.length + _stringPrefixSize + " +
+                                    "ByteUtils.sizeOfUnsignedVarint(_stringPrefixSize));%n");
                             } else {
-                                buffer.printf("_size += _stringBytes.length + " +
-                                    "ByteUtils.sizeOfUnsignedVarint(_stringBytes.length + 1);%n");
+                                buffer.printf("_size.addBytes(_stringBytes.length + " +
+                                    "ByteUtils.sizeOfUnsignedVarint(_stringBytes.length + 1));%n");
                             }
                         }).
                         ifNotMember(__ -> {
@@ -1541,25 +1526,27 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                                 throw new RuntimeException("Tagged field " + field.name() +
                                     " should not be present in non-flexible versions.");
                             }
-                            buffer.printf("_size += _stringBytes.length + 2;%n");
+                            buffer.printf("_size.addBytes(_stringBytes.length + 2);%n");
                         }).
                         generate(buffer);
                 } else if (field.type().isArray()) {
-                    buffer.printf("int _arraySize = 0;%n");
+                    if (tagged) {
+                        buffer.printf("int _sizeBeforeArray = _size.totalSize();%n");
+                    }
                     VersionConditional.forVersions(fieldFlexibleVersions(field), possibleVersions).
                         ifMember(__ -> {
                             headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
-                            buffer.printf("_arraySize += ByteUtils.sizeOfUnsignedVarint(%s.size() + 1);%n",
+                            buffer.printf("_size.addBytes(ByteUtils.sizeOfUnsignedVarint(%s.size() + 1));%n",
                                 field.camelCaseName());
                         }).
                         ifNotMember(__ -> {
-                            buffer.printf("_arraySize += 4;%n");
+                            buffer.printf("_size.addBytes(4);%n");
                         }).
                         generate(buffer);
                     FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
                     FieldType elementType = arrayType.elementType();
                     if (elementType.fixedLength().isPresent()) {
-                        buffer.printf("_arraySize += %s.size() * %d;%n",
+                        buffer.printf("_size.addBytes(%s.size() * %d);%n",
                             field.camelCaseName(),
                             elementType.fixedLength().get());
                     } else if (elementType instanceof FieldType.ArrayType) {
@@ -1579,58 +1566,60 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                     }
                     if (tagged) {
                         headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
+                        buffer.printf("int _arraySize = _size.totalSize() - _sizeBeforeArray;%n");
                         buffer.printf("_cache.setArraySizeInBytes(%s, _arraySize);%n",
                             field.camelCaseName());
-                        buffer.printf("_size += _arraySize + ByteUtils.sizeOfUnsignedVarint(_arraySize);%n");
-                    } else {
-                        buffer.printf("_size += _arraySize;%n");
+                        buffer.printf("_size.addBytes(ByteUtils.sizeOfUnsignedVarint(_arraySize));%n");
                     }
                 } else if (field.type().isBytes()) {
+                    if (tagged) {
+                        buffer.printf("int _sizeBeforeBytes = _size.totalSize();%n");
+                    }
                     if (field.zeroCopy()) {
-                        buffer.printf("int _bytesSize = %s.remaining();%n", field.camelCaseName());
+                        buffer.printf("_size.addZeroCopyBytes(%s.remaining());%n", field.camelCaseName());
                     } else {
-                        buffer.printf("int _bytesSize = %s.length;%n", field.camelCaseName());
+                        buffer.printf("_size.addBytes(%s.length);%n", field.camelCaseName());
                     }
                     VersionConditional.forVersions(fieldFlexibleVersions(field), possibleVersions).
                         ifMember(__ -> {
                             headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
                             if (field.zeroCopy()) {
-                                buffer.printf("_bytesSize += " +
-                                        "ByteUtils.sizeOfUnsignedVarint(%s.remaining() + 1);%n", field.camelCaseName());
+                                buffer.printf("_size.addBytes(" +
+                                        "ByteUtils.sizeOfUnsignedVarint(%s.remaining() + 1));%n", field.camelCaseName());
                             } else {
-                                buffer.printf("_bytesSize += ByteUtils.sizeOfUnsignedVarint(%s.length + 1);%n",
+                                buffer.printf("_size.addBytes(ByteUtils.sizeOfUnsignedVarint(%s.length + 1));%n",
                                     field.camelCaseName());
                             }
                         }).
                         ifNotMember(__ -> {
-                            buffer.printf("_bytesSize += 4;%n");
+                            buffer.printf("_size.addBytes(4);%n");
                         }).
                         generate(buffer);
                     if (tagged) {
                         headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
-                        buffer.printf("_size += _bytesSize + ByteUtils.sizeOfUnsignedVarint(_bytesSize);%n");
-                    } else {
-                        buffer.printf("_size += _bytesSize;%n");
+                        buffer.printf("int _bytesSize = _size.totalSize() - _sizeBeforeBytes;%n");
+                        buffer.printf("_size.addBytes(ByteUtils.sizeOfUnsignedVarint(_bytesSize));%n");
                     }
                 } else if (field.type().isRecords()) {
-                    buffer.printf("int _recordsSize = %s.sizeInBytes();%n", field.camelCaseName());
+                    buffer.printf("_size.addZeroCopyBytes(%s.sizeInBytes());%n", field.camelCaseName());
                     VersionConditional.forVersions(fieldFlexibleVersions(field), possibleVersions).
                         ifMember(__ -> {
                             headerGenerator.addImport(MessageGenerator.BYTE_UTILS_CLASS);
-                            buffer.printf("_recordsSize += " +
-                                "ByteUtils.sizeOfUnsignedVarint(%s.sizeInBytes() + 1);%n", field.camelCaseName());
+                            buffer.printf("_size.addBytes(" +
+                                "ByteUtils.sizeOfUnsignedVarint(%s.sizeInBytes() + 1));%n", field.camelCaseName());
                         }).
                         ifNotMember(__ -> {
-                            buffer.printf("_recordsSize += 4;%n");
+                            buffer.printf("_size.addBytes(4);%n");
                         }).
                         generate(buffer);
-                    buffer.printf("_size += _recordsSize;%n");
                 } else if (field.type().isStruct()) {
-                    buffer.printf("int size = this.%s.size(_cache, _version);%n", field.camelCaseName());
+                    buffer.printf("int _sizeBeforeStruct = _size.totalSize();%n", field.camelCaseName());
+                    buffer.printf("this.%s.addSize(_size, _cache, _version);%n", field.camelCaseName());
+                    buffer.printf("int _structSize = _size.totalSize() - _sizeBeforeStruct;%n", field.camelCaseName());
+
                     if (tagged) {
-                        buffer.printf("_size += ByteUtils.sizeOfUnsignedVarint(size);%n");
+                        buffer.printf("_size.addBytes(ByteUtils.sizeOfUnsignedVarint(_structSize));%n");
                     }
-                    buffer.printf("_size += size;%n");
                 } else {
                     throw new RuntimeException("unhandled type " + field.type());
                 }

@@ -21,6 +21,7 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
+import java.util.Objects;
 
 /**
  * A response header in the kafka protocol.
@@ -66,5 +67,19 @@ public class ResponseHeader implements AbstractRequestResponse {
         return new ResponseHeader(
             new ResponseHeaderData(new ByteBufferAccessor(buffer), headerVersion),
                 headerVersion);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ResponseHeader that = (ResponseHeader) o;
+        return headerVersion == that.headerVersion &&
+            Objects.equals(data, that.data);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(data, headerVersion);
     }
 }

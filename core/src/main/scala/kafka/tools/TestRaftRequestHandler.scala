@@ -92,7 +92,7 @@ class TestRaftRequestHandler(
 
     val response = responseOpt match {
       case Some(response) =>
-        val responseSend = request.context.buildResponse(response)
+        val responseSend = request.context.buildResponseSend(response)
         val responseString =
           if (RequestChannel.isRequestLoggingEnabled) Some(response.toString(request.context.apiVersion))
           else None

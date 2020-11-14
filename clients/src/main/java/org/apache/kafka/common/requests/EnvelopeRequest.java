@@ -18,6 +18,8 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.EnvelopeRequestData;
 import org.apache.kafka.common.message.EnvelopeResponseData;
+import org.apache.kafka.common.network.Send;
+import org.apache.kafka.common.protocol.SendBuilder;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -36,7 +38,7 @@ public class EnvelopeRequest extends AbstractRequest {
             super(ApiKeys.ENVELOPE);
             this.data = new EnvelopeRequestData()
                             .setRequestData(requestData)
-                            .setRequestPrincipal(ByteBuffer.wrap(serializedPrincipal))
+                            .setRequestPrincipal(serializedPrincipal)
                             .setClientHostAddress(clientAddress);
         }
 
@@ -71,10 +73,8 @@ public class EnvelopeRequest extends AbstractRequest {
         return data.clientHostAddress();
     }
 
-    public byte[] principalData() {
-        byte[] serializedPrincipal = new byte[data.requestPrincipal().limit()];
-        data.requestPrincipal().get(serializedPrincipal);
-        return serializedPrincipal;
+    public byte[] requestPrincipal() {
+        return data.requestPrincipal();
     }
 
     @Override
@@ -91,4 +91,14 @@ public class EnvelopeRequest extends AbstractRequest {
     public static EnvelopeRequest parse(ByteBuffer buffer, short version) {
         return new EnvelopeRequest(ApiKeys.ENVELOPE.parseRequest(version, buffer), version);
     }
+
+    public EnvelopeRequestData data() {
+        return data;
+    }
+
+    @Override
+    public Send toSend(String destination, RequestHeader header) {
+        return SendBuilder.buildRequestSend(destination, header, this.data);
+    }
+
 }

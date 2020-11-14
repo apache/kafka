@@ -18,6 +18,8 @@
 package org.apache.kafka.common.protocol;
 
 import org.apache.kafka.common.UUID;
+import org.apache.kafka.common.record.BaseRecords;
+import org.apache.kafka.common.record.MemoryRecords;
 
 import java.nio.ByteBuffer;
 
@@ -32,6 +34,15 @@ public interface Writable {
     void writeByteBuffer(ByteBuffer buf);
     void writeVarint(int i);
     void writeVarlong(long i);
+
+    default void writeRecords(BaseRecords records) {
+        if (records instanceof MemoryRecords) {
+            MemoryRecords memRecords = (MemoryRecords) records;
+            writeByteBuffer(memRecords.buffer());
+        } else {
+            throw new UnsupportedOperationException("Unsupported record type " + records.getClass());
+        }
+    }
 
     default void writeUUID(UUID uuid) {
         writeLong(uuid.getMostSignificantBits());

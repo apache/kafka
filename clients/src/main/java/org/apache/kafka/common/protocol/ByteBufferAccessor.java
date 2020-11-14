@@ -110,7 +110,7 @@ public class ByteBufferAccessor implements Readable, Writable {
 
     @Override
     public void writeByteBuffer(ByteBuffer src) {
-        buf.put(src);
+        buf.put(src.duplicate());
     }
 
     @Override

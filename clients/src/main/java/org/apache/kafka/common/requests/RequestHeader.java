@@ -89,10 +89,11 @@ public class RequestHeader implements AbstractRequestResponse {
     public static RequestHeader parse(ByteBuffer buffer) {
         short apiKey = -1;
         try {
+            int position = buffer.position();
             apiKey = buffer.getShort();
             short apiVersion = buffer.getShort();
             short headerVersion = ApiKeys.forId(apiKey).requestHeaderVersion(apiVersion);
-            buffer.rewind();
+            buffer.position(position);
             return new RequestHeader(new RequestHeaderData(
                 new ByteBufferAccessor(buffer), headerVersion), headerVersion);
         } catch (UnsupportedVersionException e) {

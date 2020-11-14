@@ -59,11 +59,7 @@ public final class MessageGenerator {
 
     static final String READABLE_CLASS = "org.apache.kafka.common.protocol.Readable";
 
-    static final String RECORDS_READABLE_CLASS = "org.apache.kafka.common.protocol.RecordsReadable";
-
     static final String WRITABLE_CLASS = "org.apache.kafka.common.protocol.Writable";
-
-    static final String RECORDS_WRITABLE_CLASS = "org.apache.kafka.common.protocol.RecordsWritable";
 
     static final String ARRAYS_CLASS = "java.util.Arrays";
 
@@ -115,6 +111,8 @@ public final class MessageGenerator {
     static final String TAGGED_FIELDS_SECTION_CLASS = "org.apache.kafka.common.protocol.types.Field.TaggedFieldsSection";
 
     static final String OBJECT_SERIALIZATION_CACHE_CLASS = "org.apache.kafka.common.protocol.ObjectSerializationCache";
+
+    static final String MESSAGE_SIZE_ACCUMULATOR_CLASS = "org.apache.kafka.common.protocol.MessageSizeAccumulator";
 
     static final String RAW_TAGGED_FIELD_CLASS = "org.apache.kafka.common.protocol.types.RawTaggedField";
 
