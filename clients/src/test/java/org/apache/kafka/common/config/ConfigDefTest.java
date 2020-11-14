@@ -103,6 +103,21 @@ public class ConfigDefTest {
     }
 
     @Test
+    public void testRangeToString() {
+        assertEquals("[1,...,10] (whitelist: [])",
+            Range.between(1, 10).toString());
+
+        assertEquals("[1,...,10] (whitelist: [-1, -2])",
+            Range.between(1, 10, Arrays.asList(-1, -2)).toString());
+
+        assertEquals("[1,...] (whitelist: [])",
+            Range.atLeast(1).toString());
+
+        assertEquals("[1,...] (whitelist: [-1, -2])",
+            Range.atLeast(1, Arrays.asList(-1, -2)).toString());
+    }
+
+    @Test
     public void testParsingEmptyDefaultValueForStringFieldShouldSucceed() {
         new ConfigDef().define("a", Type.STRING, "", ConfigDef.Importance.HIGH, "docs")
                 .parse(new HashMap<String, Object>());
@@ -141,6 +156,13 @@ public class ConfigDefTest {
     @Test(expected = ConfigException.class)
     public void testInvalidDefaultRange() {
         new ConfigDef().define("name", Type.INT, -1, Range.between(0, 10), Importance.HIGH, "docs");
+    }
+
+    @Test
+    public void testInvalidDefaultRangeWhitelistedWorks() {
+        Range whitelistRange = Range.between(0, 10, Collections.singletonList(-1));
+        ConfigDef def = new ConfigDef().define("name", Type.INT, -1, whitelistRange, Importance.HIGH, "docs");
+        assertEquals(-1, def.parse(new Properties()).get("name"));
     }
 
     @Test(expected = ConfigException.class)

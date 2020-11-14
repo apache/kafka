@@ -250,8 +250,8 @@ object LogConfig {
       .define(FlushMsProp, LONG, Defaults.FlushMs, atLeast(0), MEDIUM, FlushMsDoc,
         KafkaConfig.LogFlushIntervalMsProp)
       // can be negative. See kafka.log.LogManager.cleanupSegmentsToMaintainSize
-      .define(RetentionBytesProp, LONG, Defaults.RetentionSize, MEDIUM, RetentionSizeDoc,
-        KafkaConfig.LogRetentionBytesProp)
+      .define(RetentionBytesProp, LONG, Defaults.RetentionSize, atLeast(LegacyRecord.RECORD_OVERHEAD_V0, Collections.singletonList(Defaults.RetentionSize)),
+        MEDIUM, RetentionSizeDoc, KafkaConfig.LogRetentionBytesProp)
       // can be negative. See kafka.log.LogManager.cleanupExpiredSegments
       .define(RetentionMsProp, LONG, Defaults.RetentionMs, atLeast(-1), MEDIUM, RetentionMsDoc,
         KafkaConfig.LogRetentionTimeMillisProp)
