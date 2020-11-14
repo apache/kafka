@@ -1343,7 +1343,7 @@ object ConnectionQuotas {
   }
 
   private case class IpQuotaEntity(ip: InetAddress) extends ConnectionQuotaEntity {
-    override def sensorName: String = s"$ConnectionRateSensorName-$ip"
+    override def sensorName: String = s"$ConnectionRateSensorName-${ip.getHostAddress}"
     override def sensorExpiration: Long = InactiveSensorExpirationTimeSeconds
     override def metricName: String = ConnectionRateMetricName
     override def metricTags: Map[String, String] = Map(IpMetricTag -> ip.getHostAddress)
