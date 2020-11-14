@@ -587,7 +587,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                     }
                 }
             }
-            if (!progressMadeThisIteration) {
+            if (!progressMadeThisIteration && numPartitionsNeeded) {
                 throw new TaskAssignmentException("Failed to compute number of partitions for all repartition topics");
             }
         } while (numPartitionsNeeded);
