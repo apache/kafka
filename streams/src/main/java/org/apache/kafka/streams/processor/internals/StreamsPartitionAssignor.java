@@ -528,10 +528,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                                                final Map<Integer, TopicsInfo> topicGroups,
                                                                final Cluster metadata) {
         boolean numPartitionsNeeded;
-        boolean progressMadeThisIteration; // avoid infinitely looping without making any progress on unknown repartitions
         do {
             numPartitionsNeeded = false;
-            progressMadeThisIteration = false;
+            boolean progressMadeThisIteration = false;  // avoid infinitely looping without making any progress on unknown repartitions
 
             for (final TopicsInfo topicsInfo : topicGroups.values()) {
                 for (final String repartitionSourceTopic : topicsInfo.repartitionSourceTopics.keySet()) {
@@ -588,11 +587,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                     }
                 }
             }
-        } while (numPartitionsNeeded && progressMadeThisIteration);
-
-        if (numPartitionsNeeded) {
-            throw new TaskAssignmentException("Failed to compute number of partitions for all repartition topics");
-        }
+            if (!progressMadeThisIteration) {
+                throw new TaskAssignmentException("Failed to compute number of partitions for all repartition topics");
+            }
+        } while (numPartitionsNeeded);
     }
 
     /**

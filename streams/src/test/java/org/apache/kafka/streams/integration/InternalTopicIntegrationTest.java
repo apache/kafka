@@ -143,7 +143,7 @@ public class InternalTopicIntegrationTest {
 
     /*
      * This test just ensures that that the assignor does not get stuck during partition number resolution
-     *  for internal repartition topics. See KAFKA-10689
+     * for internal repartition topics. See KAFKA-10689
      */
     @Test
     public void shouldGetToRunningWithWindowedTableInFKJ() throws Exception {
