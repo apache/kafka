@@ -41,6 +41,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.fail;
 
 public class SubscriptionInfoTest {
     private static final Set<TaskId> ACTIVE_TASKS = new HashSet<>(Arrays.asList(
@@ -367,6 +368,17 @@ public class SubscriptionInfoTest {
         final SubscriptionInfo info =
             new SubscriptionInfo(8, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE);
         assertThat(info, is(SubscriptionInfo.decode(info.encode())));
+    }
+
+    @Test
+    public void shouldNotErrorAccessingFutureVars() {
+        final SubscriptionInfo info =
+                new SubscriptionInfo(8, LATEST_SUPPORTED_VERSION, UUID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE);
+        try {
+            info.errorCode();
+        } catch (final Exception e) {
+            fail("should not error");
+        }
     }
 
     @Test
