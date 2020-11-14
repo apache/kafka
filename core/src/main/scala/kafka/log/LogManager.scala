@@ -477,27 +477,41 @@ class LogManager(logDirs: Seq[File],
       jobs(dir) = jobsForDir.map(pool.submit).toSeq
     }
 
+    var firstExceptionOpt: Option[Throwable] = Option.empty
     try {
       for ((dir, dirJobs) <- jobs) {
-        dirJobs.foreach(_.get)
+        val errorsForDirJobs = dirJobs.map {
+          future =>
+            try {
+              future.get
+              Option.empty
+            } catch {
+              case e: ExecutionException =>
+                error(s"There was an error in one of the threads during LogManager shutdown: ${e.getCause}")
+                Some(e.getCause)
+            }
+        }.filter{ e => e.isDefined }.map{ e => e.get }
 
-        val logs = logsInDir(localLogsByDir, dir)
+        if (firstExceptionOpt.isEmpty) {
+          firstExceptionOpt = errorsForDirJobs.headOption
+        }
 
-        // update the last flush point
-        debug(s"Updating recovery points at $dir")
-        checkpointRecoveryOffsetsInDir(dir, logs)
+        if (errorsForDirJobs.isEmpty) {
+          val logs = logsInDir(localLogsByDir, dir)
 
-        debug(s"Updating log start offsets at $dir")
-        checkpointLogStartOffsetsInDir(dir, logs)
+          // update the last flush point
+          debug(s"Updating recovery points at $dir")
+          checkpointRecoveryOffsetsInDir(dir, logs)
 
-        // mark that the shutdown was clean by creating marker file
-        debug(s"Writing clean shutdown marker at $dir")
-        CoreUtils.swallow(Files.createFile(new File(dir, Log.CleanShutdownFile).toPath), this)
+          debug(s"Updating log start offsets at $dir")
+          checkpointLogStartOffsetsInDir(dir, logs)
+
+          // mark that the shutdown was clean by creating marker file
+          debug(s"Writing clean shutdown marker at $dir")
+          CoreUtils.swallow(Files.createFile(new File(dir, Log.CleanShutdownFile).toPath), this)
+        }
       }
-    } catch {
-      case e: ExecutionException =>
-        error(s"There was an error in one of the threads during LogManager shutdown: ${e.getCause}")
-        throw e.getCause
+      firstExceptionOpt.foreach{ e => throw e}
     } finally {
       threadPools.foreach(_.shutdown())
       // regardless of whether the close succeeded, we need to unlock the data directories
