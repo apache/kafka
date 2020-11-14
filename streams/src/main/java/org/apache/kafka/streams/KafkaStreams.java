@@ -384,7 +384,7 @@ public class KafkaStreams implements AutoCloseable {
      * might be exceptions thrown by your code, for example a NullPointerException thrown from your processor
      * logic.
      * The handler will execute on the thread that produced the exception.
-     * In order to get the thread uses use Thread.currentThread()
+     * In order to get the thread use Thread.currentThread()
      * <p>
      * Note, this handler must be threadsafe, since it will be shared among all threads, and invoked from any
      * thread that encounters such an exception.
