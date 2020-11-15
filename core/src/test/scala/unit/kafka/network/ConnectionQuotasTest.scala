@@ -28,9 +28,10 @@ import kafka.network.Processor.ListenerMetricTag
 import kafka.server.{DynamicConfig, KafkaConfig}
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.common.metrics.internals.MetricsUtils
 import org.apache.kafka.common.metrics.{KafkaMetric, MetricConfig, Metrics}
 import org.apache.kafka.common.network._
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.Time
 import org.junit.Assert._
 import org.junit._
 import org.scalatest.Assertions.{assertThrows, intercept}
@@ -43,6 +44,7 @@ class ConnectionQuotasTest {
   private var metrics: Metrics = _
   private var executor: ExecutorService = _
   private var connectionQuotas: ConnectionQuotas = _
+  private var time: Time = _
 
   private val listeners = Map(
     "EXTERNAL" -> ListenerDesc(new ListenerName("EXTERNAL"), InetAddress.getByName("192.168.1.1")),
@@ -73,6 +75,13 @@ class ConnectionQuotasTest {
     props
   }
 
+  private def setupMockTime(): Unit = {
+    // clean up metrics initialized with Time.SYSTEM
+    metrics.close()
+    time = new MockTime()
+    metrics = new Metrics(time)
+  }
+
   @Before
   def setUp(): Unit = {
     // Clean-up any metrics left around by previous tests
@@ -84,7 +93,8 @@ class ConnectionQuotasTest {
     }
     // use system time, because ConnectionQuota causes the current thread to wait with timeout, which waits based on
     // system time; so using mock time will likely result in test flakiness due to a mixed use of mock and system time
-    metrics = new Metrics(new MetricConfig(), Collections.emptyList(), Time.SYSTEM)
+    time = Time.SYSTEM
+    metrics = new Metrics(new MetricConfig(), Collections.emptyList(), time)
     executor = Executors.newFixedThreadPool(listeners.size)
   }
 
@@ -102,7 +112,7 @@ class ConnectionQuotasTest {
   @Test
   def testFailWhenNoListeners(): Unit = {
     val config = KafkaConfig.fromProps(brokerPropsWithDefaultConnectionLimits)
-    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
 
     // inc() on a separate thread in case it blocks
     val listener = listeners("EXTERNAL")
@@ -116,7 +126,7 @@ class ConnectionQuotasTest {
   @Test
   def testFailDecrementForUnknownIp(): Unit = {
     val config = KafkaConfig.fromProps(brokerPropsWithDefaultConnectionLimits)
-    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
     addListenersAndVerify(config, connectionQuotas)
 
     // calling dec() for an IP for which we didn't call inc() should throw an exception
@@ -126,7 +136,7 @@ class ConnectionQuotasTest {
   @Test
   def testNoConnectionLimitsByDefault(): Unit = {
     val config = KafkaConfig.fromProps(brokerPropsWithDefaultConnectionLimits)
-    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
     addListenersAndVerify(config, connectionQuotas)
 
     // verify there is no limit by accepting 10000 connections as fast as possible
@@ -159,7 +169,7 @@ class ConnectionQuotasTest {
     val props = brokerPropsWithDefaultConnectionLimits
     props.put(KafkaConfig.MaxConnectionsPerIpProp, maxConnectionsPerIp.toString)
     val config = KafkaConfig.fromProps(props)
-    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
 
     addListenersAndVerify(config, connectionQuotas)
 
@@ -201,7 +211,7 @@ class ConnectionQuotasTest {
     val props = brokerPropsWithDefaultConnectionLimits
     props.put(KafkaConfig.MaxConnectionsProp, maxConnections.toString)
     val config = KafkaConfig.fromProps(props)
-    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
 
     addListenersAndVerify(config, connectionQuotas)
 
@@ -268,7 +278,7 @@ class ConnectionQuotasTest {
     val props = brokerPropsWithDefaultConnectionLimits
     props.put(KafkaConfig.MaxConnectionsProp, maxConnections.toString)
     val config = KafkaConfig.fromProps(props)
-    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
 
     addListenersAndVerify(config, connectionQuotas)
 
@@ -315,7 +325,7 @@ class ConnectionQuotasTest {
     val props = brokerPropsWithDefaultConnectionLimits
     props.put(KafkaConfig.MaxConnectionCreationRateProp, brokerRateLimit.toString)
     val config = KafkaConfig.fromProps(props)
-    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
 
     addListenersAndVerify(config, connectionQuotas)
 
@@ -335,7 +345,7 @@ class ConnectionQuotasTest {
     val props = brokerPropsWithDefaultConnectionLimits
     props.put(KafkaConfig.MaxConnectionCreationRateProp, brokerRateLimit.toString)
     val config = KafkaConfig.fromProps(props)
-    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
 
     addListenersAndVerify(config, connectionQuotas)
 
@@ -362,7 +372,7 @@ class ConnectionQuotasTest {
     val props = brokerPropsWithDefaultConnectionLimits
     props.put(KafkaConfig.MaxConnectionCreationRateProp, brokerRateLimit.toString)
     val config = KafkaConfig.fromProps(props)
-    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
 
     val listenerConfig = Map(KafkaConfig.MaxConnectionCreationRateProp -> listenerRateLimit.toString).asJava
     addListenersAndVerify(config, listenerConfig, connectionQuotas)
@@ -388,7 +398,7 @@ class ConnectionQuotasTest {
     val props = brokerPropsWithDefaultConnectionLimits
     props.put(KafkaConfig.MaxConnectionCreationRateProp, brokerRateLimit.toString)
     val config = KafkaConfig.fromProps(props)
-    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
 
     val listenerConfig = Map(KafkaConfig.MaxConnectionCreationRateProp -> listenerRateLimit.toString).asJava
     addListenersAndVerify(config, listenerConfig, connectionQuotas)
@@ -417,24 +427,24 @@ class ConnectionQuotasTest {
     val connCreateIntervalMs = 40 // connection creation rate = 25/sec
     val props = brokerPropsWithDefaultConnectionLimits
     val config = KafkaConfig.fromProps(props)
-    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    // use MockTime for IP connection rate quota tests that don't expect to block
+    setupMockTime()
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
     addListenersAndVerify(config, connectionQuotas)
     val externalListener = listeners("EXTERNAL")
     connectionQuotas.updateIpConnectionRateQuota(Some(externalListener.defaultIp), Some(ipConnectionRateLimit))
-    val numConnections = 200 // should take 8 seconds to create 200 connections with rate = 25/s
+    val numConnections = 200
     // create connections with the rate < ip quota and verify there is no throttling
-    var future = executor.submit((() => acceptConnections(connectionQuotas, externalListener, numConnections,
-      connCreateIntervalMs)): Runnable)
-    future.get(15, TimeUnit.SECONDS)
+    acceptConnectionsAndVerifyRate(connectionQuotas, externalListener, numConnections, connCreateIntervalMs,
+      expectedRate = 25, epsilon = 0)
     assertEquals(s"Number of connections on $externalListener:",
       numConnections, connectionQuotas.get(externalListener.defaultIp))
 
     val adminListener = listeners("ADMIN")
-    val unthrottledConnectionCreateInterval = 20 // connection creation rate = 50/s, should take 4s for 200 connections
+    val unthrottledConnectionCreateInterval = 20 // connection creation rate = 50/s
     // create connections with an IP with no quota and verify there is no throttling
-    future = executor.submit((() => acceptConnections(connectionQuotas, adminListener, numConnections,
-      unthrottledConnectionCreateInterval)): Runnable)
-    future.get(10, TimeUnit.SECONDS)
+    acceptConnectionsAndVerifyRate(connectionQuotas, adminListener, numConnections, unthrottledConnectionCreateInterval,
+      expectedRate = 50, epsilon = 0)
 
     assertEquals(s"Number of connections on $adminListener:",
       numConnections, connectionQuotas.get(adminListener.defaultIp))
@@ -449,24 +459,22 @@ class ConnectionQuotasTest {
     val connCreateIntervalMs = 25 // connection creation rate = 40/sec
     val props = brokerPropsWithDefaultConnectionLimits
     val config = KafkaConfig.fromProps(props)
-    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    // use MockTime for IP connection rate quota tests that don't expect to block
+    setupMockTime()
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
     addListenersAndVerify(config, connectionQuotas)
-    val externalListener = listeners("EXTERNAL").listenerName
-    connectionQuotas.updateIpConnectionRateQuota(Some(knownHost), Some(ipConnectionRateLimit))
+    val externalListener = listeners("EXTERNAL")
+    connectionQuotas.updateIpConnectionRateQuota(Some(externalListener.defaultIp), Some(ipConnectionRateLimit))
     // create connections with the rate > ip quota
-    val numConnections = 200
-    assertTrue("Expected IP to be throttled by overriden IP rate limit", acceptConnections(connectionQuotas,
-      externalListener, knownHost, numConnections, connCreateIntervalMs, expectIpThrottle = true))
-    assertTrue(s"Number of connections on $externalListener: should be at least the IP rate limit",
-      connectionQuotas.get(knownHost) >= ipConnectionRateLimit)
+    val numConnections = 80
+    acceptConnectionsAndVerifyRate(connectionQuotas, externalListener, numConnections, connCreateIntervalMs, ipConnectionRateLimit,
+      1, expectIpThrottle = true)
 
     // verify that default quota applies to IPs without a quota override
     connectionQuotas.updateIpConnectionRateQuota(None, Some(ipConnectionRateLimit))
-    val adminListener = listeners("ADMIN").listenerName
-    assertTrue("Expected IP to be throttled by default rate limit",
-      acceptConnections(connectionQuotas, adminListener, unknownHost, numConnections, connCreateIntervalMs, expectIpThrottle = true))
-    assertTrue(s"Number of connections on $adminListener: should be at least the IP rate limit",
-      connectionQuotas.get(unknownHost) >= ipConnectionRateLimit)
+    val adminListener = listeners("ADMIN")
+    acceptConnectionsAndVerifyRate(connectionQuotas, adminListener, numConnections, connCreateIntervalMs, ipConnectionRateLimit,
+      1, expectIpThrottle = true)
 
     // acceptor shouldn't block for IP rate throttling
     verifyNoBlockedPercentRecordedOnAllListeners()
@@ -478,7 +486,7 @@ class ConnectionQuotasTest {
     val listenerRateLimit = 35
     val props = brokerPropsWithDefaultConnectionLimits
     val config = KafkaConfig.fromProps(props)
-    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
     // with a default per-IP limit of 25 and a listener rate of 30, only one IP should be able to saturate their IP rate
     // limit, the other IP will hit listener rate limits and block
     connectionQuotas.updateIpConnectionRateQuota(None, Some(ipConnectionRateLimit))
@@ -533,7 +541,7 @@ class ConnectionQuotasTest {
   @Test
   def testMaxListenerConnectionListenerMustBeAboveZero(): Unit = {
     val config = KafkaConfig.fromProps(brokerPropsWithDefaultConnectionLimits)
-    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
 
     connectionQuotas.addListener(config, listeners("EXTERNAL").listenerName)
 
@@ -547,7 +555,7 @@ class ConnectionQuotasTest {
   @Test
   def testMaxListenerConnectionRateReconfiguration(): Unit = {
     val config = KafkaConfig.fromProps(brokerPropsWithDefaultConnectionLimits)
-    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
     connectionQuotas.addListener(config, listeners("EXTERNAL").listenerName)
 
     val listenerRateLimit = 20
@@ -581,7 +589,7 @@ class ConnectionQuotasTest {
   @Test
   def testMaxBrokerConnectionRateReconfiguration(): Unit = {
     val config = KafkaConfig.fromProps(brokerPropsWithDefaultConnectionLimits)
-    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
     connectionQuotas.addListener(config, listeners("EXTERNAL").listenerName)
 
     addListenersAndVerify(config, connectionQuotas)
@@ -601,7 +609,7 @@ class ConnectionQuotasTest {
   @Test
   def testIpConnectionRateMetricUpdate(): Unit = {
     val config = KafkaConfig.fromProps(brokerPropsWithDefaultConnectionLimits)
-    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
     connectionQuotas.addListener(config, listeners("EXTERNAL").listenerName)
     connectionQuotas.addListener(config, listeners("ADMIN").listenerName)
     val defaultIpRate = 50
@@ -645,7 +653,9 @@ class ConnectionQuotasTest {
     val ipConnectionRateLimit = 20
     val props = brokerPropsWithDefaultConnectionLimits
     val config = KafkaConfig.fromProps(props)
-    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    // use MockTime for IP connection rate quota tests that don't expect to block
+    setupMockTime()
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
     addListenersAndVerify(config, connectionQuotas)
     val externalListener = listeners("EXTERNAL")
     connectionQuotas.updateIpConnectionRateQuota(Some(externalListener.defaultIp), Some(ipConnectionRateLimit))
@@ -698,7 +708,7 @@ class ConnectionQuotasTest {
     props.put(KafkaConfig.MaxConnectionsProp, maxConnections.toString)
     props.put(KafkaConfig.MaxConnectionCreationRateProp, brokerRateLimit.toString)
     val config = KafkaConfig.fromProps(props)
-    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, time, metrics)
     connectionQuotas.addListener(config, listeners("EXTERNAL").listenerName)
 
     addListenersAndVerify(config, connectionQuotas)
@@ -848,14 +858,17 @@ class ConnectionQuotasTest {
                                              numConnections: Long,
                                              timeIntervalMs: Long,
                                              expectedRate: Int,
-                                             epsilon: Int) : Unit = {
-    val startTimeMs = System.currentTimeMillis
+                                             epsilon: Int,
+                                             expectIpThrottle: Boolean = false) : Unit = {
+    val startTimeMs = time.milliseconds
+    val startNumConnections = connectionQuotas.get(listenerDesc.defaultIp)
     acceptConnections(connectionQuotas, listenerDesc.listenerName, listenerDesc.defaultIp, numConnections,
-      timeIntervalMs, expectIpThrottle = false)
-    val elapsedSeconds = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis - startTimeMs)
-    val actualRate = (numConnections.toDouble / elapsedSeconds).toInt
-    assertTrue(s"Expected rate ($expectedRate +- $epsilon), but got $actualRate ($numConnections connections / $elapsedSeconds sec)",
-      actualRate <= expectedRate + epsilon && actualRate >= expectedRate - epsilon)
+      timeIntervalMs, expectIpThrottle)
+    val elapsedSeconds = MetricsUtils.convert(time.milliseconds - startTimeMs, TimeUnit.SECONDS)
+    val createdConnections = connectionQuotas.get(listenerDesc.defaultIp) - startNumConnections
+    val actualRate = createdConnections.toDouble / elapsedSeconds
+    assertEquals(s"Expected rate ($expectedRate +- $epsilon), but got $actualRate ($createdConnections connections / $elapsedSeconds sec)",
+      expectedRate.toDouble, actualRate, epsilon)
   }
 
   /**
@@ -871,7 +884,7 @@ class ConnectionQuotasTest {
                                 numConnections: Long,
                                 timeIntervalMs: Long,
                                 expectIpThrottle: Boolean): Boolean = {
-    var nextSendTime = System.currentTimeMillis + timeIntervalMs
+    var nextSendTime = time.milliseconds + timeIntervalMs
     var ipThrottled = false
     for (_ <- 0L until numConnections) {
       // this method may block if broker-wide or listener limit on the number of connections is reached
@@ -883,9 +896,9 @@ class ConnectionQuotasTest {
             throw e
           ipThrottled = true
       }
-      val sleepMs = math.max(nextSendTime - System.currentTimeMillis, 0)
+      val sleepMs = math.max(nextSendTime - time.milliseconds, 0)
       if (sleepMs > 0)
-        Utils.sleep(sleepMs)
+        time.sleep(sleepMs)
 
       nextSendTime = nextSendTime + timeIntervalMs
     }
