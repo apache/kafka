@@ -18,8 +18,10 @@ package org.apache.kafka.streams;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.state.MockStoreFactory;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.SessionWindows;
@@ -33,6 +35,7 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockKeyValueStore;
@@ -60,6 +63,14 @@ public class TopologyTest {
     private final StoreBuilder<MockKeyValueStore> storeBuilder = EasyMock.createNiceMock(StoreBuilder.class);
     private final KeyValueStoreBuilder<?, ?> globalStoreBuilder = EasyMock.createNiceMock(KeyValueStoreBuilder.class);
     private final Topology topology = new Topology();
+    private final MockStoreFactory mockStoreFactory = new MockStoreFactory();
+    private final KeyValueStoreBuilder keyValueStoreBuilder = mockStoreFactory.createKeyValueStoreBuilder(
+            Stores.inMemoryKeyValueStore("store"),
+            Serdes.Bytes(),
+            Serdes.Bytes(),
+            false,
+            Time.SYSTEM);
+
     private final InternalTopologyBuilder.TopologyDescription expectedDescription = new InternalTopologyBuilder.TopologyDescription();
 
     @Test(expected = NullPointerException.class)
@@ -258,9 +269,7 @@ public class TopologyTest {
 
     @Test(expected = TopologyException.class)
     public void shouldNotAllowToAddStateStoreToNonExistingProcessor() {
-        mockStoreBuilder();
-        EasyMock.replay(storeBuilder);
-        topology.addStateStore(storeBuilder, "no-such-processor");
+        topology.addStateStore(keyValueStoreBuilder, "no-such-processor");
     }
 
     @Test
