@@ -35,7 +35,8 @@ class ConsoleProducerTest {
     "--property",
     "parse.key=true",
     "--property",
-    "key.separator=#"
+    "key.separator=#",
+    "null.value=NULL"
   )
   val bootstrapServerValidArgs: Array[String] = Array(
     "--bootstrap-server",
