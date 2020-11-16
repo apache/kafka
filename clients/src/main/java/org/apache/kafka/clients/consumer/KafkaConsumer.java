@@ -872,8 +872,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 .timeWindow(config.getLong(ConsumerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
                 .recordLevel(Sensor.RecordingLevel.forName(config.getString(ConsumerConfig.METRICS_RECORDING_LEVEL_CONFIG)))
                 .tags(metricsTags);
+        final Map<String, Object> reporterConfigOverrides = new HashMap<>();
+        reporterConfigOverrides.put(ConsumerConfig.CLIENT_ID_CONFIG, clientId);
+        if (groupId != null && !groupId.isEmpty()) {
+            reporterConfigOverrides.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        }
         List<MetricsReporter> reporters = config.getConfiguredInstances(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG,
-                MetricsReporter.class, Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId));
+                MetricsReporter.class, reporterConfigOverrides);
         JmxReporter jmxReporter = new JmxReporter();
         jmxReporter.configure(config.originals());
         reporters.add(jmxReporter);
