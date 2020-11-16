@@ -21,9 +21,11 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.ProduceResponseData;
+import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.SendBuilder;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -162,6 +164,11 @@ public class ProduceRequest extends AbstractRequest {
         this.acks = data.acks();
         this.timeout = data.timeoutMs();
         this.transactionalId = data.transactionalId();
+    }
+
+    @Override
+    public Send toSend(String destination, RequestHeader header) {
+        return SendBuilder.buildRequestSend(destination, header, this.data);
     }
 
     // visible for testing
