@@ -44,6 +44,23 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     }, s"Expected --list to show groups $expectedGroups, but found $foundGroups.")
   }
 
+  @Test
+  def testListConsumerGroupsWithSufficientInitializationTimeoutSpecified(): Unit = {
+    val simpleGroup = "simple-group"
+    addSimpleGroupExecutor(group = simpleGroup)
+    addConsumerGroupExecutor(numConsumers = 1)
+
+    val cgcArgs = Array("--bootstrap-server", brokerList, "--list", "--timeout", "5000")
+    val service = getConsumerGroupService(cgcArgs)
+
+    val expectedGroups = Set(group, simpleGroup)
+    var foundGroups = Set.empty[String]
+    TestUtils.waitUntilTrue(() => {
+      foundGroups = service.listGroups().toSet
+      expectedGroups == foundGroups
+    }, s"Expected --list to show groups $expectedGroups, but found $foundGroups.")
+  }
+
   @Test(expected = classOf[OptionException])
   def testListWithUnrecognizedNewConsumerOption(): Unit = {
     val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--list")

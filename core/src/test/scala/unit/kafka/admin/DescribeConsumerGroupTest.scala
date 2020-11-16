@@ -166,6 +166,45 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   }
 
   @Test
+  def testDescribeExistingGroupWithSufficientInitializationTimeoutSpecified(): Unit = {
+    TestUtils.createOffsetsTopic(zkClient, servers)
+
+    for (describeType <- describeTypes) {
+      val group = this.group + describeType.mkString("")
+      // run one consumer in the group consuming from a single-partition topic
+      addConsumerGroupExecutor(numConsumers = 1, group = group)
+      // 5000ms is less than the admin client default but should be sufficient in the test
+      val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group, "--timeout", "5000") ++ describeType
+      val service = getConsumerGroupService(cgcArgs)
+
+      TestUtils.waitUntilTrue(() => {
+        val (output, error) = TestUtils.grabConsoleOutputAndError(service.describeGroups())
+        output.trim.split("\n").length == 2 && error.isEmpty
+      }, s"Expected a data row and no error in describe results with describe type ${describeType.mkString(" ")}.")
+    }
+  }
+
+  @Test
+  def testDescribeExistingGroupWithInitializationTimeoutGreaterThanDefault(): Unit = {
+    TestUtils.createOffsetsTopic(zkClient, servers)
+
+    for (describeType <- describeTypes) {
+      val group = this.group + describeType.mkString("")
+      // run one consumer in the group consuming from a single-partition topic
+      addConsumerGroupExecutor(numConsumers = 1, group = group)
+      // 31000 ms is 1000 greater than the admin client default of 30000ms, but uses the minimum of the two so uses the admin client default of 30000ms
+      val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group, "--timeout", "31000") ++ describeType
+      val service = getConsumerGroupService(cgcArgs)
+
+      TestUtils.waitUntilTrue(() => {
+        val (output, error) = TestUtils.grabConsoleOutputAndError(service.describeGroups())
+        output.trim.split("\n").length == 2 && error.isEmpty
+      }, s"Expected a data row and no error in describe results with describe type ${describeType.mkString(" ")}.")
+    }
+  }
+
+
+  @Test
   def testDescribeExistingGroups(): Unit = {
     TestUtils.createOffsetsTopic(zkClient, servers)
 

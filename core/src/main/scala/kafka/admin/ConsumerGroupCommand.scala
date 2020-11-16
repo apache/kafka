@@ -701,8 +701,10 @@ object ConsumerGroupCommand extends Logging {
     }
 
     private def withTimeoutMs [T <: AbstractOptions[T]] (options : T) =  {
-      val t = opts.options.valueOf(opts.timeoutMsOpt).intValue()
-      options.timeoutMs(t)
+      if (opts.options.has(opts.timeoutMsOpt)){
+        options.timeoutMs(opts.options.valueOf(opts.timeoutMsOpt).intValue())
+      }
+      options
     }
 
     private def parseTopicPartitionsToReset(groupId: String, topicArgs: Seq[String]): Seq[TopicPartition] = topicArgs.flatMap {
@@ -1023,7 +1025,6 @@ object ConsumerGroupCommand extends Logging {
                              .withRequiredArg
                              .describedAs("timeout (ms)")
                              .ofType(classOf[Long])
-                             .defaultsTo(5000)
     val commandConfigOpt = parser.accepts("command-config", CommandConfigDoc)
                                   .withRequiredArg
                                   .describedAs("command config property file")
