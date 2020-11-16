@@ -384,7 +384,7 @@ public class KafkaStreams implements AutoCloseable {
      * might be exceptions thrown by your code, for example a NullPointerException thrown from your processor
      * logic.
      * The handler will execute on the thread that produced the exception.
-     * In order to get the thread use Thread.currentThread()
+     * In order to get the thread use that threw the exception, Thread.currentThread().
      * <p>
      * Note, this handler must be threadsafe, since it will be shared among all threads, and invoked from any
      * thread that encounters such an exception.
@@ -449,13 +449,13 @@ public class KafkaStreams implements AutoCloseable {
                     log.error("Exception in global thread caused the application to attempt to shutdown." +
                             " This action will succeed only if there is at least one StreamThread running on this client." +
                             " Currently there are no running threads so will now close the client.");
-                    close();
+                    close(Duration.ZERO);
                 } else {
                     for (final StreamThread streamThread : threads) {
                         streamThread.sendShutdownRequest(AssignorError.SHUTDOWN_REQUESTED);
                     }
                     log.error("Encountered the following exception during processing " +
-                            "and the application is going to shut down: ", throwable);
+                            "and sent shutdown request for the entire application.", throwable);
                 }
                 break;
         }
