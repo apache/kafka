@@ -1501,6 +1501,28 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
         Seq("<default>/clients/client-3", sanitizedPrincipal + "/clients/client-2"))
   }
 
+  @Test
+  def testRemoveDuplicateFromList(): Unit = {
+    val brokerOpts = Array("--bootstrap-server", "localhost:9092")
+    val zkOpts = Array("--zookeeper", "localhost:2181")
+    val commonOpts = Array("--entity-type", "topics", "--entity-name", "test", "--alter")
+    val configOpts = Array("--add-config", "cleanup.policy=[delete,delete,compact],segment.bytes=123456")
+    val addedConfigs = Seq("segment.bytes=123456", "cleanup.policy=delete,delete,compact")
+    val file = TestUtils.tempFile(addedConfigs.mkString("\n"))
+    val fileOpts = Array("--add-config-file", file.getPath)
+
+    for (config <- Array(
+      brokerOpts ++ commonOpts ++ configOpts,
+      brokerOpts ++ commonOpts ++ fileOpts,
+      zkOpts ++ commonOpts ++ configOpts,
+      zkOpts ++ commonOpts ++ fileOpts)) {
+      val props = ConfigCommand.parseConfigsToBeAdded(new ConfigCommandOptions(config))
+      ConfigCommand.preProcessTopicConfigs(props)
+      assertEquals(2, props.values().size)
+      assertEquals("delete,compact", props.get("cleanup.policy"))
+    }
+  }
+
   private def registerBrokerInZk(id: Int): Unit = {
     zkClient.createTopLevelPaths()
     val securityProtocol = SecurityProtocol.PLAINTEXT

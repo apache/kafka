@@ -94,6 +94,14 @@ class LogConfigTest {
   }
 
   @Test
+  def testCleanupPolicyDuplicatedItemsRemoved(): Unit = {
+    val props = new Properties
+    props.setProperty(LogConfig.CleanupPolicyProp, "delete,compact,delete,compact")
+    LogConfig.processValues(props)
+    assertEquals("delete,compact", props.getProperty(LogConfig.CleanupPolicyProp))
+  }
+
+  @Test
   def shouldValidateThrottledReplicasConfig(): Unit = {
     assertTrue(isValid("*"))
     assertTrue(isValid("* "))

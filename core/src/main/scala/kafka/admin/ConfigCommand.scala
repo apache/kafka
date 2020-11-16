@@ -153,6 +153,8 @@ object ConfigCommand extends Config {
         }
         preProcessBrokerConfigs(configsToBeAdded, perBrokerConfig)
       }
+    } else if (entityType == ConfigType.Topic) {
+      preProcessTopicConfigs(configsToBeAdded)
     }
 
     // compile the final set of configs
@@ -189,6 +191,18 @@ object ConfigCommand extends Config {
         case value =>
           configsToBeAdded.setProperty(mechanism.mechanismName, scramCredential(mechanism, value))
       }
+    }
+  }
+
+  private[admin] def preProcessTopicConfigs(configsToBeAdded: Properties): Unit = {
+    val originalValueForCleanupPolicyOpt = Option(configsToBeAdded.getProperty(LogConfig.CleanupPolicyProp))
+    LogConfig.processValues(configsToBeAdded)
+    Option(configsToBeAdded.getProperty(LogConfig.CleanupPolicyProp)) match {
+      case Some(value) if value.contains(",") =>
+        if (value != originalValueForCleanupPolicyOpt.getOrElse(value))
+          println(s"WARNING: The configuration ${LogConfig.CleanupPolicyProp}=${originalValueForCleanupPolicyOpt.get} which contains duplicate items is specified. " +
+            "The de-duplicated value will be applied.")
+      case _ => // do nothing
     }
   }
 

@@ -16,12 +16,13 @@
  */
 package kafka.admin
 
-import kafka.admin.TopicCommand.PartitionDescription
+import kafka.admin.TopicCommand.{PartitionDescription, TopicCommandOptions}
 import org.apache.kafka.clients.admin.PartitionReassignment
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.TopicPartitionInfo
 import org.junit.Assert._
 import org.junit.Test
+
 import scala.jdk.CollectionConverters._
 
 class TopicCommandTest {
@@ -52,5 +53,17 @@ class TopicCommandTest {
     )
 
     assertFalse(partitionDescription.isUnderReplicated)
+  }
+
+  @Test
+  def testCreateTopicWithDuplicatedCleanupPolicyConfig(): Unit = {
+    val opts = Array("--create", "--topic", "test", "--config", "cleanup.policy=compact,compact,delete,compact", "--config", "segment.bytes=123456")
+    val brokerOpts = Array("--bootstrap-server", "localhost:9092")
+    val zkOpts = Array("--zookeeper", "localhost:2181")
+    for (config <- Array(brokerOpts, zkOpts)) {
+      val props = TopicCommand.parseTopicConfigsToBeAdded(new TopicCommandOptions(opts ++ config))
+      assertEquals(2, props.size)
+      assertEquals("compact,delete", props.get("cleanup.policy"))
+    }
   }
 }

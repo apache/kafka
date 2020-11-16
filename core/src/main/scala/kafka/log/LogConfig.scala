@@ -344,6 +344,18 @@ object LogConfig {
     validateValues(valueMaps)
   }
 
+  def processValues(props: Properties): Unit = {
+    // de-duplicate items for `cleanup.policy`
+    Option(props.getProperty(CleanupPolicyProp)) match {
+      case Some(value) if value.contains(",") =>
+        val values = value.split(",")
+        if (values.distinct.size != values.size) {
+          props.replace(CleanupPolicyProp, values.distinct.mkString(","))
+        }
+      case _ => // no need to process, do nothing
+    }
+  }
+
   /**
    * Map topic config to the broker config with highest priority. Some of these have additional synonyms
    * that can be obtained using [[kafka.server.DynamicBrokerConfig#brokerConfigSynonyms]]

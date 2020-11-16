@@ -547,17 +547,26 @@ object TopicCommand extends Logging {
     allTopics.filterNot(Topic.isInternal(_) && excludeInternalTopics)
   }
 
-
-  def parseTopicConfigsToBeAdded(opts: TopicCommandOptions): Properties = {
+  // package level visibility for testing only
+  private[admin] def parseTopicConfigsToBeAdded(opts: TopicCommandOptions): Properties = {
     val configsToBeAdded = opts.topicConfig.getOrElse(Collections.emptyList()).asScala.map(_.split("""\s*=\s*"""))
     require(configsToBeAdded.forall(config => config.length == 2),
       "Invalid topic config: all configs to be added must be in the format \"key=val\".")
     val props = new Properties
     configsToBeAdded.foreach(pair => props.setProperty(pair(0).trim, pair(1).trim))
     LogConfig.validate(props)
+    LogConfig.processValues(props)
     if (props.containsKey(LogConfig.MessageFormatVersionProp)) {
       println(s"WARNING: The configuration ${LogConfig.MessageFormatVersionProp}=${props.getProperty(LogConfig.MessageFormatVersionProp)} is specified. " +
         s"This configuration will be ignored if the version is newer than the inter.broker.protocol.version specified in the broker.")
+    }
+    Option(props.getProperty(LogConfig.CleanupPolicyProp)) match {
+      case Some(value) if value.contains(",") =>
+        val originalValue = configsToBeAdded.filter(pair => pair(0) == LogConfig.CleanupPolicyProp).map(_(1)).mkString(",")
+        if (value != originalValue)
+          println(s"WARNING: The configuration ${LogConfig.CleanupPolicyProp}=$originalValue which contains duplicate items is specified. " +
+            "The de-duplicated value will be applied.")
+      case _ => // do nothing
     }
     props
   }

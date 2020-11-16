@@ -1713,8 +1713,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     // Alter topic configs
     var topic1AlterConfigs = Seq(
       new AlterConfigOp(new ConfigEntry(LogConfig.FlushMsProp, "1000"), AlterConfigOp.OpType.SET),
-      new AlterConfigOp(new ConfigEntry(LogConfig.CleanupPolicyProp, LogConfig.Delete), AlterConfigOp.OpType.APPEND),
-      new AlterConfigOp(new ConfigEntry(LogConfig.RetentionMsProp, ""), AlterConfigOp.OpType.DELETE)
+      new AlterConfigOp(new ConfigEntry(LogConfig.CleanupPolicyProp,
+        Seq(LogConfig.Delete, LogConfig.Delete, LogConfig.Compact).mkString(",")), AlterConfigOp.OpType.APPEND),
+      new AlterConfigOp(new ConfigEntry(LogConfig.RetentionMsProp, ""), AlterConfigOp.OpType.DELETE),
     ).asJavaCollection
 
     // Test SET and APPEND on previously unset properties
@@ -2298,7 +2299,8 @@ object PlaintextAdminIntegrationTest {
 
     var topicConfigEntries2 = Seq(
       new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.9"),
-      new ConfigEntry(LogConfig.CompressionTypeProp, "lz4")
+      new ConfigEntry(LogConfig.CompressionTypeProp, "lz4"),
+      new ConfigEntry(LogConfig.CleanupPolicyProp, "delete,compact,compact")
     ).asJava
 
     var alterResult = client.alterConfigs(Map(
@@ -2323,6 +2325,7 @@ object PlaintextAdminIntegrationTest {
 
     assertEquals("0.9", configs.get(topicResource2).get(LogConfig.MinCleanableDirtyRatioProp).value)
     assertEquals("lz4", configs.get(topicResource2).get(LogConfig.CompressionTypeProp).value)
+    assertEquals("delete,compact", configs.get(topicResource2).get(LogConfig.CleanupPolicyProp).value)
 
     // Alter topics with validateOnly=true
     topicConfigEntries1 = Seq(

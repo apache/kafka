@@ -26,6 +26,7 @@ import kafka.utils.Logging
 import kafka.utils.TestUtils._
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, CreateTopicsOptions, CreateTopicsResult, DescribeClusterOptions, DescribeTopicsOptions, NewTopic, TopicDescription}
 import org.apache.kafka.common.acl.AclOperation
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.{TopicExistsException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.utils.Utils
@@ -72,7 +73,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     val topics = Seq("mytopic", "mytopic2", "mytopic3")
     val newTopics = Seq(
       new NewTopic("mytopic", Map((0: Integer) -> Seq[Integer](1, 2).asJava, (1: Integer) -> Seq[Integer](2, 0).asJava).asJava),
-      new NewTopic("mytopic2", 3, 3.toShort),
+      new NewTopic("mytopic2", 3, 3.toShort).configs(Map(TopicConfig.CLEANUP_POLICY_CONFIG -> "delete,compact,delete").asJava),
       new NewTopic("mytopic3", Option.empty[Integer].asJava, Option.empty[java.lang.Short].asJava)
     )
     val validateResult = client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true))
@@ -84,6 +85,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
       assertEquals(2, result.replicationFactor("mytopic").get())
       assertEquals(3, result.numPartitions("mytopic2").get())
       assertEquals(3, result.replicationFactor("mytopic2").get())
+      assertEquals("delete,compact", result.config("mytopic2").get.get(TopicConfig.CLEANUP_POLICY_CONFIG).value)
       assertEquals(configs.head.numPartitions, result.numPartitions("mytopic3").get())
       assertEquals(configs.head.defaultReplicationFactor, result.replicationFactor("mytopic3").get())
       assertFalse(result.config("mytopic").get().entries.isEmpty)
