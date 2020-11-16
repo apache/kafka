@@ -30,6 +30,12 @@ You are encouraged to check out other Kafka projects from LinkedIn:
 * [Burrow](https://github.com/linkedin/Burrow)
 * [Kafka Monitor](https://github.com/linkedin/kafka-monitor)
 
+### CI ###
+We are currently using Travis as the CI framework, and the testing results can be found [here](https://travis-ci.com/github/linkedin/kafka)
+To publish a release, go to [the release page](https://github.com/linkedin/kafka/releases) and manually create a new release.
+Once the release tag is created, a Travis job will be triggered to run the necessary tests. And once the test passes, the artifacts
+will be published to [the bintray hosting LinkedIn projects](https://dl.bintray.com/linkedin/maven/com/linkedin/kafka/kafka_2.12/).
+
 ### Contributing ###
 
 At this moment we are not accepting external contributions directly. Please
