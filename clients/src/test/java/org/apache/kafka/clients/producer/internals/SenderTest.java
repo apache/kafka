@@ -1755,6 +1755,7 @@ public class SenderTest {
         assertTrue(request3.isDone());
         assertEquals(1012L, request3.get().offset());
         assertEquals(OptionalLong.of(1012L), transactionManager.lastAckedOffset(tp0));
+        assertFalse(transactionManager.hasError());
     }
 
     @Test
