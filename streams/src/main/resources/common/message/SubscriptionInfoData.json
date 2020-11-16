@@ -61,7 +61,7 @@
     {
       "name": "errorCode",
       "versions": "9+",
-      "type": "int8"
+      "type": "int32"
     }
   ],
   "commonStructs": [

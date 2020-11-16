@@ -83,7 +83,7 @@ public class SubscriptionInfo {
                             final String userEndPoint,
                             final Map<TaskId, Long> taskOffsetSums,
                             final byte uniqueField,
-                            final byte errorCode) {
+                            final int errorCode) {
         validateVersions(version, latestSupportedVersion);
         final SubscriptionInfoData data = new SubscriptionInfoData();
         data.setVersion(version);
