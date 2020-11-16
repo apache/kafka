@@ -1429,7 +1429,7 @@ public class StreamThreadTest {
             new MockStateRestoreListener(),
             threadIdx,
             null,
-                HANDLER
+            HANDLER
         );
 
         thread.setState(StreamThread.State.STARTING);
