@@ -17,15 +17,22 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
+import java.util.HashSet;
+import java.util.Set;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.Topology.AutoOffsetReset;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.regex.Pattern;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class StreamSourceNode<K, V> extends StreamsGraphNode {
+
+    private final Logger log = LoggerFactory.getLogger(StreamSourceNode.class);
 
     private Collection<String> topicNames;
     private Pattern topicPattern;
@@ -51,8 +58,8 @@ public class StreamSourceNode<K, V> extends StreamsGraphNode {
         this.consumedInternal = consumedInternal;
     }
 
-    public Collection<String> topicNames() {
-        return new ArrayList<>(topicNames);
+    public Set<String> topicNames() {
+        return new HashSet<>(topicNames);
     }
 
     public Pattern topicPattern() {
@@ -69,6 +76,21 @@ public class StreamSourceNode<K, V> extends StreamsGraphNode {
 
     public Serde<V> valueSerde() {
         return consumedInternal.valueSerde();
+    }
+
+    public void merge(final StreamSourceNode<?, ?> other) {
+        final AutoOffsetReset resetPolicy = consumedInternal.offsetResetPolicy();
+        final AutoOffsetReset otherResetPolicy = other.consumedInternal().offsetResetPolicy();
+        if (resetPolicy != null && !resetPolicy.equals(otherResetPolicy)
+            || otherResetPolicy != null && !otherResetPolicy.equals(resetPolicy)) {
+            log.error("Tried to merge source nodes {} and {} which are subscribed to the same topic/pattern, but "
+                          + "the offset reset policies do not match", this, other);
+            throw new TopologyException("Can't configure different offset reset policies on the same input topic(s)");
+        }
+        for (final StreamsGraphNode otherChild : other.children()) {
+            other.removeChild(otherChild);
+            addChild(otherChild);
+        }
     }
 
     @Override

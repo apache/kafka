@@ -196,7 +196,7 @@ KTable&lt;String, Long&gt; wordCounts = textLines
             .groupBy((keyIgnored, word) -&gt; word)
             .count();
 
-wordCounts.toStream().to("output-topic"), Produced.with(Serdes.String(), Serdes.Long()));</code></pre>
+wordCounts.toStream().to("output-topic", Produced.with(Serdes.String(), Serdes.Long()));</code></pre>
 
   <p>
       The <a href="/25/documentation/streams/quickstart">Kafka Streams demo</a>

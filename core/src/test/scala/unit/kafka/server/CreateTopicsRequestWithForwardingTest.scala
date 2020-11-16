@@ -25,18 +25,18 @@ import org.junit.Test
 
 import scala.jdk.CollectionConverters._
 
-class CreateTopicsRequestWithForwardingTest extends CreateTopicsRequestTest {
+class CreateTopicsRequestWithForwardingTest extends AbstractCreateTopicsRequestTest {
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    super.brokerPropertyOverrides(properties)
     properties.put(KafkaConfig.EnableMetadataQuorumProp, true.toString)
   }
 
   @Test
-  override def testNotController(): Unit = {
+  def testForwardToController(): Unit = {
     val req = topicsReq(Seq(topicReq("topic1")))
     val response = sendCreateTopicRequest(req, notControllerSocketServer)
     // With forwarding enabled, request could be forwarded to the active controller.
     assertEquals(Map(Errors.NONE -> 1), response.errorCounts().asScala)
   }
+
 }

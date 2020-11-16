@@ -530,7 +530,8 @@ class AclAuthorizer extends Authorizer with Logging {
       throw new IllegalStateException(s"Failed to update ACLs for $resource after trying a maximum of $maxUpdateRetries times")
 
     if (newVersionedAcls.acls != currentVersionedAcls.acls) {
-      debug(s"Updated ACLs for $resource to ${newVersionedAcls.acls} with version ${newVersionedAcls.zkVersion}")
+      info(s"Updated ACLs for $resource with new version ${newVersionedAcls.zkVersion}")
+      debug(s"Updated ACLs for $resource to $newVersionedAcls")
       updateCache(resource, newVersionedAcls)
       updateAclChangedFlag(resource)
       true

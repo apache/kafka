@@ -1070,7 +1070,7 @@ public class TaskManager {
     }
 
     private void commitOffsetsOrTransaction(final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> offsetsPerTask) {
-        log.info("Committing task offsets {}", offsetsPerTask);
+        log.debug("Committing task offsets {}", offsetsPerTask);
 
         if (!offsetsPerTask.isEmpty()) {
             if (processingMode == EXACTLY_ONCE_ALPHA) {

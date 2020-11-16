@@ -27,7 +27,7 @@ import kafka.api._
 import kafka.log.{AppendOrigin, Log, LogConfig, LogManager, ProducerStateManager}
 import kafka.cluster.{BrokerEndPoint, Partition}
 import kafka.log.LeaderOffsetIncremented
-import kafka.server.QuotaFactory.UnboundedQuota
+import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.server.checkpoints.LazyOffsetCheckpoints
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
@@ -66,6 +66,8 @@ class ReplicaManagerTest {
   val metrics = new Metrics
   var kafkaZkClient: KafkaZkClient = _
   var alterIsrManager: AlterIsrManager = _
+  var config: KafkaConfig = _
+  var quotaManager: QuotaManagers = _
 
   // Constants defined for readability
   val zkVersion = 0
@@ -79,22 +81,24 @@ class ReplicaManagerTest {
     EasyMock.expect(kafkaZkClient.getEntityConfigs(EasyMock.anyString(), EasyMock.anyString())).andReturn(new Properties()).anyTimes()
     EasyMock.replay(kafkaZkClient)
 
+    val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
+    config = KafkaConfig.fromProps(props)
     alterIsrManager = EasyMock.createMock(classOf[AlterIsrManager])
+    quotaManager = QuotaFactory.instantiate(config, metrics, time, "")
   }
 
   @After
   def tearDown(): Unit = {
     TestUtils.clearYammerMetrics()
+    Option(quotaManager).foreach(_.shutdown())
     metrics.close()
   }
 
   @Test
   def testHighWaterMarkDirectoryMapping(): Unit = {
-    val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
-    val config = KafkaConfig.fromProps(props)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
     val rm = new ReplicaManager(config, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr,
-      new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time, ""), new BrokerTopicStats,
+      new AtomicBoolean(false), quotaManager, new BrokerTopicStats,
       new MetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), alterIsrManager)
     try {
       val partition = rm.createPartition(new TopicPartition(topic, 1))
@@ -114,7 +118,7 @@ class ReplicaManagerTest {
     val config = KafkaConfig.fromProps(props)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
     val rm = new ReplicaManager(config, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr,
-      new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time, ""), new BrokerTopicStats,
+      new AtomicBoolean(false), quotaManager, new BrokerTopicStats,
       new MetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), alterIsrManager)
     try {
       val partition = rm.createPartition(new TopicPartition(topic, 1))
@@ -129,11 +133,9 @@ class ReplicaManagerTest {
 
   @Test
   def testIllegalRequiredAcks(): Unit = {
-    val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
-    val config = KafkaConfig.fromProps(props)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
     val rm = new ReplicaManager(config, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr,
-      new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time, ""), new BrokerTopicStats,
+      new AtomicBoolean(false), quotaManager, new BrokerTopicStats,
       new MetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), alterIsrManager, Option(this.getClass.getName))
     try {
       def callback(responseStatus: Map[TopicPartition, PartitionResponse]) = {
@@ -166,7 +168,7 @@ class ReplicaManagerTest {
     EasyMock.expect(metadataCache.getAliveBrokers).andReturn(aliveBrokers).anyTimes()
     EasyMock.replay(metadataCache)
     val rm = new ReplicaManager(config, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr,
-      new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time, ""), new BrokerTopicStats,
+      new AtomicBoolean(false), quotaManager, new BrokerTopicStats,
       metadataCache, new LogDirFailureChannel(config.logDirs.size), alterIsrManager)
 
     try {
@@ -1506,23 +1508,22 @@ class ReplicaManagerTest {
       purgatoryName = "ElectLeader", timer, reaperEnabled = false)
 
     // Mock network client to show leader offset of 5
-    val quota = QuotaFactory.instantiate(config, metrics, time, "")
     val blockingSend = new ReplicaFetcherMockBlockingSend(Map(topicPartitionObj ->
       new EpochEndOffset(leaderEpochFromLeader, offsetFromLeader)).asJava, BrokerEndPoint(1, "host1" ,1), time)
     val replicaManager = new ReplicaManager(config, metrics, time, kafkaZkClient, mockScheduler, mockLogMgr,
-      new AtomicBoolean(false), quota, mockBrokerTopicStats,
+      new AtomicBoolean(false), quotaManager, mockBrokerTopicStats,
       metadataCache, mockLogDirFailureChannel, mockProducePurgatory, mockFetchPurgatory,
       mockDeleteRecordsPurgatory, mockElectLeaderPurgatory, Option(this.getClass.getName), alterIsrManager) {
 
       override protected def createReplicaFetcherManager(metrics: Metrics,
                                                      time: Time,
                                                      threadNamePrefix: Option[String],
-                                                     quotaManager: ReplicationQuotaManager): ReplicaFetcherManager = {
-        new ReplicaFetcherManager(config, this, metrics, time, threadNamePrefix, quotaManager) {
+                                                     replicationQuotaManager: ReplicationQuotaManager): ReplicaFetcherManager = {
+        new ReplicaFetcherManager(config, this, metrics, time, threadNamePrefix, replicationQuotaManager) {
 
           override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): ReplicaFetcherThread = {
             new ReplicaFetcherThread(s"ReplicaFetcherThread-$fetcherId", fetcherId,
-              sourceBroker, config, failedPartitions, replicaManager, metrics, time, quota.follower, Some(blockingSend)) {
+              sourceBroker, config, failedPartitions, replicaManager, metrics, time, quotaManager.follower, Some(blockingSend)) {
 
               override def doWork() = {
                 // In case the thread starts before the partition is added by AbstractFetcherManager,
@@ -1684,7 +1685,7 @@ class ReplicaManagerTest {
       purgatoryName = "DelayedElectLeader", timer, reaperEnabled = false)
 
     new ReplicaManager(config, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr,
-      new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time, ""), new BrokerTopicStats,
+      new AtomicBoolean(false), quotaManager, new BrokerTopicStats,
       metadataCache, new LogDirFailureChannel(config.logDirs.size), mockProducePurgatory, mockFetchPurgatory,
       mockDeleteRecordsPurgatory, mockDelayedElectLeaderPurgatory, Option(this.getClass.getName), alterIsrManager)
   }
@@ -1892,10 +1893,10 @@ class ReplicaManagerTest {
 
     // each replica manager is for a broker
     val rm0 = new ReplicaManager(config0, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr0,
-      new AtomicBoolean(false), QuotaFactory.instantiate(config0, metrics, time, ""),
+      new AtomicBoolean(false), quotaManager,
       brokerTopicStats1, metadataCache0, new LogDirFailureChannel(config0.logDirs.size), alterIsrManager)
     val rm1 = new ReplicaManager(config1, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr1,
-      new AtomicBoolean(false), QuotaFactory.instantiate(config1, metrics, time, ""),
+      new AtomicBoolean(false), quotaManager,
       brokerTopicStats2, metadataCache1, new LogDirFailureChannel(config1.logDirs.size), alterIsrManager)
 
     (rm0, rm1)
@@ -2135,7 +2136,7 @@ class ReplicaManagerTest {
       val config = KafkaConfig.fromProps(props)
       val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
       new ReplicaManager(config, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr,
-        new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time, ""), new BrokerTopicStats,
+        new AtomicBoolean(false), quotaManager, new BrokerTopicStats,
         new MetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), alterIsrManager) {
         override def getPartitionOrException(topicPartition: TopicPartition): Partition = {
           throw Errors.NOT_LEADER_OR_FOLLOWER.exception()
