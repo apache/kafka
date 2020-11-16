@@ -35,6 +35,6 @@ object LogUtils {
     val timeIdx = LazyIndex.forTime(Log.timeIndexFile(logDir, offset), offset, maxIndexSize = 1500)
     val txnIndex = new TransactionIndex(offset, Log.transactionIndexFile(logDir, offset))
 
-    new LogSegment(ms, idx, timeIdx, txnIndex, offset, indexIntervalBytes, 0, time)
+    new LogSegment(ms, idx, timeIdx, txnIndex, offset, indexIntervalBytes, 0, time, _ => 0)
   }
 }

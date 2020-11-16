@@ -651,7 +651,8 @@ class Log(@volatile private var _dir: File,
           baseOffset = baseOffset,
           config,
           time = time,
-          fileAlreadyExists = true)
+          fileAlreadyExists = true,
+          recovery = segmentRecovery())
 
         try segment.sanityCheck(timeIndexFileNewlyCreated)
         catch {
@@ -687,6 +688,12 @@ class Log(@volatile private var _dir: File,
     bytesTruncated
   }
 
+  def segmentRecovery(): LogSegment => Int = {
+    (segment: LogSegment) => {
+      recoverSegment(segment, None)
+    }
+  }
+
   /**
    * This method does not need to convert IOException to KafkaStorageException because it is only called before all logs
    * are loaded.
@@ -705,7 +712,8 @@ class Log(@volatile private var _dir: File,
         baseOffset = baseOffset,
         config,
         time = time,
-        fileSuffix = SwapFileSuffix)
+        fileSuffix = SwapFileSuffix,
+        recovery = segmentRecovery())
       info(s"Found log file ${swapFile.getPath} from interrupted swap operation, repairing.")
       recoverSegment(swapSegment)
 
@@ -769,7 +777,8 @@ class Log(@volatile private var _dir: File,
             time = time,
             fileAlreadyExists = false,
             initFileSize = this.initFileSize,
-            preallocate = false))
+            preallocate = false,
+            recovery = segmentRecovery()))
        }
       0
     }
@@ -857,7 +866,8 @@ class Log(@volatile private var _dir: File,
         time = time,
         fileAlreadyExists = false,
         initFileSize = this.initFileSize,
-        preallocate = config.preallocate))
+        preallocate = config.preallocate,
+        recovery = segmentRecovery()))
     }
 
     recoveryPoint = activeSegment.readNextOffset
@@ -1966,7 +1976,8 @@ class Log(@volatile private var _dir: File,
           time = time,
           fileAlreadyExists = false,
           initFileSize = initFileSize,
-          preallocate = config.preallocate)
+          preallocate = config.preallocate,
+          recovery = segmentRecovery())
         addSegment(segment)
 
         // We need to update the segment base offset and append position data of the metadata when log rolls.
@@ -2108,7 +2119,8 @@ class Log(@volatile private var _dir: File,
           time = time,
           fileAlreadyExists = false,
           initFileSize = initFileSize,
-          preallocate = config.preallocate))
+          preallocate = config.preallocate,
+          recovery = segmentRecovery()))
         updateLogEndOffset(newOffset)
         leaderEpochCache.foreach(_.clearAndFlush())
 

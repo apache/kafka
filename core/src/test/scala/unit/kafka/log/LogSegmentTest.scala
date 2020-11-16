@@ -474,7 +474,7 @@ class LogSegmentTest {
       LogConfig.SegmentJitterMsProp -> 0
     ).asJava)
     val seg = LogSegment.open(tempDir, baseOffset, logConfig, Time.SYSTEM, fileAlreadyExists = fileAlreadyExists,
-      initFileSize = initFileSize, preallocate = preallocate)
+      initFileSize = initFileSize, preallocate = preallocate, recovery = _ => 0)
     segments += seg
     seg
   }
@@ -491,7 +491,7 @@ class LogSegmentTest {
     checkEquals(ms2.records.iterator, read.records.records.iterator)
   }
 
-  /* create a segment with   pre allocate and clearly shut down*/
+  /* create a segment with pre allocate and cleanly shut down*/
   @Test
   def testCreateWithInitFileSizeClearShutdown(): Unit = {
     val tempDir = TestUtils.tempDir()
@@ -502,7 +502,7 @@ class LogSegmentTest {
     ).asJava)
 
     val seg = LogSegment.open(tempDir, baseOffset = 40, logConfig, Time.SYSTEM, fileAlreadyExists = false,
-      initFileSize = 512 * 1024 * 1024, preallocate = true)
+      initFileSize = 512 * 1024 * 1024, preallocate = true, recovery = _ => 0)
 
     val ms = records(50, "hello", "there")
     seg.append(51, RecordBatch.NO_TIMESTAMP, -1L, ms)
@@ -519,7 +519,7 @@ class LogSegmentTest {
     assertEquals(oldSize, seg.log.file.length)
 
     val segReopen = LogSegment.open(tempDir, baseOffset = 40, logConfig, Time.SYSTEM, fileAlreadyExists = true,
-      initFileSize = 512 * 1024 * 1024, preallocate = true)
+      initFileSize = 512 * 1024 * 1024, preallocate = true, recovery = _ => 0)
     segments += segReopen
 
     val readAgain = segReopen.read(startOffset = 55, maxSize = 200)
