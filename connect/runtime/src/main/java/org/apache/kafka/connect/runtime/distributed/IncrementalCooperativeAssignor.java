@@ -571,7 +571,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         log.debug("Previous rounded down (floor) average number of connectors per worker {}", totalActiveConnectorsNum / existingWorkersNum);
         int floorConnectors = totalActiveConnectorsNum / totalWorkersNum;
         int ceilConnectors = (int) Math.ceil((float) totalActiveConnectorsNum / totalWorkersNum);
-        log.debug("New rounded down (floor) average number of connectors per worker floor connectors {} ciel connectors ", floorConnectors,ceilConnectors);
+        log.debug("New rounded down (floor) average number of connectors per worker floor connectors {} ciel connectors ", floorConnectors, ceilConnectors);
 
 
         log.debug("Previous rounded down (floor) average number of tasks per worker {}", totalActiveTasksNum / existingWorkersNum);
