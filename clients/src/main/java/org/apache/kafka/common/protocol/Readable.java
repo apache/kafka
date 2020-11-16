@@ -57,7 +57,7 @@ public interface Readable {
     /**
      * Read a UUID with the most significant digits first.
      */
-    default Uuid readUUID() {
+    default Uuid readUuid() {
         return new Uuid(readLong(), readLong());
     }
 }

@@ -33,7 +33,7 @@ public interface Writable {
     void writeVarint(int i);
     void writeVarlong(long i);
 
-    default void writeUUID(Uuid uuid) {
+    default void writeUuid(Uuid uuid) {
         writeLong(uuid.getMostSignificantBits());
         writeLong(uuid.getLeastSignificantBits());
     }

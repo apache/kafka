@@ -90,7 +90,7 @@ public class Struct {
     }
 
     public Uuid get(Field.UUID field) {
-        return getUUID(field.name);
+        return getUuid(field.name);
     }
 
     public Short get(Field.Int16 field) {
@@ -129,7 +129,7 @@ public class Struct {
 
     public Uuid getOrElse(Field.UUID field, Uuid alternative) {
         if (hasField(field.name))
-            return getUUID(field.name);
+            return getUuid(field.name);
         return alternative;
     }
 
@@ -266,11 +266,11 @@ public class Struct {
         return (Long) get(name);
     }
 
-    public Uuid getUUID(BoundField field) {
+    public Uuid getUuid(BoundField field) {
         return (Uuid) get(field);
     }
 
-    public Uuid getUUID(String name) {
+    public Uuid getUuid(String name) {
         return (Uuid) get(name);
     }
 
