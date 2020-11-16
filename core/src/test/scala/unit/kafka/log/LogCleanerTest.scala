@@ -971,11 +971,17 @@ class LogCleanerTest {
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0, firstUncleanableOffset))
 
     val distinctValuesBySegmentAfterClean = distinctValuesBySegment
-
+    
+    // One segment should have been completely deleted, so there will be fewer segments.
+    assertTrue(distinctValuesBySegmentAfterClean.size < distinctValuesBySegmentBeforeClean.size)
+    
+    // Drop the first segment from before cleaning since it was removed. Also subtract 1 from numCleanableSegments
+    val normalizedDistinctValuesBySegmentBeforeClean = distinctValuesBySegmentBeforeClean.drop(1)
+    val newNumCleanableSegments = numCleanableSegments - 1
     assertTrue("The cleanable segments should have fewer number of values after cleaning",
-      distinctValuesBySegmentBeforeClean.zip(distinctValuesBySegmentAfterClean).take(numCleanableSegments).forall { case (before, after) => after < before })
-    assertTrue("The uncleanable segments should have the same number of values after cleaning", distinctValuesBySegmentBeforeClean.zip(distinctValuesBySegmentAfterClean)
-      .slice(numCleanableSegments, numTotalSegments).forall { x => x._1 == x._2 })
+      normalizedDistinctValuesBySegmentBeforeClean.zip(distinctValuesBySegmentAfterClean).take(newNumCleanableSegments).forall { case (before, after) => after < before })
+    assertTrue("The uncleanable segments should have the same number of values after cleaning", normalizedDistinctValuesBySegmentBeforeClean.zip(distinctValuesBySegmentAfterClean)
+      .slice(newNumCleanableSegments, numTotalSegments).forall { x => x._1 == x._2 })
   }
 
   @Test
@@ -1637,6 +1643,7 @@ class LogCleanerTest {
     logProps.put(LogConfig.SegmentBytesProp, 256: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
     
+    // Each segment can contain 3 records
     log.appendAsLeader(record(1,0), leaderEpoch = 0)
     log.appendAsLeader(record(1,1), leaderEpoch = 0)
     log.appendAsLeader(record(1,2), leaderEpoch = 0)
@@ -1654,7 +1661,7 @@ class LogCleanerTest {
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0, log.activeSegment.baseOffset))
     
     // The log cleaner will not delete the first empty segment, but it will update logStartOffset
-    assertEquals(4, log.logSegments.size)
+    assertEquals(3, log.logSegments.size)
     assertEquals(4, log.logStartOffset)
     val offset = log.fetchOffsetByTimestamp(ListOffsetRequest.EARLIEST_TIMESTAMP)
     assertTrue(offset.isDefined)
@@ -1662,7 +1669,6 @@ class LogCleanerTest {
     
     // Each baseOffset of the segment will be the offset of the first record or the original baseOffset if it is empty.
     val segments = log.logSegments.iterator
-    assertEquals(0, segments.next().baseOffset)
     assertEquals(4, segments.next().baseOffset)
     assertEquals(7, segments.next().baseOffset)
     assertEquals(8, segments.next().baseOffset)

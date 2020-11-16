@@ -57,7 +57,7 @@ class LogSegment private[log] (val log: FileRecords,
                                val lazyOffsetIndex: LazyIndex[OffsetIndex],
                                val lazyTimeIndex: LazyIndex[TimeIndex],
                                val txnIndex: TransactionIndex,
-                               var baseOffset: Long,
+                               val baseOffset: Long,
                                val indexIntervalBytes: Int,
                                val rollJitterMs: Long,
                                val time: Time) extends Logging {
@@ -65,10 +65,6 @@ class LogSegment private[log] (val log: FileRecords,
   def offsetIndex: OffsetIndex = lazyOffsetIndex.get
 
   def timeIndex: TimeIndex = lazyTimeIndex.get
-
-  def updateBaseOffset(newOffset: Long): Unit = {
-    baseOffset = newOffset
-  }
 
   def shouldRoll(rollParams: RollParams): Boolean = {
     val reachedRollMs = timeWaitedForRoll(rollParams.now, rollParams.maxTimestampInMessages) > rollParams.maxSegmentMs - rollJitterMs

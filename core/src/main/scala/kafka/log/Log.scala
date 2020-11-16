@@ -1741,7 +1741,7 @@ class Log(@volatile private var _dir: File,
     }
   }
 
-  private def deleteSegments(deletable: Iterable[LogSegment], reason: SegmentDeletionReason): Int = {
+  private[log] def deleteSegments(deletable: Iterable[LogSegment], reason: SegmentDeletionReason): Int = {
     maybeHandleIOException(s"Error while deleting segments for $topicPartition in dir ${dir.getParent}") {
       val numToDelete = deletable.size
       if (numToDelete > 0) {
@@ -1752,6 +1752,9 @@ class Log(@volatile private var _dir: File,
           checkIfMemoryMappedBufferClosed()
           // remove the segments for lookups
           removeAndDeleteSegments(deletable, asyncDelete = true, reason)
+          if (reason == LogCompaction) {
+            maybeIncrementLogStartOffset(segments.firstEntry.getValue.baseOffset, SegmentCompaction)
+          }
           maybeIncrementLogStartOffset(segments.firstEntry.getValue.baseOffset, SegmentDeletion)
         }
       }
@@ -2730,5 +2733,11 @@ case object LogRoll extends SegmentDeletionReason {
 case object LogDeletion extends SegmentDeletionReason {
   override def logReason(log: Log, toDelete: List[LogSegment]): Unit = {
     log.info(s"Deleting segments as the log has been deleted: ${toDelete.mkString(",")}")
+  }
+}
+
+case object LogCompaction extends SegmentDeletionReason {
+  override def logReason(log: Log, toDelete: List[LogSegment]): Unit = {
+    log.info(s"Deleting segments as all records were deleted in log compaction: ${toDelete.mkString(",")}")
   }
 }
