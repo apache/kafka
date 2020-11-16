@@ -41,10 +41,12 @@ public class ProducerMetadata extends Metadata {
     private final Set<String> newTopics = new HashSet<>();
     private final Logger log;
     private final Time time;
+    private boolean allowAutoTopicCreation;
 
     public ProducerMetadata(long refreshBackoffMs,
                             long metadataExpireMs,
                             long metadataIdleMs,
+                            boolean allowAutoTopicCreation,
                             LogContext logContext,
                             ClusterResourceListeners clusterResourceListeners,
                             Time time) {
@@ -52,16 +54,17 @@ public class ProducerMetadata extends Metadata {
         this.metadataIdleMs = metadataIdleMs;
         this.log = logContext.logger(ProducerMetadata.class);
         this.time = time;
+        this.allowAutoTopicCreation = allowAutoTopicCreation;
     }
 
     @Override
     public synchronized MetadataRequest.Builder newMetadataRequestBuilder() {
-        return new MetadataRequest.Builder(new ArrayList<>(topics.keySet()), true);
+        return new MetadataRequest.Builder(new ArrayList<>(topics.keySet()), this.allowAutoTopicCreation);
     }
 
     @Override
     public synchronized MetadataRequest.Builder newMetadataRequestBuilderForNewTopics() {
-        return new MetadataRequest.Builder(new ArrayList<>(newTopics), true);
+        return new MetadataRequest.Builder(new ArrayList<>(newTopics), this.allowAutoTopicCreation);
     }
 
     public synchronized void add(String topic, long nowMs) {
@@ -154,6 +157,10 @@ public class ProducerMetadata extends Metadata {
     public synchronized void close() {
         super.close();
         notifyAll();
+    }
+
+    public boolean allowAutoTopicCreation() {
+        return allowAutoTopicCreation;
     }
 
 }
