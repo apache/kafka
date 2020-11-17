@@ -903,9 +903,6 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     private void resizeThreadCache(final int numStreamThreads) {
-        if (numStreamThreads < 0) {
-            throw new IllegalArgumentException("There cannot be negative StreamThreads");
-        }
         final long cacheSizePreThread = getCacheSizePerThread(numStreamThreads);
         for (final StreamThread streamThread: threads) {
             streamThread.resizeCache(cacheSizePreThread);
