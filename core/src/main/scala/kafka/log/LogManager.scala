@@ -477,26 +477,21 @@ class LogManager(logDirs: Seq[File],
       jobs(dir) = jobsForDir.map(pool.submit).toSeq
     }
 
-    var firstExceptionOpt: Option[Throwable] = Option.empty
     try {
       for ((dir, dirJobs) <- jobs) {
-        val errorsForDirJobs = dirJobs.map {
+        val hasErrors = dirJobs.exists {
           future =>
             try {
               future.get
-              Option.empty
+              false
             } catch {
               case e: ExecutionException =>
-                error(s"There was an error in one of the threads during LogManager shutdown: ${e.getCause}")
-                Some(e.getCause)
+                warn(s"There was an error in one of the threads during LogManager shutdown: ${e.getCause}")
+                true
             }
-        }.filter{ e => e.isDefined }.map{ e => e.get }
-
-        if (firstExceptionOpt.isEmpty) {
-          firstExceptionOpt = errorsForDirJobs.headOption
         }
 
-        if (errorsForDirJobs.isEmpty) {
+        if (!hasErrors) {
           val logs = logsInDir(localLogsByDir, dir)
 
           // update the last flush point
@@ -511,7 +506,6 @@ class LogManager(logDirs: Seq[File],
           CoreUtils.swallow(Files.createFile(new File(dir, Log.CleanShutdownFile).toPath), this)
         }
       }
-      firstExceptionOpt.foreach{ e => throw e}
     } finally {
       threadPools.foreach(_.shutdown())
       // regardless of whether the close succeeded, we need to unlock the data directories

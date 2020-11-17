@@ -27,7 +27,7 @@ import kafka.server.{FetchDataInfo, FetchLogEnd}
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils._
 import org.apache.directory.api.util.FileUtils
-import org.apache.kafka.common.errors.{KafkaStorageException, OffsetOutOfRangeException}
+import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.easymock.EasyMock
@@ -35,7 +35,6 @@ import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{doAnswer, spy}
-import org.scalatest.Assertions.assertThrows
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
@@ -93,43 +92,43 @@ class LogManagerTest {
    */
   @Test
   def testHandlingExceptionsDuringShutdown(): Unit = {
-    logManager.shutdown()
-
     // We create two directories logDir1 and logDir2 to help effectively test error handling
     // during LogManager.shutdown().
     val logDir1 = TestUtils.tempDir()
     val logDir2 = TestUtils.tempDir()
-    logManager = createLogManager(Seq(logDir1, logDir2))
-    assertEquals(2, logManager.liveLogDirs.size)
-    logManager.startup()
+    var logManagerForTest: Option[LogManager] = Option.empty
+    try {
+      logManagerForTest = Some(createLogManager(Seq(logDir1, logDir2)))
 
-    val log1 = logManager.getOrCreateLog(new TopicPartition(name, 0), () => logConfig)
-    val log2 = logManager.getOrCreateLog(new TopicPartition(name, 1), () => logConfig)
+      assertEquals(2, logManagerForTest.get.liveLogDirs.size)
+      logManagerForTest.get.startup()
 
-    val logFile1 = new File(logDir1, name + "-0")
-    assertTrue(logFile1.exists)
-    val logFile2 = new File(logDir2, name + "-1")
-    assertTrue(logFile2.exists)
+      val log1 = logManagerForTest.get.getOrCreateLog(new TopicPartition(name, 0), () => logConfig)
+      val log2 = logManagerForTest.get.getOrCreateLog(new TopicPartition(name, 1), () => logConfig)
 
-    log1.appendAsLeader(TestUtils.singletonRecords("test1".getBytes()), leaderEpoch = 0)
-    log1.takeProducerSnapshot()
-    log1.appendAsLeader(TestUtils.singletonRecords("test1".getBytes()), leaderEpoch = 0)
+      val logFile1 = new File(logDir1, name + "-0")
+      assertTrue(logFile1.exists)
+      val logFile2 = new File(logDir2, name + "-1")
+      assertTrue(logFile2.exists)
 
-    log2.appendAsLeader(TestUtils.singletonRecords("test2".getBytes()), leaderEpoch = 0)
-    log2.takeProducerSnapshot()
-    log2.appendAsLeader(TestUtils.singletonRecords("test2".getBytes()), leaderEpoch = 0)
+      log1.appendAsLeader(TestUtils.singletonRecords("test1".getBytes()), leaderEpoch = 0)
+      log1.takeProducerSnapshot()
+      log1.appendAsLeader(TestUtils.singletonRecords("test1".getBytes()), leaderEpoch = 0)
 
-    // This should cause log1.close() to fail during LogManger shutdown sequence.
-    FileUtils.deleteDirectory(logFile1)
+      log2.appendAsLeader(TestUtils.singletonRecords("test2".getBytes()), leaderEpoch = 0)
+      log2.takeProducerSnapshot()
+      log2.appendAsLeader(TestUtils.singletonRecords("test2".getBytes()), leaderEpoch = 0)
 
-    assertThrows[KafkaStorageException] {
-      logManager.shutdown()
+      // This should cause log1.close() to fail during LogManger shutdown sequence.
+      FileUtils.deleteDirectory(logFile1)
+
+      logManagerForTest.get.shutdown()
+
+      assertFalse(Files.exists(new File(logDir1, Log.CleanShutdownFile).toPath))
+      assertTrue(Files.exists(new File(logDir2, Log.CleanShutdownFile).toPath))
+    } finally {
+      logManagerForTest.foreach(manager => manager.liveLogDirs.foreach(Utils.delete))
     }
-    assertFalse(Files.exists(new File(logDir1, Log.CleanShutdownFile).toPath))
-    assertTrue(Files.exists(new File(logDir2, Log.CleanShutdownFile).toPath))
-
-    logManager.liveLogDirs.foreach(Utils.delete)
-    logManager = null
   }
 
   /**
