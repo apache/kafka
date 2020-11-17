@@ -99,6 +99,7 @@ public class MetricsIntegrationTest {
     private static final String TOPOLOGY_DESCRIPTION = "topology-description";
     private static final String STATE = "state";
     private static final String ALIVE_STREAM_THREADS = "alive-stream-threads";
+    private static final String FAILED_STREAM_THREADS = "failed-stream-threads";
     private static final String PUT_LATENCY_AVG = "put-latency-avg";
     private static final String PUT_LATENCY_MAX = "put-latency-max";
     private static final String PUT_IF_ABSENT_LATENCY_AVG = "put-if-absent-latency-avg";
@@ -260,6 +261,7 @@ public class MetricsIntegrationTest {
         kafkaStreams = new KafkaStreams(topology, streamsConfiguration);
 
         verifyAliveStreamThreadsMetric(0);
+        verifyFailedStreamThreadsSensor(0);
         verifyStateMetric(State.CREATED);
         verifyTopologyDescriptionMetric(topology.describe().toString());
         verifyApplicationIdMetric();
@@ -471,6 +473,15 @@ public class MetricsIntegrationTest {
         assertThat(metricsList.get(0).metricValue(), is(numThreads));
     }
 
+    private void verifyFailedStreamThreadsSensor(final int failedThreads) {
+        final List<Metric> metricsList = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
+            .filter(m -> m.metricName().name().equals(FAILED_STREAM_THREADS) &&
+                m.metricName().group().equals(STREAM_CLIENT_NODE_METRICS))
+            .collect(Collectors.toList());
+        assertThat(metricsList.size(), is(1));
+        assertThat(metricsList.get(0).metricValue(), is(failedThreads));
+    }
+
     private void verifyStateMetric(final State state) {
         final List<Metric> metricsList = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
             .filter(m -> m.metricName().name().equals(STATE) &&
@@ -509,6 +520,7 @@ public class MetricsIntegrationTest {
         checkMetricByName(listMetricThread, TOPOLOGY_DESCRIPTION, 1);
         checkMetricByName(listMetricThread, STATE, 1);
         checkMetricByName(listMetricThread, ALIVE_STREAM_THREADS, 1);
+        checkMetricByName(listMetricThread, FAILED_STREAM_THREADS, 1);
     }
 
     private void checkThreadLevelMetrics(final String builtInMetricsVersion) {
