@@ -822,7 +822,7 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         totalCacheSize = config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG);
-        final long cacheSizePerThread = totalCacheSize / (numStreamThreads + ((globalTaskTopology != null) ? 1 : 0));
+        final long cacheSizePerThread = totalCacheSize / (numStreamThreads + (hasGlobalTopology ? 1 : 0));
         final boolean hasPersistentStores = taskTopology.hasPersistentLocalStore() ||
                 (hasGlobalTopology && globalTaskTopology.hasPersistentGlobalStore());
 
@@ -899,6 +899,9 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     private void resizeThreadCache(final int numStreamThreads) {
+        if (numStreamThreads < 0) {
+            throw new IllegalArgumentException("There cannot be negative StreamThreads");
+        }
         final long cacheSizePreThread = totalCacheSize / (numStreamThreads + ((globalTaskTopology != null) ? 1 : 0));
         for (final StreamThread streamThread: threads) {
             streamThread.resizeCache(cacheSizePreThread);
