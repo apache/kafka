@@ -27,6 +27,7 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.SendBuilder;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.RecordBatch;
@@ -37,7 +38,6 @@ import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -45,50 +45,91 @@ import static org.apache.kafka.common.requests.ProduceResponse.INVALID_OFFSET;
 
 public class ProduceRequest extends AbstractRequest {
 
-    public static class Builder extends AbstractRequest.Builder<ProduceRequest> {
-        private final short acks;
-        private final int timeout;
-        private final Map<TopicPartition, MemoryRecords> partitionRecords;
-        private final String transactionalId;
+    public static Builder forMagic(byte magic, ProduceRequestData data) {
+        // Message format upgrades correspond with a bump in the produce request version. Older
+        // message format versions are generally not supported by the produce request versions
+        // following the bump.
 
+        final short minVersion;
+        final short maxVersion;
+        if (magic < RecordBatch.MAGIC_VALUE_V2) {
+            minVersion = 2;
+            maxVersion = 2;
+        } else {
+            minVersion = 3;
+            maxVersion = ApiKeys.PRODUCE.latestVersion();
+        }
+        return new Builder(minVersion, maxVersion, data);
+    }
+
+    private static ProduceRequestData data(short acks,
+                                           int timeout,
+                                           Map<TopicPartition, MemoryRecords> partitionRecords,
+                                           String transactionalId) {
+        return new ProduceRequestData()
+                .setAcks(acks)
+                .setTimeoutMs(timeout)
+                .setTransactionalId(transactionalId)
+                .setTopicData(new ProduceRequestData.TopicProduceDataCollection(partitionRecords
+                        .entrySet()
+                        .stream()
+                        .collect(Collectors.groupingBy(e -> e.getKey().topic()))
+                        .entrySet()
+                        .stream()
+                        .map(e -> new ProduceRequestData.TopicProduceData()
+                                .setName(e.getKey())
+                                .setPartitionData(e.getValue().stream()
+                                        .map(tpAndRecord -> new ProduceRequestData.PartitionProduceData()
+                                                .setIndex(tpAndRecord.getKey().partition())
+                                                .setRecords(tpAndRecord.getValue()))
+                                        .collect(Collectors.toList())))
+                        .iterator()));
+    }
+
+
+    public static class Builder extends AbstractRequest.Builder<ProduceRequest> {
+        private final ProduceRequestData data;
+
+        /**
+         * @deprecated Since 2.8.0. there is no replacement.
+         */
+        @Deprecated
         public static Builder forCurrentMagic(short acks,
                                               int timeout,
                                               Map<TopicPartition, MemoryRecords> partitionRecords) {
             return forMagic(RecordBatch.CURRENT_MAGIC_VALUE, acks, timeout, partitionRecords, null);
         }
 
+        /**
+         * @deprecated Since 2.8.0. use {@link Builder#forMagic(byte, ProduceRequestData)} instead
+         */
+        @Deprecated
         public static Builder forMagic(byte magic,
                                        short acks,
                                        int timeout,
                                        Map<TopicPartition, MemoryRecords> partitionRecords,
                                        String transactionalId) {
-            // Message format upgrades correspond with a bump in the produce request version. Older
-            // message format versions are generally not supported by the produce request versions
-            // following the bump.
-
-            final short minVersion;
-            final short maxVersion;
-            if (magic < RecordBatch.MAGIC_VALUE_V2) {
-                minVersion = 2;
-                maxVersion = 2;
-            } else {
-                minVersion = 3;
-                maxVersion = ApiKeys.PRODUCE.latestVersion();
-            }
-            return new Builder(minVersion, maxVersion, acks, timeout, partitionRecords, transactionalId);
+            return ProduceRequest.forMagic(magic, data(acks, timeout, partitionRecords, transactionalId));
         }
 
+        private Builder(short minVersion,
+                       short maxVersion,
+                       ProduceRequestData data) {
+            super(ApiKeys.PRODUCE, minVersion, maxVersion);
+            this.data = data;
+        }
+
+        /**
+         * @deprecated Since 2.8.0. there is no replacement.
+         */
+        @Deprecated
         public Builder(short minVersion,
                        short maxVersion,
                        short acks,
                        int timeout,
                        Map<TopicPartition, MemoryRecords> partitionRecords,
                        String transactionalId) {
-            super(ApiKeys.PRODUCE, minVersion, maxVersion);
-            this.acks = acks;
-            this.timeout = timeout;
-            this.partitionRecords = partitionRecords;
-            this.transactionalId = transactionalId;
+            this(minVersion, maxVersion, data(acks, timeout, partitionRecords, transactionalId));
         }
 
         @Override
@@ -104,41 +145,21 @@ public class ProduceRequest extends AbstractRequest {
         private ProduceRequest build(short version, boolean validate) {
             if (validate) {
                 // Validate the given records first
-                for (MemoryRecords records : partitionRecords.values()) {
-                    ProduceRequest.validateRecords(version, records);
-                }
+                data.topicData().forEach(tpd ->
+                        tpd.partitionData().forEach(partitionProduceData ->
+                                ProduceRequest.validateRecords(version, partitionProduceData.records())));
             }
-
-            List<ProduceRequestData.TopicProduceData> tpd = partitionRecords
-                .entrySet()
-                .stream()
-                .collect(Collectors.groupingBy(e -> e.getKey().topic()))
-                .entrySet()
-                .stream()
-                .map(e -> new ProduceRequestData.TopicProduceData()
-                    .setName(e.getKey())
-                    .setPartitionData(e.getValue().stream()
-                        .map(tpAndRecord -> new ProduceRequestData.PartitionProduceData()
-                            .setIndex(tpAndRecord.getKey().partition())
-                            .setRecords(tpAndRecord.getValue()))
-                        .collect(Collectors.toList())))
-                .collect(Collectors.toList());
-
-            return new ProduceRequest(new ProduceRequestData()
-                .setAcks(acks)
-                .setTimeoutMs(timeout)
-                .setTransactionalId(transactionalId)
-                .setTopicData(tpd), version);
+            return new ProduceRequest(data, version);
         }
 
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder();
             bld.append("(type=ProduceRequest")
-                    .append(", acks=").append(acks)
-                    .append(", timeout=").append(timeout)
-                    .append(", partitionRecords=(").append(partitionRecords)
-                    .append("), transactionalId='").append(transactionalId != null ? transactionalId : "")
+                    .append(", acks=").append(data.acks())
+                    .append(", timeout=").append(data.timeoutMs())
+                    .append(", partitionRecords=(").append(data.topicData().stream().flatMap(d -> d.partitionData().stream()).collect(Collectors.toList()))
+                    .append("), transactionalId='").append(data.transactionalId() != null ? data.transactionalId() : "")
                     .append("'");
             return bld.toString();
         }
@@ -168,7 +189,7 @@ public class ProduceRequest extends AbstractRequest {
 
     @Override
     public Send toSend(String destination, RequestHeader header) {
-        return SendBuilder.buildRequestSend(destination, header, this.data);
+        return SendBuilder.buildRequestSend(destination, header, dataOrException());
     }
 
     // visible for testing
@@ -274,25 +295,28 @@ public class ProduceRequest extends AbstractRequest {
         data = null;
     }
 
-    public static void validateRecords(short version, Records records) {
+    public static void validateRecords(short version, BaseRecords baseRecords) {
         if (version >= 3) {
-            Iterator<? extends RecordBatch> iterator = records.batches().iterator();
-            if (!iterator.hasNext())
-                throw new InvalidRecordException("Produce requests with version " + version + " must have at least " +
-                    "one record batch");
+            if (baseRecords instanceof Records) {
+                Records records = (Records) baseRecords;
+                Iterator<? extends RecordBatch> iterator = records.batches().iterator();
+                if (!iterator.hasNext())
+                    throw new InvalidRecordException("Produce requests with version " + version + " must have at least " +
+                            "one record batch");
 
-            RecordBatch entry = iterator.next();
-            if (entry.magic() != RecordBatch.MAGIC_VALUE_V2)
-                throw new InvalidRecordException("Produce requests with version " + version + " are only allowed to " +
-                    "contain record batches with magic version 2");
-            if (version < 7 && entry.compressionType() == CompressionType.ZSTD) {
-                throw new UnsupportedCompressionTypeException("Produce requests with version " + version + " are not allowed to " +
-                    "use ZStandard compression");
+                RecordBatch entry = iterator.next();
+                if (entry.magic() != RecordBatch.MAGIC_VALUE_V2)
+                    throw new InvalidRecordException("Produce requests with version " + version + " are only allowed to " +
+                            "contain record batches with magic version 2");
+                if (version < 7 && entry.compressionType() == CompressionType.ZSTD) {
+                    throw new UnsupportedCompressionTypeException("Produce requests with version " + version + " are not allowed to " +
+                            "use ZStandard compression");
+                }
+
+                if (iterator.hasNext())
+                    throw new InvalidRecordException("Produce requests with version " + version + " are only allowed to " +
+                            "contain exactly one record batch");
             }
-
-            if (iterator.hasNext())
-                throw new InvalidRecordException("Produce requests with version " + version + " are only allowed to " +
-                    "contain exactly one record batch");
         }
 
         // Note that we do not do similar validation for older versions to ensure compatibility with

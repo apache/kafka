@@ -32,6 +32,7 @@ import org.junit.Assert._
 import org.junit.Test
 import org.scalatest.Assertions.fail
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
 /**
@@ -42,6 +43,7 @@ class ProduceRequestTest extends BaseRequestTest {
 
   val metricsKeySet = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala
 
+  @nowarn("cat=deprecation")
   @Test
   def testSimpleProduceRequest(): Unit = {
     val (partition, leader) = createTopicAndFindPartitionWithLeader("topic")
@@ -69,6 +71,7 @@ class ProduceRequestTest extends BaseRequestTest {
       new SimpleRecord(System.currentTimeMillis(), "key2".getBytes, "value2".getBytes)), 1)
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testProduceWithInvalidTimestamp(): Unit = {
     val topic = "topic"
@@ -105,6 +108,7 @@ class ProduceRequestTest extends BaseRequestTest {
     assertEquals("One or more records have been rejected due to invalid timestamp", partitionResponse.errorMessage)
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testProduceToNonReplica(): Unit = {
     val topic = "topic"
@@ -136,6 +140,7 @@ class ProduceRequestTest extends BaseRequestTest {
     }.getOrElse(fail(s"No leader elected for topic $topic"))
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testCorruptLz4ProduceRequest(): Unit = {
     val (partition, leader) = createTopicAndFindPartitionWithLeader("topic")
@@ -159,6 +164,7 @@ class ProduceRequestTest extends BaseRequestTest {
     assertTrue(TestUtils.meterCount(s"${BrokerTopicStats.InvalidMessageCrcRecordsPerSec}") > 0)
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testZSTDProduceRequest(): Unit = {
     val topic = "topic"

@@ -62,6 +62,11 @@ public class ProducerResponseBenchmark {
         ))
         .collect(Collectors.toMap(AbstractMap.SimpleEntry::getKey, AbstractMap.SimpleEntry::getValue));
 
+    /**
+     * this method is still used by production so we benchmark it.
+     * see https://issues.apache.org/jira/browse/KAFKA-10730
+     */
+    @SuppressWarnings("deprecation")
     private static ProduceResponse response() {
         return new ProduceResponse(PARTITION_RESPONSE_MAP);
     }

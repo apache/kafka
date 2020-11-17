@@ -36,6 +36,7 @@ import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import org.scalatest.Assertions.intercept
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
 class DynamicConnectionQuotaTest extends BaseRequestTest {
@@ -265,6 +266,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     }
   }
 
+  @nowarn("cat=deprecation")
   private def produceRequest: ProduceRequest = {
     val topicPartition = new TopicPartition(topic, 0)
     val memoryRecords = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "value".getBytes))
@@ -288,6 +290,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     }
   }
 
+  @nowarn("cat=deprecation")
   private def verifyConnection(socket: Socket): Unit = {
     val produceResponse = sendAndReceive[ProduceResponse](produceRequest, socket)
     assertEquals(1, produceResponse.responses.size)

@@ -45,6 +45,7 @@ import static org.junit.Assert.assertTrue;
 
 public class ProduceResponseTest {
 
+    @SuppressWarnings("deprecation")
     @Test
     public void produceResponseV5Test() {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
@@ -74,6 +75,7 @@ public class ProduceResponseTest {
         assertEquals(responseData, v5Response.responses());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void produceResponseVersionTest() {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
@@ -96,6 +98,7 @@ public class ProduceResponseTest {
         assertEquals("Response data does not match", responseData, v2Response.responses());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void produceResponseRecordErrorsTest() {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();

@@ -625,6 +625,7 @@ public class RequestResponseTest {
         builder.build((short) 0);
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testPartitionSize() {
         TopicPartition tp0 = new TopicPartition("test", 0);
@@ -667,6 +668,7 @@ public class RequestResponseTest {
         assertFalse(request.toString(true).contains("numPartitions"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void produceRequestGetErrorResponseTest() {
         ProduceRequest request = createProduceRequest(ApiKeys.PRODUCE.latestVersion());
@@ -1407,6 +1409,7 @@ public class RequestResponseTest {
         return new OffsetFetchResponse(Errors.NONE, responseData);
     }
 
+    @SuppressWarnings("deprecation")
     private ProduceRequest createProduceRequest(int version) {
         if (version < 2)
             throw new IllegalArgumentException("Produce request version 2 is not supported");
@@ -1418,6 +1421,7 @@ public class RequestResponseTest {
                 .build((short) version);
     }
 
+    @SuppressWarnings("deprecation")
     private ProduceResponse createProduceResponse() {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
         responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE,
@@ -1425,6 +1429,7 @@ public class RequestResponseTest {
         return new ProduceResponse(responseData, 0);
     }
 
+    @SuppressWarnings("deprecation")
     private ProduceResponse createProduceResponseWithErrorMessage() {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
         responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE,

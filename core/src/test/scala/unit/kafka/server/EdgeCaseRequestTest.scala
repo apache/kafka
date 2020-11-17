@@ -34,6 +34,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert._
 import org.junit.Test
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
 class EdgeCaseRequestTest extends KafkaServerTestHarness {
@@ -108,6 +109,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
     }
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testProduceRequestWithNullClientId(): Unit = {
     val topic = "topic"

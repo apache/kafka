@@ -147,6 +147,7 @@ public class NetworkClientTest {
         assertFalse(client.ready(new Node(1234, "badhost", 1234), time.milliseconds()));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testClose() {
         client.ready(node, time.milliseconds());
@@ -180,6 +181,7 @@ public class NetworkClientTest {
         assertEquals(UnsupportedVersionException.class, metadataUpdater.getAndClearFailure().getClass());
     }
 
+    @SuppressWarnings("deprecation")
     private void checkSimpleRequestResponse(NetworkClient networkClient) {
         awaitReady(networkClient, node); // has to be before creating any request, as it may send ApiVersionsRequest and its response is mocked with correlation id 0
         ProduceRequest.Builder builder = new ProduceRequest.Builder(
@@ -429,6 +431,7 @@ public class NetworkClientTest {
         assertTrue(client.isReady(node, time.milliseconds()));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testRequestTimeout() {
         awaitReady(client, node); // has to be before creating any request, as it may send ApiVersionsRequest and its response is mocked with correlation id 0
@@ -442,6 +445,7 @@ public class NetworkClientTest {
         testRequestTimeout(request);
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testDefaultRequestTimeout() {
         awaitReady(client, node); // has to be before creating any request, as it may send ApiVersionsRequest and its response is mocked with correlation id 0
@@ -492,6 +496,7 @@ public class NetworkClientTest {
         );
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testConnectionThrottling() {
         // Instrument the test to return a response with a 100ms throttle delay.
@@ -586,6 +591,7 @@ public class NetworkClientTest {
         return sendEmptyProduceRequest(node.idString());
     }
 
+    @SuppressWarnings("deprecation")
     private int sendEmptyProduceRequest(String nodeId) {
         ProduceRequest.Builder builder = ProduceRequest.Builder.forCurrentMagic((short) 1, 1000,
                 Collections.emptyMap());

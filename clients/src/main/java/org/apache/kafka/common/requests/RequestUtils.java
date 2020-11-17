@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.BaseRecords;
@@ -23,9 +24,9 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 
 import java.nio.ByteBuffer;
+import java.util.AbstractMap;
 import java.util.Iterator;
 import java.util.Optional;
-import java.util.function.Predicate;
 
 public final class RequestUtils {
 
@@ -53,27 +54,40 @@ public final class RequestUtils {
         return buffer;
     }
 
+    // visible for testing
     public static boolean hasIdempotentRecords(ProduceRequest request) {
-        return anyMatch(request, RecordBatch::hasProducerId);
+        return flags(request).getKey();
     }
 
+    // visible for testing
     public static boolean hasTransactionalRecords(ProduceRequest request) {
-        return anyMatch(request, RecordBatch::isTransactional);
+        return flags(request).getValue();
     }
 
-    private static boolean anyMatch(ProduceRequest request, Predicate<RecordBatch> predicate) {
-        return request.dataOrException().topicData()
-                .stream()
-                .anyMatch(topicProduceData -> topicProduceData.partitionData()
-                    .stream()
-                    .anyMatch(partitionProduceData -> {
-                        BaseRecords records = partitionProduceData.records();
-                        if (records instanceof Records) {
-                            Iterator<? extends RecordBatch> iterator = ((Records) records).batches().iterator();
-                            return iterator.hasNext() && predicate.test(iterator.next());
-                        } else return false;
-                    }));
+    /**
+     * Get both hasIdempotentRecords flag and hasTransactionalRecords flag from produce request.
+     * Noted that we find all flags at once to avoid duplicate loop and record batch construction.
+     * @return first flag is "hasIdempotentRecords" and another is "hasTransactionalRecords"
+     */
+    public static AbstractMap.SimpleEntry<Boolean, Boolean> flags(ProduceRequest request) {
+        boolean hasIdempotentRecords = false;
+        boolean hasTransactionalRecords = false;
+        for (ProduceRequestData.TopicProduceData tpd : request.dataOrException().topicData()) {
+            for (ProduceRequestData.PartitionProduceData ppd : tpd.partitionData()) {
+                BaseRecords records = ppd.records();
+                if (records instanceof Records) {
+                    Iterator<? extends RecordBatch> iterator = ((Records) records).batches().iterator();
+                    if (iterator.hasNext()) {
+                        RecordBatch batch = iterator.next();
+                        hasIdempotentRecords = hasIdempotentRecords || batch.hasProducerId();
+                        hasTransactionalRecords = hasTransactionalRecords || batch.isTransactional();
+                    }
+                }
+                // return early
+                if (hasIdempotentRecords && hasTransactionalRecords)
+                    return new AbstractMap.SimpleEntry<>(true, true);
+            }
+        }
+        return new AbstractMap.SimpleEntry<>(hasIdempotentRecords, hasTransactionalRecords);
     }
-
-
 }

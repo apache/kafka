@@ -50,6 +50,7 @@ import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, A
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
 
@@ -208,6 +209,7 @@ class RequestQuotaTest extends BaseRequestTest {
     }
   }
 
+  @nowarn("cat=deprecation")
   private def requestBuilder(apiKey: ApiKeys): AbstractRequest.Builder[_ <: AbstractRequest] = {
     apiKey match {
         case ApiKeys.PRODUCE =>

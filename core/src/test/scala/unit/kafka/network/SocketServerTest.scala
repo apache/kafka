@@ -53,6 +53,7 @@ import org.junit.Assert._
 import org.junit._
 import org.scalatest.Assertions.fail
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -205,6 +206,7 @@ class SocketServerTest {
     server.metrics.close()
   }
 
+  @nowarn("cat=deprecation")
   private def producerRequestBytes(ack: Short = 0): Array[Byte] = {
     val correlationId = -1
     val clientId = ""
@@ -880,6 +882,7 @@ class SocketServerTest {
     }
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testSslSocketServer(): Unit = {
     val serverMetrics = new Metrics
@@ -925,6 +928,7 @@ class SocketServerTest {
     checkSaslReauthenticationFailure(false)
   }
 
+  @nowarn("cat=deprecation")
   def checkSaslReauthenticationFailure(leverageKip152SaslAuthenticateRequest : Boolean): Unit = {
     shutdownServerAndMetrics(server) // we will use our own instance because we require custom configs
     val username = "admin"

@@ -55,6 +55,7 @@ public class ProduceRequestTest {
                                                                "key".getBytes(),
                                                                "value".getBytes());
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldBeFlaggedAsTransactionalWhenTransactionalRecords() throws Exception {
         final MemoryRecords memoryRecords = MemoryRecords.withTransactionalRecords(0, CompressionType.NONE, 1L,
@@ -76,6 +77,7 @@ public class ProduceRequestTest {
         assertFalse(RequestUtils.hasTransactionalRecords(request));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldBeFlaggedAsIdempotentWhenIdempotentRecords() throws Exception {
         final MemoryRecords memoryRecords = MemoryRecords.withIdempotentRecords(1, CompressionType.NONE, 1L,
@@ -85,6 +87,7 @@ public class ProduceRequestTest {
         assertTrue(RequestUtils.hasIdempotentRecords(request));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testBuildWithOldMessageFormat() {
         ByteBuffer buffer = ByteBuffer.allocate(256);
@@ -100,6 +103,7 @@ public class ProduceRequestTest {
         assertEquals(2, requestBuilder.latestAllowedVersion());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testBuildWithCurrentMessageFormat() {
         ByteBuffer buffer = ByteBuffer.allocate(256);
@@ -115,6 +119,7 @@ public class ProduceRequestTest {
         assertEquals(ApiKeys.PRODUCE.latestVersion(), requestBuilder.latestAllowedVersion());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testV3AndAboveShouldContainOnlyOneRecordBatch() {
         ByteBuffer buffer = ByteBuffer.allocate(256);
@@ -135,6 +140,7 @@ public class ProduceRequestTest {
         assertThrowsInvalidRecordExceptionForAllVersions(requestBuilder);
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testV3AndAboveCannotHaveNoRecordBatches() {
         Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
@@ -143,6 +149,7 @@ public class ProduceRequestTest {
         assertThrowsInvalidRecordExceptionForAllVersions(requestBuilder);
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testV3AndAboveCannotUseMagicV0() {
         ByteBuffer buffer = ByteBuffer.allocate(256);
@@ -156,6 +163,7 @@ public class ProduceRequestTest {
         assertThrowsInvalidRecordExceptionForAllVersions(requestBuilder);
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testV3AndAboveCannotUseMagicV1() {
         ByteBuffer buffer = ByteBuffer.allocate(256);
@@ -169,6 +177,7 @@ public class ProduceRequestTest {
         assertThrowsInvalidRecordExceptionForAllVersions(requestBuilder);
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testV6AndBelowCannotUseZStdCompression() {
         ByteBuffer buffer = ByteBuffer.allocate(256);
@@ -189,6 +198,7 @@ public class ProduceRequestTest {
         ProduceRequest.Builder.forCurrentMagic((short) 1, 5000, produceData);
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testMixedTransactionalData() {
         final long producerId = 15L;
@@ -213,6 +223,7 @@ public class ProduceRequestTest {
         assertTrue(RequestUtils.hasIdempotentRecords(request));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testMixedIdempotentData() {
         final long producerId = 15L;
@@ -252,6 +263,7 @@ public class ProduceRequestTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     private ProduceRequest createNonIdempotentNonTransactionalRecords() {
         final MemoryRecords memoryRecords = MemoryRecords.withRecords(CompressionType.NONE, simpleRecord);
         return ProduceRequest.Builder.forCurrentMagic((short) -1, 10,
