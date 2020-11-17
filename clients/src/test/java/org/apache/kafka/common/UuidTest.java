@@ -45,6 +45,17 @@ public class UuidTest {
         assertEquals(id1.hashCode(), id2.hashCode());
         assertNotEquals(id1.hashCode(), id3.hashCode());
     }
+    
+    @Test
+    public void testHashCode() {
+        Uuid id1 = new Uuid(16L, 7L);
+        Uuid id2 = new Uuid(1043L, 20075L);
+        Uuid id3 = new Uuid(104312423523523L, 200732425676585L);
+        
+        assertEquals(23, id1.hashCode());
+        assertEquals(19064, id2.hashCode());
+        assertEquals(-2011255899, id3.hashCode());
+    }
 
     @Test
     public void testStringConversion() {
