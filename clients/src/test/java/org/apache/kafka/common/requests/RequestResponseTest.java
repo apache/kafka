@@ -131,6 +131,7 @@ import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResp
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopic;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection;
+import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
 import org.apache.kafka.common.message.RenewDelegationTokenResponseData;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
@@ -625,7 +626,6 @@ public class RequestResponseTest {
         builder.build((short) 0);
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testPartitionSize() {
         TopicPartition tp0 = new TopicPartition("test", 0);
@@ -634,10 +634,17 @@ public class RequestResponseTest {
             CompressionType.NONE, new SimpleRecord("woot".getBytes()));
         MemoryRecords records1 = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2,
             CompressionType.NONE, new SimpleRecord("woot".getBytes()), new SimpleRecord("woot".getBytes()));
-        Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
-        produceData.put(tp0, records0);
-        produceData.put(tp1, records1);
-        ProduceRequest request = ProduceRequest.Builder.forMagic(RecordBatch.MAGIC_VALUE_V2, (short) 1, 5000, produceData, "transactionalId")
+        ProduceRequest request = ProduceRequest.forMagic(RecordBatch.MAGIC_VALUE_V2,
+                new ProduceRequestData()
+                        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Arrays.asList(
+                                new ProduceRequestData.TopicProduceData().setName(tp0.topic()).setPartitionData(
+                                        Collections.singletonList(new ProduceRequestData.PartitionProduceData().setIndex(tp0.partition()).setRecords(records0))),
+                                new ProduceRequestData.TopicProduceData().setName(tp1.topic()).setPartitionData(
+                                        Collections.singletonList(new ProduceRequestData.PartitionProduceData().setIndex(tp1.partition()).setRecords(records1))))
+                                .iterator()))
+                        .setAcks((short) 1)
+                        .setTimeoutMs(5000)
+                        .setTransactionalId("transactionalId"))
             .build((short) 3);
         assertEquals(2, request.partitionSizes().size());
         assertEquals(records0.sizeInBytes(), (int) request.partitionSizes().get(tp0));
@@ -1413,11 +1420,19 @@ public class RequestResponseTest {
     private ProduceRequest createProduceRequest(int version) {
         if (version < 2)
             throw new IllegalArgumentException("Produce request version 2 is not supported");
-
         byte magic = version == 2 ? RecordBatch.MAGIC_VALUE_V1 : RecordBatch.MAGIC_VALUE_V2;
         MemoryRecords records = MemoryRecords.withRecords(magic, CompressionType.NONE, new SimpleRecord("woot".getBytes()));
-        Map<TopicPartition, MemoryRecords> produceData = Collections.singletonMap(new TopicPartition("test", 0), records);
-        return ProduceRequest.Builder.forMagic(magic, (short) 1, 5000, produceData, version >= 3 ? "transactionalId" : null)
+        return ProduceRequest.forMagic(magic,
+                new ProduceRequestData()
+                        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
+                                new ProduceRequestData.TopicProduceData()
+                                        .setName("test")
+                                        .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
+                                                .setIndex(0)
+                                                .setRecords(records)))).iterator()))
+                        .setAcks((short) 1)
+                        .setTimeoutMs(5000)
+                        .setTransactionalId(version >= 3 ? "transactionalId" : null))
                 .build((short) version);
     }
 

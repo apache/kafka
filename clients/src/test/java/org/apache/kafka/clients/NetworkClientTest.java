@@ -25,6 +25,7 @@ import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
+import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -147,7 +148,6 @@ public class NetworkClientTest {
         assertFalse(client.ready(new Node(1234, "badhost", 1234), time.milliseconds()));
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testClose() {
         client.ready(node, time.milliseconds());
@@ -155,8 +155,11 @@ public class NetworkClientTest {
         client.poll(1, time.milliseconds());
         assertTrue("The client should be ready", client.isReady(node, time.milliseconds()));
 
-        ProduceRequest.Builder builder = ProduceRequest.Builder.forCurrentMagic((short) 1, 1000,
-                Collections.emptyMap());
+        ProduceRequest.Builder builder = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+                .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
+                .setAcks((short) 1)
+                .setTimeoutMs(1000)
+                .setTransactionalId(null));
         ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true);
         client.send(request, time.milliseconds());
         assertEquals("There should be 1 in-flight request after send", 1,
@@ -181,16 +184,15 @@ public class NetworkClientTest {
         assertEquals(UnsupportedVersionException.class, metadataUpdater.getAndClearFailure().getClass());
     }
 
-    @SuppressWarnings("deprecation")
     private void checkSimpleRequestResponse(NetworkClient networkClient) {
         awaitReady(networkClient, node); // has to be before creating any request, as it may send ApiVersionsRequest and its response is mocked with correlation id 0
         ProduceRequest.Builder builder = new ProduceRequest.Builder(
                 PRODUCE.latestVersion(),
                 PRODUCE.latestVersion(),
-                (short) 1,
-                1000,
-                Collections.emptyMap(),
-                null);
+                new ProduceRequestData()
+                    .setAcks((short) 1)
+                    .setTimeoutMs(1000)
+                    .setTransactionalId(null));
         TestCallbackHandler handler = new TestCallbackHandler();
         ClientRequest request = networkClient.newClientRequest(node.idString(), builder, time.milliseconds(),
             true, defaultRequestTimeoutMs, handler);
@@ -431,12 +433,14 @@ public class NetworkClientTest {
         assertTrue(client.isReady(node, time.milliseconds()));
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testRequestTimeout() {
         awaitReady(client, node); // has to be before creating any request, as it may send ApiVersionsRequest and its response is mocked with correlation id 0
-        ProduceRequest.Builder builder = ProduceRequest.Builder.forCurrentMagic((short) 1,
-                1000, Collections.emptyMap());
+        ProduceRequest.Builder builder = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+                .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
+                .setAcks((short) 1)
+                .setTimeoutMs(1000)
+                .setTransactionalId(null));
         TestCallbackHandler handler = new TestCallbackHandler();
         int requestTimeoutMs = defaultRequestTimeoutMs + 5000;
         ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true,
@@ -445,12 +449,14 @@ public class NetworkClientTest {
         testRequestTimeout(request);
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testDefaultRequestTimeout() {
         awaitReady(client, node); // has to be before creating any request, as it may send ApiVersionsRequest and its response is mocked with correlation id 0
-        ProduceRequest.Builder builder = ProduceRequest.Builder.forCurrentMagic((short) 1,
-                1000, Collections.emptyMap());
+        ProduceRequest.Builder builder = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+                .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
+                .setAcks((short) 1)
+                .setTimeoutMs(1000)
+                .setTransactionalId(null));
         ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true);
         assertEquals(defaultRequestTimeoutMs, request.requestTimeoutMs());
         testRequestTimeout(request);
@@ -496,7 +502,6 @@ public class NetworkClientTest {
         );
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testConnectionThrottling() {
         // Instrument the test to return a response with a 100ms throttle delay.
@@ -504,10 +509,10 @@ public class NetworkClientTest {
         ProduceRequest.Builder builder = new ProduceRequest.Builder(
             PRODUCE.latestVersion(),
             PRODUCE.latestVersion(),
-            (short) 1,
-            1000,
-            Collections.emptyMap(),
-            null);
+            new ProduceRequestData()
+                .setAcks((short) 1)
+                .setTimeoutMs(1000)
+                .setTransactionalId(null));
         TestCallbackHandler handler = new TestCallbackHandler();
         ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true,
                 defaultRequestTimeoutMs, handler);
@@ -591,10 +596,12 @@ public class NetworkClientTest {
         return sendEmptyProduceRequest(node.idString());
     }
 
-    @SuppressWarnings("deprecation")
     private int sendEmptyProduceRequest(String nodeId) {
-        ProduceRequest.Builder builder = ProduceRequest.Builder.forCurrentMagic((short) 1, 1000,
-                Collections.emptyMap());
+        ProduceRequest.Builder builder = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+                .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
+                .setAcks((short) 1)
+                .setTimeoutMs(1000)
+                .setTransactionalId(null));
         TestCallbackHandler handler = new TestCallbackHandler();
         ClientRequest request = client.newClientRequest(nodeId, builder, time.milliseconds(), true,
                 defaultRequestTimeoutMs, handler);

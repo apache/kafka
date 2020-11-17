@@ -20,22 +20,23 @@ package kafka.server
 import java.io.{DataInputStream, DataOutputStream}
 import java.net.Socket
 import java.nio.ByteBuffer
+import java.util.Collections
 
 import kafka.integration.KafkaServerTestHarness
 import kafka.network.SocketServer
 import kafka.utils._
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.message.ProduceRequestData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.types.Type
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
-import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse, ResponseHeader}
+import org.apache.kafka.common.requests.{ProduceResponse, ResponseHeader}
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.{TopicPartition, requests}
 import org.junit.Assert._
 import org.junit.Test
 
 import scala.annotation.nowarn
-import scala.jdk.CollectionConverters._
 
 class EdgeCaseRequestTest extends KafkaServerTestHarness {
 
@@ -121,8 +122,18 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
     val (serializedBytes, responseHeaderVersion) = {
       val headerBytes = requestHeaderBytes(ApiKeys.PRODUCE.id, version, null,
         correlationId)
-      val records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("message".getBytes))
-      val request = ProduceRequest.Builder.forCurrentMagic(1, 10000, Map(topicPartition -> records).asJava).build()
+      val request = requests.ProduceRequest.forCurrentMagic(new ProduceRequestData()
+        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
+          Collections.singletonList(new ProduceRequestData.TopicProduceData()
+            .setName(topicPartition.topic()).setPartitionData(Collections.singletonList(
+            new ProduceRequestData.PartitionProduceData()
+              .setIndex(topicPartition.partition())
+              .setRecords(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("message".getBytes))))))
+            .iterator))
+        .setAcks(1.toShort)
+        .setTimeoutMs(10000)
+        .setTransactionalId(null))
+        .build()
       val byteBuffer = ByteBuffer.allocate(headerBytes.length + request.toStruct.sizeOf)
       byteBuffer.put(headerBytes)
       request.toStruct.writeTo(byteBuffer)

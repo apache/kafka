@@ -26,6 +26,7 @@ import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.TransactionAbortedException;
+import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.RequestUtils;
@@ -296,8 +297,11 @@ public class SenderTest {
 
         for (int i = 1; i <= 3; i++) {
             int throttleTimeMs = 100 * i;
-            ProduceRequest.Builder builder = ProduceRequest.Builder.forCurrentMagic((short) 1, 1000,
-                            Collections.emptyMap());
+            ProduceRequest.Builder builder = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+                    .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
+                    .setAcks((short) 1)
+                    .setTimeoutMs(1000)
+                    .setTransactionalId(null));
             ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true);
             client.send(request, time.milliseconds());
             client.poll(1, time.milliseconds());

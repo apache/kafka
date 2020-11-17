@@ -20,18 +20,19 @@ package kafka.network
 
 import java.io.IOException
 import java.net.{InetAddress, Socket}
-import java.util.Properties
 import java.util.concurrent._
+import java.util.{Collections, Properties}
 
 import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
+import org.apache.kafka.common.message.ProduceRequestData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.common.{KafkaException, requests}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import org.scalatest.Assertions.intercept
@@ -266,13 +267,20 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     }
   }
 
-  @nowarn("cat=deprecation")
-  private def produceRequest: ProduceRequest = {
-    val topicPartition = new TopicPartition(topic, 0)
-    val memoryRecords = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "value".getBytes))
-    val partitionRecords = Map(topicPartition -> memoryRecords)
-    ProduceRequest.Builder.forCurrentMagic(-1, 3000, partitionRecords.asJava).build()
-  }
+  private def produceRequest: ProduceRequest =
+    requests.ProduceRequest.forCurrentMagic(new ProduceRequestData()
+      .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
+        Collections.singletonList(new ProduceRequestData.TopicProduceData()
+          .setName(topic)
+          .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
+            .setIndex(0)
+            .setRecords(MemoryRecords.withRecords(CompressionType.NONE,
+              new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "value".getBytes))))))
+        .iterator))
+      .setAcks((-1).toShort)
+      .setTimeoutMs(3000)
+      .setTransactionalId(null))
+      .build()
 
   def connectionCount: Int = servers.head.socketServer.connectionCount(localAddress)
 

@@ -66,7 +66,6 @@ public class ProduceResponse extends AbstractResponse {
     /**
      * Constructor for Version 0
      * @param responses Produced data grouped by topic-partition
-     * @deprecated Since 2.8.0. This will be removed in a future major release.
      */
     @Deprecated
     public ProduceResponse(Map<TopicPartition, PartitionResponse> responses) {
@@ -77,7 +76,6 @@ public class ProduceResponse extends AbstractResponse {
      * Constructor for the latest version
      * @param responses Produced data grouped by topic-partition
      * @param throttleTimeMs Time in milliseconds the response was throttled
-     * @deprecated Since 2.8.0. This will be removed in a future major release.
      */
     @Deprecated
     public ProduceResponse(Map<TopicPartition, PartitionResponse> responses, int throttleTimeMs) {
@@ -131,7 +129,6 @@ public class ProduceResponse extends AbstractResponse {
      * this method is used by testing only.
      * TODO: refactor the tests which are using this method and then remove this method from production code.
      * https://issues.apache.org/jira/browse/KAFKA-10697
-     * @deprecated Since 2.8.0. This will be removed in a future major release.
      */
     @Deprecated
     public Map<TopicPartition, PartitionResponse> responses() {

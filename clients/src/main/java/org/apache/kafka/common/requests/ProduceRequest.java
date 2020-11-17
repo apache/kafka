@@ -29,7 +29,6 @@ import org.apache.kafka.common.protocol.SendBuilder;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.Utils;
@@ -62,74 +61,18 @@ public class ProduceRequest extends AbstractRequest {
         return new Builder(minVersion, maxVersion, data);
     }
 
-    private static ProduceRequestData data(short acks,
-                                           int timeout,
-                                           Map<TopicPartition, MemoryRecords> partitionRecords,
-                                           String transactionalId) {
-        return new ProduceRequestData()
-                .setAcks(acks)
-                .setTimeoutMs(timeout)
-                .setTransactionalId(transactionalId)
-                .setTopicData(new ProduceRequestData.TopicProduceDataCollection(partitionRecords
-                        .entrySet()
-                        .stream()
-                        .collect(Collectors.groupingBy(e -> e.getKey().topic()))
-                        .entrySet()
-                        .stream()
-                        .map(e -> new ProduceRequestData.TopicProduceData()
-                                .setName(e.getKey())
-                                .setPartitionData(e.getValue().stream()
-                                        .map(tpAndRecord -> new ProduceRequestData.PartitionProduceData()
-                                                .setIndex(tpAndRecord.getKey().partition())
-                                                .setRecords(tpAndRecord.getValue()))
-                                        .collect(Collectors.toList())))
-                        .iterator()));
+    public static Builder forCurrentMagic(ProduceRequestData data) {
+        return forMagic(RecordBatch.CURRENT_MAGIC_VALUE, data);
     }
-
 
     public static class Builder extends AbstractRequest.Builder<ProduceRequest> {
         private final ProduceRequestData data;
 
-        /**
-         * @deprecated Since 2.8.0. there is no replacement.
-         */
-        @Deprecated
-        public static Builder forCurrentMagic(short acks,
-                                              int timeout,
-                                              Map<TopicPartition, MemoryRecords> partitionRecords) {
-            return forMagic(RecordBatch.CURRENT_MAGIC_VALUE, acks, timeout, partitionRecords, null);
-        }
-
-        /**
-         * @deprecated Since 2.8.0. use {@link Builder#forMagic(byte, ProduceRequestData)} instead
-         */
-        @Deprecated
-        public static Builder forMagic(byte magic,
-                                       short acks,
-                                       int timeout,
-                                       Map<TopicPartition, MemoryRecords> partitionRecords,
-                                       String transactionalId) {
-            return ProduceRequest.forMagic(magic, data(acks, timeout, partitionRecords, transactionalId));
-        }
-
-        private Builder(short minVersion,
+        public Builder(short minVersion,
                        short maxVersion,
                        ProduceRequestData data) {
             super(ApiKeys.PRODUCE, minVersion, maxVersion);
             this.data = data;
-        }
-
-        /**
-         * @deprecated Since 2.8.0. there is no replacement.
-         */
-        @Deprecated
-        public Builder(short minVersion,
-                       short maxVersion,
-                       short acks,
-                       int timeout,
-                       Map<TopicPartition, MemoryRecords> partitionRecords,
-                       String transactionalId) {
-            this(minVersion, maxVersion, data(acks, timeout, partitionRecords, transactionalId));
         }
 
         @Override
