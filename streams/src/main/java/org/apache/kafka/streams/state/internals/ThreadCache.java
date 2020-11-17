@@ -72,16 +72,12 @@ public class ThreadCache {
         return numFlushes;
     }
 
-    public void resize(final long maxCacheSizeBytes) {
-        final boolean shrink = maxCacheSizeBytes < this.maxCacheSizeBytes;
-        this.maxCacheSizeBytes = maxCacheSizeBytes;
+    public void resize(final long newCacheSizeBytes) {
+        final boolean shrink = newCacheSizeBytes < this.maxCacheSizeBytes;
+        this.maxCacheSizeBytes = newCacheSizeBytes;
         if (shrink) {
             final CircularIterator<NamedCache> circularIterator = new CircularIterator<>(caches.values());
             while (sizeBytes() > maxCacheSizeBytes) {
-                if (!circularIterator.hasNext()) {
-                    log.error("Unable to remove any more entries as all caches are empty");
-                    return;
-                }
                 final NamedCache cache = circularIterator.next();
                 if (cache.isEmpty()) {
                     circularIterator.remove();
