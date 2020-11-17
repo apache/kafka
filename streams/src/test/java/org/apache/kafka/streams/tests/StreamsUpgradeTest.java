@@ -322,7 +322,9 @@ public class StreamsUpgradeTest {
                 16 + // client ID
                 4 + activeTasks.size() * 8 +   // length + active tasks
                 4 + standbyTasks.size() * 8 +  // length + standby tasks
-                4 + endPointBytes.length       // length + endpoint
+                4 + endPointBytes.length +      // length + endpoint
+                4 + //uniqueField
+                4 //assignment error code
             );
 
             buf.putInt(version); // used version
