@@ -61,7 +61,7 @@ public class SubscriptionInfoTest {
 
     private final static String IGNORED_USER_ENDPOINT = "ignoredUserEndpoint:80";
     private static final byte IGNORED_UNIQUE_FIELD = (byte) 0;
-    private static final byte IGNORED_ERROR_CODE = (byte) 0;
+    private static final int IGNORED_ERROR_CODE = 0;
 
 
     @Test(expected = IllegalArgumentException.class)
