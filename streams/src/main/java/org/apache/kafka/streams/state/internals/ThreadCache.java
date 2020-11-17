@@ -73,8 +73,8 @@ public class ThreadCache {
     }
 
     public void resize(final long newCacheSizeBytes) {
-        final boolean shrink = newCacheSizeBytes < this.maxCacheSizeBytes;
-        this.maxCacheSizeBytes = newCacheSizeBytes;
+        final boolean shrink = newCacheSizeBytes < maxCacheSizeBytes;
+        maxCacheSizeBytes = newCacheSizeBytes;
         if (shrink) {
             final CircularIterator<NamedCache> circularIterator = new CircularIterator<>(caches.values());
             while (sizeBytes() > maxCacheSizeBytes) {
