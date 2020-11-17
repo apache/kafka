@@ -90,10 +90,22 @@ public class MirrorMakerConfig extends AbstractConfig {
         List<SourceAndTarget> pairs = new ArrayList<>();
         Set<String> clusters = clusters();
         Map<String, String> originalStrings = originalsStrings();
+        boolean globalHeartbeatsEnabled = MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED_DEFAULT;
+        if (originalStrings.containsKey(MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED)) {
+            globalHeartbeatsEnabled = Boolean.valueOf(originalStrings.get(MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED));
+        }
+
         for (String source : clusters) {
             for (String target : clusters) {
                 if (!source.equals(target)) {
-                    if (originalStrings.getOrDefault(source + "->" + target + ".enabled", "false").equals("true")) {
+                    String clusterPairConfigPrefix = source + "->" + target + ".";
+                    boolean clusterPairEnabled = Boolean.valueOf(originalStrings.getOrDefault(clusterPairConfigPrefix + "enabled", "false"));
+                    boolean clusterPairHeartbeatsEnabled = globalHeartbeatsEnabled;
+                    if (originalStrings.containsKey(clusterPairConfigPrefix + MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED)) {
+                        clusterPairHeartbeatsEnabled = Boolean.valueOf(originalStrings.get(clusterPairConfigPrefix + MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED));
+                    }
+
+                    if (clusterPairEnabled || clusterPairHeartbeatsEnabled) {
                         pairs.add(new SourceAndTarget(source, target));
                     }
                 }
