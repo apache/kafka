@@ -164,7 +164,7 @@ public class KafkaStreams implements AutoCloseable {
     GlobalStreamThread globalStreamThread;
     private KafkaStreams.StateListener stateListener;
     private StateRestoreListener globalStateRestoreListener;
-    private boolean oldHanlder;
+    private boolean oldHandler;
 
     // container states
     /**
@@ -362,7 +362,7 @@ public class KafkaStreams implements AutoCloseable {
     public void setUncaughtExceptionHandler(final Thread.UncaughtExceptionHandler uncaughtExceptionHandler) {
         synchronized (stateLock) {
             if (state == State.CREATED) {
-                oldHanlder = true;
+                oldHandler = true;
                 for (final StreamThread thread : threads) {
                     thread.setUncaughtExceptionHandler(uncaughtExceptionHandler);
                 }
@@ -384,7 +384,7 @@ public class KafkaStreams implements AutoCloseable {
      * might be exceptions thrown by your code, for example a NullPointerException thrown from your processor
      * logic.
      * The handler will execute on the thread that produced the exception.
-     * In order to get the thread use that threw the exception, Thread.currentThread().
+     * In order to get the thread that threw the exception, Thread.currentThread().
      * <p>
      * Note, this handler must be threadsafe, since it will be shared among all threads, and invoked from any
      * thread that encounters such an exception.
@@ -412,7 +412,7 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     private void defaultStreamsUncaughtExceptionHandler(final Throwable throwable) {
-        if (oldHanlder) {
+        if (oldHandler) {
             if (throwable instanceof RuntimeException) {
                 throw (RuntimeException) throwable;
             } else if (throwable instanceof Error) {
@@ -428,7 +428,7 @@ public class KafkaStreams implements AutoCloseable {
     private void handleStreamsUncaughtException(final Throwable throwable,
                                                 final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
         final StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse action = streamsUncaughtExceptionHandler.handle(throwable);
-        if (oldHanlder) {
+        if (oldHandler) {
             log.warn("Stream's new uncaught exception handler is set as well as the deprecated old handler." +
                     "The old handler will be ignored as long as a new handler is set.");
         }
@@ -897,7 +897,7 @@ public class KafkaStreams implements AutoCloseable {
         queryableStoreProvider = new QueryableStoreProvider(storeProviders, globalStateStoreProvider);
 
         stateDirCleaner = setupStateDirCleaner();
-        oldHanlder = false;
+        oldHandler = false;
         maybeWarnAboutCodeInRocksDBConfigSetter(log, config);
         rocksDBMetricsRecordingService = maybeCreateRocksDBMetricsRecordingService(clientId, config);
     }

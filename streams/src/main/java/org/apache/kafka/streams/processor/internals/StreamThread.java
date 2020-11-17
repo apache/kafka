@@ -569,7 +569,6 @@ public class StreamThread extends Thread {
                                     "Setting {}=\"{}\" requires broker version 2.5 or higher.",
                             StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
                             EXACTLY_ONCE_BETA);
-
                 }
                 this.streamsUncaughtExceptionHandler.accept(e);
             } catch (final Throwable e) {
