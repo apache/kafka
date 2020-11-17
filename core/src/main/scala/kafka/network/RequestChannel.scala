@@ -113,13 +113,11 @@ object RequestChannel extends Logging {
     def buildResponseSend(abstractResponse: AbstractResponse): Send = {
       envelope match {
         case Some(request) =>
-          val envelopeResponse = new EnvelopeResponse(
-            abstractResponse.serialize(header.apiVersion, header.toResponseHeader),
-            Errors.NONE
-          )
-          request.context.buildResponse(envelopeResponse)
+          val responseBytes = context.buildResponseEnvelopePayload(abstractResponse)
+          val envelopeResponse = new EnvelopeResponse(responseBytes, Errors.NONE)
+          request.context.buildResponseSend(envelopeResponse)
         case None =>
-          context.buildResponse(abstractResponse)
+          context.buildResponseSend(abstractResponse)
       }
     }
 
@@ -279,6 +277,7 @@ object RequestChannel extends Logging {
           .append(",principal:").append(session.principal)
           .append(",listener:").append(context.listenerName.value)
           .append(",clientInformation:").append(context.clientInformation)
+          .append(",forwarded:").append(isForwarded)
         if (temporaryMemoryBytes > 0)
           builder.append(",temporaryMemoryBytes:").append(temporaryMemoryBytes)
         if (messageConversionsTimeMs > 0)

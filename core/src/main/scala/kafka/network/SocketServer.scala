@@ -1026,7 +1026,7 @@ private[kafka] class Processor(val id: Int,
     envelopeRequest: RequestChannel.Request,
     envelopeResponse: EnvelopeResponse
   ): Unit = {
-    val envelopResponseSend = envelopeRequest.context.buildResponse(envelopeResponse)
+    val envelopResponseSend = envelopeRequest.context.buildResponseSend(envelopeResponse)
     enqueueResponse(new RequestChannel.SendResponse(
       envelopeRequest,
       envelopResponseSend,
@@ -1042,7 +1042,7 @@ private[kafka] class Processor(val id: Int,
     val envelope = envelopeRequest.body[EnvelopeRequest]
     try {
       principalSerde.map { serde =>
-        serde.deserialize(envelope.principalData())
+        serde.deserialize(envelope.requestPrincipal())
       }
     } catch {
       case e: Exception =>
@@ -1278,6 +1278,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
   @volatile private var defaultMaxConnectionsPerIp: Int = config.maxConnectionsPerIp
   @volatile private var maxConnectionsPerIpOverrides = config.maxConnectionsPerIpOverrides.map { case (host, count) => (InetAddress.getByName(host), count) }
   @volatile private var brokerMaxConnections = config.maxConnections
+  private val interBrokerListenerName = config.interBrokerListenerName
   private val counts = mutable.Map[InetAddress, Int]()
 
   // Listener counts and configs are synchronized on `counts`
@@ -1415,7 +1416,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
   }
 
   private def protectedListener(listenerName: ListenerName): Boolean =
-    config.interBrokerListenerName == listenerName && config.listeners.size > 1
+    interBrokerListenerName == listenerName && listenerCounts.size > 1
 
   private def maxListenerConnections(listenerName: ListenerName): Int =
     maxConnectionsPerListener.get(listenerName).map(_.maxConnections).getOrElse(Int.MaxValue)

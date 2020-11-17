@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.streams;
 
+import java.util.regex.Pattern;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.Topology.AutoOffsetReset;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.ForeachAction;
@@ -66,7 +68,9 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class StreamsBuilderTest {
 
@@ -893,6 +897,91 @@ public class StreamsBuilderTest {
             STREAM_OPERATION_NAME + "-sink",
             STREAM_OPERATION_NAME + "-source",
             STREAM_OPERATION_NAME);
+    }
+
+    @Test
+    public void shouldAllowStreamsFromSameTopic() {
+        builder.stream("topic");
+        builder.stream("topic");
+        assertBuildDoesNotThrow(builder);
+    }
+
+    @Test
+    public void shouldAllowTablesFromSameTopic() {
+        builder.table("topic");
+        builder.table("topic");
+        assertBuildDoesNotThrow(builder);
+    }
+
+    @Test
+    public void shouldAllowStreamAndTableFromSameTopic() {
+        builder.stream("topic");
+        builder.table("topic");
+        assertBuildDoesNotThrow(builder);
+    }
+
+    @Test
+    public void shouldAllowSubscribingToSamePattern() {
+        builder.stream(Pattern.compile("some-regex"));
+        builder.stream(Pattern.compile("some-regex"));
+        assertBuildDoesNotThrow(builder);
+    }
+
+    @Test
+    public void shouldAllowReadingFromSameCollectionOfTopics() {
+        builder.stream(asList("topic1", "topic2"));
+        builder.stream(asList("topic2", "topic1"));
+        assertBuildDoesNotThrow(builder);
+    }
+
+    @Test
+    public void shouldNotAllowReadingFromOverlappingAndUnequalCollectionOfTopics() {
+        builder.stream(Collections.singletonList("topic"));
+        builder.stream(asList("topic", "anotherTopic"));
+        assertThrows(TopologyException.class, builder::build);
+    }
+
+    @Test
+    public void shouldThrowWhenSubscribedToATopicWithDifferentResetPolicies() {
+        builder.stream("topic", Consumed.with(AutoOffsetReset.EARLIEST));
+        builder.stream("topic", Consumed.with(AutoOffsetReset.LATEST));
+        assertThrows(TopologyException.class, builder::build);
+    }
+
+    @Test
+    public void shouldThrowWhenSubscribedToATopicWithSetAndUnsetResetPolicies() {
+        builder.stream("topic", Consumed.with(AutoOffsetReset.EARLIEST));
+        builder.stream("topic");
+        assertThrows(TopologyException.class, builder::build);
+    }
+
+    @Test
+    public void shouldThrowWhenSubscribedToATopicWithUnsetAndSetResetPolicies() {
+        builder.stream("another-topic");
+        builder.stream("another-topic", Consumed.with(AutoOffsetReset.LATEST));
+        assertThrows(TopologyException.class, builder::build);
+    }
+
+    @Test
+    public void shouldThrowWhenSubscribedToAPatternWithDifferentResetPolicies() {
+        builder.stream(Pattern.compile("some-regex"), Consumed.with(AutoOffsetReset.EARLIEST));
+        builder.stream(Pattern.compile("some-regex"), Consumed.with(AutoOffsetReset.LATEST));
+        assertThrows(TopologyException.class, builder::build);
+    }
+
+    @Test
+    public void shouldThrowWhenSubscribedToAPatternWithSetAndUnsetResetPolicies() {
+        builder.stream(Pattern.compile("some-regex"), Consumed.with(AutoOffsetReset.EARLIEST));
+        builder.stream(Pattern.compile("some-regex"));
+        assertThrows(TopologyException.class, builder::build);
+    }
+
+    private static void assertBuildDoesNotThrow(final StreamsBuilder builder) {
+        try {
+            builder.build();
+        } catch (final TopologyException topologyException) {
+            fail("TopologyException not expected");
+        }
     }
 
     private static void assertNamesForOperation(final ProcessorTopology topology, final String... expected) {

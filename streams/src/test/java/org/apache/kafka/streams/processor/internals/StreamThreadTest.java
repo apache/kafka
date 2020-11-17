@@ -54,7 +54,6 @@ import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
-import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilderTest;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -149,15 +148,14 @@ public class StreamThreadTest {
     private final ConsumedInternal<Object, Object> consumed = new ConsumedInternal<>();
     private final ChangelogReader changelogReader = new MockChangelogReader();
     private final StateDirectory stateDirectory = new StateDirectory(config, mockTime, true);
-    private final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(new InternalTopologyBuilder());
+    private final InternalTopologyBuilder internalTopologyBuilder = new InternalTopologyBuilder();
+    private final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder);
 
     private StreamsMetadataState streamsMetadataState;
-    private InternalTopologyBuilder internalTopologyBuilder;
 
     @Before
     public void setUp() {
         Thread.currentThread().setName(CLIENT_ID + "-StreamThread-" + threadIdx);
-        internalTopologyBuilder = InternalStreamsBuilderTest.internalTopologyBuilder(internalStreamsBuilder);
         internalTopologyBuilder.setApplicationId(APPLICATION_ID);
         streamsMetadataState = new StreamsMetadataState(internalTopologyBuilder, StreamsMetadataState.UNKNOWN_HOST);
     }
@@ -957,7 +955,7 @@ public class StreamThreadTest {
     public void shouldNotReturnDataAfterTaskMigrated() {
         final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
 
-        internalTopologyBuilder = EasyMock.createNiceMock(InternalTopologyBuilder.class);
+        final InternalTopologyBuilder internalTopologyBuilder = EasyMock.createNiceMock(InternalTopologyBuilder.class);
 
         expect(internalTopologyBuilder.sourceTopicCollection()).andReturn(Collections.singletonList(topic1)).times(2);
 

@@ -41,14 +41,6 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
     }
 
     /**
-     * Used for forwarding response serialization, typically {@link #toSend(String, ResponseHeader, short)}
-     * should be used instead.
-     */
-    public ByteBuffer serialize(short version, ResponseHeader responseHeader) {
-        return RequestUtils.serialize(responseHeader.toStruct(), toStruct(version));
-    }
-
-    /**
      * Visible for testing, typically {@link #toSend(String, ResponseHeader, short)} should be used instead.
      */
     public ByteBuffer serialize(ApiKeys apiKey, short version, int correlationId) {
@@ -88,16 +80,11 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
 
     protected abstract Struct toStruct(short version);
 
-    public ByteBuffer serializeBody(short version) {
-        Struct dataStruct = toStruct(version);
-        ByteBuffer buffer = ByteBuffer.allocate(dataStruct.sizeOf());
-        dataStruct.writeTo(buffer);
-        buffer.flip();
-
-        return buffer;
-    }
-
-    public static AbstractResponse deserializeBody(ByteBuffer byteBuffer, RequestHeader header) {
+    /**
+     * Parse a response from the provided buffer. The buffer is expected to hold both
+     * the {@link ResponseHeader} as well as the response payload.
+     */
+    public static AbstractResponse parseResponse(ByteBuffer byteBuffer, RequestHeader header) {
         ApiKeys apiKey = header.apiKey();
         short apiVersion = header.apiVersion();
 
