@@ -397,7 +397,7 @@ public class StreamThread extends Thread {
             referenceContainer.nextScheduledRebalanceMs,
             shutdownErrorHook,
             streamsUncaughtExceptionHandler,
-            cache
+            cacheSize -> cache.resize(cacheSize)
         );
 
         taskManager.setPartitionResetter(partitions -> streamThread.resetOffsets(partitions, null));
@@ -451,7 +451,7 @@ public class StreamThread extends Thread {
                         final AtomicLong nextProbingRebalanceMs,
                         final Runnable shutdownErrorHook,
                         final java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler,
-                        final ThreadCache cache) {
+                        final java.util.function.Consumer<Long> cacheResizer) {
         super(threadId);
         this.stateLock = new Object();
 
@@ -471,7 +471,8 @@ public class StreamThread extends Thread {
         this.assignmentErrorCode = assignmentErrorCode;
         this.shutdownErrorHook = shutdownErrorHook;
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
-        this.cacheResizer = cacheSize -> cache.resize(cacheSize);
+        this.cacheResizer = cacheResizer;
+
 
         // The following sensors are created here but their references are not stored in this object, since within
         // this object they are not recorded. The sensors are created here so that the stream threads starts with all
