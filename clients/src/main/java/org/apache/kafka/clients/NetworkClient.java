@@ -30,14 +30,13 @@ import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.CommonFields;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.SchemaException;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
+import org.apache.kafka.common.requests.CorrelationIdMismatchException;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
@@ -726,24 +725,20 @@ public class NetworkClient implements KafkaClient {
 
     public static AbstractResponse parseResponse(ByteBuffer responseBuffer, RequestHeader requestHeader) {
         try {
-            Struct responseStruct = parseStructMaybeUpdateThrottleTimeMetrics(responseBuffer, requestHeader, null, 0);
-            return AbstractResponse.parseResponse(requestHeader.apiKey(), responseStruct,
-                    requestHeader.apiVersion());
+            return AbstractResponse.parseResponse(responseBuffer, requestHeader);
         } catch (BufferUnderflowException e) {
             throw new SchemaException("Buffer underflow while parsing response for request with header " + requestHeader, e);
+        } catch (CorrelationIdMismatchException e) {
+            if (SaslClientAuthenticator.isReserved(requestHeader.correlationId())
+                && !SaslClientAuthenticator.isReserved(e.responseCorrelationId()))
+                throw new SchemaException("The response is unrelated to Sasl request since its correlation id is "
+                    + e.responseCorrelationId() + " and the reserved range for Sasl request is [ "
+                    + SaslClientAuthenticator.MIN_RESERVED_CORRELATION_ID + ","
+                    + SaslClientAuthenticator.MAX_RESERVED_CORRELATION_ID + "]");
+            else {
+                throw e;
+            }
         }
-    }
-
-    private static Struct parseStructMaybeUpdateThrottleTimeMetrics(ByteBuffer responseBuffer, RequestHeader requestHeader,
-                                                                    Sensor throttleTimeSensor, long now) {
-        ResponseHeader responseHeader = ResponseHeader.parse(responseBuffer,
-            requestHeader.apiKey().responseHeaderVersion(requestHeader.apiVersion()));
-        // Always expect the response version id to be the same as the request version id
-        Struct responseBody = requestHeader.apiKey().parseResponse(requestHeader.apiVersion(), responseBuffer);
-        correlate(requestHeader, responseHeader);
-        if (throttleTimeSensor != null && responseBody.hasField(CommonFields.THROTTLE_TIME_MS))
-            throttleTimeSensor.record(responseBody.get(CommonFields.THROTTLE_TIME_MS), now);
-        return responseBody;
     }
 
     /**
@@ -874,10 +869,11 @@ public class NetworkClient implements KafkaClient {
         for (NetworkReceive receive : this.selector.completedReceives()) {
             String source = receive.source();
             InFlightRequest req = inFlightRequests.completeNext(source);
-            Struct responseStruct = parseStructMaybeUpdateThrottleTimeMetrics(receive.payload(), req.header,
-                throttleTimeSensor, now);
-            AbstractResponse response = AbstractResponse.
-                parseResponse(req.header.apiKey(), responseStruct, req.header.apiVersion());
+
+            AbstractResponse response = parseResponse(receive.payload(), req.header);
+            if (throttleTimeSensor != null) {
+                throttleTimeSensor.record(response.throttleTimeMs());
+            }
 
             if (log.isDebugEnabled()) {
                 log.debug("Received {} response from node {} for request with header {}: {}",

@@ -327,8 +327,10 @@ class KafkaApisTest {
 
     assertEquals(Errors.NONE, response.error)
 
-    val innerResponse = AbstractResponse.parseResponse(response.responseData(),
-      requestHeader).asInstanceOf[AlterConfigsResponse]
+    val innerResponse = AbstractResponse.parseResponse(
+      response.responseData(),
+      requestHeader
+    ).asInstanceOf[AlterConfigsResponse]
 
     val responseMap = innerResponse.data.responses().asScala.map { resourceResponse =>
       resourceResponse.resourceName() -> Errors.forCode(resourceResponse.errorCode)
