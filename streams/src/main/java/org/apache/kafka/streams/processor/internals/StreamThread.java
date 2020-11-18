@@ -66,7 +66,6 @@ import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_BETA;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getConsumerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getRestoreConsumerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getSharedAdminClientId;
-import static org.apache.kafka.streams.internals.metrics.ClientMetrics.failedStreamThreadSensor;
 
 public class StreamThread extends Thread {
 
@@ -220,10 +219,11 @@ public class StreamThread extends Thread {
             } else if (!state.isValidTransition(newState)) {
                 log.error("Unexpected state transition from {} to {}", oldState, newState);
                 throw new StreamsException(logPrefix + "Unexpected state transition from " + oldState + " to " + newState);
-            } else if (newState == State.DEAD) {
-                failedStreamThreadSensor.record();
             } else {
                 log.info("State transition from {} to {}", oldState, newState);
+                if (newState == State.DEAD) {
+                    failedStreamThreadSensor.record();
+                }
             }
 
             state = newState;

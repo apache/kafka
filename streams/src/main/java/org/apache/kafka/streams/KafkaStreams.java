@@ -1070,11 +1070,9 @@ public class KafkaStreams implements AutoCloseable {
             adminClient.close();
 
             streamsMetrics.removeAllClientLevelMetrics();
-            metrics.close();
-            streamsMetrics.removeAllClientLevelMetrics();
             streamsMetrics.removeAllClientLevelSensors();
-
             metrics.close();
+
             if (!error) {
                 setState(State.NOT_RUNNING);
             }
