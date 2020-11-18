@@ -1233,6 +1233,53 @@ class KafkaApisTest {
   }
 
   @Test
+  def shouldReplaceProducerFencedWithInvalidProducerEpochInProduceResponse(): Unit = {
+    val topic = "topic"
+    setupBasicMetadataCache(topic, numPartitions = 2)
+
+    for (version <- ApiKeys.PRODUCE.oldestVersion to ApiKeys.PRODUCE.latestVersion) {
+
+      EasyMock.reset(replicaManager, clientQuotaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
+
+      val responseCallback: Capture[Map[TopicPartition, PartitionResponse] => Unit] = EasyMock.newCapture()
+
+      val tp = new TopicPartition("topic", 0)
+
+      val produceRequest = ProduceRequest.Builder.forCurrentMagic(1, 5000,
+        collection.mutable.Map(tp -> MemoryRecords.withRecords(CompressionType.NONE,
+          new SimpleRecord("test".getBytes))).asJava)
+      .build(version.toShort)
+      val request = buildRequest(produceRequest)
+
+      EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),
+        EasyMock.anyShort(),
+        EasyMock.eq(false),
+        EasyMock.eq(AppendOrigin.Client),
+        EasyMock.anyObject(),
+        EasyMock.capture(responseCallback),
+        EasyMock.anyObject(),
+        EasyMock.anyObject())
+      ).andAnswer(() => responseCallback.getValue.apply(Map(tp -> new PartitionResponse(Errors.INVALID_PRODUCER_EPOCH))))
+
+      val capturedResponse = expectNoThrottling()
+      EasyMock.expect(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
+        anyObject[RequestChannel.Request](), anyDouble, anyLong)).andReturn(0)
+
+      EasyMock.replay(replicaManager, clientQuotaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
+
+      createKafkaApis().handleProduceRequest(request)
+
+      val response = readResponse(produceRequest, capturedResponse)
+        .asInstanceOf[ProduceResponse]
+
+      assertEquals(1, response.responses().size())
+      for (partitionResponse <- response.responses().asScala) {
+        assertEquals(Errors.INVALID_PRODUCER_EPOCH, partitionResponse._2.error)
+      }
+    }
+  }
+
+  @Test
   def testAddPartitionsToTxnWithInvalidPartition(): Unit = {
     val topic = "topic"
     setupBasicMetadataCache(topic, numPartitions = 1)

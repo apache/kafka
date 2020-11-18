@@ -1825,7 +1825,7 @@ class LogTest {
     assertEquals(5L, log.logEndOffset)
   }
 
-  @Test(expected = classOf[ProducerFencedException])
+  @Test(expected = classOf[InvalidProducerEpochException])
   def testOldProducerEpoch(): Unit = {
     // create a log
     val log = createLog(logDir, LogConfig())
@@ -4297,7 +4297,7 @@ class LogTest {
     val log = createLog(logDir, logConfig)
     appendEndTxnMarkerAsLeader(log, producerId, epoch, ControlRecordType.ABORT, coordinatorEpoch = 1)
 
-    assertThrows[ProducerFencedException] {
+    assertThrows[InvalidProducerEpochException] {
       appendEndTxnMarkerAsLeader(log, producerId, (epoch - 1).toShort, ControlRecordType.ABORT, coordinatorEpoch = 1)
     }
   }
