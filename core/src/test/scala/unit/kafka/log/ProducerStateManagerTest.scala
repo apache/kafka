@@ -78,7 +78,7 @@ class ProducerStateManagerTest {
     append(stateManager, producerId, (epoch + 1).toShort, 0, 0L, 3L)
 
     // Incorrect epoch
-    assertThrows[ProducerFencedException] {
+    assertThrows[InvalidProducerEpochException] {
       append(stateManager, producerId, epoch, 0, 0L, 4L)
     }
   }
@@ -94,7 +94,7 @@ class ProducerStateManagerTest {
     assertEquals(RecordBatch.NO_SEQUENCE, firstEntry.lastSeq)
 
     // Fencing should continue to work even if the marker is the only thing left
-    assertThrows[ProducerFencedException] {
+    assertThrows[InvalidProducerEpochException] {
       append(stateManager, producerId, 0.toShort, 0, 0L, 4L)
     }
 
@@ -742,7 +742,7 @@ class ProducerStateManagerTest {
       isTransactional = true, origin = AppendOrigin.Coordinator)
   }
 
-  @Test(expected = classOf[ProducerFencedException])
+  @Test(expected = classOf[InvalidProducerEpochException])
   def testOldEpochForControlRecord(): Unit = {
     val epoch = 5.toShort
     val sequence = 0
