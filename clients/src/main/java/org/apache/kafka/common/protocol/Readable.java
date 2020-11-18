@@ -17,7 +17,7 @@
 
 package org.apache.kafka.common.protocol;
 
-import org.apache.kafka.common.UUID;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.types.RawTaggedField;
 import org.apache.kafka.common.record.MemoryRecords;
 
@@ -67,7 +67,7 @@ public interface Readable {
     /**
      * Read a UUID with the most significant digits first.
      */
-    default UUID readUUID() {
-        return new UUID(readLong(), readLong());
+    default Uuid readUuid() {
+        return new Uuid(readLong(), readLong());
     }
 }

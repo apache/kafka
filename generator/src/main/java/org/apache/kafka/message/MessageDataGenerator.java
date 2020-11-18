@@ -559,7 +559,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
         } else if (type instanceof FieldType.Int64FieldType) {
             return "_readable.readLong()";
         } else if (type instanceof FieldType.UUIDFieldType) {
-            return "_readable.readUUID()";
+            return "_readable.readUuid()";
         } else if (type instanceof FieldType.Float64FieldType) {
             return "_readable.readDouble()";
         } else if (type.isStruct()) {
@@ -831,7 +831,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
         } else if (type instanceof FieldType.Int64FieldType) {
             return String.format("struct.getLong(\"%s\")", name);
         } else if (type instanceof FieldType.UUIDFieldType) {
-            return String.format("struct.getUUID(\"%s\")", name);
+            return String.format("struct.getUuid(\"%s\")", name);
         } else if (type instanceof FieldType.Float64FieldType) {
             return String.format("struct.getDouble(\"%s\")", name);
         } else if (type.isString()) {
@@ -1044,7 +1044,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
         } else if (type instanceof FieldType.Int64FieldType) {
             return String.format("_writable.writeLong(%s)", name);
         } else if (type instanceof FieldType.UUIDFieldType) {
-            return String.format("_writable.writeUUID(%s)", name);
+            return String.format("_writable.writeUuid(%s)", name);
         } else if (type instanceof FieldType.Float64FieldType) {
             return String.format("_writable.writeDouble(%s)", name);
         } else if (type instanceof FieldType.StructType) {

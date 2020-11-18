@@ -20,7 +20,7 @@ package org.apache.kafka.common.message;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import org.apache.kafka.common.IsolationLevel;
-import org.apache.kafka.common.UUID;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopic;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopicCollection;
@@ -744,7 +744,7 @@ public final class MessageTest {
         ));
         message.setMyTaggedStruct(new SimpleExampleMessageData.TaggedStruct().setStructId("abc"));
 
-        message.setProcessId(UUID.randomUUID());
+        message.setProcessId(Uuid.randomUuid());
         message.setMyNullableString("notNull");
         message.setMyInt16((short) 3);
         message.setMyString("test string");
