@@ -19,7 +19,7 @@ package kafka.controller
 
 import kafka.cluster.Broker
 import kafka.utils.Implicits._
-import org.apache.kafka.common.{TopicPartition,UUID}
+import org.apache.kafka.common.{TopicPartition, Uuid}
 
 import scala.collection.{Map, Seq, Set, mutable}
 
@@ -83,8 +83,8 @@ class ControllerContext {
   var epochZkVersion: Int = KafkaController.InitialControllerEpochZkVersion
 
   val allTopics = mutable.Set.empty[String]
-  var topicIds = mutable.Map.empty[String, UUID]
-  var topicNames = mutable.Map.empty[UUID, String]
+  var topicIds = mutable.Map.empty[String, Uuid]
+  var topicNames = mutable.Map.empty[Uuid, String]
   val partitionAssignments = mutable.Map.empty[String, mutable.Map[Int, ReplicaAssignment]]
   private val partitionLeadershipInfo = mutable.Map.empty[TopicPartition, LeaderIsrAndControllerEpoch]
   val partitionsBeingReassigned = mutable.Set.empty[TopicPartition]
@@ -130,7 +130,7 @@ class ControllerContext {
     replicaStates.clear()
   }
 
-  def addTopicId(topic: String, id: UUID): Unit = {
+  def addTopicId(topic: String, id: Uuid): Unit = {
     if (!allTopics.contains(topic))
       throw new IllegalStateException(s"topic $topic is not contained in all topics.")
 

@@ -30,7 +30,7 @@ import org.apache.kafka.common.errors.{ControllerMovedException, StaleBrokerEpoc
 import org.apache.kafka.common.feature.Features
 import org.apache.kafka.common.metrics.KafkaMetric
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.{ElectionType, TopicPartition, UUID}
+import org.apache.kafka.common.{ElectionType, TopicPartition, Uuid}
 import org.apache.log4j.Level
 import org.junit.Assert.{assertEquals, assertNotEquals, assertTrue}
 import org.junit.{After, Before, Test}
@@ -255,7 +255,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       tp0 -> ReplicaAssignment(Seq(0), Seq(), Seq()),
       tp1 -> ReplicaAssignment(Seq(0), Seq(), Seq()))
     TestUtils.createTopic(zkClient, tp0.topic, partitionReplicaAssignment = assignment, servers = servers)
-    zkClient.setTopicAssignment(tp0.topic, UUID.randomUUID(), expandedAssignment, firstControllerEpochZkVersion)
+    zkClient.setTopicAssignment(tp0.topic, Uuid.randomUuid(), expandedAssignment, firstControllerEpochZkVersion)
     waitForPartitionState(tp1, firstControllerEpoch, 0, LeaderAndIsr.initialLeaderEpoch,
       "failed to get expected partition state upon topic partition expansion")
     TestUtils.waitUntilMetadataIsPropagated(servers, tp1.topic, tp1.partition)
@@ -275,7 +275,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     TestUtils.createTopic(zkClient, tp0.topic, partitionReplicaAssignment = assignment, servers = servers)
     servers(otherBrokerId).shutdown()
     servers(otherBrokerId).awaitShutdown()
-    zkClient.setTopicAssignment(tp0.topic, UUID.randomUUID(), expandedAssignment, firstControllerEpochZkVersion)
+    zkClient.setTopicAssignment(tp0.topic, Uuid.randomUuid(), expandedAssignment, firstControllerEpochZkVersion)
     waitForPartitionState(tp1, firstControllerEpoch, controllerId, LeaderAndIsr.initialLeaderEpoch,
       "failed to get expected partition state upon topic partition expansion")
     TestUtils.waitUntilMetadataIsPropagated(Seq(servers(controllerId)), tp1.topic, tp1.partition)

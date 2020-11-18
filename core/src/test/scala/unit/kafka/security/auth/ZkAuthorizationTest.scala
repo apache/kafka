@@ -22,7 +22,7 @@ import java.nio.charset.StandardCharsets
 import kafka.admin.ZkSecurityMigrator
 import kafka.utils.{Logging, TestUtils}
 import kafka.zk._
-import org.apache.kafka.common.{KafkaException, TopicPartition, UUID}
+import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.junit.Assert._
@@ -110,7 +110,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
 
     // Test that creates persistent nodes
     val topic1 = "topic1"
-    val topicId = UUID.randomUUID()
+    val topicId = Uuid.randomUuid()
     val assignment = Map(
       new TopicPartition(topic1, 0) -> Seq(0, 1),
       new TopicPartition(topic1, 1) -> Seq(0, 1),

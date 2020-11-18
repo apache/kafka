@@ -34,7 +34,7 @@ import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{KafkaException, TopicPartition, UUID}
+import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.zookeeper.KeeperException.{Code, NodeExistsException}
 import org.apache.zookeeper.OpResult.{CreateResult, ErrorResult, SetDataResult}
 import org.apache.zookeeper.client.ZKClientConfig
@@ -491,7 +491,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
                   expectedControllerEpochZkVersion: Int): Set[TopicIdReplicaAssignment] = {
     val updatedAssignments = topicIdReplicaAssignments.map {
       case TopicIdReplicaAssignment(topic, None, assignments) =>
-        TopicIdReplicaAssignment(topic, Some(UUID.randomUUID()), assignments)
+        TopicIdReplicaAssignment(topic, Some(Uuid.randomUuid()), assignments)
       case TopicIdReplicaAssignment(topic, Some(_), _) =>
         throw new IllegalArgumentException("TopicIdReplicaAssignment for " + topic + " already contains a topic ID.")
     }.toSet
@@ -513,7 +513,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @return SetDataResponse
    */
   def setTopicAssignmentRaw(topic: String,
-                            topicId: UUID,
+                            topicId: Uuid,
                             assignment: collection.Map[TopicPartition, ReplicaAssignment],
                             expectedControllerEpochZkVersion: Int): SetDataResponse = {
     val setDataRequest = SetDataRequest(TopicZNode.path(topic), TopicZNode.encode(topicId, assignment), ZkVersion.MatchAnyVersion)
@@ -529,7 +529,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @throws KeeperException if there is an error while setting assignment
    */
   def setTopicAssignment(topic: String,
-                         topicId: UUID,
+                         topicId: Uuid,
                          assignment: Map[TopicPartition, ReplicaAssignment],
                          expectedControllerEpochZkVersion: Int = ZkVersion.MatchAnyVersion) = {
     val setDataResponse = setTopicAssignmentRaw(topic, topicId, assignment, expectedControllerEpochZkVersion)
@@ -543,7 +543,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @param assignment the partition to replica mapping to set for the given topic
    * @throws KeeperException if there is an error while creating assignment
    */
-  def createTopicAssignment(topic: String, topicId: UUID, assignment: Map[TopicPartition, Seq[Int]]): Unit = {
+  def createTopicAssignment(topic: String, topicId: Uuid, assignment: Map[TopicPartition, Seq[Int]]): Unit = {
     val persistedAssignments = assignment.map { case (k, v) => k -> ReplicaAssignment(v) }
     createRecursive(TopicZNode.path(topic), TopicZNode.encode(topicId, persistedAssignments))
   }
@@ -611,7 +611,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @return the Topic IDs
    * @throws IllegalStateException if a topic in topics does not have a Topic ID
    */
-  def getTopicIdsForTopics(topics: Set[String]): Map[String, UUID] = {
+  def getTopicIdsForTopics(topics: Set[String]): Map[String, Uuid] = {
     val getDataRequests = topics.map(topic => GetDataRequest(TopicZNode.path(topic), ctx = Some(topic)))
     val getDataResponses = retryRequestsUntilConnected(getDataRequests.toSeq)
     getDataResponses.map { getDataResponse =>

@@ -25,7 +25,7 @@ import kafka.cluster.{Broker, EndPoint}
 import kafka.log.LogConfig
 import kafka.server.{ConfigType, KafkaConfig}
 import kafka.utils.CoreUtils
-import org.apache.kafka.common.{TopicPartition, UUID}
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.TokenInformation
@@ -60,7 +60,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   private val group = "my-group"
   private val topic1 = "topic1"
   private val topic2 = "topic2"
-  private val topicIds = Map(topic1 -> UUID.randomUUID(), topic2 -> UUID.randomUUID())
+  private val topicIds = Map(topic1 -> Uuid.randomUuid(), topic2 -> Uuid.randomUuid())
 
   val topicPartition10 = new TopicPartition(topic1, 0)
   val topicPartition11 = new TopicPartition(topic1, 1)
@@ -559,8 +559,8 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
       assertTrue(zkClient.pathExists(store.changeStore.aclChangePath))
       AclEntry.ResourceTypes.foreach(resource => assertTrue(zkClient.pathExists(store.path(resource))))
 
-      val resource1 = new ResourcePattern(TOPIC, UUID.randomUUID().toString, store.patternType)
-      val resource2 = new ResourcePattern(TOPIC, UUID.randomUUID().toString, store.patternType)
+      val resource1 = new ResourcePattern(TOPIC, Uuid.randomUuid().toString, store.patternType)
+      val resource2 = new ResourcePattern(TOPIC, Uuid.randomUuid().toString, store.patternType)
 
       // try getting acls for non-existing resource
       var versionedAcls = zkClient.getVersionedAclsForResource(resource1)
@@ -920,7 +920,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
   @Test
   def testTopicAssignments(): Unit = {
-    val topicId = UUID.randomUUID()
+    val topicId = Uuid.randomUuid()
     assertEquals(0, zkClient.getPartitionAssignmentForTopics(Set(topicPartition.topic())).size)
     zkClient.createTopicAssignment(topicPartition.topic(), topicId,
       Map(topicPartition -> Seq()))
