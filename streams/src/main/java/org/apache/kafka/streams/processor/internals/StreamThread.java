@@ -40,6 +40,7 @@ import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.streams.processor.ThreadMetadata;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
@@ -282,6 +283,10 @@ public class StreamThread extends Thread {
     private final Admin adminClient;
     private final InternalTopologyBuilder builder;
 
+    private java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler;
+    private Runnable shutdownErrorHook;
+    private AtomicInteger assignmentErrorCode;
+
     public static StreamThread create(final InternalTopologyBuilder builder,
                                       final StreamsConfig config,
                                       final KafkaClientSupplier clientSupplier,
@@ -294,7 +299,9 @@ public class StreamThread extends Thread {
                                       final long cacheSizeBytes,
                                       final StateDirectory stateDirectory,
                                       final StateRestoreListener userStateRestoreListener,
-                                      final int threadIdx) {
+                                      final int threadIdx,
+                                      final Runnable shutdownErrorHook,
+                                      final java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler) {
         final String threadId = clientId + "-StreamThread-" + threadIdx;
 
         final String logPrefix = String.format("stream-thread [%s] ", threadId);
@@ -386,7 +393,9 @@ public class StreamThread extends Thread {
             threadId,
             logContext,
             referenceContainer.assignmentErrorCode,
-            referenceContainer.nextScheduledRebalanceMs
+            referenceContainer.nextScheduledRebalanceMs,
+            shutdownErrorHook,
+            streamsUncaughtExceptionHandler
         );
 
         taskManager.setPartitionResetter(partitions -> streamThread.resetOffsets(partitions, null));
@@ -437,7 +446,9 @@ public class StreamThread extends Thread {
                         final String threadId,
                         final LogContext logContext,
                         final AtomicInteger assignmentErrorCode,
-                        final AtomicLong nextProbingRebalanceMs) {
+                        final AtomicLong nextProbingRebalanceMs,
+                        final Runnable shutdownErrorHook,
+                        final java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler) {
         super(threadId);
         this.stateLock = new Object();
 
@@ -454,6 +465,9 @@ public class StreamThread extends Thread {
         this.punctuateSensor = ThreadMetrics.punctuateSensor(threadId, streamsMetrics);
         this.punctuateRatioSensor = ThreadMetrics.punctuateRatioSensor(threadId, streamsMetrics);
         this.commitRatioSensor = ThreadMetrics.commitRatioSensor(threadId, streamsMetrics);
+        this.assignmentErrorCode = assignmentErrorCode;
+        this.shutdownErrorHook = shutdownErrorHook;
+        this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
 
         // The following sensors are created here but their references are not stored in this object, since within
         // this object they are not recorded. The sensors are created here so that the stream threads starts with all
@@ -471,7 +485,7 @@ public class StreamThread extends Thread {
         this.builder = builder;
         this.logPrefix = logContext.logPrefix();
         this.log = logContext.logger(StreamThread.class);
-        this.rebalanceListener = new StreamsRebalanceListener(time, taskManager, this, this.log, assignmentErrorCode);
+        this.rebalanceListener = new StreamsRebalanceListener(time, taskManager, this, this.log, this.assignmentErrorCode);
         this.taskManager = taskManager;
         this.restoreConsumer = restoreConsumer;
         this.mainConsumer = mainConsumer;
@@ -512,27 +526,6 @@ public class StreamThread extends Thread {
         try {
             runLoop();
             cleanRun = true;
-        } catch (final Exception e) {
-            // we have caught all Kafka related exceptions, and other runtime exceptions
-            // should be due to user application errors
-
-            if (e instanceof UnsupportedVersionException) {
-                final String errorMessage = e.getMessage();
-                if (errorMessage != null &&
-                    errorMessage.startsWith("Broker unexpectedly doesn't support requireStable flag on version ")) {
-
-                    log.error("Shutting down because the Kafka cluster seems to be on a too old version. " +
-                        "Setting {}=\"{}\" requires broker version 2.5 or higher.",
-                        StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
-                        EXACTLY_ONCE_BETA);
-
-                    throw e;
-                }
-            }
-
-            log.error("Encountered the following exception during processing " +
-                "and the thread is going to shut down: ", e);
-            throw e;
         } finally {
             completeShutdown(cleanRun);
         }
@@ -559,7 +552,7 @@ public class StreamThread extends Thread {
                 }
             } catch (final TaskCorruptedException e) {
                 log.warn("Detected the states of tasks " + e.corruptedTaskWithChangelogs() + " are corrupted. " +
-                             "Will close the task as dirty and re-create and bootstrap from scratch.", e);
+                        "Will close the task as dirty and re-create and bootstrap from scratch.", e);
                 try {
                     taskManager.handleCorruption(e.corruptedTaskWithChangelogs());
                 } catch (final TaskMigratedException taskMigrated) {
@@ -567,8 +560,41 @@ public class StreamThread extends Thread {
                 }
             } catch (final TaskMigratedException e) {
                 handleTaskMigrated(e);
+            } catch (final UnsupportedVersionException e) {
+                final String errorMessage = e.getMessage();
+                if (errorMessage != null &&
+                        errorMessage.startsWith("Broker unexpectedly doesn't support requireStable flag on version ")) {
+
+                    log.error("Shutting down because the Kafka cluster seems to be on a too old version. " +
+                                    "Setting {}=\"{}\" requires broker version 2.5 or higher.",
+                            StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
+                            EXACTLY_ONCE_BETA);
+                }
+                this.streamsUncaughtExceptionHandler.accept(e);
+            } catch (final Throwable e) {
+                this.streamsUncaughtExceptionHandler.accept(e);
             }
         }
+    }
+
+    /**
+     * Sets the streams uncaught exception handler.
+     *
+     * @param streamsUncaughtExceptionHandler the user handler wrapped in shell to execute the action
+     */
+    public void setStreamsUncaughtExceptionHandler(final java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler) {
+        this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
+    }
+
+    public void shutdownToError() {
+        shutdownErrorHook.run();
+    }
+
+    public void sendShutdownRequest(final AssignorError assignorError) {
+        log.warn("Detected that shutdown was requested. " +
+                "All clients in this app will now begin to shutdown");
+        assignmentErrorCode.set(assignorError.code());
+        mainConsumer.enforceRebalance();
     }
 
     private void handleTaskMigrated(final TaskMigratedException e) {
