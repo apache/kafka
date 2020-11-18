@@ -759,7 +759,7 @@ class KafkaApisTest {
 
       createKafkaApis().handleProduceRequest(request)
 
-      val response = readResponse(produceRequest, capturedResponse)
+      val response = readResponse(ApiKeys.PRODUCE, produceRequest, capturedResponse)
         .asInstanceOf[ProduceResponse]
 
       assertEquals(1, response.responses().size())
