@@ -1768,7 +1768,6 @@ public class RequestResponseTest {
 
     private InitProducerIdRequest createInitPidRequest() {
         InitProducerIdRequestData requestData = new InitProducerIdRequestData()
-                .setTransactionalId(null)
                 .setTransactionTimeoutMs(100);
         return new InitProducerIdRequest.Builder(requestData).build();
     }

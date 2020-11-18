@@ -580,7 +580,6 @@ public class TransactionManager {
             if (currentState != State.INITIALIZING && !hasProducerId()) {
                 transitionTo(State.INITIALIZING);
                 InitProducerIdRequestData requestData = new InitProducerIdRequestData()
-                        .setTransactionalId(null)
                         .setTransactionTimeoutMs(Integer.MAX_VALUE);
                 InitProducerIdHandler handler = new InitProducerIdHandler(new InitProducerIdRequest.Builder(requestData), false);
                 enqueueRequest(handler);

@@ -300,8 +300,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
             .setRecords(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("test".getBytes))))))
         .iterator))
       .setAcks(1.toShort)
-      .setTimeoutMs(5000)
-      .setTransactionalId(null))
+      .setTimeoutMs(5000))
       .build()
 
   private def createFetchRequest = {

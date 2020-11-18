@@ -58,8 +58,7 @@ public class ProduceRequestTest {
                                 .setIndex(1)
                                 .setRecords(memoryRecords)))).iterator()))
                 .setAcks((short) -1)
-                .setTimeoutMs(10)
-                .setTransactionalId(null)).build();
+                .setTimeoutMs(10)).build();
         assertTrue(RequestUtils.hasTransactionalRecords(request));
     }
 
@@ -88,8 +87,7 @@ public class ProduceRequestTest {
                                 .setIndex(1)
                                 .setRecords(memoryRecords)))).iterator()))
                 .setAcks((short) -1)
-                .setTimeoutMs(10)
-                .setTransactionalId(null)).build();
+                .setTimeoutMs(10)).build();
         assertTrue(RequestUtils.hasIdempotentRecords(request));
     }
 
@@ -106,8 +104,7 @@ public class ProduceRequestTest {
                         new ProduceRequestData.PartitionProduceData().setIndex(9).setRecords(builder.build()))))
                     .iterator()))
                 .setAcks((short) 1)
-                .setTimeoutMs(5000)
-                .setTransactionalId(null));
+                .setTimeoutMs(5000));
         assertEquals(2, requestBuilder.oldestAllowedVersion());
         assertEquals(2, requestBuilder.latestAllowedVersion());
     }
@@ -125,8 +122,7 @@ public class ProduceRequestTest {
                                         new ProduceRequestData.PartitionProduceData().setIndex(9).setRecords(builder.build()))))
                                 .iterator()))
                         .setAcks((short) 1)
-                        .setTimeoutMs(5000)
-                        .setTransactionalId(null));
+                        .setTimeoutMs(5000));
         assertEquals(3, requestBuilder.oldestAllowedVersion());
         assertEquals(ApiKeys.PRODUCE.latestVersion(), requestBuilder.latestAllowedVersion());
     }
@@ -154,8 +150,7 @@ public class ProduceRequestTest {
                                 .setIndex(0)
                                     .setRecords(MemoryRecords.readableRecords(buffer))))).iterator()))
                 .setAcks((short) 1)
-                .setTimeoutMs(5000)
-                .setTransactionalId(null));
+                .setTimeoutMs(5000));
         assertThrowsInvalidRecordExceptionForAllVersions(requestBuilder);
     }
 
@@ -170,8 +165,7 @@ public class ProduceRequestTest {
                                                 .setIndex(0)
                                                 .setRecords(MemoryRecords.EMPTY)))).iterator()))
                 .setAcks((short) 1)
-                .setTimeoutMs(5000)
-                .setTransactionalId(null));
+                .setTimeoutMs(5000));
         assertThrowsInvalidRecordExceptionForAllVersions(requestBuilder);
     }
 
@@ -191,8 +185,7 @@ public class ProduceRequestTest {
                                                 .setIndex(0)
                                                 .setRecords(builder.build())))).iterator()))
                 .setAcks((short) 1)
-                .setTimeoutMs(5000)
-                .setTransactionalId(null));
+                .setTimeoutMs(5000));
         assertThrowsInvalidRecordExceptionForAllVersions(requestBuilder);
     }
 
@@ -212,8 +205,7 @@ public class ProduceRequestTest {
                                         .setRecords(builder.build()))))
                         .iterator()))
                 .setAcks((short) 1)
-                .setTimeoutMs(5000)
-                .setTransactionalId(null));
+                .setTimeoutMs(5000));
         assertThrowsInvalidRecordExceptionForAllVersions(requestBuilder);
     }
 
@@ -233,8 +225,7 @@ public class ProduceRequestTest {
                             .setRecords(builder.build()))))
                     .iterator()))
                 .setAcks((short) 1)
-                .setTimeoutMs(1000)
-                .setTransactionalId(null);
+                .setTimeoutMs(1000);
         // Can't create ProduceRequest instance with version within [3, 7)
         for (short version = 3; version < 7; version++) {
 
@@ -266,10 +257,8 @@ public class ProduceRequestTest {
                                 new ProduceRequestData.TopicProduceData().setName("foo").setPartitionData(Collections.singletonList(
                                         new ProduceRequestData.PartitionProduceData().setIndex(1).setRecords(nonTxnRecords))))
                                 .iterator()))
-                        .setAcks((short) 1)
-                        .setTimeoutMs(5000)
-                        .setTransactionalId(null));
-
+                        .setAcks((short) -1)
+                        .setTimeoutMs(5000));
         final ProduceRequest request = builder.build();
         assertTrue(RequestUtils.hasTransactionalRecords(request));
         assertTrue(RequestUtils.hasIdempotentRecords(request));
@@ -295,8 +284,7 @@ public class ProduceRequestTest {
                                         new ProduceRequestData.PartitionProduceData().setIndex(1).setRecords(nonTxnRecords))))
                                 .iterator()))
                         .setAcks((short) -1)
-                        .setTimeoutMs(5000)
-                        .setTransactionalId(null));
+                        .setTimeoutMs(5000));
 
         final ProduceRequest request = builder.build();
         assertFalse(RequestUtils.hasTransactionalRecords(request));
@@ -329,7 +317,6 @@ public class ProduceRequestTest {
                                         .setRecords(MemoryRecords.withRecords(CompressionType.NONE, simpleRecord)))))
                         .iterator()))
                 .setAcks((short) -1)
-                .setTimeoutMs(10)
-                .setTransactionalId(null)).build();
+                .setTimeoutMs(10)).build();
     }
 }

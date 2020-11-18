@@ -300,8 +300,7 @@ public class SenderTest {
             ProduceRequest.Builder builder = ProduceRequest.forCurrentMagic(new ProduceRequestData()
                     .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
                     .setAcks((short) 1)
-                    .setTimeoutMs(1000)
-                    .setTransactionalId(null));
+                    .setTimeoutMs(1000));
             ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true);
             client.send(request, time.milliseconds());
             client.poll(1, time.milliseconds());

@@ -158,8 +158,7 @@ public class NetworkClientTest {
         ProduceRequest.Builder builder = ProduceRequest.forCurrentMagic(new ProduceRequestData()
                 .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
                 .setAcks((short) 1)
-                .setTimeoutMs(1000)
-                .setTransactionalId(null));
+                .setTimeoutMs(1000));
         ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true);
         client.send(request, time.milliseconds());
         assertEquals("There should be 1 in-flight request after send", 1,
@@ -191,8 +190,7 @@ public class NetworkClientTest {
                 PRODUCE.latestVersion(),
                 new ProduceRequestData()
                     .setAcks((short) 1)
-                    .setTimeoutMs(1000)
-                    .setTransactionalId(null));
+                    .setTimeoutMs(1000));
         TestCallbackHandler handler = new TestCallbackHandler();
         ClientRequest request = networkClient.newClientRequest(node.idString(), builder, time.milliseconds(),
             true, defaultRequestTimeoutMs, handler);
@@ -204,7 +202,7 @@ public class NetworkClientTest {
                 request.apiKey().responseHeaderVersion(PRODUCE.latestVersion()));
         Struct resp = new ProduceResponseData()
                 .setThrottleTimeMs(100)
-                .toStruct(ProduceResponseData.HIGHEST_SUPPORTED_VERSION);
+                .toStruct(PRODUCE.latestVersion());
         Struct responseHeaderStruct = respHeader.toStruct();
         int size = responseHeaderStruct.sizeOf() + resp.sizeOf();
         ByteBuffer buffer = ByteBuffer.allocate(size);
@@ -439,8 +437,7 @@ public class NetworkClientTest {
         ProduceRequest.Builder builder = ProduceRequest.forCurrentMagic(new ProduceRequestData()
                 .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
                 .setAcks((short) 1)
-                .setTimeoutMs(1000)
-                .setTransactionalId(null));
+                .setTimeoutMs(1000));
         TestCallbackHandler handler = new TestCallbackHandler();
         int requestTimeoutMs = defaultRequestTimeoutMs + 5000;
         ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true,
@@ -455,8 +452,7 @@ public class NetworkClientTest {
         ProduceRequest.Builder builder = ProduceRequest.forCurrentMagic(new ProduceRequestData()
                 .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
                 .setAcks((short) 1)
-                .setTimeoutMs(1000)
-                .setTransactionalId(null));
+                .setTimeoutMs(1000));
         ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true);
         assertEquals(defaultRequestTimeoutMs, request.requestTimeoutMs());
         testRequestTimeout(request);
@@ -511,8 +507,7 @@ public class NetworkClientTest {
             PRODUCE.latestVersion(),
             new ProduceRequestData()
                 .setAcks((short) 1)
-                .setTimeoutMs(1000)
-                .setTransactionalId(null));
+                .setTimeoutMs(1000));
         TestCallbackHandler handler = new TestCallbackHandler();
         ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true,
                 defaultRequestTimeoutMs, handler);
@@ -523,7 +518,7 @@ public class NetworkClientTest {
                 request.apiKey().responseHeaderVersion(PRODUCE.latestVersion()));
         Struct resp = new ProduceResponseData()
                 .setThrottleTimeMs(100)
-                .toStruct(ProduceResponseData.HIGHEST_SUPPORTED_VERSION);
+                .toStruct(PRODUCE.latestVersion());
         Struct responseHeaderStruct = respHeader.toStruct();
         int size = responseHeaderStruct.sizeOf() + resp.sizeOf();
         ByteBuffer buffer = ByteBuffer.allocate(size);
@@ -600,8 +595,7 @@ public class NetworkClientTest {
         ProduceRequest.Builder builder = ProduceRequest.forCurrentMagic(new ProduceRequestData()
                 .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
                 .setAcks((short) 1)
-                .setTimeoutMs(1000)
-                .setTransactionalId(null));
+                .setTimeoutMs(1000));
         TestCallbackHandler handler = new TestCallbackHandler();
         ClientRequest request = client.newClientRequest(nodeId, builder, time.milliseconds(), true,
                 defaultRequestTimeoutMs, handler);
@@ -622,7 +616,7 @@ public class NetworkClientTest {
     private void sendThrottledProduceResponse(int correlationId, int throttleMs) {
         Struct resp = new ProduceResponseData()
                 .setThrottleTimeMs(throttleMs)
-                .toStruct(ProduceResponseData.HIGHEST_SUPPORTED_VERSION);
+                .toStruct(PRODUCE.latestVersion());
         sendResponse(new ResponseHeader(correlationId,
             PRODUCE.responseHeaderVersion(PRODUCE.latestVersion())),
             resp);

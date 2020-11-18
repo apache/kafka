@@ -219,8 +219,7 @@ class RequestQuotaTest extends BaseRequestTest {
                   .setRecords(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("test".getBytes))))))
                 .iterator))
             .setAcks(1.toShort)
-            .setTimeoutMs(5000)
-            .setTransactionalId(null))
+            .setTimeoutMs(5000))
 
         case ApiKeys.FETCH =>
           val partitionMap = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
