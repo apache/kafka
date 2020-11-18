@@ -902,7 +902,7 @@ class LogCleanerTest {
 
   @Test
   def testPartialSegmentClean(): Unit = {
-    // because loadFactor is 0.75, this means we can fit 2 messages in the map
+    // because loadFactor is 0.75, this means we can fit 1 message in the map
     val cleaner = makeCleaner(2)
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
