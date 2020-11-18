@@ -19,6 +19,7 @@ package org.apache.kafka.common.protocol;
 import org.apache.kafka.common.network.ByteBufferSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.record.BaseRecords;
+import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MultiRecordsSend;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.ResponseHeader;
@@ -26,6 +27,8 @@ import org.apache.kafka.common.utils.ByteUtils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Queue;
 
 /**
@@ -39,6 +42,7 @@ import java.util.Queue;
  */
 public class SendBuilder implements Writable {
     private final Queue<Send> sends = new ArrayDeque<>();
+    private final List<ByteBuffer> buffers = new ArrayList<>();
     private final ByteBuffer buffer;
     private final String destinationId;
 
@@ -48,21 +52,18 @@ public class SendBuilder implements Writable {
         this.buffer.mark();
     }
 
-    private void flushCurrentBuffer() {
+    private void flushPendingBuffer() {
         int latestPosition = buffer.position();
         buffer.reset();
 
         if (latestPosition > buffer.position()) {
             buffer.limit(latestPosition);
-            addByteBufferSend(buffer.slice());
+            buffers.add(buffer.slice());
+
             buffer.position(latestPosition);
             buffer.limit(buffer.capacity());
             buffer.mark();
         }
-    }
-
-    private void addByteBufferSend(ByteBuffer buffer) {
-        sends.add(new ByteBufferSend(destinationId, buffer));
     }
 
     @Override
@@ -108,8 +109,8 @@ public class SendBuilder implements Writable {
      */
     @Override
     public void writeByteBuffer(ByteBuffer buf) {
-        flushCurrentBuffer();
-        addByteBufferSend(buf.duplicate());
+        flushPendingBuffer();
+        buffers.add(buf.duplicate());
     }
 
     @Override
@@ -122,6 +123,14 @@ public class SendBuilder implements Writable {
         ByteUtils.writeVarlong(i, buffer);
     }
 
+    private void flushPendingSend() {
+        if (!buffers.isEmpty()) {
+            ByteBuffer[] byteBufferArray = buffers.toArray(new ByteBuffer[0]);
+            sends.add(new ByteBufferSend(destinationId, byteBufferArray));
+            buffers.clear();
+        }
+    }
+
     /**
      * Write a record set. The underlying record data will be retained
      * in the result of {@link #build()}. See {@link BaseRecords#toSend(String)}.
@@ -130,13 +139,25 @@ public class SendBuilder implements Writable {
      */
     @Override
     public void writeRecords(BaseRecords records) {
-        flushCurrentBuffer();
-        sends.add(records.toSend(destinationId));
+        flushPendingBuffer();
+
+        if (records instanceof MemoryRecords) {
+            buffers.add(((MemoryRecords) records).buffer());
+        } else {
+            flushPendingSend();
+            sends.add(records.toSend(destinationId));
+        }
     }
 
     public Send build() {
-        flushCurrentBuffer();
-        return new MultiRecordsSend(destinationId, sends);
+        flushPendingBuffer();
+        flushPendingSend();
+
+        if (sends.size() == 1) {
+            return sends.poll();
+        } else {
+            return new MultiRecordsSend(destinationId, sends);
+        }
     }
 
     public static Send buildRequestSend(
