@@ -77,15 +77,13 @@ public class OffsetsForLeaderEpochClient extends AsyncClient<
             Map<TopicPartition, SubscriptionState.FetchPosition> requestData,
             OffsetsForLeaderEpochResponse response) {
 
-        Set<TopicPartition> missingPartitions = new HashSet<>(requestData.keySet());
-        Set<TopicPartition> partitionsToRetry = new HashSet<>();
+        Set<TopicPartition> partitionsToRetry = new HashSet<>(requestData.keySet());
         Set<String> unauthorizedTopics = new HashSet<>();
         Map<TopicPartition, OffsetForLeaderPartitionResult> endOffsets = new HashMap<>();
 
         for (OffsetForLeaderTopicResult topic : response.data().topics()) {
             for (OffsetForLeaderPartitionResult partition : topic.partitions()) {
                 TopicPartition topicPartition = new TopicPartition(topic.topic(), partition.partition());
-                missingPartitions.remove(topicPartition);
 
                 if (!requestData.containsKey(topicPartition)) {
                     logger().warn("Received unrequested topic or partition {} from response, ignoring.", topicPartition);
@@ -98,6 +96,7 @@ public class OffsetsForLeaderEpochClient extends AsyncClient<
                         logger().debug("Handling OffsetsForLeaderEpoch response for {}. Got offset {} for epoch {}.",
                             topicPartition, partition.endOffset(), partition.leaderEpoch());
                         endOffsets.put(topicPartition, partition);
+                        partitionsToRetry.remove(topicPartition);
                         break;
                     case NOT_LEADER_OR_FOLLOWER:
                     case REPLICA_NOT_AVAILABLE:
@@ -108,27 +107,20 @@ public class OffsetsForLeaderEpochClient extends AsyncClient<
                     case UNKNOWN_LEADER_EPOCH:
                         logger().debug("Attempt to fetch offsets for partition {} failed due to {}, retrying.",
                             topicPartition, error);
-                        partitionsToRetry.add(topicPartition);
                         break;
                     case UNKNOWN_TOPIC_OR_PARTITION:
                         logger().warn("Received unknown topic or partition error in OffsetsForLeaderEpoch request for partition {}.",
                             topicPartition);
-                        partitionsToRetry.add(topicPartition);
                         break;
                     case TOPIC_AUTHORIZATION_FAILED:
                         unauthorizedTopics.add(topicPartition.topic());
+                        partitionsToRetry.remove(topicPartition);
                         break;
                     default:
                         logger().warn("Attempt to fetch offsets for partition {} failed due to: {}, retrying.",
                             topicPartition, error.message());
-                        partitionsToRetry.add(topicPartition);
                 }
             }
-        }
-
-        for (TopicPartition topicPartition : missingPartitions) {
-            logger().warn("Missing partition {} from response, retrying.", topicPartition);
-            partitionsToRetry.add(topicPartition);
         }
 
         if (!unauthorizedTopics.isEmpty())
