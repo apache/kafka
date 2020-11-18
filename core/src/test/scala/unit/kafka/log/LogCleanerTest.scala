@@ -815,9 +815,10 @@ class LogCleanerTest {
                (0 until leo.toInt by 2).forall(!keys.contains(_)))
   }
 
+  @Test
   def testLogCleanerStats(): Unit = {
-    // because loadFactor is 0.75, this means we can fit 2 messages in the map
-    val cleaner = makeCleaner(2)
+    // because loadFactor is 0.75, this means we can fit 3 messages in the map
+    val cleaner = makeCleaner(4)
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
 
