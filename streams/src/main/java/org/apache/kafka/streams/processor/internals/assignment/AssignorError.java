@@ -22,7 +22,9 @@ public enum AssignorError {
     NONE(0),
     INCOMPLETE_SOURCE_TOPIC_METADATA(1),
     VERSION_PROBING(2), // not actually used anymore, but we may hit it during a rolling upgrade from earlier versions
-    ASSIGNMENT_ERROR(3);
+    ASSIGNMENT_ERROR(3),
+    SHUTDOWN_REQUESTED(4);
+
     private final int code;
 
     AssignorError(final int code) {

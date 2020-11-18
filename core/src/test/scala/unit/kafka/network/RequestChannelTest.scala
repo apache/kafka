@@ -46,8 +46,9 @@ class RequestChannelTest {
 
     val sensitiveValue = "secret"
     def verifyConfig(resource: ConfigResource, entries: Seq[ConfigEntry], expectedValues: Map[String, String]): Unit = {
-      val alterConfigs = request(new AlterConfigsRequest.Builder(Collections.singletonMap(resource,
-        new Config(entries.asJavaCollection)), true).build())
+      val alterConfigs = request(new AlterConfigsRequest.Builder(
+          Collections.singletonMap(resource, new Config(entries.asJavaCollection)), true).build())
+
       val loggableAlterConfigs = alterConfigs.loggableRequest.asInstanceOf[AlterConfigsRequest]
       val loggedConfig = loggableAlterConfigs.configs.get(resource)
       assertEquals(expectedValues, toMap(loggedConfig))
@@ -85,7 +86,8 @@ class RequestChannelTest {
     verifyConfig(topicResource, Seq(customConfig), Map(customConfig.name -> Password.HIDDEN))
 
     // Verify empty request
-    val alterConfigs = request(new AlterConfigsRequest.Builder(Collections.emptyMap[ConfigResource, Config], true).build())
+    val alterConfigs = request(new AlterConfigsRequest.Builder(
+        Collections.emptyMap[ConfigResource, Config], true).build())
     assertEquals(Collections.emptyMap, alterConfigs.loggableRequest.asInstanceOf[AlterConfigsRequest].configs)
   }
 
@@ -182,7 +184,8 @@ class RequestChannelTest {
       new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user"),
       ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
       SecurityProtocol.PLAINTEXT,
-      new ClientInformation("name", "version"))
+      new ClientInformation("name", "version"),
+      false)
   }
 
   private def toMap(config: Config): Map[String, String] = {

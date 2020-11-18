@@ -69,7 +69,7 @@ public class MultiRecordsSendTest {
         }
 
         @Override
-        public long write(ByteBuffer[] srcs) throws IOException {
+        public long write(ByteBuffer[] srcs) {
             // Instead of overflowing, this channel refuses additional writes once the buffer is full,
             // which allows us to test the MultiRecordsSend behavior on a per-send basis.
             if (!buffer().hasRemaining())

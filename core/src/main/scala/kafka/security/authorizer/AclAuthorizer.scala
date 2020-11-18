@@ -351,8 +351,8 @@ class AclAuthorizer extends Authorizer with Logging {
     }
 
     def aclsAllowAccess = {
-      //we allow an operation if no acls are found and user has configured to allow all users
-      //when no acls are found or if no deny acls are found and at least one allow acls matches.
+      // we allow an operation if no acls are found and user has configured to allow all users
+      // when no acls are found or if no deny acls are found and at least one allow acls matches.
       val acls = matchingAcls(resource.resourceType, resource.name)
       isEmptyAclAndAuthorized(acls) || (!denyAclExists(acls) && allowAclExists(acls))
     }
@@ -474,7 +474,8 @@ class AclAuthorizer extends Authorizer with Logging {
       val apiKey = if (ApiKeys.hasId(requestContext.requestType)) ApiKeys.forId(requestContext.requestType).name else requestContext.requestType
       val refCount = action.resourceReferenceCount
 
-      s"Principal = $principal is $authResult Operation = $operation from host = $host on resource = $resource for request = $apiKey with resourceRefCount = $refCount"
+      s"Principal = $principal is $authResult Operation = $operation " +
+        s"from host = $host on resource = $resource for request = $apiKey with resourceRefCount = $refCount"
     }
 
     if (authorized) {
@@ -544,7 +545,8 @@ class AclAuthorizer extends Authorizer with Logging {
       throw new IllegalStateException(s"Failed to update ACLs for $resource after trying a maximum of $maxUpdateRetries times")
 
     if (newVersionedAcls.acls != currentVersionedAcls.acls) {
-      debug(s"Updated ACLs for $resource to ${newVersionedAcls.acls} with version ${newVersionedAcls.zkVersion}")
+      info(s"Updated ACLs for $resource with new version ${newVersionedAcls.zkVersion}")
+      debug(s"Updated ACLs for $resource to $newVersionedAcls")
       updateCache(resource, newVersionedAcls)
       updateAclChangedFlag(resource)
       true

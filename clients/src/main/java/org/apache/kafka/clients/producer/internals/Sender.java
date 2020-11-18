@@ -469,8 +469,8 @@ public class Sender implements Runnable {
                 time.sleep(nextRequestHandler.retryBackoffMs());
 
             long currentTimeMs = time.milliseconds();
-            ClientRequest clientRequest = client.newClientRequest(
-                targetNode.idString(), requestBuilder, currentTimeMs, true, requestTimeoutMs, nextRequestHandler);
+            ClientRequest clientRequest = client.newClientRequest(targetNode.idString(), requestBuilder, currentTimeMs,
+                true, requestTimeoutMs, nextRequestHandler);
             log.debug("Sending transactional request {} to node {} with correlation ID {}", requestBuilder, targetNode, clientRequest.correlationId());
             client.send(clientRequest, currentTimeMs);
             transactionManager.setInFlightCorrelationId(clientRequest.correlationId());

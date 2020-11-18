@@ -273,9 +273,7 @@ public class SenderTest {
                 time, true, new ApiVersions(), throttleTimeSensor, logContext);
 
         ByteBuffer buffer = ApiVersionsResponse.createApiVersionsResponse(
-            400,
-            RecordBatch.CURRENT_MAGIC_VALUE
-        ).serialize(ApiKeys.API_VERSIONS, ApiKeys.API_VERSIONS.latestVersion(), 0);
+            400, RecordBatch.CURRENT_MAGIC_VALUE).serialize(ApiKeys.API_VERSIONS, ApiKeys.API_VERSIONS.latestVersion(), 0);
         selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));
         while (!client.ready(node, time.milliseconds())) {
             client.poll(1, time.milliseconds());
@@ -2298,8 +2296,7 @@ public class SenderTest {
 
         InOrder inOrder = inOrder(client);
         inOrder.verify(client, atLeastOnce()).ready(any(), anyLong());
-        inOrder.verify(client, atLeastOnce()).newClientRequest(anyString(), any(), anyLong(), anyBoolean(), anyInt(),
-                any());
+        inOrder.verify(client, atLeastOnce()).newClientRequest(anyString(), any(), anyLong(), anyBoolean(), anyInt(), any());
         inOrder.verify(client, atLeastOnce()).send(any(), anyLong());
         inOrder.verify(client).poll(eq(0L), anyLong());
         inOrder.verify(client).poll(eq(accumulator.getDeliveryTimeoutMs()), anyLong());

@@ -177,7 +177,7 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
             buffer.printf("}%n");
             headerGenerator.addImport(MessageGenerator.UUID_CLASS);
             buffer.printf("%s;%n", target.assignmentStatement(String.format(
-                "UUID.fromString(%s.asText())", target.sourceVariable())));
+                "Uuid.fromString(%s.asText())", target.sourceVariable())));
         } else if (target.field().type() instanceof FieldType.Float64FieldType) {
             headerGenerator.addImport(MessageGenerator.MESSAGE_UTIL_CLASS);
             buffer.printf("%s;%n", target.assignmentStatement(
