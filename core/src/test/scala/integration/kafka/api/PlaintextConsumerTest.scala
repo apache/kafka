@@ -1964,25 +1964,36 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // Sleep to allow compaction to take place.
     Thread.sleep(15000)
     
-    val consumer = createConsumer()
-    consumer.assign(asList(tp))
-    val records1 = consumer.poll(Duration.ofMillis(5000))
-    consumer.commitSync()
+    val consumer1 = createConsumer()
+    val consumer2 = createConsumer()
+    val consumer3 = createConsumer()
+    val consumer4 = createConsumer()
+    consumer1.assign(asList(tp))
+    consumer2.assign(asList(tp))
+    consumer3.assign(asList(tp))
+    consumer4.assign(asList(tp))
+    
+    
+    val records1 = consumer1.poll(Duration.ofMillis(5000))
+    consumer1.commitSync()
+    consumer1.close()
+    val records2 = consumer2.poll(Duration.ofMillis(5000))
+    consumer2.commitSync()
+    consumer2.close()
+    val records3 = consumer3.poll(Duration.ofMillis(5000))
+    consumer3.commitSync()
+    consumer3.close()
+    val records4 = consumer4.poll(Duration.ofMillis(5000))
+    consumer4.commitSync()
+    consumer4.close()
+    
+    
     assertTrue("Expected consumer1 to consume one message at offset 3",
       records1.count() == 1 && records1.records(tp).asScala.head.offset == 3)
-
-    val records2 = consumer.poll(Duration.ofMillis(5000))
-    consumer.commitSync()
     assertTrue("Expected consumer1 to consume one message at offset 8",
       records2.count() == 1 && records2.records(tp).asScala.head.offset == 8)
-
-    val records3 = consumer.poll(Duration.ofMillis(5000))
-    consumer.commitSync()
     assertTrue("Expected consumer1 to consume consume one message at offset 9",
       records3.count() == 1 && records3.records(tp).asScala.head.offset == 9)
-
-    val records4 = consumer.poll(Duration.ofMillis(5000))
-    consumer.commitSync()
     assertTrue("Expected consumer1 to consume one message at offset 10",
       records4.count() == 1 && records4.records(tp).asScala.head.offset == 10)
   }
