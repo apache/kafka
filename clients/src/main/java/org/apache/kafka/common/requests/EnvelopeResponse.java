@@ -17,6 +17,8 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.EnvelopeResponseData;
+import org.apache.kafka.common.network.Send;
+import org.apache.kafka.common.protocol.SendBuilder;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -59,4 +61,14 @@ public class EnvelopeResponse extends AbstractResponse {
     public Errors error() {
         return Errors.forCode(data.errorCode());
     }
+
+    public EnvelopeResponseData data() {
+        return data;
+    }
+
+    @Override
+    protected Send toSend(String destination, ResponseHeader header, short apiVersion) {
+        return SendBuilder.buildResponseSend(destination, header, this.data, apiVersion);
+    }
+
 }

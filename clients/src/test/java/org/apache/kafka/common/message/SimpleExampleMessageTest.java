@@ -17,7 +17,7 @@
 package org.apache.kafka.common.message;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import org.apache.kafka.common.UUID;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
@@ -41,7 +41,7 @@ public class SimpleExampleMessageTest {
 
     @Test
     public void shouldStoreField() {
-        final UUID uuid = UUID.randomUUID();
+        final Uuid uuid = Uuid.randomUuid();
         final ByteBuffer buf = ByteBuffer.wrap(new byte[] {1, 2, 3});
 
         final SimpleExampleMessageData out = new SimpleExampleMessageData();
@@ -61,7 +61,7 @@ public class SimpleExampleMessageTest {
     public void shouldThrowIfCannotWriteNonIgnorableField() {
         // processId is not supported in v0 and is not marked as ignorable
 
-        final SimpleExampleMessageData out = new SimpleExampleMessageData().setProcessId(UUID.randomUUID());
+        final SimpleExampleMessageData out = new SimpleExampleMessageData().setProcessId(Uuid.randomUuid());
         assertThrows(UnsupportedVersionException.class, () ->
                 out.write(new ByteBufferAccessor(ByteBuffer.allocate(64)), new ObjectSerializationCache(), (short) 0));
         assertThrows(UnsupportedVersionException.class, () -> out.toStruct((short) 0));
@@ -70,14 +70,14 @@ public class SimpleExampleMessageTest {
     @Test
     public void shouldDefaultField() {
         final SimpleExampleMessageData out = new SimpleExampleMessageData();
-        assertEquals(UUID.fromString("AAAAAAAAAAAAAAAAAAAAAA"), out.processId());
+        assertEquals(Uuid.fromString("AAAAAAAAAAAAAAAAAAAAAA"), out.processId());
         assertEquals(ByteUtils.EMPTY_BUF, out.zeroCopyByteBuffer());
         assertEquals(ByteUtils.EMPTY_BUF, out.nullableZeroCopyByteBuffer());
     }
 
     @Test
     public void shouldRoundTripFieldThroughStruct() {
-        final UUID uuid = UUID.randomUUID();
+        final Uuid uuid = Uuid.randomUuid();
         final ByteBuffer buf = ByteBuffer.wrap(new byte[] {1, 2, 3});
         final SimpleExampleMessageData out = new SimpleExampleMessageData();
         out.setProcessId(uuid);
@@ -96,7 +96,7 @@ public class SimpleExampleMessageTest {
 
     @Test
     public void shouldRoundTripFieldThroughStructWithNullable() {
-        final UUID uuid = UUID.randomUUID();
+        final Uuid uuid = Uuid.randomUuid();
         final ByteBuffer buf1 = ByteBuffer.wrap(new byte[] {1, 2, 3});
         final ByteBuffer buf2 = ByteBuffer.wrap(new byte[] {4, 5, 6});
         final SimpleExampleMessageData out = new SimpleExampleMessageData();
@@ -118,7 +118,7 @@ public class SimpleExampleMessageTest {
 
     @Test
     public void shouldRoundTripFieldThroughBuffer() {
-        final UUID uuid = UUID.randomUUID();
+        final Uuid uuid = Uuid.randomUuid();
         final ByteBuffer buf = ByteBuffer.wrap(new byte[] {1, 2, 3});
         final SimpleExampleMessageData out = new SimpleExampleMessageData();
         out.setProcessId(uuid);
@@ -141,7 +141,7 @@ public class SimpleExampleMessageTest {
 
     @Test
     public void shouldRoundTripFieldThroughBufferWithNullable() {
-        final UUID uuid = UUID.randomUUID();
+        final Uuid uuid = Uuid.randomUuid();
         final ByteBuffer buf1 = ByteBuffer.wrap(new byte[] {1, 2, 3});
         final ByteBuffer buf2 = ByteBuffer.wrap(new byte[] {4, 5, 6});
         final SimpleExampleMessageData out = new SimpleExampleMessageData();
@@ -167,7 +167,7 @@ public class SimpleExampleMessageTest {
 
     @Test
     public void shouldImplementEqualsAndHashCode() {
-        final UUID uuid = UUID.randomUUID();
+        final Uuid uuid = Uuid.randomUuid();
         final ByteBuffer buf = ByteBuffer.wrap(new byte[] {1, 2, 3});
         final SimpleExampleMessageData a = new SimpleExampleMessageData();
         a.setProcessId(uuid);
@@ -259,13 +259,13 @@ public class SimpleExampleMessageTest {
     public void testTaggedUuid() {
         testRoundTrip(new SimpleExampleMessageData(),
             message -> assertEquals(
-                UUID.fromString("212d54944a8b4fdf94b388b470beb367"),
+                Uuid.fromString("212d54944a8b4fdf94b388b470beb367"),
                 message.taggedUuid()));
 
         testRoundTrip(new SimpleExampleMessageData().
-                setTaggedUuid(UUID.fromString("0123456789abcdef0123456789abcdef")),
+                setTaggedUuid(Uuid.fromString("0123456789abcdef0123456789abcdef")),
             message -> assertEquals(
-                UUID.fromString("0123456789abcdef0123456789abcdef"),
+                Uuid.fromString("0123456789abcdef0123456789abcdef"),
                 message.taggedUuid()));
     }
 

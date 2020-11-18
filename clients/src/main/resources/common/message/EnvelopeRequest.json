@@ -23,7 +23,7 @@
   "fields": [
     { "name": "RequestData", "type": "bytes", "versions": "0+", "zeroCopy": true,
       "about": "The embedded request header and data."},
-    { "name": "RequestPrincipal", "type": "bytes", "versions": "0+", "zeroCopy": true, "nullableVersions": "0+",
+    { "name": "RequestPrincipal", "type": "bytes", "versions": "0+", "nullableVersions": "0+",
       "about": "Value of the initial client principal when the request is redirected by a broker." },
     { "name": "ClientHostAddress", "type": "bytes", "versions": "0+",
       "about": "The original client's address in bytes." }

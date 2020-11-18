@@ -23,13 +23,13 @@ import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
 import kafka.server.AdminManager;
 import kafka.server.BrokerFeatures;
-import kafka.server.BrokerToControllerChannelManager;
 import kafka.server.BrokerTopicStats;
 import kafka.server.ClientQuotaManager;
 import kafka.server.ClientRequestQuotaManager;
 import kafka.server.ControllerMutationQuotaManager;
 import kafka.server.FetchManager;
 import kafka.server.FinalizedFeatureCache;
+import kafka.server.ForwardingManager;
 import kafka.server.KafkaApis;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaConfig$;
@@ -98,7 +98,7 @@ public class MetadataRequestBenchmark {
     private AdminManager adminManager = Mockito.mock(AdminManager.class);
     private TransactionCoordinator transactionCoordinator = Mockito.mock(TransactionCoordinator.class);
     private KafkaController kafkaController = Mockito.mock(KafkaController.class);
-    private BrokerToControllerChannelManager brokerToControllerChannelManager = Mockito.mock(BrokerToControllerChannelManager.class);
+    private ForwardingManager forwardingManager = Mockito.mock(ForwardingManager.class);
     private KafkaZkClient kafkaZkClient = Mockito.mock(KafkaZkClient.class);
     private Metrics metrics = new Metrics();
     private int brokerId = 1;
@@ -175,7 +175,7 @@ public class MetadataRequestBenchmark {
             groupCoordinator,
             transactionCoordinator,
             kafkaController,
-            brokerToControllerChannelManager,
+            forwardingManager,
             kafkaZkClient,
             brokerId,
             new KafkaConfig(kafkaProps),

@@ -1026,7 +1026,7 @@ private[kafka] class Processor(val id: Int,
     envelopeRequest: RequestChannel.Request,
     envelopeResponse: EnvelopeResponse
   ): Unit = {
-    val envelopResponseSend = envelopeRequest.context.buildResponse(envelopeResponse)
+    val envelopResponseSend = envelopeRequest.context.buildResponseSend(envelopeResponse)
     enqueueResponse(new RequestChannel.SendResponse(
       envelopeRequest,
       envelopResponseSend,
@@ -1042,7 +1042,7 @@ private[kafka] class Processor(val id: Int,
     val envelope = envelopeRequest.body[EnvelopeRequest]
     try {
       principalSerde.map { serde =>
-        serde.deserialize(envelope.principalData())
+        serde.deserialize(envelope.requestPrincipal())
       }
     } catch {
       case e: Exception =>

@@ -30,7 +30,7 @@ class FeatureCacheUpdateException(message: String) extends RuntimeException(mess
 // Helper class that represents finalized features along with an epoch value.
 case class FinalizedFeaturesAndEpoch(features: Features[FinalizedVersionRange], epoch: Long) {
   override def toString(): String = {
-    "FinalizedFeaturesAndEpoch(features=%s, epoch=%d)".format(features, epoch)
+    s"FinalizedFeaturesAndEpoch(features=$features, epoch=$epoch)"
   }
 }
 
@@ -106,18 +106,18 @@ class FinalizedFeatureCache(private val brokerFeatures: BrokerFeatures) extends 
     val latest = FinalizedFeaturesAndEpoch(latestFeatures, latestEpoch)
     val existing = featuresAndEpoch.map(item => item.toString()).getOrElse("<empty>")
     if (featuresAndEpoch.isDefined && featuresAndEpoch.get.epoch > latest.epoch) {
-      val errorMsg = ("FinalizedFeatureCache update failed due to invalid epoch in new %s." +
-        " The existing cache contents are %s.").format(latest, existing)
+      val errorMsg = s"FinalizedFeatureCache update failed due to invalid epoch in new $latest." +
+        s" The existing cache contents are $existing."
       throw new FeatureCacheUpdateException(errorMsg)
     } else {
       val incompatibleFeatures = brokerFeatures.incompatibleFeatures(latest.features)
       if (!incompatibleFeatures.empty) {
-        val errorMsg = ("FinalizedFeatureCache update failed since feature compatibility" +
-          " checks failed! Supported %s has incompatibilities with the latest %s."
-          ).format(brokerFeatures.supportedFeatures, latest)
+        val errorMsg = "FinalizedFeatureCache update failed since feature compatibility" +
+          s" checks failed! Supported ${brokerFeatures.supportedFeatures} has incompatibilities" +
+          s" with the latest $latest."
         throw new FeatureCacheUpdateException(errorMsg)
       } else {
-        val logMsg = "Updated cache from existing %s to latest %s.".format(existing, latest)
+        val logMsg = s"Updated cache from existing $existing to latest $latest."
         synchronized {
           featuresAndEpoch = Some(latest)
           notifyAll()
