@@ -30,10 +30,8 @@
   // Starting in version 7, records can be produced using ZStandard compression.  See KIP-110.
   //
   // Starting in Version 8, response has RecordErrors and ErrorMEssage. See KIP-467.
-  //
-  // Version 9 enables flexible versions.
-  "validVersions": "0-9",
-  "flexibleVersions": "9+",
+  "validVersions": "0-8",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "TransactionalId", "type": "string", "versions": "3+", "nullableVersions": "0+", "entityType": "transactionalId",
       "about": "The transactional ID, or null if the producer is not transactional." },
