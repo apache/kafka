@@ -678,48 +678,47 @@ public final class MessageTest {
         String errorMessage = "global error message";
 
         testAllMessageRoundTrips(new ProduceResponseData()
-                                     .setResponses(singletonList(
-                                         new ProduceResponseData.TopicProduceResponse()
-                                             .setName(topicName)
-                                             .setPartitions(singletonList(
-                                                 new ProduceResponseData.PartitionProduceResponse()
-                                                     .setPartitionIndex(partitionIndex)
-                                                     .setErrorCode(errorCode)
-                                                     .setBaseOffset(baseOffset))))));
+            .setResponses(new ProduceResponseData.TopicProduceResponseCollection(singletonList(
+                new ProduceResponseData.TopicProduceResponse()
+                    .setName(topicName)
+                    .setPartitionResponses(singletonList(
+                        new ProduceResponseData.PartitionProduceResponse()
+                            .setIndex(partitionIndex)
+                            .setErrorCode(errorCode)
+                            .setBaseOffset(baseOffset)))).iterator())));
 
-        Supplier<ProduceResponseData> response =
-            () -> new ProduceResponseData()
-                      .setResponses(singletonList(
-                            new ProduceResponseData.TopicProduceResponse()
-                                .setName(topicName)
-                                .setPartitions(singletonList(
-                                     new ProduceResponseData.PartitionProduceResponse()
-                                         .setPartitionIndex(partitionIndex)
-                                         .setErrorCode(errorCode)
-                                         .setBaseOffset(baseOffset)
-                                         .setLogAppendTimeMs(logAppendTimeMs)
-                                         .setLogStartOffset(logStartOffset)
-                                         .setRecordErrors(singletonList(
-                                             new ProduceResponseData.BatchIndexAndErrorMessage()
-                                                 .setBatchIndex(batchIndex)
-                                                 .setBatchIndexErrorMessage(batchIndexErrorMessage)))
-                                         .setErrorMessage(errorMessage)))))
-                      .setThrottleTimeMs(throttleTimeMs);
+        Supplier<ProduceResponseData> response = () -> new ProduceResponseData()
+                .setResponses(new ProduceResponseData.TopicProduceResponseCollection(singletonList(
+                    new ProduceResponseData.TopicProduceResponse()
+                        .setName(topicName)
+                        .setPartitionResponses(singletonList(
+                             new ProduceResponseData.PartitionProduceResponse()
+                                 .setIndex(partitionIndex)
+                                 .setErrorCode(errorCode)
+                                 .setBaseOffset(baseOffset)
+                                 .setLogAppendTimeMs(logAppendTimeMs)
+                                 .setLogStartOffset(logStartOffset)
+                                 .setRecordErrors(singletonList(
+                                     new ProduceResponseData.BatchIndexAndErrorMessage()
+                                         .setBatchIndex(batchIndex)
+                                         .setBatchIndexErrorMessage(batchIndexErrorMessage)))
+                                 .setErrorMessage(errorMessage)))).iterator()))
+                .setThrottleTimeMs(throttleTimeMs);
 
         for (short version = 0; version <= ApiKeys.PRODUCE.latestVersion(); version++) {
             ProduceResponseData responseData = response.get();
 
             if (version < 8) {
-                responseData.responses().get(0).partitions().get(0).setRecordErrors(Collections.emptyList());
-                responseData.responses().get(0).partitions().get(0).setErrorMessage(null);
+                responseData.responses().iterator().next().partitionResponses().get(0).setRecordErrors(Collections.emptyList());
+                responseData.responses().iterator().next().partitionResponses().get(0).setErrorMessage(null);
             }
 
             if (version < 5) {
-                responseData.responses().get(0).partitions().get(0).setLogStartOffset(-1);
+                responseData.responses().iterator().next().partitionResponses().get(0).setLogStartOffset(-1);
             }
 
             if (version < 2) {
-                responseData.responses().get(0).partitions().get(0).setLogAppendTimeMs(-1);
+                responseData.responses().iterator().next().partitionResponses().get(0).setLogAppendTimeMs(-1);
             }
 
             if (version < 1) {

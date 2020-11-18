@@ -35,6 +35,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TransactionAbortedException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
@@ -59,6 +60,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.record.RecordBatch.NO_TIMESTAMP;
 
@@ -560,13 +562,24 @@ public class Sender implements Runnable {
             log.trace("Received produce response from node {} with correlation id {}", response.destination(), correlationId);
             // if we have a response, parse it
             if (response.hasResponse()) {
+                // Sender should exercise PartitionProduceResponse rather than ProduceResponse.PartitionResponse
+                // https://issues.apache.org/jira/browse/KAFKA-10696
                 ProduceResponse produceResponse = (ProduceResponse) response.responseBody();
-                for (Map.Entry<TopicPartition, ProduceResponse.PartitionResponse> entry : produceResponse.responses().entrySet()) {
-                    TopicPartition tp = entry.getKey();
-                    ProduceResponse.PartitionResponse partResp = entry.getValue();
+                produceResponse.data().responses().forEach(r -> r.partitionResponses().forEach(p -> {
+                    TopicPartition tp = new TopicPartition(r.name(), p.index());
+                    ProduceResponse.PartitionResponse partResp = new ProduceResponse.PartitionResponse(
+                            Errors.forCode(p.errorCode()),
+                            p.baseOffset(),
+                            p.logAppendTimeMs(),
+                            p.logStartOffset(),
+                            p.recordErrors()
+                                .stream()
+                                .map(e -> new ProduceResponse.RecordError(e.batchIndex(), e.batchIndexErrorMessage()))
+                                .collect(Collectors.toList()),
+                            p.errorMessage());
                     ProducerBatch batch = batches.get(tp);
                     completeBatch(batch, partResp, correlationId, now);
-                }
+                }));
                 this.sensors.recordLatency(response.destination(), response.requestLatencyMs());
             } else {
                 // this is the acks = 0 case, just complete all requests
@@ -721,7 +734,6 @@ public class Sender implements Runnable {
         if (batches.isEmpty())
             return;
 
-        Map<TopicPartition, MemoryRecords> produceRecordsByPartition = new HashMap<>(batches.size());
         final Map<TopicPartition, ProducerBatch> recordsByPartition = new HashMap<>(batches.size());
 
         // find the minimum magic version used when creating the record sets
@@ -730,7 +742,7 @@ public class Sender implements Runnable {
             if (batch.magic() < minUsedMagic)
                 minUsedMagic = batch.magic();
         }
-
+        ProduceRequestData.TopicProduceDataCollection tpd = new ProduceRequestData.TopicProduceDataCollection();
         for (ProducerBatch batch : batches) {
             TopicPartition tp = batch.topicPartition;
             MemoryRecords records = batch.records();
@@ -744,7 +756,14 @@ public class Sender implements Runnable {
             // which is supporting the new magic version to one which doesn't, then we will need to convert.
             if (!records.hasMatchingMagic(minUsedMagic))
                 records = batch.records().downConvert(minUsedMagic, 0, time).records();
-            produceRecordsByPartition.put(tp, records);
+            ProduceRequestData.TopicProduceData tpData = tpd.find(tp.topic());
+            if (tpData == null) {
+                tpData = new ProduceRequestData.TopicProduceData().setName(tp.topic());
+                tpd.add(tpData);
+            }
+            tpData.partitionData().add(new ProduceRequestData.PartitionProduceData()
+                    .setIndex(tp.partition())
+                    .setRecords(records));
             recordsByPartition.put(tp, batch);
         }
 
@@ -752,8 +771,13 @@ public class Sender implements Runnable {
         if (transactionManager != null && transactionManager.isTransactional()) {
             transactionalId = transactionManager.transactionalId();
         }
-        ProduceRequest.Builder requestBuilder = ProduceRequest.Builder.forMagic(minUsedMagic, acks, timeout,
-                produceRecordsByPartition, transactionalId);
+
+        ProduceRequest.Builder requestBuilder = ProduceRequest.forMagic(minUsedMagic,
+                new ProduceRequestData()
+                        .setAcks(acks)
+                        .setTimeoutMs(timeout)
+                        .setTransactionalId(transactionalId)
+                        .setTopicData(tpd));
         RequestCompletionHandler callback = response -> handleProduceResponse(response, recordsByPartition, time.milliseconds());
 
         String nodeId = Integer.toString(destination);
