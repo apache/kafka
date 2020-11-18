@@ -193,7 +193,7 @@
 
     <!-- Streams tests -->
     <suppress checks="ClassFanOutComplexity"
-              files="(StreamThreadTest|StreamTaskTest|ProcessorTopologyTestDriver).java"/>
+              files="(StreamsPartitionAssignorTest|StreamThreadTest|StreamTaskTest|ProcessorTopologyTestDriver).java"/>
 
     <suppress checks="MethodLength"
               files="KStreamKTableJoinIntegrationTest.java"/>

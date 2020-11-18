@@ -522,10 +522,11 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         boolean numPartitionsNeeded;
         do {
             numPartitionsNeeded = false;
+            boolean progressMadeThisIteration = false;  // avoid infinitely looping without making any progress on unknown repartitions
 
             for (final TopicsInfo topicsInfo : topicGroups.values()) {
-                for (final String topicName : topicsInfo.repartitionSourceTopics.keySet()) {
-                    final Optional<Integer> maybeNumPartitions = repartitionTopicMetadata.get(topicName)
+                for (final String repartitionSourceTopic : topicsInfo.repartitionSourceTopics.keySet()) {
+                    final Optional<Integer> maybeNumPartitions = repartitionTopicMetadata.get(repartitionSourceTopic)
                                                                      .numberOfPartitions();
                     Integer numPartitions = null;
 
@@ -534,24 +535,24 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                         for (final TopicsInfo otherTopicsInfo : topicGroups.values()) {
                             final Set<String> otherSinkTopics = otherTopicsInfo.sinkTopics;
 
-                            if (otherSinkTopics.contains(topicName)) {
+                            if (otherSinkTopics.contains(repartitionSourceTopic)) {
                                 // if this topic is one of the sink topics of this topology,
                                 // use the maximum of all its source topic partitions as the number of partitions
-                                for (final String sourceTopicName : otherTopicsInfo.sourceTopics) {
+                                for (final String upstreamSourceTopic : otherTopicsInfo.sourceTopics) {
                                     Integer numPartitionsCandidate = null;
                                     // It is possible the sourceTopic is another internal topic, i.e,
                                     // map().join().join(map())
-                                    if (repartitionTopicMetadata.containsKey(sourceTopicName)) {
-                                        if (repartitionTopicMetadata.get(sourceTopicName).numberOfPartitions().isPresent()) {
+                                    if (repartitionTopicMetadata.containsKey(upstreamSourceTopic)) {
+                                        if (repartitionTopicMetadata.get(upstreamSourceTopic).numberOfPartitions().isPresent()) {
                                             numPartitionsCandidate =
-                                                repartitionTopicMetadata.get(sourceTopicName).numberOfPartitions().get();
+                                                repartitionTopicMetadata.get(upstreamSourceTopic).numberOfPartitions().get();
                                         }
                                     } else {
-                                        final Integer count = metadata.partitionCountForTopic(sourceTopicName);
+                                        final Integer count = metadata.partitionCountForTopic(upstreamSourceTopic);
                                         if (count == null) {
                                             throw new IllegalStateException(
                                                 "No partition count found for source topic "
-                                                    + sourceTopicName
+                                                    + upstreamSourceTopic
                                                     + ", but it should have been."
                                             );
                                         }
@@ -567,15 +568,19 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                             }
                         }
 
-                        // if we still have not found the right number of partitions,
-                        // another iteration is needed
                         if (numPartitions == null) {
                             numPartitionsNeeded = true;
+                            log.trace("Unable to determine number of partitions for {}, another iteration is needed",
+                                      repartitionSourceTopic);
                         } else {
-                            repartitionTopicMetadata.get(topicName).setNumberOfPartitions(numPartitions);
+                            repartitionTopicMetadata.get(repartitionSourceTopic).setNumberOfPartitions(numPartitions);
+                            progressMadeThisIteration = true;
                         }
                     }
                 }
+            }
+            if (!progressMadeThisIteration && numPartitionsNeeded) {
+                throw new TaskAssignmentException("Failed to compute number of partitions for all repartition topics");
             }
         } while (numPartitionsNeeded);
     }
