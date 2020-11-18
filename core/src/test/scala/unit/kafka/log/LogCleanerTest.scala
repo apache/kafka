@@ -1450,9 +1450,9 @@ class LogCleanerTest {
   @Test
   def testBuildPartialOffsetMap(): Unit = {
     // because loadFactor is 0.75, this means we can fit 2 messages in the map
-    val map = new FakeOffsetMap(3)
     val log = makeLog()
-    val cleaner = makeCleaner(2)
+    val cleaner = makeCleaner(3)
+    val map = cleaner.offsetMap
 
     log.appendAsLeader(record(0,0), leaderEpoch = 0)
     log.appendAsLeader(record(1,1), leaderEpoch = 0)
