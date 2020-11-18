@@ -225,6 +225,14 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         throwUnsupportedOperationExceptionIfStandby("forward");
 
         final ProcessorNode<?, ?, ?, ?> previousNode = currentNode();
+        if (previousNode == null) {
+            throw new StreamsException("Current node is unknown. This can happen if 'forward()' is called " +
+                    "in an illegal scope. The root cause could be that a 'Processor' or 'Transformer' instance" +
+                    " is shared. To avoid this error, make sure that your suppliers return new instances " +
+                    "each time 'get()' of Supplier is called and do not return the same object reference " +
+                    "multiple times.");
+        }
+
         final ProcessorRecordContext previousContext = recordContext;
 
         try {

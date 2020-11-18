@@ -77,6 +77,8 @@ import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.EndTxnRequestData;
 import org.apache.kafka.common.message.EndTxnResponseData;
+import org.apache.kafka.common.message.EnvelopeRequestData;
+import org.apache.kafka.common.message.EnvelopeResponseData;
 import org.apache.kafka.common.message.ExpireDelegationTokenRequestData;
 import org.apache.kafka.common.message.ExpireDelegationTokenResponseData;
 import org.apache.kafka.common.message.FetchRequestData;
@@ -185,8 +187,8 @@ public enum ApiKeys {
             return parseResponse(version, buffer, (short) 0);
         }
     },
-    CREATE_TOPICS(19, "CreateTopics", CreateTopicsRequestData.SCHEMAS, CreateTopicsResponseData.SCHEMAS),
-    DELETE_TOPICS(20, "DeleteTopics", DeleteTopicsRequestData.SCHEMAS, DeleteTopicsResponseData.SCHEMAS),
+    CREATE_TOPICS(19, "CreateTopics", CreateTopicsRequestData.SCHEMAS, CreateTopicsResponseData.SCHEMAS, true),
+    DELETE_TOPICS(20, "DeleteTopics", DeleteTopicsRequestData.SCHEMAS, DeleteTopicsResponseData.SCHEMAS, true),
     DELETE_RECORDS(21, "DeleteRecords", DeleteRecordsRequestData.SCHEMAS, DeleteRecordsResponseData.SCHEMAS),
     INIT_PRODUCER_ID(22, "InitProducerId", InitProducerIdRequestData.SCHEMAS, InitProducerIdResponseData.SCHEMAS),
     OFFSET_FOR_LEADER_EPOCH(23, "OffsetForLeaderEpoch", false, OffsetsForLeaderEpochRequest.schemaVersions(),
@@ -201,12 +203,12 @@ public enum ApiKeys {
     TXN_OFFSET_COMMIT(28, "TxnOffsetCommit", false, RecordBatch.MAGIC_VALUE_V2, TxnOffsetCommitRequestData.SCHEMAS,
             TxnOffsetCommitResponseData.SCHEMAS),
     DESCRIBE_ACLS(29, "DescribeAcls", DescribeAclsRequestData.SCHEMAS, DescribeAclsResponseData.SCHEMAS),
-    CREATE_ACLS(30, "CreateAcls", CreateAclsRequestData.SCHEMAS, CreateAclsResponseData.SCHEMAS),
-    DELETE_ACLS(31, "DeleteAcls", DeleteAclsRequestData.SCHEMAS, DeleteAclsResponseData.SCHEMAS),
+    CREATE_ACLS(30, "CreateAcls", CreateAclsRequestData.SCHEMAS, CreateAclsResponseData.SCHEMAS, true),
+    DELETE_ACLS(31, "DeleteAcls", DeleteAclsRequestData.SCHEMAS, DeleteAclsResponseData.SCHEMAS, true),
     DESCRIBE_CONFIGS(32, "DescribeConfigs", DescribeConfigsRequestData.SCHEMAS,
              DescribeConfigsResponseData.SCHEMAS),
     ALTER_CONFIGS(33, "AlterConfigs", AlterConfigsRequestData.SCHEMAS,
-            AlterConfigsResponseData.SCHEMAS),
+            AlterConfigsResponseData.SCHEMAS, true),
     ALTER_REPLICA_LOG_DIRS(34, "AlterReplicaLogDirs", AlterReplicaLogDirsRequestData.SCHEMAS,
             AlterReplicaLogDirsResponseData.SCHEMAS),
     DESCRIBE_LOG_DIRS(35, "DescribeLogDirs", DescribeLogDirsRequestData.SCHEMAS,
@@ -214,33 +216,33 @@ public enum ApiKeys {
     SASL_AUTHENTICATE(36, "SaslAuthenticate", SaslAuthenticateRequestData.SCHEMAS,
             SaslAuthenticateResponseData.SCHEMAS),
     CREATE_PARTITIONS(37, "CreatePartitions", CreatePartitionsRequestData.SCHEMAS,
-            CreatePartitionsResponseData.SCHEMAS),
+            CreatePartitionsResponseData.SCHEMAS, true),
     CREATE_DELEGATION_TOKEN(38, "CreateDelegationToken", CreateDelegationTokenRequestData.SCHEMAS,
-            CreateDelegationTokenResponseData.SCHEMAS),
+            CreateDelegationTokenResponseData.SCHEMAS, true),
     RENEW_DELEGATION_TOKEN(39, "RenewDelegationToken", RenewDelegationTokenRequestData.SCHEMAS,
-            RenewDelegationTokenResponseData.SCHEMAS),
+            RenewDelegationTokenResponseData.SCHEMAS, true),
     EXPIRE_DELEGATION_TOKEN(40, "ExpireDelegationToken", ExpireDelegationTokenRequestData.SCHEMAS,
-            ExpireDelegationTokenResponseData.SCHEMAS),
+            ExpireDelegationTokenResponseData.SCHEMAS, true),
     DESCRIBE_DELEGATION_TOKEN(41, "DescribeDelegationToken", DescribeDelegationTokenRequestData.SCHEMAS,
             DescribeDelegationTokenResponseData.SCHEMAS),
     DELETE_GROUPS(42, "DeleteGroups", DeleteGroupsRequestData.SCHEMAS, DeleteGroupsResponseData.SCHEMAS),
     ELECT_LEADERS(43, "ElectLeaders", ElectLeadersRequestData.SCHEMAS,
             ElectLeadersResponseData.SCHEMAS),
     INCREMENTAL_ALTER_CONFIGS(44, "IncrementalAlterConfigs", IncrementalAlterConfigsRequestData.SCHEMAS,
-            IncrementalAlterConfigsResponseData.SCHEMAS),
+            IncrementalAlterConfigsResponseData.SCHEMAS, true),
     ALTER_PARTITION_REASSIGNMENTS(45, "AlterPartitionReassignments", AlterPartitionReassignmentsRequestData.SCHEMAS,
-            AlterPartitionReassignmentsResponseData.SCHEMAS),
+            AlterPartitionReassignmentsResponseData.SCHEMAS, true),
     LIST_PARTITION_REASSIGNMENTS(46, "ListPartitionReassignments", ListPartitionReassignmentsRequestData.SCHEMAS,
             ListPartitionReassignmentsResponseData.SCHEMAS),
     OFFSET_DELETE(47, "OffsetDelete", OffsetDeleteRequestData.SCHEMAS, OffsetDeleteResponseData.SCHEMAS),
     DESCRIBE_CLIENT_QUOTAS(48, "DescribeClientQuotas", DescribeClientQuotasRequestData.SCHEMAS,
             DescribeClientQuotasResponseData.SCHEMAS),
     ALTER_CLIENT_QUOTAS(49, "AlterClientQuotas", AlterClientQuotasRequestData.SCHEMAS,
-            AlterClientQuotasResponseData.SCHEMAS),
+            AlterClientQuotasResponseData.SCHEMAS, true),
     DESCRIBE_USER_SCRAM_CREDENTIALS(50, "DescribeUserScramCredentials", DescribeUserScramCredentialsRequestData.SCHEMAS,
             DescribeUserScramCredentialsResponseData.SCHEMAS),
     ALTER_USER_SCRAM_CREDENTIALS(51, "AlterUserScramCredentials", AlterUserScramCredentialsRequestData.SCHEMAS,
-            AlterUserScramCredentialsResponseData.SCHEMAS),
+            AlterUserScramCredentialsResponseData.SCHEMAS, true),
     VOTE(52, "Vote", true, false,
         VoteRequestData.SCHEMAS, VoteResponseData.SCHEMAS),
     BEGIN_QUORUM_EPOCH(53, "BeginQuorumEpoch", true, false,
@@ -251,7 +253,8 @@ public enum ApiKeys {
         DescribeQuorumRequestData.SCHEMAS, DescribeQuorumResponseData.SCHEMAS),
     ALTER_ISR(56, "AlterIsr", AlterIsrRequestData.SCHEMAS, AlterIsrResponseData.SCHEMAS),
     UPDATE_FEATURES(57, "UpdateFeatures",
-        UpdateFeaturesRequestData.SCHEMAS, UpdateFeaturesResponseData.SCHEMAS);
+        UpdateFeaturesRequestData.SCHEMAS, UpdateFeaturesResponseData.SCHEMAS, true),
+    ENVELOPE(58, "Envelope", true, false, EnvelopeRequestData.SCHEMAS, EnvelopeResponseData.SCHEMAS);
 
     private static final ApiKeys[] ID_TO_TYPE;
     private static final int MIN_API_KEY = 0;
@@ -283,6 +286,9 @@ public enum ApiKeys {
     /** indicates whether the API is enabled and should be exposed in ApiVersions **/
     public final boolean isEnabled;
 
+    /** indicates whether the API is enabled for forwarding **/
+    public final boolean forwardable;
+
     public final Schema[] requestSchemas;
     public final Schema[] responseSchemas;
     public final boolean requiresDelayedAllocation;
@@ -295,13 +301,17 @@ public enum ApiKeys {
         this(id, name, clusterAction, RecordBatch.MAGIC_VALUE_V0, requestSchemas, responseSchemas);
     }
 
+    ApiKeys(int id, String name, Schema[] requestSchemas, Schema[] responseSchemas, boolean forwardable) {
+        this(id, name, false, RecordBatch.MAGIC_VALUE_V0, true, requestSchemas, responseSchemas, forwardable);
+    }
+
     ApiKeys(int id, String name, boolean clusterAction, boolean isEnabled, Schema[] requestSchemas, Schema[] responseSchemas) {
-        this(id, name, clusterAction, RecordBatch.MAGIC_VALUE_V0, isEnabled, requestSchemas, responseSchemas);
+        this(id, name, clusterAction, RecordBatch.MAGIC_VALUE_V0, isEnabled, requestSchemas, responseSchemas, false);
     }
 
     ApiKeys(int id, String name, boolean clusterAction, byte minRequiredInterBrokerMagic,
             Schema[] requestSchemas, Schema[] responseSchemas) {
-        this(id, name, clusterAction, minRequiredInterBrokerMagic, true, requestSchemas, responseSchemas);
+        this(id, name, clusterAction, minRequiredInterBrokerMagic, true, requestSchemas, responseSchemas, false);
     }
 
     ApiKeys(
@@ -311,7 +321,8 @@ public enum ApiKeys {
         byte minRequiredInterBrokerMagic,
         boolean isEnabled,
         Schema[] requestSchemas,
-        Schema[] responseSchemas
+        Schema[] responseSchemas,
+        boolean forwardable
     ) {
         if (id < 0)
             throw new IllegalArgumentException("id must not be negative, id: " + id);
@@ -332,6 +343,13 @@ public enum ApiKeys {
                 throw new IllegalStateException("Response schema for api " + name + " for version " + i + " is null");
         }
 
+        this.requiresDelayedAllocation = forwardable || shouldRetainsBufferReference(requestSchemas);
+        this.requestSchemas = requestSchemas;
+        this.responseSchemas = responseSchemas;
+        this.forwardable = forwardable;
+    }
+
+    private static boolean shouldRetainsBufferReference(Schema[] requestSchemas) {
         boolean requestRetainsBufferReference = false;
         for (Schema requestVersionSchema : requestSchemas) {
             if (retainsBufferReference(requestVersionSchema)) {
@@ -339,9 +357,7 @@ public enum ApiKeys {
                 break;
             }
         }
-        this.requiresDelayedAllocation = requestRetainsBufferReference;
-        this.requestSchemas = requestSchemas;
-        this.responseSchemas = responseSchemas;
+        return requestRetainsBufferReference;
     }
 
     public static ApiKeys forId(int id) {

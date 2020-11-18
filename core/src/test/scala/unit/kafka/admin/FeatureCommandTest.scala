@@ -76,7 +76,7 @@ class FeatureCommandTest extends BaseRequestTest {
   @Test
   def testDescribeFeaturesSuccess(): Unit = {
     updateSupportedFeaturesInAllBrokers(defaultSupportedFeatures)
-    val featureApis = new FeatureApis(new FeatureCommandOptions(Array("--bootstrap-server", brokerList, "--describe", "--from-controller")))
+    val featureApis = new FeatureApis(new FeatureCommandOptions(Array("--bootstrap-server", brokerList, "--describe")))
     featureApis.setSupportedFeatures(defaultSupportedFeatures)
     try {
       val initialDescribeOutput = TestUtils.grabConsoleOutput(featureApis.describeFeatures())

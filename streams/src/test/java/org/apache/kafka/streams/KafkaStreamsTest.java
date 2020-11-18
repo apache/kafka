@@ -377,12 +377,12 @@ public class KafkaStreamsTest {
         Assert.assertEquals(KafkaStreams.State.REBALANCING, streams.state());
 
         threadStatelistenerCapture.getValue().onChange(
-            streams.threads[NUM_THREADS - 1],
+            streams.threads.get(NUM_THREADS - 1),
             StreamThread.State.PENDING_SHUTDOWN,
             StreamThread.State.PARTITIONS_ASSIGNED);
 
         threadStatelistenerCapture.getValue().onChange(
-            streams.threads[NUM_THREADS - 1],
+            streams.threads.get(NUM_THREADS - 1),
             StreamThread.State.DEAD,
             StreamThread.State.PENDING_SHUTDOWN);
 
@@ -390,7 +390,7 @@ public class KafkaStreamsTest {
         Assert.assertEquals(KafkaStreams.State.REBALANCING, streams.state());
 
         for (final StreamThread thread : streams.threads) {
-            if (thread != streams.threads[NUM_THREADS - 1]) {
+            if (thread != streams.threads.get(NUM_THREADS - 1)) {
                 threadStatelistenerCapture.getValue().onChange(
                     thread,
                     StreamThread.State.RUNNING,
@@ -435,12 +435,12 @@ public class KafkaStreamsTest {
         Assert.assertEquals(KafkaStreams.State.REBALANCING, streams.state());
 
         threadStatelistenerCapture.getValue().onChange(
-            streams.threads[NUM_THREADS - 1],
+            streams.threads.get(NUM_THREADS - 1),
             StreamThread.State.PENDING_SHUTDOWN,
             StreamThread.State.PARTITIONS_REVOKED);
 
         threadStatelistenerCapture.getValue().onChange(
-            streams.threads[NUM_THREADS - 1],
+            streams.threads.get(NUM_THREADS - 1),
             StreamThread.State.DEAD,
             StreamThread.State.PENDING_SHUTDOWN);
 
@@ -448,7 +448,7 @@ public class KafkaStreamsTest {
         Assert.assertEquals(KafkaStreams.State.REBALANCING, streams.state());
 
         for (final StreamThread thread : streams.threads) {
-            if (thread != streams.threads[NUM_THREADS - 1]) {
+            if (thread != streams.threads.get(NUM_THREADS - 1)) {
                 threadStatelistenerCapture.getValue().onChange(
                     thread,
                     StreamThread.State.PENDING_SHUTDOWN,
@@ -500,7 +500,7 @@ public class KafkaStreamsTest {
         final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time);
 
         try {
-            assertEquals(NUM_THREADS, streams.threads.length);
+            assertEquals(NUM_THREADS, streams.threads.size());
             assertEquals(streams.state(), KafkaStreams.State.CREATED);
 
             streams.start();
@@ -509,11 +509,11 @@ public class KafkaStreamsTest {
                 "Streams never started.");
 
             for (int i = 0; i < NUM_THREADS; i++) {
-                final StreamThread tmpThread = streams.threads[i];
+                final StreamThread tmpThread = streams.threads.get(i);
                 tmpThread.shutdown();
                 TestUtils.waitForCondition(() -> tmpThread.state() == StreamThread.State.DEAD,
                     "Thread never stopped.");
-                streams.threads[i].join();
+                streams.threads.get(i).join();
             }
             TestUtils.waitForCondition(
                 () -> streams.state() == KafkaStreams.State.ERROR,
@@ -912,7 +912,7 @@ public class KafkaStreamsTest {
         builder.globalTable("anyTopic");
         final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time);
 
-        assertThat(streams.threads.length, equalTo(0));
+        assertThat(streams.threads.size(), equalTo(0));
     }
 
     @Test
@@ -921,7 +921,7 @@ public class KafkaStreamsTest {
         builder.globalTable("anyTopic");
         final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time);
 
-        assertThat(streams.threads.length, equalTo(0));
+        assertThat(streams.threads.size(), equalTo(0));
         assertEquals(streams.state(), KafkaStreams.State.CREATED);
 
         streams.start();

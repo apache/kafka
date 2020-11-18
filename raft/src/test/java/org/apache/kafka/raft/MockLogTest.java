@@ -37,7 +37,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -315,7 +314,7 @@ public class MockLogTest {
         // Now update to a high watermark with invalid metadata
         assertThrows(IllegalArgumentException.class, () ->
             log.updateHighWatermark(new LogOffsetMetadata(10L,
-                Optional.of(new MockLog.MockOffsetMetadata(UUID.randomUUID())))));
+                Optional.of(new MockLog.MockOffsetMetadata(98230980L)))));
 
         // Ensure we can update the high watermark to the end offset
         LogFetchInfo readFromEndInfo = log.read(15L, Isolation.UNCOMMITTED);

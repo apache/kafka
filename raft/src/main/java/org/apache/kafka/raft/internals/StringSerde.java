@@ -14,14 +14,34 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.raft;
+package org.apache.kafka.raft.internals;
 
-import java.util.Locale;
+import org.apache.kafka.common.protocol.Readable;
+import org.apache.kafka.common.protocol.Writable;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.raft.RecordSerde;
 
-public enum AckMode {
-    LEADER, QUORUM;
+public class StringSerde implements RecordSerde<String> {
 
-    public static AckMode forConfig(String config) {
-        return AckMode.valueOf(config.toUpperCase(Locale.ROOT));
+    @Override
+    public int recordSize(String data, Object context) {
+        return recordSize(data);
     }
+
+    public int recordSize(String data) {
+        return Utils.utf8Length(data);
+    }
+
+    @Override
+    public void write(String data, Object context, Writable out) {
+        out.writeByteArray(Utils.utf8(data));
+    }
+
+    @Override
+    public String read(Readable input, int size) {
+        byte[] data = new byte[size];
+        input.readArray(data);
+        return Utils.utf8(data);
+    }
+
 }

@@ -25,9 +25,11 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.network.NetworkReceive;
+import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.requests.ByteBufferChannel;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.Exit;
@@ -529,6 +531,17 @@ public class TestUtils {
         struct.writeTo(buffer);
         buffer.rewind();
         return buffer;
+    }
+
+    public static ByteBuffer toBuffer(Send send) {
+        ByteBufferChannel channel = new ByteBufferChannel(send.size());
+        try {
+            assertEquals(send.size(), send.writeTo(channel));
+            channel.close();
+            return channel.buffer();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public static Set<TopicPartition> generateRandomTopicPartitions(int numTopic, int numPartitionPerTopic) {

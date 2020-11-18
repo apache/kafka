@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.Timer;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -29,6 +30,7 @@ public class CandidateState implements EpochState {
     private final int epoch;
     private final int retries;
     private final Map<Integer, State> voteStates = new HashMap<>();
+    private final Optional<LogOffsetMetadata> highWatermark;
     private final int electionTimeoutMs;
     private final Timer electionTimer;
     private final Timer backoffTimer;
@@ -48,11 +50,13 @@ public class CandidateState implements EpochState {
         int localId,
         int epoch,
         Set<Integer> voters,
+        Optional<LogOffsetMetadata> highWatermark,
         int retries,
         int electionTimeoutMs
     ) {
         this.localId = localId;
         this.epoch = epoch;
+        this.highWatermark = highWatermark;
         this.retries = retries;
         this.isBackingOff = false;
         this.electionTimeoutMs = electionTimeoutMs;
@@ -224,6 +228,11 @@ public class CandidateState implements EpochState {
     @Override
     public int epoch() {
         return epoch;
+    }
+
+    @Override
+    public Optional<LogOffsetMetadata> highWatermark() {
+        return highWatermark;
     }
 
     @Override

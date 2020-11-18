@@ -113,11 +113,11 @@ public class Percentiles extends SampledStat implements CompoundStat {
     protected void update(Sample sample, MetricConfig config, double value, long timeMs) {
         final double boundedValue;
         if (value > max) {
-            log.warn("Received value {} which is greater than max recordable value {}, will be pinned to the max value",
+            log.debug("Received value {} which is greater than max recordable value {}, will be pinned to the max value",
                      value, max);
             boundedValue = max;
         } else if (value < min) {
-            log.warn("Received value {} which is less than min recordable value {}, will be pinned to the min value",
+            log.debug("Received value {} which is less than min recordable value {}, will be pinned to the min value",
                      value, min);
             boundedValue = min;
         } else {

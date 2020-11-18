@@ -203,7 +203,10 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
       if (origin == AppendOrigin.Replication) {
         warn(message)
       } else {
-        throw new ProducerFencedException(message)
+        // Starting from 2.7, we replaced ProducerFenced error with InvalidProducerEpoch in the
+        // producer send response callback to differentiate from the former fatal exception,
+        // letting client abort the ongoing transaction and retry.
+        throw new InvalidProducerEpochException(message)
       }
     }
   }

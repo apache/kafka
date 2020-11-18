@@ -19,6 +19,7 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 
@@ -32,15 +33,18 @@ public class UnattachedState implements EpochState {
     private final Set<Integer> voters;
     private final long electionTimeoutMs;
     private final Timer electionTimer;
+    private final Optional<LogOffsetMetadata> highWatermark;
 
     public UnattachedState(
         Time time,
         int epoch,
         Set<Integer> voters,
+        Optional<LogOffsetMetadata> highWatermark,
         long electionTimeoutMs
     ) {
         this.epoch = epoch;
         this.voters = voters;
+        this.highWatermark = highWatermark;
         this.electionTimeoutMs = electionTimeoutMs;
         this.electionTimer = time.timer(electionTimeoutMs);
     }
@@ -77,6 +81,11 @@ public class UnattachedState implements EpochState {
     public boolean hasElectionTimeoutExpired(long currentTimeMs) {
         electionTimer.update(currentTimeMs);
         return electionTimer.isExpired();
+    }
+
+    @Override
+    public Optional<LogOffsetMetadata> highWatermark() {
+        return highWatermark;
     }
 
     @Override
