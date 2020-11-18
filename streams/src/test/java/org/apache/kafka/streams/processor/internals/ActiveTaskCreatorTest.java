@@ -457,6 +457,7 @@ public class ActiveTaskCreatorTest {
         activeTaskCreator = new ActiveTaskCreator(
             builder,
             new StreamsConfig(properties),
+            0L,
             streamsMetrics,
             stateDirectory,
             changeLogReader,

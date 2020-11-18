@@ -27,6 +27,7 @@ import org.apache.kafka.common.record.TimestampType;
 import org.junit.Test;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
@@ -76,7 +77,7 @@ public class ConsumerInterceptorsTest {
                 if (tp.partition() != filterPartition)
                     recordMap.put(tp, records.records(tp));
             }
-            return new ConsumerRecords<K, V>(recordMap);
+            return new ConsumerRecords<K, V>(recordMap, Collections.emptyMap());
         }
 
         @Override
@@ -125,7 +126,7 @@ public class ConsumerInterceptorsTest {
         records.put(tp, list1);
         records.put(filterTopicPart1, list2);
         records.put(filterTopicPart2, list3);
-        ConsumerRecords<Integer, Integer> consumerRecords = new ConsumerRecords<>(records);
+        ConsumerRecords<Integer, Integer> consumerRecords = new ConsumerRecords<>(records, Collections.emptyMap());
         ConsumerRecords<Integer, Integer> interceptedRecords = interceptors.onConsume(consumerRecords);
         assertEquals(1, interceptedRecords.count());
         assertTrue(interceptedRecords.partitions().contains(tp));

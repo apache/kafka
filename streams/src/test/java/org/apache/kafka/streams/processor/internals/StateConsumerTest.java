@@ -28,6 +28,7 @@ import org.junit.Test;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -58,6 +59,7 @@ public class StateConsumerTest {
 
     @Test
     public void shouldAssignPartitionsToConsumer() {
+        assertEquals(Collections.emptySet(), consumer.assignment());
         stateConsumer.initialize();
         assertEquals(Utils.mkSet(topicOne, topicTwo), consumer.assignment());
     }

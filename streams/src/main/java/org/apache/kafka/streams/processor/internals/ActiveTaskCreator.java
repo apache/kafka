@@ -51,6 +51,7 @@ import static org.apache.kafka.streams.processor.internals.StreamThread.Processi
 class ActiveTaskCreator {
     private final InternalTopologyBuilder builder;
     private final StreamsConfig config;
+    private final long metadataStalenessBound;
     private final StreamsMetricsImpl streamsMetrics;
     private final StateDirectory stateDirectory;
     private final ChangelogReader storeChangelogReader;
@@ -66,6 +67,7 @@ class ActiveTaskCreator {
 
     ActiveTaskCreator(final InternalTopologyBuilder builder,
                       final StreamsConfig config,
+                      final long metadataStalenessBound,
                       final StreamsMetricsImpl streamsMetrics,
                       final StateDirectory stateDirectory,
                       final ChangelogReader storeChangelogReader,
@@ -77,6 +79,7 @@ class ActiveTaskCreator {
                       final Logger log) {
         this.builder = builder;
         this.config = config;
+        this.metadataStalenessBound = metadataStalenessBound;
         this.streamsMetrics = streamsMetrics;
         this.stateDirectory = stateDirectory;
         this.storeChangelogReader = storeChangelogReader;
@@ -234,6 +237,7 @@ class ActiveTaskCreator {
             topology,
             consumer,
             config,
+            metadataStalenessBound,
             streamsMetrics,
             stateDirectory,
             cache,

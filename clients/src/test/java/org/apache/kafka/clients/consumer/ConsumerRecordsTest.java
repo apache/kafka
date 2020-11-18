@@ -16,17 +16,19 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import static org.junit.Assert.assertEquals;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.record.TimestampType;
+import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.record.TimestampType;
-import org.junit.Test;
+
+import static org.junit.Assert.assertEquals;
 
 public class ConsumerRecordsTest {
 
@@ -42,7 +44,7 @@ public class ConsumerRecordsTest {
         records.put(new TopicPartition(topic, 1), Arrays.asList(record1, record2));
         records.put(new TopicPartition(topic, 2), new ArrayList<ConsumerRecord<Integer, String>>());
 
-        ConsumerRecords<Integer, String> consumerRecords = new ConsumerRecords<>(records);
+        ConsumerRecords<Integer, String> consumerRecords = new ConsumerRecords<>(records, Collections.emptyMap());
         Iterator<ConsumerRecord<Integer, String>> iter = consumerRecords.iterator();
 
         int c = 0;

@@ -435,6 +435,7 @@ public class StreamThreadStateStoreProviderTest {
             topology,
             clientSupplier.consumer,
             streamsConfig,
+            Long.MAX_VALUE,
             streamsMetrics,
             stateDirectory,
             EasyMock.createNiceMock(ThreadCache.class),

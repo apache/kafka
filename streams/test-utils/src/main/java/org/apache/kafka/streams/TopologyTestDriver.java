@@ -19,6 +19,7 @@ package org.apache.kafka.streams;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -519,6 +520,7 @@ public class TopologyTestDriver implements Closeable {
                 processorTopology,
                 consumer,
                 streamsConfig,
+                Long.MAX_VALUE, // topic-partition metadata should never time out in the TTD
                 streamsMetrics,
                 stateDirectory,
                 cache,
@@ -591,10 +593,11 @@ public class TopologyTestDriver implements Closeable {
                                    final byte[] key,
                                    final byte[] value,
                                    final Headers headers) {
+        final long offset = offsetsByTopicOrPatternPartition.get(topicOrPatternPartition).incrementAndGet() - 1;
         task.addRecords(topicOrPatternPartition, Collections.singleton(new ConsumerRecord<>(
             inputTopic,
             topicOrPatternPartition.partition(),
-            offsetsByTopicOrPatternPartition.get(topicOrPatternPartition).incrementAndGet() - 1,
+            offset,
             timestamp,
             TimestampType.CREATE_TIME,
             (long) ConsumerRecord.NULL_CHECKSUM,
@@ -603,6 +606,15 @@ public class TopologyTestDriver implements Closeable {
             key,
             value,
             headers))
+        );
+        task.addFetchedMetadata(
+            topicOrPatternPartition,
+            new ConsumerRecords.Metadata(
+                mockWallClockTime.milliseconds(),
+                offset,
+                0L,
+                offset
+            )
         );
     }
 

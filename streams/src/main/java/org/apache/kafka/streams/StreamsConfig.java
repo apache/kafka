@@ -134,6 +134,8 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 @SuppressWarnings("deprecation")
 public class StreamsConfig extends AbstractConfig {
 
+    public static final long MAX_TASK_IDLE_MS_DISABLED = -1;
+
     private final static Logger log = LoggerFactory.getLogger(StreamsConfig.class);
 
     private static final ConfigDef CONFIG;
@@ -662,7 +664,7 @@ public class StreamsConfig extends AbstractConfig {
                     DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS_DOC)
             .define(MAX_TASK_IDLE_MS_CONFIG,
                     Type.LONG,
-                    0L,
+                    MAX_TASK_IDLE_MS_DISABLED,
                     Importance.MEDIUM,
                     MAX_TASK_IDLE_MS_DOC)
             .define(MAX_WARMUP_REPLICAS_CONFIG,
