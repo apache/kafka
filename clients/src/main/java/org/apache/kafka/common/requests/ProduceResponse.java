@@ -127,7 +127,7 @@ public class ProduceResponse extends AbstractResponse {
 
     /**
      * this method is used by testing only.
-     * TODO: refactor the tests which are using this method and then remove this method from production code.
+     * refactor the tests which are using this method and then remove this method from production code.
      * https://issues.apache.org/jira/browse/KAFKA-10697
      */
     @Deprecated

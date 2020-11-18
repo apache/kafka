@@ -598,7 +598,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       val topicPartition = new TopicPartition(topic.name, partition.index)
       // This caller assumes the type is MemoryRecords and that is true on current serialization
       // We cast the type to avoid causing big change to code base.
-      // TODO: maybe we need to refactor code to avoid this casting
       // https://issues.apache.org/jira/browse/KAFKA-10698
       val memoryRecords = partition.records.asInstanceOf[MemoryRecords]
       if (!authorizedTopics.contains(topicPartition.topic))
@@ -616,7 +615,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     })
 
     // the callback for sending a produce response
-    // TODO: the construction of ProduceResponse is able to accept auto-generated protocol data so
+    // The construction of ProduceResponse is able to accept auto-generated protocol data so
     // KafkaApis#handleProduceRequest should apply auto-generated protocol to avoid extra conversion.
     // https://issues.apache.org/jira/browse/KAFKA-10730
     @nowarn("cat=deprecation")

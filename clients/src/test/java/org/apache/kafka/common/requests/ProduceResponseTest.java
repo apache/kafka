@@ -21,9 +21,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.RecordBatch;
 import org.junit.Test;
@@ -34,11 +31,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.kafka.common.protocol.ApiKeys.PRODUCE;
-import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
-import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
-import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
-import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
-import static org.apache.kafka.common.protocol.types.Type.INT64;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -123,82 +115,6 @@ public class ProduceResponseTest {
                 assertEquals(0, deserialized.recordErrors.size());
                 assertNull(deserialized.errorMessage);
             }
-        }
-    }
-
-    /**
-     * the schema in this test is from previous code and the automatic protocol should be compatible to previous schema.
-     */
-    @Test
-    public void testCompatibility() {
-        String responseKeyName = "responses";
-        String partitionResponsesKeyName = "partition_responses";
-        long invalidOffset = -1L;
-        String baseOffsetKeyName = "base_offset";
-        String logAppendTimeKeyName = "log_append_time";
-        String logStartOffsetKeyName = "log_start_offset";
-        String recordErrorsKeyName = "record_errors";
-        String batchIndexKeyName = "batch_index";
-        String batchIndexErrorMessageKeyName = "batch_index_error_message";
-        String errorMessageKeyName = "error_message";
-
-        Field.Int64 logStartOffsetField = new Field.Int64(logStartOffsetKeyName,
-                "The start offset of the log at the time this produce response was created", invalidOffset);
-        Field.NullableStr batchIndexErrorMessageField = new Field.NullableStr(batchIndexErrorMessageKeyName,
-                "The error message of the record that caused the batch to be dropped");
-        Field.NullableStr errorMessageField = new Field.NullableStr(errorMessageKeyName,
-                "The global error message summarizing the common root cause of the records that caused the batch to be dropped");
-
-        Schema produceResponseV0 = new Schema(
-                new Field(responseKeyName, new ArrayOf(new Schema(TOPIC_NAME,
-                        new Field(partitionResponsesKeyName, new ArrayOf(new Schema(PARTITION_ID, ERROR_CODE,
-                                new Field(baseOffsetKeyName, INT64))))))));
-
-        Schema produceResponseV1 = new Schema(
-                new Field(responseKeyName, new ArrayOf(new Schema(TOPIC_NAME,
-                        new Field(partitionResponsesKeyName, new ArrayOf(new Schema(PARTITION_ID, ERROR_CODE,
-                                new Field(baseOffsetKeyName, INT64))))))),
-                THROTTLE_TIME_MS);
-
-        Schema produceResponseV2 = new Schema(
-                new Field(responseKeyName, new ArrayOf(new Schema(TOPIC_NAME,
-                        new Field(partitionResponsesKeyName, new ArrayOf(new Schema(PARTITION_ID, ERROR_CODE,
-                                new Field(baseOffsetKeyName, INT64),
-                                new Field(logAppendTimeKeyName, INT64))))))),
-                THROTTLE_TIME_MS);
-        Schema produceResponseV3 = produceResponseV2;
-        Schema produceResponseV4 = produceResponseV3;
-        Schema produceResponseV5 = new Schema(
-                new Field(responseKeyName, new ArrayOf(new Schema(TOPIC_NAME,
-                        new Field(partitionResponsesKeyName, new ArrayOf(new Schema(PARTITION_ID, ERROR_CODE,
-                                new Field(baseOffsetKeyName, INT64),
-                                new Field(logAppendTimeKeyName, INT64),
-                                logStartOffsetField)))))),
-                THROTTLE_TIME_MS);
-        Schema produceResponseV6 = produceResponseV5;
-        Schema produceResponseV7 = produceResponseV6;
-        Schema produceResponseV8 = new Schema(
-                new Field(responseKeyName, new ArrayOf(new Schema(TOPIC_NAME,
-                        new Field(partitionResponsesKeyName, new ArrayOf(new Schema(PARTITION_ID, ERROR_CODE,
-                                new Field(baseOffsetKeyName, INT64),
-                                new Field(logAppendTimeKeyName, INT64),
-                                logStartOffsetField,
-                                new Field(recordErrorsKeyName, new ArrayOf(new Schema(
-                                        new Field.Int32(batchIndexKeyName, "The batch index of the record " +
-                                                "that caused the batch to be dropped"),
-                                        batchIndexErrorMessageField
-                                ))),
-                                errorMessageField)))))),
-                THROTTLE_TIME_MS);
-
-        Schema[] schemaVersions = new Schema[]{
-            produceResponseV0, produceResponseV1, produceResponseV2,
-            produceResponseV3, produceResponseV4, produceResponseV5,
-            produceResponseV6, produceResponseV7, produceResponseV8};
-
-        int schemaVersion = 0;
-        for (Schema previousSchema : schemaVersions) {
-            SchemaTestUtils.assertEquals(previousSchema, ProduceResponseData.SCHEMAS[schemaVersion++]);
         }
     }
 }
