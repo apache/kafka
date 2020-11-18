@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.errors.InvalidPidMappingException;
+import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -1014,10 +1015,6 @@ public class TransactionManager {
                 requestEpochBumpForPartition(batch.topicPartition);
                 return true;
             }
-        } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
-            // Retry the initProducerId to bump the epoch and continue.
-            requestEpochBumpForPartition(batch.topicPartition);
-            return true;
         } else if (error == Errors.OUT_OF_ORDER_SEQUENCE_NUMBER) {
             if (!hasUnresolvedSequence(batch.topicPartition) &&
                     (batch.sequenceHasBeenReset() || !isNextSequence(batch.topicPartition, batch.baseSequence()))) {
@@ -1096,6 +1093,8 @@ public class TransactionManager {
             if (lastError instanceof ProducerFencedException) {
                 throw new ProducerFencedException("The producer has been rejected from the broker because " +
                     "it tried to use an old epoch with the transactionalId");
+            } else if (lastError instanceof InvalidProducerEpochException) {
+                throw new InvalidProducerEpochException("Producer attempted to produce with an old epoch " + producerIdAndEpoch);
             } else {
                 throw new KafkaException("Cannot execute transactional method because we are in an error state", lastError);
             }

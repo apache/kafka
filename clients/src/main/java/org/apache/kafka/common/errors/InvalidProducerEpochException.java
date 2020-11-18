@@ -14,16 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.internals;
-
-import org.apache.kafka.common.errors.RetriableException;
+package org.apache.kafka.common.errors;
 
 /**
  * This exception indicates that the produce request sent to the partition leader
- * contains a non-matching producer epoch. When encountering this exception, the ongoing transaction
- * will be aborted and can be retried.
+ * contains a non-matching producer epoch. When encountering this exception, user should abort the ongoing transaction
+ * by calling KafkaProducer#abortTransaction which would try to send initPidRequest and reinitialize the producer
+ * under the hood.
  */
-public class InvalidProducerEpochException extends RetriableException {
+public class InvalidProducerEpochException extends ApiException {
 
     private static final long serialVersionUID = 1L;
 
