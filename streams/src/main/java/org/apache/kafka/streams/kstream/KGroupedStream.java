@@ -440,7 +440,7 @@ public interface KGroupedStream<K, V> {
      *
      * <p>
      * For failure and recovery the store (which always will be of type {@link TimestampedKeyValueStore} -- regardless of what
-     * is specified in the parameter {@materialized}) will be backed by an internal changelog topic that will be created in Kafka.
+     * is specified in the parameter {@code materialized}) will be backed by an internal changelog topic that will be created in Kafka.
      * Therefore, the store name defined by the Materialized instance must be a valid Kafka topic name and cannot contain characters other than ASCII
      * alphanumerics, '.', '_' and '-'.
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
@@ -499,7 +499,7 @@ public interface KGroupedStream<K, V> {
      *
      * <p>
      * For failure and recovery the store (which always will be of type {@link TimestampedKeyValueStore} -- regardless of what
-     * is specified in the parameter {@materialized}) will be backed by an internal changelog topic that will be created in Kafka.
+     * is specified in the parameter {@code materialized}) will be backed by an internal changelog topic that will be created in Kafka.
      * Therefore, the store name defined by the Materialized instance must be a valid Kafka topic name and cannot contain characters other than ASCII
      * alphanumerics, '.', '_' and '-'.
      * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
