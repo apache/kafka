@@ -1,0 +1,38 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "type": "data",
+  "name": "TransactionLogValue",
+  "validVersions": "0",
+  "fields": [
+    { "name": "producerId", "type": "int64", "versions": "0",
+      "about": "Producer id in use by the transactional id"},
+    { "name": "producerEpoch", "type": "int16", "versions": "0",
+      "about": "Epoch associated with the producer id"},
+    { "name": "transactionTimeoutMs", "type": "int32", "versions": "0",
+      "about": "Transaction timeout in milliseconds"},
+    { "name": "transactionStatus", "type": "int8", "versions": "0",
+      "about": "TransactionState the transaction is in"},
+    { "name": "transactionPartitions", "type": "[]PartitionsSchema", "versions": "0", "nullableVersions": "0",
+      "about": "Set of partitions involved in the transaction", "fields": [
+      { "name": "topic", "type": "string", "versions": "0"},
+      { "name": "partitionIds", "type": "[]int32", "versions": "0"}]},
+    { "name": "transactionLastUpdateTimestampMs", "type": "int64", "versions": "0",
+      "about": "Time the transaction was last updated"},
+    { "name": "transactionStartTimestampMs", "type": "int64", "versions": "0",
+      "about": "Time the transaction was started"}
+  ]
+}
