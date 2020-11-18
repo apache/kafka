@@ -14,13 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.raft;
+package org.apache.kafka.common.errors;
 
-import org.apache.kafka.common.KafkaException;
+/**
+ * This exception indicates that the produce request sent to the partition leader
+ * contains a non-matching producer epoch. When encountering this exception, user should abort the ongoing transaction
+ * by calling KafkaProducer#abortTransaction which would try to send initPidRequest and reinitialize the producer
+ * under the hood.
+ */
+public class InvalidProducerEpochException extends ApiException {
 
-public class LogTruncationException extends KafkaException {
+    private static final long serialVersionUID = 1L;
 
-    public LogTruncationException(String message) {
+    public InvalidProducerEpochException(String message) {
         super(message);
     }
 }

@@ -34,9 +34,6 @@ env:
 jdk:
   - oraclejdk8
 
-before_install:
-  - gradle wrapper
-
 script:
   - ./gradlew rat
   - ./gradlew systemTestLibs && /bin/bash ./tests/docker/run_tests.sh

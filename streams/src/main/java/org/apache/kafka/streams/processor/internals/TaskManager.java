@@ -35,6 +35,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.Task.State;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.slf4j.Logger;
 
@@ -186,6 +187,15 @@ public class TaskManager {
             // mark corrupted partitions to not be checkpointed, and then close the task as dirty
             final Collection<TopicPartition> corruptedPartitions = entry.getValue();
             task.markChangelogAsCorrupted(corruptedPartitions);
+
+            try {
+                // we do not need to take the returned offsets since we are not going to commit anyways;
+                // this call is only used for active tasks to flush the cache before suspending and
+                // closing the topology
+                task.prepareCommit();
+            } catch (final RuntimeException swallow) {
+                log.error("Error flushing cache for corrupted task {} ", task.id(), swallow);
+            }
 
             try {
                 task.suspend();
@@ -662,7 +672,8 @@ public class TaskManager {
         // just have an empty changelogOffsets map.
         for (final TaskId id : union(HashSet::new, lockedTaskDirectories, tasks.keySet())) {
             final Task task = tasks.get(id);
-            if (task != null) {
+            // Closed and uninitialized tasks don't have any offsets so we should read directly from the checkpoint
+            if (task != null && task.state() != State.CREATED && task.state() != State.CLOSED) {
                 final Map<TopicPartition, Long> changelogOffsets = task.changelogOffsets();
                 if (changelogOffsets.isEmpty()) {
                     log.debug("Skipping to encode apparently stateless (or non-logged) offset sum for task {}", id);
@@ -770,6 +781,14 @@ public class TaskManager {
     }
 
     private void closeTaskDirty(final Task task) {
+        try {
+            // we call this function only to flush the case if necessary
+            // before suspending and closing the topology
+            task.prepareCommit();
+        } catch (final RuntimeException swallow) {
+            log.error("Error flushing caches of dirty task {} ", task.id(), swallow);
+        }
+
         try {
             task.suspend();
         } catch (final RuntimeException swallow) {
@@ -1051,7 +1070,7 @@ public class TaskManager {
     }
 
     private void commitOffsetsOrTransaction(final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> offsetsPerTask) {
-        log.info("Committing task offsets {}", offsetsPerTask);
+        log.debug("Committing task offsets {}", offsetsPerTask);
 
         if (!offsetsPerTask.isEmpty()) {
             if (processingMode == EXACTLY_ONCE_ALPHA) {

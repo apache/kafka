@@ -19,7 +19,11 @@ package kafka.api
 
 import org.apache.kafka.common.config.ConfigDef.Validator
 import org.apache.kafka.common.config.ConfigException
-import org.apache.kafka.common.record.RecordVersion
+import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.record.{RecordBatch, RecordVersion}
+import org.apache.kafka.common.requests.{AbstractResponse, ApiVersionsResponse}
+import org.apache.kafka.common.requests.ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE
 
 /**
  * This class contains the different Kafka versions.
@@ -134,6 +138,47 @@ object ApiVersion {
       case RecordVersion.V2 => KAFKA_0_11_0_IV0
       case _ => throw new IllegalArgumentException(s"Invalid message format version $recordVersion")
     }
+  }
+
+  def apiVersionsResponse(throttleTimeMs: Int,
+                          maxMagic: Byte,
+                          latestSupportedFeatures: Features[SupportedVersionRange]): ApiVersionsResponse = {
+    apiVersionsResponse(
+      throttleTimeMs,
+      maxMagic,
+      latestSupportedFeatures,
+      Features.emptyFinalizedFeatures,
+      ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH
+    )
+  }
+
+  def apiVersionsResponse(throttleTimeMs: Int,
+                          maxMagic: Byte,
+                          latestSupportedFeatures: Features[SupportedVersionRange],
+                          finalizedFeatures: Features[FinalizedVersionRange],
+                          finalizedFeaturesEpoch: Long): ApiVersionsResponse = {
+    val apiKeys = ApiVersionsResponse.defaultApiKeys(maxMagic)
+    if (maxMagic == RecordBatch.CURRENT_MAGIC_VALUE &&
+      throttleTimeMs == AbstractResponse.DEFAULT_THROTTLE_TIME)
+      return new ApiVersionsResponse(
+        ApiVersionsResponse.createApiVersionsResponseData(
+          DEFAULT_API_VERSIONS_RESPONSE.throttleTimeMs,
+          Errors.forCode(DEFAULT_API_VERSIONS_RESPONSE.data.errorCode),
+          apiKeys,
+          latestSupportedFeatures,
+          finalizedFeatures,
+          finalizedFeaturesEpoch)
+      )
+
+    new ApiVersionsResponse(
+      ApiVersionsResponse.createApiVersionsResponseData(
+        throttleTimeMs,
+        Errors.NONE,
+        apiKeys,
+        latestSupportedFeatures,
+        finalizedFeatures,
+        finalizedFeaturesEpoch)
+    )
   }
 }
 

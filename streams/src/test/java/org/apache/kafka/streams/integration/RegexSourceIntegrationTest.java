@@ -32,6 +32,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyWrapper;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
@@ -424,6 +425,10 @@ public class RegexSourceIntegrationTest {
             if (newState == KafkaStreams.State.ERROR) {
                 expectError.set(true);
             }
+        });
+        streams.setUncaughtExceptionHandler(e -> {
+            expectError.set(true);
+            return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
         });
         streams.start();
 

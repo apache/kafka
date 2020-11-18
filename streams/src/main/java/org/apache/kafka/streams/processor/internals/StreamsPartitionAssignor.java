@@ -255,8 +255,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             taskManager.processId(),
             userEndPoint,
             taskManager.getTaskOffsetSums(),
-            uniqueField)
-                .encode();
+            uniqueField,
+            assignmentErrorCode.get()
+        ).encode();
     }
 
     private Map<String, Assignment> errorAssignment(final Map<UUID, ClientMetadata> clientsMetadata,
@@ -308,12 +309,16 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         int minReceivedMetadataVersion = LATEST_SUPPORTED_VERSION;
         int minSupportedMetadataVersion = LATEST_SUPPORTED_VERSION;
 
+        boolean shutdownRequested = false;
         int futureMetadataVersion = UNKNOWN;
         for (final Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
             final String consumerId = entry.getKey();
             final Subscription subscription = entry.getValue();
             final SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
             final int usedVersion = info.version();
+            if (info.errorCode() == AssignorError.SHUTDOWN_REQUESTED.code()) {
+                shutdownRequested = true;
+            }
 
             minReceivedMetadataVersion = updateMinReceivedVersion(usedVersion, minReceivedMetadataVersion);
             minSupportedMetadataVersion = updateMinSupportedVersion(info.latestSupportedVersion(), minSupportedMetadataVersion);
@@ -350,6 +355,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             log.debug("Constructed client metadata {} from the member subscriptions.", clientMetadataMap);
 
             // ---------------- Step One ---------------- //
+
+            if (shutdownRequested) {
+                return new GroupAssignment(errorAssignment(clientMetadataMap, AssignorError.SHUTDOWN_REQUESTED.code()));
+            }
 
             // parse the topology to determine the repartition source topics,
             // making sure they are created with the number of partitions as
@@ -530,10 +539,11 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         boolean numPartitionsNeeded;
         do {
             numPartitionsNeeded = false;
+            boolean progressMadeThisIteration = false;  // avoid infinitely looping without making any progress on unknown repartitions
 
             for (final TopicsInfo topicsInfo : topicGroups.values()) {
-                for (final String topicName : topicsInfo.repartitionSourceTopics.keySet()) {
-                    final Optional<Integer> maybeNumPartitions = repartitionTopicMetadata.get(topicName)
+                for (final String repartitionSourceTopic : topicsInfo.repartitionSourceTopics.keySet()) {
+                    final Optional<Integer> maybeNumPartitions = repartitionTopicMetadata.get(repartitionSourceTopic)
                                                                      .numberOfPartitions();
                     Integer numPartitions = null;
 
@@ -542,24 +552,24 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                         for (final TopicsInfo otherTopicsInfo : topicGroups.values()) {
                             final Set<String> otherSinkTopics = otherTopicsInfo.sinkTopics;
 
-                            if (otherSinkTopics.contains(topicName)) {
+                            if (otherSinkTopics.contains(repartitionSourceTopic)) {
                                 // if this topic is one of the sink topics of this topology,
                                 // use the maximum of all its source topic partitions as the number of partitions
-                                for (final String sourceTopicName : otherTopicsInfo.sourceTopics) {
+                                for (final String upstreamSourceTopic : otherTopicsInfo.sourceTopics) {
                                     Integer numPartitionsCandidate = null;
                                     // It is possible the sourceTopic is another internal topic, i.e,
                                     // map().join().join(map())
-                                    if (repartitionTopicMetadata.containsKey(sourceTopicName)) {
-                                        if (repartitionTopicMetadata.get(sourceTopicName).numberOfPartitions().isPresent()) {
+                                    if (repartitionTopicMetadata.containsKey(upstreamSourceTopic)) {
+                                        if (repartitionTopicMetadata.get(upstreamSourceTopic).numberOfPartitions().isPresent()) {
                                             numPartitionsCandidate =
-                                                repartitionTopicMetadata.get(sourceTopicName).numberOfPartitions().get();
+                                                repartitionTopicMetadata.get(upstreamSourceTopic).numberOfPartitions().get();
                                         }
                                     } else {
-                                        final Integer count = metadata.partitionCountForTopic(sourceTopicName);
+                                        final Integer count = metadata.partitionCountForTopic(upstreamSourceTopic);
                                         if (count == null) {
                                             throw new TaskAssignmentException(
                                                 "No partition count found for source topic "
-                                                    + sourceTopicName
+                                                    + upstreamSourceTopic
                                                     + ", but it should have been."
                                             );
                                         }
@@ -575,15 +585,19 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                             }
                         }
 
-                        // if we still have not found the right number of partitions,
-                        // another iteration is needed
                         if (numPartitions == null) {
                             numPartitionsNeeded = true;
+                            log.trace("Unable to determine number of partitions for {}, another iteration is needed",
+                                      repartitionSourceTopic);
                         } else {
-                            repartitionTopicMetadata.get(topicName).setNumberOfPartitions(numPartitions);
+                            repartitionTopicMetadata.get(repartitionSourceTopic).setNumberOfPartitions(numPartitions);
+                            progressMadeThisIteration = true;
                         }
                     }
                 }
+            }
+            if (!progressMadeThisIteration && numPartitionsNeeded) {
+                throw new TaskAssignmentException("Failed to compute number of partitions for all repartition topics");
             }
         } while (numPartitionsNeeded);
     }
@@ -1437,6 +1451,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 break;
             case 7:
             case 8:
+            case 9:
                 validateActiveTaskEncoding(partitions, info, logPrefix);
 
                 activeTasks = getActiveTasks(partitions, info);

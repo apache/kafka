@@ -525,11 +525,11 @@ class SocketServerTest {
         new Processor(id, time, config.socketRequestMaxBytes, dataPlaneRequestChannel, connectionQuotas,
           config.connectionsMaxIdleMs, config.failedAuthenticationDelayMs, listenerName, protocol, config, metrics,
           credentialProvider, memoryPool, new LogContext(), isPrivilegedListener = isPrivilegedListener) {
-            override protected[network] def connectionId(socket: Socket): String = overrideConnectionId
-            override protected[network] def createSelector(channelBuilder: ChannelBuilder): Selector = {
-             val testableSelector = new TestableSelector(config, channelBuilder, time, metrics)
-             selector = testableSelector
-             testableSelector
+          override protected[network] def connectionId(socket: Socket): String = overrideConnectionId
+          override protected[network] def createSelector(channelBuilder: ChannelBuilder): Selector = {
+            val testableSelector = new TestableSelector(config, channelBuilder, time, metrics)
+            selector = testableSelector
+            testableSelector
           }
         }
       }
@@ -1066,10 +1066,10 @@ class SocketServerTest {
           config.connectionsMaxIdleMs, config.failedAuthenticationDelayMs, listenerName, protocol, config, metrics,
           credentialProvider, memoryPool, new LogContext(), isPrivilegedListener = isPrivilegedListener) {
           override protected[network] def createSelector(channelBuilder: ChannelBuilder): Selector = {
-           val testableSelector = new TestableSelector(config, channelBuilder, time, metrics)
-           selector = testableSelector
-           testableSelector
-        }
+            val testableSelector = new TestableSelector(config, channelBuilder, time, metrics)
+            selector = testableSelector
+            testableSelector
+          }
         }
       }
     }
@@ -1136,8 +1136,8 @@ class SocketServerTest {
     assertEquals(2, server.dataPlaneRequestChannel.metrics(ApiKeys.PRODUCE.name).requestRate(version).count())
     server.dataPlaneRequestChannel.updateErrorMetrics(ApiKeys.PRODUCE, Map(Errors.NONE -> 1))
     val nonZeroMeters = Map(s"kafka.network:type=RequestMetrics,name=RequestsPerSec,request=Produce,version=$version" -> 2,
-        s"kafka.network:type=RequestMetrics,name=RequestsPerSec,request=Produce,version=$version2" -> 1,
-        "kafka.network:type=RequestMetrics,name=ErrorsPerSec,request=Produce,error=NONE" -> 1)
+      s"kafka.network:type=RequestMetrics,name=RequestsPerSec,request=Produce,version=$version2" -> 1,
+      "kafka.network:type=RequestMetrics,name=ErrorsPerSec,request=Produce,error=NONE" -> 1)
 
     def requestMetricMeters = KafkaYammerMetrics
       .defaultRegistry
@@ -1608,7 +1608,7 @@ class SocketServerTest {
 
       testableSelector.operationCounts.clear()
       testableSelector.addFailure(SelectorOperation.Poll,
-          Some(new ControlThrowable() {}))
+        Some(new ControlThrowable() {}))
       testableSelector.waitForOperations(SelectorOperation.Poll, 1)
 
       testableSelector.waitForOperations(SelectorOperation.CloseSelector, 1)
@@ -1639,7 +1639,7 @@ class SocketServerTest {
       if (stackTraces.isEmpty)
         errors.add(s"Acceptor thread not found, threads=${Thread.getAllStackTraces.keySet}")
       stackTraces.exists { case (thread, stackTrace) =>
-          thread.getState == Thread.State.WAITING && stackTrace.contains("ArrayBlockingQueue")
+        thread.getState == Thread.State.WAITING && stackTrace.contains("ArrayBlockingQueue")
       }
     }
 
@@ -1758,7 +1758,7 @@ class SocketServerTest {
     val testableServer = new TestableSocketServer(config)
     testableServer.startup()
     try {
-        testWithServer(testableServer)
+      testWithServer(testableServer)
     } finally {
       shutdownServerAndMetrics(testableServer)
       assertEquals(0, testableServer.uncaughtExceptions)
@@ -1814,7 +1814,7 @@ class SocketServerTest {
 
   class TestableSocketServer(config : KafkaConfig = KafkaConfig.fromProps(props), val connectionQueueSize: Int = 20,
                              override val time: Time = Time.SYSTEM) extends SocketServer(config,
-      new Metrics, time, credentialProvider) {
+    new Metrics, time, credentialProvider) {
 
     @volatile var selector: Option[TestableSelector] = None
     @volatile var uncaughtExceptions = 0
@@ -1826,9 +1826,9 @@ class SocketServerTest {
         memoryPool, new LogContext(), connectionQueueSize, isPrivilegedListener) {
 
         override protected[network] def createSelector(channelBuilder: ChannelBuilder): Selector = {
-           val testableSelector = new TestableSelector(config, channelBuilder, time, metrics, metricTags.asScala)
-           selector = Some(testableSelector)
-           testableSelector
+          val testableSelector = new TestableSelector(config, channelBuilder, time, metrics, metricTags.asScala)
+          selector = Some(testableSelector)
+          testableSelector
         }
 
         override private[network] def processException(errorMessage: String, throwable: Throwable): Unit = {
@@ -1846,11 +1846,11 @@ class SocketServerTest {
       val selector = testableSelector
       if (locallyClosed) {
         TestUtils.waitUntilTrue(() => selector.allLocallyClosedChannels.contains(connectionId),
-            s"Channel not closed: $connectionId")
+          s"Channel not closed: $connectionId")
         assertTrue("Unexpected disconnect notification", testableSelector.allDisconnectedChannels.isEmpty)
       } else {
         TestUtils.waitUntilTrue(() => selector.allDisconnectedChannels.contains(connectionId),
-            s"Disconnect notification not received: $connectionId")
+          s"Disconnect notification not received: $connectionId")
         assertTrue("Channel closed locally", testableSelector.allLocallyClosedChannels.isEmpty)
       }
       val openCount = selector.allChannels.size - 1 // minus one for the channel just closed above
@@ -1875,8 +1875,8 @@ class SocketServerTest {
   }
 
   class TestableSelector(config: KafkaConfig, channelBuilder: ChannelBuilder, time: Time, metrics: Metrics, metricTags: mutable.Map[String, String] = mutable.Map.empty)
-        extends Selector(config.socketRequestMaxBytes, config.connectionsMaxIdleMs, config.failedAuthenticationDelayMs,
-            metrics, time, "socket-server", metricTags.asJava, false, true, channelBuilder, MemoryPool.NONE, new LogContext()) {
+    extends Selector(config.socketRequestMaxBytes, config.connectionsMaxIdleMs, config.failedAuthenticationDelayMs,
+      metrics, time, "socket-server", metricTags.asJava, false, true, channelBuilder, MemoryPool.NONE, new LogContext()) {
 
     val failures = mutable.Map[SelectorOperation, Throwable]()
     val operationCounts = mutable.Map[SelectorOperation, Int]().withDefaultValue(0)
@@ -1977,7 +1977,7 @@ class SocketServerTest {
     }
 
     def runOp[T](operation: SelectorOperation, connectionId: Option[String],
-        onFailure: => Unit = {})(code: => T): T = {
+                 onFailure: => Unit = {})(code: => T): T = {
       // If a failure is set on `operation`, throw that exception even if `code` fails
       try code
       finally onOperation(operation, connectionId, onFailure)

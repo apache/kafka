@@ -118,13 +118,10 @@ import org.apache.kafka.common.message.DescribeLogDirsRequestData;
 import org.apache.kafka.common.message.DescribeLogDirsRequestData.DescribableLogDirTopic;
 import org.apache.kafka.common.message.DescribeLogDirsResponseData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData;
+import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData.UserName;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.ExpireDelegationTokenRequestData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
-import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData;
-import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterConfigsResource;
-import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfig;
-import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfigCollection;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.message.ListGroupsRequestData;
@@ -1092,7 +1089,7 @@ public class KafkaAdminClient extends AdminClient {
                     continue;
                 }
                 ClientRequest clientRequest = client.newClientRequest(node.idString(), requestBuilder, now,
-                        true, requestTimeoutMs, null, null, null);
+                        true, requestTimeoutMs, null);
                 log.debug("Sending {} to {}. correlationId={}", requestBuilder, node, clientRequest.correlationId());
                 client.send(clientRequest, now);
                 getOrCreateListValue(callsInFlight, node.idString()).add(call);
@@ -2216,7 +2213,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs,
-                                                                 final AlterConfigsOptions options) {
+                                                      final AlterConfigsOptions options) {
         final Map<ConfigResource, KafkaFutureImpl<Void>> allFutures = new HashMap<>();
         // We must make a separate AlterConfigs request for every BROKER resource we want to alter
         // and send the request to that specific broker. Other resources are grouped together into
@@ -2238,9 +2235,9 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     private Map<ConfigResource, KafkaFutureImpl<Void>> incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs,
-                                                                    final AlterConfigsOptions options,
-                                                                    Collection<ConfigResource> resources,
-                                                                    NodeProvider nodeProvider) {
+                                                                               final AlterConfigsOptions options,
+                                                                               Collection<ConfigResource> resources,
+                                                                               NodeProvider nodeProvider) {
         final Map<ConfigResource, KafkaFutureImpl<Void>> futures = new HashMap<>();
         for (ConfigResource resource : resources)
             futures.put(resource, new KafkaFutureImpl<>());
@@ -2250,8 +2247,7 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             public IncrementalAlterConfigsRequest.Builder createRequest(int timeoutMs) {
-                return new IncrementalAlterConfigsRequest.Builder(
-                        toIncrementalAlterConfigsRequestData(resources, configs, options.shouldValidateOnly()));
+                return new IncrementalAlterConfigsRequest.Builder(resources, configs, options.shouldValidateOnly());
             }
 
             @Override
@@ -2275,27 +2271,6 @@ public class KafkaAdminClient extends AdminClient {
             }
         }, now);
         return futures;
-    }
-
-    private IncrementalAlterConfigsRequestData toIncrementalAlterConfigsRequestData(final Collection<ConfigResource> resources,
-                                                                                    final Map<ConfigResource, Collection<AlterConfigOp>> configs,
-                                                                                    final boolean validateOnly) {
-        IncrementalAlterConfigsRequestData requestData = new IncrementalAlterConfigsRequestData();
-        requestData.setValidateOnly(validateOnly);
-        for (ConfigResource resource : resources) {
-            AlterableConfigCollection alterableConfigSet = new AlterableConfigCollection();
-            for (AlterConfigOp configEntry : configs.get(resource))
-                alterableConfigSet.add(new AlterableConfig().
-                        setName(configEntry.configEntry().name()).
-                        setValue(configEntry.configEntry().value()).
-                        setConfigOperation(configEntry.opType().id()));
-
-            AlterConfigsResource alterConfigsResource = new AlterConfigsResource();
-            alterConfigsResource.setResourceType(resource.type().id()).
-                    setResourceName(resource.name()).setConfigs(alterableConfigSet);
-            requestData.resources().add(alterConfigsResource);
-        }
-        return requestData;
     }
 
     @Override
@@ -4168,10 +4143,22 @@ public class KafkaAdminClient extends AdminClient {
         Call call = new Call("describeUserScramCredentials", calcDeadlineMs(now, options.timeoutMs()),
                 new LeastLoadedNodeProvider()) {
             @Override
-            public DescribeUserScramCredentialsRequest.Builder createRequest(int timeoutMs) {
-                return new DescribeUserScramCredentialsRequest.Builder(
-                        new DescribeUserScramCredentialsRequestData().setUsers(users.stream().map(user ->
-                                new DescribeUserScramCredentialsRequestData.UserName().setName(user)).collect(Collectors.toList())));
+            public DescribeUserScramCredentialsRequest.Builder createRequest(final int timeoutMs) {
+                final DescribeUserScramCredentialsRequestData requestData = new DescribeUserScramCredentialsRequestData();
+
+                if (users != null && !users.isEmpty()) {
+                    final List<UserName> userNames = new ArrayList<>(users.size());
+
+                    for (final String user : users) {
+                        if (user != null) {
+                            userNames.add(new UserName().setName(user));
+                        }
+                    }
+
+                    requestData.setUsers(userNames);
+                }
+
+                return new DescribeUserScramCredentialsRequest.Builder(requestData);
             }
 
             @Override
@@ -4337,14 +4324,12 @@ public class KafkaAdminClient extends AdminClient {
                 .hi(password, salt, iterations);
     }
 
+    @Override
     public DescribeFeaturesResult describeFeatures(final DescribeFeaturesOptions options) {
         final KafkaFutureImpl<FeatureMetadata> future = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
-        final NodeProvider provider =
-            options.sendRequestToController() ? new ControllerNodeProvider() : new LeastLoadedNodeProvider();
-
         final Call call = new Call(
-            "describeFeatures", calcDeadlineMs(now, options.timeoutMs()), provider) {
+            "describeFeatures", calcDeadlineMs(now, options.timeoutMs()), new LeastLoadedNodeProvider()) {
 
             private FeatureMetadata createFeatureMetadata(final ApiVersionsResponse response) {
                 final Map<String, FinalizedVersionRange> finalizedFeatures = new HashMap<>();
@@ -4377,9 +4362,6 @@ public class KafkaAdminClient extends AdminClient {
                 final ApiVersionsResponse apiVersionsResponse = (ApiVersionsResponse) response;
                 if (apiVersionsResponse.data.errorCode() == Errors.NONE.code()) {
                     future.complete(createFeatureMetadata(apiVersionsResponse));
-                } else if (options.sendRequestToController() &&
-                           apiVersionsResponse.data.errorCode() == Errors.NOT_CONTROLLER.code()) {
-                    handleNotControllerError(Errors.NOT_CONTROLLER);
                 } else {
                     future.completeExceptionally(Errors.forCode(apiVersionsResponse.data.errorCode()).exception());
                 }

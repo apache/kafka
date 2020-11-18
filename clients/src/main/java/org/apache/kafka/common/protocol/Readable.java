@@ -17,9 +17,9 @@
 
 package org.apache.kafka.common.protocol;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.types.RawTaggedField;
-
-import org.apache.kafka.common.UUID;
+import org.apache.kafka.common.record.MemoryRecords;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -35,6 +35,8 @@ public interface Readable {
     void readArray(byte[] arr);
     int readUnsignedVarint();
     ByteBuffer readByteBuffer(int length);
+    int readVarint();
+    long readVarlong();
 
     default String readString(int length) {
         byte[] arr = new byte[length];
@@ -52,10 +54,20 @@ public interface Readable {
         return unknowns;
     }
 
+    default MemoryRecords readRecords(int length) {
+        if (length < 0) {
+            // no records
+            return null;
+        } else {
+            ByteBuffer recordsBuffer = readByteBuffer(length);
+            return MemoryRecords.readableRecords(recordsBuffer);
+        }
+    }
+
     /**
      * Read a UUID with the most significant digits first.
      */
-    default UUID readUUID() {
-        return new UUID(readLong(), readLong());
+    default Uuid readUuid() {
+        return new Uuid(readLong(), readLong());
     }
 }

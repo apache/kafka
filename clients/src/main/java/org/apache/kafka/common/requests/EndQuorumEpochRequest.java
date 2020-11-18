@@ -70,16 +70,14 @@ public class EndQuorumEpochRequest extends AbstractRequest {
     }
 
     public static EndQuorumEpochRequestData singletonRequest(TopicPartition topicPartition,
-                                                             int replicaId,
                                                              int leaderEpoch,
                                                              int leaderId,
                                                              List<Integer> preferredSuccessors) {
-        return singletonRequest(topicPartition, null, replicaId, leaderEpoch, leaderId, preferredSuccessors);
+        return singletonRequest(topicPartition, null, leaderEpoch, leaderId, preferredSuccessors);
     }
 
     public static EndQuorumEpochRequestData singletonRequest(TopicPartition topicPartition,
                                                              String clusterId,
-                                                             int replicaId,
                                                              int leaderEpoch,
                                                              int leaderId,
                                                              List<Integer> preferredSuccessors) {
@@ -91,7 +89,6 @@ public class EndQuorumEpochRequest extends AbstractRequest {
                            .setPartitions(Collections.singletonList(
                                new EndQuorumEpochRequestData.PartitionData()
                                    .setPartitionIndex(topicPartition.partition())
-                                   .setReplicaId(replicaId)
                                    .setLeaderEpoch(leaderEpoch)
                                    .setLeaderId(leaderId)
                                    .setPreferredSuccessors(preferredSuccessors))))

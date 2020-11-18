@@ -78,8 +78,10 @@ public class OffsetCheckpoint {
      * @throws IOException if any file operation fails with an IO exception
      */
     public void write(final Map<TopicPartition, Long> offsets) throws IOException {
-        // if there is no offsets, skip writing the file to save disk IOs
+        // if there are no offsets, skip writing the file to save disk IOs
+        // but make sure to delete the existing file if one exists
         if (offsets.isEmpty()) {
+            Utils.delete(file);
             return;
         }
 
