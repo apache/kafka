@@ -36,6 +36,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TaskMetadata;
@@ -200,7 +201,6 @@ public class StreamThread extends Thread {
      */
     State setState(final State newState) {
         final State oldState;
-        final Sensor failedStreamThreadSensor = failedStreamThreadSensor(streamsMetrics);
         synchronized (stateLock) {
             oldState = state;
 
@@ -269,6 +269,7 @@ public class StreamThread extends Thread {
     private final Sensor processRatioSensor;
     private final Sensor punctuateRatioSensor;
     private final Sensor commitRatioSensor;
+    private final Sensor failedStreamThreadSensor;
 
     private long now;
     private long lastPollMs;
@@ -457,6 +458,7 @@ public class StreamThread extends Thread {
         this.punctuateSensor = ThreadMetrics.punctuateSensor(threadId, streamsMetrics);
         this.punctuateRatioSensor = ThreadMetrics.punctuateRatioSensor(threadId, streamsMetrics);
         this.commitRatioSensor = ThreadMetrics.commitRatioSensor(threadId, streamsMetrics);
+        this.failedStreamThreadSensor = ClientMetrics.failedStreamThreadSensor(streamsMetrics);
 
         // The following sensors are created here but their references are not stored in this object, since within
         // this object they are not recorded. The sensors are created here so that the stream threads starts with all
