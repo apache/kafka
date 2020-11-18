@@ -40,7 +40,6 @@ import org.apache.kafka.common.requests.CorrelationIdMismatchException;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
-import org.apache.kafka.common.requests.ResponseHeader;
 import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -967,21 +966,6 @@ public class NetworkClient implements KafkaClient {
                 doSend(clientRequest, true, now);
                 iter.remove();
             }
-        }
-    }
-
-    /**
-     * Validate that the response corresponds to the request we expect or else explode
-     */
-    private static void correlate(RequestHeader requestHeader, ResponseHeader responseHeader) {
-        if (requestHeader.correlationId() != responseHeader.correlationId()) {
-            if (SaslClientAuthenticator.isReserved(requestHeader.correlationId())
-                    && !SaslClientAuthenticator.isReserved(responseHeader.correlationId()))
-                throw new SchemaException("the response is unrelated to Sasl request since its correlation id is " + responseHeader.correlationId()
-                    + " and the reserved range for Sasl request is [ "
-                    + SaslClientAuthenticator.MIN_RESERVED_CORRELATION_ID + "," + SaslClientAuthenticator.MAX_RESERVED_CORRELATION_ID + "]");
-            throw new IllegalStateException("Correlation id for response (" + responseHeader.correlationId()
-                    + ") does not match request (" + requestHeader.correlationId() + "), request header: " + requestHeader);
         }
     }
 
