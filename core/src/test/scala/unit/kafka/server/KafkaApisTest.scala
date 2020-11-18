@@ -94,7 +94,7 @@ class KafkaApisTest {
   })
   private val zkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
   private val metrics = new Metrics()
-  private val brokerId = 1
+  private val brokerId: Int = 1
   private var metadataCache: MetadataCache = _
   private val clientQuotaManager: ClientQuotaManager = EasyMock.createNiceMock(classOf[ClientQuotaManager])
   private val clientRequestQuotaManager: ClientRequestQuotaManager = EasyMock.createNiceMock(classOf[ClientRequestQuotaManager])
@@ -1849,7 +1849,7 @@ class KafkaApisTest {
     metadataCache =
       EasyMock.partialMockBuilder(classOf[MetadataCache])
         .withConstructor(classOf[Int])
-        .withArgs(brokerId)
+        .withArgs(Int.box(brokerId))  // Need to box it for <= Scala 2.12
         .addMockedMethod("getAllTopics")
         .addMockedMethod("getTopicMetadata")
         .createMock()
@@ -1859,7 +1859,10 @@ class KafkaApisTest {
     expect(metadataCache.getAllTopics()).andReturn(topicsReturnedFromMetadataCacheForAuthorization).once()
     // 1 topic is deleted from metadata right at the time between authorization and the next getTopicMetadata() call
     expect(metadataCache.getTopicMetadata(
-      EasyMock.eq(topicsReturnedFromMetadataCacheForAuthorization), anyObject, anyBoolean, anyBoolean
+      EasyMock.eq(topicsReturnedFromMetadataCacheForAuthorization),
+      anyObject[ListenerName],
+      anyBoolean,
+      anyBoolean
     )).andStubReturn(Seq(
       new MetadataResponseTopic()
         .setErrorCode(Errors.NONE.code)
