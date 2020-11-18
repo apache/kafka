@@ -310,10 +310,11 @@ public class GlobalStreamThread extends Thread {
                 "Updating global state failed due to inconsistent local state. Will attempt to clean up the local state. You can restart KafkaStreams to recover from this error.",
                 recoverableException
             );
-            throw new StreamsException(
-                "Updating global state failed. You can restart KafkaStreams to recover from this error.",
+            final StreamsException e = new StreamsException(
+                "Updating global state failed. You can restart KafkaStreams to launch a new GlobalStreamThread to recover from this error.",
                 recoverableException
             );
+            this.streamsUncaughtExceptionHandler.accept(e);
         } catch (final Exception e) {
             this.streamsUncaughtExceptionHandler.accept(e);
         } finally {
