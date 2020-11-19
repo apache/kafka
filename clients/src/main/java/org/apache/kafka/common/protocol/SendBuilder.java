@@ -19,6 +19,7 @@ package org.apache.kafka.common.protocol;
 import org.apache.kafka.common.network.ByteBufferSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.record.BaseRecords;
+import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MultiRecordsSend;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.ResponseHeader;
@@ -26,6 +27,8 @@ import org.apache.kafka.common.utils.ByteUtils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Queue;
 
 /**
@@ -38,31 +41,19 @@ import java.util.Queue;
  * for example usage.
  */
 public class SendBuilder implements Writable {
-    private final Queue<Send> sends = new ArrayDeque<>();
     private final ByteBuffer buffer;
     private final String destinationId;
+
+    private final Queue<Send> sends = new ArrayDeque<>(1);
+    private long sizeOfSends = 0;
+
+    private final List<ByteBuffer> buffers = new ArrayList<>();
+    private long sizeOfBuffers = 0;
 
     SendBuilder(String destinationId, int size) {
         this.destinationId = destinationId;
         this.buffer = ByteBuffer.allocate(size);
         this.buffer.mark();
-    }
-
-    private void flushCurrentBuffer() {
-        int latestPosition = buffer.position();
-        buffer.reset();
-
-        if (latestPosition > buffer.position()) {
-            buffer.limit(latestPosition);
-            addByteBufferSend(buffer.slice());
-            buffer.position(latestPosition);
-            buffer.limit(buffer.capacity());
-            buffer.mark();
-        }
-    }
-
-    private void addByteBufferSend(ByteBuffer buffer) {
-        sends.add(new ByteBufferSend(destinationId, buffer));
     }
 
     @Override
@@ -108,8 +99,8 @@ public class SendBuilder implements Writable {
      */
     @Override
     public void writeByteBuffer(ByteBuffer buf) {
-        flushCurrentBuffer();
-        addByteBufferSend(buf.duplicate());
+        flushPendingBuffer();
+        addBuffer(buf.duplicate());
     }
 
     @Override
@@ -122,6 +113,21 @@ public class SendBuilder implements Writable {
         ByteUtils.writeVarlong(i, buffer);
     }
 
+    private void addBuffer(ByteBuffer buffer) {
+        buffers.add(buffer);
+        sizeOfBuffers += buffer.remaining();
+    }
+
+    private void addSend(Send send) {
+        sends.add(send);
+        sizeOfSends += send.size();
+    }
+
+    private void clearBuffers() {
+        buffers.clear();
+        sizeOfBuffers = 0;
+    }
+
     /**
      * Write a record set. The underlying record data will be retained
      * in the result of {@link #build()}. See {@link BaseRecords#toSend(String)}.
@@ -130,13 +136,46 @@ public class SendBuilder implements Writable {
      */
     @Override
     public void writeRecords(BaseRecords records) {
-        flushCurrentBuffer();
-        sends.add(records.toSend(destinationId));
+        if (records instanceof MemoryRecords) {
+            flushPendingBuffer();
+            addBuffer(((MemoryRecords) records).buffer());
+        } else {
+            flushPendingSend();
+            addSend(records.toSend(destinationId));
+        }
+    }
+
+    private void flushPendingSend() {
+        flushPendingBuffer();
+        if (!buffers.isEmpty()) {
+            ByteBuffer[] byteBufferArray = buffers.toArray(new ByteBuffer[0]);
+            addSend(new ByteBufferSend(destinationId, byteBufferArray, sizeOfBuffers));
+            clearBuffers();
+        }
+    }
+
+    private void flushPendingBuffer() {
+        int latestPosition = buffer.position();
+        buffer.reset();
+
+        if (latestPosition > buffer.position()) {
+            buffer.limit(latestPosition);
+            addBuffer(buffer.slice());
+
+            buffer.position(latestPosition);
+            buffer.limit(buffer.capacity());
+            buffer.mark();
+        }
     }
 
     public Send build() {
-        flushCurrentBuffer();
-        return new MultiRecordsSend(destinationId, sends);
+        flushPendingSend();
+
+        if (sends.size() == 1) {
+            return sends.poll();
+        } else {
+            return new MultiRecordsSend(destinationId, sends, sizeOfSends);
+        }
     }
 
     public static Send buildRequestSend(
