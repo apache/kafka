@@ -41,7 +41,7 @@ import java.util.Queue;
  * for example usage.
  */
 public class SendBuilder implements Writable {
-    private final Queue<Send> sends = new ArrayDeque<>();
+    private final Queue<Send> sends = new ArrayDeque<>(1);
     private final List<ByteBuffer> buffers = new ArrayList<>();
     private final ByteBuffer buffer;
     private final String destinationId;
