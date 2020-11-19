@@ -593,22 +593,18 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void testAddThread() {
+    public void shouldAddThread() throws InterruptedException {
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         streams.start();
         final int oldSize = streams.threads.size();
-        try {
-            TestUtils.waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, 15L, "wait until running");
-        } catch (final InterruptedException e) {
-            e.printStackTrace();
-        }
+        TestUtils.waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, 15L, "wait until running");
         assertThat(streams.addStreamThread(), equalTo(Optional.of("newThread")));
         assertThat(streams.threads.size(), equalTo(oldSize + 1));
     }
 
     @Test
-    public void testAddThreadNotDuringStart() {
+    public void shouldNotAddThread() {
         final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         final int oldSize = streams.threads.size();
         assertThat(streams.addStreamThread(), equalTo(Optional.empty()));

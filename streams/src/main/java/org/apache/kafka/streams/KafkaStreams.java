@@ -866,26 +866,7 @@ public class KafkaStreams implements AutoCloseable {
         threadState = new HashMap<>(numStreamThreads);
         storeProviders = new ArrayList<>();
         for (int i = 0; i < numStreamThreads; i++) {
-            final StreamThread streamThread = StreamThread.create(
-                internalTopologyBuilder,
-                config,
-                clientSupplier,
-                adminClient,
-                processId,
-                clientId,
-                streamsMetrics,
-                time,
-                streamsMetadataState,
-                cacheSizePerThread,
-                stateDirectory,
-                delegatingStateRestoreListener,
-                i + 1,
-                KafkaStreams.this::closeToError,
-                streamsUncaughtExceptionHandler
-            );
-            threads.add(streamThread);
-            threadState.put(streamThread.getId(), streamThread.state());
-            storeProviders.add(new StreamThreadStateStoreProvider(streamThread));
+            makeThread(cacheSizePerThread, i + 1);
         }
 
         ClientMetrics.addNumAliveStreamThreadMetric(streamsMetrics, (metricsConfig, now) ->
@@ -907,6 +888,30 @@ public class KafkaStreams implements AutoCloseable {
         rocksDBMetricsRecordingService = maybeCreateRocksDBMetricsRecordingService(clientId, config);
     }
 
+    private StreamThread makeThread(final long cacheSizePerThread, final int threadIdx) {
+        final StreamThread streamThread = StreamThread.create(
+                internalTopologyBuilder,
+                config,
+                clientSupplier,
+                adminClient,
+                processId,
+                clientId,
+                streamsMetrics,
+                time,
+                streamsMetadataState,
+                cacheSizePerThread,
+                stateDirectory,
+                delegatingStateRestoreListener,
+                threadIdx,
+                KafkaStreams.this::closeToError,
+                streamsUncaughtExceptionHandler
+        );
+        threads.add(streamThread);
+        threadState.put(streamThread.getId(), streamThread.state());
+        storeProviders.add(new StreamThreadStateStoreProvider(streamThread));
+        return streamThread;
+    }
+
     /**
      * Adds and starts a stream thread in addition to the stream threads that are already running in this
      * Kafka Streams client.
@@ -922,30 +927,11 @@ public class KafkaStreams implements AutoCloseable {
      */
     public Optional<String> addStreamThread() {
         synchronized (stateLock) {
-            if (state == State.RUNNING || state == State.REBALANCING) {
+            if (isRunningOrRebalancing()) {
                 final int threadIdx = getNextThreadIndex();
                 final long cacheSizePerThread = getCacheSizePerThread(threads.size() + 1);
                 resizeThreadCache(threads.size() + 1);
-                final StreamThread streamThread = StreamThread.create(
-                        internalTopologyBuilder,
-                        config,
-                        clientSupplier,
-                        adminClient,
-                        processId,
-                        clientId,
-                        streamsMetrics,
-                        time,
-                        streamsMetadataState,
-                        cacheSizePerThread,
-                        stateDirectory,
-                        delegatingStateRestoreListener,
-                        threadIdx,
-                        KafkaStreams.this::closeToError,
-                        streamsUncaughtExceptionHandler
-                );
-                threads.add(streamThread);
-                threadState.put(streamThread.getId(), streamThread.state());
-                storeProviders.add(new StreamThreadStateStoreProvider(streamThread));
+                final StreamThread streamThread = makeThread(cacheSizePerThread, threadIdx);
                 streamThread.setStateListener(streamStateListener);
                 streamThread.start();
                 return Optional.of(streamThread.getName());
