@@ -40,6 +40,7 @@ import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
+import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
@@ -199,10 +200,18 @@ public class MockAdminClient extends AdminClient {
         this.controller = controller;
     }
 
-    synchronized public void addTopic(boolean internal,
+    public void addTopic(boolean internal,
                          String name,
                          List<TopicPartitionInfo> partitions,
                          Map<String, String> configs) {
+        addTopic(internal, name, partitions, configs, true);
+    }
+
+    synchronized public void addTopic(boolean internal,
+                                      String name,
+                                      List<TopicPartitionInfo> partitions,
+                                      Map<String, String> configs,
+                                      boolean usesTopicId) {
         if (allTopics.containsKey(name)) {
             throw new IllegalArgumentException(String.format("Topic %s was already added.", name));
         }
@@ -223,10 +232,15 @@ public class MockAdminClient extends AdminClient {
                 logDirs.add(brokerLogDirs.get(partition.leader().id()).get(0));
             }
         }
-        allTopics.put(name, new TopicMetadata(internal, partitions, logDirs, configs));
-        Uuid id = Uuid.randomUuid();
-        topicIds.put(name, id);
-        topicNames.put(id, name);
+        Uuid topicId;
+        if (usesTopicId) {
+            topicId = Uuid.randomUuid();
+            topicIds.put(name, topicId);
+            topicNames.put(topicId, name);
+        } else {
+            topicId = Uuid.ZERO_UUID;
+        }
+        allTopics.put(name, new TopicMetadata(topicId, internal, partitions, logDirs, configs));
     }
 
     synchronized public void markTopicForDeletion(final String name) {
@@ -317,10 +331,10 @@ public class MockAdminClient extends AdminClient {
                 partitions.add(new TopicPartitionInfo(i, brokers.get(0), replicas, Collections.emptyList()));
                 logDirs.add(brokerLogDirs.get(partitions.get(i).leader().id()).get(0));
             }
-            allTopics.put(topicName, new TopicMetadata(false, partitions, logDirs, newTopic.configs()));
-            Uuid id = Uuid.randomUuid();
-            topicIds.put(topicName, id);
-            topicNames.put(id, topicName);
+            Uuid topicId = Uuid.randomUuid();
+            topicIds.put(topicName, topicId);
+            topicNames.put(topicId, topicName);
+            allTopics.put(topicName, new TopicMetadata(topicId, false, partitions, logDirs, newTopic.configs()));
             future.complete(null);
             createTopicResult.put(topicName, future);
         }
@@ -345,7 +359,7 @@ public class MockAdminClient extends AdminClient {
             if (topicDescription.getValue().fetchesRemainingUntilVisible > 0) {
                 topicDescription.getValue().fetchesRemainingUntilVisible--;
             } else {
-                topicListings.put(topicName, new TopicListing(topicName, topicDescription.getValue().isInternalTopic));
+                topicListings.put(topicName, new TopicListing(topicName, topicDescription.getValue().topicId, topicDescription.getValue().isInternalTopic));
             }
         }
 
@@ -372,14 +386,14 @@ public class MockAdminClient extends AdminClient {
         for (String requestedTopic : topicNames) {
             for (Map.Entry<String, TopicMetadata> topicDescription : allTopics.entrySet()) {
                 String topicName = topicDescription.getKey();
+                Uuid topicId = topicIds.getOrDefault(topicName, Uuid.ZERO_UUID);
                 if (topicName.equals(requestedTopic) && !topicDescription.getValue().markedForDeletion) {
                     if (topicDescription.getValue().fetchesRemainingUntilVisible > 0) {
                         topicDescription.getValue().fetchesRemainingUntilVisible--;
                     } else {
                         TopicMetadata topicMetadata = topicDescription.getValue();
                         KafkaFutureImpl<TopicDescription> future = new KafkaFutureImpl<>();
-                        future.complete(new TopicDescription(topicName, topicMetadata.isInternalTopic, topicMetadata.partitions,
-                                Collections.emptySet()));
+                        future.complete(new TopicDescription(topicName, topicMetadata.isInternalTopic, topicMetadata.partitions, Collections.emptySet(), topicId));
                         topicDescriptions.put(topicName, future);
                         break;
                     }
@@ -393,6 +407,48 @@ public class MockAdminClient extends AdminClient {
         }
 
         return new DescribeTopicsResult(topicDescriptions);
+    }
+
+    synchronized public DescribeTopicsResultWithIds describeTopicsWithIds(Collection<Uuid> topicIds, DescribeTopicsOptions options) {
+
+        Map<Uuid, KafkaFuture<TopicDescription>> topicDescriptions = new HashMap<>();
+
+        if (timeoutNextRequests > 0) {
+            for (Uuid requestedTopicId : topicIds) {
+                KafkaFutureImpl<TopicDescription> future = new KafkaFutureImpl<>();
+                future.completeExceptionally(new TimeoutException());
+                topicDescriptions.put(requestedTopicId, future);
+            }
+
+            --timeoutNextRequests;
+            return new DescribeTopicsResultWithIds(topicDescriptions);
+        }
+
+        for (Uuid requestedTopicId : topicIds) {
+            for (Map.Entry<String, TopicMetadata> topicDescription : allTopics.entrySet()) {
+                String topicName = topicDescription.getKey();
+                Uuid topicId = this.topicIds.get(topicName);
+
+                if (topicId != null && topicId.equals(requestedTopicId) && !topicDescription.getValue().markedForDeletion) {
+                    if (topicDescription.getValue().fetchesRemainingUntilVisible > 0) {
+                        topicDescription.getValue().fetchesRemainingUntilVisible--;
+                    } else {
+                        TopicMetadata topicMetadata = topicDescription.getValue();
+                        KafkaFutureImpl<TopicDescription> future = new KafkaFutureImpl<>();
+                        future.complete(new TopicDescription(topicName, topicMetadata.isInternalTopic, topicMetadata.partitions, Collections.emptySet(), topicId));
+                        topicDescriptions.put(requestedTopicId, future);
+                        break;
+                    }
+                }
+            }
+            if (!topicDescriptions.containsKey(requestedTopicId)) {
+                KafkaFutureImpl<TopicDescription> future = new KafkaFutureImpl<>();
+                future.completeExceptionally(new UnknownTopicIdException("Topic id" + requestedTopicId + " not found."));
+                topicDescriptions.put(requestedTopicId, future);
+            }
+        }
+
+        return new DescribeTopicsResultWithIds(topicDescriptions);
     }
 
     @Override
@@ -948,6 +1004,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     private final static class TopicMetadata {
+        final Uuid topicId;
         final boolean isInternalTopic;
         final List<TopicPartitionInfo> partitions;
         final List<String> partitionLogDirs;
@@ -956,10 +1013,12 @@ public class MockAdminClient extends AdminClient {
 
         public boolean markedForDeletion;
 
-        TopicMetadata(boolean isInternalTopic,
+        TopicMetadata(Uuid topicId,
+                      boolean isInternalTopic,
                       List<TopicPartitionInfo> partitions,
                       List<String> partitionLogDirs,
                       Map<String, String> configs) {
+            this.topicId = topicId;
             this.isInternalTopic = isInternalTopic;
             this.partitions = partitions;
             this.partitionLogDirs = partitionLogDirs;

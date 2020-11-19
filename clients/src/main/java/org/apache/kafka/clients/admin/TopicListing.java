@@ -17,22 +17,34 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.Uuid;
+
 /**
  * A listing of a topic in the cluster.
  */
 public class TopicListing {
     private final String name;
+    private final Uuid topicId;
     private final boolean internal;
 
     /**
      * Create an instance with the specified parameters.
      *
      * @param name The topic name
+     * @param topicId The topic id.
      * @param internal Whether the topic is internal to Kafka
      */
-    public TopicListing(String name, boolean internal) {
+    public TopicListing(String name, Uuid topicId, boolean internal) {
+        this.topicId = topicId;
         this.name = name;
         this.internal = internal;
+    }
+
+    /**
+     * The id of the topic.
+     */
+    public Uuid topicId() {
+        return topicId;
     }
 
     /**
@@ -52,6 +64,6 @@ public class TopicListing {
 
     @Override
     public String toString() {
-        return "(name=" + name + ", internal=" + internal + ")";
+        return "(name=" + name + ", topicId=" + topicId +  ", internal=" + internal + ")";
     }
 }

@@ -17,14 +17,6 @@
 
 package org.apache.kafka.clients.admin;
 
-import java.time.Duration;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Properties;
-import java.util.Set;
-
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.KafkaFuture;
@@ -33,6 +25,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicCollection;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionReplica;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.annotation.InterfaceStability;
@@ -41,6 +34,14 @@ import org.apache.kafka.common.errors.FeatureUpdateFailedException;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
+
+import java.time.Duration;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Properties;
+import java.util.Set;
 
 /**
  * The administrative client for Kafka, which supports managing and inspecting topics, brokers, configurations and ACLs.
@@ -304,6 +305,29 @@ public interface Admin extends AutoCloseable {
      * @return The DescribeTopicsResult.
      */
     DescribeTopicsResult describeTopics(Collection<String> topicNames, DescribeTopicsOptions options);
+
+    /**
+     * Describe some topics in the cluster by their topicId, with the default options.
+     * <p>
+     * This is a convenience method for {@link #describeTopicsWithIds(Collection, DescribeTopicsOptions)} with
+     * default options. See the overload for more details.
+     *
+     * @param topicIds The ids of the topics to describe.
+     * @return The DescribeTopicsResultWithIds
+     */
+    default DescribeTopicsResultWithIds describeTopicsWithIds(Collection<Uuid> topicIds) {
+        return describeTopicsWithIds(topicIds, new DescribeTopicsOptions());
+    }
+
+    /**
+     * Describe some topics in the cluster by their topicId, with specified options.
+     *
+     * @param topicIds The ids of the topics to describe.
+     * @param options  The options to use when describing the topic.
+     * @return DescribeTopicsResultWithIds
+     */
+    DescribeTopicsResultWithIds describeTopicsWithIds(Collection<Uuid> topicIds, DescribeTopicsOptions options);
+
 
     /**
      * Get information about the nodes in the cluster, using the default options.
