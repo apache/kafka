@@ -552,7 +552,8 @@ public class Sender implements Runnable {
             log.trace("Cancelled request with header {} due to node {} being disconnected",
                 requestHeader, response.destination());
             for (ProducerBatch batch : batches.values())
-                completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.NETWORK_EXCEPTION), correlationId, now);
+                completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.NETWORK_EXCEPTION, String.format("Disconnected from node %s", response.destination())),
+                        correlationId, now);
         } else if (response.versionMismatch() != null) {
             log.warn("Cancelled request {} due to a version mismatch with node {}",
                     response, response.destination(), response.versionMismatch());
@@ -611,7 +612,7 @@ public class Sender implements Runnable {
                 correlationId,
                 batch.topicPartition,
                 this.retries - batch.attempts(),
-                error);
+                formatErrMsg(response));
             if (transactionManager != null)
                 transactionManager.removeInFlightBatch(batch);
             this.accumulator.splitAndReenqueue(batch);
@@ -624,7 +625,7 @@ public class Sender implements Runnable {
                     correlationId,
                     batch.topicPartition,
                     this.retries - batch.attempts() - 1,
-                    error);
+                    formatErrMsg(response));
                 reenqueueBatch(batch, now);
             } else if (error == Errors.DUPLICATE_SEQUENCE_NUMBER) {
                 // If we have received a duplicate sequence error, it means that the sequence number has advanced beyond
@@ -653,7 +654,8 @@ public class Sender implements Runnable {
                         batch.topicPartition);
                 } else {
                     log.warn("Received invalid metadata error in produce request on partition {} due to {}. Going " +
-                            "to request metadata update now", batch.topicPartition, error.exception(response.errorMessage).toString());
+                            "to request metadata update now", batch.topicPartition,
+                            error.exception(response.errorMessage).toString());
                 }
                 metadata.requestUpdate();
             }
@@ -664,6 +666,16 @@ public class Sender implements Runnable {
         // Unmute the completed partition.
         if (guaranteeMessageOrder)
             this.accumulator.unmutePartition(batch.topicPartition);
+    }
+
+    /**
+     * Format the error from a {@link ProduceResponse.PartitionResponse} in a user-friendly string
+     * e.g "NETWORK_EXCEPTION. Error Message: Disconnected from node 0"
+     */
+    private String formatErrMsg(ProduceResponse.PartitionResponse response) {
+        String errorMessageSuffix = (response.errorMessage == null || response.errorMessage.isEmpty()) ?
+                "" : String.format(". Error Message: %s", response.errorMessage);
+        return String.format("%s%s", response.error, errorMessageSuffix);
     }
 
     private void reenqueueBatch(ProducerBatch batch, long currentTimeMs) {
