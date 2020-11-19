@@ -37,7 +37,7 @@ public class Throttle {
     synchronized public boolean increment() throws InterruptedException {
         boolean throttled = false;
         while (true) {
-            if (count < maxPerPeriod) {
+            if (count < maxPerPeriod || maxPerPeriod <= 0) {
                 count++;
                 return throttled;
             }

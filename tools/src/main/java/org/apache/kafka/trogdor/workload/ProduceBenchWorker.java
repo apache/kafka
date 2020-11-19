@@ -230,7 +230,7 @@ public class ProduceBenchWorker implements TaskWorker {
                         producer.initTransactions();
 
                     long sentMessages = 0;
-                    while (sentMessages < spec.maxMessages()) {
+                    while (sentMessages < spec.maxMessages() || spec.maxMessages() <= 0) {
                         if (enableTransactions) {
                             boolean tookAction = takeTransactionAction();
                             if (tookAction)

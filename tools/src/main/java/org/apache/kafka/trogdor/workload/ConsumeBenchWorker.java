@@ -205,11 +205,7 @@ public class ConsumeBenchWorker implements TaskWorker {
             this.clientId = consumer.clientId();
             this.statusUpdaterFuture = executor.scheduleAtFixedRate(
                 new ConsumeStatusUpdater(latencyHistogram, messageSizeHistogram, consumer), 1, 1, TimeUnit.MINUTES);
-            int perPeriod;
-            if (spec.targetMessagesPerSec() <= 0)
-                perPeriod = Integer.MAX_VALUE;
-            else
-                perPeriod = WorkerUtils.perSecToPerPeriod(spec.targetMessagesPerSec(), THROTTLE_PERIOD_MS);
+            int perPeriod = WorkerUtils.perSecToPerPeriod(spec.targetMessagesPerSec(), THROTTLE_PERIOD_MS);
 
             this.throttle = new Throttle(perPeriod, THROTTLE_PERIOD_MS);
             this.consumer = consumer;
@@ -235,7 +231,7 @@ public class ConsumeBenchWorker implements TaskWorker {
             long startBatchMs = startTimeMs;
             long maxMessages = spec.maxMessages();
             try {
-                while (messagesConsumed < maxMessages) {
+                while (messagesConsumed < maxMessages || maxMessages <= 0) {
                     ConsumerRecords<byte[], byte[]> records = consumer.poll();
                     if (records.isEmpty()) {
                         continue;
@@ -254,9 +250,9 @@ public class ConsumeBenchWorker implements TaskWorker {
                         latencyHistogram.add(elapsedBatchMs);
                         messageSizeHistogram.add(messageBytes);
                         bytesConsumed += messageBytes;
-                        if (messagesConsumed >= maxMessages)
+                        if (messagesConsumed >= maxMessages && maxMessages > 0)
                             break;
-
+                        
                         throttle.increment();
                     }
                     startBatchMs = Time.SYSTEM.milliseconds();
