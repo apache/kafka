@@ -261,7 +261,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicPartition: collection.Map[To
                             expectedNumFetchers: Int,
                             reportInterval: Long) extends Logging {
   private val fetchOffsetMap = new Pool[TopicPartition, Long]
-  private val recordsCache = new Pool[TopicPartition, Pool[Int, FetchResponse.PartitionData[MemoryRecords]]]
+  private val recordsCache = new Pool[TopicPartition, Pool[Int, FetchResponse.PartitionData]]
   private val fetcherBarrier = new AtomicReference(new CountDownLatch(expectedNumFetchers))
   private val verificationBarrier = new AtomicReference(new CountDownLatch(1))
   @volatile private var lastReportTime = Time.SYSTEM.milliseconds
@@ -284,7 +284,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicPartition: collection.Map[To
 
   private def initialize(): Unit = {
     for (topicPartition <- expectedReplicasPerTopicPartition.keySet)
-      recordsCache.put(topicPartition, new Pool[Int, FetchResponse.PartitionData[MemoryRecords]])
+      recordsCache.put(topicPartition, new Pool[Int, FetchResponse.PartitionData])
     setInitialOffsets()
   }
 
@@ -294,7 +294,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicPartition: collection.Map[To
       fetchOffsetMap.put(tp, offset)
   }
 
-  def addFetchedData(topicAndPartition: TopicPartition, replicaId: Int, partitionData: FetchResponse.PartitionData[MemoryRecords]): Unit = {
+  def addFetchedData(topicAndPartition: TopicPartition, replicaId: Int, partitionData: FetchResponse.PartitionData): Unit = {
     recordsCache.get(topicAndPartition).put(replicaId, partitionData)
   }
 
@@ -403,10 +403,10 @@ private class ReplicaFetcher(name: String, sourceBroker: Node, topicPartitions: 
 
     debug("Issuing fetch request ")
 
-    var fetchResponse: FetchResponse[MemoryRecords] = null
+    var fetchResponse: FetchResponse = null
     try {
       val clientResponse = fetchEndpoint.sendRequest(fetchRequestBuilder)
-      fetchResponse = clientResponse.responseBody.asInstanceOf[FetchResponse[MemoryRecords]]
+      fetchResponse = clientResponse.responseBody.asInstanceOf[FetchResponse]
     } catch {
       case t: Throwable =>
         if (!isRunning)

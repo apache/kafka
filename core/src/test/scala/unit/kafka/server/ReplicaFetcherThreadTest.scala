@@ -28,7 +28,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, Records, SimpleRecord}
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.requests.{EpochEndOffset, FetchResponse, OffsetsForLeaderEpochRequest}
 import org.apache.kafka.common.utils.SystemTime
@@ -811,7 +811,7 @@ class ReplicaFetcherThreadTest {
     val records = MemoryRecords.withRecords(CompressionType.NONE,
       new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
 
-    val partitionData: thread.FetchData = new FetchResponse.PartitionData[Records](
+    val partitionData: thread.FetchData = new FetchResponse.PartitionData(
       Errors.NONE, 0, 0, 0, Optional.empty(), Collections.emptyList(), records)
     thread.processPartitionData(t1p0, 0, partitionData)
 

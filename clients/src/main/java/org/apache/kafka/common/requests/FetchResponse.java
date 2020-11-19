@@ -25,7 +25,7 @@ import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.SendBuilder;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.BaseRecords;
-import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.Records;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -59,7 +59,7 @@ import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
  *     the fetch offset after the index lookup
  * - {@link Errors#UNKNOWN_SERVER_ERROR} For any unexpected errors
  */
-public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
+public class FetchResponse extends AbstractResponse {
 
     public static final long INVALID_HIGHWATERMARK = -1L;
     public static final long INVALID_LAST_STABLE_OFFSET = -1L;
@@ -67,7 +67,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     public static final int INVALID_PREFERRED_REPLICA_ID = -1;
 
     private final FetchResponseData data;
-    private final LinkedHashMap<TopicPartition, PartitionData<T>> responseDataMap;
+    private final LinkedHashMap<TopicPartition, PartitionData> responseDataMap;
 
     public FetchResponseData data() {
         return data;
@@ -111,7 +111,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         }
     }
 
-    public static final class PartitionData<T extends BaseRecords> {
+    public static final class PartitionData {
         private final FetchResponseData.FetchablePartitionResponse partitionResponse;
 
         // Derived fields
@@ -145,7 +145,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                              Optional<Integer> preferredReadReplica,
                              List<AbortedTransaction> abortedTransactions,
                              Optional<FetchResponseData.EpochEndOffset> divergingEpoch,
-                             T records) {
+                             BaseRecords records) {
             this.preferredReplica = preferredReadReplica;
             this.abortedTransactions = abortedTransactions;
             this.error = error;
@@ -178,7 +178,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                              long logStartOffset,
                              Optional<Integer> preferredReadReplica,
                              List<AbortedTransaction> abortedTransactions,
-                             T records) {
+                             BaseRecords records) {
             this(error, highWatermark, lastStableOffset, logStartOffset, preferredReadReplica,
                 abortedTransactions, Optional.empty(), records);
         }
@@ -188,7 +188,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                              long lastStableOffset,
                              long logStartOffset,
                              List<AbortedTransaction> abortedTransactions,
-                             T records) {
+                             BaseRecords records) {
             this(error, highWatermark, lastStableOffset, logStartOffset, Optional.empty(), abortedTransactions, records);
         }
 
@@ -218,7 +218,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                     ", preferredReadReplica = " + preferredReadReplica().map(Object::toString).orElse("absent") +
                     ", abortedTransactions = " + abortedTransactions() +
                     ", divergingEpoch =" + divergingEpoch() +
-                    ", recordsSizeInBytes=" + records().sizeInBytes() + ")";
+                    ", recordsSizeInBytes=" + sizeInBytes() + ")";
         }
 
         public Errors error() {
@@ -254,9 +254,19 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
             }
         }
 
-        @SuppressWarnings("unchecked")
-        public T records() {
-            return (T) partitionResponse.recordSet();
+        public Records records() {
+            // noted that only KafkaApis#handleFetchRequest is possible to add non-Records (LazyDownConversionRecords)
+            return (Records) partitionResponse.recordSet();
+        }
+
+        /**
+         * LazyDownConversionRecords is the only case which can fail the casting (BaseRecords -> Records). However,
+         * the caller who uses LazyDownConversionRecords need to know the size of LazyDownConversionRecords so we
+         * add this helper method.
+         * @return 0 if there is no records. Otherwise, return records size.
+         */
+        public int sizeInBytes() {
+            return partitionResponse.recordSet() == null ? 0 : partitionResponse.recordSet().sizeInBytes();
         }
     }
 
@@ -270,7 +280,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
      * @param sessionId         The fetch session id.
      */
     public FetchResponse(Errors error,
-                         LinkedHashMap<TopicPartition, PartitionData<T>> responseData,
+                         LinkedHashMap<TopicPartition, PartitionData> responseData,
                          int throttleTimeMs,
                          int sessionId) {
         this.data = toMessage(throttleTimeMs, error, responseData.entrySet().iterator(), sessionId);
@@ -296,7 +306,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         return Errors.forCode(data.errorCode());
     }
 
-    public LinkedHashMap<TopicPartition, PartitionData<T>> responseData() {
+    public LinkedHashMap<TopicPartition, PartitionData> responseData() {
         return responseDataMap;
     }
 
@@ -319,29 +329,28 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         return errorCounts;
     }
 
-    public static FetchResponse<MemoryRecords> parse(ByteBuffer buffer, short version) {
+    public static FetchResponse parse(ByteBuffer buffer, short version) {
         FetchResponseData fetchResponseData = new FetchResponseData();
         ByteBufferAccessor reader = new ByteBufferAccessor(buffer);
         fetchResponseData.read(reader, version);
-        return new FetchResponse<>(fetchResponseData);
+        return new FetchResponse(fetchResponseData);
     }
 
-    @SuppressWarnings("unchecked")
-    private static <T extends BaseRecords> LinkedHashMap<TopicPartition, PartitionData<T>> toResponseDataMap(
+    private static LinkedHashMap<TopicPartition, PartitionData> toResponseDataMap(
             FetchResponseData message) {
-        LinkedHashMap<TopicPartition, PartitionData<T>> responseMap = new LinkedHashMap<>();
-        message.responses().forEach(topicResponse -> {
+        LinkedHashMap<TopicPartition, PartitionData> responseMap = new LinkedHashMap<>();
+        message.responses().forEach(topicResponse ->
             topicResponse.partitionResponses().forEach(partitionResponse -> {
                 TopicPartition tp = new TopicPartition(topicResponse.topic(), partitionResponse.partition());
-                PartitionData<T> partitionData = new PartitionData<>(partitionResponse);
+                PartitionData partitionData = new PartitionData(partitionResponse);
                 responseMap.put(tp, partitionData);
-            });
-        });
+            })
+        );
         return responseMap;
     }
 
-    private static <T extends BaseRecords> FetchResponseData toMessage(int throttleTimeMs, Errors error,
-                                                                       Iterator<Map.Entry<TopicPartition, PartitionData<T>>> partIterator,
+    private static FetchResponseData toMessage(int throttleTimeMs, Errors error,
+                                                                       Iterator<Map.Entry<TopicPartition, PartitionData>> partIterator,
                                                                        int sessionId) {
         FetchResponseData message = new FetchResponseData();
         message.setThrottleTimeMs(throttleTimeMs);
@@ -349,7 +358,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         message.setSessionId(sessionId);
 
         List<FetchResponseData.FetchableTopicResponse> topicResponseList = new ArrayList<>();
-        List<FetchRequest.TopicAndPartitionData<PartitionData<T>>> topicsData =
+        List<FetchRequest.TopicAndPartitionData<PartitionData>> topicsData =
                 FetchRequest.TopicAndPartitionData.batchByTopic(partIterator);
         topicsData.forEach(partitionDataTopicAndPartitionData -> {
             List<FetchResponseData.FetchablePartitionResponse> partitionResponses = new ArrayList<>();
@@ -374,8 +383,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
      * @param partIterator  The partition iterator.
      * @return              The response size in bytes.
      */
-    public static <T extends BaseRecords> int sizeOf(short version,
-                                                     Iterator<Map.Entry<TopicPartition, PartitionData<T>>> partIterator) {
+    public static int sizeOf(short version, Iterator<Map.Entry<TopicPartition, PartitionData>> partIterator) {
         // Since the throttleTimeMs and metadata field sizes are constant and fixed, we can
         // use arbitrary values here without affecting the result.
         FetchResponseData data = toMessage(0, Errors.NONE, partIterator, INVALID_SESSION_ID);

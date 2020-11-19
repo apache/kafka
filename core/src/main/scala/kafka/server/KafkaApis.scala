@@ -729,12 +729,12 @@ class KafkaApis(val requestChannel: RequestChannel,
       None
     }
 
-    def errorResponse[T >: MemoryRecords <: BaseRecords](error: Errors): FetchResponse.PartitionData[T] = {
-      new FetchResponse.PartitionData[T](error, FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
+    def errorResponse(error: Errors): FetchResponse.PartitionData = {
+      new FetchResponse.PartitionData(error, FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
         FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY)
     }
 
-    val erroneous = mutable.ArrayBuffer[(TopicPartition, FetchResponse.PartitionData[Records])]()
+    val erroneous = mutable.ArrayBuffer[(TopicPartition, FetchResponse.PartitionData)]()
     val interesting = mutable.ArrayBuffer[(TopicPartition, FetchRequest.PartitionData)]()
     if (fetchRequest.isFromFollower) {
       // The follower must have ClusterAction on ClusterResource in order to fetch partition data.
@@ -780,7 +780,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     def maybeConvertFetchedData(tp: TopicPartition,
-                                partitionData: FetchResponse.PartitionData[Records]): FetchResponse.PartitionData[BaseRecords] = {
+                                partitionData: FetchResponse.PartitionData): FetchResponse.PartitionData = {
       val logConfig = replicaManager.getLogConfig(tp)
 
       if (logConfig.exists(_.compressionType == ZStdCompressionCodec.name) && versionId < 10) {
@@ -819,7 +819,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 // down-conversion always guarantees that at least one batch of messages is down-converted and sent out to the
                 // client.
                 val error = maybeDownConvertStorageError(partitionData.error, versionId)
-                new FetchResponse.PartitionData[BaseRecords](error, partitionData.highWatermark,
+                new FetchResponse.PartitionData(error, partitionData.highWatermark,
                   partitionData.lastStableOffset, partitionData.logStartOffset,
                   partitionData.preferredReadReplica, partitionData.abortedTransactions,
                   new LazyDownConversionRecords(tp, unconvertedRecords, magic, fetchContext.getFetchOffset(tp).get, time))
@@ -831,7 +831,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             }
           case None =>
             val error = maybeDownConvertStorageError(partitionData.error, versionId)
-            new FetchResponse.PartitionData[BaseRecords](error,
+            new FetchResponse.PartitionData(error,
               partitionData.highWatermark,
               partitionData.lastStableOffset,
               partitionData.logStartOffset,
@@ -845,7 +845,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     // the callback for process a fetch response, invoked before throttling
     def processResponseCallback(responsePartitionData: Seq[(TopicPartition, FetchPartitionData)]): Unit = {
-      val partitions = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
+      val partitions = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]
       val reassigningPartitions = mutable.Set[TopicPartition]()
       responsePartitionData.foreach { case (tp, data) =>
         val abortedTransactions = data.abortedTransactions.map(_.asJava).orNull
@@ -865,11 +865,11 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
       erroneous.foreach { case (tp, data) => partitions.put(tp, data) }
 
-      var unconvertedFetchResponse: FetchResponse[Records] = null
+      var unconvertedFetchResponse: FetchResponse = null
 
-      def createResponse(throttleTimeMs: Int): FetchResponse[BaseRecords] = {
+      def createResponse(throttleTimeMs: Int): FetchResponse = {
         // Down-convert messages for each partition if required
-        val convertedData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[BaseRecords]]
+        val convertedData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]
         unconvertedFetchResponse.responseData.forEach { (tp, unconvertedPartitionData) =>
           if (unconvertedPartitionData.error != Errors.NONE)
             debug(s"Fetch request with correlation id ${request.header.correlationId} from client $clientId " +
@@ -882,7 +882,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           unconvertedFetchResponse.sessionId)
         // record the bytes out metrics only when the response is being sent
         response.responseData.forEach { (tp, data) =>
-          brokerTopicStats.updateBytesOut(tp.topic, fetchRequest.isFromFollower, reassigningPartitions.contains(tp), data.records.sizeInBytes)
+          brokerTopicStats.updateBytesOut(tp.topic, fetchRequest.isFromFollower, reassigningPartitions.contains(tp), data.sizeInBytes)
         }
         response
       }
@@ -970,12 +970,12 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  class SelectingIterator(val partitions: util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]],
+  class SelectingIterator(val partitions: util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData],
                           val quota: ReplicationQuotaManager)
-                          extends util.Iterator[util.Map.Entry[TopicPartition, FetchResponse.PartitionData[Records]]] {
+                          extends util.Iterator[util.Map.Entry[TopicPartition, FetchResponse.PartitionData]] {
     val iter = partitions.entrySet().iterator()
 
-    var nextElement: util.Map.Entry[TopicPartition, FetchResponse.PartitionData[Records]] = null
+    var nextElement: util.Map.Entry[TopicPartition, FetchResponse.PartitionData] = null
 
     override def hasNext: Boolean = {
       while ((nextElement == null) && iter.hasNext()) {
@@ -987,7 +987,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       nextElement != null
     }
 
-    override def next(): util.Map.Entry[TopicPartition, FetchResponse.PartitionData[Records]] = {
+    override def next(): util.Map.Entry[TopicPartition, FetchResponse.PartitionData] = {
       if (!hasNext()) throw new NoSuchElementException()
       val element = nextElement
       nextElement = null
@@ -1000,7 +1000,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   // Traffic from both in-sync and out of sync replicas are accounted for in replication quota to ensure total replication
   // traffic doesn't exceed quota.
   private def sizeOfThrottledPartitions(versionId: Short,
-                                        unconvertedResponse: FetchResponse[Records],
+                                        unconvertedResponse: FetchResponse,
                                         quota: ReplicationQuotaManager): Int = {
     val iter = new SelectingIterator(unconvertedResponse.responseData, quota)
     FetchResponse.sizeOf(versionId, iter)

@@ -23,7 +23,6 @@ import kafka.utils.MockTime
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.requests.FetchMetadata.{FINAL_EPOCH, INVALID_SESSION_ID}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.utils.Utils
@@ -158,7 +157,7 @@ class FetchSessionTest {
     assertEquals(Optional.of(1), epochs1(tp1))
     assertEquals(Optional.of(2), epochs1(tp2))
 
-    val response = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
+    val response = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]
     response.put(tp0, new FetchResponse.PartitionData(Errors.NONE, 100, 100,
       100, null, null))
     response.put(tp1, new FetchResponse.PartitionData(
@@ -223,7 +222,7 @@ class FetchSessionTest {
     assertEquals(Map(tp0 -> Optional.empty, tp1 -> Optional.empty, tp2 -> Optional.of(1)),
       cachedLastFetchedEpochs(context1))
 
-    val response = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
+    val response = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]
     response.put(tp0, new FetchResponse.PartitionData(Errors.NONE, 100, 100, 100, null, null))
     response.put(tp1, new FetchResponse.PartitionData(Errors.NONE, 10, 10, 10, null, null))
     response.put(tp2, new FetchResponse.PartitionData(Errors.NONE, 5, 5, 5, null, null))
@@ -278,7 +277,7 @@ class FetchSessionTest {
     })
     assertEquals(0, context2.getFetchOffset(new TopicPartition("foo", 0)).get)
     assertEquals(10, context2.getFetchOffset(new TopicPartition("foo", 1)).get)
-    val respData2 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
+    val respData2 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]
     respData2.put(new TopicPartition("foo", 0), new FetchResponse.PartitionData(
       Errors.NONE, 100, 100, 100, null, null))
     respData2.put(new TopicPartition("foo", 1), new FetchResponse.PartitionData(
@@ -348,7 +347,7 @@ class FetchSessionTest {
         new JFetchMetadata(prevSessionId, FINAL_EPOCH), reqData8, EMPTY_PART_LIST, false)
       assertEquals(classOf[SessionlessFetchContext], context8.getClass)
       assertEquals(0, cache.size)
-      val respData8 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
+      val respData8 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]
       respData8.put(new TopicPartition("bar", 0),
         new FetchResponse.PartitionData(Errors.NONE, 100, 100, 100, null, null))
       respData8.put(new TopicPartition("bar", 1),
@@ -373,7 +372,7 @@ class FetchSessionTest {
       Optional.empty()))
     val context1 = fetchManager.newContext(JFetchMetadata.INITIAL, reqData1, EMPTY_PART_LIST, false)
     assertEquals(classOf[FullFetchContext], context1.getClass)
-    val respData1 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
+    val respData1 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]
     respData1.put(new TopicPartition("foo", 0), new FetchResponse.PartitionData(
       Errors.NONE, 100, 100, 100, null, null))
     respData1.put(new TopicPartition("foo", 1), new FetchResponse.PartitionData(
@@ -401,7 +400,7 @@ class FetchSessionTest {
     assertEquals(10, context2.getFetchOffset(new TopicPartition("foo", 1)).get)
     assertEquals(15, context2.getFetchOffset(new TopicPartition("bar", 0)).get)
     assertEquals(None, context2.getFetchOffset(new TopicPartition("bar", 2)))
-    val respData2 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
+    val respData2 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]
     respData2.put(new TopicPartition("foo", 1), new FetchResponse.PartitionData(
       Errors.NONE, 10, 10, 10, null, null))
     respData2.put(new TopicPartition("bar", 0), new FetchResponse.PartitionData(
@@ -427,7 +426,7 @@ class FetchSessionTest {
       Optional.empty()))
     val session1context1 = fetchManager.newContext(JFetchMetadata.INITIAL, session1req, EMPTY_PART_LIST, false)
     assertEquals(classOf[FullFetchContext], session1context1.getClass)
-    val respData1 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
+    val respData1 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]
     respData1.put(new TopicPartition("foo", 0), new FetchResponse.PartitionData(
       Errors.NONE, 100, 100, 100, null, null))
     respData1.put(new TopicPartition("foo", 1), new FetchResponse.PartitionData(
@@ -449,7 +448,7 @@ class FetchSessionTest {
       Optional.empty()))
     val session2context = fetchManager.newContext(JFetchMetadata.INITIAL, session1req, EMPTY_PART_LIST, false)
     assertEquals(classOf[FullFetchContext], session2context.getClass)
-    val session2RespData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
+    val session2RespData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]
     session2RespData.put(new TopicPartition("foo", 0), new FetchResponse.PartitionData(
       Errors.NONE, 100, 100, 100, null, null))
     session2RespData.put(new TopicPartition("foo", 1), new FetchResponse.PartitionData(
@@ -484,7 +483,7 @@ class FetchSessionTest {
       Optional.empty()))
     val session3context = fetchManager.newContext(JFetchMetadata.INITIAL, session3req, EMPTY_PART_LIST, false)
     assertEquals(classOf[FullFetchContext], session3context.getClass)
-    val respData3 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
+    val respData3 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]
     respData3.put(new TopicPartition("foo", 0), new FetchResponse.PartitionData(
       Errors.NONE, 100, 100, 100, null, null))
     respData3.put(new TopicPartition("foo", 1), new FetchResponse.PartitionData(
@@ -515,7 +514,7 @@ class FetchSessionTest {
       Optional.empty()))
     val session1context = fetchManager.newContext(JFetchMetadata.INITIAL, session1req, EMPTY_PART_LIST, true)
     assertEquals(classOf[FullFetchContext], session1context.getClass)
-    val respData1 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
+    val respData1 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]
     respData1.put(new TopicPartition("foo", 0), new FetchResponse.PartitionData(
       Errors.NONE, 100, 100, 100, null, null))
     respData1.put(new TopicPartition("foo", 1), new FetchResponse.PartitionData(
@@ -537,7 +536,7 @@ class FetchSessionTest {
       Optional.empty()))
     val session2context = fetchManager.newContext(JFetchMetadata.INITIAL, session1req, EMPTY_PART_LIST, false)
     assertEquals(classOf[FullFetchContext], session2context.getClass)
-    val session2RespData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
+    val session2RespData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]
     session2RespData.put(new TopicPartition("foo", 0), new FetchResponse.PartitionData(
       Errors.NONE, 100, 100, 100, null, null))
     session2RespData.put(new TopicPartition("foo", 1), new FetchResponse.PartitionData(
@@ -561,7 +560,7 @@ class FetchSessionTest {
       Optional.empty()))
     val session3context = fetchManager.newContext(JFetchMetadata.INITIAL, session3req, EMPTY_PART_LIST, true)
     assertEquals(classOf[FullFetchContext], session3context.getClass)
-    val respData3 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
+    val respData3 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]
     respData3.put(new TopicPartition("foo", 0), new FetchResponse.PartitionData(
       Errors.NONE, 100, 100, 100, null, null))
     respData3.put(new TopicPartition("foo", 1), new FetchResponse.PartitionData(
@@ -589,7 +588,7 @@ class FetchSessionTest {
       Optional.empty()))
     val session4context = fetchManager.newContext(JFetchMetadata.INITIAL, session4req, EMPTY_PART_LIST, true)
     assertEquals(classOf[FullFetchContext], session4context.getClass)
-    val respData4 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
+    val respData4 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]
     respData4.put(new TopicPartition("foo", 0), new FetchResponse.PartitionData(
       Errors.NONE, 100, 100, 100, null, null))
     respData4.put(new TopicPartition("foo", 1), new FetchResponse.PartitionData(
@@ -620,7 +619,7 @@ class FetchSessionTest {
       Optional.empty()))
     val context1 = fetchManager.newContext(JFetchMetadata.INITIAL, reqData1, EMPTY_PART_LIST, false)
     assertEquals(classOf[FullFetchContext], context1.getClass)
-    val respData1 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
+    val respData1 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]
     respData1.put(new TopicPartition("foo", 0), new FetchResponse.PartitionData(
       Errors.NONE, 100, 100, 100, null, null))
     respData1.put(new TopicPartition("foo", 1), new FetchResponse.PartitionData(
@@ -639,7 +638,7 @@ class FetchSessionTest {
     val context2 = fetchManager.newContext(
       new JFetchMetadata(resp1.sessionId, 1), reqData2, removed2, false)
     assertEquals(classOf[SessionlessFetchContext], context2.getClass)
-    val respData2 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
+    val respData2 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]
     val resp2 = context2.updateAndGenerateResponseData(respData2)
     assertEquals(INVALID_SESSION_ID, resp2.sessionId)
     assertTrue(resp2.responseData().isEmpty)
@@ -661,7 +660,7 @@ class FetchSessionTest {
     // Full fetch context returns all partitions in the response
     val context1 = fetchManager.newContext(JFetchMetadata.INITIAL, reqData, EMPTY_PART_LIST, isFollower = false)
     assertEquals(classOf[FullFetchContext], context1.getClass)
-    val respData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
+    val respData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]
     respData.put(tp1, new FetchResponse.PartitionData(Errors.NONE,
       105, 105, 0, Optional.empty(), Collections.emptyList(), Optional.empty(), null))
     val divergingEpoch = Optional.of(new FetchResponseData.EpochEndOffset().setEpoch(3).setEndOffset(90))

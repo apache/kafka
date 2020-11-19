@@ -29,7 +29,6 @@ import kafka.server.QuotaFactory.UnboundedQuota
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.requests.FetchResponse.PartitionData
 import org.apache.kafka.common.requests.{EpochEndOffset, FetchRequest, FetchResponse}
@@ -74,7 +73,7 @@ class ReplicaAlterLogDirsThread(name: String,
   }
 
   def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = {
-    var partitionData: Seq[(TopicPartition, FetchResponse.PartitionData[Records])] = null
+    var partitionData: Seq[(TopicPartition, FetchResponse.PartitionData)] = null
     val request = fetchRequest.build()
 
     def processResponseCallback(responsePartitionData: Seq[(TopicPartition, FetchPartitionData)]): Unit = {
@@ -107,7 +106,7 @@ class ReplicaAlterLogDirsThread(name: String,
   // process fetched data
   override def processPartitionData(topicPartition: TopicPartition,
                                     fetchOffset: Long,
-                                    partitionData: PartitionData[Records]): Option[LogAppendInfo] = {
+                                    partitionData: PartitionData): Option[LogAppendInfo] = {
     val partition = replicaMgr.nonOfflinePartition(topicPartition).get
     val futureLog = partition.futureLocalLogOrException
     val records = toMemoryRecords(partitionData.records)

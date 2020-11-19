@@ -885,7 +885,7 @@ class AbstractFetcherThreadTest {
         sourceCodec = NoCompressionCodec,
         targetCodec = NoCompressionCodec,
         shallowCount = batches.size,
-        validBytes = partitionData.records.sizeInBytes,
+        validBytes = partitionData.sizeInBytes,
         offsetsMonotonic = true,
         lastOffsetOfFirstBatch = batches.headOption.map(_.lastOffset).getOrElse(-1)))
     }

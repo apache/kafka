@@ -28,7 +28,6 @@ import org.apache.kafka.common.message.ListOffsetRequestData.ListOffsetPartition
 import org.apache.kafka.common.message.ListOffsetResponseData.ListOffsetPartitionResponse
 import org.apache.kafka.common.message.ListOffsetResponseData.ListOffsetTopicResponse
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, ListOffsetRequest, ListOffsetResponse}
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.easymock.{EasyMock, IAnswer}
@@ -251,8 +250,8 @@ class LogOffsetTest extends BaseRequestTest {
     connectAndReceive[ListOffsetResponse](request)
   }
 
-  private def sendFetchRequest(request: FetchRequest): FetchResponse[MemoryRecords] = {
-    connectAndReceive[FetchResponse[MemoryRecords]](request)
+  private def sendFetchRequest(request: FetchRequest): FetchResponse = {
+    connectAndReceive[FetchResponse](request)
   }
 
   private def buildTargetTimes(tp: TopicPartition, timestamp: Long, maxNumOffsets: Int): List[ListOffsetTopic] = {

@@ -111,7 +111,7 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
             case PRODUCE:
                 return new ProduceResponse(new ProduceResponseData(struct, version));
             case FETCH:
-                return new FetchResponse<>(new FetchResponseData(struct, version));
+                return new FetchResponse(new FetchResponseData(struct, version));
             case LIST_OFFSETS:
                 return new ListOffsetResponse(struct, version);
             case METADATA:

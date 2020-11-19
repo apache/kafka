@@ -328,14 +328,14 @@ public class FetchRequest extends AbstractRequest {
         // may not be any partitions at all in the response.  For this reason, the top-level error code
         // is essential for them.
         Errors error = Errors.forException(e);
-        LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> responseData = new LinkedHashMap<>();
+        LinkedHashMap<TopicPartition, FetchResponse.PartitionData> responseData = new LinkedHashMap<>();
         for (Map.Entry<TopicPartition, PartitionData> entry : fetchData.entrySet()) {
-            FetchResponse.PartitionData<MemoryRecords> partitionResponse = new FetchResponse.PartitionData<>(error,
+            FetchResponse.PartitionData partitionResponse = new FetchResponse.PartitionData(error,
                 FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
                 FetchResponse.INVALID_LOG_START_OFFSET, Optional.empty(), null, MemoryRecords.EMPTY);
             responseData.put(entry.getKey(), partitionResponse);
         }
-        return new FetchResponse<>(error, responseData, throttleTimeMs, data.sessionId());
+        return new FetchResponse(error, responseData, throttleTimeMs, data.sessionId());
     }
 
     public int replicaId() {

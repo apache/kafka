@@ -32,7 +32,7 @@ import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.message.ListOffsetRequestData.{ListOffsetPartition, ListOffsetTopic}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{MemoryRecords, Records}
+import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.{LogContext, Time}
@@ -209,7 +209,7 @@ class ReplicaFetcherThread(name: String,
   override protected def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = {
     try {
       val clientResponse = leaderEndpoint.sendRequest(fetchRequest)
-      val fetchResponse = clientResponse.responseBody.asInstanceOf[FetchResponse[Records]]
+      val fetchResponse = clientResponse.responseBody.asInstanceOf[FetchResponse]
       if (!fetchSessionHandler.handleResponse(fetchResponse)) {
         Map.empty
       } else {

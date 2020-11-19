@@ -1887,7 +1887,7 @@ class KafkaApisTest {
     createKafkaApis().handleFetchRequest(request)
 
     val response = readResponse(fetchRequest, capturedResponse)
-      .asInstanceOf[FetchResponse[BaseRecords]]
+      .asInstanceOf[FetchResponse]
     assertTrue(response.responseData.containsKey(tp))
 
     val partitionData = response.responseData.get(tp)

@@ -26,7 +26,7 @@ import kafka.message.{GZIPCompressionCodec, ProducerCompressionCodec, ZStdCompre
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{MemoryRecords, Record, RecordBatch}
+import org.apache.kafka.common.record.{Record, RecordBatch}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.serialization.{ByteArraySerializer, StringSerializer}
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
@@ -70,8 +70,8 @@ class FetchRequestTest extends BaseRequestTest {
     partitionMap
   }
 
-  private def sendFetchRequest(leaderId: Int, request: FetchRequest): FetchResponse[MemoryRecords] = {
-    connectAndReceive[FetchResponse[MemoryRecords]](request, destination = brokerSocketServer(leaderId))
+  private def sendFetchRequest(leaderId: Int, request: FetchRequest): FetchResponse = {
+    connectAndReceive[FetchResponse](request, destination = brokerSocketServer(leaderId))
   }
 
   private def initProducer(): Unit = {
@@ -138,7 +138,7 @@ class FetchRequestTest extends BaseRequestTest {
     val size3 = records(partitionData3).map(_.sizeInBytes).sum
     assertTrue(s"Expected $size3 to be smaller than $maxResponseBytes", size3 <= maxResponseBytes)
     assertTrue(s"Expected $size3 to be larger than $maxPartitionBytes", size3 > maxPartitionBytes)
-    assertTrue(maxPartitionBytes < partitionData3.records.sizeInBytes)
+    assertTrue(maxPartitionBytes < partitionData3.sizeInBytes)
 
     // 4. Partition with message larger than the response limit at the start of the list
     val shuffledTopicPartitions4 = Seq(partitionWithLargeMessage2, partitionWithLargeMessage1) ++
@@ -155,7 +155,7 @@ class FetchRequestTest extends BaseRequestTest {
     assertTrue(partitionData4.highWatermark > 0)
     val size4 = records(partitionData4).map(_.sizeInBytes).sum
     assertTrue(s"Expected $size4 to be larger than $maxResponseBytes", size4 > maxResponseBytes)
-    assertTrue(maxResponseBytes < partitionData4.records.sizeInBytes)
+    assertTrue(maxResponseBytes < partitionData4.sizeInBytes)
   }
 
   @Test
@@ -171,7 +171,7 @@ class FetchRequestTest extends BaseRequestTest {
     val partitionData = fetchResponse.responseData.get(topicPartition)
     assertEquals(Errors.NONE, partitionData.error)
     assertTrue(partitionData.highWatermark > 0)
-    assertEquals(maxPartitionBytes, partitionData.records.sizeInBytes)
+    assertEquals(maxPartitionBytes, partitionData.sizeInBytes)
     assertEquals(0, records(partitionData).map(_.sizeInBytes).sum)
   }
 
@@ -244,7 +244,7 @@ class FetchRequestTest extends BaseRequestTest {
     val fetchResponse = sendFetchRequest(secondLeaderId, fetchRequest)
     val partitionData = fetchResponse.responseData.get(topicPartition)
     assertEquals(Errors.NONE, partitionData.error)
-    assertEquals(0L, partitionData.records.sizeInBytes())
+    assertEquals(0L, partitionData.sizeInBytes())
     assertTrue(partitionData.divergingEpoch.isPresent)
 
     val divergingEpoch = partitionData.divergingEpoch.get()
@@ -366,7 +366,7 @@ class FetchRequestTest extends BaseRequestTest {
     // batch is not complete, but sent when the producer is closed
     futures.foreach(_.get)
 
-    def fetch(version: Short, maxPartitionBytes: Int, closeAfterPartialResponse: Boolean): Option[FetchResponse[MemoryRecords]] = {
+    def fetch(version: Short, maxPartitionBytes: Int, closeAfterPartialResponse: Boolean): Option[FetchResponse] = {
       val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(maxPartitionBytes,
         Seq(topicPartition))).build(version)
 
@@ -383,7 +383,7 @@ class FetchRequestTest extends BaseRequestTest {
               size > maxPartitionBytes - batchSize)
           None
         } else {
-          Some(receive[FetchResponse[MemoryRecords]](socket, ApiKeys.FETCH, version))
+          Some(receive[FetchResponse](socket, ApiKeys.FETCH, version))
         }
       } finally {
         socket.close()
@@ -655,11 +655,11 @@ class FetchRequestTest extends BaseRequestTest {
     assertEquals(3, records(data4).size)
   }
 
-  private def records(partitionData: FetchResponse.PartitionData[MemoryRecords]): Seq[Record] = {
+  private def records(partitionData: FetchResponse.PartitionData): Seq[Record] = {
     partitionData.records.records.asScala.toBuffer
   }
 
-  private def checkFetchResponse(expectedPartitions: Seq[TopicPartition], fetchResponse: FetchResponse[MemoryRecords],
+  private def checkFetchResponse(expectedPartitions: Seq[TopicPartition], fetchResponse: FetchResponse,
                                  maxPartitionBytes: Int, maxResponseBytes: Int, numMessagesPerPartition: Int): Unit = {
     assertEquals(expectedPartitions, fetchResponse.responseData.keySet.asScala.toSeq)
     var emptyResponseSeen = false

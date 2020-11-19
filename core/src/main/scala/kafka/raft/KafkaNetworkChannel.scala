@@ -73,7 +73,7 @@ object KafkaNetworkChannel {
       case voteResponse: VoteResponse => voteResponse.data
       case beginEpochResponse: BeginQuorumEpochResponse => beginEpochResponse.data
       case endEpochResponse: EndQuorumEpochResponse => endEpochResponse.data
-      case fetchResponse: FetchResponse[_] => fetchResponse.data
+      case fetchResponse: FetchResponse => fetchResponse.data
       case _ => throw new IllegalArgumentException(s"Unexpected type for response: $response")
     }
   }

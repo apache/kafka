@@ -61,11 +61,11 @@ public class FetchResponseBenchmark {
     @Param({"3", "10", "20"})
     private int partitionCount;
 
-    LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> responseData;
+    LinkedHashMap<TopicPartition, FetchResponse.PartitionData> responseData;
 
     ResponseHeader header;
 
-    FetchResponse<MemoryRecords> fetchResponse;
+    FetchResponse fetchResponse;
 
     @Setup(Level.Trial)
     public void setup() {
@@ -78,19 +78,19 @@ public class FetchResponseBenchmark {
         for (int topicIdx = 0; topicIdx < topicCount; topicIdx++) {
             String topic = UUID.randomUUID().toString();
             for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
-                FetchResponse.PartitionData<MemoryRecords> partitionData = new FetchResponse.PartitionData<>(
+                FetchResponse.PartitionData partitionData = new FetchResponse.PartitionData(
                     Errors.NONE, 0, 0, 0, Optional.empty(), Collections.emptyList(), records);
                 responseData.put(new TopicPartition(topic, partitionId), partitionData);
             }
         }
 
         this.header = new ResponseHeader(100, ApiKeys.FETCH.responseHeaderVersion(ApiKeys.FETCH.latestVersion()));
-        this.fetchResponse = new FetchResponse<>(Errors.NONE, responseData, 0, 0);
+        this.fetchResponse = new FetchResponse(Errors.NONE, responseData, 0, 0);
     }
 
     @Benchmark
     public int testConstructFetchResponse() {
-        FetchResponse<MemoryRecords> fetchResponse = new FetchResponse<>(Errors.NONE, responseData, 0, 0);
+        FetchResponse fetchResponse = new FetchResponse(Errors.NONE, responseData, 0, 0);
         return fetchResponse.responseData().size();
     }
 
