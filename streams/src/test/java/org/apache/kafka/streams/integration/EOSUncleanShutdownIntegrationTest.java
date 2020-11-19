@@ -99,6 +99,7 @@ public class EOSUncleanShutdownIntegrationTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldWorkWithUncleanShutdownWipeOutStateStore() throws InterruptedException {
         final String appId = "shouldWorkWithUncleanShutdownWipeOutStateStore";
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
@@ -132,7 +133,10 @@ public class EOSUncleanShutdownIntegrationTest {
             mkEntry(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ((Serializer<String>) STRING_SERIALIZER).getClass().getName()),
             mkEntry(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
         ));
-        final KafkaStreams driver = IntegrationTestUtils.getStartedStreams(STREAMS_CONFIG, builder, true);
+        final KafkaStreams driver =  new KafkaStreams(builder.build(), STREAMS_CONFIG);
+        driver.cleanUp();
+        driver.setUncaughtExceptionHandler((t, e) -> { });
+        driver.start();
 
         final File stateDir = new File(String.join("/", TEST_FOLDER.getRoot().getPath(), appId, "0_0"));
 

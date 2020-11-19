@@ -313,7 +313,7 @@ object TestUtils extends Logging {
     }
 
     if (enableToken)
-      props.put(KafkaConfig.DelegationTokenMasterKeyProp, "masterkey")
+      props.put(KafkaConfig.DelegationTokenSecretKeyProp, "secretkey")
 
     props.put(KafkaConfig.NumPartitionsProp, numPartitions.toString)
     props.put(KafkaConfig.DefaultReplicationFactorProp, defaultReplicationFactor.toString)

@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.message.EnvelopeResponseData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.AlterIsrResponseData;
+import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -37,13 +39,6 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
 
     protected Send toSend(String destination, ResponseHeader header, short apiVersion) {
         return new NetworkSend(destination, RequestUtils.serialize(header.toStruct(), toStruct(apiVersion)));
-    }
-
-    /**
-     * Visible for testing, typically {@link #toSend(String, ResponseHeader, short)} should be used instead.
-     */
-    public ByteBuffer serialize(short version, ResponseHeader responseHeader) {
-        return RequestUtils.serialize(responseHeader.toStruct(), toStruct(version));
     }
 
     /**
@@ -86,10 +81,23 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
 
     protected abstract Struct toStruct(short version);
 
+    /**
+     * Parse a response from the provided buffer. The buffer is expected to hold both
+     * the {@link ResponseHeader} as well as the response payload.
+     */
+    public static AbstractResponse parseResponse(ByteBuffer byteBuffer, RequestHeader header) {
+        ApiKeys apiKey = header.apiKey();
+        short apiVersion = header.apiVersion();
+
+        ResponseHeader.parse(byteBuffer, apiKey.responseHeaderVersion(apiVersion));
+        Struct struct = apiKey.parseResponse(apiVersion, byteBuffer);
+        return AbstractResponse.parseResponse(apiKey, struct, apiVersion);
+    }
+
     public static AbstractResponse parseResponse(ApiKeys apiKey, Struct struct, short version) {
         switch (apiKey) {
             case PRODUCE:
-                return new ProduceResponse(struct);
+                return new ProduceResponse(new ProduceResponseData(struct, version));
             case FETCH:
                 return new FetchResponse<>(new FetchResponseData(struct, version));
             case LIST_OFFSETS:
@@ -135,7 +143,7 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
             case INIT_PRODUCER_ID:
                 return new InitProducerIdResponse(struct, version);
             case OFFSET_FOR_LEADER_EPOCH:
-                return new OffsetsForLeaderEpochResponse(struct);
+                return new OffsetsForLeaderEpochResponse(struct, version);
             case ADD_PARTITIONS_TO_TXN:
                 return new AddPartitionsToTxnResponse(struct, version);
             case ADD_OFFSETS_TO_TXN:
@@ -204,6 +212,8 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return new AlterIsrResponse(new AlterIsrResponseData(struct, version));
             case UPDATE_FEATURES:
                 return new UpdateFeaturesResponse(struct, version);
+            case ENVELOPE:
+                return new EnvelopeResponse(new EnvelopeResponseData(struct, version));
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

@@ -132,6 +132,10 @@ import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResp
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopic;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection;
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition;
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic;
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopicCollection;
+import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
 import org.apache.kafka.common.message.RenewDelegationTokenResponseData;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
@@ -627,9 +631,34 @@ public class RequestResponseTest {
     }
 
     @Test
+    public void testPartitionSize() {
+        TopicPartition tp0 = new TopicPartition("test", 0);
+        TopicPartition tp1 = new TopicPartition("test", 1);
+        MemoryRecords records0 = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2,
+            CompressionType.NONE, new SimpleRecord("woot".getBytes()));
+        MemoryRecords records1 = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2,
+            CompressionType.NONE, new SimpleRecord("woot".getBytes()), new SimpleRecord("woot".getBytes()));
+        ProduceRequest request = ProduceRequest.forMagic(RecordBatch.MAGIC_VALUE_V2,
+                new ProduceRequestData()
+                        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Arrays.asList(
+                                new ProduceRequestData.TopicProduceData().setName(tp0.topic()).setPartitionData(
+                                        Collections.singletonList(new ProduceRequestData.PartitionProduceData().setIndex(tp0.partition()).setRecords(records0))),
+                                new ProduceRequestData.TopicProduceData().setName(tp1.topic()).setPartitionData(
+                                        Collections.singletonList(new ProduceRequestData.PartitionProduceData().setIndex(tp1.partition()).setRecords(records1))))
+                                .iterator()))
+                        .setAcks((short) 1)
+                        .setTimeoutMs(5000)
+                        .setTransactionalId("transactionalId"))
+            .build((short) 3);
+        assertEquals(2, request.partitionSizes().size());
+        assertEquals(records0.sizeInBytes(), (int) request.partitionSizes().get(tp0));
+        assertEquals(records1.sizeInBytes(), (int) request.partitionSizes().get(tp1));
+    }
+
+    @Test
     public void produceRequestToStringTest() {
         ProduceRequest request = createProduceRequest(ApiKeys.PRODUCE.latestVersion());
-        assertEquals(1, request.partitionRecordsOrFail().size());
+        assertEquals(1, request.dataOrException().topicData().size());
         assertFalse(request.toString(false).contains("partitionSizes"));
         assertTrue(request.toString(false).contains("numPartitions=1"));
         assertTrue(request.toString(true).contains("partitionSizes"));
@@ -637,8 +666,8 @@ public class RequestResponseTest {
 
         request.clearPartitionRecords();
         try {
-            request.partitionRecordsOrFail();
-            fail("partitionRecordsOrFail should fail after clearPartitionRecords()");
+            request.dataOrException();
+            fail("dataOrException should fail after clearPartitionRecords()");
         } catch (IllegalStateException e) {
             // OK
         }
@@ -650,10 +679,11 @@ public class RequestResponseTest {
         assertFalse(request.toString(true).contains("numPartitions"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void produceRequestGetErrorResponseTest() {
         ProduceRequest request = createProduceRequest(ApiKeys.PRODUCE.latestVersion());
-        Set<TopicPartition> partitions = new HashSet<>(request.partitionRecordsOrFail().keySet());
+        Set<TopicPartition> partitions = new HashSet<>(request.partitionSizes().keySet());
 
         ProduceResponse errorResponse = (ProduceResponse) request.getErrorResponse(new NotEnoughReplicasException());
         assertEquals(partitions, errorResponse.responses().keySet());
@@ -1244,7 +1274,8 @@ public class RequestResponseTest {
                     .setPartitions(Arrays.asList(new ListOffsetPartition()
                             .setPartitionIndex(0)
                             .setTimestamp(1000000L)
-                            .setMaxNumOffsets(10)));
+                            .setMaxNumOffsets(10)
+                            .setCurrentLeaderEpoch(5)));
             return ListOffsetRequest.Builder
                     .forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
                     .setTargetTimes(Collections.singletonList(topic))
@@ -1254,7 +1285,8 @@ public class RequestResponseTest {
                     .setName("test")
                     .setPartitions(Arrays.asList(new ListOffsetPartition()
                             .setPartitionIndex(0)
-                            .setTimestamp(1000000L)));
+                            .setTimestamp(1000000L)
+                            .setCurrentLeaderEpoch(5)));
             return ListOffsetRequest.Builder
                     .forConsumer(true, IsolationLevel.READ_UNCOMMITTED)
                     .setTargetTimes(Collections.singletonList(topic))
@@ -1262,10 +1294,9 @@ public class RequestResponseTest {
         } else if (version >= 2 && version <= 5) {
             ListOffsetPartition partition = new ListOffsetPartition()
                     .setPartitionIndex(0)
-                    .setTimestamp(1000000L);
-            if (version >= 4) {
-                partition.setCurrentLeaderEpoch(5);
-            }
+                    .setTimestamp(1000000L)
+                    .setCurrentLeaderEpoch(5);
+
             ListOffsetTopic topic = new ListOffsetTopic()
                     .setName("test")
                     .setPartitions(Arrays.asList(partition));
@@ -1389,17 +1420,27 @@ public class RequestResponseTest {
         return new OffsetFetchResponse(Errors.NONE, responseData);
     }
 
+    @SuppressWarnings("deprecation")
     private ProduceRequest createProduceRequest(int version) {
         if (version < 2)
             throw new IllegalArgumentException("Produce request version 2 is not supported");
-
         byte magic = version == 2 ? RecordBatch.MAGIC_VALUE_V1 : RecordBatch.MAGIC_VALUE_V2;
         MemoryRecords records = MemoryRecords.withRecords(magic, CompressionType.NONE, new SimpleRecord("woot".getBytes()));
-        Map<TopicPartition, MemoryRecords> produceData = Collections.singletonMap(new TopicPartition("test", 0), records);
-        return ProduceRequest.Builder.forMagic(magic, (short) 1, 5000, produceData, "transactionalId")
+        return ProduceRequest.forMagic(magic,
+                new ProduceRequestData()
+                        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
+                                new ProduceRequestData.TopicProduceData()
+                                        .setName("test")
+                                        .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
+                                                .setIndex(0)
+                                                .setRecords(records)))).iterator()))
+                        .setAcks((short) 1)
+                        .setTimeoutMs(5000)
+                        .setTransactionalId(version >= 3 ? "transactionalId" : null))
                 .build((short) version);
     }
 
+    @SuppressWarnings("deprecation")
     private ProduceResponse createProduceResponse() {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
         responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE,
@@ -1407,6 +1448,7 @@ public class RequestResponseTest {
         return new ProduceResponse(responseData, 0);
     }
 
+    @SuppressWarnings("deprecation")
     private ProduceResponse createProduceResponseWithErrorMessage() {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
         responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE,
@@ -1765,8 +1807,31 @@ public class RequestResponseTest {
         return epochs;
     }
 
+    private OffsetForLeaderTopicCollection createOffsetForLeaderTopicCollection() {
+        OffsetForLeaderTopicCollection topics = new OffsetForLeaderTopicCollection();
+        topics.add(new OffsetForLeaderTopic()
+            .setTopic("topic1")
+            .setPartitions(Arrays.asList(
+                new OffsetForLeaderPartition()
+                    .setPartition(0)
+                    .setLeaderEpoch(1)
+                    .setCurrentLeaderEpoch(0),
+                new OffsetForLeaderPartition()
+                    .setPartition(1)
+                    .setLeaderEpoch(1)
+                    .setCurrentLeaderEpoch(0))));
+        topics.add(new OffsetForLeaderTopic()
+            .setTopic("topic2")
+            .setPartitions(Arrays.asList(
+                new OffsetForLeaderPartition()
+                    .setPartition(2)
+                    .setLeaderEpoch(3)
+                    .setCurrentLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH))));
+        return topics;
+    }
+
     private OffsetsForLeaderEpochRequest createLeaderEpochRequestForConsumer() {
-        Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData> epochs = createOffsetForLeaderEpochPartitionData();
+        OffsetForLeaderTopicCollection epochs = createOffsetForLeaderTopicCollection();
         return OffsetsForLeaderEpochRequest.Builder.forConsumer(epochs).build();
     }
 

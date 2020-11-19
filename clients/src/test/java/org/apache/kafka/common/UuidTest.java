@@ -21,50 +21,61 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 
-public class UUIDTest {
+public class UuidTest {
 
     @Test
     public void testSignificantBits() {
-        UUID id = new UUID(34L, 98L);
+        Uuid id = new Uuid(34L, 98L);
 
         assertEquals(id.getMostSignificantBits(), 34L);
         assertEquals(id.getLeastSignificantBits(), 98L);
     }
 
     @Test
-    public void testUUIDEquality() {
-        UUID id1 = new UUID(12L, 13L);
-        UUID id2 = new UUID(12L, 13L);
-        UUID id3 = new UUID(24L, 38L);
+    public void testUuidEquality() {
+        Uuid id1 = new Uuid(12L, 13L);
+        Uuid id2 = new Uuid(12L, 13L);
+        Uuid id3 = new Uuid(24L, 38L);
 
-        assertEquals(UUID.ZERO_UUID, UUID.ZERO_UUID);
+        assertEquals(Uuid.ZERO_UUID, Uuid.ZERO_UUID);
         assertEquals(id1, id2);
         assertNotEquals(id1, id3);
 
-        assertEquals(UUID.ZERO_UUID.hashCode(), UUID.ZERO_UUID.hashCode());
+        assertEquals(Uuid.ZERO_UUID.hashCode(), Uuid.ZERO_UUID.hashCode());
         assertEquals(id1.hashCode(), id2.hashCode());
         assertNotEquals(id1.hashCode(), id3.hashCode());
+    }
+    
+    @Test
+    public void testHashCode() {
+        Uuid id1 = new Uuid(16L, 7L);
+        Uuid id2 = new Uuid(1043L, 20075L);
+        Uuid id3 = new Uuid(104312423523523L, 200732425676585L);
+        
+        assertEquals(23, id1.hashCode());
+        assertEquals(19064, id2.hashCode());
+        assertEquals(-2011255899, id3.hashCode());
     }
 
     @Test
     public void testStringConversion() {
-        UUID id = UUID.randomUUID();
+        Uuid id = Uuid.randomUuid();
         String idString = id.toString();
 
-        assertEquals(UUID.fromString(idString), id);
+        assertEquals(Uuid.fromString(idString), id);
 
-        String zeroIdString = UUID.ZERO_UUID.toString();
+        String zeroIdString = Uuid.ZERO_UUID.toString();
 
-        assertEquals(UUID.fromString(zeroIdString), UUID.ZERO_UUID);
+        assertEquals(Uuid.fromString(zeroIdString), Uuid.ZERO_UUID);
     }
 
     @Test
-    public void testRandomUUID() {
-        UUID randomID = UUID.randomUUID();
-        // reservedSentinel is based on the value of SENTINEL_ID_INTERNAL in UUID.
-        UUID reservedSentinel = new UUID(0L, 1L);
+    public void testRandomUuid() {
+        Uuid randomID = Uuid.randomUuid();
+        // reservedSentinel is based on the value of SENTINEL_ID_INTERNAL in Uuid.
+        Uuid reservedSentinel = new Uuid(0L, 1L);
 
-        assertNotEquals(randomID, UUID.ZERO_UUID);
+        assertNotEquals(randomID, Uuid.ZERO_UUID);
         assertNotEquals(randomID, reservedSentinel);
     }
 }

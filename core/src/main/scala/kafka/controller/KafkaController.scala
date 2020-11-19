@@ -30,6 +30,7 @@ import kafka.server._
 import kafka.utils._
 import kafka.utils.Implicits._
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
+import kafka.zk.TopicZNode.TopicIdReplicaAssignment
 import kafka.zk.{FeatureZNodeStatus, _}
 import kafka.zookeeper.{StateChangeHandler, ZNodeChangeHandler, ZNodeChildChangeHandler}
 import org.apache.kafka.common.ElectionType
@@ -1032,8 +1033,8 @@ class KafkaController(val config: KafkaConfig,
       (topicPartition -> assignment)
 
     val setDataResponse = zkClient.setTopicAssignmentRaw(topicPartition.topic,
-                                                         controllerContext.topicIds.get(topicPartition.topic),
-                                                         topicAssignment, controllerContext.epochZkVersion)
+      controllerContext.topicIds(topicPartition.topic),
+      topicAssignment, controllerContext.epochZkVersion)
     setDataResponse.resultCode match {
       case Code.OK =>
         info(s"Successfully updated assignment of partition $topicPartition to $assignment")
@@ -1672,9 +1673,9 @@ class KafkaController(val config: KafkaConfig,
   }
 
   private def processTopicIds(topicIdAssignments: Set[TopicIdReplicaAssignment]): Unit = {
-      val updated = zkClient.setTopicIds(topicIdAssignments.filter(_.topicId.isEmpty), controllerContext.epochZkVersion)
-      val allTopicIdAssignments = updated ++ topicIdAssignments.filter(_.topicId.isDefined)
-      allTopicIdAssignments.foreach(topicIdAssignment => controllerContext.addTopicId(topicIdAssignment.topic, topicIdAssignment.topicId.get))
+    val updated = zkClient.setTopicIds(topicIdAssignments.filter(_.topicId.isEmpty), controllerContext.epochZkVersion)
+    val allTopicIdAssignments = updated ++ topicIdAssignments.filter(_.topicId.isDefined)
+    allTopicIdAssignments.foreach(topicIdAssignment => controllerContext.addTopicId(topicIdAssignment.topic, topicIdAssignment.topicId.get))
   }
 
   private def processLogDirEventNotification(): Unit = {
@@ -1704,7 +1705,7 @@ class KafkaController(val config: KafkaConfig,
       }.toMap
 
       zkClient.setTopicAssignment(topic,
-        controllerContext.topicIds.get(topic),
+        controllerContext.topicIds(topic),
         existingPartitionReplicaAssignment,
         controllerContext.epochZkVersion)
     }

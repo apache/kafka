@@ -1381,10 +1381,8 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * Describes finalized as well as supported features. By default, the request is issued to any
-     * broker. It can be optionally directed only to the controller via DescribeFeaturesOptions
-     * parameter. This is particularly useful if the user requires strongly consistent reads of
-     * finalized features.
+     * Describes finalized as well as supported features. The request is issued to any random
+     * broker.
      * <p>
      * The following exceptions can be anticipated when calling {@code get()} on the future from the
      * returned {@link DescribeFeaturesResult}:
@@ -1435,7 +1433,7 @@ public interface Admin extends AutoCloseable {
      *   This means there was an unexpected error encountered when the update was applied on
      *   the controller. There is no guarantee on whether the update succeeded or failed. The best
      *   way to find out is to issue a {@link Admin#describeFeatures(DescribeFeaturesOptions)}
-     *   request to the controller to get the latest features.</li>
+     *   request.</li>
      * </ul>
      * <p>
      * This operation is supported by brokers with version 2.7.0 or higher.

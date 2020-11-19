@@ -361,7 +361,7 @@ public final class FieldSpec {
         } else if (type instanceof FieldType.UUIDFieldType) {
             headerGenerator.addImport(MessageGenerator.UUID_CLASS);
             if (fieldDefault.isEmpty()) {
-                return "UUID.ZERO_UUID";
+                return "Uuid.ZERO_UUID";
             } else {
                 try {
                     ByteBuffer uuidBytes = ByteBuffer.wrap(Base64.getUrlDecoder().decode(fieldDefault));
@@ -372,7 +372,7 @@ public final class FieldSpec {
                         name + ": " + fieldDefault, e);
                 }
                 headerGenerator.addImport(MessageGenerator.UUID_CLASS);
-                return "UUID.fromString(\"" + fieldDefault + "\")";
+                return "Uuid.fromString(\"" + fieldDefault + "\")";
             }
         } else if (type instanceof FieldType.Float64FieldType) {
             if (fieldDefault.isEmpty()) {
@@ -463,7 +463,7 @@ public final class FieldSpec {
             return "long";
         } else if (type instanceof FieldType.UUIDFieldType) {
             headerGenerator.addImport(MessageGenerator.UUID_CLASS);
-            return "UUID";
+            return "Uuid";
         } else if (type instanceof FieldType.Float64FieldType) {
             return "double";
         } else if (type.isString()) {

@@ -34,7 +34,7 @@ import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{KafkaException, TopicPartition, UUID}
+import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.zookeeper.KeeperException.{Code, NodeExistsException}
 import org.apache.zookeeper.OpResult.{CreateResult, ErrorResult, SetDataResult}
 import org.apache.zookeeper.client.ZKClientConfig
@@ -491,13 +491,13 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
                   expectedControllerEpochZkVersion: Int): Set[TopicIdReplicaAssignment] = {
     val updatedAssignments = topicIdReplicaAssignments.map {
       case TopicIdReplicaAssignment(topic, None, assignments) =>
-        TopicIdReplicaAssignment(topic, Some(UUID.randomUUID()), assignments)
+        TopicIdReplicaAssignment(topic, Some(Uuid.randomUuid()), assignments)
       case TopicIdReplicaAssignment(topic, Some(_), _) =>
         throw new IllegalArgumentException("TopicIdReplicaAssignment for " + topic + " already contains a topic ID.")
     }.toSet
 
     val setDataRequests = updatedAssignments.map { case TopicIdReplicaAssignment(topic, topicIdOpt, assignments) =>
-      SetDataRequest(TopicZNode.path(topic), TopicZNode.encode(topicIdOpt, assignments), ZkVersion.MatchAnyVersion)
+      SetDataRequest(TopicZNode.path(topic), TopicZNode.encode(topicIdOpt.get, assignments), ZkVersion.MatchAnyVersion)
     }.toSeq
 
     retryRequestsUntilConnected(setDataRequests, expectedControllerEpochZkVersion)
@@ -507,13 +507,13 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   /**
    * Sets the topic znode with the given assignment.
    * @param topic the topic whose assignment is being set.
-   * @param topicId Optional topic ID if the topic has one
+   * @param topicId optional topic ID if the topic has one
    * @param assignment the partition to replica mapping to set for the given topic
    * @param expectedControllerEpochZkVersion expected controller epoch zkVersion.
    * @return SetDataResponse
    */
   def setTopicAssignmentRaw(topic: String,
-                            topicId: Option[UUID],
+                            topicId: Uuid,
                             assignment: collection.Map[TopicPartition, ReplicaAssignment],
                             expectedControllerEpochZkVersion: Int): SetDataResponse = {
     val setDataRequest = SetDataRequest(TopicZNode.path(topic), TopicZNode.encode(topicId, assignment), ZkVersion.MatchAnyVersion)
@@ -523,13 +523,13 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   /**
    * Sets the topic znode with the given assignment.
    * @param topic the topic whose assignment is being set.
-   * @param topicId optional topic ID if one exists for the topic
+   * @param topicId unique topic ID for the topic
    * @param assignment the partition to replica mapping to set for the given topic
    * @param expectedControllerEpochZkVersion expected controller epoch zkVersion.
    * @throws KeeperException if there is an error while setting assignment
    */
   def setTopicAssignment(topic: String,
-                         topicId: Option[UUID],
+                         topicId: Uuid,
                          assignment: Map[TopicPartition, ReplicaAssignment],
                          expectedControllerEpochZkVersion: Int = ZkVersion.MatchAnyVersion) = {
     val setDataResponse = setTopicAssignmentRaw(topic, topicId, assignment, expectedControllerEpochZkVersion)
@@ -539,11 +539,11 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   /**
    * Create the topic znode with the given assignment.
    * @param topic the topic whose assignment is being set.
-   * @param topicId optional topic ID if one exists for the topic
+   * @param topicId unique topic ID for the topic
    * @param assignment the partition to replica mapping to set for the given topic
    * @throws KeeperException if there is an error while creating assignment
    */
-  def createTopicAssignment(topic: String, topicId: Option[UUID], assignment: Map[TopicPartition, Seq[Int]]): Unit = {
+  def createTopicAssignment(topic: String, topicId: Uuid, assignment: Map[TopicPartition, Seq[Int]]): Unit = {
     val persistedAssignments = assignment.map { case (k, v) => k -> ReplicaAssignment(v) }
     createRecursive(TopicZNode.path(topic), TopicZNode.encode(topicId, persistedAssignments))
   }
@@ -609,8 +609,9 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * Gets the topic IDs for the given topics.
    * @param topics the topics we wish to retrieve the Topic IDs for
    * @return the Topic IDs
+   * @throws IllegalStateException if a topic in topics does not have a Topic ID
    */
-  def getTopicIdsForTopics(topics: Set[String]): Map[String, UUID] = {
+  def getTopicIdsForTopics(topics: Set[String]): Map[String, Uuid] = {
     val getDataRequests = topics.map(topic => GetDataRequest(TopicZNode.path(topic), ctx = Some(topic)))
     val getDataResponses = retryRequestsUntilConnected(getDataRequests.toSeq)
     getDataResponses.map { getDataResponse =>
@@ -620,9 +621,10 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
         case Code.NONODE => None
         case _ => throw getDataResponse.resultException.get
       }
-    }.filter(_.flatMap(_.topicId).isDefined)
-      .map(_.get)
-      .map(topicIdAssignment => (topicIdAssignment.topic, topicIdAssignment.topicId.get))
+    }.map(_.get)
+      .map(topicIdAssignment => (topicIdAssignment.topic,
+        topicIdAssignment.topicId.getOrElse(
+          throw new IllegalStateException("Topic " + topicIdAssignment.topic + " does not have a topic ID."))))
       .toMap
   }
 
@@ -682,7 +684,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     val getDataResponses = retryRequestsUntilConnected(getDataRequests.toSeq)
     getDataResponses.flatMap { getDataResponse =>
       val topic = getDataResponse.ctx.get.asInstanceOf[String]
-       if (getDataResponse.resultCode == Code.OK) {
+      if (getDataResponse.resultCode == Code.OK) {
         val partitionMap = TopicZNode.decode(topic, getDataResponse.data).assignment.map { case (k, v) => (k.partition, v) }
         Map(topic -> partitionMap)
       } else if (getDataResponse.resultCode == Code.NONODE) {

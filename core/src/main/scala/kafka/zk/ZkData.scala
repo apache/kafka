@@ -31,7 +31,7 @@ import kafka.security.authorizer.AclEntry
 import kafka.server.{ConfigType, DelegationTokenManager}
 import kafka.utils.Json
 import kafka.utils.json.JsonObject
-import org.apache.kafka.common.{KafkaException, TopicPartition, UUID}
+import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
 import org.apache.kafka.common.feature.Features._
@@ -280,11 +280,10 @@ object TopicsZNode {
 
 object TopicZNode {
   case class TopicIdReplicaAssignment(topic: String,
-                                      topicId: Option[UUID],
+                                      topicId: Option[Uuid],
                                       assignment: Map[TopicPartition, ReplicaAssignment])
-
   def path(topic: String) = s"${TopicsZNode.path}/$topic"
-  def encode(topicId: Option[UUID],
+  def encode(topicId: Uuid,
              assignment: collection.Map[TopicPartition, ReplicaAssignment]): Array[Byte] = {
     val replicaAssignmentJson = mutable.Map[String, util.List[Int]]()
     val addingReplicasAssignmentJson = mutable.Map[String, util.List[Int]]()
@@ -299,12 +298,12 @@ object TopicZNode {
     }
 
     val topicAssignment = mutable.Map(
-      "version" -> 2,
+      "version" -> 3,
+      "topic_id" -> topicId.toString,
       "partitions" -> replicaAssignmentJson.asJava,
       "adding_replicas" -> addingReplicasAssignmentJson.asJava,
       "removing_replicas" -> removingReplicasAssignmentJson.asJava
     )
-    topicId.foreach(id => topicAssignment += "topic_id" -> id.toString)
 
     Json.encodeAsBytes(topicAssignment.asJava)
   }
@@ -321,7 +320,7 @@ object TopicZNode {
 
     Json.parseBytes(bytes).map { js =>
       val assignmentJson = js.asJsonObject
-      val topicId = assignmentJson.get("topic_id").map(_.to[String]).map(UUID.fromString)
+      val topicId = assignmentJson.get("topic_id").map(_.to[String]).map(Uuid.fromString)
       val addingReplicasJsonOpt = assignmentJson.get("adding_replicas").map(_.asJsonObject)
       val removingReplicasJsonOpt = assignmentJson.get("removing_replicas").map(_.asJsonObject)
       val partitionsJsonOpt = assignmentJson.get("partitions").map(_.asJsonObject)
@@ -809,12 +808,25 @@ object DelegationTokenInfoZNode {
  *             written by the controller to the FeatureZNode only when the broker IBP config
  *             is less than KAFKA_2_7_IV0.
  */
-object FeatureZNodeStatus extends Enumeration {
-  type FeatureZNodeStatus = Value
-  val Disabled, Enabled = Value
+sealed trait FeatureZNodeStatus {
+  def id: Int
+}
 
-  def withNameOpt(value: Int): Option[Value] = {
-    values.find(_.id == value)
+object FeatureZNodeStatus {
+  case object Disabled extends FeatureZNodeStatus {
+    val id: Int = 0
+  }
+
+  case object Enabled extends FeatureZNodeStatus {
+    val id: Int = 1
+  }
+
+  def withNameOpt(id: Int): Option[FeatureZNodeStatus] = {
+    id match {
+      case Disabled.id => Some(Disabled)
+      case Enabled.id => Some(Enabled)
+      case _ => Option.empty
+    }
   }
 }
 
@@ -824,7 +836,7 @@ object FeatureZNodeStatus extends Enumeration {
  * @param status     the status of the ZK node
  * @param features   the cluster-wide finalized features
  */
-case class FeatureZNode(status: FeatureZNodeStatus.FeatureZNodeStatus, features: Features[FinalizedVersionRange]) {
+case class FeatureZNode(status: FeatureZNodeStatus, features: Features[FinalizedVersionRange]) {
 }
 
 object FeatureZNode {

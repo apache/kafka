@@ -180,6 +180,7 @@ public class AssignmentInfo {
                     break;
                 case 7:
                 case 8:
+                case 9:
                     out.writeInt(usedVersion);
                     out.writeInt(commonlySupportedVersion);
                     encodeActiveAndStandbyTaskAssignment(out);
@@ -354,6 +355,7 @@ public class AssignmentInfo {
                     break;
                 case 7:
                 case 8:
+                case 9:
                     commonlySupportedVersion = in.readInt();
                     assignmentInfo = new AssignmentInfo(usedVersion, commonlySupportedVersion);
                     decodeActiveTasks(assignmentInfo, in);

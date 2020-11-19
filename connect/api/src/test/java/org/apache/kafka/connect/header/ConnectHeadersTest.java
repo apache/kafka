@@ -34,6 +34,7 @@ import org.junit.Test;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.GregorianCalendar;
@@ -47,6 +48,7 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -496,6 +498,18 @@ public class ConnectHeadersTest {
     public void shouldDuplicateAndAlwaysReturnEquivalentButDifferentObject() {
         assertEquals(headers, headers.duplicate());
         assertNotSame(headers, headers.duplicate());
+    }
+
+    @Test
+    public void shouldNotAllowToAddNullHeader() {
+        final ConnectHeaders headers = new ConnectHeaders();
+        assertThrows(NullPointerException.class, () -> headers.add(null));
+    }
+
+    @Test
+    public void shouldThrowNpeWhenAddingCollectionWithNullHeader() {
+        final Iterable<Header> header = Arrays.asList(new ConnectHeader[1]);
+        assertThrows(NullPointerException.class, () -> new ConnectHeaders(header));
     }
 
     protected void assertSchemaMatches(Schema schema, Object value) {
