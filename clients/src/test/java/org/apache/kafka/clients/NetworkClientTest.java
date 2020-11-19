@@ -25,9 +25,10 @@ import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
+import org.apache.kafka.common.message.ProduceRequestData;
+import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.CommonFields;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
@@ -154,8 +155,10 @@ public class NetworkClientTest {
         client.poll(1, time.milliseconds());
         assertTrue("The client should be ready", client.isReady(node, time.milliseconds()));
 
-        ProduceRequest.Builder builder = ProduceRequest.Builder.forCurrentMagic((short) 1, 1000,
-                Collections.emptyMap());
+        ProduceRequest.Builder builder = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+                .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
+                .setAcks((short) 1)
+                .setTimeoutMs(1000));
         ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true);
         client.send(request, time.milliseconds());
         assertEquals("There should be 1 in-flight request after send", 1,
@@ -185,10 +188,9 @@ public class NetworkClientTest {
         ProduceRequest.Builder builder = new ProduceRequest.Builder(
                 PRODUCE.latestVersion(),
                 PRODUCE.latestVersion(),
-                (short) 1,
-                1000,
-                Collections.emptyMap(),
-                null);
+                new ProduceRequestData()
+                    .setAcks((short) 1)
+                    .setTimeoutMs(1000));
         TestCallbackHandler handler = new TestCallbackHandler();
         ClientRequest request = networkClient.newClientRequest(node.idString(), builder, time.milliseconds(),
             true, defaultRequestTimeoutMs, handler);
@@ -198,8 +200,9 @@ public class NetworkClientTest {
         ResponseHeader respHeader =
             new ResponseHeader(request.correlationId(),
                 request.apiKey().responseHeaderVersion(PRODUCE.latestVersion()));
-        Struct resp = new Struct(PRODUCE.responseSchema(PRODUCE.latestVersion()));
-        resp.set("responses", new Object[0]);
+        Struct resp = new ProduceResponseData()
+                .setThrottleTimeMs(100)
+                .toStruct(PRODUCE.latestVersion());
         Struct responseHeaderStruct = respHeader.toStruct();
         int size = responseHeaderStruct.sizeOf() + resp.sizeOf();
         ByteBuffer buffer = ByteBuffer.allocate(size);
@@ -431,8 +434,10 @@ public class NetworkClientTest {
     @Test
     public void testRequestTimeout() {
         awaitReady(client, node); // has to be before creating any request, as it may send ApiVersionsRequest and its response is mocked with correlation id 0
-        ProduceRequest.Builder builder = ProduceRequest.Builder.forCurrentMagic((short) 1,
-                1000, Collections.emptyMap());
+        ProduceRequest.Builder builder = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+                .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
+                .setAcks((short) 1)
+                .setTimeoutMs(1000));
         TestCallbackHandler handler = new TestCallbackHandler();
         int requestTimeoutMs = defaultRequestTimeoutMs + 5000;
         ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true,
@@ -444,8 +449,10 @@ public class NetworkClientTest {
     @Test
     public void testDefaultRequestTimeout() {
         awaitReady(client, node); // has to be before creating any request, as it may send ApiVersionsRequest and its response is mocked with correlation id 0
-        ProduceRequest.Builder builder = ProduceRequest.Builder.forCurrentMagic((short) 1,
-                1000, Collections.emptyMap());
+        ProduceRequest.Builder builder = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+                .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
+                .setAcks((short) 1)
+                .setTimeoutMs(1000));
         ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true);
         assertEquals(defaultRequestTimeoutMs, request.requestTimeoutMs());
         testRequestTimeout(request);
@@ -498,10 +505,9 @@ public class NetworkClientTest {
         ProduceRequest.Builder builder = new ProduceRequest.Builder(
             PRODUCE.latestVersion(),
             PRODUCE.latestVersion(),
-            (short) 1,
-            1000,
-            Collections.emptyMap(),
-            null);
+            new ProduceRequestData()
+                .setAcks((short) 1)
+                .setTimeoutMs(1000));
         TestCallbackHandler handler = new TestCallbackHandler();
         ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true,
                 defaultRequestTimeoutMs, handler);
@@ -510,9 +516,9 @@ public class NetworkClientTest {
         ResponseHeader respHeader =
             new ResponseHeader(request.correlationId(),
                 request.apiKey().responseHeaderVersion(PRODUCE.latestVersion()));
-        Struct resp = new Struct(PRODUCE.responseSchema(PRODUCE.latestVersion()));
-        resp.set("responses", new Object[0]);
-        resp.set(CommonFields.THROTTLE_TIME_MS, 100);
+        Struct resp = new ProduceResponseData()
+                .setThrottleTimeMs(100)
+                .toStruct(PRODUCE.latestVersion());
         Struct responseHeaderStruct = respHeader.toStruct();
         int size = responseHeaderStruct.sizeOf() + resp.sizeOf();
         ByteBuffer buffer = ByteBuffer.allocate(size);
@@ -586,8 +592,10 @@ public class NetworkClientTest {
     }
 
     private int sendEmptyProduceRequest(String nodeId) {
-        ProduceRequest.Builder builder = ProduceRequest.Builder.forCurrentMagic((short) 1, 1000,
-                Collections.emptyMap());
+        ProduceRequest.Builder builder = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+                .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
+                .setAcks((short) 1)
+                .setTimeoutMs(1000));
         TestCallbackHandler handler = new TestCallbackHandler();
         ClientRequest request = client.newClientRequest(nodeId, builder, time.milliseconds(), true,
                 defaultRequestTimeoutMs, handler);
@@ -606,9 +614,9 @@ public class NetworkClientTest {
     }
 
     private void sendThrottledProduceResponse(int correlationId, int throttleMs) {
-        Struct resp = new Struct(PRODUCE.responseSchema(PRODUCE.latestVersion()));
-        resp.set("responses", new Object[0]);
-        resp.set(CommonFields.THROTTLE_TIME_MS, throttleMs);
+        Struct resp = new ProduceResponseData()
+                .setThrottleTimeMs(throttleMs)
+                .toStruct(PRODUCE.latestVersion());
         sendResponse(new ResponseHeader(correlationId,
             PRODUCE.responseHeaderVersion(PRODUCE.latestVersion())),
             resp);

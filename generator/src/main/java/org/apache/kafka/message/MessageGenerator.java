@@ -94,7 +94,7 @@ public final class MessageGenerator {
 
     static final String BYTES_CLASS = "org.apache.kafka.common.utils.Bytes";
 
-    static final String UUID_CLASS = "org.apache.kafka.common.UUID";
+    static final String UUID_CLASS = "org.apache.kafka.common.Uuid";
 
     static final String BASE_RECORDS_CLASS = "org.apache.kafka.common.record.BaseRecords";
 

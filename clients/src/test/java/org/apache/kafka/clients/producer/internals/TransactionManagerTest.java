@@ -1685,13 +1685,13 @@ public class TransactionManagerTest {
         sender.runOnce();
 
         runUntil(responseFuture::isDone);
-        assertFalse(transactionManager.hasError());
+        assertTrue(transactionManager.hasError());
 
-        transactionManager.beginCommit();
+        transactionManager.beginAbort();
 
         TransactionManager.TxnRequestHandler handler = transactionManager.nextRequest(false);
 
-        // First we will get an EndTxn for commit.
+        // First we will get an EndTxn for abort.
         assertNotNull(handler);
         assertTrue(handler.requestBuilder() instanceof EndTxnRequest.Builder);
 
@@ -3356,7 +3356,16 @@ public class TransactionManagerTest {
     private MockClient.RequestMatcher produceRequestMatcher(final long producerId, final short epoch, TopicPartition tp) {
         return body -> {
             ProduceRequest produceRequest = (ProduceRequest) body;
-            MemoryRecords records = produceRequest.partitionRecordsOrFail().get(tp);
+            MemoryRecords records = produceRequest.dataOrException().topicData()
+                    .stream()
+                    .filter(t -> t.name().equals(tp.topic()))
+                    .findAny()
+                    .get()
+                    .partitionData()
+                    .stream()
+                    .filter(p -> p.index() == tp.partition())
+                    .map(p -> (MemoryRecords) p.records())
+                    .findAny().get();
             assertNotNull(records);
             Iterator<MutableRecordBatch> batchIterator = records.batches().iterator();
             assertTrue(batchIterator.hasNext());
@@ -3481,6 +3490,7 @@ public class TransactionManagerTest {
         return produceResponse(tp, offset, error, throttleTimeMs, 10);
     }
 
+    @SuppressWarnings("deprecation")
     private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs, int logStartOffset) {
         ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(error, offset, RecordBatch.NO_TIMESTAMP, logStartOffset);
         Map<TopicPartition, ProduceResponse.PartitionResponse> partResp = singletonMap(tp, resp);

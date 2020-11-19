@@ -26,8 +26,10 @@ import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.TransactionAbortedException;
+import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.MetadataRequest;
+import org.apache.kafka.common.requests.RequestUtils;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
@@ -156,6 +158,15 @@ public class SenderTest {
         this.metrics.close();
     }
 
+    private static Map<TopicPartition, MemoryRecords> partitionRecords(ProduceRequest request) {
+        Map<TopicPartition, MemoryRecords> partitionRecords = new HashMap<>();
+        request.dataOrException().topicData().forEach(tpData -> tpData.partitionData().forEach(p -> {
+            TopicPartition tp = new TopicPartition(tpData.name(), p.index());
+            partitionRecords.put(tp, (MemoryRecords) p.records());
+        }));
+        return Collections.unmodifiableMap(partitionRecords);
+    }
+ 
     @Test
     public void testSimple() throws Exception {
         long offset = 0;
@@ -195,7 +206,7 @@ public class SenderTest {
             if (request.version() != 2)
                 return false;
 
-            MemoryRecords records = request.partitionRecordsOrFail().get(tp0);
+            MemoryRecords records = partitionRecords(request).get(tp0);
             return records != null &&
                     records.sizeInBytes() > 0 &&
                     records.hasMatchingMagic(RecordBatch.MAGIC_VALUE_V1);
@@ -208,6 +219,7 @@ public class SenderTest {
         assertEquals(offset, future.get().offset());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testDownConversionForMismatchedMagicValues() throws Exception {
         // it can happen that we construct a record set with mismatching magic values (perhaps
@@ -241,7 +253,7 @@ public class SenderTest {
             if (request.version() != 2)
                 return false;
 
-            Map<TopicPartition, MemoryRecords> recordsMap = request.partitionRecordsOrFail();
+            Map<TopicPartition, MemoryRecords> recordsMap = partitionRecords(request);
             if (recordsMap.size() != 2)
                 return false;
 
@@ -262,6 +274,7 @@ public class SenderTest {
     /*
      * Send multiple requests. Verify that the client side quota metrics have the right values
      */
+    @SuppressWarnings("deprecation")
     @Test
     public void testQuotaMetrics() {
         MockSelector selector = new MockSelector(time);
@@ -284,8 +297,10 @@ public class SenderTest {
 
         for (int i = 1; i <= 3; i++) {
             int throttleTimeMs = 100 * i;
-            ProduceRequest.Builder builder = ProduceRequest.Builder.forCurrentMagic((short) 1, 1000,
-                            Collections.emptyMap());
+            ProduceRequest.Builder builder = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+                    .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
+                    .setAcks((short) 1)
+                    .setTimeoutMs(1000));
             ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true);
             client.send(request, time.milliseconds());
             client.poll(1, time.milliseconds());
@@ -648,7 +663,7 @@ public class SenderTest {
 
         client.respond(body -> {
             ProduceRequest request = (ProduceRequest) body;
-            assertFalse(request.hasIdempotentRecords());
+            assertFalse(RequestUtils.hasIdempotentRecords(request));
             return true;
         }, produceResponse(tp0, -1L, Errors.TOPIC_AUTHORIZATION_FAILED, 0));
         sender.runOnce();
@@ -1806,9 +1821,9 @@ public class SenderTest {
     void sendIdempotentProducerResponse(final int expectedSequence, TopicPartition tp, Errors responseError, long responseOffset, long logStartOffset) {
         client.respond(body -> {
             ProduceRequest produceRequest = (ProduceRequest) body;
-            assertTrue(produceRequest.hasIdempotentRecords());
+            assertTrue(RequestUtils.hasIdempotentRecords(produceRequest));
 
-            MemoryRecords records = produceRequest.partitionRecordsOrFail().get(tp0);
+            MemoryRecords records = partitionRecords(produceRequest).get(tp0);
             Iterator<MutableRecordBatch> batchIterator = records.batches().iterator();
             RecordBatch firstBatch = batchIterator.next();
             assertFalse(batchIterator.hasNext());
@@ -1829,8 +1844,7 @@ public class SenderTest {
         // cluster authorization is a fatal error for the producer
         Future<RecordMetadata> future = appendToAccumulator(tp0);
         client.prepareResponse(
-            body -> body instanceof ProduceRequest &&
-                ((ProduceRequest) body).hasIdempotentRecords(),
+            body -> body instanceof ProduceRequest && RequestUtils.hasIdempotentRecords((ProduceRequest) body),
             produceResponse(tp0, -1, Errors.CLUSTER_AUTHORIZATION_FAILED, 0));
 
         sender.runOnce();
@@ -1858,8 +1872,7 @@ public class SenderTest {
         sender.runOnce();
 
         client.respond(
-            body -> body instanceof ProduceRequest &&
-                ((ProduceRequest) body).hasIdempotentRecords(),
+            body -> body instanceof ProduceRequest && RequestUtils.hasIdempotentRecords((ProduceRequest) body),
             produceResponse(tp0, -1, Errors.CLUSTER_AUTHORIZATION_FAILED, 0));
 
         sender.runOnce();
@@ -1871,8 +1884,7 @@ public class SenderTest {
 
         // Should be fine if the second response eventually returns
         client.respond(
-            body -> body instanceof ProduceRequest &&
-                ((ProduceRequest) body).hasIdempotentRecords(),
+            body -> body instanceof ProduceRequest && RequestUtils.hasIdempotentRecords((ProduceRequest) body),
             produceResponse(tp1, 0, Errors.NONE, 0));
         sender.runOnce();
     }
@@ -1888,8 +1900,7 @@ public class SenderTest {
 
         Future<RecordMetadata> future = appendToAccumulator(tp0);
         client.prepareResponse(
-            body -> body instanceof ProduceRequest &&
-                ((ProduceRequest) body).hasIdempotentRecords(),
+            body -> body instanceof ProduceRequest && RequestUtils.hasIdempotentRecords((ProduceRequest) body),
             produceResponse(tp0, -1, Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT, 0));
 
         sender.runOnce();
@@ -1910,8 +1921,7 @@ public class SenderTest {
 
         Future<RecordMetadata> future = appendToAccumulator(tp0);
         client.prepareUnsupportedVersionResponse(
-            body -> body instanceof ProduceRequest &&
-                ((ProduceRequest) body).hasIdempotentRecords());
+            body -> body instanceof ProduceRequest && RequestUtils.hasIdempotentRecords((ProduceRequest) body));
 
         sender.runOnce();
         assertFutureFailure(future, UnsupportedVersionException.class);
@@ -1940,7 +1950,7 @@ public class SenderTest {
         client.prepareResponse(body -> {
             if (body instanceof ProduceRequest) {
                 ProduceRequest request = (ProduceRequest) body;
-                MemoryRecords records = request.partitionRecordsOrFail().get(tp0);
+                MemoryRecords records = partitionRecords(request).get(tp0);
                 Iterator<MutableRecordBatch> batchIterator = records.batches().iterator();
                 assertTrue(batchIterator.hasNext());
                 RecordBatch batch = batchIterator.next();
@@ -2057,6 +2067,7 @@ public class SenderTest {
         testSplitBatchAndSend(txnManager, producerIdAndEpoch, tp);
     }
 
+    @SuppressWarnings("deprecation")
     private void testSplitBatchAndSend(TransactionManager txnManager,
                                        ProducerIdAndEpoch producerIdAndEpoch,
                                        TopicPartition tp) throws Exception {
@@ -2170,6 +2181,7 @@ public class SenderTest {
         assertEquals(0, sender.inFlightBatches(tp0).size());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testInflightBatchesExpireOnDeliveryTimeout() throws InterruptedException {
         long deliveryTimeoutMs = 1500L;
@@ -2304,6 +2316,7 @@ public class SenderTest {
 
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testExpiredBatchesInMultiplePartitions() throws Exception {
         long deliveryTimeoutMs = 1500L;
@@ -2601,7 +2614,7 @@ public class SenderTest {
                 return false;
 
             ProduceRequest request = (ProduceRequest) body;
-            Map<TopicPartition, MemoryRecords> recordsMap = request.partitionRecordsOrFail();
+            Map<TopicPartition, MemoryRecords> recordsMap = partitionRecords(request);
             MemoryRecords records = recordsMap.get(tp);
             if (records == null)
                 return false;
@@ -2637,6 +2650,7 @@ public class SenderTest {
                 null, MAX_BLOCK_TIMEOUT, false, time.milliseconds()).future;
     }
 
+    @SuppressWarnings("deprecation")
     private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs, long logStartOffset, String errorMessage) {
         ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(error, offset,
                 RecordBatch.NO_TIMESTAMP, logStartOffset, Collections.emptyList(), errorMessage);
@@ -2644,6 +2658,7 @@ public class SenderTest {
         return new ProduceResponse(partResp, throttleTimeMs);
     }
 
+    @SuppressWarnings("deprecation")
     private ProduceResponse produceResponse(Map<TopicPartition, OffsetAndError> responses) {
         Map<TopicPartition, ProduceResponse.PartitionResponse> partResponses = new LinkedHashMap<>();
         for (Map.Entry<TopicPartition, OffsetAndError> entry : responses.entrySet()) {

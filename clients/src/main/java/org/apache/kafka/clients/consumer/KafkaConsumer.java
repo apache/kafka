@@ -1383,16 +1383,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void commitSync(Duration timeout) {
-        acquireAndEnsureOpen();
-        try {
-            maybeThrowInvalidGroupIdException();
-            if (!coordinator.commitOffsetsSync(subscriptions.allConsumed(), time.timer(timeout))) {
-                throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before successfully " +
-                        "committing the current consumed offsets");
-            }
-        } finally {
-            release();
-        }
+        commitSync(subscriptions.allConsumed(), timeout);
     }
 
     /**

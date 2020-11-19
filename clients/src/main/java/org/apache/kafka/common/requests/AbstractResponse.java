@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.EnvelopeResponseData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.AlterIsrResponseData;
+import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -96,7 +97,7 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
     public static AbstractResponse parseResponse(ApiKeys apiKey, Struct struct, short version) {
         switch (apiKey) {
             case PRODUCE:
-                return new ProduceResponse(struct);
+                return new ProduceResponse(new ProduceResponseData(struct, version));
             case FETCH:
                 return new FetchResponse<>(new FetchResponseData(struct, version));
             case LIST_OFFSETS:
@@ -142,7 +143,7 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
             case INIT_PRODUCER_ID:
                 return new InitProducerIdResponse(struct, version);
             case OFFSET_FOR_LEADER_EPOCH:
-                return new OffsetsForLeaderEpochResponse(struct);
+                return new OffsetsForLeaderEpochResponse(struct, version);
             case ADD_PARTITIONS_TO_TXN:
                 return new AddPartitionsToTxnResponse(struct, version);
             case ADD_OFFSETS_TO_TXN:

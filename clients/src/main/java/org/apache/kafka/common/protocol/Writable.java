@@ -17,7 +17,7 @@
 
 package org.apache.kafka.common.protocol;
 
-import org.apache.kafka.common.UUID;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 
@@ -44,7 +44,7 @@ public interface Writable {
         }
     }
 
-    default void writeUUID(UUID uuid) {
+    default void writeUuid(Uuid uuid) {
         writeLong(uuid.getMostSignificantBits());
         writeLong(uuid.getLeastSignificantBits());
     }

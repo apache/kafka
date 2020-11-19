@@ -180,4 +180,15 @@ public final class MessageUtil {
             return first.equals(second);
         }
     }
+
+    public static ByteBuffer serializeMessage(final short version, final Message message) {
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+        int size = message.size(cache, version);
+        ByteBuffer bytes = ByteBuffer.allocate(2 + size);
+        ByteBufferAccessor accessor = new ByteBufferAccessor(bytes);
+        accessor.writeShort(version);
+        message.write(accessor, cache, version);
+        bytes.flip();
+        return bytes;
+    }
 }

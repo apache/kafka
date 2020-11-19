@@ -90,6 +90,8 @@ import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.util.{Failure, Success, Try}
 import kafka.coordinator.group.GroupOverview
 
+import scala.annotation.nowarn
+
 /**
  * Logic to handle the various Kafka requests
  */
@@ -566,7 +568,11 @@ class KafkaApis(val requestChannel: RequestChannel,
     val produceRequest = request.body[ProduceRequest]
     val numBytesAppended = request.header.toStruct.sizeOf + request.sizeOfBodyInBytes
 
-    if (produceRequest.hasTransactionalRecords) {
+    val (hasIdempotentRecords, hasTransactionalRecords) = {
+      val flags = RequestUtils.flags(produceRequest)
+      (flags.getKey, flags.getValue)
+    }
+    if (hasTransactionalRecords) {
       val isAuthorizedTransactional = produceRequest.transactionalId != null &&
         authorize(request.context, WRITE, TRANSACTIONAL_ID, produceRequest.transactionalId)
       if (!isAuthorizedTransactional) {
@@ -575,19 +581,25 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
       // Note that authorization to a transactionalId implies ProducerId authorization
 
-    } else if (produceRequest.hasIdempotentRecords && !authorize(request.context, IDEMPOTENT_WRITE, CLUSTER, CLUSTER_NAME)) {
+    } else if (hasIdempotentRecords && !authorize(request.context, IDEMPOTENT_WRITE, CLUSTER, CLUSTER_NAME)) {
       sendErrorResponseMaybeThrottle(request, Errors.CLUSTER_AUTHORIZATION_FAILED.exception)
       return
     }
 
-    val produceRecords = produceRequest.partitionRecordsOrFail.asScala
     val unauthorizedTopicResponses = mutable.Map[TopicPartition, PartitionResponse]()
     val nonExistingTopicResponses = mutable.Map[TopicPartition, PartitionResponse]()
     val invalidRequestResponses = mutable.Map[TopicPartition, PartitionResponse]()
     val authorizedRequestInfo = mutable.Map[TopicPartition, MemoryRecords]()
-    val authorizedTopics = filterByAuthorized(request.context, WRITE, TOPIC, produceRecords)(_._1.topic)
+    // cache the result to avoid redundant authorization calls
+    val authorizedTopics = filterByAuthorized(request.context, WRITE, TOPIC,
+      produceRequest.dataOrException().topicData().asScala)(_.name())
 
-    for ((topicPartition, memoryRecords) <- produceRecords) {
+    produceRequest.dataOrException.topicData.forEach(topic => topic.partitionData.forEach { partition =>
+      val topicPartition = new TopicPartition(topic.name, partition.index)
+      // This caller assumes the type is MemoryRecords and that is true on current serialization
+      // We cast the type to avoid causing big change to code base.
+      // https://issues.apache.org/jira/browse/KAFKA-10698
+      val memoryRecords = partition.records.asInstanceOf[MemoryRecords]
       if (!authorizedTopics.contains(topicPartition.topic))
         unauthorizedTopicResponses += topicPartition -> new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED)
       else if (!metadataCache.contains(topicPartition))
@@ -600,9 +612,13 @@ class KafkaApis(val requestChannel: RequestChannel,
           case e: ApiException =>
             invalidRequestResponses += topicPartition -> new PartitionResponse(Errors.forException(e))
         }
-    }
+    })
 
     // the callback for sending a produce response
+    // The construction of ProduceResponse is able to accept auto-generated protocol data so
+    // KafkaApis#handleProduceRequest should apply auto-generated protocol to avoid extra conversion.
+    // https://issues.apache.org/jira/browse/KAFKA-10730
+    @nowarn("cat=deprecation")
     def sendResponseCallback(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
       val mergedResponseStatus = responseStatus ++ unauthorizedTopicResponses ++ nonExistingTopicResponses ++ invalidRequestResponses
       var errorInResponse = false

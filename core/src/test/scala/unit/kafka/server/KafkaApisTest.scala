@@ -71,6 +71,7 @@ import org.easymock.{Capture, EasyMock, IAnswer, IArgumentMatcher}
 import org.junit.Assert.{assertArrayEquals, assertEquals, assertNull, assertTrue}
 import org.junit.{After, Test}
 
+import scala.annotation.nowarn
 import scala.collection.{Map, Seq, mutable}
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
@@ -1228,6 +1229,61 @@ class KafkaApisTest {
         assertEquals(Errors.INVALID_PRODUCER_EPOCH.code, response.data.errorCode)
       } else {
         assertEquals(Errors.PRODUCER_FENCED.code, response.data.errorCode)
+      }
+    }
+  }
+
+  @nowarn("cat=deprecation")
+  @Test
+  def shouldReplaceProducerFencedWithInvalidProducerEpochInProduceResponse(): Unit = {
+    val topic = "topic"
+    setupBasicMetadataCache(topic, numPartitions = 2)
+
+    for (version <- ApiKeys.PRODUCE.oldestVersion to ApiKeys.PRODUCE.latestVersion) {
+
+      EasyMock.reset(replicaManager, clientQuotaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
+
+      val responseCallback: Capture[Map[TopicPartition, PartitionResponse] => Unit] = EasyMock.newCapture()
+
+      val tp = new TopicPartition("topic", 0)
+
+      val produceRequest = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
+          Collections.singletonList(new ProduceRequestData.TopicProduceData()
+            .setName(tp.topic()).setPartitionData(Collections.singletonList(
+            new ProduceRequestData.PartitionProduceData()
+              .setIndex(tp.partition())
+              .setRecords(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("test".getBytes))))))
+            .iterator))
+        .setAcks(1.toShort)
+        .setTimeoutMs(5000))
+        .build(version.toShort)
+      val request = buildRequest(produceRequest)
+
+      EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),
+        EasyMock.anyShort(),
+        EasyMock.eq(false),
+        EasyMock.eq(AppendOrigin.Client),
+        EasyMock.anyObject(),
+        EasyMock.capture(responseCallback),
+        EasyMock.anyObject(),
+        EasyMock.anyObject())
+      ).andAnswer(() => responseCallback.getValue.apply(Map(tp -> new PartitionResponse(Errors.INVALID_PRODUCER_EPOCH))))
+
+      val capturedResponse = expectNoThrottling()
+      EasyMock.expect(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
+        anyObject[RequestChannel.Request](), anyDouble, anyLong)).andReturn(0)
+
+      EasyMock.replay(replicaManager, clientQuotaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
+
+      createKafkaApis().handleProduceRequest(request)
+
+      val response = readResponse(produceRequest, capturedResponse)
+        .asInstanceOf[ProduceResponse]
+
+      assertEquals(1, response.responses().size())
+      for (partitionResponse <- response.responses().asScala) {
+        assertEquals(Errors.INVALID_PRODUCER_EPOCH, partitionResponse._2.error)
       }
     }
   }

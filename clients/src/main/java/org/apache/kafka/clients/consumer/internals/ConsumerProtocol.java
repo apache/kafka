@@ -23,8 +23,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.ConsumerProtocolAssignment;
 import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
-import org.apache.kafka.common.protocol.Message;
-import org.apache.kafka.common.protocol.ObjectSerializationCache;
+import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.utils.CollectionUtils;
 
@@ -82,7 +81,7 @@ public class ConsumerProtocol {
                 .setPartitions(topicEntry.getValue()));
         }
 
-        return serializeMessage(version, data);
+        return MessageUtil.serializeMessage(version, data);
     }
 
     public static Subscription deserializeSubscription(final ByteBuffer buffer, short version) {
@@ -128,7 +127,7 @@ public class ConsumerProtocol {
                 .setPartitions(topicEntry.getValue()));
         }
 
-        return serializeMessage(version, data);
+        return MessageUtil.serializeMessage(version, data);
     }
 
     public static Assignment deserializeAssignment(final ByteBuffer buffer, short version) {
@@ -173,16 +172,5 @@ public class ConsumerProtocol {
             return ConsumerProtocolAssignment.HIGHEST_SUPPORTED_VERSION;
         else
             return version;
-    }
-
-    private static ByteBuffer serializeMessage(final short version, final Message message) {
-        ObjectSerializationCache cache = new ObjectSerializationCache();
-        int size = message.size(cache, version);
-        ByteBuffer bytes = ByteBuffer.allocate(2 + size);
-        ByteBufferAccessor accessor = new ByteBufferAccessor(bytes);
-        accessor.writeShort(version);
-        message.write(accessor, cache, version);
-        bytes.flip();
-        return bytes;
     }
 }

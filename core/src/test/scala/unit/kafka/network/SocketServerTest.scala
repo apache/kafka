@@ -24,7 +24,7 @@ import java.nio.channels.{SelectionKey, SocketChannel}
 import java.nio.charset.StandardCharsets
 import java.util
 import java.util.concurrent.{CompletableFuture, ConcurrentLinkedQueue, Executors, TimeUnit}
-import java.util.{HashMap, Properties, Random}
+import java.util.{Properties, Random}
 
 import com.yammer.metrics.core.{Gauge, Meter}
 import javax.net.ssl._
@@ -33,29 +33,26 @@ import kafka.security.CredentialProvider
 import kafka.server.{KafkaConfig, ThrottledChannel}
 import kafka.utils.Implicits._
 import kafka.utils.TestUtils
-import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.memory.MemoryPool
-import org.apache.kafka.common.message.{SaslAuthenticateRequestData, SaslHandshakeRequestData, VoteRequestData}
+import org.apache.kafka.common.message.{ProduceRequestData, SaslAuthenticateRequestData, SaslHandshakeRequestData, VoteRequestData}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.ClientInformation
 import org.apache.kafka.common.network.KafkaChannel.ChannelMuteState
-import org.apache.kafka.common.network._
+import org.apache.kafka.common.network.{ClientInformation, _}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.MemoryRecords
-import org.apache.kafka.common.requests.{AbstractRequest, ApiVersionsRequest, ProduceRequest, RequestHeader, SaslAuthenticateRequest, SaslHandshakeRequest, VoteRequest}
+import org.apache.kafka.common.requests
+import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
-import org.apache.kafka.common.utils.AppInfoParser
-import org.apache.kafka.common.utils.{LogContext, MockTime, Time}
+import org.apache.kafka.common.utils.{AppInfoParser, LogContext, MockTime, Time}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.log4j.Level
 import org.junit.Assert._
 import org.junit._
 import org.scalatest.Assertions.fail
 
-import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
+import scala.jdk.CollectionConverters._
 import scala.util.control.ControlThrowable
 
 class SocketServerTest {
@@ -210,8 +207,12 @@ class SocketServerTest {
     val clientId = ""
     val ackTimeoutMs = 10000
 
-    val emptyRequest = ProduceRequest.Builder.forCurrentMagic(ack, ackTimeoutMs,
-      new HashMap[TopicPartition, MemoryRecords]()).build()
+    val emptyRequest = requests.ProduceRequest.forCurrentMagic(new ProduceRequestData()
+      .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
+      .setAcks(ack)
+      .setTimeoutMs(ackTimeoutMs)
+      .setTransactionalId(null))
+      .build()
     val emptyHeader = new RequestHeader(ApiKeys.PRODUCE, emptyRequest.version, clientId, correlationId)
     val byteBuffer = emptyRequest.serialize(emptyHeader)
     byteBuffer.rewind()
@@ -897,8 +898,12 @@ class SocketServerTest {
       val clientId = ""
       val ackTimeoutMs = 10000
       val ack = 0: Short
-      val emptyRequest = ProduceRequest.Builder.forCurrentMagic(ack, ackTimeoutMs,
-        new HashMap[TopicPartition, MemoryRecords]()).build()
+      val emptyRequest = requests.ProduceRequest.forCurrentMagic(new ProduceRequestData()
+        .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
+        .setAcks(ack)
+        .setTimeoutMs(ackTimeoutMs)
+        .setTransactionalId(null))
+        .build()
       val emptyHeader = new RequestHeader(ApiKeys.PRODUCE, emptyRequest.version, clientId, correlationId)
 
       val byteBuffer = emptyRequest.serialize(emptyHeader)
@@ -980,8 +985,12 @@ class SocketServerTest {
       // ...and now send something to trigger the disconnection
       val ackTimeoutMs = 10000
       val ack = 0: Short
-      val emptyRequest = ProduceRequest.Builder.forCurrentMagic(ack, ackTimeoutMs,
-        new HashMap[TopicPartition, MemoryRecords]()).build()
+      val emptyRequest = requests.ProduceRequest.forCurrentMagic(new ProduceRequestData()
+        .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
+        .setAcks(ack)
+        .setTimeoutMs(ackTimeoutMs)
+        .setTransactionalId(null))
+        .build()
       val emptyHeader = new RequestHeader(ApiKeys.PRODUCE, emptyRequest.version, clientId, correlationId)
       sendApiRequest(socket, emptyRequest, emptyHeader)
       // wait a little bit for the server-side disconnection to occur since it happens asynchronously
