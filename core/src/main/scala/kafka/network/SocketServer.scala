@@ -1425,8 +1425,10 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
     def shouldUpdateQuota(metric: KafkaMetric, quotaLimit: Int) = {
       quotaLimit != metric.config.quota.bound
     }
+
     ip match {
       case Some(address) =>
+        // synchronize on counts to ensure reading an IP connection rate quota and creating a quota config is atomic
         counts.synchronized {
           maxConnectionRate match {
             case Some(rate) =>
@@ -1439,6 +1441,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
         }
         updateConnectionRateQuota(connectionRateForIp(address), IpQuotaEntity(address))
       case None =>
+        // synchronize on counts to ensure reading an IP connection rate quota and creating a quota config is atomic
         counts.synchronized {
           defaultConnectionRatePerIp = maxConnectionRate.getOrElse(DynamicConfig.Ip.DefaultConnectionCreationRate)
         }
@@ -1605,7 +1608,9 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
   /**
    * Calculates the delay needed to bring the observed connection creation rate to the IP limit.
    * If the connection would cause an IP quota violation, un-record the connection for both IP,
-   * listener, and broker connection rate and throw a ConnectionThrottledException.
+   * listener, and broker connection rate and throw a ConnectionThrottledException. Calls to
+   * this function must be performed with the counts lock to ensure that reading the IP
+   * connection rate quota and creating the sensor's metric config is atomic.
    *
    * @param listenerName listener to unrecord connection if throttled
    * @param address ip address to record connection
