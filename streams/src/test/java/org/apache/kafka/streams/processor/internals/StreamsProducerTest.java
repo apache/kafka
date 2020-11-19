@@ -983,21 +983,6 @@ public class StreamsProducerTest {
     }
 
     @Test
-    public void shouldThrowStreamsExceptionOnEosCommitTxTimeout() {
-        // cannot use `eosMockProducer.fenceProducer()` because this would already trigger in `beginTransaction()`
-        eosAlphaMockProducer.commitTransactionException = new TimeoutException("KABOOM!");
-
-        final StreamsException thrown = assertThrows(
-            StreamsException.class,
-            () -> eosAlphaStreamsProducer.commitTransaction(offsetsAndMetadata, new ConsumerGroupMetadata("appId"))
-        );
-
-        assertThat(eosAlphaMockProducer.sentOffsets(), is(true));
-        assertThat(thrown.getCause(), is(eosAlphaMockProducer.commitTransactionException));
-        assertThat(thrown.getMessage(), is("Timed out trying to commit a transaction [test]"));
-    }
-
-    @Test
     public void shouldThrowStreamsExceptionOnEosCommitTxError() {
         eosAlphaMockProducer.commitTransactionException = new KafkaException("KABOOM!");
 

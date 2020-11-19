@@ -151,7 +151,7 @@ public class StreamsProducer {
             try {
                 producer.initTransactions();
                 transactionInitialized = true;
-            } catch (final TimeoutException exception) {
+            } catch (final TimeoutException timeoutException) {
                 log.warn(
                     "Timeout exception caught trying to initialize transactions. " +
                         "The broker is either slow or in bad state (like not having enough replicas) in " +
@@ -162,7 +162,8 @@ public class StreamsProducer {
                     ProducerConfig.MAX_BLOCK_MS_CONFIG
                 );
 
-                throw exception;
+                // re-throw to trigger `task.timeout.ms`
+                throw timeoutException;
             } catch (final KafkaException exception) {
                 throw new StreamsException(
                     formatException("Error encountered trying to initialize transactions"),
@@ -249,9 +250,9 @@ public class StreamsProducer {
                 formatException("Producer got fenced trying to commit a transaction"),
                 error
             );
-        } catch (final TimeoutException error) {
-            // TODO KIP-447: we can consider treating it as non-fatal and retry on the thread level
-            throw new StreamsException(formatException("Timed out trying to commit a transaction"), error);
+        } catch (final TimeoutException timeoutException) {
+            // re-throw to trigger `task.timeout.ms`
+            throw timeoutException;
         } catch (final KafkaException error) {
             throw new StreamsException(
                 formatException("Error encountered trying to commit a transaction"),
@@ -263,13 +264,21 @@ public class StreamsProducer {
     /**
      * @throws IllegalStateException if EOS is disabled
      */
-    void abortTransaction() throws ProducerFencedException {
+    void abortTransaction() {
         if (!eosEnabled()) {
             throw new IllegalStateException(formatException("Exactly-once is not enabled"));
         }
         if (transactionInFlight) {
             try {
                 producer.abortTransaction();
+            } catch (final TimeoutException logAndSwallow) {
+                // no need to re-throw because we abort a TX only if we close a task dirty,
+                // and thus `task.timeout.ms` does not apply
+                log.warn(
+                    "Aborting transaction failed due to timeout." +
+                        " Will rely on broker to eventually abort the transaction after the transaction timeout passed.",
+                    logAndSwallow
+                );
             } catch (final ProducerFencedException error) {
                 // The producer is aborting the txn when there's still an ongoing one,
                 // which means that we did not commit the task while closing it, which
