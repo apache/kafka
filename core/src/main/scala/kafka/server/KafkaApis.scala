@@ -1236,7 +1236,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     topicMetadata.headOption.getOrElse(createInternalTopic(topic))
   }
 
-  private def getTopicMetadata(allowAutoTopicCreation: Boolean, topics: Set[String], listenerName: ListenerName,
+  private def getTopicMetadata(allowAutoTopicCreation: Boolean, isFetchAllMetadata: Boolean,
+                               topics: Set[String], listenerName: ListenerName,
                                errorUnavailableEndpoints: Boolean,
                                errorUnavailableListeners: Boolean): Seq[MetadataResponseTopic] = {
     val topicResponses = metadataCache.getTopicMetadata(topics, listenerName,
@@ -1252,13 +1253,23 @@ class KafkaApis(val requestChannel: RequestChannel,
             metadataResponseTopic(Errors.INVALID_REPLICATION_FACTOR, topic, true, util.Collections.emptyList())
           else
             topicMetadata
-        } else if (allowAutoTopicCreation && config.autoCreateTopicsEnable) {
+        } else if (!isFetchAllMetadata && allowAutoTopicCreation && config.autoCreateTopicsEnable) {
+          // KAFKA-10606: If this request is to get metadata for all topics, auto topic creation should not be allowed
+          // The special handling is necessary on broker side because allowAutoTopicCreation is hard coded to true
+          // for backward compatibility on client side.
           createTopic(topic, config.numPartitions, config.defaultReplicationFactor)
         } else {
           metadataResponseTopic(Errors.UNKNOWN_TOPIC_OR_PARTITION, topic, false, util.Collections.emptyList())
         }
       }
-      topicResponses ++ responsesForNonExistentTopics
+      topicResponses ++ (
+        if (isFetchAllMetadata)
+          // KAFKA-10606: In previous versions, UNKNOWN_TOPIC_OR_PARTITION won't happen on fetch all metadata,
+          // so we filter out those UNKNOWN_TOPIC_OR_PARTITION during fetch all metadata for backward-compatibility.
+          responsesForNonExistentTopics.filter { _.errorCode() != Errors.UNKNOWN_TOPIC_OR_PARTITION.code() }
+        else
+          responsesForNonExistentTopics
+      )
     }
   }
 
@@ -1314,12 +1325,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (authorizedTopics.isEmpty)
         Seq.empty[MetadataResponseTopic]
       else {
-        // KAFKA-10606: If this request is to get metadata for all topics, auto topic creation should not be allowed
-        // The special handling is necessary on broker side because allowAutoTopicCreation is hard coded to true
-        // for backward compatibility on client side.
-        val allowAutoTopicCreation = (!metadataRequest.isAllTopics) && metadataRequest.allowAutoTopicCreation
         getTopicMetadata(
-          allowAutoTopicCreation,
+          metadataRequest.allowAutoTopicCreation,
+          metadataRequest.isAllTopics,
           authorizedTopics,
           request.context.listenerName,
           errorUnavailableEndpoints,
@@ -1345,17 +1353,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    val completeTopicMetadata = (if (metadataRequest.isAllTopics) {
-      /*
-       * In fix of KAFKA-10606, we stopped auto topic creation on fetch all metadata, which might introduce
-       * UNKNOWN_TOPIC_OR_PARTITION.
-       * But in previous versions, UNKNOWN_TOPIC_OR_PARTITION won't happen on fetch all metadata, so we filter out
-       * those UNKNOWN_TOPIC_OR_PARTITION during fetch all metadata for backward-compatibility.
-       */
-      topicMetadata.filter(_.errorCode() != Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
-    } else {
-      topicMetadata
-    }) ++ unauthorizedForCreateTopicMetadata ++ unauthorizedForDescribeTopicMetadata
+    val completeTopicMetadata = topicMetadata ++ unauthorizedForCreateTopicMetadata ++ unauthorizedForDescribeTopicMetadata
 
     val brokers = metadataCache.getAliveBrokers
 
