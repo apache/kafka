@@ -53,7 +53,7 @@ public class LeaderAndIsrRequestTest {
     public void testUnsupportedVersion() {
         LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder(
                 (short) (LEADER_AND_ISR.latestVersion() + 1), 0, 0, 0,
-                Collections.emptyList(), Collections.emptyMap(),  Collections.emptySet());
+                Collections.emptyList(), Collections.emptyMap(), Collections.emptySet());
         assertThrows(UnsupportedVersionException.class, builder::build);
     }
 
@@ -119,10 +119,9 @@ public class LeaderAndIsrRequestTest {
                 new Node(1, "host1", 9091)
             );
 
-            HashMap<String, UUID> topicIds = new HashMap<>();
-
-            topicIds.put("topic0", UUID.randomUUID());
-            topicIds.put("topic1", UUID.randomUUID());
+            HashMap<String, Uuid> topicIds = new HashMap<>();
+            topicIds.put("topic0", Uuid.randomUuid());
+            topicIds.put("topic1", Uuid.randomUuid());
 
             LeaderAndIsrRequest request = new LeaderAndIsrRequest.Builder(version, 1, 2, 3, partitionStates,
                 topicIds, liveNodes).build();
