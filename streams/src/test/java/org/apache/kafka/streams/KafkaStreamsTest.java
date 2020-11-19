@@ -78,6 +78,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.Executors;
@@ -312,6 +313,9 @@ public class KafkaStreamsTest {
                 StreamThread.State.PARTITIONS_ASSIGNED);
             return null;
         }).anyTimes();
+        thread.resizeCache(EasyMock.anyLong());
+        EasyMock.expectLastCall().anyTimes();
+        EasyMock.expect(thread.getName()).andStubReturn("newThread");
         thread.shutdown();
         EasyMock.expectLastCall().andAnswer(() -> {
             supplier.consumer.close();
@@ -590,6 +594,7 @@ public class KafkaStreamsTest {
 
     @Test
     public void testAddThread() {
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         streams.start();
         final int oldSize = streams.threads.size();
@@ -598,7 +603,7 @@ public class KafkaStreamsTest {
         } catch (final InterruptedException e) {
             e.printStackTrace();
         }
-        streams.addStreamThread();
+        assertThat(streams.addStreamThread(), equalTo(Optional.of("newThread")));
         assertThat(streams.threads.size(), equalTo(oldSize + 1));
     }
 
@@ -606,7 +611,7 @@ public class KafkaStreamsTest {
     public void testAddThreadNotDuringStart() {
         final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         final int oldSize = streams.threads.size();
-        streams.addStreamThread();
+        assertThat(streams.addStreamThread(), equalTo(Optional.empty()));
         assertThat(streams.threads.size(), equalTo(oldSize));
     }
 
