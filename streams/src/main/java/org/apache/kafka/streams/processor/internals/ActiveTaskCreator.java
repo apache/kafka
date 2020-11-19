@@ -295,8 +295,4 @@ class ActiveTaskCreator {
         final String logPrefix = threadIdPrefix + String.format("%s [%s] ", "task", taskId);
         return new LogContext(logPrefix);
     }
-
-    public void resizeCache(final long size) {
-        cache.resize(size);
-    }
 }
