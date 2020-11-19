@@ -589,6 +589,28 @@ public class KafkaStreamsTest {
     }
 
     @Test
+    public void testAddThread() {
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
+        streams.start();
+        final int oldSize = streams.threads.size();
+        try {
+            TestUtils.waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, 15L, "wait until running");
+        } catch (final InterruptedException e) {
+            e.printStackTrace();
+        }
+        streams.addStreamThread();
+        assertThat(streams.threads.size(), equalTo(oldSize + 1));
+    }
+
+    @Test
+    public void testAddThreadNotDuringStart() {
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
+        final int oldSize = streams.threads.size();
+        streams.addStreamThread();
+        assertThat(streams.threads.size(), equalTo(oldSize));
+    }
+
+    @Test
     public void testCannotStartOnceClosed() {
         final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         streams.start();
