@@ -351,19 +351,19 @@ public final class MessageTest {
         // Version 2 adds optional current leader epoch
         OffsetForLeaderEpochRequestData.OffsetForLeaderPartition partitionDataNoCurrentEpoch =
                 new OffsetForLeaderEpochRequestData.OffsetForLeaderPartition()
-                        .setPartitionIndex(0)
+                        .setPartition(0)
                         .setLeaderEpoch(3);
         OffsetForLeaderEpochRequestData.OffsetForLeaderPartition partitionDataWithCurrentEpoch =
                 new OffsetForLeaderEpochRequestData.OffsetForLeaderPartition()
-                        .setPartitionIndex(0)
+                        .setPartition(0)
                         .setLeaderEpoch(3)
                         .setCurrentLeaderEpoch(5);
+        OffsetForLeaderEpochRequestData data = new OffsetForLeaderEpochRequestData();
+        data.topics().add(new OffsetForLeaderEpochRequestData.OffsetForLeaderTopic()
+                .setTopic("foo")
+                .setPartitions(singletonList(partitionDataNoCurrentEpoch)));
 
-        testAllMessageRoundTrips(new OffsetForLeaderEpochRequestData().setTopics(singletonList(
-                new OffsetForLeaderEpochRequestData.OffsetForLeaderTopic()
-                        .setName("foo")
-                        .setPartitions(singletonList(partitionDataNoCurrentEpoch)))
-        ));
+        testAllMessageRoundTrips(data);
         testAllMessageRoundTripsBeforeVersion((short) 2, partitionDataWithCurrentEpoch, partitionDataNoCurrentEpoch);
         testAllMessageRoundTripsFromVersion((short) 2, partitionDataWithCurrentEpoch);
 

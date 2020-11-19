@@ -131,6 +131,9 @@ import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResp
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopic;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection;
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition;
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic;
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopicCollection;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
 import org.apache.kafka.common.message.RenewDelegationTokenResponseData;
@@ -1793,8 +1796,31 @@ public class RequestResponseTest {
         return epochs;
     }
 
+    private OffsetForLeaderTopicCollection createOffsetForLeaderTopicCollection() {
+        OffsetForLeaderTopicCollection topics = new OffsetForLeaderTopicCollection();
+        topics.add(new OffsetForLeaderTopic()
+            .setTopic("topic1")
+            .setPartitions(Arrays.asList(
+                new OffsetForLeaderPartition()
+                    .setPartition(0)
+                    .setLeaderEpoch(1)
+                    .setCurrentLeaderEpoch(0),
+                new OffsetForLeaderPartition()
+                    .setPartition(1)
+                    .setLeaderEpoch(1)
+                    .setCurrentLeaderEpoch(0))));
+        topics.add(new OffsetForLeaderTopic()
+            .setTopic("topic2")
+            .setPartitions(Arrays.asList(
+                new OffsetForLeaderPartition()
+                    .setPartition(2)
+                    .setLeaderEpoch(3)
+                    .setCurrentLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH))));
+        return topics;
+    }
+
     private OffsetsForLeaderEpochRequest createLeaderEpochRequestForConsumer() {
-        Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData> epochs = createOffsetForLeaderEpochPartitionData();
+        OffsetForLeaderTopicCollection epochs = createOffsetForLeaderTopicCollection();
         return OffsetsForLeaderEpochRequest.Builder.forConsumer(epochs).build();
     }
 

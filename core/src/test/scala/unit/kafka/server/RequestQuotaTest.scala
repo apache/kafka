@@ -32,6 +32,9 @@ import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProt
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.ListOffsetRequestData.{ListOffsetPartition, ListOffsetTopic}
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopicCollection
 import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
 import org.apache.kafka.common.message.{AddOffsetsToTxnRequestData, _}
@@ -411,8 +414,14 @@ class RequestQuotaTest extends BaseRequestTest {
           new InitProducerIdRequest.Builder(requestData)
 
         case ApiKeys.OFFSET_FOR_LEADER_EPOCH =>
-          OffsetsForLeaderEpochRequest.Builder.forConsumer(Map(tp ->
-            new OffsetsForLeaderEpochRequest.PartitionData(Optional.of(15), 0)).asJava)
+          val epochs = new OffsetForLeaderTopicCollection()
+          epochs.add(new OffsetForLeaderTopic()
+            .setTopic(tp.topic())
+            .setPartitions(List(new OffsetForLeaderPartition()
+              .setPartition(tp.partition())
+              .setLeaderEpoch(0)
+              .setCurrentLeaderEpoch(15)).asJava))
+          OffsetsForLeaderEpochRequest.Builder.forConsumer(epochs)
 
         case ApiKeys.ADD_PARTITIONS_TO_TXN =>
           new AddPartitionsToTxnRequest.Builder("test-transactional-id", 1, 0, List(tp).asJava)
