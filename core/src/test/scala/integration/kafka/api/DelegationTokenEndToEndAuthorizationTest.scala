@@ -49,7 +49,7 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
 
   private val privilegedAdminClientConfig = new Properties()
 
-  this.serverConfig.setProperty(KafkaConfig.DelegationTokenMasterKeyProp, "testKey")
+  this.serverConfig.setProperty(KafkaConfig.DelegationTokenSecretKeyProp, "testKey")
 
   override def configureSecurityBeforeServersStart(): Unit = {
     super.configureSecurityBeforeServersStart()
