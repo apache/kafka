@@ -78,21 +78,6 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
         return data;
     }
 
-    public Map<TopicPartition, EpochEndOffset> responses() {
-        Map<TopicPartition, EpochEndOffset> epochEndOffsetsByPartition = new HashMap<>();
-
-        data.topics().forEach(topic ->
-            topic.partitions().forEach(partition ->
-                epochEndOffsetsByPartition.put(
-                    new TopicPartition(topic.topic(), partition.partition()),
-                    new EpochEndOffset(
-                        Errors.forCode(partition.errorCode()),
-                        partition.leaderEpoch(),
-                        partition.endOffset()))));
-
-        return epochEndOffsetsByPartition;
-    }
-
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();

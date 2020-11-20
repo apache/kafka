@@ -30,10 +30,11 @@ import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.serialization.StringSerializer
 import org.apache.kafka.common.utils.{LogContext, SystemTime}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult
 import org.apache.kafka.common.protocol.ApiKeys
 import org.junit.Assert._
 import org.junit.{After, Test}
-import org.apache.kafka.common.requests.{EpochEndOffset, OffsetsForLeaderEpochRequest, OffsetsForLeaderEpochResponse}
+import org.apache.kafka.common.requests.{OffsetsForLeaderEpochRequest, OffsetsForLeaderEpochResponse}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Map
@@ -127,8 +128,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     assertEquals(30, offsetsForEpochs(t2p0).endOffset)
 
     //And should get no leader for partition error from t1p1 (as it's not on broker 0)
-    assertTrue(offsetsForEpochs(t1p1).hasError)
-    assertEquals(NOT_LEADER_OR_FOLLOWER, offsetsForEpochs(t1p1).error)
+    assertEquals(NOT_LEADER_OR_FOLLOWER.code, offsetsForEpochs(t1p1).errorCode)
     assertEquals(UNDEFINED_EPOCH_OFFSET, offsetsForEpochs(t1p1).endOffset)
 
     //Repointing to broker 1 we should get the correct offset for t1p1
@@ -273,7 +273,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     */
   private[epoch] class TestFetcherThread(sender: BlockingSend) extends Logging {
 
-    def leaderOffsetsFor(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = {
+    def leaderOffsetsFor(partitions: Map[TopicPartition, Int]): Map[TopicPartition, OffsetForLeaderPartitionResult] = {
       val partitionData = partitions.map { case (k, v) =>
         k -> new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty(), v)
       }
@@ -281,8 +281,11 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
       val request = OffsetsForLeaderEpochRequest.Builder.forFollower(
         ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion, partitionData.asJava, 1)
       val response = sender.sendRequest(request)
-      response.responseBody.asInstanceOf[OffsetsForLeaderEpochResponse].responses.asScala
+      response.responseBody.asInstanceOf[OffsetsForLeaderEpochResponse].data.topics.asScala.flatMap { topic =>
+        topic.partitions.asScala.map { partition =>
+          new TopicPartition(topic.topic, partition.partition) -> partition
+        }
+      }.toMap
     }
-
   }
 }
