@@ -85,11 +85,18 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
      * Parse a response from the provided buffer. The buffer is expected to hold both
      * the {@link ResponseHeader} as well as the response payload.
      */
-    public static AbstractResponse parseResponse(ByteBuffer byteBuffer, RequestHeader header) {
-        ApiKeys apiKey = header.apiKey();
-        short apiVersion = header.apiVersion();
+    public static AbstractResponse parseResponse(ByteBuffer byteBuffer, RequestHeader requestHeader) {
+        ApiKeys apiKey = requestHeader.apiKey();
+        short apiVersion = requestHeader.apiVersion();
 
-        ResponseHeader.parse(byteBuffer, apiKey.responseHeaderVersion(apiVersion));
+        ResponseHeader responseHeader = ResponseHeader.parse(byteBuffer, apiKey.responseHeaderVersion(apiVersion));
+        if (requestHeader.correlationId() != responseHeader.correlationId()) {
+            throw new CorrelationIdMismatchException("Correlation id for response ("
+                + responseHeader.correlationId() + ") does not match request ("
+                + requestHeader.correlationId() + "), request header: " + requestHeader,
+                requestHeader.correlationId(), responseHeader.correlationId());
+        }
+
         Struct struct = apiKey.parseResponse(apiVersion, byteBuffer);
         return AbstractResponse.parseResponse(apiKey, struct, apiVersion);
     }

@@ -55,7 +55,7 @@ class BrokerToControllerChannelManagerImpl(metadataCache: kafka.server.MetadataC
                                            config: KafkaConfig,
                                            channelName: String,
                                            threadNamePrefix: Option[String] = None) extends BrokerToControllerChannelManager with Logging {
-  protected val requestQueue = new LinkedBlockingDeque[BrokerToControllerQueueItem]
+  private val requestQueue = new LinkedBlockingDeque[BrokerToControllerQueueItem]
   private val logContext = new LogContext(s"[broker-${config.brokerId}-to-controller] ")
   private val manualMetadataUpdater = new ManualMetadataUpdater()
   private val requestThread = newRequestThread

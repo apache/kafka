@@ -168,7 +168,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   var kafkaController: KafkaController = null
 
-  var forwardingManager: ForwardingManager = null
+  var forwardingChannelManager: BrokerToControllerChannelManager = null
 
   var alterIsrChannelManager: BrokerToControllerChannelManager = null
 
@@ -329,10 +329,13 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         kafkaController = new KafkaController(config, zkClient, time, metrics, brokerInfo, brokerEpoch, tokenManager, brokerFeatures, featureCache, threadNamePrefix)
         kafkaController.startup()
 
+        var forwardingManager: ForwardingManager = null
         if (config.metadataQuorumEnabled) {
           /* start forwarding manager */
-          forwardingManager = new ForwardingManager(metadataCache, time, metrics, config, threadNamePrefix)
-          forwardingManager.start()
+          forwardingChannelManager = new BrokerToControllerChannelManagerImpl(metadataCache, time, metrics,
+            config, "forwardingChannel", threadNamePrefix)
+          forwardingChannelManager.start()
+          forwardingManager = new ForwardingManager(forwardingChannelManager)
         }
 
         adminManager = new AdminManager(config, metrics, metadataCache, zkClient)
@@ -726,8 +729,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         if (alterIsrChannelManager != null)
           CoreUtils.swallow(alterIsrChannelManager.shutdown(), this)
 
-        if (forwardingManager != null)
-          CoreUtils.swallow(forwardingManager.shutdown(), this)
+        if (forwardingChannelManager != null)
+          CoreUtils.swallow(forwardingChannelManager.shutdown(), this)
 
         if (logManager != null)
           CoreUtils.swallow(logManager.shutdown(), this)
