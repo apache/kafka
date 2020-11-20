@@ -25,10 +25,11 @@ import kafka.server.BlockingSend
 import org.apache.kafka.clients.MockClient.MockMetadataUpdater
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, MockClient, NetworkClientUtils}
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.requests.AbstractRequest.Builder
-import org.apache.kafka.common.requests.{AbstractRequest, EpochEndOffset, FetchResponse, OffsetsForLeaderEpochResponse, FetchMetadata => JFetchMetadata}
+import org.apache.kafka.common.requests.{AbstractRequest, FetchResponse, OffsetsForLeaderEpochResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.utils.{SystemTime, Time}
 import org.apache.kafka.common.{Node, TopicPartition}
 
@@ -42,7 +43,7 @@ import scala.collection.Map
   * OFFSET_FOR_LEADER_EPOCH with different offsets in response, it should update offsets using
   * setOffsetsForNextResponse
   */
-class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, EpochEndOffset],
+class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, OffsetForLeaderPartitionResult],
                                      sourceBroker: BrokerEndPoint,
                                      time: Time)
   extends BlockingSend {
@@ -56,7 +57,7 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
   var epochFetchCount = 0
   var lastUsedOffsetForLeaderEpochVersion = -1
   var callback: Option[() => Unit] = None
-  var currentOffsets: util.Map[TopicPartition, EpochEndOffset] = offsets
+  var currentOffsets: util.Map[TopicPartition, OffsetForLeaderPartitionResult] = offsets
   var fetchPartitionData: Map[TopicPartition, FetchResponse.PartitionData[Records]] = Map.empty
   private val sourceNode = new Node(sourceBroker.id, sourceBroker.host, sourceBroker.port)
 
@@ -64,7 +65,7 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
     callback = Some(postEpochFunction)
   }
 
-  def setOffsetsForNextResponse(newOffsets: util.Map[TopicPartition, EpochEndOffset]): Unit = {
+  def setOffsetsForNextResponse(newOffsets: util.Map[TopicPartition, OffsetForLeaderPartitionResult]): Unit = {
     currentOffsets = newOffsets
   }
 
@@ -88,18 +89,14 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
         lastUsedOffsetForLeaderEpochVersion = requestBuilder.latestAllowedVersion()
 
         val data = new OffsetForLeaderEpochResponseData()
-        offsets.forEach((tp: TopicPartition, offset: EpochEndOffset) => {
+        currentOffsets.forEach((tp, offsetForLeaderPartition) => {
           var topic = data.topics.find(tp.topic)
           if (topic == null) {
             topic = new OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult()
               .setTopic(tp.topic)
             data.topics.add(topic)
           }
-          topic.partitions.add(new OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult()
-            .setPartition(tp.partition)
-            .setErrorCode(offset.error.code)
-            .setLeaderEpoch(offset.leaderEpoch)
-            .setEndOffset(offset.endOffset))
+          topic.partitions.add(offsetForLeaderPartition.setPartition(tp.partition))
         })
 
         new OffsetsForLeaderEpochResponse(data)
