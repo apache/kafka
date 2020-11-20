@@ -4361,9 +4361,6 @@ public class KafkaAdminClient extends AdminClient {
                 final ApiVersionsResponse apiVersionsResponse = (ApiVersionsResponse) response;
                 if (apiVersionsResponse.data().errorCode() == Errors.NONE.code()) {
                     future.complete(createFeatureMetadata(apiVersionsResponse));
-                } else if (options.sendRequestToController() &&
-                           apiVersionsResponse.data().errorCode() == Errors.NOT_CONTROLLER.code()) {
-                    handleNotControllerError(Errors.NOT_CONTROLLER);
                 } else {
                     future.completeExceptionally(Errors.forCode(apiVersionsResponse.data().errorCode()).exception());
                 }

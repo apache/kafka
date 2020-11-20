@@ -17,19 +17,12 @@
 
 package kafka.network
 
-import java.util
-
 import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.node.{ArrayNode, BinaryNode, DoubleNode, IntNode, JsonNodeFactory, LongNode, NullNode, ObjectNode, ShortNode, TextNode}
+import com.fasterxml.jackson.databind.node.{DoubleNode, JsonNodeFactory, LongNode, ObjectNode, TextNode}
 import kafka.network.RequestChannel.{Response, Session}
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.network.ClientInformation
-import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests._
-import org.apache.kafka.common.utils.CollectionUtils
-
-import scala.jdk.CollectionConverters._
 
 object RequestConvertToJson {
   def request(request: AbstractRequest): JsonNode = {
@@ -64,6 +57,7 @@ object RequestConvertToJson {
       case req: ElectLeadersRequest => ElectLeadersRequestDataJsonConverter.write(req.data, request.version)
       case req: EndTxnRequest => EndTxnRequestDataJsonConverter.write(req.data, request.version)
       case req: EndQuorumEpochRequest => EndQuorumEpochRequestDataJsonConverter.write(req.data, request.version)
+      case req: EnvelopeRequest => EnvelopeRequestDataJsonConverter.write(req.data, request.version)
       case req: ExpireDelegationTokenRequest => ExpireDelegationTokenRequestDataJsonConverter.write(req.data, request.version)
       case req: FetchRequest => FetchRequestDataJsonConverter.write(req.data, request.version)
       case req: FindCoordinatorRequest => FindCoordinatorRequestDataJsonConverter.write(req.data, request.version)
@@ -80,8 +74,8 @@ object RequestConvertToJson {
       case req: OffsetCommitRequest => OffsetCommitRequestDataJsonConverter.write(req.data, request.version)
       case req: OffsetDeleteRequest => OffsetDeleteRequestDataJsonConverter.write(req.data, request.version)
       case req: OffsetFetchRequest => OffsetFetchRequestDataJsonConverter.write(req.data, request.version)
-      case req: OffsetsForLeaderEpochRequest => offsetsForLeaderEpochRequestNode(req, request.version)
-      case req: ProduceRequest => produceRequestNode(req, request.version, false)
+      case req: OffsetsForLeaderEpochRequest => OffsetForLeaderEpochRequestDataJsonConverter.write(req.data, request.version)
+      case req: ProduceRequest => if (req.data == null) null else ProduceRequestDataJsonConverter.write(req.data, request.version)
       case req: RenewDelegationTokenRequest => RenewDelegationTokenRequestDataJsonConverter.write(req.data, request.version)
       case req: SaslAuthenticateRequest => SaslAuthenticateRequestDataJsonConverter.write(req.data, request.version)
       case req: SaslHandshakeRequest => SaslHandshakeRequestDataJsonConverter.write(req.data, request.version)
@@ -129,6 +123,7 @@ object RequestConvertToJson {
       case res: ElectLeadersResponse => ElectLeadersResponseDataJsonConverter.write(res.data, version)
       case res: EndTxnResponse => EndTxnResponseDataJsonConverter.write(res.data, version)
       case res: EndQuorumEpochResponse => EndQuorumEpochResponseDataJsonConverter.write(res.data, version)
+      case res: EnvelopeResponse => EnvelopeResponseDataJsonConverter.write(res.data, version)
       case res: ExpireDelegationTokenResponse => ExpireDelegationTokenResponseDataJsonConverter.write(res.data, version)
       case res: FetchResponse[_] => FetchResponseDataJsonConverter.write(res.data, version, false)
       case res: FindCoordinatorResponse => FindCoordinatorResponseDataJsonConverter.write(res.data, version)
@@ -145,8 +140,8 @@ object RequestConvertToJson {
       case res: OffsetCommitResponse => OffsetCommitResponseDataJsonConverter.write(res.data, version)
       case res: OffsetDeleteResponse => OffsetDeleteResponseDataJsonConverter.write(res.data, version)
       case res: OffsetFetchResponse => OffsetFetchResponseDataJsonConverter.write(res.data, version)
-      case res: OffsetsForLeaderEpochResponse => offsetsForLeaderEpochResponseNode(res, version)
-      case res: ProduceResponse => produceResponseNode(res, version)
+      case res: OffsetsForLeaderEpochResponse => OffsetForLeaderEpochResponseDataJsonConverter.write(res.data(), version)
+      case res: ProduceResponse => ProduceResponseDataJsonConverter.write(res.data(), version)
       case res: RenewDelegationTokenResponse => RenewDelegationTokenResponseDataJsonConverter.write(res.data, version)
       case res: SaslAuthenticateResponse => SaslAuthenticateResponseDataJsonConverter.write(res.data, version)
       case res: SaslHandshakeResponse => SaslHandshakeResponseDataJsonConverter.write(res.data, version)
@@ -206,157 +201,6 @@ object RequestConvertToJson {
       node.set("temporaryMemoryBytes", new LongNode(temporaryMemoryBytes))
     if (messageConversionsTimeMs > 0)
       node.set("messageConversionsTime", new DoubleNode(messageConversionsTimeMs))
-    node
-  }
-
-  /**
-   * Temporary until switch to use the generated schemas.
-   */
-  def offsetsForLeaderEpochRequestNode(request: OffsetsForLeaderEpochRequest, version: Short): JsonNode = {
-    val node = new ObjectNode(JsonNodeFactory.instance)
-    if (version >= 3) {
-      node.set("replicaId", new IntNode(request.replicaId))
-    }
-    val topics = CollectionUtils.groupPartitionDataByTopic(request.epochsByTopicPartition)
-    val topicsArray = new ArrayNode(JsonNodeFactory.instance)
-    topics.forEach { (topicName, partitions) =>
-      val topicNode = new ObjectNode(JsonNodeFactory.instance)
-      topicNode.set("name", new TextNode(topicName))
-      val partitionsArray = new ArrayNode(JsonNodeFactory.instance)
-      partitions.forEach { (partitionIndex, partitionData) =>
-        val partitionNode = new ObjectNode(JsonNodeFactory.instance)
-        partitionNode.set("partitionIndex", new IntNode(partitionIndex))
-        if (version >= 2) {
-          val leaderEpoch = partitionData.currentLeaderEpoch
-          partitionNode.set("currentLeaderEpoch", new IntNode(leaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH)))
-        }
-        partitionNode.set("leaderEpoch", new IntNode(partitionData.leaderEpoch))
-        partitionsArray.add(partitionNode)
-      }
-      topicNode.set("partitions", partitionsArray)
-      topicsArray.add(topicNode)
-    }
-    node.set("topics", topicsArray)
-    node
-  }
-
-  /**
-   * Temporary until switch to use the generated schemas.
-   */
-  def produceRequestNode(request: ProduceRequest, version: Short, serializeRecords: Boolean): JsonNode = {
-    val node = new ObjectNode(JsonNodeFactory.instance)
-    if (version >= 3) {
-      if (request.transactionalId == null) {
-        node.set("transactionalId", NullNode.instance)
-      } else {
-        node.set("transactionalId", new TextNode(request.transactionalId))
-      }
-    }
-    node.set("acks", new ShortNode(request.acks))
-    node.set("timeoutMs", new IntNode(request.timeout))
-    val topics = CollectionUtils.groupPartitionDataByTopic(request.partitionRecordsOrFail())
-    val topicsArray = new ArrayNode(JsonNodeFactory.instance)
-    topics.forEach { (topicName, partitions) =>
-      val topicNode = new ObjectNode(JsonNodeFactory.instance)
-      topicNode.set("name", new TextNode(topicName))
-      val partitionsArray = new ArrayNode(JsonNodeFactory.instance)
-      partitions.forEach { (partitionIndex, partitionData) =>
-        val partitionNode = new ObjectNode(JsonNodeFactory.instance)
-        partitionNode.set("partitionIndex", new IntNode(partitionIndex))
-        if (partitionData == null) {
-          partitionNode.set("records", NullNode.instance)
-        } else {
-          if (serializeRecords)
-            partitionNode.set("records", new BinaryNode(util.Arrays.copyOf(partitionData.buffer().array(), partitionData.validBytes())))
-          else
-            partitionNode.set("records", new IntNode(partitionData.validBytes()))
-        }
-        partitionsArray.add(partitionNode)
-      }
-      topicNode.set("partitions", partitionsArray)
-      topicsArray.add(topicNode)
-    }
-    node.set("topics", topicsArray)
-    node
-  }
-
-  /**
-   * Temporary until switch to use the generated schemas.
-   */
-  def offsetsForLeaderEpochResponseNode(response: OffsetsForLeaderEpochResponse, version: Short): JsonNode = {
-    val node = new ObjectNode(JsonNodeFactory.instance)
-    if (version >= 2) {
-      node.set("throttleTimeMs", new IntNode(response.throttleTimeMs))
-    }
-    val topics = CollectionUtils.groupPartitionDataByTopic(response.responses)
-    val topicsArray = new ArrayNode(JsonNodeFactory.instance)
-    topics.forEach { (topicName, partitions) =>
-      val topicNode = new ObjectNode(JsonNodeFactory.instance)
-      topicNode.set("name", new TextNode(topicName))
-      val partitionsArray = new ArrayNode(JsonNodeFactory.instance)
-      partitions.forEach { (partitionIndex, partitionData) =>
-        val partitionNode = new ObjectNode(JsonNodeFactory.instance)
-        partitionNode.set("errorCode", new ShortNode(partitionData.error.code))
-        partitionNode.set("partitionIndex", new IntNode(partitionIndex))
-        if (version >= 1) partitionNode.set("leaderEpoch", new IntNode(partitionData.leaderEpoch))
-        partitionNode.set("endOffset", new LongNode(partitionData.endOffset))
-        partitionsArray.add(partitionNode)
-      }
-      topicNode.set("partitions", partitionsArray)
-      topicsArray.add(topicNode)
-    }
-    node.set("topics", topicsArray)
-    node
-  }
-
-  /**
-   * Temporary until switch to use the generated schemas.
-   */
-  def produceResponseNode(response: ProduceResponse, version: Short): JsonNode = {
-    val node = new ObjectNode(JsonNodeFactory.instance)
-    val topics = CollectionUtils.groupPartitionDataByTopic(response.responses)
-    val responsesArray = new ArrayNode(JsonNodeFactory.instance)
-    topics.forEach { (topicName, partitions) =>
-      val topicNode = new ObjectNode(JsonNodeFactory.instance)
-      topicNode.set("name", new TextNode(topicName))
-      val partitionsArray = new ArrayNode(JsonNodeFactory.instance)
-      partitions.forEach { (partitionIndex, partitionData) =>
-        val partitionNode = new ObjectNode(JsonNodeFactory.instance)
-        partitionNode.set("partitionIndex", new IntNode(partitionIndex))
-        var errorCode = partitionData.error.code
-        if (errorCode == Errors.KAFKA_STORAGE_ERROR.code && version <= 3) {
-          errorCode = Errors.NOT_LEADER_OR_FOLLOWER.code
-        }
-        partitionNode.set("errorCode", new ShortNode(errorCode))
-        partitionNode.set("baseOffset", new LongNode(partitionData.baseOffset))
-        if (version >= 2) {
-          partitionNode.set("logAppendTimeMs", new LongNode(partitionData.logAppendTime))
-        }
-        if (version >= 5) {
-          partitionNode.set("logStartOffset", new LongNode(partitionData.logStartOffset))
-        }
-        if (version >= 8) {
-          val recordErrorsArray = new ArrayNode(JsonNodeFactory.instance)
-          for (indexAndMessage <- partitionData.recordErrors.asScala) {
-            val indexAndMessageData = new ObjectNode(JsonNodeFactory.instance)
-            indexAndMessageData.set("batchIndex", new IntNode(indexAndMessage.batchIndex))
-            if (indexAndMessage.message == null) indexAndMessageData.set("batchIndexErrorMessage", NullNode.instance)
-            else indexAndMessageData.set("batchIndexErrorMessage", new TextNode(indexAndMessage.message))
-            recordErrorsArray.add(indexAndMessageData)
-          }
-          partitionNode.set("recordErrors", recordErrorsArray)
-          if (partitionData.errorMessage == null) partitionNode.set("errorMessage", NullNode.instance)
-          else partitionNode.set("errorMessage", new TextNode(partitionData.errorMessage))
-        }
-        partitionsArray.add(partitionNode)
-      }
-      topicNode.set("partitions", partitionsArray)
-      responsesArray.add(topicNode)
-    }
-    node.set("responses", responsesArray)
-    if (version >= 1) {
-      node.set("throttleTimeMs", new IntNode(response.throttleTimeMs))
-    }
     node
   }
 }

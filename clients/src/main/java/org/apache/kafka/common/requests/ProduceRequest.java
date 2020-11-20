@@ -217,6 +217,10 @@ public class ProduceRequest extends AbstractRequest {
         return transactionalId;
     }
 
+    public ProduceRequestData data() {
+        return data;
+    }
+
     public void clearPartitionRecords() {
         // lazily initialize partitionSizes.
         partitionSizes();
