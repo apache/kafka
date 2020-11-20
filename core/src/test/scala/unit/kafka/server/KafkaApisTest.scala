@@ -2813,7 +2813,8 @@ class KafkaApisTest {
 
   private def createWriteTxnMarkersRequest(partitions: util.List[TopicPartition]) = {
     val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(asList(
-      new TxnMarkerEntry(1, 1.toShort, 0, TransactionResult.COMMIT, partitions))
+      new TxnMarkerEntry(1, 1.toShort, 0, TransactionResult.COMMIT, partitions)),
+      ApiKeys.WRITE_TXN_MARKERS.latestVersion()
     ).build()
     (writeTxnMarkersRequest, buildRequest(writeTxnMarkersRequest))
   }

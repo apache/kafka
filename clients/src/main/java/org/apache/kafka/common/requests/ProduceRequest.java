@@ -286,6 +286,7 @@ public class ProduceRequest extends AbstractRequest {
             case 6:
             case 7:
             case 8:
+            case 9:
                 return RecordBatch.MAGIC_VALUE_V2;
 
             default:

@@ -190,9 +190,11 @@ class TransactionMarkerChannelManagerTest {
 
     val expectedBroker1Request = new WriteTxnMarkersRequest.Builder(
       asList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, asList(partition1)),
-        new WriteTxnMarkersRequest.TxnMarkerEntry(producerId2, producerEpoch, coordinatorEpoch, txnResult, asList(partition1)))).build()
+        new WriteTxnMarkersRequest.TxnMarkerEntry(producerId2, producerEpoch, coordinatorEpoch, txnResult, asList(partition1))),
+      ApiKeys.WRITE_TXN_MARKERS.latestVersion()).build()
     val expectedBroker2Request = new WriteTxnMarkersRequest.Builder(
-      asList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, asList(partition2)))).build()
+      asList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, asList(partition2))),
+      ApiKeys.WRITE_TXN_MARKERS.latestVersion()).build()
 
     val requests: Map[Node, WriteTxnMarkersRequest] = channelManager.generateRequests().map { handler =>
       (handler.destination, handler.request.asInstanceOf[WriteTxnMarkersRequest.Builder].build())
@@ -266,9 +268,11 @@ class TransactionMarkerChannelManagerTest {
 
     val expectedBroker1Request = new WriteTxnMarkersRequest.Builder(
       asList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, asList(partition1)),
-        new WriteTxnMarkersRequest.TxnMarkerEntry(producerId2, producerEpoch, coordinatorEpoch, txnResult, asList(partition1)))).build()
+        new WriteTxnMarkersRequest.TxnMarkerEntry(producerId2, producerEpoch, coordinatorEpoch, txnResult, asList(partition1))),
+      ApiKeys.WRITE_TXN_MARKERS.latestVersion()).build()
     val expectedBroker2Request = new WriteTxnMarkersRequest.Builder(
-      asList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, asList(partition2)))).build()
+      asList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, asList(partition2))),
+      ApiKeys.WRITE_TXN_MARKERS.latestVersion()).build()
 
     val firstDrainedRequests: Map[Node, WriteTxnMarkersRequest] = channelManager.generateRequests().map { handler =>
       (handler.destination, handler.request.asInstanceOf[WriteTxnMarkersRequest.Builder].build())
