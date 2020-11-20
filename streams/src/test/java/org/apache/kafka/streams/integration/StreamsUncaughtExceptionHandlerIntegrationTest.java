@@ -48,7 +48,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -68,6 +67,7 @@ import static org.junit.Assert.fail;
 public class StreamsUncaughtExceptionHandlerIntegrationTest {
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
+    public static final Duration DEFAULT_DURATION = Duration.ofSeconds(30);
 
     @Rule
     public TestName testName = new TestName();
@@ -110,26 +110,24 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
     }
 
     @Test
-    public void shouldShutdownThreadUsingOldHandler() throws Exception {
+    public void shouldShutdownThreadUsingOldHandler() throws InterruptedException {
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
-            final CountDownLatch latch = new CountDownLatch(1);
             final AtomicBoolean flag = new AtomicBoolean(false);
             kafkaStreams.setUncaughtExceptionHandler((t, e) -> flag.set(true));
 
             StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
-
             produceMessages(0L, inputTopic, "A");
-            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.ERROR, Duration.ofSeconds(15));
 
             TestUtils.waitForCondition(flag::get, "Handler was called");
+            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.ERROR, DEFAULT_DURATION);
+
             assertThat(processorValueCollector.size(), equalTo(2));
         }
     }
 
     @Test
-    public void shouldShutdownClient() throws Exception {
+    public void shouldShutdownClient() throws InterruptedException {
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
-            final CountDownLatch latch = new CountDownLatch(1);
             kafkaStreams.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
 
             kafkaStreams.setUncaughtExceptionHandler(exception -> SHUTDOWN_CLIENT);
@@ -137,7 +135,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
             StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
 
             produceMessages(0L, inputTopic, "A");
-            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.NOT_RUNNING, Duration.ofSeconds(15));
+            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.NOT_RUNNING, DEFAULT_DURATION);
 
             assertThat(processorValueCollector.size(), equalTo(1));
         }
@@ -145,48 +143,12 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
 
     @Test
     public void shouldShutdownApplication() throws Exception {
-        final Topology topology = builder.build();
-
-        try (final KafkaStreams kafkaStreams = new KafkaStreams(topology, properties)) {
-            final KafkaStreams kafkaStreams1 = new KafkaStreams(topology, properties);
-            final CountDownLatch latch = new CountDownLatch(1);
-            kafkaStreams.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
-            kafkaStreams1.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
-            kafkaStreams.setUncaughtExceptionHandler(exception -> SHUTDOWN_APPLICATION);
-            kafkaStreams1.setUncaughtExceptionHandler(exception -> SHUTDOWN_APPLICATION);
-
-            kafkaStreams.start();
-            kafkaStreams1.start();
-
-            produceMessages(0L, inputTopic, "A");
-            waitForApplicationState(Arrays.asList(kafkaStreams, kafkaStreams1), KafkaStreams.State.ERROR, Duration.ofSeconds(30));
-
-            assertThat(processorValueCollector.size(), equalTo(1));
-        }
+        testShutdownApplication(2);
     }
 
     @Test
     public void shouldShutdownSingleThreadApplication() throws Exception {
-        properties.setProperty(StreamsConfig.NUM_STREAM_THREADS_CONFIG, "1");
-
-        final Topology topology = builder.build();
-
-        try (final KafkaStreams kafkaStreams = new KafkaStreams(topology, properties)) {
-            final KafkaStreams kafkaStreams1 = new KafkaStreams(topology, properties);
-            final CountDownLatch latch = new CountDownLatch(1);
-            kafkaStreams.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
-            kafkaStreams1.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
-            kafkaStreams.setUncaughtExceptionHandler(exception -> SHUTDOWN_APPLICATION);
-            kafkaStreams1.setUncaughtExceptionHandler(exception -> SHUTDOWN_APPLICATION);
-
-            kafkaStreams.start();
-            kafkaStreams1.start();
-
-            produceMessages(0L, inputTopic, "A");
-            waitForApplicationState(Arrays.asList(kafkaStreams, kafkaStreams1), KafkaStreams.State.ERROR, Duration.ofSeconds(30));
-
-            assertThat(processorValueCollector.size(), equalTo(1));
-        }
+        testShutdownApplication(1);
     }
 
     private void produceMessages(final long timestamp, final String streamOneInput, final String msg) {
@@ -202,7 +164,6 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
     }
 
     private static class ShutdownProcessor extends AbstractProcessor<String, String> {
-
         final List<String> valueList;
 
         ShutdownProcessor(final List<String> valueList) {
@@ -213,6 +174,28 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
         public void process(final String key, final String value) {
             valueList.add(value + " " + context.taskId());
             throw new StreamsException(Thread.currentThread().getName());
+        }
+    }
+
+    private void testShutdownApplication(final int numThreads) throws InterruptedException {
+        properties.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numThreads);
+
+        final Topology topology = builder.build();
+
+        try (final KafkaStreams kafkaStreams1 = new KafkaStreams(topology, properties);
+             final KafkaStreams kafkaStreams2 = new KafkaStreams(topology, properties)) {
+            kafkaStreams1.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
+            kafkaStreams2.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
+            kafkaStreams1.setUncaughtExceptionHandler(exception -> SHUTDOWN_APPLICATION);
+            kafkaStreams2.setUncaughtExceptionHandler(exception -> SHUTDOWN_APPLICATION);
+
+            StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams1);
+            StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams2);
+
+            produceMessages(0L, inputTopic, "A");
+            waitForApplicationState(Arrays.asList(kafkaStreams1, kafkaStreams2), KafkaStreams.State.ERROR, DEFAULT_DURATION);
+
+            assertThat(processorValueCollector.size(), equalTo(1));
         }
     }
 }
