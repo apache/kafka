@@ -361,10 +361,6 @@ class Partition(val topicPartition: TopicPartition,
 
   def getReplica(replicaId: Int): Option[Replica] = Option(remoteReplicasMap.get(replicaId))
 
-  private def getReplicaOrException(replicaId: Int): Replica = getReplica(replicaId).getOrElse{
-    throw new NotLeaderOrFollowerException(s"Replica with id $replicaId is not available on broker $localBrokerId")
-  }
-
   private def checkCurrentLeaderEpoch(remoteLeaderEpochOpt: Optional[Integer]): Errors = {
     if (!remoteLeaderEpochOpt.isPresent) {
       Errors.NONE
@@ -793,7 +789,7 @@ class Partition(val topicPartition: TopicPartition,
             case (brokerId, logEndOffset) => s"broker $brokerId: $logEndOffset"
           }
 
-          val curInSyncReplicaObjects = (curMaximalIsr - localBrokerId).map(getReplicaOrException)
+          val curInSyncReplicaObjects = (curMaximalIsr - localBrokerId).flatMap(getReplica)
           val replicaInfo = curInSyncReplicaObjects.map(replica => (replica.brokerId, replica.logEndOffset))
           val localLogInfo = (localBrokerId, localLogOrException.logEndOffset)
           val (ackedReplicas, awaitingReplicas) = (replicaInfo + localLogInfo).partition { _._2 >= requiredOffset}
@@ -917,11 +913,15 @@ class Partition(val topicPartition: TopicPartition,
         val outOfSyncReplicaIds = getOutOfSyncReplicas(replicaLagTimeMaxMs)
         if (outOfSyncReplicaIds.nonEmpty) {
           val outOfSyncReplicaLog = outOfSyncReplicaIds.map { replicaId =>
-            s"(brokerId: $replicaId, endOffset: ${getReplicaOrException(replicaId).logEndOffset})"
+            val logEndOffsetMessage = getReplica(replicaId)
+              .map(_.logEndOffset.toString)
+              .getOrElse("unknown")
+            s"(brokerId: $replicaId, endOffset: $logEndOffsetMessage)"
           }.mkString(" ")
           val newIsrLog = (isrState.isr -- outOfSyncReplicaIds).mkString(",")
           info(s"Shrinking ISR from ${isrState.isr.mkString(",")} to $newIsrLog. " +
-               s"Leader: (highWatermark: ${leaderLog.highWatermark}, endOffset: ${leaderLog.logEndOffset}). " +
+               s"Leader: (highWatermark: ${leaderLog.highWatermark}, " +
+               s"endOffset: ${leaderLog.logEndOffset}). " +
                s"Out of sync replicas: $outOfSyncReplicaLog.")
 
           shrinkIsr(outOfSyncReplicaIds)
@@ -947,9 +947,10 @@ class Partition(val topicPartition: TopicPartition,
                                   leaderEndOffset: Long,
                                   currentTimeMs: Long,
                                   maxLagMs: Long): Boolean = {
-    val followerReplica = getReplicaOrException(replicaId)
-    followerReplica.logEndOffset != leaderEndOffset &&
-      (currentTimeMs - followerReplica.lastCaughtUpTimeMs) > maxLagMs
+    getReplica(replicaId).fold(true) { followerReplica =>
+      followerReplica.logEndOffset != leaderEndOffset &&
+        (currentTimeMs - followerReplica.lastCaughtUpTimeMs) > maxLagMs
+    }
   }
 
   /**
