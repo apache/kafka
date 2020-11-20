@@ -140,8 +140,8 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
                 topicData.partitions().add(new OffsetForLeaderPartitionResult()
                     .setPartition(partition.partition())
                     .setErrorCode(error.code())
-                    .setLeaderEpoch(EpochEndOffset.UNDEFINED_EPOCH)
-                    .setEndOffset(EpochEndOffset.UNDEFINED_EPOCH_OFFSET)));
+                    .setLeaderEpoch(OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH)
+                    .setEndOffset(OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET)));
             responseData.topics().add(topicData);
         });
 

@@ -47,8 +47,8 @@ import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
 import static org.apache.kafka.clients.consumer.internals.Fetcher.hasUsableOffsetForLeaderEpochVersion;
-import static org.apache.kafka.common.requests.EpochEndOffset.UNDEFINED_EPOCH;
-import static org.apache.kafka.common.requests.EpochEndOffset.UNDEFINED_EPOCH_OFFSET;
+import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH;
+import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET;
 
 /**
  * A class for tracking the topics, partitions, and offsets for the consumer. A partition

@@ -26,7 +26,6 @@ import kafka.cluster.BrokerEndPoint
 import kafka.utils.{DelayedItem, Pool, ShutdownableThread}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.errors._
-import org.apache.kafka.common.requests.EpochEndOffset._
 import kafka.common.ClientIdAndBroker
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.CoreUtils.inLock
@@ -45,6 +44,7 @@ import org.apache.kafka.common.internals.PartitionStates
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult
 import org.apache.kafka.common.record.{FileRecords, MemoryRecords, Records}
 import org.apache.kafka.common.requests._
+import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 
 import scala.math._
 

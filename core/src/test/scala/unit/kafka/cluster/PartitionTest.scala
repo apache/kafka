@@ -34,7 +34,8 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrParti
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.requests.{EpochEndOffset, ListOffsetRequest}
+import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse
+import org.apache.kafka.common.requests.ListOffsetRequest
 import org.apache.kafka.common.utils.SystemTime
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.junit.Assert._
@@ -178,8 +179,8 @@ class PartitionTest extends AbstractPartitionTest {
 
     val epochEndOffset = partition.lastOffsetForLeaderEpoch(currentLeaderEpoch = Optional.of(leaderEpoch),
       leaderEpoch = leaderEpoch, fetchOnlyFromLeader = true)
-    assertEquals(EpochEndOffset.UNDEFINED_EPOCH_OFFSET, epochEndOffset.endOffset)
-    assertEquals(EpochEndOffset.UNDEFINED_EPOCH, epochEndOffset.leaderEpoch)
+    assertEquals(OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET, epochEndOffset.endOffset)
+    assertEquals(OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH, epochEndOffset.leaderEpoch)
   }
 
   @Test

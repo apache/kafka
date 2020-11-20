@@ -2611,8 +2611,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         new OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult()
           .setPartition(offsetForLeaderPartition.partition)
           .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
-          .setLeaderEpoch(EpochEndOffset.UNDEFINED_EPOCH)
-          .setEndOffset(EpochEndOffset.UNDEFINED_EPOCH_OFFSET)
+          .setLeaderEpoch(OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH)
+          .setEndOffset(OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET)
       }
 
       new OffsetForLeaderTopicResult()

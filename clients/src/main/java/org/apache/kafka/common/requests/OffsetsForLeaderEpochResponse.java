@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.requests;
 
+import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH;
+
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -38,6 +40,8 @@ import java.util.Map;
  * - {@link Errors#UNKNOWN_SERVER_ERROR} For any unexpected errors
  */
 public class OffsetsForLeaderEpochResponse extends AbstractResponse {
+    public static final long UNDEFINED_EPOCH_OFFSET = NO_PARTITION_LEADER_EPOCH;
+    public static final int UNDEFINED_EPOCH = NO_PARTITION_LEADER_EPOCH;
 
     private final OffsetForLeaderEpochResponseData data;
 

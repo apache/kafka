@@ -27,7 +27,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.requests.EpochEndOffset;
+import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
@@ -686,8 +686,8 @@ public class SubscriptionStateTest {
 
         Optional<LogTruncation> truncationOpt = state.maybeCompleteValidation(tp0, initialPosition,
                 new OffsetForLeaderPartitionResult()
-                    .setLeaderEpoch(EpochEndOffset.UNDEFINED_EPOCH)
-                    .setEndOffset(EpochEndOffset.UNDEFINED_EPOCH_OFFSET));
+                    .setLeaderEpoch(OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH)
+                    .setEndOffset(OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET));
         assertEquals(Optional.empty(), truncationOpt);
         assertFalse(state.awaitingValidation(tp0));
         assertTrue(state.isOffsetResetNeeded(tp0));
@@ -711,8 +711,8 @@ public class SubscriptionStateTest {
 
         Optional<LogTruncation> truncationOpt = state.maybeCompleteValidation(tp0, initialPosition,
                 new OffsetForLeaderPartitionResult()
-                    .setLeaderEpoch(EpochEndOffset.UNDEFINED_EPOCH)
-                    .setEndOffset(EpochEndOffset.UNDEFINED_EPOCH_OFFSET));
+                    .setLeaderEpoch(OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH)
+                    .setEndOffset(OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET));
         assertTrue(truncationOpt.isPresent());
         LogTruncation truncation = truncationOpt.get();
 

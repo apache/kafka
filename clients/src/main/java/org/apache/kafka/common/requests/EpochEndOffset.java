@@ -18,16 +18,12 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.Errors;
 
-import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH;
-
 import java.util.Objects;
 
 /**
  * The offset, fetched from a leader, for a particular partition.
  */
 public class EpochEndOffset {
-    public static final long UNDEFINED_EPOCH_OFFSET = NO_PARTITION_LEADER_EPOCH;
-    public static final int UNDEFINED_EPOCH = NO_PARTITION_LEADER_EPOCH;
 
     private Errors error;
     private int leaderEpoch;  // introduced in V1
@@ -86,7 +82,7 @@ public class EpochEndOffset {
     }
 
     public boolean hasUndefinedEpochOrOffset() {
-        return this.endOffset == UNDEFINED_EPOCH_OFFSET ||
-            this.leaderEpoch == UNDEFINED_EPOCH;
+        return this.endOffset == OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET ||
+            this.leaderEpoch == OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH;
     }
 }

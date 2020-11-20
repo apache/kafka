@@ -35,8 +35,8 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetFo
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, Records}
-import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.requests._
+import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.utils.{LogContext, Time}
 
 import scala.jdk.CollectionConverters._
