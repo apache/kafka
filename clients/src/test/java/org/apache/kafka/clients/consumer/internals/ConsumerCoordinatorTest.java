@@ -1225,7 +1225,7 @@ public class ConsumerCoordinatorTest {
             LeaveGroupRequest leaveRequest = (LeaveGroupRequest) body;
             return validateLeaveGroup(groupId, consumerId, leaveRequest);
         }, new LeaveGroupResponse(new LeaveGroupResponseData().setErrorCode(Errors.NONE.code())));
-        coordinator.maybeLeaveGroup("test maybe leave group");
+        coordinator.maybeLeaveGroup("test maybe leave group", false);
         assertTrue(received.get());
 
         AbstractCoordinator.Generation generation = coordinator.generationIfStable();
@@ -1269,7 +1269,7 @@ public class ConsumerCoordinatorTest {
             return validateLeaveGroup(groupId, consumerId, leaveRequest);
         }, new LeaveGroupResponse(new LeaveGroupResponseData().setErrorCode(Errors.NONE.code())));
 
-        coordinator.maybeLeaveGroup("pending member leaves");
+        coordinator.maybeLeaveGroup("pending member leaves", false);
         assertTrue(received.get());
     }
 
@@ -1905,7 +1905,7 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(new LeaveGroupResponse(new LeaveGroupResponseData()
                 .setErrorCode(Errors.NONE.code())));
         subscriptions.unsubscribe();
-        coordinator.maybeLeaveGroup("test commit after leave");
+        coordinator.maybeLeaveGroup("test commit after leave", false);
         subscriptions.assignFromUser(singleton(t1p));
 
         // the client should not reuse generation/memberId from auto-subscribed generation
@@ -2808,7 +2808,7 @@ public class ConsumerCoordinatorTest {
             assertEquals(memberId, coordinator.generation().memberId);
 
             // Imitating heartbeat thread that clears generation data.
-            coordinator.maybeLeaveGroup("Clear generation data.");
+            coordinator.maybeLeaveGroup("Clear generation data.", false);
 
             assertEquals(AbstractCoordinator.Generation.NO_GENERATION, coordinator.generation());
 

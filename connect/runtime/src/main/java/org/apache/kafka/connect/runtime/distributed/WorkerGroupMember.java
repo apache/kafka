@@ -203,8 +203,8 @@ public class WorkerGroupMember {
         coordinator.requestRejoin();
     }
 
-    public void maybeLeaveGroup(String leaveReason) {
-        coordinator.maybeLeaveGroup(leaveReason);
+    public void maybeLeaveGroup(String leaveReason, boolean shouldWarn) {
+        coordinator.maybeLeaveGroup(leaveReason, shouldWarn);
     }
 
     public String ownerUrl(String connector) {

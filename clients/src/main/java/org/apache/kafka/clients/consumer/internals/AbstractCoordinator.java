@@ -985,7 +985,7 @@ public abstract class AbstractCoordinator implements Closeable {
             synchronized (this) {
                 if (rebalanceConfig.leaveGroupOnClose) {
                     onLeavePrepare();
-                    maybeLeaveGroup("the consumer is being closed");
+                    maybeLeaveGroup("the consumer is being closed", false);
                 }
 
                 // At this point, there may be pending commits (async commits or sync commits that were
@@ -1001,9 +1001,14 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     /**
+     * Leave the group. This method also sends LeaveGroupRequest and log {@code leaveReason} if this is dynamic members
+     * or unknown coordinator or state is not UNJOINED or this generation has a valid member id.
+     *
+     * @param leaveReason the reason to leave the group for logging
+     * @param shouldWarn should log as WARN level or INFO
      * @throws KafkaException if the rebalance callback throws exception
      */
-    public synchronized RequestFuture<Void> maybeLeaveGroup(String leaveReason) {
+    public synchronized RequestFuture<Void> maybeLeaveGroup(String leaveReason, boolean shouldWarn) throws KafkaException {
         RequestFuture<Void> future = null;
 
         // Starting from 2.3, only dynamic members will send LeaveGroupRequest to the broker,
@@ -1013,8 +1018,13 @@ public abstract class AbstractCoordinator implements Closeable {
             state != MemberState.UNJOINED && generation.hasMemberId()) {
             // this is a minimal effort attempt to leave the group. we do not
             // attempt any resending if the request fails or times out.
-            log.info("Member {} sending LeaveGroup request to coordinator {} due to {}",
+            final String logMessage = String.format("Member %s sending LeaveGroup request to coordinator %s due to %s",
                 generation.memberId, coordinator, leaveReason);
+            if (shouldWarn) {
+                log.warn(logMessage);
+            } else {
+                log.info(logMessage);
+            }
             LeaveGroupRequest.Builder request = new LeaveGroupRequest.Builder(
                 rebalanceConfig.groupId,
                 Collections.singletonList(new MemberIdentity().setMemberId(generation.memberId))
@@ -1353,12 +1363,13 @@ public abstract class AbstractCoordinator implements Closeable {
                         } else if (heartbeat.pollTimeoutExpired(now)) {
                             // the poll timeout has expired, which means that the foreground thread has stalled
                             // in between calls to poll().
-                            String leaveReason = "consumer poll timeout has expired. This means the time between subsequent calls to poll() " +
-                                                    "was longer than the configured max.poll.interval.ms, which typically implies that " +
+                            final String leaveReason = "consumer poll timeout has expired. This means the time between " +
+                                                    "subsequent calls to poll() was longer than the configured " +
+                                                    "max.poll.interval.ms, which typically implies that " +
                                                     "the poll loop is spending too much time processing messages. " +
                                                     "You can address this either by increasing max.poll.interval.ms or by reducing " +
                                                     "the maximum size of batches returned in poll() with max.poll.records.";
-                            maybeLeaveGroup(leaveReason);
+                            maybeLeaveGroup(leaveReason, true);
                         } else if (!heartbeat.shouldHeartbeat(now)) {
                             // poll again after waiting for the retry backoff in case the heartbeat failed or the
                             // coordinator disconnected
