@@ -545,6 +545,32 @@ class LogTest {
     assertEquals(101L, log.logEndOffset)
   }
 
+  @Test
+  def testTruncateToEndOffsetClearsEpochCache(): Unit = {
+    val log = createLog(logDir, LogConfig())
+
+    // Seed some initial data in the log
+    val records = TestUtils.records(List(new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)),
+      baseOffset = 27)
+    appendAsFollower(log, records, leaderEpoch = 19)
+    assertEquals(Some(EpochEntry(epoch = 19, startOffset = 27)),
+      log.leaderEpochCache.flatMap(_.latestEntry))
+    assertEquals(29, log.logEndOffset)
+
+    // Now simulate becoming a leader
+    log.maybeAssignEpochStartOffset(leaderEpoch = 20, startOffset = log.logEndOffset)
+    assertEquals(Some(EpochEntry(epoch = 20, startOffset = 29)),
+      log.leaderEpochCache.flatMap(_.latestEntry))
+    assertEquals(29, log.logEndOffset)
+
+    // Now we become the follower and truncate at the current end offset.
+    // The trivial epoch entry at the end of the log should be gone
+    log.truncateTo(log.logEndOffset)
+    assertEquals(Some(EpochEntry(epoch = 19, startOffset = 27)),
+      log.leaderEpochCache.flatMap(_.latestEntry))
+    assertEquals(29, log.logEndOffset)
+  }
+
   /**
    * Test the values returned by the logSegments call
    */
