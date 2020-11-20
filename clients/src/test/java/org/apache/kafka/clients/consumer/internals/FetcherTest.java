@@ -53,6 +53,8 @@ import org.apache.kafka.common.message.ListOffsetRequestData.ListOffsetPartition
 import org.apache.kafka.common.message.ListOffsetResponseData;
 import org.apache.kafka.common.message.ListOffsetResponseData.ListOffsetTopicResponse;
 import org.apache.kafka.common.message.ListOffsetResponseData.ListOffsetPartitionResponse;
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData;
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -3735,7 +3737,7 @@ public class FetcherTest {
             OffsetsForLeaderEpochResponse response = new OffsetsForLeaderEpochResponse(endOffsets);
             client.prepareResponseFrom(body -> {
                 OffsetsForLeaderEpochRequest request = (OffsetsForLeaderEpochRequest) body;
-                return expectedPartitions.equals(request.epochsByTopicPartition().keySet());
+                return expectedPartitions.equals(offsetForLeaderPartitionMap(request.data()).keySet());
             }, response, node);
         }
 
@@ -3937,8 +3939,10 @@ public class FetcherTest {
 
         client.respond(request -> {
             OffsetsForLeaderEpochRequest epochRequest = (OffsetsForLeaderEpochRequest) request;
-            OffsetsForLeaderEpochRequest.PartitionData partitionData = epochRequest.epochsByTopicPartition().get(tp0);
-            return partitionData.currentLeaderEpoch.equals(Optional.of(epochOne)) && partitionData.leaderEpoch == epochOne;
+            OffsetForLeaderPartition partition = offsetForLeaderPartitionMap(epochRequest.data()).get(tp0);
+            return partition != null
+                && partition.currentLeaderEpoch() == epochOne
+                && partition.leaderEpoch() == epochOne;
         }, new OffsetsForLeaderEpochResponse(singletonMap(tp0, epochEndOffset)));
         consumerClient.poll(time.timer(Duration.ZERO));
 
@@ -3992,8 +3996,10 @@ public class FetcherTest {
 
         client.respond(request -> {
             OffsetsForLeaderEpochRequest epochRequest = (OffsetsForLeaderEpochRequest) request;
-            OffsetsForLeaderEpochRequest.PartitionData partitionData = epochRequest.epochsByTopicPartition().get(tp0);
-            return partitionData.currentLeaderEpoch.equals(Optional.of(epochOne)) && partitionData.leaderEpoch == epochOne;
+            OffsetForLeaderPartition partition = offsetForLeaderPartitionMap(epochRequest.data()).get(tp0);
+            return partition != null
+                && partition.currentLeaderEpoch() == epochOne
+                && partition.leaderEpoch() == epochOne;
         }, new OffsetsForLeaderEpochResponse(singletonMap(tp0, new EpochEndOffset(0, 0L))));
         consumerClient.poll(time.timer(Duration.ZERO));
 
@@ -4356,6 +4362,16 @@ public class FetcherTest {
     public void testEndOffsetsEmpty() {
         buildFetcher();
         assertEquals(emptyMap(), fetcher.endOffsets(emptyList(), time.timer(5000L)));
+    }
+
+    private Map<TopicPartition, OffsetForLeaderPartition> offsetForLeaderPartitionMap(
+        OffsetForLeaderEpochRequestData data
+    ) {
+        Map<TopicPartition, OffsetForLeaderPartition> result = new HashMap<>();
+        data.topics().forEach(topic ->
+            topic.partitions().forEach(partition ->
+                result.put(new TopicPartition(topic.topic(), partition.partition()), partition)));
+        return result;
     }
 
     private MockClient.RequestMatcher listOffsetRequestMatcher(final long timestamp) {

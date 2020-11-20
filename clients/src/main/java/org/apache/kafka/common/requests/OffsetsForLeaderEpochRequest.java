@@ -31,7 +31,6 @@ import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.RecordBatch;
 
 import java.nio.ByteBuffer;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -114,20 +113,6 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
 
     public OffsetForLeaderEpochRequestData data() {
         return data;
-    }
-
-    public Map<TopicPartition, PartitionData> epochsByTopicPartition() {
-        Map<TopicPartition, PartitionData> epochsByTopicPartition = new HashMap<>();
-
-        data.topics().forEach(topic ->
-            topic.partitions().forEach(partition ->
-                epochsByTopicPartition.put(
-                    new TopicPartition(topic.topic(), partition.partition()),
-                    new PartitionData(
-                        RequestUtils.getLeaderEpoch(partition.currentLeaderEpoch()),
-                        partition.leaderEpoch()))));
-
-        return epochsByTopicPartition;
     }
 
     public int replicaId() {
