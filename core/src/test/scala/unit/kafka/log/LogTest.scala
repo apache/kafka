@@ -30,9 +30,9 @@ import kafka.log.Log.DeleteDirSuffix
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
-import kafka.server.{BrokerState, BrokerTopicStats, FetchDataInfo, FetchHighWatermark, FetchIsolation, FetchLogEnd, FetchTxnCommitted, KafkaConfig, LogDirFailureChannel, LogOffsetMetadata}
+import kafka.server.{BrokerState, BrokerTopicStats, FetchDataInfo, FetchHighWatermark, FetchIsolation, FetchLogEnd, FetchTxnCommitted, KafkaConfig, LogDirFailureChannel, LogOffsetMetadata, PartitionMetadataFile}
 import kafka.utils._
-import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition, UUID}
+import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter
@@ -2343,7 +2343,7 @@ class LogTest {
     val logConfig = LogTest.createLogConfig()
     var log = createLog(logDir, logConfig)
 
-    val topicId = UUID.randomUUID()
+    val topicId = Uuid.randomUuid()
     log.partitionMetadataFile.get.write(topicId)
     log.close()
 
@@ -2893,7 +2893,7 @@ class LogTest {
     val log = createLog(logDir, logConfig)
 
     // Write a topic ID to the partition metadata file to ensure it is transferred correctly.
-    val id = UUID.randomUUID()
+    val id = Uuid.randomUuid()
     log.topicId = id
     log.partitionMetadataFile.get.write(id)
 

@@ -56,7 +56,7 @@ import org.apache.kafka.common.resource.PatternType.LITERAL
 import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourcePatternFilter, ResourceType}
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder, SecurityProtocol}
-import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicPartition, requests, UUID}
+import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicPartition, requests, Uuid}
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
@@ -99,7 +99,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   val brokerId: Integer = 0
   val topic = "topic"
-  val topicId = UUID.randomUUID()
+  val topicId = Uuid.randomUuid()
   val topicPattern = "topic.*"
   val transactionalId = "transactional.id"
   val producerId = 83392L

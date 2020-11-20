@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.UUID;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
 import org.apache.kafka.common.message.LeaderAndIsrResponseData;
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicError;
@@ -60,8 +60,8 @@ public class LeaderAndIsrResponseTest {
             .setZkVersion(20)
             .setReplicas(Collections.singletonList(10))
             .setIsNew(false));
-        HashMap<String, UUID> topicIds = new HashMap<>();
-        topicIds.put("foo", UUID.randomUUID());
+        HashMap<String, Uuid> topicIds = new HashMap<>();
+        topicIds.put("foo", Uuid.randomUuid());
 
         LeaderAndIsrRequest request = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion(),
                 15, 20, 0, partitionStates, topicIds, Collections.emptySet()).build();
@@ -71,7 +71,7 @@ public class LeaderAndIsrResponseTest {
 
     @Test
     public void testErrorCountsWithTopLevelError() {
-        UUID id = UUID.randomUUID();
+        Uuid id = Uuid.randomUuid();
         List<LeaderAndIsrTopicError> topics = createTopic(id, asList(Errors.NONE, Errors.NOT_LEADER_OR_FOLLOWER));
         LeaderAndIsrResponse response = new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
             .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
@@ -81,7 +81,7 @@ public class LeaderAndIsrResponseTest {
 
     @Test
     public void testErrorCountsNoTopLevelError() {
-        UUID id = UUID.randomUUID();
+        Uuid id = Uuid.randomUuid();
         List<LeaderAndIsrTopicError> topics = createTopic(id, asList(Errors.NONE, Errors.CLUSTER_AUTHORIZATION_FAILED));
         LeaderAndIsrResponse response = new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
             .setErrorCode(Errors.NONE.code())
@@ -94,7 +94,7 @@ public class LeaderAndIsrResponseTest {
 
     @Test
     public void testToString() {
-        UUID id = UUID.randomUUID();
+        Uuid id = Uuid.randomUuid();
         List<LeaderAndIsrTopicError> topics = createTopic(id, asList(Errors.NONE, Errors.CLUSTER_AUTHORIZATION_FAILED));
         LeaderAndIsrResponse response = new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
             .setErrorCode(Errors.NONE.code())
@@ -106,7 +106,7 @@ public class LeaderAndIsrResponseTest {
         assertTrue(responseStr.contains("errorCode=" + Errors.NONE.code()));
     }
 
-    private List<LeaderAndIsrTopicError> createTopic(UUID id, List<Errors> errors) {
+    private List<LeaderAndIsrTopicError> createTopic(Uuid id, List<Errors> errors) {
         List<LeaderAndIsrTopicError> topics = new ArrayList<>();
         LeaderAndIsrTopicError topic = new LeaderAndIsrTopicError();
         topic.setTopicId(id);

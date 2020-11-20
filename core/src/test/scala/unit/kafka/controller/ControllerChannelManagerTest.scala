@@ -22,7 +22,7 @@ import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, KAFKA_0_10_2_IV0, KAFKA_0_9_0, K
 import kafka.cluster.{Broker, EndPoint}
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import org.apache.kafka.common.{TopicPartition, UUID}
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.message.{LeaderAndIsrResponseData, StopReplicaResponseData, UpdateMetadataResponseData}
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState
@@ -871,9 +871,10 @@ class ControllerChannelManagerTest {
     }.toMap
 
     context.setLiveBrokers(brokerEpochs)
+    context.setAllTopics(topics)
 
     for (topic <- topics) {
-      context.addTopicId(topic, UUID.randomUUID())
+      context.addTopicId(topic, Uuid.randomUuid())
     }
 
     // Simple round-robin replica assignment

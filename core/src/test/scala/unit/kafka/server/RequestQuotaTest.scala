@@ -62,7 +62,7 @@ class RequestQuotaTest extends BaseRequestTest {
   private val topic = "topic-1"
   private val numPartitions = 1
   private val tp = new TopicPartition(topic, 0)
-  private val topicIds =  Collections.singletonMap(topic, UUID.randomUUID())
+  private val topicIds =  Collections.singletonMap(topic, Uuid.randomUuid())
   private val logDir = "logDir"
   private val unthrottledClientId = "unthrottled-client"
   private val smallQuotaProducerClientId = "small-quota-producer-client"

@@ -18,7 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.UUID;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData;
@@ -155,10 +155,10 @@ public class LeaderAndIsrRequestTest {
             }
 
             //  In versions 2-4 there are TopicStates, but no topicIds, so deserialized requests will have
-            //  Zero UUIDs in place.
+            //  Zero Uuids in place.
             if (version > 1 && version < 5) {
-                topicIds.put("topic0", UUID.ZERO_UUID);
-                topicIds.put("topic1", UUID.ZERO_UUID);
+                topicIds.put("topic0", Uuid.ZERO_UUID);
+                topicIds.put("topic1", Uuid.ZERO_UUID);
             }
 
             assertEquals(new HashSet<>(partitionStates), iterableToSet(deserializedRequest.partitionStates()));
@@ -174,12 +174,12 @@ public class LeaderAndIsrRequestTest {
     public void testTopicPartitionGroupingSizeReduction() {
         Set<TopicPartition> tps = TestUtils.generateRandomTopicPartitions(10, 10);
         List<LeaderAndIsrPartitionState> partitionStates = new ArrayList<>();
-        HashMap<String, UUID> topicIds = new HashMap<>();
+        HashMap<String, Uuid> topicIds = new HashMap<>();
         for (TopicPartition tp : tps) {
             partitionStates.add(new LeaderAndIsrPartitionState()
                 .setTopicName(tp.topic())
                 .setPartitionIndex(tp.partition()));
-            topicIds.put(tp.topic(), UUID.randomUUID());
+            topicIds.put(tp.topic(), Uuid.randomUuid());
         }
         LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder((short) 2, 0, 0, 0,
             partitionStates, topicIds, Collections.emptySet());

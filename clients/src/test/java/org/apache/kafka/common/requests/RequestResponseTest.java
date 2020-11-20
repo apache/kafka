@@ -21,7 +21,7 @@ import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.UUID;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBinding;
@@ -1563,9 +1563,9 @@ public class RequestResponseTest {
                 new Node(1, "test1", 1223)
         );
 
-        HashMap<String, UUID> topicIds = new HashMap<>();
-        topicIds.put("topic5", UUID.randomUUID());
-        topicIds.put("topic20", UUID.randomUUID());
+        HashMap<String, Uuid> topicIds = new HashMap<>();
+        topicIds.put("topic5", Uuid.randomUuid());
+        topicIds.put("topic20", Uuid.randomUuid());
 
         return new LeaderAndIsrRequest.Builder((short) version, 1, 10, 0,
                 partitionStates, topicIds, leaders).build();
@@ -1618,9 +1618,9 @@ public class RequestResponseTest {
                 .setReplicas(replicas)
                 .setOfflineReplicas(offlineReplicas));
 
-        HashMap<String, UUID> topicIds = new HashMap<>();
-        topicIds.put("topic5", UUID.randomUUID());
-        topicIds.put("topic20", UUID.randomUUID());
+        HashMap<String, Uuid> topicIds = new HashMap<>();
+        topicIds.put("topic5", Uuid.randomUuid());
+        topicIds.put("topic20", Uuid.randomUuid());
 
         SecurityProtocol plaintext = SecurityProtocol.PLAINTEXT;
         List<UpdateMetadataEndpoint> endpoints1 = new ArrayList<>();

@@ -23,7 +23,7 @@ import java.nio.file.{FileAlreadyExistsException, Files, Paths}
 import java.util.regex.Pattern
 
 import kafka.utils.Logging
-import org.apache.kafka.common.UUID
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.utils.Utils
 
@@ -51,7 +51,7 @@ object PartitionMetadataFile {
         new IOException(s"Malformed line in checkpoint file ($location): '$line'")
 
       var line: String = null
-      var metadataTopicId: UUID = null
+      var metadataTopicId: Uuid = null
       try {
         line = reader.readLine()
         WhiteSpacesPattern.split(line) match {
@@ -59,7 +59,7 @@ object PartitionMetadataFile {
             if (version.toInt == CurrentVersion) {
               line = reader.readLine()
               WhiteSpacesPattern.split(line) match {
-                case Array(_, topicId) => metadataTopicId = UUID.fromString(topicId)
+                case Array(_, topicId) => metadataTopicId = Uuid.fromString(topicId)
                 case _ => throw malformedLineException(line)
               }
               new PartitionMetadata(CurrentVersion, metadataTopicId)
@@ -76,7 +76,7 @@ object PartitionMetadataFile {
 
 }
 
-class PartitionMetadata(val version: Int, val topicId: UUID)
+class PartitionMetadata(val version: Int, val topicId: Uuid)
 
 
 class PartitionMetadataFile(val file: File,
@@ -92,7 +92,7 @@ class PartitionMetadataFile(val file: File,
   try Files.createFile(file.toPath) // create the file if it doesn't exist
   catch { case _: FileAlreadyExistsException => }
 
-  def write(topicId: UUID): Unit = {
+  def write(topicId: Uuid): Unit = {
     lock synchronized {
       try {
         // write to temp file and then swap with the existing file

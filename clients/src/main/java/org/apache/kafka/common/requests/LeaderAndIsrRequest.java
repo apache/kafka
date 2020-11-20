@@ -17,7 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.UUID;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrLiveLeader;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrTopicState;
@@ -45,11 +45,11 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
     public static class Builder extends AbstractControlRequest.Builder<LeaderAndIsrRequest> {
 
         private final List<LeaderAndIsrPartitionState> partitionStates;
-        private final Map<String, UUID> topicIds;
+        private final Map<String, Uuid> topicIds;
         private final Collection<Node> liveLeaders;
 
         public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
-                       List<LeaderAndIsrPartitionState> partitionStates, Map<String, UUID> topicIds,
+                       List<LeaderAndIsrPartitionState> partitionStates, Map<String, Uuid> topicIds,
                        Collection<Node> liveLeaders) {
             super(ApiKeys.LEADER_AND_ISR, version, controllerId, controllerEpoch, brokerEpoch);
             this.partitionStates = partitionStates;
@@ -81,14 +81,14 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
             return new LeaderAndIsrRequest(data, version);
         }
 
-        private static Map<String, LeaderAndIsrTopicState> groupByTopic(List<LeaderAndIsrPartitionState> partitionStates, Map<String, UUID> topicIds) {
+        private static Map<String, LeaderAndIsrTopicState> groupByTopic(List<LeaderAndIsrPartitionState> partitionStates, Map<String, Uuid> topicIds) {
             Map<String, LeaderAndIsrTopicState> topicStates = new HashMap<>();
             // We don't null out the topic name in LeaderAndIsrRequestPartition since it's ignored by
             // the generated code if version >= 2
             for (LeaderAndIsrPartitionState partition : partitionStates) {
                 LeaderAndIsrTopicState topicState = topicStates.computeIfAbsent(partition.topicName(), t -> new LeaderAndIsrTopicState()
                                 .setTopicName(partition.topicName())
-                                .setTopicId(topicIds.getOrDefault(partition.topicName(), UUID.ZERO_UUID)));
+                                .setTopicId(topicIds.getOrDefault(partition.topicName(), Uuid.ZERO_UUID)));
                 topicState.partitionStates().add(partition);
             }
             return topicStates;
@@ -196,8 +196,8 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
         return data.ungroupedPartitionStates();
     }
 
-    public Map<String, UUID> topicIds() {
-        Map<String, UUID> topicIds = new HashMap<>();
+    public Map<String, Uuid> topicIds() {
+        Map<String, Uuid> topicIds = new HashMap<>();
         for (LeaderAndIsrTopicState ts : data.topicStates()) {
             topicIds.put(ts.topicName(), ts.topicId());
         }

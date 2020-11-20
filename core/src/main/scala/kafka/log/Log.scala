@@ -43,7 +43,7 @@ import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.ProduceResponse.RecordError
 import org.apache.kafka.common.requests.{EpochEndOffset, ListOffsetRequest}
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition, UUID}
+import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition, Uuid}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
@@ -296,7 +296,7 @@ class Log(@volatile private var _dir: File,
 
   @volatile var partitionMetadataFile : Option[PartitionMetadataFile] = None
 
-  @volatile var topicId : UUID = UUID.ZERO_UUID
+  @volatile var topicId : Uuid = Uuid.ZERO_UUID
 
   locally {
     // create the log directory if it doesn't exist
@@ -327,6 +327,11 @@ class Log(@volatile private var _dir: File,
     // deletion.
     producerStateManager.removeStraySnapshots(segments.values().asScala.map(_.baseOffset).toSeq)
     loadProducerState(logEndOffset, reloadFromCleanShutdown = hadCleanShutdown)
+
+    // Recover topic ID if present
+    if (!partitionMetadataFile.get.isEmpty()) {
+      topicId = partitionMetadataFile.get.read().topicId
+    }
   }
 
   def dir: File = _dir

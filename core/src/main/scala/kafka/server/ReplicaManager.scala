@@ -36,7 +36,7 @@ import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile, Of
 import kafka.utils._
 import kafka.utils.Implicits._
 import kafka.zk.KafkaZkClient
-import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicPartition, UUID}
+import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicPartition, Uuid}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
@@ -1372,7 +1372,7 @@ class ReplicaManager(val config: KafkaConfig,
               requestLeaderEpoch > currentLeaderEpoch ||
                 (requestLeaderEpoch == currentLeaderEpoch &&
                   partition.log.map(_.topicId).isEmpty &&
-                  topicIds.get(topicPartition.topic()) != UUID.ZERO_UUID)
+                  topicIds.get(topicPartition.topic()) != Uuid.ZERO_UUID)
             }
 
             // Next check partition's leader epoch
@@ -1450,13 +1450,13 @@ class ReplicaManager(val config: KafkaConfig,
             else {
               val id = topicIds.get(topicPartition.topic())
               // Ensure we have not received a request from an older protocol
-              if (id != null && !id.equals(UUID.ZERO_UUID)) {
+              if (id != null && !id.equals(Uuid.ZERO_UUID)) {
                 val log = localLog(topicPartition).get
                 // Check if the topic ID is in memory, if not, it must be new to the broker.
                 // If the broker previously wrote it to file, it would be recovered on restart after failure.
                 // If the topic ID is not the default (ZERO_UUID), a topic ID is being used for the given topic.
                 // If the topic ID in the log does not match the one in the request, the broker's topic must be stale.
-                if (!log.topicId.equals(UUID.ZERO_UUID) && !log.topicId.equals(topicIds.get(topicPartition.topic))) {
+                if (!log.topicId.equals(Uuid.ZERO_UUID) && !log.topicId.equals(topicIds.get(topicPartition.topic))) {
                   stateChangeLogger.warn(s"Topic Id in memory: ${log.topicId.toString} does not" +
                     s" match the topic Id provided in the request: " +
                     s"${topicIds.get(topicPartition.topic).toString}.")
@@ -1483,7 +1483,7 @@ class ReplicaManager(val config: KafkaConfig,
           replicaFetcherManager.shutdownIdleFetcherThreads()
           replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
           onLeadershipChange(partitionsBecomeLeader, partitionsBecomeFollower)
-          if (leaderAndIsrRequest.version() < 4) {
+          if (leaderAndIsrRequest.version() < 5) {
             val responsePartitions = responseMap.iterator.map { case (tp, error) =>
               new LeaderAndIsrPartitionError()
                 .setTopicName(tp.topic)
@@ -1496,7 +1496,7 @@ class ReplicaManager(val config: KafkaConfig,
           } else {
             val topics = new mutable.HashMap[String, List[LeaderAndIsrPartitionError]]
             responseMap.asJava.forEach { case (tp, error) =>
-              if (topics.get(tp.topic) == None) {
+              if (!topics.contains(tp.topic)) {
                 topics.put(tp.topic, List(new LeaderAndIsrPartitionError()
                                                                 .setPartitionIndex(tp.partition)
                                                                 .setErrorCode(error.code)))
