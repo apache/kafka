@@ -27,6 +27,7 @@ import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.FetchResponseData
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -212,8 +213,16 @@ class ReplicaFetcherThreadTest {
       t1p1 -> new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty(), 0)))
 
     val expected = Map(
-      t1p0 -> new EpochEndOffset(Errors.UNKNOWN_SERVER_ERROR, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET),
-      t1p1 -> new EpochEndOffset(Errors.UNKNOWN_SERVER_ERROR, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
+      t1p0 -> new OffsetForLeaderPartitionResult()
+        .setPartition(t1p0.partition)
+        .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code)
+        .setLeaderEpoch(UNDEFINED_EPOCH)
+        .setEndOffset(UNDEFINED_EPOCH_OFFSET),
+      t1p1 -> new OffsetForLeaderPartitionResult()
+        .setPartition(t1p1.partition)
+        .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code)
+        .setLeaderEpoch(UNDEFINED_EPOCH)
+        .setEndOffset(UNDEFINED_EPOCH_OFFSET),
     )
 
     assertEquals("results from leader epoch request should have undefined offset", expected, result)

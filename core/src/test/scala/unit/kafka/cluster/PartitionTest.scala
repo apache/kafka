@@ -365,7 +365,7 @@ class PartitionTest extends AbstractPartitionTest {
     def assertLastOffsetForLeaderError(error: Errors, currentLeaderEpochOpt: Optional[Integer]): Unit = {
       val endOffset = partition.lastOffsetForLeaderEpoch(currentLeaderEpochOpt, 0,
         fetchOnlyFromLeader = true)
-      assertEquals(error, endOffset.error)
+      assertEquals(error.code(), endOffset.errorCode())
     }
 
     assertLastOffsetForLeaderError(Errors.NONE, Optional.empty())
@@ -384,7 +384,7 @@ class PartitionTest extends AbstractPartitionTest {
                                        fetchOnlyLeader: Boolean): Unit = {
       val endOffset = partition.lastOffsetForLeaderEpoch(currentLeaderEpochOpt, 0,
         fetchOnlyFromLeader = fetchOnlyLeader)
-      assertEquals(error, endOffset.error)
+      assertEquals(error.code(), endOffset.errorCode())
     }
 
     assertLastOffsetForLeaderError(Errors.NONE, Optional.empty(), fetchOnlyLeader = false)

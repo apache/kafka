@@ -32,6 +32,7 @@ import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{FencedLeaderEpochException, UnknownLeaderEpochException}
 import org.apache.kafka.common.message.FetchResponseData
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{EpochEndOffset, FetchRequest}
@@ -40,7 +41,7 @@ import org.junit.Assert._
 import org.junit.{Before, Test}
 
 import scala.jdk.CollectionConverters._
-import scala.collection.{mutable, Map, Set}
+import scala.collection.{Map, Set, mutable}
 import scala.util.Random
 import org.scalatest.Assertions.assertThrows
 
@@ -308,7 +309,7 @@ class AbstractFetcherThreadTest {
         super.truncate(topicPartition, truncationState)
       }
 
-      override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] =
+      override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, OffsetForLeaderPartitionResult] =
         throw new UnsupportedOperationException
 
       override protected val isOffsetForLeaderEpochSupported: Boolean = false
@@ -343,7 +344,7 @@ class AbstractFetcherThreadTest {
         super.truncate(topicPartition, truncationState)
       }
 
-      override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] =
+      override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, OffsetForLeaderPartitionResult] =
         throw new UnsupportedOperationException
 
       override def latestEpoch(topicPartition: TopicPartition): Option[Int] = None
@@ -644,7 +645,7 @@ class AbstractFetcherThreadTest {
 
     val fetcher = new MockFetcherThread {
       var fetchEpochsFromLeaderOnce = false
-      override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
+      override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, OffsetForLeaderPartitionResult] = {
         val fetchedEpochs = super.fetchEpochEndOffsets(partitions)
         if (!fetchEpochsFromLeaderOnce) {
           // leader epoch changes while fetching epochs from leader
@@ -691,7 +692,7 @@ class AbstractFetcherThreadTest {
     val nextLeaderEpochOnFollower = initialLeaderEpochOnFollower + 1
 
     val fetcher = new MockFetcherThread {
-      override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
+      override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, OffsetForLeaderPartitionResult] = {
         val fetchedEpochs = super.fetchEpochEndOffsets(partitions)
         // leader epoch changes while fetching epochs from leader
         // at the same time, the replica fetcher manager removes the partition
@@ -729,9 +730,13 @@ class AbstractFetcherThreadTest {
   def testTruncationThrowsExceptionIfLeaderReturnsPartitionsNotRequestedInFetchEpochs(): Unit = {
     val partition = new TopicPartition("topic", 0)
     val fetcher = new MockFetcherThread {
-      override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
+      override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, OffsetForLeaderPartitionResult] = {
         val unrequestedTp = new TopicPartition("topic2", 0)
-        super.fetchEpochEndOffsets(partitions).toMap + (unrequestedTp -> new EpochEndOffset(0, 0))
+        super.fetchEpochEndOffsets(partitions).toMap + (unrequestedTp -> new OffsetForLeaderPartitionResult()
+          .setPartition(unrequestedTp.partition)
+          .setErrorCode(Errors.NONE.code)
+          .setLeaderEpoch(0)
+          .setEndOffset(0))
       }
     }
 
@@ -905,7 +910,11 @@ class AbstractFetcherThreadTest {
 
       if (isTruncationOnFetchSupported && partitionData.divergingEpoch.isPresent) {
         val divergingEpoch = partitionData.divergingEpoch.get
-        truncateOnFetchResponse(Map(topicPartition -> new EpochEndOffset(Errors.NONE, divergingEpoch.epoch, divergingEpoch.endOffset)))
+        truncateOnFetchResponse(Map(topicPartition -> new OffsetForLeaderPartitionResult()
+          .setPartition(topicPartition.partition)
+          .setErrorCode(Errors.NONE.code)
+          .setLeaderEpoch(divergingEpoch.epoch)
+          .setEndOffset(divergingEpoch.endOffset)))
         return None
       }
 
@@ -997,7 +1006,7 @@ class AbstractFetcherThreadTest {
 
     override def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Option[OffsetAndEpoch] = {
       val epochData = new EpochData(Optional.empty[Integer](), epoch)
-      val result = lookupEndOffsetForEpoch(epochData, replicaPartitionState(topicPartition))
+      val result = lookupEndOffsetForEpoch(topicPartition, epochData, replicaPartitionState(topicPartition))
       if (result.endOffset == EpochEndOffset.UNDEFINED_EPOCH_OFFSET)
         None
       else
@@ -1033,7 +1042,9 @@ class AbstractFetcherThreadTest {
       lastFetchedEpoch.asScala.flatMap { fetchEpoch =>
         val epochEndOffset = fetchEpochEndOffsets(Map(partition -> new EpochData(Optional.empty[Integer], fetchEpoch)))(partition)
 
-        if (partitionState.log.isEmpty || epochEndOffset.hasUndefinedEpochOrOffset)
+        if (partitionState.log.isEmpty
+            || epochEndOffset.endOffset == EpochEndOffset.UNDEFINED_EPOCH_OFFSET
+            || epochEndOffset.leaderEpoch == EpochEndOffset.UNDEFINED_EPOCH)
           None
         else if (epochEndOffset.leaderEpoch < fetchEpoch || epochEndOffset.endOffset < fetchOffset) {
           Some(new FetchResponseData.EpochEndOffset()
@@ -1044,10 +1055,15 @@ class AbstractFetcherThreadTest {
       }
     }
 
-    private def lookupEndOffsetForEpoch(epochData: EpochData,
-                                        partitionState: PartitionState): EpochEndOffset = {
+    private def lookupEndOffsetForEpoch(topicPartition: TopicPartition,
+                                        epochData: EpochData,
+                                        partitionState: PartitionState): OffsetForLeaderPartitionResult = {
       checkExpectedLeaderEpoch(epochData.currentLeaderEpoch, partitionState).foreach { error =>
-        return new EpochEndOffset(error, EpochEndOffset.UNDEFINED_EPOCH, EpochEndOffset.UNDEFINED_EPOCH_OFFSET)
+        return new OffsetForLeaderPartitionResult()
+          .setPartition(topicPartition.partition)
+          .setErrorCode(error.code)
+          .setLeaderEpoch(EpochEndOffset.UNDEFINED_EPOCH)
+          .setEndOffset(EpochEndOffset.UNDEFINED_EPOCH_OFFSET)
       }
 
       var epochLowerBound = EpochEndOffset.UNDEFINED_EPOCH
@@ -1055,20 +1071,32 @@ class AbstractFetcherThreadTest {
         if (batch.partitionLeaderEpoch > epochData.leaderEpoch) {
           // If we don't have the requested epoch, return the next higher entry
           if (epochLowerBound == EpochEndOffset.UNDEFINED_EPOCH)
-            return new EpochEndOffset(Errors.NONE, batch.partitionLeaderEpoch, batch.baseOffset)
+            return new OffsetForLeaderPartitionResult()
+              .setPartition(topicPartition.partition)
+              .setErrorCode(Errors.NONE.code)
+              .setLeaderEpoch(batch.partitionLeaderEpoch)
+              .setEndOffset(batch.baseOffset)
           else
-            return new EpochEndOffset(Errors.NONE, epochLowerBound, batch.baseOffset)
+            return new OffsetForLeaderPartitionResult()
+              .setPartition(topicPartition.partition)
+              .setErrorCode(Errors.NONE.code)
+              .setLeaderEpoch(epochLowerBound)
+              .setEndOffset(batch.baseOffset)
         }
         epochLowerBound = batch.partitionLeaderEpoch
       }
-      new EpochEndOffset(Errors.NONE, EpochEndOffset.UNDEFINED_EPOCH, EpochEndOffset.UNDEFINED_EPOCH_OFFSET)
+      new OffsetForLeaderPartitionResult()
+        .setPartition(topicPartition.partition)
+        .setErrorCode(Errors.NONE.code)
+        .setLeaderEpoch(EpochEndOffset.UNDEFINED_EPOCH)
+        .setEndOffset(EpochEndOffset.UNDEFINED_EPOCH_OFFSET)
     }
 
-    override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
-      val endOffsets = mutable.Map[TopicPartition, EpochEndOffset]()
+    override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, OffsetForLeaderPartitionResult] = {
+      val endOffsets = mutable.Map[TopicPartition, OffsetForLeaderPartitionResult]()
       partitions.foreach { case (partition, epochData) =>
         val leaderState = leaderPartitionState(partition)
-        val epochEndOffset = lookupEndOffsetForEpoch(epochData, leaderState)
+        val epochEndOffset = lookupEndOffsetForEpoch(partition, epochData, leaderState)
         endOffsets.put(partition, epochEndOffset)
       }
       endOffsets

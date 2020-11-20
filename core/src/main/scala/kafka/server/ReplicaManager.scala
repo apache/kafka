@@ -1881,20 +1881,10 @@ class ReplicaManager(val config: KafkaConfig,
   def lastOffsetForLeaderEpoch(
     requestedEpochInfo: Seq[OffsetForLeaderEpochRequestData.OffsetForLeaderTopic]
   ): Seq[OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult] = {
-    def newOffsetForLeaderPartitionResult(
-      error: Errors,
-      leaderEpoch: Int,
-      offset: Long
-    ): OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult =
-      new OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult()
-        .setErrorCode(error.code)
-        .setLeaderEpoch(leaderEpoch)
-        .setEndOffset(offset)
-
     requestedEpochInfo.map { offsetForLeaderTopic =>
       val partitions = offsetForLeaderTopic.partitions.asScala.map { offsetForLeaderPartition =>
         val tp = new TopicPartition(offsetForLeaderTopic.topic, offsetForLeaderPartition.partition)
-        val partitionResult = getPartition(tp) match {
+        getPartition(tp) match {
           case HostedPartition.Online(partition) =>
             val currentLeaderEpochOpt =
               if (offsetForLeaderPartition.currentLeaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH)
@@ -1905,28 +1895,29 @@ class ReplicaManager(val config: KafkaConfig,
             partition.lastOffsetForLeaderEpoch(
               currentLeaderEpochOpt,
               offsetForLeaderPartition.leaderEpoch,
-              fetchOnlyFromLeader = true,
-              constructor = newOffsetForLeaderPartitionResult)
+              fetchOnlyFromLeader = true)
 
           case HostedPartition.Offline =>
-            newOffsetForLeaderPartitionResult(
-              Errors.KAFKA_STORAGE_ERROR,
-              UNDEFINED_EPOCH,
-              UNDEFINED_EPOCH_OFFSET)
+            new OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult()
+              .setPartition(offsetForLeaderPartition.partition)
+              .setErrorCode(Errors.KAFKA_STORAGE_ERROR.code)
+              .setLeaderEpoch(UNDEFINED_EPOCH)
+              .setEndOffset(UNDEFINED_EPOCH_OFFSET)
 
           case HostedPartition.None if metadataCache.contains(tp) =>
-            newOffsetForLeaderPartitionResult(
-              Errors.NOT_LEADER_OR_FOLLOWER,
-              UNDEFINED_EPOCH,
-              UNDEFINED_EPOCH_OFFSET)
+            new OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult()
+              .setPartition(offsetForLeaderPartition.partition)
+              .setErrorCode(Errors.NOT_LEADER_OR_FOLLOWER.code)
+              .setLeaderEpoch(UNDEFINED_EPOCH)
+              .setEndOffset(UNDEFINED_EPOCH_OFFSET)
 
           case HostedPartition.None =>
-            newOffsetForLeaderPartitionResult(
-              Errors.UNKNOWN_TOPIC_OR_PARTITION,
-              UNDEFINED_EPOCH,
-              UNDEFINED_EPOCH_OFFSET)
+            new OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult()
+              .setPartition(offsetForLeaderPartition.partition)
+              .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
+              .setLeaderEpoch(UNDEFINED_EPOCH)
+              .setEndOffset(UNDEFINED_EPOCH_OFFSET)
         }
-        partitionResult.setPartition(offsetForLeaderPartition.partition)
       }
 
       new OffsetForLeaderTopicResult()

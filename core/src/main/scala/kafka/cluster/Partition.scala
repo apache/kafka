@@ -33,6 +33,7 @@ import kafka.zookeeper.ZooKeeperClientException
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
@@ -1096,11 +1097,12 @@ class Partition(val topicPartition: TopicPartition,
 
     lastFetchedEpoch.ifPresent { fetchEpoch =>
       val epochEndOffset = lastOffsetForLeaderEpoch(currentLeaderEpoch, fetchEpoch, fetchOnlyFromLeader = false)
-      if (epochEndOffset.error != Errors.NONE) {
-        throw epochEndOffset.error.exception()
+      val error = Errors.forCode(epochEndOffset.errorCode)
+      if (error != Errors.NONE) {
+        throw error.exception()
       }
 
-      if (epochEndOffset.hasUndefinedEpochOrOffset) {
+      if (epochEndOffset.endOffset == UNDEFINED_EPOCH_OFFSET || epochEndOffset.leaderEpoch == UNDEFINED_EPOCH) {
         throw new OffsetOutOfRangeException("Could not determine the end offset of the last fetched epoch " +
           s"$lastFetchedEpoch from the request")
       }
@@ -1284,30 +1286,32 @@ class Partition(val topicPartition: TopicPartition,
    *         offset of the first leader epoch larger than the leader epoch, or else the log end
    *         offset if the leader epoch is the latest leader epoch.
    */
-  def lastOffsetForLeaderEpoch[T](currentLeaderEpoch: Optional[Integer],
-                                  leaderEpoch: Int,
-                                  fetchOnlyFromLeader: Boolean,
-                                  constructor: (Errors, Int, Long) => T): T = {
+  def lastOffsetForLeaderEpoch(currentLeaderEpoch: Optional[Integer],
+                               leaderEpoch: Int,
+                               fetchOnlyFromLeader: Boolean): OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult = {
     inReadLock(leaderIsrUpdateLock) {
       val localLogOrError = getLocalLog(currentLeaderEpoch, fetchOnlyFromLeader)
       localLogOrError match {
         case Left(localLog) =>
           localLog.endOffsetForEpoch(leaderEpoch) match {
-            case Some(epochAndOffset) => constructor(NONE, epochAndOffset.leaderEpoch, epochAndOffset.offset)
-            case None => constructor(NONE, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
+            case Some(epochAndOffset) => new OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult()
+              .setPartition(partitionId)
+              .setErrorCode(NONE.code)
+              .setLeaderEpoch(epochAndOffset.leaderEpoch)
+              .setEndOffset(epochAndOffset.offset)
+            case None => new OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult()
+              .setPartition(partitionId)
+              .setErrorCode(NONE.code)
+              .setLeaderEpoch(UNDEFINED_EPOCH)
+              .setEndOffset(UNDEFINED_EPOCH_OFFSET)
           }
-        case Right(error) =>
-          constructor(error, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
+        case Right(error) => new OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult()
+          .setPartition(partitionId)
+          .setErrorCode(error.code)
+          .setLeaderEpoch(UNDEFINED_EPOCH)
+          .setEndOffset(UNDEFINED_EPOCH_OFFSET)
       }
     }
-  }
-
-  def lastOffsetForLeaderEpoch(currentLeaderEpoch: Optional[Integer],
-                               leaderEpoch: Int,
-                               fetchOnlyFromLeader: Boolean): EpochEndOffset = {
-    lastOffsetForLeaderEpoch(
-      currentLeaderEpoch, leaderEpoch, fetchOnlyFromLeader,
-      (error, leaderEpoch, offset) => new EpochEndOffset(error, leaderEpoch, offset))
   }
 
   private[cluster] def expandIsr(newInSyncReplica: Int): Unit = {
