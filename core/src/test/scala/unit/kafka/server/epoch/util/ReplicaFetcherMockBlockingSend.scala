@@ -24,6 +24,7 @@ import kafka.cluster.BrokerEndPoint
 import kafka.server.BlockingSend
 import org.apache.kafka.clients.MockClient.MockMetadataUpdater
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, MockClient, NetworkClientUtils}
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.requests.AbstractRequest.Builder
@@ -85,7 +86,23 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
         callback.foreach(_.apply())
         epochFetchCount += 1
         lastUsedOffsetForLeaderEpochVersion = requestBuilder.latestAllowedVersion()
-        new OffsetsForLeaderEpochResponse(currentOffsets)
+
+        val data = new OffsetForLeaderEpochResponseData()
+        offsets.forEach((tp: TopicPartition, offset: EpochEndOffset) => {
+          var topic = data.topics.find(tp.topic)
+          if (topic == null) {
+            topic = new OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult()
+              .setTopic(tp.topic)
+            data.topics.add(topic)
+          }
+          topic.partitions.add(new OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult()
+            .setPartition(tp.partition)
+            .setErrorCode(offset.error.code)
+            .setLeaderEpoch(offset.leaderEpoch)
+            .setEndOffset(offset.endOffset))
+        })
+
+        new OffsetsForLeaderEpochResponse(data)
 
       case ApiKeys.FETCH =>
         fetchCount += 1

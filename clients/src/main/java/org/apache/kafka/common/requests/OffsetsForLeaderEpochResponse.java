@@ -16,10 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData;
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult;
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -50,28 +47,6 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
 
     public OffsetsForLeaderEpochResponse(Struct struct, short version) {
         data = new OffsetForLeaderEpochResponseData(struct, version);
-    }
-
-    public OffsetsForLeaderEpochResponse(Map<TopicPartition, EpochEndOffset> offsets) {
-        this(0, offsets);
-    }
-
-    public OffsetsForLeaderEpochResponse(int throttleTimeMs, Map<TopicPartition, EpochEndOffset> offsets) {
-        data = new OffsetForLeaderEpochResponseData();
-        data.setThrottleTimeMs(throttleTimeMs);
-
-        offsets.forEach((tp, offset) -> {
-            OffsetForLeaderTopicResult topic = data.topics().find(tp.topic());
-            if (topic == null) {
-                topic = new OffsetForLeaderTopicResult().setTopic(tp.topic());
-                data.topics().add(topic);
-            }
-            topic.partitions().add(new OffsetForLeaderPartitionResult()
-                .setPartition(tp.partition())
-                .setErrorCode(offset.error().code())
-                .setLeaderEpoch(offset.leaderEpoch())
-                .setEndOffset(offset.endOffset()));
-        });
     }
 
     public OffsetForLeaderEpochResponseData data() {
