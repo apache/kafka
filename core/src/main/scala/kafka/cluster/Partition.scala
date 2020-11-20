@@ -1284,21 +1284,30 @@ class Partition(val topicPartition: TopicPartition,
    *         offset of the first leader epoch larger than the leader epoch, or else the log end
    *         offset if the leader epoch is the latest leader epoch.
    */
-  def lastOffsetForLeaderEpoch(currentLeaderEpoch: Optional[Integer],
-                               leaderEpoch: Int,
-                               fetchOnlyFromLeader: Boolean): EpochEndOffset = {
+  def lastOffsetForLeaderEpoch[T](currentLeaderEpoch: Optional[Integer],
+                                  leaderEpoch: Int,
+                                  fetchOnlyFromLeader: Boolean,
+                                  constructor: (Errors, Int, Long) => T): T = {
     inReadLock(leaderIsrUpdateLock) {
       val localLogOrError = getLocalLog(currentLeaderEpoch, fetchOnlyFromLeader)
       localLogOrError match {
         case Left(localLog) =>
           localLog.endOffsetForEpoch(leaderEpoch) match {
-            case Some(epochAndOffset) => new EpochEndOffset(NONE, epochAndOffset.leaderEpoch, epochAndOffset.offset)
-            case None => new EpochEndOffset(NONE, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
+            case Some(epochAndOffset) => constructor(NONE, epochAndOffset.leaderEpoch, epochAndOffset.offset)
+            case None => constructor(NONE, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
           }
         case Right(error) =>
-          new EpochEndOffset(error, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
+          constructor(error, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
       }
     }
+  }
+
+  def lastOffsetForLeaderEpoch(currentLeaderEpoch: Optional[Integer],
+                               leaderEpoch: Int,
+                               fetchOnlyFromLeader: Boolean): EpochEndOffset = {
+    lastOffsetForLeaderEpoch(
+      currentLeaderEpoch, leaderEpoch, fetchOnlyFromLeader,
+      (error, leaderEpoch, offset) => new EpochEndOffset(error, leaderEpoch, offset))
   }
 
   private[cluster] def expandIsr(newInSyncReplica: Int): Unit = {

@@ -43,6 +43,9 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrParti
 import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsPartitionResult
 import org.apache.kafka.common.message.{DescribeLogDirsResponseData, FetchResponseData, LeaderAndIsrResponseData}
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
@@ -1875,23 +1878,60 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  def lastOffsetForLeaderEpoch(requestedEpochInfo: Map[TopicPartition, OffsetsForLeaderEpochRequest.PartitionData]): Map[TopicPartition, EpochEndOffset] = {
-    requestedEpochInfo.map { case (tp, partitionData) =>
-      val epochEndOffset = getPartition(tp) match {
-        case HostedPartition.Online(partition) =>
-          partition.lastOffsetForLeaderEpoch(partitionData.currentLeaderEpoch, partitionData.leaderEpoch,
-            fetchOnlyFromLeader = true)
+  def lastOffsetForLeaderEpoch(
+    requestedEpochInfo: Seq[OffsetForLeaderEpochRequestData.OffsetForLeaderTopic]
+  ): Seq[OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult] = {
+    def newOffsetForLeaderPartitionResult(
+      error: Errors,
+      leaderEpoch: Int,
+      offset: Long
+    ): OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult =
+      new OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult()
+        .setErrorCode(error.code)
+        .setLeaderEpoch(leaderEpoch)
+        .setEndOffset(offset)
 
-        case HostedPartition.Offline =>
-          new EpochEndOffset(Errors.KAFKA_STORAGE_ERROR, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
+    requestedEpochInfo.map { offsetForLeaderTopic =>
+      val partitions = offsetForLeaderTopic.partitions.asScala.map { offsetForLeaderPartition =>
+        val tp = new TopicPartition(offsetForLeaderTopic.topic, offsetForLeaderPartition.partition)
+        val partitionResult = getPartition(tp) match {
+          case HostedPartition.Online(partition) =>
+            val currentLeaderEpochOpt =
+              if (offsetForLeaderPartition.currentLeaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                Optional.empty[Integer]
+              else
+                Optional.of[Integer](offsetForLeaderPartition.currentLeaderEpoch)
 
-        case HostedPartition.None if metadataCache.contains(tp) =>
-          new EpochEndOffset(Errors.NOT_LEADER_OR_FOLLOWER, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
+            partition.lastOffsetForLeaderEpoch(
+              currentLeaderEpochOpt,
+              offsetForLeaderPartition.leaderEpoch,
+              fetchOnlyFromLeader = true,
+              constructor = newOffsetForLeaderPartitionResult)
 
-        case HostedPartition.None =>
-          new EpochEndOffset(Errors.UNKNOWN_TOPIC_OR_PARTITION, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
+          case HostedPartition.Offline =>
+            newOffsetForLeaderPartitionResult(
+              Errors.KAFKA_STORAGE_ERROR,
+              UNDEFINED_EPOCH,
+              UNDEFINED_EPOCH_OFFSET)
+
+          case HostedPartition.None if metadataCache.contains(tp) =>
+            newOffsetForLeaderPartitionResult(
+              Errors.NOT_LEADER_OR_FOLLOWER,
+              UNDEFINED_EPOCH,
+              UNDEFINED_EPOCH_OFFSET)
+
+          case HostedPartition.None =>
+            newOffsetForLeaderPartitionResult(
+              Errors.UNKNOWN_TOPIC_OR_PARTITION,
+              UNDEFINED_EPOCH,
+              UNDEFINED_EPOCH_OFFSET)
+        }
+        partitionResult.setPartition(offsetForLeaderPartition.partition)
       }
-      tp -> epochEndOffset
+
+      new OffsetForLeaderTopicResult()
+        .setTopic(offsetForLeaderTopic.topic)
+        .setPartitions(partitions.toList.asJava)
     }
   }
 
