@@ -866,7 +866,7 @@ public class KafkaStreams implements AutoCloseable {
         threadState = new HashMap<>(numStreamThreads);
         storeProviders = new ArrayList<>();
         for (int i = 0; i < numStreamThreads; i++) {
-            makeThread(cacheSizePerThread, i + 1);
+            createStreamThread(cacheSizePerThread, i + 1);
         }
 
         ClientMetrics.addNumAliveStreamThreadMetric(streamsMetrics, (metricsConfig, now) ->
@@ -888,7 +888,7 @@ public class KafkaStreams implements AutoCloseable {
         rocksDBMetricsRecordingService = maybeCreateRocksDBMetricsRecordingService(clientId, config);
     }
 
-    private StreamThread makeThread(final long cacheSizePerThread, final int threadIdx) {
+    private StreamThread createStreamThread(final long cacheSizePerThread, final int threadIdx) {
         final StreamThread streamThread = StreamThread.create(
                 internalTopologyBuilder,
                 config,
@@ -926,18 +926,22 @@ public class KafkaStreams implements AutoCloseable {
      * @return name of the added stream thread or empty if a new stream thread could not be added
      */
     public Optional<String> addStreamThread() {
-        synchronized (stateLock) {
-            if (isRunningOrRebalancing()) {
-                final int threadIdx = getNextThreadIndex();
-                final long cacheSizePerThread = getCacheSizePerThread(threads.size() + 1);
-                resizeThreadCache(threads.size() + 1);
-                final StreamThread streamThread = makeThread(cacheSizePerThread, threadIdx);
-                streamThread.setStateListener(streamStateListener);
-                streamThread.start();
-                return Optional.of(streamThread.getName());
-            } else {
-                return Optional.empty();
+        if (isRunningOrRebalancing()) {
+            final int threadIdx = getNextThreadIndex();
+            final long cacheSizePerThread = getCacheSizePerThread(threads.size() + 1);
+            resizeThreadCache(cacheSizePerThread);
+            final StreamThread streamThread = createStreamThread(cacheSizePerThread, threadIdx);
+            streamThread.setStateListener(streamStateListener);
+            synchronized (stateLock) {
+                if (isRunningOrRebalancing()) {
+                    streamThread.start();
+                } else {
+                    return Optional.empty();
+                }
             }
+            return Optional.of(streamThread.getName());
+        } else {
+            return Optional.empty();
         }
     }
 
@@ -959,10 +963,9 @@ public class KafkaStreams implements AutoCloseable {
         return totalCacheSize / (numStreamThreads + ((globalTaskTopology != null) ? 1 : 0));
     }
 
-    private void resizeThreadCache(final int numStreamThreads) {
-        final long cacheSizePreThread = getCacheSizePerThread(numStreamThreads);
+    private void resizeThreadCache(final long cacheSizePerThread) {
         for (final StreamThread streamThread: threads) {
-            streamThread.resizeCache(cacheSizePreThread);
+            streamThread.resizeCache(cacheSizePerThread);
         }
     }
 
