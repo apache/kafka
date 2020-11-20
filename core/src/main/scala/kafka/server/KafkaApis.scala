@@ -183,7 +183,7 @@ class KafkaApis(val requestChannel: RequestChannel,
    */
   override def handle(request: RequestChannel.Request): Unit = {
     try {
-      trace(s"Handling request:${RequestConvertToJson.requestDesc(request.header, request.loggableRequest).toString} from connection ${request.context.connectionId};" +
+      trace(s"Handling request:${RequestConvertToJson.requestDesc(request.header, request.loggableRequest)} from connection ${request.context.connectionId};" +
         s"securityProtocol:${request.context.securityProtocol},principal:${request.context.principal}")
 
       request.envelope.foreach { envelope =>

@@ -386,12 +386,12 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
             } else {
                 headerGenerator.addImport(MessageGenerator.ARRAYS_CLASS);
                 buffer.printf("%s;%n", target.assignmentStatement(
-                        String.format("new BinaryNode(Arrays.copyOf(%s, %s.length))",
-                                target.sourceVariable(), target.sourceVariable())));
+                    String.format("new BinaryNode(Arrays.copyOf(%s, %s.length))",
+                            target.sourceVariable(), target.sourceVariable())));
             }
         } else if (target.field().type().isRecords()) {
-            headerGenerator.addImport(MessageGenerator.INT_NODE_CLASS);
             headerGenerator.addImport(MessageGenerator.BINARY_NODE_CLASS);
+            headerGenerator.addImport(MessageGenerator.INT_NODE_CLASS);
             // KIP-673: When logging requests/responses, we do not serialize the record, instead we
             // output its sizeInBytes, because outputting the bytes is not very useful and can be
             // quite expensive. Otherwise, we will serialize the record.
@@ -402,7 +402,7 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
             buffer.printf("} else {%n");
             buffer.incrementIndent();
             buffer.printf("%s;%n", target.assignmentStatement(
-                    String.format("new IntNode(%s.sizeInBytes())", target.sourceVariable())));
+                String.format("new IntNode(%s.sizeInBytes())", target.sourceVariable())));
             buffer.decrementIndent();
             buffer.printf("}%n");
         } else if (target.field().type().isArray()) {

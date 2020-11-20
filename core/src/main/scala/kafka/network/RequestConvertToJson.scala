@@ -18,7 +18,7 @@
 package kafka.network
 
 import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.node.{DoubleNode, JsonNodeFactory, LongNode, ObjectNode, TextNode}
+import com.fasterxml.jackson.databind.node.{DoubleNode, JsonNodeFactory, LongNode, NullNode, ObjectNode, TextNode}
 import kafka.network.RequestChannel.{Response, Session}
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.network.ClientInformation
@@ -75,7 +75,7 @@ object RequestConvertToJson {
       case req: OffsetDeleteRequest => OffsetDeleteRequestDataJsonConverter.write(req.data, request.version)
       case req: OffsetFetchRequest => OffsetFetchRequestDataJsonConverter.write(req.data, request.version)
       case req: OffsetsForLeaderEpochRequest => OffsetForLeaderEpochRequestDataJsonConverter.write(req.data, request.version)
-      case req: ProduceRequest => if (req.data == null) null else ProduceRequestDataJsonConverter.write(req.data, request.version)
+      case req: ProduceRequest => if (req.data == null) NullNode.instance else ProduceRequestDataJsonConverter.write(req.data, request.version)
       case req: RenewDelegationTokenRequest => RenewDelegationTokenRequestDataJsonConverter.write(req.data, request.version)
       case req: SaslAuthenticateRequest => SaslAuthenticateRequestDataJsonConverter.write(req.data, request.version)
       case req: SaslHandshakeRequest => SaslHandshakeRequestDataJsonConverter.write(req.data, request.version)
