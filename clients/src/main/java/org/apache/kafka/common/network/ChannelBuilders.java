@@ -158,7 +158,9 @@ public class ChannelBuilders {
         return channelBuilder;
     }
 
-    // Visibility for testing
+    /**
+     * @return a mutable RecordingMap. The elements got from RecordingMap are marked as "used".
+     */
     @SuppressWarnings("unchecked")
     static Map<String, Object> channelBuilderConfigs(final AbstractConfig config, final ListenerName listenerName) {
         Map<String, Object> parsedConfigs;
@@ -175,7 +177,6 @@ public class ChannelBuilders {
             // exclude keys like `{mechanism}.some.prop` if "listener.name." prefix is present and key `some.prop` exists in parsed configs.
             .filter(e -> !(listenerName != null && parsedConfigs.containsKey(e.getKey().substring(e.getKey().indexOf('.') + 1))))
             .forEach(e -> parsedConfigs.put(e.getKey(), e.getValue()));
-        // the callers have to create a new map to carry more elements and then following Get ops are not recorded.
         return parsedConfigs;
     }
 

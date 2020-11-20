@@ -99,6 +99,7 @@ import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -114,9 +115,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class KafkaProducerTest {
-    private String topic = "topic";
-    private Node host1 = new Node(0, "host1", 1000);
-    private Collection<Node> nodes = Collections.singletonList(host1);
+    private final String topic = "topic";
+    private final Node host1 = new Node(0, "host1", 1000);
+    private final Collection<Node> nodes = Collections.singletonList(host1);
     private final Cluster emptyCluster = new Cluster(
             null,
             nodes,
@@ -138,7 +139,7 @@ public class KafkaProducerTest {
                     new PartitionInfo(topic, 2, null, null, null)),
             Collections.emptySet(),
             Collections.emptySet());
-    private final int defaultMetadataIdleMs = 5 * 60 * 1000;
+    private static final int DEFAULT_METADATA_IDLE_MS = 5 * 60 * 1000;
 
 
     private static <K, V> KafkaProducer<K, V> kafkaProducer(Map<String, Object> configs,
@@ -370,6 +371,25 @@ public class KafkaProducerTest {
         new KafkaProducer<>(config, new ByteArraySerializer(), new ByteArraySerializer());
     }
 
+    private static KafkaProducer<String, String> producerWithOverrideNewSender(Map<String, Object> configs,
+                                                                               ProducerMetadata metadata) {
+        return producerWithOverrideNewSender(configs, metadata, Time.SYSTEM);
+    }
+
+    private static KafkaProducer<String, String> producerWithOverrideNewSender(Map<String, Object> configs,
+                                                                               ProducerMetadata metadata,
+                                                                               Time timer) {
+        return new KafkaProducer<String, String>(
+                new ProducerConfig(ProducerConfig.appendSerializerToConfig(configs, new StringSerializer(), new StringSerializer())),
+                new StringSerializer(), new StringSerializer(), metadata, new MockClient(Time.SYSTEM, metadata), null, timer) {
+            @Override
+            Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata) {
+                // give Sender its own Metadata instance so that we can isolate Metadata calls from KafkaProducer
+                return super.newSender(logContext, kafkaClient, newMetadata(0, 100_000));
+            }
+        };
+    }
+
     @Test
     public void testMetadataFetch() throws InterruptedException {
         Map<String, Object> configs = new HashMap<>();
@@ -379,15 +399,7 @@ public class KafkaProducerTest {
         // Return empty cluster 4 times and cluster from then on
         when(metadata.fetch()).thenReturn(emptyCluster, emptyCluster, emptyCluster, emptyCluster, onePartitionCluster);
 
-        KafkaProducer<String, String> producer = new KafkaProducer<String, String>(
-                new ProducerConfig(ProducerConfig.appendSerializerToConfig(configs, new StringSerializer(), new StringSerializer())),
-                new StringSerializer(), new StringSerializer(), metadata, new MockClient(Time.SYSTEM, metadata), null, Time.SYSTEM) {
-            @Override
-            Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata) {
-                // give Sender its own Metadata instance so that we can isolate Metadata calls from KafkaProducer
-                return super.newSender(logContext, kafkaClient, newMetadata(0, 100_000));
-            }
-        };
+        KafkaProducer<String, String> producer = producerWithOverrideNewSender(configs, metadata);
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
         producer.send(record);
 
@@ -425,15 +437,7 @@ public class KafkaProducerTest {
             Collections.emptySet());
         when(metadata.fetch()).thenReturn(onePartitionCluster, emptyCluster, onePartitionCluster);
 
-        KafkaProducer<String, String> producer = new KafkaProducer<String, String>(
-                new ProducerConfig(ProducerConfig.appendSerializerToConfig(configs, new StringSerializer(), new StringSerializer())),
-                new StringSerializer(), new StringSerializer(), metadata, new MockClient(Time.SYSTEM, metadata), null, Time.SYSTEM) {
-            @Override
-            Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata) {
-                // give Sender its own Metadata instance so that we can isolate Metadata calls from KafkaProducer
-                return super.newSender(logContext, kafkaClient, newMetadata(0, 100_000));
-            }
-        };
+        KafkaProducer<String, String> producer = producerWithOverrideNewSender(configs, metadata);
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
         producer.send(record);
 
@@ -472,15 +476,7 @@ public class KafkaProducerTest {
             return emptyCluster;
         });
 
-        KafkaProducer<String, String> producer = new KafkaProducer<String, String>(
-                new ProducerConfig(ProducerConfig.appendSerializerToConfig(configs, new StringSerializer(), new StringSerializer())),
-                new StringSerializer(), new StringSerializer(), metadata, new MockClient(Time.SYSTEM, metadata), null, mockTime) {
-            @Override
-            Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata) {
-                // give Sender its own Metadata instance so that we can isolate Metadata calls from KafkaProducer
-                return super.newSender(logContext, kafkaClient, newMetadata(0, 100_000));
-            }
-        };
+        KafkaProducer<String, String> producer = producerWithOverrideNewSender(configs, metadata, mockTime);
 
         // Four request updates where the topic isn't present, at which point the timeout expires and a
         // TimeoutException is thrown
@@ -511,15 +507,7 @@ public class KafkaProducerTest {
 
         when(metadata.fetch()).thenReturn(onePartitionCluster, onePartitionCluster, threePartitionCluster);
 
-        KafkaProducer<String, String> producer = new KafkaProducer<String, String>(
-                new ProducerConfig(ProducerConfig.appendSerializerToConfig(configs, new StringSerializer(), new StringSerializer())),
-                new StringSerializer(), new StringSerializer(), metadata, new MockClient(Time.SYSTEM, metadata), null, mockTime) {
-            @Override
-            Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata) {
-                // give Sender its own Metadata instance so that we can isolate Metadata calls from KafkaProducer
-                return super.newSender(logContext, kafkaClient, newMetadata(0, 100_000));
-            }
-        };
+        KafkaProducer<String, String> producer = producerWithOverrideNewSender(configs, metadata, mockTime);
         // One request update if metadata is available but outdated for the given record
         producer.send(record);
         verify(metadata, times(2)).requestUpdateForTopic(topic);
@@ -550,15 +538,7 @@ public class KafkaProducerTest {
             return onePartitionCluster;
         });
 
-        KafkaProducer<String, String> producer = new KafkaProducer<String, String>(
-                new ProducerConfig(ProducerConfig.appendSerializerToConfig(configs, new StringSerializer(), new StringSerializer())),
-                new StringSerializer(), new StringSerializer(), metadata, new MockClient(Time.SYSTEM, metadata), null, mockTime) {
-            @Override
-            Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata) {
-                // give Sender its own Metadata instance so that we can isolate Metadata calls from KafkaProducer
-                return super.newSender(logContext, kafkaClient, newMetadata(0, 100_000));
-            }
-        };
+        KafkaProducer<String, String> producer = producerWithOverrideNewSender(configs, metadata, mockTime);
 
         // Four request updates where the requested partition is out of range, at which point the timeout expires
         // and a TimeoutException is thrown
@@ -725,7 +705,7 @@ public class KafkaProducerTest {
     public void closeWithNegativeTimestampShouldThrow() {
         Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
-        try (Producer producer = new KafkaProducer<>(producerProps, new ByteArraySerializer(), new ByteArraySerializer())) {
+        try (Producer<byte[], byte[]> producer = new KafkaProducer<>(producerProps, new ByteArraySerializer(), new ByteArraySerializer())) {
             assertThrows(IllegalArgumentException.class, () -> producer.close(Duration.ofMillis(-100)));
         }
     }
@@ -749,7 +729,7 @@ public class KafkaProducerTest {
                 Future<RecordMetadata> response = producer.send(new ProducerRecord<>("topic", "value" + i));
                 futureResponses.add(response);
             }
-            futureResponses.forEach(res -> assertTrue(!res.isDone()));
+            futureResponses.forEach(res -> assertFalse(res.isDone()));
             producer.flush();
             futureResponses.forEach(res -> assertTrue(res.isDone()));
         }
@@ -1289,8 +1269,8 @@ public class KafkaProducerTest {
         producer.close();
     }
 
-    private ProducerMetadata newMetadata(long refreshBackoffMs, long expirationMs) {
-        return new ProducerMetadata(refreshBackoffMs, expirationMs, defaultMetadataIdleMs,
+    private static ProducerMetadata newMetadata(long refreshBackoffMs, long expirationMs) {
+        return new ProducerMetadata(refreshBackoffMs, expirationMs, DEFAULT_METADATA_IDLE_MS,
                 new LogContext(), new ClusterResourceListeners(), Time.SYSTEM);
     }
 

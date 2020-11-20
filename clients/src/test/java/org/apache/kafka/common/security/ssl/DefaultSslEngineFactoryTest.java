@@ -19,7 +19,6 @@ package org.apache.kafka.common.security.ssl;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
-import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Test;
@@ -30,13 +29,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
 
 public class DefaultSslEngineFactoryTest {
 
@@ -310,12 +307,6 @@ public class DefaultSslEngineFactoryTest {
         assertEquals(Collections.singletonList("kafka"), aliases);
         assertNotNull("Certificate not found", keyStore.getCertificate("kafka"));
         assertNotNull("Private key not found", keyStore.getKey("kafka", KEY_PASSWORD.value().toCharArray()));
-    }
-
-    @Test
-    public void testRecordingMap() {
-        TestSecurityConfig config = new TestSecurityConfig(new Properties());
-        assertTrue(SslFactory.isRecording(config.values()));
     }
 
     private String pemFilePath(String pem) throws Exception {

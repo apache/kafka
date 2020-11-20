@@ -79,15 +79,6 @@ public class SslFactory implements Reconfigurable, Closeable {
         this.keystoreVerifiableUsingTruststore = keystoreVerifiableUsingTruststore;
     }
 
-    /**
-     * @return true if the input map is a recording map. otherwise, false
-     */
-    static boolean isRecording(Map<String, ?> map) {
-        // AbstractConfig is a public APIs and RecordingMap is a internal class
-        // In order to avoid touching public interface, we just compare the class name here.
-        return map.getClass().getSimpleName().equals("RecordingMap");
-    }
-
     @SuppressWarnings("unchecked")
     @Override
     public void configure(Map<String, ?> configs) throws KafkaException {
@@ -96,12 +87,8 @@ public class SslFactory implements Reconfigurable, Closeable {
         }
         this.endpointIdentification = (String) configs.get(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
 
-        // it should keep using the input map if it is recording.
-        // Otherwise, the used configs are not recorded and then AbstractConfig can produce misleading warnings:
-        // "The configuration 'xxx' was supplied but isn't a known config."
-        Map<String, Object> nextConfigs = isRecording(configs)
-                ? (Map<String, Object>) configs
-                : new HashMap<>(configs);
+        // The input map must be a mutable RecordingMap in production.
+        Map<String, Object> nextConfigs = (Map<String, Object>) configs;
         if (clientAuthConfigOverride != null) {
             nextConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, clientAuthConfigOverride);
         }
