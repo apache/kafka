@@ -45,6 +45,7 @@ import kafka.utils.KafkaScheduler;
 import kafka.utils.Pool;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData;
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.BaseRecords;
@@ -303,11 +304,15 @@ public class ReplicaFetcherThreadBenchmark {
         }
 
         @Override
-        public Map<TopicPartition, EpochEndOffset> fetchEpochEndOffsets(Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData> partitions) {
-            scala.collection.mutable.Map<TopicPartition, EpochEndOffset> endOffsets = new scala.collection.mutable.HashMap<>();
+        public Map<TopicPartition, OffsetForLeaderPartitionResult> fetchEpochEndOffsets(Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData> partitions) {
+            scala.collection.mutable.Map<TopicPartition, OffsetForLeaderPartitionResult> endOffsets = new scala.collection.mutable.HashMap<>();
             Iterator<TopicPartition> iterator = partitions.keys().iterator();
             while (iterator.hasNext()) {
-                endOffsets.put(iterator.next(), new EpochEndOffset(0, 100));
+                TopicPartition tp = iterator.next();
+                endOffsets.put(tp, new OffsetForLeaderPartitionResult()
+                    .setPartition(tp.partition())
+                    .setLeaderEpoch(0)
+                    .setEndOffset(100));
             }
             return endOffsets;
         }
