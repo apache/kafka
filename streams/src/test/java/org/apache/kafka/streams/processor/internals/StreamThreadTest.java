@@ -756,7 +756,8 @@ public class StreamThreadTest {
             new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST, mockTime);
 
         final AtomicBoolean committed = new AtomicBoolean(false);
-        final TaskManager taskManager = new TaskManager(null,
+        final TaskManager taskManager = new TaskManager(
+            null,
             null,
             null,
             null,
