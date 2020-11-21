@@ -27,8 +27,8 @@ ext {
 }
 
 // Add Scala version
-def defaultScala212Version = '2.12.12'
-def defaultScala213Version = '2.13.3'
+def defaultScala212Version = '2.12.13'
+def defaultScala213Version = '2.13.4'
 if (hasProperty('scalaVersion')) {
   if (scalaVersion == '2.12') {
     versions["scala"] = defaultScala212Version
@@ -101,7 +101,7 @@ versions += [
   powermock: "2.0.9",
   reflections: "0.9.12",
   rocksDB: "5.18.4",
-  scalaCollectionCompat: "2.2.0",
+  scalaCollectionCompat: "2.3.0",
   scalafmt: "1.5.1",
   scalaJava8Compat : "0.9.1",
   scalatest: "3.0.8",
