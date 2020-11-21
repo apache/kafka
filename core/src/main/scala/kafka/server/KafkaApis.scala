@@ -1150,7 +1150,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     // In versions 5 and below, we returned LEADER_NOT_AVAILABLE if a matching listener was not found on the leader.
     // From version 6 onwards, we return LISTENER_NOT_FOUND to enable diagnosis of configuration errors.
     val errorUnavailableListeners = requestVersion >= 6
-    val topicMetadata =
+    var topicMetadata =
       if (authorizedTopics.isEmpty)
         Seq.empty[MetadataResponse.TopicMetadata]
       else {
@@ -1173,6 +1173,16 @@ class KafkaApis(val requestChannel: RequestChannel,
         topicMetadata.foreach(topicData => {
           topicData.authorizedOperations(authorizedOperations(request, new Resource(ResourceType.TOPIC, topicData.topic())))
         })
+    }
+
+    /*
+     * In fix of KAFKA-10606, we stopped auto topic creation on fetch all metadata, which might introduce
+     * UNKNOWN_TOPIC_OR_PARTITION.
+     * But in previous versions, UNKNOWN_TOPIC_OR_PARTITION won't happen on fetch all metadata, so we filter out
+     * those UNKNOWN_TOPIC_OR_PARTITION during fetch all metadata for backward-compatibility.
+     */
+    if (metadataRequest.isAllTopics) {
+      topicMetadata = topicMetadata.filter(_.error().code() != Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
     }
 
     val completeTopicMetadata = topicMetadata ++ unauthorizedForCreateTopicMetadata ++ unauthorizedForDescribeTopicMetadata
