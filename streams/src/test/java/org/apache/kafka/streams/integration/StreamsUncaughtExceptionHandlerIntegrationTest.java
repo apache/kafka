@@ -97,7 +97,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
                 mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
                 mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
                 mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-                mkEntry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2),
+                mkEntry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1),
                 mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
                 mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class)
             )
@@ -121,7 +121,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
             TestUtils.waitForCondition(flag::get, "Handler was called");
             waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.ERROR, DEFAULT_DURATION);
 
-            assertThat(processorValueCollector.size(), equalTo(2));
+            assertThat(processorValueCollector.size(), equalTo(1));
         }
     }
 
@@ -142,12 +142,12 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
     }
 
     @Test
-    public void shouldShutdownApplication() throws Exception {
+    public void shouldShutdownMultipleThreadApplication() throws InterruptedException {
         testShutdownApplication(2);
     }
 
     @Test
-    public void shouldShutdownSingleThreadApplication() throws Exception {
+    public void shouldShutdownSingleThreadApplication() throws InterruptedException {
         testShutdownApplication(1);
     }
 
