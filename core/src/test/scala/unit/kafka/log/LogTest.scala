@@ -557,18 +557,26 @@ class LogTest {
       log.leaderEpochCache.flatMap(_.latestEntry))
     assertEquals(29, log.logEndOffset)
 
-    // Now simulate becoming a leader
-    log.maybeAssignEpochStartOffset(leaderEpoch = 20, startOffset = log.logEndOffset)
-    assertEquals(Some(EpochEntry(epoch = 20, startOffset = 29)),
-      log.leaderEpochCache.flatMap(_.latestEntry))
-    assertEquals(29, log.logEndOffset)
+    def verifyTruncationClearsEpochCache(epoch: Int, truncationOffset: Long): Unit = {
+      // Simulate becoming a leader
+      log.maybeAssignEpochStartOffset(leaderEpoch = epoch, startOffset = log.logEndOffset)
+      assertEquals(Some(EpochEntry(epoch = epoch, startOffset = 29)),
+        log.leaderEpochCache.flatMap(_.latestEntry))
+      assertEquals(29, log.logEndOffset)
 
-    // Now we become the follower and truncate at the current end offset.
-    // The trivial epoch entry at the end of the log should be gone
-    log.truncateTo(log.logEndOffset)
-    assertEquals(Some(EpochEntry(epoch = 19, startOffset = 27)),
-      log.leaderEpochCache.flatMap(_.latestEntry))
-    assertEquals(29, log.logEndOffset)
+      // Now we become the follower and truncate to an offset greater
+      // than or equal to the log end offset. The trivial epoch entry
+      // at the end of the log should be gone
+      log.truncateTo(truncationOffset)
+      assertEquals(Some(EpochEntry(epoch = 19, startOffset = 27)),
+        log.leaderEpochCache.flatMap(_.latestEntry))
+      assertEquals(29, log.logEndOffset)
+    }
+
+    // Truncations greater than or equal to the log end offset should
+    // clear the epoch cache
+    verifyTruncationClearsEpochCache(epoch = 20, truncationOffset = log.logEndOffset)
+    verifyTruncationClearsEpochCache(epoch = 24, truncationOffset = log.logEndOffset + 1)
   }
 
   /**
