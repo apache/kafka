@@ -328,11 +328,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                   ProducerInterceptors<K, V> interceptors,
                   Time time) {
         try {
-            Map<String, Object> userProvidedConfigs = config.originals();
             this.producerConfig = config;
             this.time = time;
 
-            String transactionalId = (String) userProvidedConfigs.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
+            String transactionalId = (String) config.originals().get(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
 
             this.clientId = config.getString(ProducerConfig.CLIENT_ID_CONFIG);
 
@@ -353,12 +352,15 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     MetricsReporter.class,
                     Collections.singletonMap(ProducerConfig.CLIENT_ID_CONFIG, clientId));
             JmxReporter jmxReporter = new JmxReporter();
-            jmxReporter.configure(userProvidedConfigs);
+            jmxReporter.configure(config.originals(Collections.singletonMap(ProducerConfig.CLIENT_ID_CONFIG, clientId)));
             reporters.add(jmxReporter);
             MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
                     config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
             this.metrics = new Metrics(metricConfig, reporters, time, metricsContext);
-            this.partitioner = config.getConfiguredInstance(ProducerConfig.PARTITIONER_CLASS_CONFIG, Partitioner.class);
+            this.partitioner = config.getConfiguredInstance(
+                    ProducerConfig.PARTITIONER_CLASS_CONFIG,
+                    Partitioner.class,
+                    Collections.singletonMap(ProducerConfig.CLIENT_ID_CONFIG, clientId));
             long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
             if (keySerializer == null) {
                 this.keySerializer = config.getConfiguredInstance(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
@@ -377,11 +379,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 this.valueSerializer = valueSerializer;
             }
 
-            // load interceptors and make sure they get clientId
-            userProvidedConfigs.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
-            ProducerConfig configWithClientId = new ProducerConfig(userProvidedConfigs, false);
-            List<ProducerInterceptor<K, V>> interceptorList = (List) configWithClientId.getConfiguredInstances(
-                    ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, ProducerInterceptor.class);
+            List<ProducerInterceptor<K, V>> interceptorList = (List) config.getConfiguredInstances(
+                    ProducerConfig.INTERCEPTOR_CLASSES_CONFIG,
+                    ProducerInterceptor.class,
+                    Collections.singletonMap(ProducerConfig.CLIENT_ID_CONFIG, clientId));
             if (interceptors != null)
                 this.interceptors = interceptors;
             else

@@ -100,6 +100,7 @@ import static java.util.Collections.singletonMap;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -1275,16 +1276,19 @@ public class KafkaProducerTest {
     }
 
     @Test
-    public void serializerShouldSeeGeneratedClientId() {
+    public void configurableObjectsShouldSeeGeneratedClientId() {
         Properties props = new Properties();
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, SerializerForClientId.class.getName());
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, SerializerForClientId.class.getName());
+        props.put(ProducerConfig.PARTITIONER_CLASS_CONFIG, PartitionerForClientId.class.getName());
+        props.put(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, ProducerInterceptorForClientId.class.getName());
 
         KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(props);
-        assertEquals(2, SerializerForClientId.CLIENT_IDS.size());
-        assertEquals(SerializerForClientId.CLIENT_IDS.get(0), producer.getClientId());
-        assertEquals(SerializerForClientId.CLIENT_IDS.get(1), producer.getClientId());
+        assertNotNull(producer.getClientId());
+        assertNotEquals(0, producer.getClientId().length());
+        assertEquals(4, CLIENT_IDS.size());
+        CLIENT_IDS.forEach(id -> assertEquals(id, producer.getClientId()));
         producer.close();
     }
 
@@ -1305,8 +1309,9 @@ public class KafkaProducerTest {
         }
     }
 
+    private static final List<String> CLIENT_IDS = new ArrayList<>();
+
     public static class SerializerForClientId implements Serializer<byte[]> {
-        static final List<String> CLIENT_IDS = new ArrayList<>();
         @Override
         public void configure(Map<String, ?> configs, boolean isKey) {
             CLIENT_IDS.add(configs.get(ProducerConfig.CLIENT_ID_CONFIG).toString());
@@ -1318,4 +1323,42 @@ public class KafkaProducerTest {
         }
     }
 
+    public static class PartitionerForClientId implements Partitioner {
+
+        @Override
+        public int partition(String topic, Object key, byte[] keyBytes, Object value, byte[] valueBytes, Cluster cluster) {
+            return 0;
+        }
+
+        @Override
+        public void close() {
+
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            CLIENT_IDS.add(configs.get(ProducerConfig.CLIENT_ID_CONFIG).toString());
+        }
+    }
+
+    public static class ProducerInterceptorForClientId implements ProducerInterceptor<byte[], byte[]> {
+
+        @Override
+        public ProducerRecord<byte[], byte[]> onSend(ProducerRecord<byte[], byte[]> record) {
+            return record;
+        }
+
+        @Override
+        public void onAcknowledgement(RecordMetadata metadata, Exception exception) {
+        }
+
+        @Override
+        public void close() {
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            CLIENT_IDS.add(configs.get(ProducerConfig.CLIENT_ID_CONFIG).toString());
+        }
+    }
 }
