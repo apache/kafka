@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals.assignment;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task;
+import org.apache.kafka.streams.processor.internals.assignment.ClientState.ConsumerState;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -348,27 +349,19 @@ public class ClientStateTest {
 
         assertThat(client.prevOwnedStatefulTasksByConsumer("c1"), equalTo(mkSet(TASK_0_1, TASK_0_0)));
         assertThat(client.prevOwnedStatefulTasksByConsumer("c2"), equalTo(mkSet(TASK_0_2)));
-//        assertThat(client.prevOwnedActiveTasksByConsumer(), equalTo(
-//                mkMap(
-//                        mkEntry("c1", Collections.singleton(TASK_0_1)),
-//                        mkEntry("c2", Collections.singleton(TASK_0_2))
-//                ))
-//        );
-//        assertThat(client.prevOwnedStandbyByConsumer(), equalTo(
-//                mkMap(
-//                        mkEntry("c1", Collections.singleton(TASK_0_0)),
-//                        mkEntry("c2", Collections.emptySet())
-//                ))
-//        );
         assertThat(client.assignedTasksConsumerStateByConsumer(), equalTo(
-            mkMap(
-                mkEntry("c1", mkMap(
-                    mkEntry(TASK_0_1, ClientState.ConsumerState.PREVIOUS_ACTIVE),
-                    mkEntry(TASK_0_0, ClientState.ConsumerState.PREVIOUS_STANDBY))),
-                mkEntry("c2", mkMap(
-                    mkEntry(TASK_0_2, ClientState.ConsumerState.PREVIOUS_ACTIVE)))
-            ))
-        );
+                mkMap(
+                        mkEntry("c1",
+                                mkMap(
+                                        mkEntry(TASK_0_0, mkSet(ConsumerState.PREVIOUS_STANDBY)),
+                                        mkEntry(TASK_0_1, mkSet(ConsumerState.PREVIOUS_ACTIVE))
+                                )),
+                        mkEntry("c2",
+                                mkMap(
+                                        mkEntry(TASK_0_2, mkSet(ConsumerState.PREVIOUS_ACTIVE))
+                                )
+                        ))
+        ));
     }
 
     @Test
@@ -392,16 +385,16 @@ public class ClientStateTest {
             mkMap(
                 mkEntry("c1",
                     mkMap(
-                        mkEntry(TASK_0_0, ClientState.ConsumerState.ASSIGNED_ACTIVE),
-                        mkEntry(TASK_0_1, ClientState.ConsumerState.ASSIGNED_ACTIVE),
-                        mkEntry(TASK_0_2, ClientState.ConsumerState.ASSIGNED_STANDBY)
+                        mkEntry(TASK_0_0, mkSet(ConsumerState.ASSIGNED_ACTIVE)),
+                        mkEntry(TASK_0_1, mkSet(ConsumerState.ASSIGNED_ACTIVE,
+                                                ConsumerState.REVOKING_ACTIVE)),
+                        mkEntry(TASK_0_2, mkSet(ConsumerState.ASSIGNED_STANDBY))
                     )
                 ),
                 mkEntry("c2",
                     mkMap(
-                        mkEntry(TASK_0_0, ClientState.ConsumerState.ASSIGNED_STANDBY),
-                        mkEntry(TASK_0_1, ClientState.ConsumerState.REVOKING_ACTIVE),
-                        mkEntry(TASK_0_2, ClientState.ConsumerState.ASSIGNED_ACTIVE)
+                        mkEntry(TASK_0_0, mkSet(ConsumerState.ASSIGNED_STANDBY)),
+                        mkEntry(TASK_0_2, mkSet(ConsumerState.ASSIGNED_ACTIVE))
                     )
                 )
             ))

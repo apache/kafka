@@ -24,9 +24,11 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -56,32 +58,15 @@ public class ClientState {
     private final Map<String, Set<TaskId>> consumerToPreviousStatefulTaskIds = new TreeMap<>();
 
     // the following four maps are used only for logging purposes;
-    // TODO KAFKA-10283: we could consider merging them with other book-keeping maps at client-levels
-    //                   so that they would not be inconsistent
-//    private final Map<String, Set<TaskId>> consumerToPreviousActiveTaskIds = new TreeMap<>();
-//    private final Map<String, Set<TaskId>> consumerToAssignedActiveTaskIds = new TreeMap<>();
-//    private final Map<String, Set<TaskId>> consumerToAssignedStandbyTaskIds = new TreeMap<>();
-//    private final Map<String, Set<TaskId>> consumerToRevokingActiveTaskIds = new TreeMap<>();
-
-    private final Map<String, Map<TaskId, ConsumerState>> consumerToTaskIdsConsumerStates = new TreeMap<>();
+    private final Map<String, Map<TaskId, Set<ConsumerState>>> consumerToTaskIdsConsumerStates = new TreeMap<>();
     private int capacity;
 
     public enum ConsumerState {
-        PREVIOUS_STANDBY(0),
-        PREVIOUS_ACTIVE(1),
-        ASSIGNED_STANDBY(2),
-        ASSIGNED_ACTIVE(3),
-        REVOKING_ACTIVE(4);
-
-        private final int stage;
-
-        ConsumerState(final int stage) {
-            this.stage = stage;
-        }
-
-        public boolean isEnabledPreviousStandby() {
-            return this.stage < PREVIOUS_ACTIVE.stage;
-        }
+        PREVIOUS_STANDBY,
+        PREVIOUS_ACTIVE,
+        ASSIGNED_STANDBY,
+        ASSIGNED_ACTIVE,
+        REVOKING_ACTIVE
     }
 
     public ClientState() {
@@ -138,80 +123,46 @@ public class ClientState {
 
     public void assignActiveToConsumer(final TaskId task, final String consumer) {
         consumerToTaskIdsConsumerStates.computeIfAbsent(consumer, k -> new HashMap<>())
-            .put(task, ConsumerState.ASSIGNED_ACTIVE);
+                                       .computeIfAbsent(task, k -> EnumSet.noneOf(ConsumerState.class))
+                                       .add(ConsumerState.ASSIGNED_ACTIVE);
     }
 
     public void assignStandbyToConsumer(final TaskId task, final String consumer) {
         consumerToTaskIdsConsumerStates.computeIfAbsent(consumer, k -> new HashMap<>())
-            .put(task, ConsumerState.ASSIGNED_STANDBY);
+                                       .computeIfAbsent(task, k -> EnumSet.noneOf(ConsumerState.class))
+                                       .add(ConsumerState.ASSIGNED_STANDBY);
     }
 
     public void revokeActiveFromConsumer(final TaskId task, final String consumer) {
         consumerToTaskIdsConsumerStates.computeIfAbsent(consumer, k -> new HashMap<>())
-            .put(task, ConsumerState.REVOKING_ACTIVE);
+                                       .computeIfAbsent(task, k -> EnumSet.noneOf(ConsumerState.class))
+                                       .add(ConsumerState.REVOKING_ACTIVE);
     }
-
-//    public Map<String, Set<TaskId>> prevOwnedActiveTasksByConsumer() {
-//        return consumerToPreviousActiveTaskIds;
-//    }
-//
-//    public Map<String, Set<TaskId>> prevOwnedStandbyByConsumer() {
-//        // standbys are just those stateful tasks minus active tasks
-//        final Map<String, Set<TaskId>> consumerToPreviousStandbyTaskIds = new TreeMap<>();
-//
-//        for (final Map.Entry<String, Set<TaskId>> entry: consumerToPreviousStatefulTaskIds.entrySet()) {
-//            final Set<TaskId> standbyTaskIds = new HashSet<>(entry.getValue());
-//            final Map<TaskId, ConsumerState> taskIdClientAssignedStateMap
-//                = consumerToTaskIdsConsumerStates.get(entry.getKey());
-//            if (taskIdClientAssignedStateMap != null) {
-//                standbyTaskIds.removeAll(taskIdClientAssignedStateMap.values()
-//                    .stream()
-//                    .filter(clientAssigned -> !clientAssigned.isEnabledPreviousStandby())
-//                    .collect(Collectors.toSet()));
-//            }
-//            consumerToPreviousStandbyTaskIds.put(entry.getKey(), standbyTaskIds);
-//        }
-//
-//        return consumerToPreviousStandbyTaskIds;
-//    }
 
     // including both active and standby tasks
     public Set<TaskId> prevOwnedStatefulTasksByConsumer(final String memberId) {
         return consumerToPreviousStatefulTaskIds.get(memberId);
     }
 
-//    public Map<String, Set<TaskId>> assignedActiveTasksByConsumer() {
-//        return consumerToAssignedActiveTaskIds;
-//    }
-//
-//    public Map<String, Set<TaskId>> revokingActiveTasksByConsumer() {
-//        return consumerToRevokingActiveTaskIds;
-//    }
-//
-//    public Map<String, Set<TaskId>> assignedStandbyTasksByConsumer() {
-//        return consumerToAssignedStandbyTaskIds;
-//    }
-
-    public Map<String, Map<TaskId, ConsumerState>> assignedTasksConsumerStateByConsumer() {
-        final Map<String, Map<TaskId, ConsumerState>> taskIdConsumerStateMap = new TreeMap<>(consumerToTaskIdsConsumerStates);
+    public Map<String, Map<TaskId, Set<ConsumerState>>> assignedTasksConsumerStateByConsumer() {
+        final Map<String, Map<TaskId, Set<ConsumerState>>> taskIdConsumerStatesMap = new TreeMap<>(consumerToTaskIdsConsumerStates);
 
         for (final Map.Entry<String, Set<TaskId>> entry : consumerToPreviousStatefulTaskIds.entrySet()) {
             final Set<TaskId> standbyTaskIds = new HashSet<>(entry.getValue());
-            final Map<TaskId, ConsumerState> taskIdClientAssignedStateMap = consumerToTaskIdsConsumerStates.get(entry.getKey());
-            if (taskIdClientAssignedStateMap != null) {
-                standbyTaskIds.removeAll(taskIdClientAssignedStateMap.values()
+            final Map<TaskId, Set<ConsumerState>> taskIdClientAssignedStateMap = consumerToTaskIdsConsumerStates.get(entry.getKey());
+            taskIdConsumerStatesMap.put(entry.getKey(), standbyTaskIds
                     .stream()
-                    .filter(clientAssigned -> !clientAssigned.isEnabledPreviousStandby())
-                    .collect(Collectors.toSet()));
-            }
-
-            final Map<TaskId, ConsumerState> previousStandbyTaskIdMap = standbyTaskIds
-                .stream()
-                .collect(Collectors.toMap(Function.identity(), e -> ConsumerState.PREVIOUS_STANDBY));
-            taskIdConsumerStateMap.put(entry.getKey(), previousStandbyTaskIdMap);
+                    .collect(Collectors.toMap(Function.identity(), taskId -> Optional.ofNullable(taskIdClientAssignedStateMap)
+                                                                                     .map(map -> map.get(taskId))
+                                                                                     .filter(states -> !states.isEmpty())
+                                                                                     .orElseGet(() -> {
+                                                                                         final Set<ConsumerState> states = EnumSet.noneOf(
+                                                                                                 ConsumerState.class);
+                                                                                         states.add(ConsumerState.PREVIOUS_STANDBY);
+                                                                                         return states;
+                                                                                     }))));
         }
-
-        return taskIdConsumerStateMap;
+        return taskIdConsumerStatesMap;
     }
 
     public void assignActive(final TaskId task) {
@@ -438,7 +389,8 @@ public class ClientState {
             if (task != null) {
                 addPreviousActiveTask(task);
                 consumerToTaskIdsConsumerStates.computeIfAbsent(partitionEntry.getValue(), k -> new HashMap<>())
-                    .put(task, ConsumerState.PREVIOUS_ACTIVE);
+                                               .computeIfAbsent(task, k -> EnumSet.noneOf(ConsumerState.class))
+                                               .add(ConsumerState.PREVIOUS_ACTIVE);
             } else {
                 LOG.error("No task found for topic partition {}", tp);
             }
