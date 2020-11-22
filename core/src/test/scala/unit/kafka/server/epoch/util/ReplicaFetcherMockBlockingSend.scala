@@ -25,7 +25,7 @@ import kafka.server.BlockingSend
 import org.apache.kafka.clients.MockClient.MockMetadataUpdater
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, MockClient, NetworkClientUtils}
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{OffsetForLeaderTopicResult, OffsetForLeaderPartitionResult}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.requests.AbstractRequest.Builder
@@ -92,7 +92,7 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Offs
         currentOffsets.forEach((tp, offsetForLeaderPartition) => {
           var topic = data.topics.find(tp.topic)
           if (topic == null) {
-            topic = new OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult()
+            topic = new OffsetForLeaderTopicResult()
               .setTopic(tp.topic)
             data.topics.add(topic)
           }

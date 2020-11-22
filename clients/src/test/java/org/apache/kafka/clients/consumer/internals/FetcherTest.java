@@ -3950,13 +3950,9 @@ public class FetcherTest {
         assertTrue(subscriptions.awaitingValidation(tp0));
         assertTrue(client.hasInFlightRequests());
 
-        client.respond(request -> {
-            OffsetsForLeaderEpochRequest epochRequest = (OffsetsForLeaderEpochRequest) request;
-            OffsetForLeaderPartition partition = offsetForLeaderPartitionMap(epochRequest.data()).get(tp0);
-            return partition != null
-                && partition.currentLeaderEpoch() == epochOne
-                && partition.leaderEpoch() == epochOne;
-        }, prepareOffsetsForLeaderEpochResponse(tp0, Errors.NONE, leaderEpoch, endOffset));
+        client.respond(
+            offsetsForLeaderEpochRequestMatcher(tp0, epochOne, epochOne),
+            prepareOffsetsForLeaderEpochResponse(tp0, Errors.NONE, leaderEpoch, endOffset));
         consumerClient.poll(time.timer(Duration.ZERO));
 
         if (offsetResetStrategy == OffsetResetStrategy.NONE) {
@@ -4007,13 +4003,9 @@ public class FetcherTest {
         subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(5, Optional.of(epochOne), leaderAndEpoch));
         assertTrue(subscriptions.awaitingValidation(tp0));
 
-        client.respond(request -> {
-            OffsetsForLeaderEpochRequest epochRequest = (OffsetsForLeaderEpochRequest) request;
-            OffsetForLeaderPartition partition = offsetForLeaderPartitionMap(epochRequest.data()).get(tp0);
-            return partition != null
-                && partition.currentLeaderEpoch() == epochOne
-                && partition.leaderEpoch() == epochOne;
-        }, prepareOffsetsForLeaderEpochResponse(tp0, Errors.NONE, 0, 0L));
+        client.respond(
+            offsetsForLeaderEpochRequestMatcher(tp0, epochOne, epochOne),
+            prepareOffsetsForLeaderEpochResponse(tp0, Errors.NONE, 0, 0L));
         consumerClient.poll(time.timer(Duration.ZERO));
 
         // The response should be ignored since we were validating a different position.
@@ -4366,6 +4358,21 @@ public class FetcherTest {
     public void testEndOffsetsEmpty() {
         buildFetcher();
         assertEquals(emptyMap(), fetcher.endOffsets(emptyList(), time.timer(5000L)));
+    }
+
+    private MockClient.RequestMatcher offsetsForLeaderEpochRequestMatcher(
+        TopicPartition topicPartition,
+        int currentLeaderEpoch,
+        int leaderEpoch
+    ) {
+        return request -> {
+            OffsetsForLeaderEpochRequest epochRequest = (OffsetsForLeaderEpochRequest) request;
+            OffsetForLeaderPartition partition = offsetForLeaderPartitionMap(epochRequest.data())
+                .get(topicPartition);
+            return partition != null
+                && partition.currentLeaderEpoch() == currentLeaderEpoch
+                && partition.leaderEpoch() == leaderEpoch;
+        };
     }
 
     private OffsetsForLeaderEpochResponse prepareOffsetsForLeaderEpochResponse(

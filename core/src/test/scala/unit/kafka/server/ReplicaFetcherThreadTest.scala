@@ -32,7 +32,6 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, Records, SimpleRecord}
-import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests.{FetchResponse, OffsetsForLeaderEpochRequest}
 import org.apache.kafka.common.utils.SystemTime
@@ -621,8 +620,8 @@ class ReplicaFetcherThreadTest {
     // Define the offsets for the OffsetsForLeaderEpochResponse with undefined epoch to simulate
     // older protocol version
     val offsets = Map(
-      t1p0 -> newOffsetForLeaderPartitionResult(t1p0, OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH, 155),
-      t1p1 -> newOffsetForLeaderPartitionResult(t1p1, OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH, 143)).asJava
+      t1p0 -> newOffsetForLeaderPartitionResult(t1p0, UNDEFINED_EPOCH, 155),
+      t1p1 -> newOffsetForLeaderPartitionResult(t1p1, UNDEFINED_EPOCH, 143)).asJava
 
     // Create the fetcher thread
     val mockNetwork = new ReplicaFetcherMockBlockingSend(offsets, brokerEndPoint, new SystemTime())
@@ -679,7 +678,7 @@ class ReplicaFetcherThreadTest {
 
     //Define the offsets for the OffsetsForLeaderEpochResponse, these are used for truncation
     val offsetsReply = Map(
-      t1p0 -> newOffsetForLeaderPartitionResult(t1p0, OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH, OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET)).asJava
+      t1p0 -> newOffsetForLeaderPartitionResult(t1p0, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)).asJava
 
     //Create the thread
     val mockNetwork = new ReplicaFetcherMockBlockingSend(offsetsReply, brokerEndPoint, new SystemTime())
@@ -730,8 +729,8 @@ class ReplicaFetcherThreadTest {
 
     //Define the offsets for the OffsetsForLeaderEpochResponse, these are used for truncation
     val offsetsReply = mutable.Map(
-      t1p0 -> newOffsetForLeaderPartitionResult(t1p0, NOT_LEADER_OR_FOLLOWER, OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH, OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET),
-      t1p1 -> newOffsetForLeaderPartitionResult(t1p1, UNKNOWN_SERVER_ERROR, OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH, OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET)
+      t1p0 -> newOffsetForLeaderPartitionResult(t1p0, NOT_LEADER_OR_FOLLOWER, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET),
+      t1p1 -> newOffsetForLeaderPartitionResult(t1p1, UNKNOWN_SERVER_ERROR, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
     ).asJava
 
     //Create the thread

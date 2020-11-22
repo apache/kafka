@@ -63,6 +63,9 @@ import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionR
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse
 import org.apache.kafka.common.message.ListOffsetRequestData.ListOffsetPartition
 import org.apache.kafka.common.message.ListOffsetResponseData.{ListOffsetPartitionResponse, ListOffsetTopicResponse}
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetForLeaderTopic}
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{OffsetForLeaderTopicResult, OffsetForLeaderTopicResultCollection, OffsetForLeaderPartitionResult}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ListenerName, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -71,6 +74,7 @@ import org.apache.kafka.common.replica.ClientMetadata
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
+import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType._
@@ -89,9 +93,6 @@ import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.util.{Failure, Success, Try}
 import kafka.coordinator.group.GroupOverview
-import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult
 
 import scala.annotation.nowarn
 
@@ -2602,17 +2603,17 @@ class KafkaApis(val requestChannel: RequestChannel,
     // following a leader change, so we also allow topic describe permission.
     val (authorizedTopics, unauthorizedTopics) =
       if (authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME, logIfDenied = false))
-        (topics, Seq.empty[OffsetForLeaderEpochRequestData.OffsetForLeaderTopic])
+        (topics, Seq.empty[OffsetForLeaderTopic])
       else partitionSeqByAuthorized(request.context, DESCRIBE, TOPIC, topics)(_.topic)
 
     val endOffsetsForAuthorizedPartitions = replicaManager.lastOffsetForLeaderEpoch(authorizedTopics)
     val endOffsetsForUnauthorizedPartitions = unauthorizedTopics.map { offsetForLeaderTopic =>
-      val partitions = offsetForLeaderTopic.partitions().asScala.map { offsetForLeaderPartition =>
-        new OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult()
+      val partitions = offsetForLeaderTopic.partitions.asScala.map { offsetForLeaderPartition =>
+        new OffsetForLeaderPartitionResult()
           .setPartition(offsetForLeaderPartition.partition)
           .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
-          .setLeaderEpoch(OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH)
-          .setEndOffset(OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET)
+          .setLeaderEpoch(UNDEFINED_EPOCH)
+          .setEndOffset(UNDEFINED_EPOCH_OFFSET)
       }
 
       new OffsetForLeaderTopicResult()
@@ -2620,7 +2621,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         .setPartitions(partitions.toList.asJava)
     }
 
-    val endOffsetsForAllTopics = new OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResultCollection(
+    val endOffsetsForAllTopics = new OffsetForLeaderTopicResultCollection(
       (endOffsetsForAuthorizedPartitions ++ endOffsetsForUnauthorizedPartitions).asJava.iterator
     )
 

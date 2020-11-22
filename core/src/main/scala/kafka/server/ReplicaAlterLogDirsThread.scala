@@ -28,7 +28,6 @@ import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.server.QuotaFactory.UnboundedQuota
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.KafkaStorageException
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.Records
@@ -167,7 +166,7 @@ class ReplicaAlterLogDirsThread(name: String,
     partitions.map { case (tp, epochData) =>
       try {
         val endOffset = if (epochData.leaderEpoch == UNDEFINED_EPOCH) {
-          new OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult()
+          new OffsetForLeaderPartitionResult()
             .setPartition(tp.partition)
             .setErrorCode(Errors.NONE.code)
             .setLeaderEpoch(UNDEFINED_EPOCH)
@@ -183,7 +182,7 @@ class ReplicaAlterLogDirsThread(name: String,
       } catch {
         case t: Throwable =>
           warn(s"Error when getting EpochEndOffset for $tp", t)
-          tp -> new OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult()
+          tp -> new OffsetForLeaderPartitionResult()
             .setPartition(tp.partition)
             .setErrorCode(Errors.forException(t).code)
             .setLeaderEpoch(UNDEFINED_EPOCH)

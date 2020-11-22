@@ -34,6 +34,9 @@ import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH;
+import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET;
+
 public class OffsetsForLeaderEpochRequest extends AbstractRequest {
     /**
      * Sentinel replica_id value to indicate a regular consumer rather than another broker
@@ -140,8 +143,8 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
                 topicData.partitions().add(new OffsetForLeaderPartitionResult()
                     .setPartition(partition.partition())
                     .setErrorCode(error.code())
-                    .setLeaderEpoch(OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH)
-                    .setEndOffset(OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET)));
+                    .setLeaderEpoch(UNDEFINED_EPOCH)
+                    .setEndOffset(UNDEFINED_EPOCH_OFFSET)));
             responseData.topics().add(topicData);
         });
 

@@ -43,9 +43,8 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrParti
 import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsPartitionResult
 import org.apache.kafka.common.message.{DescribeLogDirsResponseData, FetchResponseData, LeaderAndIsrResponseData}
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError
-import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetForLeaderTopic}
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{OffsetForLeaderTopicResult, OffsetForLeaderPartitionResult}
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
@@ -1879,8 +1878,8 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   def lastOffsetForLeaderEpoch(
-    requestedEpochInfo: Seq[OffsetForLeaderEpochRequestData.OffsetForLeaderTopic]
-  ): Seq[OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult] = {
+    requestedEpochInfo: Seq[OffsetForLeaderTopic]
+  ): Seq[OffsetForLeaderTopicResult] = {
     requestedEpochInfo.map { offsetForLeaderTopic =>
       val partitions = offsetForLeaderTopic.partitions.asScala.map { offsetForLeaderPartition =>
         val tp = new TopicPartition(offsetForLeaderTopic.topic, offsetForLeaderPartition.partition)
@@ -1898,21 +1897,21 @@ class ReplicaManager(val config: KafkaConfig,
               fetchOnlyFromLeader = true)
 
           case HostedPartition.Offline =>
-            new OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult()
+            new OffsetForLeaderPartitionResult()
               .setPartition(offsetForLeaderPartition.partition)
               .setErrorCode(Errors.KAFKA_STORAGE_ERROR.code)
               .setLeaderEpoch(UNDEFINED_EPOCH)
               .setEndOffset(UNDEFINED_EPOCH_OFFSET)
 
           case HostedPartition.None if metadataCache.contains(tp) =>
-            new OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult()
+            new OffsetForLeaderPartitionResult()
               .setPartition(offsetForLeaderPartition.partition)
               .setErrorCode(Errors.NOT_LEADER_OR_FOLLOWER.code)
               .setLeaderEpoch(UNDEFINED_EPOCH)
               .setEndOffset(UNDEFINED_EPOCH_OFFSET)
 
           case HostedPartition.None =>
-            new OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult()
+            new OffsetForLeaderPartitionResult()
               .setPartition(offsetForLeaderPartition.partition)
               .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
               .setLeaderEpoch(UNDEFINED_EPOCH)

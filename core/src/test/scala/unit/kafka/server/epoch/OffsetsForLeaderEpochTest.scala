@@ -24,8 +24,8 @@ import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server._
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetForLeaderTopic, OffsetForLeaderPartition}
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{OffsetForLeaderTopicResult, OffsetForLeaderPartitionResult}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
@@ -141,10 +141,10 @@ class OffsetsForLeaderEpochTest {
     tp: TopicPartition,
     currentLeaderEpoch: Int,
     leaderEpoch: Int
-  ): OffsetForLeaderEpochRequestData.OffsetForLeaderTopic = {
-    new OffsetForLeaderEpochRequestData.OffsetForLeaderTopic()
+  ): OffsetForLeaderTopic = {
+    new OffsetForLeaderTopic()
       .setTopic(tp.topic)
-      .setPartitions(List(new OffsetForLeaderEpochRequestData.OffsetForLeaderPartition()
+      .setPartitions(List(new OffsetForLeaderPartition()
         .setPartition(tp.partition)
         .setCurrentLeaderEpoch(currentLeaderEpoch)
         .setLeaderEpoch(leaderEpoch)).asJava)
@@ -155,10 +155,10 @@ class OffsetsForLeaderEpochTest {
      error: Errors,
      leaderEpoch: Int,
      endOffset: Long
-  ): OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult = {
-    new OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult()
+  ): OffsetForLeaderTopicResult = {
+    new OffsetForLeaderTopicResult()
       .setTopic(tp.topic)
-      .setPartitions(List(new OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult()
+      .setPartitions(List(new OffsetForLeaderPartitionResult()
         .setPartition(tp.partition)
         .setErrorCode(error.code)
         .setLeaderEpoch(leaderEpoch)

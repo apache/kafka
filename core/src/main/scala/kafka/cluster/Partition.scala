@@ -33,9 +33,8 @@ import kafka.zookeeper.ZooKeeperClientException
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests._
@@ -1288,24 +1287,24 @@ class Partition(val topicPartition: TopicPartition,
    */
   def lastOffsetForLeaderEpoch(currentLeaderEpoch: Optional[Integer],
                                leaderEpoch: Int,
-                               fetchOnlyFromLeader: Boolean): OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult = {
+                               fetchOnlyFromLeader: Boolean): OffsetForLeaderPartitionResult = {
     inReadLock(leaderIsrUpdateLock) {
       val localLogOrError = getLocalLog(currentLeaderEpoch, fetchOnlyFromLeader)
       localLogOrError match {
         case Left(localLog) =>
           localLog.endOffsetForEpoch(leaderEpoch) match {
-            case Some(epochAndOffset) => new OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult()
+            case Some(epochAndOffset) => new OffsetForLeaderPartitionResult()
               .setPartition(partitionId)
-              .setErrorCode(NONE.code)
+              .setErrorCode(Errors.NONE.code)
               .setLeaderEpoch(epochAndOffset.leaderEpoch)
               .setEndOffset(epochAndOffset.offset)
-            case None => new OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult()
+            case None => new OffsetForLeaderPartitionResult()
               .setPartition(partitionId)
-              .setErrorCode(NONE.code)
+              .setErrorCode(Errors.NONE.code)
               .setLeaderEpoch(UNDEFINED_EPOCH)
               .setEndOffset(UNDEFINED_EPOCH_OFFSET)
           }
-        case Right(error) => new OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult()
+        case Right(error) => new OffsetForLeaderPartitionResult()
           .setPartition(partitionId)
           .setErrorCode(error.code)
           .setLeaderEpoch(UNDEFINED_EPOCH)

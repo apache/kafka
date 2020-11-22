@@ -30,7 +30,6 @@ import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.message.ListOffsetRequestData.{ListOffsetPartition, ListOffsetTopic}
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
@@ -357,7 +356,7 @@ class ReplicaFetcherThread(name: String,
         // if we get any unexpected exception, mark all partitions with an error
         val error = Errors.forException(t)
         partitions.map { case (tp, _) =>
-          tp -> new OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult()
+          tp -> new OffsetForLeaderPartitionResult()
             .setPartition(tp.partition)
             .setErrorCode(error.code)
             .setLeaderEpoch(UNDEFINED_EPOCH)

@@ -27,7 +27,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
@@ -42,6 +41,8 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 import static java.util.Collections.singleton;
+import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH;
+import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -686,8 +687,8 @@ public class SubscriptionStateTest {
 
         Optional<LogTruncation> truncationOpt = state.maybeCompleteValidation(tp0, initialPosition,
                 new OffsetForLeaderPartitionResult()
-                    .setLeaderEpoch(OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH)
-                    .setEndOffset(OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET));
+                    .setLeaderEpoch(UNDEFINED_EPOCH)
+                    .setEndOffset(UNDEFINED_EPOCH_OFFSET));
         assertEquals(Optional.empty(), truncationOpt);
         assertFalse(state.awaitingValidation(tp0));
         assertTrue(state.isOffsetResetNeeded(tp0));
@@ -711,8 +712,8 @@ public class SubscriptionStateTest {
 
         Optional<LogTruncation> truncationOpt = state.maybeCompleteValidation(tp0, initialPosition,
                 new OffsetForLeaderPartitionResult()
-                    .setLeaderEpoch(OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH)
-                    .setEndOffset(OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET));
+                    .setLeaderEpoch(UNDEFINED_EPOCH)
+                    .setEndOffset(UNDEFINED_EPOCH_OFFSET));
         assertTrue(truncationOpt.isPresent());
         LogTruncation truncation = truncationOpt.get();
 

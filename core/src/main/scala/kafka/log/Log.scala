@@ -40,7 +40,7 @@ import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
-import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse
+import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET
 import org.apache.kafka.common.requests.ProduceResponse.RecordError
 import org.apache.kafka.common.requests.ListOffsetRequest
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -1277,7 +1277,7 @@ class Log(@volatile private var _dir: File,
   def endOffsetForEpoch(leaderEpoch: Int): Option[OffsetAndEpoch] = {
     leaderEpochCache.flatMap { cache =>
       val (foundEpoch, foundOffset) = cache.endOffsetFor(leaderEpoch)
-      if (foundOffset == OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET)
+      if (foundOffset == UNDEFINED_EPOCH_OFFSET)
         None
       else
         Some(OffsetAndEpoch(foundOffset, foundEpoch))
