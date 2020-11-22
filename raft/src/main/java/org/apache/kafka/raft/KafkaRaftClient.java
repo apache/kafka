@@ -352,7 +352,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         // from the new leader's epoch. Hence we write a control message immediately
         // to ensure there is no delay committing pending data.
         appendLeaderChangeMessage(state, currentTimeMs);
-        updateLeaderEndOffsetAndTimestamp(state, currentTimeMs);
+        // updateLeaderEndOffsetAndTimestamp(state, currentTimeMs);
 
         resetConnections();
 
