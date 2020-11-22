@@ -435,6 +435,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private void transitionToResigned(List<Integer> preferredSuccessors) {
+        fetchPurgatory.completeAllExceptionally(Errors.BROKER_NOT_AVAILABLE.exception("The broker is shutting down"));
         quorum.transitionToResigned(preferredSuccessors);
         resetConnections();
     }
@@ -1804,6 +1805,15 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             channel.wakeup();
         }
         return offset;
+    }
+
+    // For testing only
+    public int numWaitingFetch() {
+        return fetchPurgatory.numWaiting();
+    }
+
+    public QuorumState quorumState() {
+        return quorum;
     }
 
     @Override

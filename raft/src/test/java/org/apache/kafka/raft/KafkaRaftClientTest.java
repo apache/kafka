@@ -31,6 +31,7 @@ import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.requests.DescribeQuorumRequest;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
@@ -205,6 +206,40 @@ public class KafkaRaftClientTest {
         context.pollUntilSend();
         List<RaftRequest.Outbound> retries = context.collectEndQuorumRequests(epoch, Utils.mkSet(nonRespondedId));
         assertEquals(1, retries.size());
+    }
+
+    @Test
+    public void testResignWillCompleteFetchPurgatory() throws Exception {
+        int localId = 0;
+        int otherNodeId = 1;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+                .build();
+
+        context.becomeLeader();
+        assertEquals(OptionalInt.of(localId), context.currentLeader());
+
+        // send fetch request when become leader
+        int epoch = context.currentEpoch();
+        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, context.log.endOffset().offset, epoch, 1000));
+        context.client.poll();
+        assertEquals(context.client.numWaitingFetch(), 1);
+
+        // append some record, but the fetch in purgatory will still fail
+        context.log.appendAsLeader(Collections.singleton(new SimpleRecord("raft".getBytes())), epoch);
+
+        // when transition to resign, all request in fetchPurgatory will fail
+        context.client.shutdown(1000);
+        context.client.poll();
+        assertTrue(context.client.quorumState().isResigned());
+        assertEquals(context.client.numWaitingFetch(), 0);
+        context.assertSentFetchResponse(Errors.NOT_LEADER_OR_FOLLOWER, epoch, OptionalInt.of(localId));
+
+        // shutting down finished
+        context.time.sleep(1000);
+        context.client.poll();
+        assertFalse(context.client.isShuttingDown());
     }
 
     @Test
