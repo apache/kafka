@@ -996,9 +996,19 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 log.debug("Requested client {} to schedule a followup rebalance", clientId);
             }
 
-            log.info("Client {} per-consumer assignment: {}\n",
-                clientId,
-                clientMetadata.state.assignedTasksConsumerStateByConsumer());
+            log.info("Client {} per-consumer assignment\n {}",
+                     clientId,
+                     clientMetadata.state.assignedTasksConsumerStateByConsumer()
+                                         .entrySet()
+                                         .stream()
+                                         .map(e -> "\tconsumer : " + e.getKey() + '\n' +
+                                                   e.getValue().entrySet()
+                                                    .stream()
+                                                    .map(taskIdEntry -> "\ttaskId : " + taskIdEntry.getKey()
+                                                                        + " states : " + taskIdEntry.getValue())
+                                                    .collect(Collectors.joining("\n")))
+                                         .collect(Collectors.joining("\n"))
+            );
         }
 
         if (rebalanceRequired) {
