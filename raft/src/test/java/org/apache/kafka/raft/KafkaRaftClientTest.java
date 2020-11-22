@@ -234,11 +234,12 @@ public class KafkaRaftClientTest {
         context.client.poll();
         assertTrue(context.client.quorumState().isResigned());
         assertEquals(context.client.numWaitingFetch(), 0);
-        context.assertSentFetchResponse(Errors.NOT_LEADER_OR_FOLLOWER, epoch, OptionalInt.of(localId));
+        context.assertSentFetchResponse(Errors.BROKER_NOT_AVAILABLE, epoch, OptionalInt.of(localId));
 
         // shutting down finished
         context.time.sleep(1000);
         context.client.poll();
+        assertFalse(context.client.isRunning());
         assertFalse(context.client.isShuttingDown());
     }
 
