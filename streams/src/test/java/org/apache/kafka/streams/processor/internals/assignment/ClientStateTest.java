@@ -348,17 +348,26 @@ public class ClientStateTest {
 
         assertThat(client.prevOwnedStatefulTasksByConsumer("c1"), equalTo(mkSet(TASK_0_1, TASK_0_0)));
         assertThat(client.prevOwnedStatefulTasksByConsumer("c2"), equalTo(mkSet(TASK_0_2)));
-        assertThat(client.prevOwnedActiveTasksByConsumer(), equalTo(
-                mkMap(
-                        mkEntry("c1", Collections.singleton(TASK_0_1)),
-                        mkEntry("c2", Collections.singleton(TASK_0_2))
-                ))
-        );
-        assertThat(client.prevOwnedStandbyByConsumer(), equalTo(
-                mkMap(
-                        mkEntry("c1", Collections.singleton(TASK_0_0)),
-                        mkEntry("c2", Collections.emptySet())
-                ))
+//        assertThat(client.prevOwnedActiveTasksByConsumer(), equalTo(
+//                mkMap(
+//                        mkEntry("c1", Collections.singleton(TASK_0_1)),
+//                        mkEntry("c2", Collections.singleton(TASK_0_2))
+//                ))
+//        );
+//        assertThat(client.prevOwnedStandbyByConsumer(), equalTo(
+//                mkMap(
+//                        mkEntry("c1", Collections.singleton(TASK_0_0)),
+//                        mkEntry("c2", Collections.emptySet())
+//                ))
+//        );
+        assertThat(client.assignedTasksConsumerStateByConsumer(), equalTo(
+            mkMap(
+                mkEntry("c1", mkMap(
+                    mkEntry(TASK_0_1, ClientState.ConsumerState.PREVIOUS_ACTIVE),
+                    mkEntry(TASK_0_0, ClientState.ConsumerState.PREVIOUS_STANDBY))),
+                mkEntry("c2", mkMap(
+                    mkEntry(TASK_0_2, ClientState.ConsumerState.PREVIOUS_ACTIVE)))
+            ))
         );
     }
 
@@ -379,15 +388,24 @@ public class ClientStateTest {
         // calling it multiple tasks should be idempotent
         client.revokeActiveFromConsumer(TASK_0_1, "c1");
 
-        assertThat(client.assignedActiveTasksByConsumer(), equalTo(mkMap(
-                mkEntry("c1", mkSet(TASK_0_0, TASK_0_1)),
-                mkEntry("c2", mkSet(TASK_0_2))
-        )));
-        assertThat(client.assignedStandbyTasksByConsumer(), equalTo(mkMap(
-                mkEntry("c1", mkSet(TASK_0_2)),
-                mkEntry("c2", mkSet(TASK_0_0))
-        )));
-        assertThat(client.revokingActiveTasksByConsumer(), equalTo(Collections.singletonMap("c1", mkSet(TASK_0_1))));
+        assertThat(client.assignedTasksConsumerStateByConsumer(), equalTo(
+            mkMap(
+                mkEntry("c1",
+                    mkMap(
+                        mkEntry(TASK_0_0, ClientState.ConsumerState.ASSIGNED_ACTIVE),
+                        mkEntry(TASK_0_1, ClientState.ConsumerState.ASSIGNED_ACTIVE),
+                        mkEntry(TASK_0_2, ClientState.ConsumerState.ASSIGNED_STANDBY)
+                    )
+                ),
+                mkEntry("c2",
+                    mkMap(
+                        mkEntry(TASK_0_0, ClientState.ConsumerState.ASSIGNED_STANDBY),
+                        mkEntry(TASK_0_1, ClientState.ConsumerState.REVOKING_ACTIVE),
+                        mkEntry(TASK_0_2, ClientState.ConsumerState.ASSIGNED_ACTIVE)
+                    )
+                )
+            ))
+        );
     }
 
     @Test
