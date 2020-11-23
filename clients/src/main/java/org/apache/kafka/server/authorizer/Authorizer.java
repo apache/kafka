@@ -26,7 +26,6 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.resource.PatternType;
-import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
@@ -34,7 +33,8 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.SecurityUtils;
 
 import java.io.Closeable;
-import java.util.Collections;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -190,10 +190,14 @@ public interface Authorizer extends Configurable, Closeable {
         AclBindingFilter aclFilter = new AclBindingFilter(
             resourceTypeFilter, AccessControlEntryFilter.ANY);
 
-        Set<String> denyLiterals = new HashSet<>();
-        Set<String> denyPrefixes = new HashSet<>();
-        Set<String> allowLiterals = new HashSet<>();
-        Set<String> allowPrefixes = new HashSet<>();
+        final int TYPE_LITERAL = 0;
+        final int TYPE_PREFIX = 1;
+
+        List<Set<String>> deny = new ArrayList<>(
+            Arrays.asList(new HashSet<>(), new HashSet<>()));
+        List<Set<String>> allow = new ArrayList<>(
+            Arrays.asList(new HashSet<>(), new HashSet<>()));
+
         boolean hasWildCardAllow = false;
 
         for (AclBinding binding : acls(aclFilter)) {
@@ -218,10 +222,10 @@ public interface Authorizer extends Configurable, Closeable {
                     case LITERAL:
                         if (binding.pattern().name().equals(ResourcePattern.WILDCARD_RESOURCE))
                             return AuthorizationResult.DENIED;
-                            denyLiterals.add(binding.pattern().name());
+                        deny.get(TYPE_LITERAL).add(binding.pattern().name());
                         break;
                     case PREFIXED:
-                        denyPrefixes.add(binding.pattern().name());
+                        deny.get(TYPE_PREFIX).add(binding.pattern().name());
                         break;
                 }
                 continue;
@@ -236,10 +240,10 @@ public interface Authorizer extends Configurable, Closeable {
                         hasWildCardAllow = true;
                         continue;
                     }
-                    allowLiterals.add(binding.pattern().name());
+                    allow.get(TYPE_LITERAL).add(binding.pattern().name());
                     break;
                 case PREFIXED:
-                    allowPrefixes.add(binding.pattern().name());
+                    allow.get(TYPE_PREFIX).add(binding.pattern().name());
                     break;
             }
         }
@@ -248,34 +252,22 @@ public interface Authorizer extends Configurable, Closeable {
             return AuthorizationResult.ALLOWED;
         }
 
-        for (String allowPrefix : allowPrefixes) {
-            StringBuilder sb = new StringBuilder();
-            boolean hasDominatedDeny = false;
-            for (char ch : allowPrefix.toCharArray()) {
-                sb.append(ch);
-                if (denyPrefixes.contains(sb.toString())) {
-                    hasDominatedDeny = true;
-                    break;
+        for (int allowType : Arrays.asList(TYPE_PREFIX, TYPE_LITERAL)) {
+            for (String allowStr : allow.get(allowType)) {
+                if (allowType == TYPE_LITERAL && deny.get(TYPE_LITERAL).contains(allowStr))
+                    continue;
+                StringBuilder sb = new StringBuilder();
+                boolean hasDominatedDeny = false;
+                for (char ch : allowStr.toCharArray()) {
+                    sb.append(ch);
+                    if (deny.get(TYPE_PREFIX).contains(sb.toString())) {
+                        hasDominatedDeny = true;
+                        break;
+                    }
                 }
+                if (!hasDominatedDeny)
+                    return AuthorizationResult.ALLOWED;
             }
-            if (!hasDominatedDeny)
-                return AuthorizationResult.ALLOWED;
-        }
-
-        for (String allowLiteral : allowLiterals) {
-            if (denyLiterals.contains(allowLiteral))
-                continue;
-            StringBuilder sb = new StringBuilder();
-            boolean hasDominatedDeny = false;
-            for (char ch : allowLiteral.toCharArray()) {
-                sb.append(ch);
-                if (denyPrefixes.contains(sb.toString())) {
-                    hasDominatedDeny = true;
-                    break;
-                }
-            }
-            if (!hasDominatedDeny)
-                return AuthorizationResult.ALLOWED;
         }
 
         return AuthorizationResult.DENIED;
