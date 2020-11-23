@@ -23,13 +23,13 @@ import org.junit.jupiter.api.Test;
 
 class ScramMechanismTest {
 
-  @Test
-  public void testFromMechanismName() {
-    assertEquals(ScramMechanism.UNKNOWN, ScramMechanism.fromMechanismName("UNKNOWN"));
-    assertEquals(ScramMechanism.SCRAM_SHA_256, ScramMechanism.fromMechanismName("SCRAM-SHA-256"));
-    assertEquals(ScramMechanism.SCRAM_SHA_512, ScramMechanism.fromMechanismName("SCRAM-SHA-512"));
-    assertEquals(ScramMechanism.UNKNOWN, ScramMechanism.fromMechanismName("some string"));
-    assertEquals(ScramMechanism.UNKNOWN, ScramMechanism.fromMechanismName("scram-sha-256"));
-  }
+    @Test
+    public void testFromMechanismName() {
+        assertEquals(ScramMechanism.UNKNOWN, ScramMechanism.fromMechanismName("UNKNOWN"));
+        assertEquals(ScramMechanism.SCRAM_SHA_256, ScramMechanism.fromMechanismName("SCRAM-SHA-256"));
+        assertEquals(ScramMechanism.SCRAM_SHA_512, ScramMechanism.fromMechanismName("SCRAM-SHA-512"));
+        assertEquals(ScramMechanism.UNKNOWN, ScramMechanism.fromMechanismName("some string"));
+        assertEquals(ScramMechanism.UNKNOWN, ScramMechanism.fromMechanismName("scram-sha-256"));
+    }
 
 }
