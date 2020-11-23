@@ -110,7 +110,7 @@ versions += [
   shadowPlugin: "6.1.0",
   slf4j: "1.7.30",
   snappy: "1.1.7.7",
-  spotbugs: "4.0.6",
+  spotbugs: "4.1.4",
   spotbugsPlugin: "4.6.0",
   spotlessPlugin: "5.8.2",
   testRetryPlugin: "1.1.9",
