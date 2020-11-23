@@ -53,7 +53,7 @@ class BaseClientQuotaManagerTest {
 
   protected def callback(response: RequestChannel.Response): Unit = {
     // Count how many times this callback is called for notifyThrottlingDone().
-    response match {
+    (response: @unchecked) match {
       case _: StartThrottlingResponse =>
       case _: EndThrottlingResponse => numCallbacks += 1
     }

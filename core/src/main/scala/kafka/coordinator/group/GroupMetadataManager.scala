@@ -589,7 +589,7 @@ class GroupMetadataManager(brokerId: Int,
 
           readAtLeastOneRecord = fetchDataInfo.records.sizeInBytes > 0
 
-          val memRecords = fetchDataInfo.records match {
+          val memRecords = (fetchDataInfo.records: @unchecked) match {
             case records: MemoryRecords => records
             case fileRecords: FileRecords =>
               val sizeInBytes = fileRecords.sizeInBytes
