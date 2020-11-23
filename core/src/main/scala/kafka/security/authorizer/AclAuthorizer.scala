@@ -330,8 +330,12 @@ class AclAuthorizer extends Authorizer with Logging {
     if (op eq AclOperation.UNKNOWN)
       throw new IllegalArgumentException("Unknown operation type")
 
+    val principal = new KafkaPrincipal(
+      requestContext.principal().getPrincipalType,
+      requestContext.principal().getName)
+
     val allowPatterns = matchingPatterns(
-      requestContext.principal().toString,
+      principal.toString,
       requestContext.clientAddress().getHostAddress,
       op,
       resourceType,

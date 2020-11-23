@@ -30,6 +30,8 @@ import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.utils.SecurityUtils;
 
 import java.io.Closeable;
 import java.util.Collections;
@@ -199,7 +201,11 @@ public interface Authorizer extends Configurable, Closeable {
                     && !binding.entry().host().equals("*"))
                 continue;
 
-            if (!binding.entry().principal().equals(requestContext.principal().toString())
+            KafkaPrincipal principal = new KafkaPrincipal(
+                requestContext.principal().getPrincipalType(),
+                requestContext.principal().getName());
+
+            if (!SecurityUtils.parseKafkaPrincipal(binding.entry().principal()).equals(principal)
                     && !binding.entry().principal().equals("User:*"))
                 continue;
 
