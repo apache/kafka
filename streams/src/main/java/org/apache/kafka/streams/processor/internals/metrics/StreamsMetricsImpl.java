@@ -93,7 +93,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     private final Version version;
     private final Deque<MetricName> clientLevelMetrics = new LinkedList<>();
-    private final Map<String, Deque<String>> clientLevelSensors = new HashMap<>();
+    private final Deque<String> clientLevelSensors = new LinkedList<>();
     private final Map<String, Deque<String>> threadLevelSensors = new HashMap<>();
     private final Map<String, Deque<String>> taskLevelSensors = new HashMap<>();
     private final Map<String, Deque<String>> nodeLevelSensors = new HashMap<>();
@@ -223,7 +223,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             final String fullSensorName = key + SENSOR_NAME_DELIMITER + sensorName;
             return Optional.ofNullable(metrics.getSensor(fullSensorName))
                 .orElseGet(() -> {
-                    clientLevelSensors.computeIfAbsent(key, ignored -> new LinkedList<>()).push(fullSensorName);
+                    clientLevelSensors.push(fullSensorName);
                     return metrics.sensor(fullSensorName, recordingLevel, parents);
                 });
         }
@@ -260,7 +260,12 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         return tagMap;
     }
 
-    public final void removeAllClientLevelMetrics() {
+    public final void removeAllClientLevelSensorsAndMetrics() {
+        removeAllClientLevelSensors();
+        removeAllClientLevelMetrics();
+    }
+
+    private final void removeAllClientLevelMetrics() {
         synchronized (clientLevelMetrics) {
             while (!clientLevelMetrics.isEmpty()) {
                 metrics.removeMetric(clientLevelMetrics.pop());
@@ -268,12 +273,10 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         }
     }
 
-    public final void removeAllClientLevelSensors() {
-        final String key = CLIENT_LEVEL_GROUP;
+    private final void removeAllClientLevelSensors() {
         synchronized (clientLevelSensors) {
-            final Deque<String> sensors = clientLevelSensors.remove(key);
-            while (sensors != null && !sensors.isEmpty()) {
-                metrics.removeSensor(sensors.pop());
+            while (!clientLevelSensors.isEmpty()) {
+                metrics.removeSensor(clientLevelSensors.pop());
             }
         }
     }

@@ -201,6 +201,7 @@ public class StreamThread extends Thread {
      */
     State setState(final State newState) {
         final State oldState;
+
         synchronized (stateLock) {
             oldState = state;
 
@@ -221,9 +222,6 @@ public class StreamThread extends Thread {
                 throw new StreamsException(logPrefix + "Unexpected state transition from " + oldState + " to " + newState);
             } else {
                 log.info("State transition from {} to {}", oldState, newState);
-                if (newState == State.DEAD) {
-                    failedStreamThreadSensor.record();
-                }
             }
 
             state = newState;
@@ -575,8 +573,10 @@ public class StreamThread extends Thread {
                             StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
                             EXACTLY_ONCE_BETA);
                 }
+                failedStreamThreadSensor.record();
                 this.streamsUncaughtExceptionHandler.accept(e);
             } catch (final Throwable e) {
+                failedStreamThreadSensor.record();
                 this.streamsUncaughtExceptionHandler.accept(e);
             }
         }

@@ -378,7 +378,7 @@ public class MetricsIntegrationTest {
             builtInMetricsVersion
         );
         checkCacheMetrics(builtInMetricsVersion);
-        verifyFailedStreamThreadsSensor(0.0);
+
         closeApplication();
 
         checkMetricsDeregistration();
@@ -470,15 +470,6 @@ public class MetricsIntegrationTest {
             .collect(Collectors.toList());
         assertThat(metricsList.size(), is(1));
         assertThat(metricsList.get(0).metricValue(), is(numThreads));
-    }
-
-    private void verifyFailedStreamThreadsSensor(final double failedThreads) {
-        final List<Metric> metricsList = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
-            .filter(m -> m.metricName().name().equals(FAILED_STREAM_THREADS) &&
-                m.metricName().group().equals(STREAM_CLIENT_NODE_METRICS))
-            .collect(Collectors.toList());
-        assertThat(metricsList.size(), is(1));
-        assertThat(metricsList.get(0).metricValue(), is(failedThreads));
     }
 
     private void verifyStateMetric(final State state) {

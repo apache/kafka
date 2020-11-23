@@ -124,7 +124,7 @@ public class ClientMetricsTest {
     @Test
     public void shouldGetFailedStreamThreadsSensor() {
         final String name = "failed-stream-threads";
-        final String description = "The number of failed stream threads so far for a given Kafka Streams client";
+        final String description = "The number of failed stream threads since the start of the Kafka Streams client";
         expect(streamsMetrics.clientLevelSensor(name, RecordingLevel.INFO)).andReturn(expectedSensor);
         expect(streamsMetrics.clientLevelTagMap()).andReturn(tagMap);
         StreamsMetricsImpl.addSumMetricToSensor(
@@ -135,9 +135,11 @@ public class ClientMetricsTest {
             false,
             description
         );
+
         replay(StreamsMetricsImpl.class, streamsMetrics);
 
         final Sensor sensor = ClientMetrics.failedStreamThreadSensor(streamsMetrics);
+
         verify(StreamsMetricsImpl.class, streamsMetrics);
         assertThat(sensor, is(expectedSensor));
     }
