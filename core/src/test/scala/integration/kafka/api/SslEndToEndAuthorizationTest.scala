@@ -34,16 +34,13 @@ object SslEndToEndAuthorizationTest {
     // Use full DN as client principal to test special characters in principal
     // Use field from DN as server principal to test custom PrincipalBuilder
     override def build(context: AuthenticationContext): KafkaPrincipal = {
-      context match {
-        case ctx: SslAuthenticationContext =>
-          val peerPrincipal = ctx.session.getPeerPrincipal.getName
-          peerPrincipal match {
-            case Pattern(name, _) =>
-              val principal = if (name == "server") name else peerPrincipal
-              new KafkaPrincipal(KafkaPrincipal.USER_TYPE, principal)
-            case _ =>
-              KafkaPrincipal.ANONYMOUS
-          }
+      val peerPrincipal = context.asInstanceOf[SslAuthenticationContext].session.getPeerPrincipal.getName
+      peerPrincipal match {
+        case Pattern(name, _) =>
+          val principal = if (name == "server") name else peerPrincipal
+          new KafkaPrincipal(KafkaPrincipal.USER_TYPE, principal)
+        case _ =>
+          KafkaPrincipal.ANONYMOUS
       }
     }
   }
