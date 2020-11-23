@@ -824,6 +824,20 @@ project(':core') {
     duplicatesStrategy 'exclude'
   }
 
+  task processMessages(type:JavaExec) {
+    main = "org.apache.kafka.message.MessageGenerator"
+    classpath = project(':generator').sourceSets.main.runtimeClasspath
+    args = [ "-p", "kafka.internals.generated",
+             "-o", "src/generated/java/kafka/internals/generated",
+             "-i", "src/main/resources/common/message",
+             "-m", "MessageDataGenerator"
+    ]
+    inputs.dir("src/main/resources/common/message")
+    outputs.dir("src/generated/java/kafka/internals/generated")
+  }
+
+  compileJava.dependsOn 'processMessages'
+
   task genProtocolErrorDocs(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     main = 'org.apache.kafka.common.protocol.Errors'
@@ -980,6 +994,19 @@ project(':core') {
 
   checkstyle {
     configProperties = checkstyleConfigProperties("import-control-core.xml")
+  }
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/generated/java", "src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/generated/java", "src/test/java"]
+      }
+    }
   }
 }
 

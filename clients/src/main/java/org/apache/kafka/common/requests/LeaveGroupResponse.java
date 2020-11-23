@@ -119,17 +119,11 @@ public class LeaveGroupResponse extends AbstractResponse {
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> combinedErrorCounts = new HashMap<>();
         // Top level error.
-        Errors topLevelError = Errors.forCode(data.errorCode());
-        if (topLevelError != Errors.NONE) {
-            updateErrorCounts(combinedErrorCounts, topLevelError);
-        }
+        updateErrorCounts(combinedErrorCounts, Errors.forCode(data.errorCode()));
 
         // Member level error.
         data.members().forEach(memberResponse -> {
-            Errors memberError = Errors.forCode(memberResponse.errorCode());
-            if (memberError != Errors.NONE) {
-                updateErrorCounts(combinedErrorCounts, memberError);
-            }
+            updateErrorCounts(combinedErrorCounts, Errors.forCode(memberResponse.errorCode()));
         });
         return combinedErrorCounts;
     }

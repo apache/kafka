@@ -16,6 +16,7 @@
   */
 package kafka.server
 
+import java.net.InetAddress
 import java.nio.charset.StandardCharsets
 import java.util.Properties
 import java.util.concurrent.ExecutionException
@@ -34,6 +35,7 @@ import org.apache.kafka.common.metrics.Quota
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Test
+import org.scalatest.Assertions.assertThrows
 
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
@@ -191,6 +193,72 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     assertEquals(Quota.upperBound(20000),  quotaManagers.fetch.quota("overriddenUser", "someclientId"))
     assertEquals(Quota.upperBound(100000),  quotaManagers.produce.quota("ANONYMOUS", "overriddenUserClientId"))
     assertEquals(Quota.upperBound(200000),  quotaManagers.fetch.quota("ANONYMOUS", "overriddenUserClientId"))
+  }
+
+  @Test
+  def testIpHandlerUnresolvableAddress(): Unit = {
+    val configHandler = new IpConfigHandler(null)
+    val props: Properties = new Properties()
+    props.put(DynamicConfig.Ip.IpConnectionRateOverrideProp, "1")
+
+    assertThrows[IllegalArgumentException]{
+      configHandler.processConfigChanges("illegal-hostname", props)
+    }
+  }
+
+  @Test
+  def testIpQuotaInitialization(): Unit = {
+    val server = servers.head
+    val ipOverrideProps = new Properties()
+    ipOverrideProps.put(DynamicConfig.Ip.IpConnectionRateOverrideProp, "10")
+    val ipDefaultProps = new Properties()
+    ipDefaultProps.put(DynamicConfig.Ip.IpConnectionRateOverrideProp, "20")
+    server.shutdown()
+
+    adminZkClient.changeIpConfig(ConfigEntityName.Default, ipDefaultProps)
+    adminZkClient.changeIpConfig("1.2.3.4", ipOverrideProps)
+
+    // Remove config change znodes to force quota initialization only through loading of ip quotas
+    zkClient.getChildren(ConfigEntityChangeNotificationZNode.path).foreach { p =>
+      zkClient.deletePath(ConfigEntityChangeNotificationZNode.path + "/" + p)
+    }
+    server.startup()
+
+    val connectionQuotas = server.socketServer.connectionQuotas
+    assertEquals(10L, connectionQuotas.connectionRateForIp(InetAddress.getByName("1.2.3.4")))
+    assertEquals(20L, connectionQuotas.connectionRateForIp(InetAddress.getByName("2.4.6.8")))
+  }
+
+  @Test
+  def testIpQuotaConfigChange(): Unit = {
+    val ipOverrideProps = new Properties()
+    ipOverrideProps.put(DynamicConfig.Ip.IpConnectionRateOverrideProp, "10")
+    val ipDefaultProps = new Properties()
+    ipDefaultProps.put(DynamicConfig.Ip.IpConnectionRateOverrideProp, "20")
+
+    val overrideQuotaIp = InetAddress.getByName("1.2.3.4")
+    val defaultQuotaIp = InetAddress.getByName("2.3.4.5")
+    adminZkClient.changeIpConfig(ConfigEntityName.Default, ipDefaultProps)
+    adminZkClient.changeIpConfig(overrideQuotaIp.getHostAddress, ipOverrideProps)
+
+    val connectionQuotas = servers.head.socketServer.connectionQuotas
+
+    def verifyConnectionQuota(ip: InetAddress, expectedQuota: Integer) = {
+      TestUtils.retry(10000) {
+        val quota = connectionQuotas.connectionRateForIp(ip)
+        assertEquals(s"Unexpected quota for IP $ip", expectedQuota, quota)
+      }
+    }
+
+    verifyConnectionQuota(overrideQuotaIp, 10)
+    verifyConnectionQuota(defaultQuotaIp, 20)
+
+    val emptyProps = new Properties()
+    adminZkClient.changeIpConfig(overrideQuotaIp.getHostAddress, emptyProps)
+    verifyConnectionQuota(overrideQuotaIp, 20)
+
+    adminZkClient.changeIpConfig(ConfigEntityName.Default, emptyProps)
+    verifyConnectionQuota(overrideQuotaIp, DynamicConfig.Ip.DefaultConnectionCreationRate)
   }
 
   @Test

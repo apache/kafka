@@ -55,7 +55,7 @@ OFFSETS_TOPIC_NUM_PARTITIONS = "offsets.topic.num.partitions"
 
 DELEGATION_TOKEN_MAX_LIFETIME_MS="delegation.token.max.lifetime.ms"
 DELEGATION_TOKEN_EXPIRY_TIME_MS="delegation.token.expiry.time.ms"
-DELEGATION_TOKEN_MASTER_KEY="delegation.token.master.key"
+DELEGATION_TOKEN_SECRET_KEY="delegation.token.secret.key"
 SASL_ENABLED_MECHANISMS="sasl.enabled.mechanisms"
 
 

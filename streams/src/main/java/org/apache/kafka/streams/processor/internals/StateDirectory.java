@@ -31,10 +31,15 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.NoSuchFileException;
+import java.nio.file.Paths;
 import java.nio.file.Path;
+import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
@@ -101,6 +106,15 @@ public class StateDirectory {
         if (hasPersistentStores && stateDirName.startsWith("/tmp")) {
             log.warn("Using /tmp directory in the state.dir property can cause failures with writing the checkpoint file" +
                 " due to the fact that this directory can be cleared by the OS");
+        }
+        final Path basePath = Paths.get(baseDir.getPath());
+        final Path statePath = Paths.get(stateDir.getPath());
+        final Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxr-x---");
+        try {
+            Files.setPosixFilePermissions(basePath, perms);
+            Files.setPosixFilePermissions(statePath, perms);
+        } catch (final IOException e) {
+            log.error("Error changing permissions for the state or base directory {} ", stateDir.getPath(), e);
         }
     }
 

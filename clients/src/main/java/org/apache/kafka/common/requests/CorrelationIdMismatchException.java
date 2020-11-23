@@ -14,20 +14,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.internals;
-
-import org.apache.kafka.common.errors.RetriableException;
+package org.apache.kafka.common.requests;
 
 /**
- * This exception indicates that the produce request sent to the partition leader
- * contains a non-matching producer epoch. When encountering this exception, the ongoing transaction
- * will be aborted and can be retried.
+ * Raised if the correlationId in a response header does not match
+ * the expected value from the request header.
  */
-public class InvalidProducerEpochException extends RetriableException {
+public class CorrelationIdMismatchException extends IllegalStateException {
+    private final int requestCorrelationId;
+    private final int responseCorrelationId;
 
-    private static final long serialVersionUID = 1L;
-
-    public InvalidProducerEpochException(String message) {
+    public CorrelationIdMismatchException(
+        String message,
+        int requestCorrelationId,
+        int responseCorrelationId
+    ) {
         super(message);
+        this.requestCorrelationId = requestCorrelationId;
+        this.responseCorrelationId = responseCorrelationId;
     }
+
+    public int requestCorrelationId() {
+        return requestCorrelationId;
+    }
+
+    public int responseCorrelationId() {
+        return responseCorrelationId;
+    }
+
 }

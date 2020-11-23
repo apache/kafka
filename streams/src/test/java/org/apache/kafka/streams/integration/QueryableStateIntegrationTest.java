@@ -1013,6 +1013,7 @@ public class QueryableStateIntegrationTest {
     }
 
     @Test
+    @Deprecated //A single thread should no longer die
     public void shouldAllowToQueryAfterThreadDied() throws Exception {
         final AtomicBoolean beforeFailure = new AtomicBoolean(true);
         final AtomicBoolean failed = new AtomicBoolean(false);
