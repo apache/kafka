@@ -31,6 +31,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
@@ -72,6 +73,7 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.st
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.greaterThan;
 
 /**
  * End-to-end integration test based on using regex and named topics for creating sources, using
@@ -208,7 +210,10 @@ public class RegexSourceIntegrationTest {
                 .aggregate(() -> "", (k, v, a) -> v)
                 .toStream().to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
 
-            streams = new KafkaStreams(builder.build(), streamsConfiguration);
+            final Topology topology = builder.build();
+            assertThat(topology.describe().subtopologies().size(), greaterThan(1));
+            streams = new KafkaStreams(topology, streamsConfiguration);
+
             startApplicationAndWaitUntilRunning(Collections.singletonList(streams), Duration.ofSeconds(30));
 
             CLUSTER.createTopic(topic2);
