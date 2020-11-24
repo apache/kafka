@@ -55,6 +55,7 @@ import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -67,6 +68,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -189,7 +191,7 @@ public class RegexSourceIntegrationTest {
     }
 
     @Test
-    public void testRegexRecordsAreProcessedAfterReassignment() throws Exception {
+    public void testRegexRecordsAreProcessedAfterNewTopicCreatedWithMultipleSubtopologies() throws Exception {
         final String topic1 = "TEST-TOPIC-1";
         final String topic2 = "TEST-TOPIC-2";
 
@@ -198,9 +200,16 @@ public class RegexSourceIntegrationTest {
 
             final StreamsBuilder builder = new StreamsBuilder();
             final KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("TEST-TOPIC-\\d"));
-            pattern1Stream.to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
+            final KStream<String, String> otherStream = builder.stream(Pattern.compile("not-a-match"));
+
+            pattern1Stream
+                .selectKey((k, v) -> k)
+                .groupByKey()
+                .aggregate(() -> "", (k, v, a) -> v)
+                .toStream().to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
+
             streams = new KafkaStreams(builder.build(), streamsConfiguration);
-            streams.start();
+            startApplicationAndWaitUntilRunning(Collections.singletonList(streams), Duration.ofSeconds(30));
 
             CLUSTER.createTopic(topic2);
 

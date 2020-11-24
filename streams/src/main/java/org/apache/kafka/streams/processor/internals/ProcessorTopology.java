@@ -149,24 +149,30 @@ public class ProcessorTopology {
         return false;
     }
 
-    public void updateSourceTopics(final Map<String, List<String>> sourceTopicsByName) {
-        if (!sourceTopicsByName.keySet().equals(sourceNodesByName.keySet())) {
-            log.error("Set of source nodes do not match: \n" +
-                "sourceNodesByName = {}\n" +
-                "sourceTopicsByName = {}",
-                sourceNodesByName.keySet(), sourceTopicsByName.keySet());
-            throw new IllegalStateException("Tried to update source topics but source nodes did not match");
-        }
+    public void updateSourceTopics(final Map<String, List<String>> allSourceTopicsByNodeName) {
         sourceNodesByTopic.clear();
-        for (final Map.Entry<String, List<String>> sourceEntry : sourceTopicsByName.entrySet()) {
-            final String nodeName = sourceEntry.getKey();
-            for (final String topic : sourceEntry.getValue()) {
-                if (sourceNodesByTopic.containsKey(topic)) {
-                    throw new IllegalStateException("Topic " + topic + " was already registered to source node "
-                        + sourceNodesByTopic.get(topic).name());
-                }
-                sourceNodesByTopic.put(topic, sourceNodesByName.get(nodeName));
+        for (final Map.Entry<String, SourceNode<?, ?, ?, ?>> sourceNodeEntry : sourceNodesByName.entrySet()) {
+            final String sourceNodeName = sourceNodeEntry.getKey();
+            final SourceNode<?, ?, ?, ?> sourceNode = sourceNodeEntry.getValue();
+
+            final List<String> updatedSourceTopics = allSourceTopicsByNodeName.get(sourceNodeName);
+            if (updatedSourceTopics == null) {
+                log.error("Unable to find source node {} in updated topics map {}",
+                          sourceNodeName, allSourceTopicsByNodeName);
+                throw new IllegalStateException("Node " + sourceNodeName + " not found in full topology");
             }
+
+            log.trace("Updating source node {} with new topics {}", sourceNodeName, updatedSourceTopics);
+            for (final String topic : updatedSourceTopics) {
+                if (sourceNodesByTopic.containsKey(topic)) {
+                    log.error("Tried to subscribe topic {} to two nodes when updating topics from {}",
+                              topic, allSourceTopicsByNodeName);
+                    throw new IllegalStateException("Topic " + topic + " was already registered to source node "
+                                                        + sourceNodesByTopic.get(topic).name());
+                }
+                sourceNodesByTopic.put(topic, sourceNode);
+            }
+
         }
     }
 
