@@ -2427,11 +2427,13 @@ class Log(@volatile private var _dir: File,
       info(s"Replacing overflowed segment $segment with split segments $newSegments")
       replaceSegments(newSegments.toList, List(segment))
       newSegments.toList
-    } finally {
-      newSegments.foreach { splitSegment =>
-        splitSegment.close()
-        splitSegment.deleteIfExists()
-      }
+    } catch {
+      case e: Exception =>
+        newSegments.foreach { splitSegment =>
+          splitSegment.close()
+          splitSegment.deleteIfExists()
+        }
+        throw e
     }
   }
 }

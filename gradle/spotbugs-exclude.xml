@@ -125,6 +125,14 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
+        <!-- Scala doesn't have checked exceptions so one cannot catch RuntimeException and rely
+             on the compiler to fail if the code is changed to call a method that throws Exception.
+             Given that, this bug pattern doesn't make sense for Scala code. -->
+        <Class name="kafka.log.Log"/>
+        <Bug pattern="REC_CATCH_EXCEPTION"/>
+    </Match>
+
+    <Match>
         <!-- A spurious null check after inlining by the scalac optimizer confuses spotBugs -->
         <Class name="kafka.tools.StateChangeLogMerger$"/>
         <Bug pattern="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE"/>
