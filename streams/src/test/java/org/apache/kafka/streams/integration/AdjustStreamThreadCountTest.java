@@ -95,9 +95,13 @@ public class AdjustStreamThreadCountTest {
             final int oldThreadCount = kafkaStreams.localThreadsMetadata().size();
 
             final Optional<String> name = kafkaStreams.addStreamThread();
+
             assertThat(name, CoreMatchers.not(Optional.empty()));
-            TestUtils.waitForCondition(() -> kafkaStreams.localThreadsMetadata().stream().sequential().map(ThreadMetadata::threadName).anyMatch(t -> t.equals(name.orElse(""))),
-                "Wait for the thread to be added");
+            TestUtils.waitForCondition(
+                () -> kafkaStreams.localThreadsMetadata().stream().sequential()
+                        .map(ThreadMetadata::threadName).anyMatch(t -> t.equals(name.orElse(""))),
+                "Wait for the thread to be added"
+            );
             assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount + 1));
         }
     }
