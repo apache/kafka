@@ -17,6 +17,8 @@
 
 package org.apache.kafka.clients.admin;
 
+import java.util.Arrays;
+
 /**
  * Representation of a SASL/SCRAM Mechanism.
  *
@@ -27,13 +29,15 @@ public enum ScramMechanism {
     SCRAM_SHA_256((byte) 1),
     SCRAM_SHA_512((byte) 2);
 
+    private static final ScramMechanism[] VALUES = values();
+
     /**
      *
      * @param type the type indicator
      * @return the instance corresponding to the given type indicator, otherwise {@link #UNKNOWN}
      */
     public static ScramMechanism fromType(byte type) {
-        for (ScramMechanism scramMechanism : ScramMechanism.values()) {
+        for (ScramMechanism scramMechanism : VALUES) {
             if (scramMechanism.type == type) {
                 return scramMechanism;
             }
@@ -49,8 +53,10 @@ public enum ScramMechanism {
      *     Salted Challenge Response Authentication Mechanism (SCRAM) SASL and GSS-API Mechanisms, Section 4</a>
      */
     public static ScramMechanism fromMechanismName(String mechanismName) {
-        ScramMechanism retvalFoundMechanism = ScramMechanism.valueOf(mechanismName.replace('-', '_'));
-        return retvalFoundMechanism != null ? retvalFoundMechanism : UNKNOWN;
+        return Arrays.stream(VALUES)
+            .filter(mechanism -> mechanism.mechanismName.equals(mechanismName))
+            .findFirst()
+            .orElse(UNKNOWN);
     }
 
     /**
