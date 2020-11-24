@@ -161,11 +161,12 @@ object ConsumerGroupCommand extends Logging {
     }
     private def getSchema[T <: CsvRecord : ClassTag] = {
       val clazz = implicitly[ClassTag[T]].runtimeClass
-      val fields = {
+
+      val fields =
         if (classOf[CsvRecordWithGroup] == clazz) CsvRecordWithGroup.fields
         else if (classOf[CsvRecordNoGroup] == clazz) CsvRecordNoGroup.fields
         else throw new IllegalStateException(s"Unhandled class $clazz")
-      }
+
       val schema = mapper.schemaFor(clazz).sortedBy(fields: _*)
       schema
     }
