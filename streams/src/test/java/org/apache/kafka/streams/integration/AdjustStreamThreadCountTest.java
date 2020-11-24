@@ -112,4 +112,17 @@ public class AdjustStreamThreadCountTest {
             assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount + 1));
         }
     }
+
+    @Test
+    public void shouldRemoveStreamThread() throws Exception {
+        try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
+            StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
+            final int oldThreadCount = kafkaStreams.localThreadsMetadata().size();
+
+            kafkaStreams.removeStreamThread();
+            produceMessages(0L, inputTopic, "A");
+
+            assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount - 1));
+        }
+    }
 }

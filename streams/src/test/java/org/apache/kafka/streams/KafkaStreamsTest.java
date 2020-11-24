@@ -329,6 +329,8 @@ public class KafkaStreamsTest {
             return null;
         }).anyTimes();
         EasyMock.expect(thread.isRunning()).andReturn(state.get() == StreamThread.State.RUNNING).anyTimes();
+        EasyMock.expect(thread.isAlive()).andReturn(true).anyTimes();
+
         thread.join();
         if (terminable)
             EasyMock.expectLastCall().anyTimes();
@@ -609,6 +611,36 @@ public class KafkaStreamsTest {
         final int oldSize = streams.threads.size();
         assertThat(streams.addStreamThread(), equalTo(Optional.empty()));
         assertThat(streams.threads.size(), equalTo(oldSize));
+    }
+
+    @Test
+    public void shoulRemoveThread() throws InterruptedException {
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
+        streams.start();
+        final int oldSize = streams.threads.size();
+        TestUtils.waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, 15L, "wait until running");
+        assertThat(streams.removeStreamThread(), equalTo(Optional.of("newThread")));
+        assertThat(streams.threads.size(), equalTo(oldSize - 1));
+    }
+
+    @Test
+    public void shouldNotRemoveThread() throws InterruptedException {
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
+        streams.start();
+        streamThreadOne.start();
+        TestUtils.waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, 15L, "wait until running");
+        assertThat(streams.removeStreamThread(), equalTo(Optional.of("newThread")));
+        assertThat(streams.removeStreamThread(), equalTo(Optional.empty()));
+        assertThat(streams.threads.size(), equalTo(0));
+    }
+
+    @Test
+    public void shouldNotRemoveThreadWhenNotRunning() throws InterruptedException {
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
+        assertThat(streams.removeStreamThread(), equalTo(Optional.empty()));
     }
 
     @Test
