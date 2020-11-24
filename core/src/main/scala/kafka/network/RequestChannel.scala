@@ -308,7 +308,7 @@ object RequestChannel extends Logging {
 
   }
 
-  abstract class Response(val request: Request) {
+  sealed abstract class Response(val request: Request) {
 
     def processor: Int = request.processor
 
