@@ -17,39 +17,40 @@
 package org.apache.kafka.streams.kstream.internals.graph;
 
 import java.util.Collection;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.Collections;
 import java.util.regex.Pattern;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 
 abstract public class SourceGraphNode<K, V> extends StreamsGraphNode {
 
-    private Collection<String> topicNames;
-    private Pattern topicPattern;
+    private final Collection<String> topicNames;
+    private final Pattern topicPattern;
     private final ConsumedInternal<K, V> consumedInternal;
 
     public SourceGraphNode(final String nodeName,
-                            final Collection<String> topicNames,
-                            final ConsumedInternal<K, V> consumedInternal) {
+                           final Collection<String> topicNames,
+                           final ConsumedInternal<K, V> consumedInternal) {
         super(nodeName);
 
         this.topicNames = topicNames;
+        this.topicPattern = null;
         this.consumedInternal = consumedInternal;
     }
 
     public SourceGraphNode(final String nodeName,
-                            final Pattern topicPattern,
-                            final ConsumedInternal<K, V> consumedInternal) {
+                           final Pattern topicPattern,
+                           final ConsumedInternal<K, V> consumedInternal) {
 
         super(nodeName);
 
+        this.topicNames = null;
         this.topicPattern = topicPattern;
         this.consumedInternal = consumedInternal;
     }
 
-    public Set<String> topicNames() {
-        return new HashSet<>(topicNames);
+    public Collection<String> topicNames() {
+        return Collections.unmodifiableCollection(topicNames);
     }
 
     public Pattern topicPattern() {
