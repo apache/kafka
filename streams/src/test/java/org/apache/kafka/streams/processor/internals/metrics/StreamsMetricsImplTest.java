@@ -586,10 +586,7 @@ public class StreamsMetricsImplTest {
         setupGetNewSensorTest(metrics, recordingLevel);
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
 
-        final Sensor actualSensor = streamsMetrics.clientLevelSensor(
-            SENSOR_NAME_1,
-            recordingLevel
-        );
+        final Sensor actualSensor = streamsMetrics.clientLevelSensor(SENSOR_NAME_1, recordingLevel);
 
         verify(metrics);
         assertThat(actualSensor, is(equalToObject(sensor)));
@@ -602,10 +599,7 @@ public class StreamsMetricsImplTest {
         setupGetExistingSensorTest(metrics);
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
 
-        final Sensor actualSensor = streamsMetrics.clientLevelSensor(
-            SENSOR_NAME_1,
-            recordingLevel
-        );
+        final Sensor actualSensor = streamsMetrics.clientLevelSensor(SENSOR_NAME_1, recordingLevel);
 
         verify(metrics);
         assertThat(actualSensor, is(equalToObject(sensor)));
@@ -671,12 +665,11 @@ public class StreamsMetricsImplTest {
 
         metrics.removeSensor(sensorKeys.getValues().get(0));
         metrics.removeSensor(sensorKeys.getValues().get(1));
-
         expect(metrics.removeMetric(metricName1)).andReturn(mock(KafkaMetric.class));
         expect(metrics.removeMetric(metricName2)).andReturn(mock(KafkaMetric.class));
         replay(metrics);
-
         streamsMetrics.removeAllClientLevelSensorsAndMetrics();
+
         verify(metrics);
     }
 

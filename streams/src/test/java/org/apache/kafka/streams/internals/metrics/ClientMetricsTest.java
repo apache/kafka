@@ -135,7 +135,6 @@ public class ClientMetricsTest {
             false,
             description
         );
-
         replay(StreamsMetricsImpl.class, streamsMetrics);
 
         final Sensor sensor = ClientMetrics.failedStreamThreadSensor(streamsMetrics);

@@ -218,14 +218,14 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public final Sensor clientLevelSensor(final String sensorName,
                                           final RecordingLevel recordingLevel,
                                           final Sensor... parents) {
-        final String key = CLIENT_LEVEL_GROUP;
         synchronized (clientLevelSensors) {
-            final String fullSensorName = key + SENSOR_NAME_DELIMITER + sensorName;
-            return Optional.ofNullable(metrics.getSensor(fullSensorName))
-                .orElseGet(() -> {
-                    clientLevelSensors.push(fullSensorName);
-                    return metrics.sensor(fullSensorName, recordingLevel, parents);
-                });
+            final String fullSensorName = CLIENT_LEVEL_GROUP + SENSOR_NAME_DELIMITER + sensorName;
+            final Sensor sensor = metrics.getSensor(fullSensorName);
+            if (sensor == null) {
+                clientLevelSensors.push(fullSensorName);
+                return metrics.sensor(fullSensorName, recordingLevel, parents);
+            }
+            return sensor;
         }
     }
 

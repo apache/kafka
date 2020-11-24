@@ -114,7 +114,6 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getSharedAdminClientId;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.easymock.EasyMock.anyObject;
-import static org.easymock.EasyMock.anyInt;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.mock;
@@ -2441,12 +2440,16 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldCountFailedStreamThread() {
-        verifyFailedStreamThread(false);
-        verifyFailedStreamThread(true);
+    public void shouldNotRecordFailedStreamThread() {
+        runAndVerifyFailedStreamThreadRecording(false);
     }
 
-    public void verifyFailedStreamThread(final boolean shouldFail) {
+    @Test
+    public void shouldRecordFailedStreamThread() {
+        runAndVerifyFailedStreamThreadRecording(true);
+    }
+
+    public void runAndVerifyFailedStreamThreadRecording(final boolean shouldFail) {
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
         final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
         final StreamsMetricsImpl streamsMetrics =
@@ -2477,21 +2480,14 @@ public class StreamThreadTest {
                 }
             }
         };
-        expect(taskManager.activeTaskMap()).andReturn(Collections.emptyMap());
-        expect(taskManager.standbyTaskMap()).andReturn(Collections.emptyMap());
-
-        taskManager.process(anyInt(), anyObject());
-        EasyMock.expectLastCall().andThrow(new StreamsException(Thread.currentThread().getName()));
-
         EasyMock.replay(taskManager);
-
         thread.updateThreadMetadata("metadata");
         thread.setState(StreamThread.State.STARTING);
+
         thread.runLoop();
 
         final Metric failedThreads = StreamsTestUtils.getMetricByName(metrics.metrics(), "failed-stream-threads", "stream-metrics");
-
-        assertEquals(shouldFail ? 1.0 : 0.0, failedThreads.metricValue());
+        assertThat(failedThreads.metricValue(), is(shouldFail ? 1.0 : 0.0));
     }
 
     private TaskManager mockTaskManagerCommit(final Consumer<byte[], byte[]> consumer,
