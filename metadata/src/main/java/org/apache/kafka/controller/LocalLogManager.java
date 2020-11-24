@@ -101,6 +101,8 @@ public final class LocalLogManager implements MetaLogManager {
      */
     private static final ByteBuffer EMPTY = ByteBuffer.allocate(0);
 
+    private static final int DEFAULT_LOG_CHECK_INTERVAL_MS = 10;
+
     /**
      * A lock plus the number of threads waiting on it.  Waiters must be updated while
      * holding the lock of the LockRegistry itself.
@@ -778,6 +780,13 @@ public final class LocalLogManager implements MetaLogManager {
     private final LeadershipClaimerThread leadershipClaimerThread;
     private final ScribeThread scribeThread;
     private final WatcherThread watcherThread;
+
+    public LocalLogManager(LogContext logContext,
+                           int nodeId,
+                           String basePath,
+                           String threadNamePrefix) throws IOException {
+        this(logContext, nodeId, basePath, threadNamePrefix, DEFAULT_LOG_CHECK_INTERVAL_MS);
+    }
 
     public LocalLogManager(LogContext logContext,
                            int nodeId,

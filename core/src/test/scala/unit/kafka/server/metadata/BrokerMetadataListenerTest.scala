@@ -20,10 +20,12 @@ package kafka.server.metadata
 import com.yammer.metrics.core.{Gauge, Histogram, MetricName}
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server.KafkaConfig
+import org.apache.kafka.common.metadata.{FenceBrokerRecord, RegisterBrokerRecord}
+import org.apache.kafka.common.protocol.{ApiMessage, ApiMessageAndVersion}
+import org.apache.kafka.common.utils.{LogContext, MockTime, Utils}
+import org.apache.kafka.controller.LocalLogManager
+import org.apache.kafka.test.{TestCondition, TestUtils => KTestUtils}
 import kafka.utils.TestUtils
-import org.apache.kafka.common.metadata.RegisterBrokerRecord
-import org.apache.kafka.common.protocol.ApiMessage
-import org.apache.kafka.common.utils.MockTime
 import org.junit.Assert.{assertEquals, assertTrue, fail}
 import org.junit.{After, Test}
 import org.mockito.Mockito.mock
@@ -202,6 +204,49 @@ class BrokerMetadataListenerTest {
     assertEquals(0, histogram.count())
   }
 
+  @Test
+  def testLocalLogManagerEventQueue(): Unit = {
+    val logdir = KTestUtils.tempDirectory()
+    val leaderEpoch = 0
+    val apiVersion: Short = 1
+    val brokerMetadataProcessor = new MockMetadataProcessor
+    val listener = new BrokerMetadataListener(mock(classOf[KafkaConfig]), new MockTime, List(brokerMetadataProcessor),
+      eventQueueTimeoutMs = 50)
+    val localLogManager = new LocalLogManager(new LogContext("log-manager-broker-test"), 1,
+      logdir.getAbsolutePath, "log-manager")
+    localLogManager.initialize(listener)
+
+    // Invoke dummy APIs
+    val apisInvoked = mutable.ListBuffer[ApiMessageAndVersion]()
+    apisInvoked += new ApiMessageAndVersion(new RegisterBrokerRecord, apiVersion)
+    apisInvoked += new ApiMessageAndVersion(new FenceBrokerRecord, apiVersion)
+
+    // Schedule writes to the metadata log
+    var eventsScheduled = 0
+    localLogManager.scheduleWrite(leaderEpoch, apisInvoked.asJava)
+    eventsScheduled += 1
+
+    // Wait for all events to be queued
+    KTestUtils.waitForCondition(new TestCondition {
+      override def conditionMet(): Boolean = {
+        listener.pendingEvents == eventsScheduled
+      }
+    }, 1000, "Wait for all events to be queued")
+
+    // Process all events
+    listener.drain()
+
+    // Cleanup
+    localLogManager.beginShutdown()
+    localLogManager.close()
+    listener.beginShutdown()
+    listener.close()
+    Utils.delete(logdir)
+
+    // Verify that the events were processed
+    assertTrue(listener.currentMetadataOffset() == apisInvoked.size - 1)
+  }
+
   private class MockMetadataProcessor extends BrokerMetadataProcessor {
     val processed: mutable.Buffer[BrokerMetadataEvent] = mutable.Buffer.empty
 
@@ -209,5 +254,4 @@ class BrokerMetadataListenerTest {
       processed += event
     }
   }
-
 }

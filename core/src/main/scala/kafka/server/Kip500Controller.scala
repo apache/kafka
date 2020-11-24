@@ -151,7 +151,7 @@ class Kip500Controller(val config: KafkaConfig,
         kafkaMetricsReporters ++ metrics.reporters.asScala)
 
       logManager = new LocalLogManager(new LogContext(),
-        config.controllerId, config.metadataLogDir, "", 10)
+        config.controllerId, config.metadataLogDir, "")
 
       tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
       credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)

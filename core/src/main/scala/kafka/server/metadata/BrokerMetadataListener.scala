@@ -124,7 +124,7 @@ class BrokerMetadataListener(
 
   // metrics
   private val eventQueueTimeHist = newHistogram(BrokerMetadataListener.EventQueueTimeMetricName)
-  newGauge(BrokerMetadataListener.EventQueueSizeMetricName, () => queue.size)
+  newGauge(BrokerMetadataListener.EventQueueSizeMetricName, () => pendingEvents)
 
   @volatile private var _currentMetadataOffset: Long = -1
 
@@ -142,6 +142,11 @@ class BrokerMetadataListener(
   // For testing, in cases where we want to block synchronously while we wait for an event
   private[metadata] def poll(): Unit = {
     thread.doWork()
+  }
+
+  // For testing, to verify event queuing
+  private[metadata] def pendingEvents: Int = {
+    queue.size
   }
 
   def close(): Unit = {
