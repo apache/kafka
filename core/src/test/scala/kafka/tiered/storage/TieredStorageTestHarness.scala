@@ -56,6 +56,7 @@ abstract class TieredStorageTestHarness extends IntegrationTestHarness {
     overridingProps.setProperty(KafkaConfig.RemoteLogMetadataManagerProp, classOf[RLMMWithTopicStorage].getName)
     overridingProps.setProperty(KafkaConfig.RemoteLogManagerTaskIntervalMsProp, 1000.toString)
     overridingProps.setProperty(KafkaConfig.RemoteLogMetadataTopicReplicationFactorProp, brokerCount.toString)
+    overridingProps.setProperty(KafkaConfig.RemoteLogMetadataTopicPartitionsProp, "5")
 
     //
     // This configuration ensures inactive log segments are deleted fast enough so that

@@ -20,11 +20,10 @@ package kafka.tiered.storage
 
 import java.util.Optional
 
-import kafka.tiered.storage.TieredStorageTests.{CanFetchFromTieredStorageAfterRecoveryOfLocalSegmentsTest, OffloadAndConsumeFromFollowerTest, OffloadAndConsumeFromLeaderTest}
+import kafka.tiered.storage.TieredStorageTests.{OffloadAndConsumeFromFollowerTest, OffloadAndConsumeFromLeaderTest}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.replica.{ClientMetadata, PartitionView, ReplicaSelector, ReplicaView}
-import org.junit.Assert.assertEquals
 import org.junit.runner.RunWith
 import org.junit.runners.Suite
 import org.junit.runners.Suite.SuiteClasses
@@ -34,7 +33,6 @@ import scala.jdk.CollectionConverters._
 
 @SuiteClasses(Array[Class[_]](
   classOf[OffloadAndConsumeFromLeaderTest],
-  classOf[CanFetchFromTieredStorageAfterRecoveryOfLocalSegmentsTest],
   classOf[OffloadAndConsumeFromFollowerTest]
 ))
 @RunWith(classOf[Suite])
@@ -332,14 +330,7 @@ final class ConsumeFromFollowerInDualBrokerCluster extends ReplicaSelector {
 
     if (Topic.isInternal(topicPartition.topic())) {
       Some(partitionView.leader()).asJava
-
     } else {
-      assertEquals(
-        s"Replicas for the topic-partition $topicPartition need to be assigned to exactly two brokers.",
-        2,
-        partitionView.replicas().size()
-      )
-
       partitionView.replicas().asScala.find(_ != partitionView.leader()).asJava
     }
   }
