@@ -126,32 +126,21 @@ class AlterIsrManagerTest {
   }
 
   @Test
-  def testAuthorizationFailed(): Unit = {
-    val isrs = Seq(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => { }, 0))
-    val manager = testTopLevelError(isrs, Errors.CLUSTER_AUTHORIZATION_FAILED)
-    // On authz error, we log the exception and keep retrying
-    assertFalse(manager.submit(AlterIsrItem(tp0, null, _ => { }, 0)))
-  }
+  def testTopLevelErrors(): Unit = {
+    val errors = Seq(Errors.CLUSTER_AUTHORIZATION_FAILED, Errors.STALE_BROKER_EPOCH, Errors.UNKNOWN_SERVER_ERROR)
+    errors.foreach(error => {
+      val isrs = Seq(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => { }, 0))
+      val manager = testTopLevelError(isrs, error)
+      // Any top-level error, we want to retry, so we don't clear items from the pending map
+      assertFalse(manager.submit(AlterIsrItem(tp0, null, _ => { }, 0)))
+    })
 
-  @Test
-  def testStaleBrokerEpoch(): Unit = {
-    val isrs = Seq(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => { }, 0))
-    val manager = testTopLevelError(isrs, Errors.STALE_BROKER_EPOCH)
-    // On stale broker epoch, we want to retry, so we don't clear items from the pending map
-    assertFalse(manager.submit(AlterIsrItem(tp0, null, _ => { }, 0)))
-  }
-
-  @Test
-  def testOtherErrors(): Unit = {
-    val isrs = Seq(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => { }, 0))
-    val manager = testTopLevelError(isrs, Errors.UNKNOWN_SERVER_ERROR)
-    // On other unexpected errors, we also want to retry
-    assertFalse(manager.submit(AlterIsrItem(tp0, null, _ => { }, 0)))
   }
 
   def testTopLevelError(isrs: Seq[AlterIsrItem], error: Errors): AlterIsrManager = {
     val callbackCapture = EasyMock.newCapture[ControllerRequestCompletionHandler]()
 
+    EasyMock.reset(brokerToController)
     EasyMock.expect(brokerToController.start())
     EasyMock.expect(brokerToController.sendRequest(EasyMock.anyObject(), EasyMock.capture(callbackCapture))).once()
     EasyMock.replay(brokerToController)
