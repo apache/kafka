@@ -935,11 +935,11 @@ public class KafkaStreams implements AutoCloseable {
             synchronized (stateLock) {
                 if (isRunningOrRebalancing()) {
                     streamThread.start();
+                    return Optional.of(streamThread.getName());
                 } else {
                     return Optional.empty();
                 }
             }
-            return Optional.of(streamThread.getName());
         } else {
             return Optional.empty();
         }

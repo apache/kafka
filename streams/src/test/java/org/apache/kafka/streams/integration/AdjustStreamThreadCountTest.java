@@ -17,16 +17,16 @@
 package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
+import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
+import org.hamcrest.CoreMatchers;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
@@ -36,7 +36,7 @@ import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 
 import java.io.IOException;
-import java.util.Collections;
+import java.util.Optional;
 import java.util.Properties;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -72,14 +72,14 @@ public class AdjustStreamThreadCountTest {
         builder.stream(inputTopic);
 
         properties  = mkObjectProperties(
-                mkMap(
-                        mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
-                        mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
-                        mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-                        mkEntry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2),
-                        mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
-                        mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class)
-                )
+            mkMap(
+                mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
+                mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
+                mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
+                mkEntry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2),
+                mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
+                mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class)
+            )
         );
     }
 
@@ -88,27 +88,16 @@ public class AdjustStreamThreadCountTest {
         purgeLocalStreamsState(properties);
     }
 
-    private void produceMessages(final long timestamp, final String streamOneInput, final String msg) {
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-                streamOneInput,
-                Collections.singletonList(new KeyValue<>("1", msg)),
-                TestUtils.producerConfig(
-                        CLUSTER.bootstrapServers(),
-                        StringSerializer.class,
-                        StringSerializer.class,
-                        new Properties()),
-                timestamp);
-    }
-
     @Test
     public void shouldAddStreamThread() throws Exception {
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
             StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
             final int oldThreadCount = kafkaStreams.localThreadsMetadata().size();
 
-            kafkaStreams.addStreamThread();
-            produceMessages(0L, inputTopic, "A");
-
+            final Optional<String> name = kafkaStreams.addStreamThread();
+            assertThat(name, CoreMatchers.not(Optional.empty()));
+            TestUtils.waitForCondition(() -> kafkaStreams.localThreadsMetadata().stream().sequential().map(ThreadMetadata::threadName).anyMatch(t -> t.equals(name.orElse(""))),
+                "Wait for the thread to be added");
             assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount + 1));
         }
     }
