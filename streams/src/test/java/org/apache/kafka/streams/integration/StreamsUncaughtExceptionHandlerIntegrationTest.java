@@ -48,7 +48,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -97,7 +97,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
                 mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
                 mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
                 mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-                mkEntry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1),
+                mkEntry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2),
                 mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
                 mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class)
             )
@@ -112,16 +112,20 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
     @Test
     public void shouldShutdownThreadUsingOldHandler() throws InterruptedException {
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
-            final AtomicBoolean flag = new AtomicBoolean(false);
-            kafkaStreams.setUncaughtExceptionHandler((t, e) -> flag.set(true));
+            final AtomicInteger counter = new AtomicInteger(0);
+            kafkaStreams.setUncaughtExceptionHandler((t, e) -> counter.incrementAndGet());
 
             StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
             produceMessages(0L, inputTopic, "A");
 
-            TestUtils.waitForCondition(flag::get, "Handler was called");
+            // should call the UncaughtExceptionHandler in current thread
+            TestUtils.waitForCondition(() -> counter.get() == 1, "Handler was called 1st time");
+            // should call the UncaughtExceptionHandler after rebalancing to another thread
+            TestUtils.waitForCondition(() -> counter.get() == 2, DEFAULT_DURATION.toMillis(), "Handler was called 2nd time");
+            // the stream should now turn into ERROR state after 2 threads are dead
             waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.ERROR, DEFAULT_DURATION);
 
-            assertThat(processorValueCollector.size(), equalTo(1));
+            assertThat(processorValueCollector.size(), equalTo(2));
         }
     }
 
