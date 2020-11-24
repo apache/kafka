@@ -53,9 +53,8 @@ public enum ScramMechanism {
      *     Salted Challenge Response Authentication Mechanism (SCRAM) SASL and GSS-API Mechanisms, Section 4</a>
      */
     public static ScramMechanism fromMechanismName(String mechanismName) {
-        String normalizedMechanism = mechanismName.replace('-', '_');
         return Arrays.stream(VALUES)
-            .filter(mechanism -> mechanism.name().equals(normalizedMechanism))
+            .filter(mechanism -> mechanism.mechanismName.equals(mechanismName))
             .findFirst()
             .orElse(UNKNOWN);
     }
