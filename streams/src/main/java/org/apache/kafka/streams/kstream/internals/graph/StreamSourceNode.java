@@ -53,7 +53,7 @@ public class StreamSourceNode<K, V> extends SourceGraphNode<K, V> {
                           + "the offset reset policies do not match", this, other);
             throw new TopologyException("Can't configure different offset reset policies on the same input topic(s)");
         }
-        for (final StreamsGraphNode otherChild : other.children()) {
+        for (final GraphNode otherChild : other.children()) {
             other.removeChild(otherChild);
             addChild(otherChild);
         }
