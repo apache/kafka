@@ -332,18 +332,10 @@ class AclAuthorizer extends Authorizer with Logging {
 
     val principal = new KafkaPrincipal(
       requestContext.principal().getPrincipalType,
-      requestContext.principal().getName)
-
-    val allowPatterns = matchingPatterns(
-      principal.toString,
-      requestContext.clientAddress().getHostAddress,
-      op,
-      resourceType,
-      AclPermissionType.ALLOW
-    )
+      requestContext.principal().getName).toString
 
     val denyPatterns = matchingPatterns(
-      requestContext.principal().toString,
+      principal,
       requestContext.clientAddress().getHostAddress,
       op,
       resourceType,
@@ -355,6 +347,14 @@ class AclAuthorizer extends Authorizer with Logging {
 
     if (shouldAllowEveryoneIfNoAclIsFound)
       return AuthorizationResult.ALLOWED
+
+    val allowPatterns = matchingPatterns(
+      principal,
+      requestContext.clientAddress().getHostAddress,
+      op,
+      resourceType,
+      AclPermissionType.ALLOW
+    )
 
     if (allowAny(allowPatterns, denyPatterns))
       return AuthorizationResult.ALLOWED

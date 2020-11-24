@@ -202,7 +202,7 @@ class AuthorizerWrapper(private[kafka] val baseAuthorizer: kafka.security.auth.A
     }
   }
 
-  def denyAllResource(requestContext: AuthorizableRequestContext,
+  private def denyAllResource(requestContext: AuthorizableRequestContext,
                       op: AclOperation,
                       resourceType: ResourceType): Boolean = {
     val resourceTypeFilter = new ResourcePatternFilter(
@@ -218,30 +218,34 @@ class AuthorizerWrapper(private[kafka] val baseAuthorizer: kafka.security.auth.A
     false
   }
 
-  def aceMatched(requestContext: AuthorizableRequestContext,
+  @inline
+  private def aceMatched(requestContext: AuthorizableRequestContext,
                  op: AclOperation,
                  binding: AclBinding): Boolean = {
     (hostMatched(requestContext, binding) && principleMatched(requestContext, binding)
       && operationMatched(op, binding))
   }
 
-  def hostMatched(requestContext: AuthorizableRequestContext,
+  @inline
+  private def hostMatched(requestContext: AuthorizableRequestContext,
                   binding: AclBinding): Boolean =
     (binding.entry().host().equals(requestContext.clientAddress().getHostAddress)
       || binding.entry().host().equals(AclEntry.WildcardHost))
 
-  def principleMatched(requestContext: AuthorizableRequestContext,
+  @inline
+  private def principleMatched(requestContext: AuthorizableRequestContext,
                   binding: AclBinding): Boolean =
     (binding.entry().principal().equals(requestContext.principal().toString)
       || binding.entry().principal().equals(AclEntry.WildcardPrincipal.toString))
 
-
-  def operationMatched(op: AclOperation,
+  @inline
+  private def operationMatched(op: AclOperation,
                        binding: AclBinding): Boolean =
     (binding.entry().operation() == op
       || binding.entry().operation() == AclOperation.ALL)
 
-  def canDenyAll(pattern: ResourcePattern): Boolean =
+  @inline
+  private def canDenyAll(pattern: ResourcePattern): Boolean =
     pattern.patternType() == PatternType.LITERAL && pattern.name().equals(ResourcePattern.WILDCARD_RESOURCE)
 
 }
