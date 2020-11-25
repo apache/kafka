@@ -70,7 +70,7 @@ import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authoriz
 import org.easymock.EasyMock._
 import org.easymock.{Capture, EasyMock, IAnswer, IArgumentMatcher}
 import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.{After, Test}
 
 import scala.annotation.nowarn
 import scala.collection.{Map, Seq, mutable}
@@ -94,8 +94,8 @@ class KafkaApisTest {
   })
   private val zkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
   private val metrics = new Metrics()
-  private val brokerId: Int = 1
-  private var metadataCache: MetadataCache = _
+  private val brokerId = 1
+  private var metadataCache: MetadataCache = new MetadataCache(brokerId)
   private val clientQuotaManager: ClientQuotaManager = EasyMock.createNiceMock(classOf[ClientQuotaManager])
   private val clientRequestQuotaManager: ClientRequestQuotaManager = EasyMock.createNiceMock(classOf[ClientRequestQuotaManager])
   private val clientControllerQuotaManager: ControllerMutationQuotaManager = EasyMock.createNiceMock(classOf[ControllerMutationQuotaManager])
@@ -107,11 +107,6 @@ class KafkaApisTest {
   private val clusterId = "clusterId"
   private val time = new MockTime
   private val clientId = ""
-
-  @Before
-  def setUp(): Unit = {
-    metadataCache = new MetadataCache(brokerId)
-  }
 
   @After
   def tearDown(): Unit = {
