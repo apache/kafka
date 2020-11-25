@@ -36,7 +36,7 @@ jdk:
 
 script:
   - ./gradlew rat
-  - ./gradlew systemTestLibs && /bin/bash ./tests/docker/run_tests.sh
+  - /bin/bash ./tests/docker/run_tests.sh
 
 services:
   - docker
