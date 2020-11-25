@@ -539,15 +539,17 @@ public class SaslClientAuthenticator implements Authenticator {
                     " Users must configure FQDN of kafka brokers when authenticating using SASL and" +
                     " `socketChannel.socket().getInetAddress().getHostName()` must match the hostname in `principal/hostname@realm`";
             }
-            error += " Kafka Client will go to AUTHENTICATION_FAILED state.";
             //Unwrap the SaslException inside `PrivilegedActionException`
             Throwable cause = e.getCause();
             // Treat transient Kerberos errors as non-fatal SaslExceptions that are processed as I/O exceptions
             // and all other failures as fatal SaslAuthenticationException.
-            if (kerberosError != null && kerberosError.retriable())
+            if ((kerberosError != null && kerberosError.retriable()) || (kerberosError == null && KerberosError.isRetriableClientGssException(e))) {
+                error += " Kafka Client will retry.";
                 throw new SaslException(error, cause);
-            else
+            } else {
+                error += " Kafka Client will go to AUTHENTICATION_FAILED state.";
                 throw new SaslAuthenticationException(error, cause);
+            }
         }
     }
 

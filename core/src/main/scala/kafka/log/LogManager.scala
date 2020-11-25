@@ -479,25 +479,30 @@ class LogManager(logDirs: Seq[File],
 
     try {
       for ((dir, dirJobs) <- jobs) {
-        dirJobs.foreach(_.get)
+        val hasErrors = dirJobs.map { future =>
+          Try(future.get) match {
+            case Success(_) => false
+            case Failure(e) =>
+              warn(s"There was an error in one of the threads during LogManager shutdown: ${e.getCause}")
+              true
+          }
+        }.contains(true)
 
-        val logs = logsInDir(localLogsByDir, dir)
+        if (!hasErrors) {
+          val logs = logsInDir(localLogsByDir, dir)
 
-        // update the last flush point
-        debug(s"Updating recovery points at $dir")
-        checkpointRecoveryOffsetsInDir(dir, logs)
+          // update the last flush point
+          debug(s"Updating recovery points at $dir")
+          checkpointRecoveryOffsetsInDir(dir, logs)
 
-        debug(s"Updating log start offsets at $dir")
-        checkpointLogStartOffsetsInDir(dir, logs)
+          debug(s"Updating log start offsets at $dir")
+          checkpointLogStartOffsetsInDir(dir, logs)
 
-        // mark that the shutdown was clean by creating marker file
-        debug(s"Writing clean shutdown marker at $dir")
-        CoreUtils.swallow(Files.createFile(new File(dir, Log.CleanShutdownFile).toPath), this)
+          // mark that the shutdown was clean by creating marker file
+          debug(s"Writing clean shutdown marker at $dir")
+          CoreUtils.swallow(Files.createFile(new File(dir, Log.CleanShutdownFile).toPath), this)
+        }
       }
-    } catch {
-      case e: ExecutionException =>
-        error(s"There was an error in one of the threads during LogManager shutdown: ${e.getCause}")
-        throw e.getCause
     } finally {
       threadPools.foreach(_.shutdown())
       // regardless of whether the close succeeded, we need to unlock the data directories

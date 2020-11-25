@@ -26,16 +26,18 @@ import kafka.security.authorizer.AclAuthorizer
 import kafka.utils.TestUtils
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.message.AddOffsetsToTxnRequestData
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.ListOffsetRequestData.{ListOffsetPartition, ListOffsetTopic}
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopicCollection
 import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
-import org.apache.kafka.common.message._
+import org.apache.kafka.common.message.{AddOffsetsToTxnRequestData, _}
 import org.apache.kafka.common.metrics.{KafkaMetric, Quota, Sensor}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
@@ -43,15 +45,15 @@ import org.apache.kafka.common.quota.ClientQuotaFilter
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.{PatternType, ResourceType => AdminResourceType}
-import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder, KafkaPrincipalSerde, SecurityProtocol}
+import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.utils.{Sanitizer, SecurityUtils}
-import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicPartition}
+import org.apache.kafka.common._
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
-import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
+import scala.jdk.CollectionConverters._
 
 class RequestQuotaTest extends BaseRequestTest {
 
@@ -211,8 +213,16 @@ class RequestQuotaTest extends BaseRequestTest {
   private def requestBuilder(apiKey: ApiKeys): AbstractRequest.Builder[_ <: AbstractRequest] = {
     apiKey match {
         case ApiKeys.PRODUCE =>
-          ProduceRequest.Builder.forCurrentMagic(1, 5000,
-            collection.mutable.Map(tp -> MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("test".getBytes))).asJava)
+          requests.ProduceRequest.forCurrentMagic(new ProduceRequestData()
+            .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
+              Collections.singletonList(new ProduceRequestData.TopicProduceData()
+                .setName(tp.topic()).setPartitionData(Collections.singletonList(
+                new ProduceRequestData.PartitionProduceData()
+                  .setIndex(tp.partition())
+                  .setRecords(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("test".getBytes))))))
+                .iterator))
+            .setAcks(1.toShort)
+            .setTimeoutMs(5000))
 
         case ApiKeys.FETCH =>
           val partitionMap = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
@@ -404,8 +414,14 @@ class RequestQuotaTest extends BaseRequestTest {
           new InitProducerIdRequest.Builder(requestData)
 
         case ApiKeys.OFFSET_FOR_LEADER_EPOCH =>
-          OffsetsForLeaderEpochRequest.Builder.forConsumer(Map(tp ->
-            new OffsetsForLeaderEpochRequest.PartitionData(Optional.of(15), 0)).asJava)
+          val epochs = new OffsetForLeaderTopicCollection()
+          epochs.add(new OffsetForLeaderTopic()
+            .setTopic(tp.topic())
+            .setPartitions(List(new OffsetForLeaderPartition()
+              .setPartition(tp.partition())
+              .setLeaderEpoch(0)
+              .setCurrentLeaderEpoch(15)).asJava))
+          OffsetsForLeaderEpochRequest.Builder.forConsumer(epochs)
 
         case ApiKeys.ADD_PARTITIONS_TO_TXN =>
           new AddPartitionsToTxnRequest.Builder("test-transactional-id", 1, 0, List(tp).asJava)

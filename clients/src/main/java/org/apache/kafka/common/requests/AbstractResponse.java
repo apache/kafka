@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.EnvelopeResponseData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.AlterIsrResponseData;
+import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -49,6 +50,11 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
         return RequestUtils.serialize(header.toStruct(), toStruct(version));
     }
 
+    /**
+     * The number of each type of error in the response, including {@link Errors#NONE} and top-level errors as well as
+     * more specifically scoped errors (such as topic or partition-level errors).
+     * @return A count of errors.
+     */
     public abstract Map<Errors, Integer> errorCounts();
 
     protected Map<Errors, Integer> errorCounts(Errors error) {
@@ -84,11 +90,18 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
      * Parse a response from the provided buffer. The buffer is expected to hold both
      * the {@link ResponseHeader} as well as the response payload.
      */
-    public static AbstractResponse parseResponse(ByteBuffer byteBuffer, RequestHeader header) {
-        ApiKeys apiKey = header.apiKey();
-        short apiVersion = header.apiVersion();
+    public static AbstractResponse parseResponse(ByteBuffer byteBuffer, RequestHeader requestHeader) {
+        ApiKeys apiKey = requestHeader.apiKey();
+        short apiVersion = requestHeader.apiVersion();
 
-        ResponseHeader.parse(byteBuffer, apiKey.responseHeaderVersion(apiVersion));
+        ResponseHeader responseHeader = ResponseHeader.parse(byteBuffer, apiKey.responseHeaderVersion(apiVersion));
+        if (requestHeader.correlationId() != responseHeader.correlationId()) {
+            throw new CorrelationIdMismatchException("Correlation id for response ("
+                + responseHeader.correlationId() + ") does not match request ("
+                + requestHeader.correlationId() + "), request header: " + requestHeader,
+                requestHeader.correlationId(), responseHeader.correlationId());
+        }
+
         Struct struct = apiKey.parseResponse(apiVersion, byteBuffer);
         return AbstractResponse.parseResponse(apiKey, struct, apiVersion);
     }
@@ -96,7 +109,7 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
     public static AbstractResponse parseResponse(ApiKeys apiKey, Struct struct, short version) {
         switch (apiKey) {
             case PRODUCE:
-                return new ProduceResponse(struct);
+                return new ProduceResponse(new ProduceResponseData(struct, version));
             case FETCH:
                 return new FetchResponse<>(new FetchResponseData(struct, version));
             case LIST_OFFSETS:
@@ -142,7 +155,7 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
             case INIT_PRODUCER_ID:
                 return new InitProducerIdResponse(struct, version);
             case OFFSET_FOR_LEADER_EPOCH:
-                return new OffsetsForLeaderEpochResponse(struct);
+                return new OffsetsForLeaderEpochResponse(struct, version);
             case ADD_PARTITIONS_TO_TXN:
                 return new AddPartitionsToTxnResponse(struct, version);
             case ADD_OFFSETS_TO_TXN:

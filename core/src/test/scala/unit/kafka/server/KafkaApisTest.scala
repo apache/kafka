@@ -71,6 +71,7 @@ import org.easymock.{Capture, EasyMock, IAnswer, IArgumentMatcher}
 import org.junit.Assert.{assertArrayEquals, assertEquals, assertNull, assertTrue}
 import org.junit.{After, Test}
 
+import scala.annotation.nowarn
 import scala.collection.{Map, Seq, mutable}
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
@@ -327,8 +328,10 @@ class KafkaApisTest {
 
     assertEquals(Errors.NONE, response.error)
 
-    val innerResponse = AbstractResponse.parseResponse(response.responseData(),
-      requestHeader).asInstanceOf[AlterConfigsResponse]
+    val innerResponse = AbstractResponse.parseResponse(
+      response.responseData(),
+      requestHeader
+    ).asInstanceOf[AlterConfigsResponse]
 
     val responseMap = innerResponse.data.responses().asScala.map { resourceResponse =>
       resourceResponse.resourceName() -> Errors.forCode(resourceResponse.errorCode)
@@ -1232,6 +1235,7 @@ class KafkaApisTest {
     }
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def shouldReplaceProducerFencedWithInvalidProducerEpochInProduceResponse(): Unit = {
     val topic = "topic"
@@ -1245,10 +1249,17 @@ class KafkaApisTest {
 
       val tp = new TopicPartition("topic", 0)
 
-      val produceRequest = ProduceRequest.Builder.forCurrentMagic(1, 5000,
-        collection.mutable.Map(tp -> MemoryRecords.withRecords(CompressionType.NONE,
-          new SimpleRecord("test".getBytes))).asJava)
-      .build(version.toShort)
+      val produceRequest = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
+          Collections.singletonList(new ProduceRequestData.TopicProduceData()
+            .setName(tp.topic()).setPartitionData(Collections.singletonList(
+            new ProduceRequestData.PartitionProduceData()
+              .setIndex(tp.partition())
+              .setRecords(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("test".getBytes))))))
+            .iterator))
+        .setAcks(1.toShort)
+        .setTimeoutMs(5000))
+        .build(version.toShort)
       val request = buildRequest(produceRequest)
 
       EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),

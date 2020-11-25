@@ -66,15 +66,11 @@ public class EndQuorumEpochResponse extends AbstractResponse {
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errors = new HashMap<>();
 
-        Errors topLevelError = Errors.forCode(data.errorCode());
-        if (topLevelError != Errors.NONE) {
-            errors.put(topLevelError, 1);
-        }
+        errors.put(Errors.forCode(data.errorCode()), 1);
 
         for (EndQuorumEpochResponseData.TopicData topicResponse : data.topics()) {
             for (EndQuorumEpochResponseData.PartitionData partitionResponse : topicResponse.partitions()) {
-                errors.compute(Errors.forCode(partitionResponse.errorCode()),
-                    (error, count) -> count == null ? 1 : count + 1);
+                updateErrorCounts(errors, Errors.forCode(partitionResponse.errorCode()));
             }
         }
         return errors;

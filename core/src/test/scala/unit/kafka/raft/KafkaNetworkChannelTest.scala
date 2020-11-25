@@ -207,7 +207,7 @@ class KafkaNetworkChannelTest {
   }
 
   private def extractError(response: ApiMessage): Errors = {
-    val code = response match {
+    val code = (response: @unchecked) match {
       case res: BeginQuorumEpochResponseData => res.errorCode
       case res: EndQuorumEpochResponseData => res.errorCode
       case res: FetchResponseData => res.errorCode

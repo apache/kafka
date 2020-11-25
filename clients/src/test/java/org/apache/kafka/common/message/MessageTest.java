@@ -351,19 +351,19 @@ public final class MessageTest {
         // Version 2 adds optional current leader epoch
         OffsetForLeaderEpochRequestData.OffsetForLeaderPartition partitionDataNoCurrentEpoch =
                 new OffsetForLeaderEpochRequestData.OffsetForLeaderPartition()
-                        .setPartitionIndex(0)
+                        .setPartition(0)
                         .setLeaderEpoch(3);
         OffsetForLeaderEpochRequestData.OffsetForLeaderPartition partitionDataWithCurrentEpoch =
                 new OffsetForLeaderEpochRequestData.OffsetForLeaderPartition()
-                        .setPartitionIndex(0)
+                        .setPartition(0)
                         .setLeaderEpoch(3)
                         .setCurrentLeaderEpoch(5);
+        OffsetForLeaderEpochRequestData data = new OffsetForLeaderEpochRequestData();
+        data.topics().add(new OffsetForLeaderEpochRequestData.OffsetForLeaderTopic()
+                .setTopic("foo")
+                .setPartitions(singletonList(partitionDataNoCurrentEpoch)));
 
-        testAllMessageRoundTrips(new OffsetForLeaderEpochRequestData().setTopics(singletonList(
-                new OffsetForLeaderEpochRequestData.OffsetForLeaderTopic()
-                        .setName("foo")
-                        .setPartitions(singletonList(partitionDataNoCurrentEpoch)))
-        ));
+        testAllMessageRoundTrips(data);
         testAllMessageRoundTripsBeforeVersion((short) 2, partitionDataWithCurrentEpoch, partitionDataNoCurrentEpoch);
         testAllMessageRoundTripsFromVersion((short) 2, partitionDataWithCurrentEpoch);
 
@@ -678,48 +678,47 @@ public final class MessageTest {
         String errorMessage = "global error message";
 
         testAllMessageRoundTrips(new ProduceResponseData()
-                                     .setResponses(singletonList(
-                                         new ProduceResponseData.TopicProduceResponse()
-                                             .setName(topicName)
-                                             .setPartitions(singletonList(
-                                                 new ProduceResponseData.PartitionProduceResponse()
-                                                     .setPartitionIndex(partitionIndex)
-                                                     .setErrorCode(errorCode)
-                                                     .setBaseOffset(baseOffset))))));
+            .setResponses(new ProduceResponseData.TopicProduceResponseCollection(singletonList(
+                new ProduceResponseData.TopicProduceResponse()
+                    .setName(topicName)
+                    .setPartitionResponses(singletonList(
+                        new ProduceResponseData.PartitionProduceResponse()
+                            .setIndex(partitionIndex)
+                            .setErrorCode(errorCode)
+                            .setBaseOffset(baseOffset)))).iterator())));
 
-        Supplier<ProduceResponseData> response =
-            () -> new ProduceResponseData()
-                      .setResponses(singletonList(
-                            new ProduceResponseData.TopicProduceResponse()
-                                .setName(topicName)
-                                .setPartitions(singletonList(
-                                     new ProduceResponseData.PartitionProduceResponse()
-                                         .setPartitionIndex(partitionIndex)
-                                         .setErrorCode(errorCode)
-                                         .setBaseOffset(baseOffset)
-                                         .setLogAppendTimeMs(logAppendTimeMs)
-                                         .setLogStartOffset(logStartOffset)
-                                         .setRecordErrors(singletonList(
-                                             new ProduceResponseData.BatchIndexAndErrorMessage()
-                                                 .setBatchIndex(batchIndex)
-                                                 .setBatchIndexErrorMessage(batchIndexErrorMessage)))
-                                         .setErrorMessage(errorMessage)))))
-                      .setThrottleTimeMs(throttleTimeMs);
+        Supplier<ProduceResponseData> response = () -> new ProduceResponseData()
+                .setResponses(new ProduceResponseData.TopicProduceResponseCollection(singletonList(
+                    new ProduceResponseData.TopicProduceResponse()
+                        .setName(topicName)
+                        .setPartitionResponses(singletonList(
+                             new ProduceResponseData.PartitionProduceResponse()
+                                 .setIndex(partitionIndex)
+                                 .setErrorCode(errorCode)
+                                 .setBaseOffset(baseOffset)
+                                 .setLogAppendTimeMs(logAppendTimeMs)
+                                 .setLogStartOffset(logStartOffset)
+                                 .setRecordErrors(singletonList(
+                                     new ProduceResponseData.BatchIndexAndErrorMessage()
+                                         .setBatchIndex(batchIndex)
+                                         .setBatchIndexErrorMessage(batchIndexErrorMessage)))
+                                 .setErrorMessage(errorMessage)))).iterator()))
+                .setThrottleTimeMs(throttleTimeMs);
 
         for (short version = 0; version <= ApiKeys.PRODUCE.latestVersion(); version++) {
             ProduceResponseData responseData = response.get();
 
             if (version < 8) {
-                responseData.responses().get(0).partitions().get(0).setRecordErrors(Collections.emptyList());
-                responseData.responses().get(0).partitions().get(0).setErrorMessage(null);
+                responseData.responses().iterator().next().partitionResponses().get(0).setRecordErrors(Collections.emptyList());
+                responseData.responses().iterator().next().partitionResponses().get(0).setErrorMessage(null);
             }
 
             if (version < 5) {
-                responseData.responses().get(0).partitions().get(0).setLogStartOffset(-1);
+                responseData.responses().iterator().next().partitionResponses().get(0).setLogStartOffset(-1);
             }
 
             if (version < 2) {
-                responseData.responses().get(0).partitions().get(0).setLogAppendTimeMs(-1);
+                responseData.responses().iterator().next().partitionResponses().get(0).setLogAppendTimeMs(-1);
             }
 
             if (version < 1) {

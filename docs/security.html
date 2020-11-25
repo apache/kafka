@@ -1059,12 +1059,12 @@ keyUsage               = digitalSignature, keyEncipherment</code></pre>
 
         <ol>
         <li><h5 class="anchor-heading"><a id="security_token_management" class="anchor-link"></a><a href="#security_token_management">Token Management</a></h5>
-        <p> A master key/secret is used to generate and verify delegation tokens. This is supplied using config
-            option <tt>delegation.token.master.key</tt>. Same secret key must be configured across all the brokers.
+        <p> A secret is used to generate and verify delegation tokens. This is supplied using config
+            option <tt>delegation.token.secret.key</tt>. The same secret key must be configured across all the brokers.
             If the secret is not set or set to empty string, brokers will disable the delegation token authentication.</p>
 
-        <p>In current implementation, token details are stored in Zookeeper and is suitable for use in Kafka installations where
-            Zookeeper is on a private network. Also currently,  master key/secret is stored as plain text in server.properties
+        <p>In the current implementation, token details are stored in Zookeeper and is suitable for use in Kafka installations where
+            Zookeeper is on a private network. Also currently, this secret is stored as plain text in the server.properties
             config file. We intend to make these configurable in a future Kafka release.</p>
 
         <p>A token has a current life, and a maximum renewable life. By default, tokens must be renewed once every 24 hours

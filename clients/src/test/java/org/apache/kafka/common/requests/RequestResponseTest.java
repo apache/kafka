@@ -131,6 +131,10 @@ import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResp
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopic;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection;
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition;
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic;
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopicCollection;
+import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
 import org.apache.kafka.common.message.RenewDelegationTokenResponseData;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
@@ -196,7 +200,12 @@ import java.util.Set;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
+import static org.apache.kafka.common.protocol.ApiKeys.DESCRIBE_CONFIGS;
 import static org.apache.kafka.common.protocol.ApiKeys.FETCH;
+import static org.apache.kafka.common.protocol.ApiKeys.JOIN_GROUP;
+import static org.apache.kafka.common.protocol.ApiKeys.LIST_GROUPS;
+import static org.apache.kafka.common.protocol.ApiKeys.LIST_OFFSETS;
+import static org.apache.kafka.common.protocol.ApiKeys.SYNC_GROUP;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.apache.kafka.test.TestUtils.toBuffer;
 import static org.junit.Assert.assertEquals;
@@ -626,9 +635,34 @@ public class RequestResponseTest {
     }
 
     @Test
+    public void testPartitionSize() {
+        TopicPartition tp0 = new TopicPartition("test", 0);
+        TopicPartition tp1 = new TopicPartition("test", 1);
+        MemoryRecords records0 = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2,
+            CompressionType.NONE, new SimpleRecord("woot".getBytes()));
+        MemoryRecords records1 = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2,
+            CompressionType.NONE, new SimpleRecord("woot".getBytes()), new SimpleRecord("woot".getBytes()));
+        ProduceRequest request = ProduceRequest.forMagic(RecordBatch.MAGIC_VALUE_V2,
+                new ProduceRequestData()
+                        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Arrays.asList(
+                                new ProduceRequestData.TopicProduceData().setName(tp0.topic()).setPartitionData(
+                                        Collections.singletonList(new ProduceRequestData.PartitionProduceData().setIndex(tp0.partition()).setRecords(records0))),
+                                new ProduceRequestData.TopicProduceData().setName(tp1.topic()).setPartitionData(
+                                        Collections.singletonList(new ProduceRequestData.PartitionProduceData().setIndex(tp1.partition()).setRecords(records1))))
+                                .iterator()))
+                        .setAcks((short) 1)
+                        .setTimeoutMs(5000)
+                        .setTransactionalId("transactionalId"))
+            .build((short) 3);
+        assertEquals(2, request.partitionSizes().size());
+        assertEquals(records0.sizeInBytes(), (int) request.partitionSizes().get(tp0));
+        assertEquals(records1.sizeInBytes(), (int) request.partitionSizes().get(tp1));
+    }
+
+    @Test
     public void produceRequestToStringTest() {
         ProduceRequest request = createProduceRequest(ApiKeys.PRODUCE.latestVersion());
-        assertEquals(1, request.partitionRecordsOrFail().size());
+        assertEquals(1, request.dataOrException().topicData().size());
         assertFalse(request.toString(false).contains("partitionSizes"));
         assertTrue(request.toString(false).contains("numPartitions=1"));
         assertTrue(request.toString(true).contains("partitionSizes"));
@@ -636,8 +670,8 @@ public class RequestResponseTest {
 
         request.clearPartitionRecords();
         try {
-            request.partitionRecordsOrFail();
-            fail("partitionRecordsOrFail should fail after clearPartitionRecords()");
+            request.dataOrException();
+            fail("dataOrException should fail after clearPartitionRecords()");
         } catch (IllegalStateException e) {
             // OK
         }
@@ -649,10 +683,11 @@ public class RequestResponseTest {
         assertFalse(request.toString(true).contains("numPartitions"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void produceRequestGetErrorResponseTest() {
         ProduceRequest request = createProduceRequest(ApiKeys.PRODUCE.latestVersion());
-        Set<TopicPartition> partitions = new HashSet<>(request.partitionRecordsOrFail().keySet());
+        Set<TopicPartition> partitions = new HashSet<>(request.partitionSizes().keySet());
 
         ProduceResponse errorResponse = (ProduceResponse) request.getErrorResponse(new NotEnoughReplicasException());
         assertEquals(partitions, errorResponse.responses().keySet());
@@ -1389,17 +1424,27 @@ public class RequestResponseTest {
         return new OffsetFetchResponse(Errors.NONE, responseData);
     }
 
+    @SuppressWarnings("deprecation")
     private ProduceRequest createProduceRequest(int version) {
         if (version < 2)
             throw new IllegalArgumentException("Produce request version 2 is not supported");
-
         byte magic = version == 2 ? RecordBatch.MAGIC_VALUE_V1 : RecordBatch.MAGIC_VALUE_V2;
         MemoryRecords records = MemoryRecords.withRecords(magic, CompressionType.NONE, new SimpleRecord("woot".getBytes()));
-        Map<TopicPartition, MemoryRecords> produceData = Collections.singletonMap(new TopicPartition("test", 0), records);
-        return ProduceRequest.Builder.forMagic(magic, (short) 1, 5000, produceData, "transactionalId")
+        return ProduceRequest.forMagic(magic,
+                new ProduceRequestData()
+                        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
+                                new ProduceRequestData.TopicProduceData()
+                                        .setName("test")
+                                        .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
+                                                .setIndex(0)
+                                                .setRecords(records)))).iterator()))
+                        .setAcks((short) 1)
+                        .setTimeoutMs(5000)
+                        .setTransactionalId(version >= 3 ? "transactionalId" : null))
                 .build((short) version);
     }
 
+    @SuppressWarnings("deprecation")
     private ProduceResponse createProduceResponse() {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
         responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE,
@@ -1407,6 +1452,7 @@ public class RequestResponseTest {
         return new ProduceResponse(responseData, 0);
     }
 
+    @SuppressWarnings("deprecation")
     private ProduceResponse createProduceResponseWithErrorMessage() {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
         responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE,
@@ -1725,6 +1771,9 @@ public class RequestResponseTest {
         data.responses().add(new DeletableTopicResult()
             .setName("t3")
             .setErrorCode(Errors.NOT_CONTROLLER.code()));
+        data.responses().add(new DeletableTopicResult()
+                .setName("t4")
+                .setErrorCode(Errors.NONE.code()));
         return new DeleteTopicsResponse(data);
     }
 
@@ -1755,8 +1804,31 @@ public class RequestResponseTest {
         return epochs;
     }
 
+    private OffsetForLeaderTopicCollection createOffsetForLeaderTopicCollection() {
+        OffsetForLeaderTopicCollection topics = new OffsetForLeaderTopicCollection();
+        topics.add(new OffsetForLeaderTopic()
+            .setTopic("topic1")
+            .setPartitions(Arrays.asList(
+                new OffsetForLeaderPartition()
+                    .setPartition(0)
+                    .setLeaderEpoch(1)
+                    .setCurrentLeaderEpoch(0),
+                new OffsetForLeaderPartition()
+                    .setPartition(1)
+                    .setLeaderEpoch(1)
+                    .setCurrentLeaderEpoch(0))));
+        topics.add(new OffsetForLeaderTopic()
+            .setTopic("topic2")
+            .setPartitions(Arrays.asList(
+                new OffsetForLeaderPartition()
+                    .setPartition(2)
+                    .setLeaderEpoch(3)
+                    .setCurrentLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH))));
+        return topics;
+    }
+
     private OffsetsForLeaderEpochRequest createLeaderEpochRequestForConsumer() {
-        Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData> epochs = createOffsetForLeaderEpochPartitionData();
+        OffsetForLeaderTopicCollection epochs = createOffsetForLeaderTopicCollection();
         return OffsetsForLeaderEpochRequest.Builder.forConsumer(epochs).build();
     }
 
@@ -1922,7 +1994,7 @@ public class RequestResponseTest {
         return new CreateAclsResponse(new CreateAclsResponseData().setResults(asList(
             new CreateAclsResponseData.AclCreationResult(),
             new CreateAclsResponseData.AclCreationResult()
-                .setErrorCode(Errors.INVALID_REQUEST.code())
+                .setErrorCode(Errors.NONE.code())
                 .setErrorMessage("Foo bar"))));
     }
 
@@ -2242,6 +2314,7 @@ public class RequestResponseTest {
         String topic = "myTopic";
         List<ReplicaElectionResult> electionResults = new ArrayList<>();
         ReplicaElectionResult electionResult = new ReplicaElectionResult();
+        electionResults.add(electionResult);
         electionResult.setTopic(topic);
         // Add partition 1 result
         PartitionResult partitionResult = new PartitionResult();
@@ -2282,7 +2355,7 @@ public class RequestResponseTest {
         data.responses().add(new AlterConfigsResourceResponse()
                 .setResourceName("testtopic")
                 .setResourceType(ResourceType.TOPIC.code())
-                .setErrorCode(Errors.INVALID_REQUEST.code())
+                .setErrorCode(Errors.NONE.code())
                 .setErrorMessage("Duplicate Keys"));
         return new IncrementalAlterConfigsResponse(data);
     }
@@ -2307,7 +2380,7 @@ public class RequestResponseTest {
                         .setPartitions(Collections.singletonList(
                                 new AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse()
                                         .setPartitionIndex(0)
-                                        .setErrorCode(Errors.NO_REASSIGNMENT_IN_PROGRESS.code())
+                                        .setErrorCode(Errors.NONE.code())
                                         .setErrorMessage("No reassignment is in progress for topic topic partition 0")
                                 )
                         )
@@ -2405,7 +2478,7 @@ public class RequestResponseTest {
                         .setPartitions(Collections.singletonList(
                                 new AlterReplicaLogDirsResponseData.AlterReplicaLogDirPartitionResult()
                                         .setPartitionIndex(0)
-                                        .setErrorCode(Errors.LOG_DIR_NOT_FOUND.code())
+                                        .setErrorCode(Errors.NONE.code())
                                 )
                         )
         );
@@ -2432,5 +2505,59 @@ public class RequestResponseTest {
     private AlterClientQuotasResponse createAlterClientQuotasResponse() {
         ClientQuotaEntity entity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, "user"));
         return new AlterClientQuotasResponse(Collections.singletonMap(entity, ApiError.NONE), 0);
+    }
+
+    /**
+     * Check that all error codes in the response get included in {@link AbstractResponse#errorCounts()}.
+     */
+    @Test
+    public void testErrorCountsIncludesNone() {
+        assertEquals(Integer.valueOf(1), createAddOffsetsToTxnResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createAddPartitionsToTxnResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createAlterClientQuotasResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createAlterConfigsResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(2), createAlterPartitionReassignmentsResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createAlterReplicaLogDirsResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createApiVersionResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createControlledShutdownResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(2), createCreateAclsResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createCreatePartitionsResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createCreateTokenResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createCreateTopicResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createDeleteAclsResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createDeleteGroupsResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createDeleteTopicsResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createDescribeAclsResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createDescribeClientQuotasResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(2), createDescribeConfigsResponse(DESCRIBE_CONFIGS.latestVersion()).errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createDescribeGroupResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createDescribeTokenResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(2), createElectLeadersResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createEndTxnResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createExpireTokenResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(3), createFetchResponse(123).errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createFindCoordinatorResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createHeartBeatResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createIncrementalAlterConfigsResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createJoinGroupResponse(JOIN_GROUP.latestVersion()).errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(2), createLeaderAndIsrResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(3), createLeaderEpochResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createLeaveGroupResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createListGroupsResponse(LIST_GROUPS.latestVersion()).errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createListOffsetResponse(LIST_OFFSETS.latestVersion()).errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createListPartitionReassignmentsResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(3), createMetadataResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createOffsetCommitResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(2), createOffsetDeleteResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(3), createOffsetFetchResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createProduceResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createRenewTokenResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createSaslAuthenticateResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createSaslHandshakeResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(2), createStopReplicaResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createSyncGroupResponse(SYNC_GROUP.latestVersion()).errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createTxnOffsetCommitResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createUpdateMetadataResponse().errorCounts().get(Errors.NONE));
+        assertEquals(Integer.valueOf(1), createWriteTxnMarkersResponse().errorCounts().get(Errors.NONE));
     }
 }

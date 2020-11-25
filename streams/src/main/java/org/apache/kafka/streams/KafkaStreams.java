@@ -160,6 +160,7 @@ public class KafkaStreams implements AutoCloseable {
     private final StreamsMetricsImpl streamsMetrics;
     private final ProcessorTopology taskTopology;
     private final ProcessorTopology globalTaskTopology;
+    private final long totalCacheSize;
 
     GlobalStreamThread globalStreamThread;
     private KafkaStreams.StateListener stateListener;
@@ -349,7 +350,7 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     /**
-     * Set the handler invoked when a {@link StreamsConfig#NUM_STREAM_THREADS_CONFIG internal thread} abruptly
+     * Set the handler invoked when an internal {@link StreamsConfig#NUM_STREAM_THREADS_CONFIG stream thread} abruptly
      * terminates due to an uncaught exception.
      *
      * @param uncaughtExceptionHandler the uncaught exception handler for all internal threads; {@code null} deletes the current handler
@@ -378,13 +379,12 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     /**
-     * Set the handler invoked when an {@link StreamsConfig#NUM_STREAM_THREADS_CONFIG internal thread}
+     * Set the handler invoked when an internal {@link StreamsConfig#NUM_STREAM_THREADS_CONFIG stream thread}
      * throws an unexpected exception.
      * These might be exceptions indicating rare bugs in Kafka Streams, or they
-     * might be exceptions thrown by your code, for example a NullPointerException thrown from your processor
-     * logic.
+     * might be exceptions thrown by your code, for example a NullPointerException thrown from your processor logic.
      * The handler will execute on the thread that produced the exception.
-     * In order to get the thread that threw the exception, Thread.currentThread().
+     * In order to get the thread that threw the exception, use {@code Thread.currentThread()}.
      * <p>
      * Note, this handler must be threadsafe, since it will be shared among all threads, and invoked from any
      * thread that encounters such an exception.
@@ -821,12 +821,8 @@ public class KafkaStreams implements AutoCloseable {
                 "must subscribe to at least one source topic or global table.");
         }
 
-        long totalCacheSize = config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG);
-        if (totalCacheSize < 0) {
-            totalCacheSize = 0;
-            log.warn("Negative cache size passed in. Reverting to cache size of 0 bytes.");
-        }
-        final long cacheSizePerThread = totalCacheSize / (numStreamThreads + (hasGlobalTopology ? 1 : 0));
+        totalCacheSize = config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG);
+        final long cacheSizePerThread = getCacheSizePerThread(numStreamThreads);
         final boolean hasPersistentStores = taskTopology.hasPersistentLocalStore() ||
                 (hasGlobalTopology && globalTaskTopology.hasPersistentGlobalStore());
 
@@ -900,6 +896,17 @@ public class KafkaStreams implements AutoCloseable {
         oldHandler = false;
         maybeWarnAboutCodeInRocksDBConfigSetter(log, config);
         rocksDBMetricsRecordingService = maybeCreateRocksDBMetricsRecordingService(clientId, config);
+    }
+
+    private long getCacheSizePerThread(final int numStreamThreads) {
+        return totalCacheSize / (numStreamThreads + ((globalTaskTopology != null) ? 1 : 0));
+    }
+
+    private void resizeThreadCache(final int numStreamThreads) {
+        final long cacheSizePreThread = getCacheSizePerThread(numStreamThreads);
+        for (final StreamThread streamThread: threads) {
+            streamThread.resizeCache(cacheSizePreThread);
+        }
     }
 
     private ScheduledExecutorService setupStateDirCleaner() {

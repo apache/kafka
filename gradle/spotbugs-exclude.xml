@@ -24,16 +24,6 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
 -->
 <FindBugsFilter>
 
-    <!-- false positive in Java 11, see https://github.com/spotbugs/spotbugs/issues/756 -->
-    <Match>
-        <Bug pattern="RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE"/>
-    </Match>
-
-    <!-- false positive in Java 11, see https://github.com/spotbugs/spotbugs/issues/756 -->
-    <Match>
-        <Bug pattern="RCN_REDUNDANT_NULLCHECK_WOULD_HAVE_BEEN_A_NPE"/>
-    </Match>
-
     <Match>
         <!-- Disable warnings about mutable objects and the use of public fields.
             EI_EXPOSE_REP: May expose internal representation by returning reference to mutable object
@@ -103,6 +93,12 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         </Or>
     </Match>
 
+    <!-- false positive in Java 11, related to https://github.com/spotbugs/spotbugs/issues/756 but more complex -->
+    <Match>
+        <Class name="org.apache.kafka.common.record.KafkaLZ4BlockOutputStream"/>
+        <Bug pattern="RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE"/>
+    </Match>
+
     <Match>
         <!-- Suppression for the equals() for extension methods. -->
         <Class name="kafka.api.package$ElectLeadersRequestOps"/>
@@ -126,6 +122,14 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <!-- A spurious null check after inlining by the scalac optimizer confuses spotBugs -->
         <Class name="kafka.log.Log"/>
         <Bug pattern="NP_NULL_ON_SOME_PATH_EXCEPTION"/>
+    </Match>
+
+    <Match>
+        <!-- Scala doesn't have checked exceptions so one cannot catch RuntimeException and rely
+             on the compiler to fail if the code is changed to call a method that throws Exception.
+             Given that, this bug pattern doesn't make sense for Scala code. -->
+        <Class name="kafka.log.Log"/>
+        <Bug pattern="REC_CATCH_EXCEPTION"/>
     </Match>
 
     <Match>

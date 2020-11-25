@@ -72,7 +72,6 @@ public class DeveloperGuideTesting {
 
         // setup test driver
         final Properties props = new Properties();
-        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "maxAggregation");
         props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass().getName());
         testDriver = new TopologyTestDriver(topology, props);

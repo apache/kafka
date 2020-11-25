@@ -282,6 +282,7 @@ public class StreamThread extends Thread {
     private final Consumer<byte[], byte[]> restoreConsumer;
     private final Admin adminClient;
     private final InternalTopologyBuilder builder;
+    private final java.util.function.Consumer<Long> cacheResizer;
 
     private java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler;
     private Runnable shutdownErrorHook;
@@ -351,6 +352,7 @@ public class StreamThread extends Thread {
             log
         );
         final TaskManager taskManager = new TaskManager(
+            time,
             changelogReader,
             processId,
             logPrefix,
@@ -395,7 +397,8 @@ public class StreamThread extends Thread {
             referenceContainer.assignmentErrorCode,
             referenceContainer.nextScheduledRebalanceMs,
             shutdownErrorHook,
-            streamsUncaughtExceptionHandler
+            streamsUncaughtExceptionHandler,
+            cacheSize -> cache.resize(cacheSize)
         );
 
         taskManager.setPartitionResetter(partitions -> streamThread.resetOffsets(partitions, null));
@@ -448,7 +451,8 @@ public class StreamThread extends Thread {
                         final AtomicInteger assignmentErrorCode,
                         final AtomicLong nextProbingRebalanceMs,
                         final Runnable shutdownErrorHook,
-                        final java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler) {
+                        final java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler,
+                        final java.util.function.Consumer<Long> cacheResizer) {
         super(threadId);
         this.stateLock = new Object();
 
@@ -468,6 +472,8 @@ public class StreamThread extends Thread {
         this.assignmentErrorCode = assignmentErrorCode;
         this.shutdownErrorHook = shutdownErrorHook;
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
+        this.cacheResizer = cacheResizer;
+
 
         // The following sensors are created here but their references are not stored in this object, since within
         // this object they are not recorded. The sensors are created here so that the stream threads starts with all
@@ -613,6 +619,10 @@ public class StreamThread extends Thread {
         } else {
             mainConsumer.subscribe(builder.sourceTopicCollection(), rebalanceListener);
         }
+    }
+
+    public void resizeCache(final long size) {
+        cacheResizer.accept(size);
     }
 
     /**
@@ -934,6 +944,7 @@ public class StreamThread extends Thread {
             if (committed == -1) {
                 log.debug("Unable to commit as we are in the middle of a rebalance, will try again when it completes.");
             } else {
+                advanceNowAndComputeLatency();
                 lastCommitMs = now;
             }
         } else {

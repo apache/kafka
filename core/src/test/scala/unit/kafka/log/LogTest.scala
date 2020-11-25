@@ -545,6 +545,40 @@ class LogTest {
     assertEquals(101L, log.logEndOffset)
   }
 
+  @Test
+  def testTruncateToEndOffsetClearsEpochCache(): Unit = {
+    val log = createLog(logDir, LogConfig())
+
+    // Seed some initial data in the log
+    val records = TestUtils.records(List(new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)),
+      baseOffset = 27)
+    appendAsFollower(log, records, leaderEpoch = 19)
+    assertEquals(Some(EpochEntry(epoch = 19, startOffset = 27)),
+      log.leaderEpochCache.flatMap(_.latestEntry))
+    assertEquals(29, log.logEndOffset)
+
+    def verifyTruncationClearsEpochCache(epoch: Int, truncationOffset: Long): Unit = {
+      // Simulate becoming a leader
+      log.maybeAssignEpochStartOffset(leaderEpoch = epoch, startOffset = log.logEndOffset)
+      assertEquals(Some(EpochEntry(epoch = epoch, startOffset = 29)),
+        log.leaderEpochCache.flatMap(_.latestEntry))
+      assertEquals(29, log.logEndOffset)
+
+      // Now we become the follower and truncate to an offset greater
+      // than or equal to the log end offset. The trivial epoch entry
+      // at the end of the log should be gone
+      log.truncateTo(truncationOffset)
+      assertEquals(Some(EpochEntry(epoch = 19, startOffset = 27)),
+        log.leaderEpochCache.flatMap(_.latestEntry))
+      assertEquals(29, log.logEndOffset)
+    }
+
+    // Truncations greater than or equal to the log end offset should
+    // clear the epoch cache
+    verifyTruncationClearsEpochCache(epoch = 20, truncationOffset = log.logEndOffset)
+    verifyTruncationClearsEpochCache(epoch = 24, truncationOffset = log.logEndOffset + 1)
+  }
+
   /**
    * Test the values returned by the logSegments call
    */
