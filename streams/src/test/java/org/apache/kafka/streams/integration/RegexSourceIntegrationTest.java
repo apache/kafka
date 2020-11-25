@@ -31,6 +31,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
@@ -54,6 +55,7 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -66,9 +68,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.greaterThan;
 
 /**
  * End-to-end integration test based on using regex and named topics for creating sources, using
@@ -184,41 +188,55 @@ public class RegexSourceIntegrationTest {
     }
 
     @Test
-    public void testRegexRecordsAreProcessedAfterReassignment() throws Exception {
+    public void testRegexRecordsAreProcessedAfterNewTopicCreatedWithMultipleSubtopologies() throws Exception {
         final String topic1 = "TEST-TOPIC-1";
-        CLUSTER.createTopic(topic1);
-
-        final StreamsBuilder builder = new StreamsBuilder();
-        final KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("TEST-TOPIC-\\d"));
-        pattern1Stream.to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
-        streams = new KafkaStreams(builder.build(), streamsConfiguration);
         final String topic2 = "TEST-TOPIC-2";
-        streams.start();
 
-        CLUSTER.createTopic(topic2);
+        try {
+            CLUSTER.createTopic(topic1);
 
-        final KeyValue<String, String> record1 = new KeyValue<>("1", "1");
-        final KeyValue<String, String> record2 = new KeyValue<>("2", "2");
-        IntegrationTestUtils.produceKeyValuesSynchronously(
+            final StreamsBuilder builder = new StreamsBuilder();
+            final KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("TEST-TOPIC-\\d"));
+            final KStream<String, String> otherStream = builder.stream(Pattern.compile("not-a-match"));
+
+            pattern1Stream
+                .selectKey((k, v) -> k)
+                .groupByKey()
+                .aggregate(() -> "", (k, v, a) -> v)
+                .toStream().to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
+
+            final Topology topology = builder.build();
+            assertThat(topology.describe().subtopologies().size(), greaterThan(1));
+            streams = new KafkaStreams(topology, streamsConfiguration);
+
+            startApplicationAndWaitUntilRunning(Collections.singletonList(streams), Duration.ofSeconds(30));
+
+            CLUSTER.createTopic(topic2);
+
+            final KeyValue<String, String> record1 = new KeyValue<>("1", "1");
+            final KeyValue<String, String> record2 = new KeyValue<>("2", "2");
+            IntegrationTestUtils.produceKeyValuesSynchronously(
                 topic1,
                 Collections.singletonList(record1),
                 TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class),
                 CLUSTER.time
-        );
-        IntegrationTestUtils.produceKeyValuesSynchronously(
+            );
+            IntegrationTestUtils.produceKeyValuesSynchronously(
                 topic2,
                 Collections.singletonList(record2),
                 TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class),
                 CLUSTER.time
-        );
-        IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
+            );
+            IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
                 TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, StringDeserializer.class),
                 outputTopic,
                 Arrays.asList(record1, record2)
-        );
+            );
 
-        streams.close();
-        CLUSTER.deleteTopicsAndWait(topic1, topic2);
+            streams.close();
+        } finally {
+            CLUSTER.deleteTopicsAndWait(topic1, topic2);
+        }
     }
 
     private String createTopic(final int suffix) throws InterruptedException {
