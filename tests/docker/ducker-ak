@@ -438,7 +438,7 @@ ducker_test() {
     must_pushd "${kafka_dir}"
     (test -f ./gradlew || gradle) && ./gradlew systemTestLibs
     must_popd
-    cmd="cd /opt/kafka-dev && && whoami && ls -al && ls -al .ducktape && su ducker && ducktape --cluster-file /opt/kafka-dev/tests/docker/build/cluster.json $args"
+    cmd="cd /opt/kafka-dev && whoami && ls -al && ls -al .ducktape && ducktape --cluster-file /opt/kafka-dev/tests/docker/build/cluster.json $args"
     echo "docker exec ducker01 bash -c \"${cmd}\""
     exec docker exec --user=ducker ducker01 bash -c "${cmd}"
 }
