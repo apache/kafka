@@ -49,11 +49,30 @@ class KafkaVersion(LooseVersion):
         else:
             return LooseVersion.__str__(self)
 
+    def _cmp(self, other):
+        if isinstance(other, str):
+            other = KafkaVersion(other)
+
+        if other.is_dev:
+            if self.is_dev:
+                return 0
+            return -1
+        elif self.is_dev:
+            return 1
+
+        return LooseVersion._cmp(self, other)
+
     def supports_named_listeners(self):
         return self >= V_0_10_2_0
 
+    def acl_command_supports_bootstrap_server(self):
+        return self >= V_2_1_0
+
     def topic_command_supports_bootstrap_server(self):
         return self >= V_2_3_0
+
+    def topic_command_supports_if_not_exists_with_bootstrap_server(self):
+        return self >= V_2_6_0
 
     def supports_tls_to_zookeeper(self):
         # indicate if KIP-515 is available
@@ -80,7 +99,7 @@ def get_version(node=None):
         return DEV_BRANCH
 
 DEV_BRANCH = KafkaVersion("dev")
-DEV_VERSION = KafkaVersion("2.7.0-SNAPSHOT")
+DEV_VERSION = KafkaVersion("2.8.0-SNAPSHOT")
 
 # 0.8.2.x versions
 V_0_8_2_1 = KafkaVersion("0.8.2.1")

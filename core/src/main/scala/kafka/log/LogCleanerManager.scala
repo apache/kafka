@@ -182,7 +182,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
             val offsetsToClean = cleanableOffsets(log, lastCleanOffset, now)
             // update checkpoint for logs with invalid checkpointed offsets
             if (offsetsToClean.forceUpdateCheckpoint)
-              updateCheckpoints(log.parentDirFile, Option(topicPartition, offsetsToClean.firstDirtyOffset))
+              updateCheckpoints(log.parentDirFile, partitionToUpdateOrAdd = Option(topicPartition, offsetsToClean.firstDirtyOffset))
             val compactionDelayMs = maxCompactionDelay(log, offsetsToClean.firstDirtyOffset, now)
             preCleanStats.updateMaxCompactionDelay(compactionDelayMs)
 
@@ -354,13 +354,32 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     }
   }
 
-  def updateCheckpoints(dataDir: File, update: Option[(TopicPartition, Long)]): Unit = {
+  /**
+   * Update checkpoint file, adding or removing partitions if necessary.
+   *
+   * @param dataDir                       The File object to be updated
+   * @param partitionToUpdateOrAdd        The [TopicPartition, Long] map data to be updated. pass "none" if doing remove, not add
+   * @param topicPartitionToBeRemoved     The TopicPartition to be removed
+   */
+  def updateCheckpoints(dataDir: File, partitionToUpdateOrAdd: Option[(TopicPartition, Long)] = None,
+                        partitionToRemove: Option[TopicPartition] = None): Unit = {
     inLock(lock) {
       val checkpoint = checkpoints(dataDir)
       if (checkpoint != null) {
         try {
-          val existing = checkpoint.read().filter { case (tp, _) => logs.keys.contains(tp) } ++ update
-          checkpoint.write(existing)
+          val currentCheckpoint = checkpoint.read().filter { case (tp, _) => logs.keys.contains(tp) }.toMap
+          // remove the partition offset if any
+          var updatedCheckpoint = partitionToRemove match {
+            case Some(topicPartion) => currentCheckpoint - topicPartion
+            case None => currentCheckpoint
+          }
+          // update or add the partition offset if any
+          updatedCheckpoint = partitionToUpdateOrAdd match {
+            case Some(updatedOffset) => updatedCheckpoint + updatedOffset
+            case None => updatedCheckpoint
+          }
+
+          checkpoint.write(updatedCheckpoint)
         } catch {
           case e: KafkaStorageException =>
             error(s"Failed to access checkpoint file ${checkpoint.file.getName} in dir ${checkpoint.file.getParentFile.getAbsolutePath}", e)
@@ -369,15 +388,21 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     }
   }
 
+  /**
+   * alter the checkpoint directory for the topicPartition, to remove the data in sourceLogDir, and add the data in destLogDir
+   */
   def alterCheckpointDir(topicPartition: TopicPartition, sourceLogDir: File, destLogDir: File): Unit = {
     inLock(lock) {
       try {
         checkpoints.get(sourceLogDir).flatMap(_.read().get(topicPartition)) match {
           case Some(offset) =>
-            // Remove this partition from the checkpoint file in the source log directory
-            updateCheckpoints(sourceLogDir, None)
-            // Add offset for this partition to the checkpoint file in the destination log directory
-            updateCheckpoints(destLogDir, Option(topicPartition, offset))
+            debug(s"Removing the partition offset data in checkpoint file for '${topicPartition}' " +
+              s"from ${sourceLogDir.getAbsoluteFile} directory.")
+            updateCheckpoints(sourceLogDir, partitionToRemove = Option(topicPartition))
+
+            debug(s"Adding the partition offset data in checkpoint file for '${topicPartition}' " +
+              s"to ${destLogDir.getAbsoluteFile} directory.")
+            updateCheckpoints(destLogDir, partitionToUpdateOrAdd = Option(topicPartition, offset))
           case None =>
         }
       } catch {
@@ -393,6 +418,11 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     }
   }
 
+  /**
+   * Stop cleaning logs in the provided directory
+   *
+   * @param dir     the absolute path of the log dir
+   */
   def handleLogDirFailure(dir: String): Unit = {
     warn(s"Stopping cleaning logs in dir $dir")
     inLock(lock) {
@@ -400,6 +430,9 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     }
   }
 
+  /**
+   * Truncate the checkpointed offset for the given partition if its checkpointed offset is larger than the given offset
+   */
   def maybeTruncateCheckpoint(dataDir: File, topicPartition: TopicPartition, offset: Long): Unit = {
     inLock(lock) {
       if (logs.get(topicPartition).config.compact) {
@@ -420,7 +453,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     inLock(lock) {
       inProgress.get(topicPartition) match {
         case Some(LogCleaningInProgress) =>
-          updateCheckpoints(dataDir, Option(topicPartition, endOffset))
+          updateCheckpoints(dataDir, partitionToUpdateOrAdd = Option(topicPartition, endOffset))
           inProgress.remove(topicPartition)
         case Some(LogCleaningAborted) =>
           inProgress.put(topicPartition, LogCleaningPaused(1))

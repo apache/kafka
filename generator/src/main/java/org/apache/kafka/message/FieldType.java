@@ -129,7 +129,7 @@ public interface FieldType {
         @Override
         public String getBoxedJavaType(HeaderGenerator headerGenerator) {
             headerGenerator.addImport(MessageGenerator.UUID_CLASS);
-            return "UUID";
+            return "Uuid";
         }
 
         @Override
@@ -280,6 +280,10 @@ public interface FieldType {
         @Override
         public boolean isStruct() {
             return true;
+        }
+
+        public String typeName() {
+            return type;
         }
 
         @Override

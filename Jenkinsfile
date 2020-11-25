@@ -50,10 +50,7 @@ def doStreamsArchetype() {
          || { echo 'Could not install kafka-streams.jar (and dependencies) locally`'; exit 1; }
   '''
 
-  sh '''
-    version=`grep "^version=" gradle.properties | cut -d= -f 2` \
-        || { echo 'Could not get version from `gradle.properties`'; exit 1; }
-  '''
+  VERSION = sh(script: 'grep "^version=" gradle.properties | cut -d= -f 2', returnStdout: true).trim()
 
   dir('streams/quickstart') {
     sh '''
@@ -61,29 +58,27 @@ def doStreamsArchetype() {
           || { echo 'Could not `mvn install` streams quickstart archetype'; exit 1; }
     '''
 
-    sh '''
-      mkdir test-streams-archetype && cd test-streams-archetype \
-          || { echo 'Could not create test directory for stream quickstart archetype'; exit 1; }
-    '''
+    dir('test-streams-archetype') {
+      // Note the double quotes for variable interpolation
+      sh """ 
+        echo "Y" | mvn archetype:generate \
+            -DarchetypeCatalog=local \
+            -DarchetypeGroupId=org.apache.kafka \
+            -DarchetypeArtifactId=streams-quickstart-java \
+            -DarchetypeVersion=${VERSION} \
+            -DgroupId=streams.examples \
+            -DartifactId=streams.examples \
+            -Dversion=0.1 \
+            -Dpackage=myapps \
+            || { echo 'Could not create new project using streams quickstart archetype'; exit 1; }
+      """
 
-    sh '''
-      echo "Y" | mvn archetype:generate \
-          -DarchetypeCatalog=local \
-          -DarchetypeGroupId=org.apache.kafka \
-          -DarchetypeArtifactId=streams-quickstart-java \
-          -DarchetypeVersion=$version \
-          -DgroupId=streams.examples \
-          -DartifactId=streams.examples \
-          -Dversion=0.1 \
-          -Dpackage=myapps \
-          || { echo 'Could not create new project using streams quickstart archetype'; exit 1; }
-    '''
-
-    dir('streams.examples') {
-      sh '''
-        mvn compile \
-            || { echo 'Could not compile streams quickstart archetype project'; exit 1; }
-      '''
+      dir('streams.examples') {
+        sh '''
+          mvn compile \
+              || { echo 'Could not compile streams quickstart archetype project'; exit 1; }
+        '''
+      }
     }
   }
 }
@@ -106,8 +101,8 @@ pipeline {
         stage('JDK 8') {
           agent { label 'ubuntu' }
           tools {
-            jdk 'JDK 1.8 (latest)'
-            maven 'Maven 3.6.3'
+            jdk 'jdk_1.8_latest'
+            maven 'maven_3_latest'
           }
           options {
             timeout(time: 8, unit: 'HOURS') 
@@ -127,7 +122,7 @@ pipeline {
         stage('JDK 11') {
           agent { label 'ubuntu' }
           tools {
-            jdk 'JDK 11 (latest)'
+            jdk 'jdk_11_latest'
           }
           options {
             timeout(time: 8, unit: 'HOURS') 
@@ -147,7 +142,7 @@ pipeline {
         stage('JDK 15') {
           agent { label 'ubuntu' }
           tools {
-            jdk 'JDK 15 (latest)'
+            jdk 'jdk_15_latest'
           }
           options {
             timeout(time: 8, unit: 'HOURS') 

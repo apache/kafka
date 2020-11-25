@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from collections import defaultdict, namedtuple
 import json
 from threading import Thread
@@ -114,7 +114,7 @@ class HttpMetricsCollector(object):
         Get any collected metrics that match the specified parameters, yielding each as a tuple of
         (key, [<timestamp, value>, ...]) values.
         """
-        for k, values in self._http_metrics.iteritems():
+        for k, values in self._http_metrics.items():
             if ((host is None or host == k.host) and
                     (client_id is None or client_id == k.client_id) and
                     (name is None or name == k.name) and
@@ -154,7 +154,7 @@ class _MetricsReceiver(BaseHTTPRequestHandler):
             name = raw_metric['name']
             group = raw_metric['group']
             # Convert to tuple of pairs because dicts & lists are unhashable
-            tags = tuple([(k, v) for k, v in raw_metric['tags'].iteritems()]),
+            tags = tuple((k, v) for k, v in raw_metric['tags'].items()),
             value = raw_metric['value']
 
             key = MetricKey(host=host, client_id=client_id, name=name, group=group, tags=tags)

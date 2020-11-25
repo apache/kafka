@@ -20,6 +20,7 @@ import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.SslAuthenticationException;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.security.auth.KafkaPrincipalSerde;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.IOException;
@@ -159,6 +160,10 @@ public class KafkaChannel implements AutoCloseable {
      */
     public KafkaPrincipal principal() {
         return authenticator.principal();
+    }
+
+    public Optional<KafkaPrincipalSerde> principalSerde() {
+        return authenticator.principalSerde();
     }
 
     /**

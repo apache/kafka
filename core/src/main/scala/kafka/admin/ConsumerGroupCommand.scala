@@ -17,7 +17,6 @@
 
 package kafka.admin
 
-import java.text.{ParseException, SimpleDateFormat}
 import java.time.{Duration, Instant}
 import java.util.Properties
 
@@ -25,6 +24,7 @@ import com.fasterxml.jackson.dataformat.csv.CsvMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.fasterxml.jackson.module.scala.experimental.ScalaObjectMapper
 import kafka.utils._
+import kafka.utils.Implicits._
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.clients.CommonClientConfigs
@@ -43,8 +43,6 @@ import scala.reflect.ClassTag
 import org.apache.kafka.common.requests.ListOffsetResponse
 import org.apache.kafka.common.ConsumerGroupState
 import joptsimple.OptionException
-
-import scala.annotation.nowarn
 
 object ConsumerGroupCommand extends Logging {
 
@@ -113,19 +111,6 @@ object ConsumerGroupCommand extends Logging {
     e.foreach(_.printStackTrace())
   }
 
-  def convertTimestamp(timeString: String): java.lang.Long = {
-    val datetime: String = timeString match {
-      case ts if ts.split("T")(1).contains("+") || ts.split("T")(1).contains("-") || ts.split("T")(1).contains("Z") => ts.toString
-      case ts => s"${ts}Z"
-    }
-    val date = try {
-      new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX").parse(datetime)
-    } catch {
-      case _: ParseException => new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX").parse(datetime)
-    }
-    date.getTime
-  }
-
   def printOffsetsToReset(groupAssignmentsToReset: Map[String, Map[TopicPartition, OffsetAndMetadata]]): Unit = {
     if (groupAssignmentsToReset.nonEmpty)
       println("\n%-30s %-30s %-10s %-15s".format("GROUP", "TOPIC", "PARTITION", "NEW-OFFSET"))
@@ -164,22 +149,24 @@ object ConsumerGroupCommand extends Logging {
   private[admin] case class CsvUtils() {
     val mapper = new CsvMapper with ScalaObjectMapper
     mapper.registerModule(DefaultScalaModule)
-    def readerFor[T <: CsvRecord: ClassTag] = {
+    def readerFor[T <: CsvRecord : ClassTag] = {
       val schema = getSchema[T]
       val clazz = implicitly[ClassTag[T]].runtimeClass
       mapper.readerFor(clazz).`with`(schema)
     }
-    def writerFor[T <: CsvRecord: ClassTag] = {
+    def writerFor[T <: CsvRecord : ClassTag] = {
       val schema = getSchema[T]
       val clazz = implicitly[ClassTag[T]].runtimeClass
       mapper.writerFor(clazz).`with`(schema)
     }
-    private def getSchema[T <: CsvRecord: ClassTag] = {
+    private def getSchema[T <: CsvRecord : ClassTag] = {
       val clazz = implicitly[ClassTag[T]].runtimeClass
-      val fields = clazz match {
-        case _ if classOf[CsvRecordWithGroup] == clazz => CsvRecordWithGroup.fields
-        case _ if classOf[CsvRecordNoGroup]   == clazz => CsvRecordNoGroup.fields
-      }
+
+      val fields =
+        if (classOf[CsvRecordWithGroup] == clazz) CsvRecordWithGroup.fields
+        else if (classOf[CsvRecordNoGroup] == clazz) CsvRecordNoGroup.fields
+        else throw new IllegalStateException(s"Unhandled class $clazz")
+
       val schema = mapper.schemaFor(clazz).sortedBy(fields: _*)
       schema
     }
@@ -568,7 +555,6 @@ object ConsumerGroupCommand extends Logging {
     /**
       * Returns the state of the specified consumer group and partition assignment states
       */
-    @nowarn("cat=optimizer")
     def collectGroupOffsets(groupId: String): (Option[String], Option[Seq[PartitionAssignmentState]]) = {
       collectGroupsOffsets(List(groupId)).getOrElse(groupId, (None, None))
     }
@@ -709,7 +695,7 @@ object ConsumerGroupCommand extends Logging {
     private def createAdminClient(configOverrides: Map[String, String]): Admin = {
       val props = if (opts.options.has(opts.commandConfigOpt)) Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt)) else new Properties()
       props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
-      configOverrides.foreach { case (k, v) => props.put(k, v)}
+      configOverrides.forKeyValue { (k, v) => props.put(k, v)}
       Admin.create(props)
     }
 
@@ -823,7 +809,7 @@ object ConsumerGroupCommand extends Logging {
           case (topicPartition, newOffset) => (topicPartition, new OffsetAndMetadata(newOffset))
         }
       } else if (opts.options.has(opts.resetToDatetimeOpt)) {
-        val timestamp = convertTimestamp(opts.options.valueOf(opts.resetToDatetimeOpt))
+        val timestamp = Utils.getDateTime(opts.options.valueOf(opts.resetToDatetimeOpt))
         val logTimestampOffsets = getLogTimestampOffsets(groupId, partitionsToReset, timestamp)
         partitionsToReset.map { topicPartition =>
           val logTimestampOffset = logTimestampOffsets.get(topicPartition)

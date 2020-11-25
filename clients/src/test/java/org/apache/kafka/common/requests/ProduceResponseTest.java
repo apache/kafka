@@ -18,6 +18,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -31,10 +32,12 @@ import java.util.Map;
 
 import static org.apache.kafka.common.protocol.ApiKeys.PRODUCE;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class ProduceResponseTest {
 
+    @SuppressWarnings("deprecation")
     @Test
     public void produceResponseV5Test() {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
@@ -64,6 +67,7 @@ public class ProduceResponseTest {
         assertEquals(responseData, v5Response.responses());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void produceResponseVersionTest() {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
@@ -86,6 +90,7 @@ public class ProduceResponseTest {
         assertEquals("Response data does not match", responseData, v2Response.responses());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void produceResponseRecordErrorsTest() {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
@@ -100,7 +105,7 @@ public class ProduceResponseTest {
             ProduceResponse response = new ProduceResponse(responseData);
             Struct struct = response.toStruct(ver);
             assertEquals("Should use schema version " + ver, ApiKeys.PRODUCE.responseSchema(ver), struct.schema());
-            ProduceResponse.PartitionResponse deserialized = new ProduceResponse(struct).responses().get(tp);
+            ProduceResponse.PartitionResponse deserialized = new ProduceResponse(new ProduceResponseData(struct, ver)).responses().get(tp);
             if (ver >= 8) {
                 assertEquals(1, deserialized.recordErrors.size());
                 assertEquals(3, deserialized.recordErrors.get(0).batchIndex);
@@ -108,7 +113,7 @@ public class ProduceResponseTest {
                 assertEquals("Produce failed", deserialized.errorMessage);
             } else {
                 assertEquals(0, deserialized.recordErrors.size());
-                assertEquals(null, deserialized.errorMessage);
+                assertNull(deserialized.errorMessage);
             }
         }
     }

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.integration;
 
-import java.time.Duration;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Partitioner;
@@ -65,6 +64,7 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
 import java.io.File;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -832,7 +832,7 @@ public class EosBetaUpgradeIntegrationTest {
             }
         }
     }
-
+    @SuppressWarnings("deprecation") //Thread should no longer die by themselves
     private KafkaStreams getKafkaStreams(final String appDir,
                                          final String processingGuarantee) {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -935,7 +935,6 @@ public class EosBetaUpgradeIntegrationTest {
         );
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), config, new TestKafkaClientSupplier());
-
         streams.setUncaughtExceptionHandler((t, e) -> {
             if (uncaughtException != null) {
                 e.printStackTrace(System.err);
@@ -1080,6 +1079,7 @@ public class EosBetaUpgradeIntegrationTest {
             streams,
             StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.keyValueStore())
         );
+        waitForCondition(() -> store.get(-1L) == null, MAX_WAIT_TIME_MS, () -> "State store did not ready: " + storeName);
         final Set<Long> keys = new HashSet<>();
         try (final KeyValueIterator<Long, Long> it = store.all()) {
             while (it.hasNext()) {

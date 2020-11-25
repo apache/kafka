@@ -62,7 +62,7 @@ class ThrottledChannelExpirationTest {
   }
 
   def callback(response: Response): Unit = {
-    response match {
+    (response: @unchecked) match {
       case _: StartThrottlingResponse => numCallbacksForStartThrottling += 1
       case _: EndThrottlingResponse => numCallbacksForEndThrottling += 1
     }

@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-
 import kafka.api.Request;
 import kafka.server.KafkaServer;
 import kafka.server.MetadataCache;
@@ -79,9 +75,13 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -833,7 +833,7 @@ public class IntegrationTestUtils {
      * {@link State#RUNNING} state at the same time. Note that states may change between the time
      * that this method returns and the calling function executes its next statement.<p>
      *
-     * When the application is already started use {@link #waitForApplicationState(List, State, Duration)}
+     * If the application is already started, use {@link #waitForApplicationState(List, State, Duration)}
      * to wait for instances to reach {@link State#RUNNING} state.
      *
      * @param streamsList the list of streams instances to run.
@@ -903,16 +903,19 @@ public class IntegrationTestUtils {
     }
 
     /**
-     * Waits for the given {@link KafkaStreams} instances to all be in a {@link State#RUNNING}
-     * state. Prefer {@link #startApplicationAndWaitUntilRunning(List, Duration)} when possible
+     * Waits for the given {@link KafkaStreams} instances to all be in a specific {@link State}.
+     * Prefer {@link #startApplicationAndWaitUntilRunning(List, Duration)} when possible
      * because this method uses polling, which can be more error prone and slightly slower.
      *
      * @param streamsList the list of streams instances to run.
-     * @param timeout the time to wait for the streams to all be in {@link State#RUNNING} state.
+     * @param state the expected state that all the streams to be in within timeout
+     * @param timeout the time to wait for the streams to all be in the specific state.
+     *
+     * @throws InterruptedException if the streams doesn't change to the expected state in time.
      */
     public static void waitForApplicationState(final List<KafkaStreams> streamsList,
                                                final State state,
-                                               final Duration timeout) throws Exception {
+                                               final Duration timeout) throws InterruptedException {
         retryOnExceptionWithTimeout(timeout.toMillis(), () -> {
             final Map<KafkaStreams, State> streamsToStates = streamsList
                 .stream()
@@ -1184,6 +1187,28 @@ public class IntegrationTestUtils {
             driver.cleanUp();
         }
         driver.start();
+        return driver;
+    }
+
+    public static KafkaStreams getRunningStreams(final Properties streamsConfig,
+                                                 final StreamsBuilder builder,
+                                                 final boolean clean) {
+        final KafkaStreams driver = new KafkaStreams(builder.build(), streamsConfig);
+        if (clean) {
+            driver.cleanUp();
+        }
+        final CountDownLatch latch = new CountDownLatch(1);
+        driver.setStateListener((newState, oldState) -> {
+            if (newState == State.RUNNING) {
+                latch.countDown();
+            }
+        });
+        driver.start();
+        try {
+            latch.await(DEFAULT_TIMEOUT, TimeUnit.MILLISECONDS);
+        } catch (final InterruptedException e) {
+            throw new RuntimeException("Streams didn't start in time.", e);
+        }
         return driver;
     }
 

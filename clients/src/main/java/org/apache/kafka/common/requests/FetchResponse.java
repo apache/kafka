@@ -18,21 +18,16 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.FetchResponseData;
-import org.apache.kafka.common.message.ResponseHeaderData;
-import org.apache.kafka.common.network.ByteBufferSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
-import org.apache.kafka.common.protocol.RecordsReadable;
-import org.apache.kafka.common.protocol.RecordsWritable;
+import org.apache.kafka.common.protocol.SendBuilder;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MultiRecordsSend;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -77,7 +72,6 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     public FetchResponseData data() {
         return data;
     }
-
 
     public static final class AbortedTransaction {
         public final long producerId;
@@ -150,10 +144,12 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                              long logStartOffset,
                              Optional<Integer> preferredReadReplica,
                              List<AbortedTransaction> abortedTransactions,
+                             Optional<FetchResponseData.EpochEndOffset> divergingEpoch,
                              T records) {
             this.preferredReplica = preferredReadReplica;
             this.abortedTransactions = abortedTransactions;
             this.error = error;
+
             FetchResponseData.FetchablePartitionResponse partitionResponse =
                 new FetchResponseData.FetchablePartitionResponse();
             partitionResponse.setErrorCode(error.code())
@@ -171,8 +167,20 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
             }
             partitionResponse.setPreferredReadReplica(preferredReadReplica.orElse(INVALID_PREFERRED_REPLICA_ID));
             partitionResponse.setRecordSet(records);
+            divergingEpoch.ifPresent(partitionResponse::setDivergingEpoch);
 
             this.partitionResponse = partitionResponse;
+        }
+
+        public PartitionData(Errors error,
+                             long highWatermark,
+                             long lastStableOffset,
+                             long logStartOffset,
+                             Optional<Integer> preferredReadReplica,
+                             List<AbortedTransaction> abortedTransactions,
+                             T records) {
+            this(error, highWatermark, lastStableOffset, logStartOffset, preferredReadReplica,
+                abortedTransactions, Optional.empty(), records);
         }
 
         public PartitionData(Errors error,
@@ -209,6 +217,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                     ", logStartOffset = " + logStartOffset() +
                     ", preferredReadReplica = " + preferredReadReplica().map(Object::toString).orElse("absent") +
                     ", abortedTransactions = " + abortedTransactions() +
+                    ", divergingEpoch =" + divergingEpoch() +
                     ", recordsSizeInBytes=" + records().sizeInBytes() + ")";
         }
 
@@ -234,6 +243,15 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
 
         public List<AbortedTransaction> abortedTransactions() {
             return abortedTransactions;
+        }
+
+        public Optional<FetchResponseData.EpochEndOffset> divergingEpoch() {
+            FetchResponseData.EpochEndOffset epochEndOffset = partitionResponse.divergingEpoch();
+            if (epochEndOffset.epoch() < 0) {
+                return Optional.empty();
+            } else {
+                return Optional.of(epochEndOffset);
+            }
         }
 
         @SuppressWarnings("unchecked")
@@ -271,37 +289,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
 
     @Override
     public Send toSend(String dest, ResponseHeader responseHeader, short apiVersion) {
-        // Generate the Sends for the response fields and records
-        ArrayDeque<Send> sends = new ArrayDeque<>();
-        ObjectSerializationCache cache = new ObjectSerializationCache();
-        int totalRecordSize = data.responses().stream()
-                .flatMap(fetchableTopicResponse -> fetchableTopicResponse.partitionResponses().stream())
-                .mapToInt(fetchablePartitionResponse -> fetchablePartitionResponse.recordSet().sizeInBytes())
-                .sum();
-        int totalMessageSize = data.size(cache, apiVersion);
-
-        RecordsWritable writer = new RecordsWritable(dest, totalMessageSize - totalRecordSize, sends::add);
-        data.write(writer, cache, apiVersion);
-        writer.flush();
-
-        // Compute the total size of all the Sends and write it out along with the header in the first Send
-        ResponseHeaderData responseHeaderData = responseHeader.data();
-
-        int headerSize = responseHeaderData.size(cache, responseHeader.headerVersion());
-        int bodySize = Math.toIntExact(sends.stream().mapToLong(Send::size).sum());
-
-        ByteBuffer buffer = ByteBuffer.allocate(headerSize + 4);
-        ByteBufferAccessor headerWriter = new ByteBufferAccessor(buffer);
-
-        // Write out the size and header
-        buffer.putInt(headerSize + bodySize);
-        responseHeaderData.write(headerWriter, cache, responseHeader.headerVersion());
-
-        // Rewind the buffer and set this the first Send in the MultiRecordsSend
-        buffer.rewind();
-        sends.addFirst(new ByteBufferSend(dest, buffer));
-
-        return new MultiRecordsSend(dest, sends);
+        return SendBuilder.buildResponseSend(dest, responseHeader, this.data, apiVersion);
     }
 
     public Errors error() {
@@ -324,6 +312,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
+        updateErrorCounts(errorCounts, error());
         responseDataMap.values().forEach(response ->
             updateErrorCounts(errorCounts, response.error())
         );
@@ -332,7 +321,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
 
     public static FetchResponse<MemoryRecords> parse(ByteBuffer buffer, short version) {
         FetchResponseData fetchResponseData = new FetchResponseData();
-        RecordsReadable reader = new RecordsReadable(buffer);
+        ByteBufferAccessor reader = new ByteBufferAccessor(buffer);
         fetchResponseData.read(reader, version);
         return new FetchResponse<>(fetchResponseData);
     }

@@ -16,17 +16,23 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.errors.MissingSourceTopicException;
+import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.internals.StreamThread.State;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
+import org.easymock.EasyMock;
+import org.junit.Before;
 import org.junit.Test;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
@@ -47,8 +53,17 @@ public class StreamsRebalanceListenerTest {
         assignmentErrorCode
     );
 
+    @Before
+    public void before() {
+        expect(streamThread.state()).andStubReturn(null);
+        expect(taskManager.activeTaskIds()).andStubReturn(null);
+        expect(taskManager.standbyTaskIds()).andStubReturn(null);
+    }
+
     @Test
     public void shouldThrowMissingSourceTopicException() {
+        taskManager.handleRebalanceComplete();
+        expectLastCall();
         replay(taskManager, streamThread);
         assignmentErrorCode.set(AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.code());
 
@@ -61,13 +76,105 @@ public class StreamsRebalanceListenerTest {
     }
 
     @Test
-    public void shouldHandleOnPartitionAssigned() {
+    public void shouldSwallowVersionProbingError() {
+        expect(streamThread.setState(State.PARTITIONS_ASSIGNED)).andStubReturn(State.PARTITIONS_REVOKED);
         taskManager.handleRebalanceComplete();
-        expect(streamThread.setState(State.PARTITIONS_ASSIGNED)).andStubReturn(null);
+        replay(taskManager, streamThread);
+        assignmentErrorCode.set(AssignorError.VERSION_PROBING.code());
+        streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList());
+        verify(taskManager, streamThread);
+    }
+
+    @Test
+    public void shouldSendShutdown() {
+        streamThread.shutdownToError();
+        EasyMock.expectLastCall();
+        taskManager.handleRebalanceComplete();
+        EasyMock.expectLastCall();
+        replay(taskManager, streamThread);
+        assignmentErrorCode.set(AssignorError.SHUTDOWN_REQUESTED.code());
+        streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList());
+        verify(taskManager, streamThread);
+    }
+
+    @Test
+    public void shouldThrowTaskAssignmentException() {
+        taskManager.handleRebalanceComplete();
+        expectLastCall();
+        replay(taskManager, streamThread);
+        assignmentErrorCode.set(AssignorError.ASSIGNMENT_ERROR.code());
+
+        final TaskAssignmentException exception = assertThrows(
+            TaskAssignmentException.class,
+            () -> streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList())
+        );
+        assertThat(exception.getMessage(), is("Hit an unexpected exception during task assignment phase of rebalance"));
+        verify(taskManager, streamThread);
+    }
+
+    @Test
+    public void shouldThrowTaskAssignmentExceptionOnUnrecognizedErrorCode() {
+        replay(taskManager, streamThread);
+        assignmentErrorCode.set(Integer.MAX_VALUE);
+
+        final TaskAssignmentException exception = assertThrows(
+            TaskAssignmentException.class,
+            () -> streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList())
+        );
+        assertThat(exception.getMessage(), is("Hit an unrecognized exception during rebalance"));
+        verify(taskManager, streamThread);
+    }
+
+    @Test
+    public void shouldHandleAssignedPartitions() {
+        taskManager.handleRebalanceComplete();
+        expect(streamThread.setState(State.PARTITIONS_ASSIGNED)).andReturn(State.RUNNING);
         replay(taskManager, streamThread);
         assignmentErrorCode.set(AssignorError.NONE.code());
 
         streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList());
+
+        verify(taskManager, streamThread);
+    }
+
+    @Test
+    public void shouldHandleRevokedPartitions() {
+        final Collection<TopicPartition> partitions = Collections.singletonList(new TopicPartition("topic", 0));
+        expect(streamThread.setState(State.PARTITIONS_REVOKED)).andReturn(State.RUNNING);
+        taskManager.handleRevocation(partitions);
+        replay(streamThread, taskManager);
+
+        streamsRebalanceListener.onPartitionsRevoked(partitions);
+
+        verify(taskManager, streamThread);
+    }
+
+    @Test
+    public void shouldNotHandleRevokedPartitionsIfStateCannotTransitToPartitionRevoked() {
+        expect(streamThread.setState(State.PARTITIONS_REVOKED)).andReturn(null);
+        replay(streamThread, taskManager);
+
+        streamsRebalanceListener.onPartitionsRevoked(Collections.singletonList(new TopicPartition("topic", 0)));
+
+        verify(taskManager, streamThread);
+    }
+
+    @Test
+    public void shouldNotHandleEmptySetOfRevokedPartitions() {
+        expect(streamThread.setState(State.PARTITIONS_REVOKED)).andReturn(State.RUNNING);
+        replay(streamThread, taskManager);
+
+        streamsRebalanceListener.onPartitionsRevoked(Collections.emptyList());
+
+        verify(taskManager, streamThread);
+    }
+
+    @Test
+    public void shouldHandleLostPartitions() {
+        taskManager.handleLostAll();
+        replay(streamThread, taskManager);
+
+        streamsRebalanceListener.onPartitionsLost(Collections.singletonList(new TopicPartition("topic", 0)));
 
         verify(taskManager, streamThread);
     }

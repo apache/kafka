@@ -699,44 +699,42 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                 if (started)
                     updateListener.onTaskConfigUpdate(updatedTasks);
             } else if (record.key().equals(SESSION_KEY_KEY)) {
-                synchronized (lock) {
-                    if (value.value() == null) {
-                        log.error("Ignoring session key because it is unexpectedly null");
-                        return;
-                    }
-                    if (!(value.value() instanceof Map)) {
-                        log.error("Ignoring session key because the value is not a Map but is {}", value.value().getClass());
-                        return;
-                    }
+                if (value.value() == null) {
+                    log.error("Ignoring session key because it is unexpectedly null");
+                    return;
+                }
+                if (!(value.value() instanceof Map)) {
+                    log.error("Ignoring session key because the value is not a Map but is {}", value.value().getClass());
+                    return;
+                }
 
-                    Map<String, Object> valueAsMap = (Map<String, Object>) value.value();
+                Map<String, Object> valueAsMap = (Map<String, Object>) value.value();
 
-                    Object sessionKey = valueAsMap.get("key");
-                    if (!(sessionKey instanceof String)) {
-                        log.error("Invalid data for session key 'key' field should be a String but is {}", sessionKey.getClass());
-                        return;
-                    }
-                    byte[] key = Base64.getDecoder().decode((String) sessionKey);
+                Object sessionKey = valueAsMap.get("key");
+                if (!(sessionKey instanceof String)) {
+                    log.error("Invalid data for session key 'key' field should be a String but is {}", sessionKey.getClass());
+                    return;
+                }
+                byte[] key = Base64.getDecoder().decode((String) sessionKey);
 
-                    Object keyAlgorithm = valueAsMap.get("algorithm");
-                    if (!(keyAlgorithm instanceof String)) {
-                        log.error("Invalid data for session key 'algorithm' field should be a String but it is {}", keyAlgorithm.getClass());
-                        return;
-                    }
+                Object keyAlgorithm = valueAsMap.get("algorithm");
+                if (!(keyAlgorithm instanceof String)) {
+                    log.error("Invalid data for session key 'algorithm' field should be a String but it is {}", keyAlgorithm.getClass());
+                    return;
+                }
 
-                    Object creationTimestamp = valueAsMap.get("creation-timestamp");
-                    if (!(creationTimestamp instanceof Long)) {
-                        log.error("Invalid data for session key 'creation-timestamp' field should be a long but it is {}", creationTimestamp.getClass());
-                        return;
-                    }
-                    KafkaConfigBackingStore.this.sessionKey = new SessionKey(
+                Object creationTimestamp = valueAsMap.get("creation-timestamp");
+                if (!(creationTimestamp instanceof Long)) {
+                    log.error("Invalid data for session key 'creation-timestamp' field should be a long but it is {}", creationTimestamp.getClass());
+                    return;
+                }
+                KafkaConfigBackingStore.this.sessionKey = new SessionKey(
                         new SecretKeySpec(key, (String) keyAlgorithm),
                         (long) creationTimestamp
-                    );
+                );
 
-                    if (started)
-                        updateListener.onSessionKeyUpdate(KafkaConfigBackingStore.this.sessionKey);
-                }
+                if (started)
+                    updateListener.onSessionKeyUpdate(KafkaConfigBackingStore.this.sessionKey);
             } else {
                 log.error("Discarding config update record with invalid key: {}", record.key());
             }

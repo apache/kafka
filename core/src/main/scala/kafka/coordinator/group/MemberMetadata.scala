@@ -61,9 +61,9 @@ private[group] class MemberMetadata(var memberId: String,
                                     val rebalanceTimeoutMs: Int,
                                     val sessionTimeoutMs: Int,
                                     val protocolType: String,
-                                    var supportedProtocols: List[(String, Array[Byte])]) {
+                                    var supportedProtocols: List[(String, Array[Byte])],
+                                    var assignment: Array[Byte] = Array.empty[Byte]) {
 
-  var assignment: Array[Byte] = Array.empty[Byte]
   var awaitingJoinCallback: JoinGroupResult => Unit = null
   var awaitingSyncCallback: SyncGroupResult => Unit = null
   var isLeaving: Boolean = false

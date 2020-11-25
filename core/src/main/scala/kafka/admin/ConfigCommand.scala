@@ -480,6 +480,7 @@ object ConfigCommand extends Config {
         describeResourceConfig(adminClient, entityTypes.head, entityNames.headOption, describeAll)
       case ConfigType.User | ConfigType.Client =>
         describeClientQuotaAndUserScramCredentialConfigs(adminClient, entityTypes, entityNames)
+      case entityType => throw new IllegalArgumentException(s"Invalid entity type: $entityType")
     }
   }
 
@@ -491,6 +492,7 @@ object ConfigCommand extends Config {
           adminClient.listTopics(new ListTopicsOptions().listInternal(true)).names().get().asScala.toSeq
         case ConfigType.Broker | BrokerLoggerConfigType =>
           adminClient.describeCluster(new DescribeClusterOptions()).nodes().get().asScala.map(_.idString).toSeq :+ BrokerDefaultEntityName
+        case entityType => throw new IllegalArgumentException(s"Invalid entity type: $entityType")
       })
 
     entities.foreach { entity =>
@@ -530,6 +532,7 @@ object ConfigCommand extends Config {
         if (!entityName.isEmpty)
           validateBrokerId()
         (ConfigResource.Type.BROKER_LOGGER, None)
+      case entityType => throw new IllegalArgumentException(s"Invalid entity type: $entityType")
     }
 
     val configSourceFilter = if (describeAll)
@@ -550,7 +553,7 @@ object ConfigCommand extends Config {
 
   private def describeClientQuotaAndUserScramCredentialConfigs(adminClient: Admin, entityTypes: List[String], entityNames: List[String]) = {
     val quotaConfigs = getAllClientQuotasConfigs(adminClient, entityTypes, entityNames)
-    quotaConfigs.foreach { case (entity, entries) =>
+    quotaConfigs.forKeyValue { (entity, entries) =>
       val entityEntries = entity.entries.asScala
 
       def entitySubstr(entityType: String): Option[String] =

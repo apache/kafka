@@ -78,7 +78,7 @@ class ProducerStateManagerTest {
     append(stateManager, producerId, (epoch + 1).toShort, 0, 0L, 3L)
 
     // Incorrect epoch
-    assertThrows[ProducerFencedException] {
+    assertThrows[InvalidProducerEpochException] {
       append(stateManager, producerId, epoch, 0, 0L, 4L)
     }
   }
@@ -94,7 +94,7 @@ class ProducerStateManagerTest {
     assertEquals(RecordBatch.NO_SEQUENCE, firstEntry.lastSeq)
 
     // Fencing should continue to work even if the marker is the only thing left
-    assertThrows[ProducerFencedException] {
+    assertThrows[InvalidProducerEpochException] {
       append(stateManager, producerId, 0.toShort, 0, 0L, 4L)
     }
 
@@ -742,7 +742,7 @@ class ProducerStateManagerTest {
       isTransactional = true, origin = AppendOrigin.Coordinator)
   }
 
-  @Test(expected = classOf[ProducerFencedException])
+  @Test(expected = classOf[InvalidProducerEpochException])
   def testOldEpochForControlRecord(): Unit = {
     val epoch = 5.toShort
     val sequence = 0
@@ -832,6 +832,40 @@ class ProducerStateManagerTest {
     // Appending the empty control batch should not throw and a new transaction shouldn't be started
     append(stateManager, producerId, producerEpoch, baseOffset, batch, origin = AppendOrigin.Client)
     assertEquals(None, stateManager.lastEntry(producerId).get.currentTxnFirstOffset)
+  }
+
+  @Test
+  def testRemoveStraySnapshotsKeepCleanShutdownSnapshot(): Unit = {
+    // Test that when stray snapshots are removed, the largest stray snapshot is kept around. This covers the case where
+    // the broker shutdown cleanly and emitted a snapshot file larger than the base offset of the active segment.
+
+    // Create 3 snapshot files at different offsets.
+    Log.producerSnapshotFile(logDir, 5).createNewFile() // not stray
+    Log.producerSnapshotFile(logDir, 2).createNewFile() // stray
+    Log.producerSnapshotFile(logDir, 42).createNewFile() // not stray
+
+    // claim that we only have one segment with a base offset of 5
+    stateManager.removeStraySnapshots(Seq(5))
+
+    // The snapshot file at offset 2 should be considered a stray, but the snapshot at 42 should be kept
+    // around because it is the largest snapshot.
+    assertEquals(Some(42), stateManager.latestSnapshotOffset)
+    assertEquals(Some(5), stateManager.oldestSnapshotOffset)
+    assertEquals(Seq(5, 42), ProducerStateManager.listSnapshotFiles(logDir).map(_.offset).sorted)
+  }
+
+  @Test
+  def testRemoveAllStraySnapshots(): Unit = {
+    // Test that when stray snapshots are removed, we remove only the stray snapshots below the largest segment base offset.
+    // Snapshots associated with an offset in the list of segment base offsets should remain.
+
+    // Create 3 snapshot files at different offsets.
+    Log.producerSnapshotFile(logDir, 5).createNewFile() // stray
+    Log.producerSnapshotFile(logDir, 2).createNewFile() // stray
+    Log.producerSnapshotFile(logDir, 42).createNewFile() // not stray
+
+    stateManager.removeStraySnapshots(Seq(42))
+    assertEquals(Seq(42), ProducerStateManager.listSnapshotFiles(logDir).map(_.offset).sorted)
   }
 
   private def testLoadFromCorruptSnapshot(makeFileCorrupt: FileChannel => Unit): Unit = {

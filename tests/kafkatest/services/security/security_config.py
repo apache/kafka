@@ -203,13 +203,16 @@ class SecurityConfig(TemplateRenderer):
         # If node is not specified, use static jaas config which will be created later.
         # Otherwise use static JAAS configuration files with SASL_SSL and sasl.jaas.config
         # property with SASL_PLAINTEXT so that both code paths are tested by existing tests.
-        # Note that this is an artibtrary choice and it is possible to run all tests with
+        # Note that this is an arbitrary choice and it is possible to run all tests with
         # either static or dynamic jaas config files if required.
         static_jaas_conf = node is None or (self.has_sasl and self.has_ssl)
         if use_inter_broker_mechanism_for_client:
             client_sasl_mechanism_to_use = self.interbroker_sasl_mechanism
         else:
-            client_sasl_mechanism_to_use = self.client_sasl_mechanism
+            # csv is supported here, but client configs only supports a single mechanism,
+            # so arbitrarily take the first one defined in case it has multiple values
+            client_sasl_mechanism_to_use = self.client_sasl_mechanism.split(',')[0].strip()
+
         return SecurityConfig(self.context, self.security_protocol,
                               client_sasl_mechanism=client_sasl_mechanism_to_use,
                               template_props=template_props,
@@ -256,8 +259,16 @@ class SecurityConfig(TemplateRenderer):
         if self.static_jaas_conf:
             node.account.create_file(SecurityConfig.JAAS_CONF_PATH, jaas_conf)
             node.account.create_file(SecurityConfig.ADMIN_CLIENT_AS_BROKER_JAAS_CONF_PATH,
-                                     self.render_jaas_config("admin_client_as_broker_jaas.conf",
-                                                             {'SecurityConfig': SecurityConfig}))
+                                     self.render_jaas_config(
+                                         "admin_client_as_broker_jaas.conf",
+                                         {
+                                             'node': node,
+                                             'is_ibm_jdk': any('IBM' in line for line in java_version),
+                                             'SecurityConfig': SecurityConfig,
+                                             'client_sasl_mechanism': self.client_sasl_mechanism,
+                                             'enabled_sasl_mechanisms': self.enabled_sasl_mechanisms
+                                         }
+                                     ))
 
         elif 'sasl.jaas.config' not in self.properties:
             self.properties['sasl.jaas.config'] = jaas_conf.replace("\n", " \\\n")
@@ -286,22 +297,6 @@ class SecurityConfig(TemplateRenderer):
 
         if java_version(node) <= 11 and self.properties.get('tls.version') == 'TLSv1.3':
             self.properties.update({'tls.version': 'TLSv1.2'})
-
-    def maybe_setup_broker_scram_credentials(self, node, path, connect):
-        self.maybe_create_scram_credentials(node, connect, path, self.interbroker_sasl_mechanism,
-                                            SecurityConfig.SCRAM_BROKER_USER, SecurityConfig.SCRAM_BROKER_PASSWORD)
-
-    def maybe_setup_client_scram_credentials(self, node, path, connect):
-        self.maybe_create_scram_credentials(node, connect, path, self.client_sasl_mechanism,
-                                            SecurityConfig.SCRAM_CLIENT_USER, SecurityConfig.SCRAM_CLIENT_PASSWORD,
-                                            self.export_kafka_opts_for_admin_client_as_broker())
-
-    def maybe_create_scram_credentials(self, node, connect, path, mechanism, user_name, password, kafka_opts_for_admin_client_as_broker = ""):
-        if self.has_sasl and self.is_sasl_scram(mechanism):
-            cmd = "%s %s %s --entity-name %s --entity-type users --alter --add-config %s=[password=%s]" % \
-                  (kafka_opts_for_admin_client_as_broker, path.script("kafka-configs.sh", node), connect,
-                  user_name, mechanism, password)
-            node.account.ssh(cmd)
 
     def clean_node(self, node):
         if self.security_protocol != SecurityConfig.PLAINTEXT:
@@ -362,14 +357,6 @@ class SecurityConfig(TemplateRenderer):
         else:
             return ""
 
-    def export_kafka_opts_for_admin_client_as_broker(self):
-        if self.has_sasl and self.static_jaas_conf:
-            kafka_opts_to_use = "\"-Djava.security.auth.login.config=%s -Djava.security.krb5.conf=%s\""\
-                                % (SecurityConfig.ADMIN_CLIENT_AS_BROKER_JAAS_CONF_PATH, SecurityConfig.KRB5CONF_PATH)
-        else:
-            kafka_opts_to_use = self.kafka_opts
-        return "export KAFKA_OPTS=%s;" % kafka_opts_to_use
-
     def props(self, prefix=''):
         """
         Return properties as string with line separators, optionally with a prefix.
@@ -382,7 +369,7 @@ class SecurityConfig(TemplateRenderer):
             return ""
         if self.has_sasl and not self.static_jaas_conf and 'sasl.jaas.config' not in self.properties:
             raise Exception("JAAS configuration property has not yet been initialized")
-        config_lines = (prefix + key + "=" + value for key, value in self.properties.iteritems())
+        config_lines = (prefix + key + "=" + value for key, value in self.properties.items())
         # Extra blank lines ensure this can be appended/prepended safely
         return "\n".join(itertools.chain([""], config_lines, [""]))
 

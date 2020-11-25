@@ -25,9 +25,11 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.network.NetworkReceive;
+import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.requests.ByteBufferChannel;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.Exit;
@@ -64,12 +66,11 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static java.util.Arrays.asList;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Helper functions for writing unit tests
@@ -98,7 +99,7 @@ public class TestUtils {
     }
 
     public static Cluster clusterWith(int nodes) {
-        return clusterWith(nodes, new HashMap<String, Integer>());
+        return clusterWith(nodes, new HashMap<>());
     }
 
     public static Cluster clusterWith(final int nodes, final Map<String, Integer> topicPartitionCounts) {
@@ -398,8 +399,8 @@ public class TestUtils {
         retryOnExceptionWithTimeout(maxWaitMs, () -> {
             String conditionDetailsSupplied = conditionDetailsSupplier != null ? conditionDetailsSupplier.get() : null;
             String conditionDetails = conditionDetailsSupplied != null ? conditionDetailsSupplied : "";
-            assertThat("Condition not met within timeout " + maxWaitMs + ". " + conditionDetails,
-                testCondition.conditionMet());
+            assertTrue(testCondition.conditionMet(),
+                "Condition not met within timeout " + maxWaitMs + ". " + conditionDetails);
         });
     }
 
@@ -532,6 +533,17 @@ public class TestUtils {
         return buffer;
     }
 
+    public static ByteBuffer toBuffer(Send send) {
+        ByteBufferChannel channel = new ByteBufferChannel(send.size());
+        try {
+            assertEquals(send.size(), send.writeTo(channel));
+            channel.close();
+            return channel.buffer();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     public static Set<TopicPartition> generateRandomTopicPartitions(int numTopic, int numPartitionPerTopic) {
         Set<TopicPartition> tps = new HashSet<>();
         for (int i = 0; i < numTopic; i++) {
@@ -554,8 +566,8 @@ public class TestUtils {
      */
     public static <T extends Throwable> T assertFutureThrows(Future<?> future, Class<T> exceptionCauseClass) {
         ExecutionException exception = assertThrows(ExecutionException.class, future::get);
-        assertTrue("Unexpected exception cause " + exception.getCause(),
-                exceptionCauseClass.isInstance(exception.getCause()));
+        assertTrue(exceptionCauseClass.isInstance(exception.getCause()),
+            "Unexpected exception cause " + exception.getCause());
         return exceptionCauseClass.cast(exception.getCause());
     }
 
@@ -566,9 +578,9 @@ public class TestUtils {
             fail("Expected a " + exceptionClass.getSimpleName() + " exception, but got success.");
         } catch (ExecutionException ee) {
             Throwable cause = ee.getCause();
-            assertEquals("Expected a " + exceptionClass.getSimpleName() + " exception, but got " +
-                    cause.getClass().getSimpleName(),
-                exceptionClass, cause.getClass());
+            assertEquals(exceptionClass, cause.getClass(),
+                "Expected a " + exceptionClass.getSimpleName() + " exception, but got " +
+                    cause.getClass().getSimpleName());
         }
     }
 
