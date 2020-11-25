@@ -129,7 +129,7 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
             subTopologySourceNodes,
             name,
             aggregateBuilder,
-                                                         graphNode,
+            graphNode,
             groupPatterns);
     }
 

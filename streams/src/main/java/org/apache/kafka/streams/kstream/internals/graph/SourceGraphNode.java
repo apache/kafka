@@ -18,13 +18,15 @@ package org.apache.kafka.streams.kstream.internals.graph;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.regex.Pattern;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 
 abstract public class SourceGraphNode<K, V> extends GraphNode {
 
-    private final Collection<String> topicNames;
+    private final Set<String> topicNames;
     private final Pattern topicPattern;
     private final ConsumedInternal<K, V> consumedInternal;
 
@@ -33,7 +35,7 @@ abstract public class SourceGraphNode<K, V> extends GraphNode {
                            final ConsumedInternal<K, V> consumedInternal) {
         super(nodeName);
 
-        this.topicNames = topicNames;
+        this.topicNames = new HashSet<>(topicNames);
         this.topicPattern = null;
         this.consumedInternal = consumedInternal;
     }
@@ -49,8 +51,8 @@ abstract public class SourceGraphNode<K, V> extends GraphNode {
         this.consumedInternal = consumedInternal;
     }
 
-    public Collection<String> topicNames() {
-        return Collections.unmodifiableCollection(topicNames);
+    public Set<String> topicNames() {
+        return Collections.unmodifiableSet(topicNames);
     }
 
     public Pattern topicPattern() {
