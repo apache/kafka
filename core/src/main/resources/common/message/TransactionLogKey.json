@@ -18,6 +18,6 @@
   "name": "TransactionLogKey",
   "validVersions": "0",
   "fields": [
-    { "name": "transactionalId", "type": "string", "versions": "0"}
+    { "name": "TransactionalId", "type": "string", "versions": "0"}
   ]
 }

@@ -73,13 +73,13 @@ object TransactionLog {
     if (txnMetadata.txnState == Empty && txnMetadata.topicPartitions.nonEmpty)
         throw new IllegalStateException(s"Transaction is not expected to have any partitions since its state is ${txnMetadata.txnState}: $txnMetadata")
 
-      val transactionPartition = if (txnMetadata.txnState == Empty) null
+      val transactionPartitions = if (txnMetadata.txnState == Empty) null
       else txnMetadata.topicPartitions
-        .groupBy(_.topic())
-        .map { case(topic, partitions) =>
+        .groupBy(_.topic)
+        .map { case (topic, partitions) =>
           new TransactionLogValue.PartitionsSchema()
             .setTopic(topic)
-            .setPartitionIds(partitions.map(_.partition()).map(Integer.valueOf).toList.asJava)
+            .setPartitionIds(partitions.map(tp => Integer.valueOf(tp.partition)).toList.asJava)
         }.toList.asJava
 
     MessageUtil.toBytes(TransactionLogValue.HIGHEST_SUPPORTED_VERSION,
@@ -90,7 +90,7 @@ object TransactionLog {
         .setTransactionStatus(txnMetadata.txnState.byte)
         .setTransactionLastUpdateTimestampMs(txnMetadata.txnLastUpdateTimestamp)
         .setTransactionStartTimestampMs(txnMetadata.txnStartTimestamp)
-        .setTransactionPartitions(transactionPartition))
+        .setTransactionPartitions(transactionPartitions))
   }
 
   /**
@@ -104,7 +104,7 @@ object TransactionLog {
       val value = new TransactionLogKey(new ByteBufferAccessor(buffer), version)
       TxnKey(
         version = version,
-        transactionalId = value.transactionalId()
+        transactionalId = value.transactionalId
       )
     } else throw new IllegalStateException(s"Unknown version $version from the transaction log message")
   }
@@ -123,21 +123,21 @@ object TransactionLog {
         val value = new TransactionLogValue(new ByteBufferAccessor(buffer), version)
         val transactionMetadata = new TransactionMetadata(
           transactionalId = transactionalId,
-          producerId = value.producerId(),
+          producerId = value.producerId,
           lastProducerId = RecordBatch.NO_PRODUCER_ID,
-          producerEpoch = value.producerEpoch(),
+          producerEpoch = value.producerEpoch,
           lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
-          txnTimeoutMs = value.transactionTimeoutMs(),
-          state = TransactionMetadata.byteToState(value.transactionStatus()),
+          txnTimeoutMs = value.transactionTimeoutMs,
+          state = TransactionMetadata.byteToState(value.transactionStatus),
           topicPartitions = mutable.Set.empty[TopicPartition],
-          txnStartTimestamp = value.transactionStartTimestampMs(),
-          txnLastUpdateTimestamp = value.transactionLastUpdateTimestampMs())
+          txnStartTimestamp = value.transactionStartTimestampMs,
+          txnLastUpdateTimestamp = value.transactionLastUpdateTimestampMs)
 
         if (!transactionMetadata.state.equals(Empty))
-          value.transactionPartitions().forEach(partitionsSchema =>
-            transactionMetadata.addPartitions(partitionsSchema.partitionIds()
+          value.transactionPartitions.forEach(partitionsSchema =>
+            transactionMetadata.addPartitions(partitionsSchema.partitionIds
               .asScala
-              .map(partitionId => new TopicPartition(partitionsSchema.topic(), partitionId))
+              .map(partitionId => new TopicPartition(partitionsSchema.topic, partitionId))
               .toSet)
           )
         Some(transactionMetadata)
