@@ -50,13 +50,10 @@ To log into one of the machines:
 
     vagrant ssh <machineName>
 
-You can access the brokers and zookeeper by their IP or hostname, e.g.
+You can access the brokers by their IP or hostname, e.g.
 
-    # Specify ZooKeeper node 1 by it's IP: 192.168.50.11
-    # Note: --zookeeper is deprecated, please use the --bootstrap-server instead
-    bin/kafka-topics.sh --create --zookeeper 192.168.50.11:2181 --replication-factor 3 --partitions 1 --topic sandbox
-
-    # Specify brokers by their hostnames: broker1, broker2, broker3
+    # Specify brokers by their hostnames: broker1, broker2, broker3 (or just one of them)
+    bin/kafka-topics.sh --create --bootstrap-server broker1:9092 --replication-factor 3 --partitions 1 --topic sandbox
     bin/kafka-console-producer.sh --bootstrap-server broker1:9092,broker2:9092,broker3:9092 --topic sandbox
 
     # Specify brokers by their IP: 192.168.50.51, 192.168.50.52, 192.168.50.53
