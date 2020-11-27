@@ -34,8 +34,8 @@
         overridden the message format version, you should keep its current value. Alternatively, if you are upgrading from a version prior
         to 0.11.0.x, then CURRENT_MESSAGE_FORMAT_VERSION should be set to match CURRENT_KAFKA_VERSION.
         <ul>
-            <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g., <code>2.6</code>, <code>2.5</code>, etc.)</li>
-            <li>log.message.format.version=CURRENT_MESSAGE_FORMAT_VERSION  (See <a href="#upgrade_10_performance_impact">potential performance impact
+            <li><code class="brokerconfig">inter.broker.protocol.version=CURRENT_KAFKA_VERSION</code> (e.g., <code>2.6</code>, <code>2.5</code>, etc.)</li>
+            <li><code class="brokerconfig">log.message.format.version=CURRENT_MESSAGE_FORMAT_VERSION</code>  (See <a href="#upgrade_10_performance_impact">potential performance impact
                 following the upgrade</a> for the details on what this configuration does.)</li>
         </ul>
         If you are upgrading from version 0.11.0.x or above, and you have not overridden the message format, then you only need to override
