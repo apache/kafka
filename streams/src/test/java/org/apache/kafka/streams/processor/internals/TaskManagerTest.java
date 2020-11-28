@@ -41,6 +41,7 @@ import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode;
+import org.apache.kafka.streams.processor.internals.Task.State;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.easymock.EasyMock;
@@ -95,12 +96,12 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.not;
 import static org.hamcrest.core.IsEqual.equalTo;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertEquals;
 
 @RunWith(EasyMockRunner.class)
 public class TaskManagerTest {
@@ -166,6 +167,7 @@ public class TaskManagerTest {
 
     private void setUpTaskManager(final StreamThread.ProcessingMode processingMode) {
         taskManager = new TaskManager(
+            time,
             changeLogReader,
             UUID.randomUUID(),
             "taskManagerTest",
@@ -338,6 +340,57 @@ public class TaskManagerTest {
         assertThat(taskManager.getTaskOffsetSums(), is(expectedOffsetSums));
     }
 
+    @Test
+    public void shouldComputeOffsetSumFromCheckpointFileForUninitializedTask() throws Exception {
+        final Map<TopicPartition, Long> changelogOffsets = mkMap(
+            mkEntry(new TopicPartition("changelog", 0), 5L),
+            mkEntry(new TopicPartition("changelog", 1), 10L)
+        );
+        final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, 15L));
+
+        expectLockObtainedFor(taskId00);
+        makeTaskFolders(taskId00.toString());
+        writeCheckpointFile(taskId00, changelogOffsets);
+        replay(stateDirectory);
+
+        taskManager.handleRebalanceStart(singleton("topic"));
+        final StateMachineTask uninitializedTask = new StateMachineTask(taskId00, taskId00Partitions, true);
+        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andStubReturn(singleton(uninitializedTask));
+        replay(activeTaskCreator);
+        taskManager.handleAssignment(taskId00Assignment, emptyMap());
+
+        assertThat(uninitializedTask.state(), is(State.CREATED));
+
+        assertThat(taskManager.getTaskOffsetSums(), is(expectedOffsetSums));
+    }
+
+    @Test
+    public void shouldComputeOffsetSumFromCheckpointFileForClosedTask() throws Exception {
+        final Map<TopicPartition, Long> changelogOffsets = mkMap(
+            mkEntry(new TopicPartition("changelog", 0), 5L),
+            mkEntry(new TopicPartition("changelog", 1), 10L)
+        );
+        final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, 15L));
+
+        expectLockObtainedFor(taskId00);
+        makeTaskFolders(taskId00.toString());
+        writeCheckpointFile(taskId00, changelogOffsets);
+        replay(stateDirectory);
+
+        final StateMachineTask closedTask = new StateMachineTask(taskId00, taskId00Partitions, true);
+
+        taskManager.handleRebalanceStart(singleton("topic"));
+        expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andStubReturn(singleton(closedTask));
+        replay(activeTaskCreator);
+        taskManager.handleAssignment(taskId00Assignment, emptyMap());
+
+        closedTask.suspend();
+        closedTask.closeClean();
+        assertThat(closedTask.state(), is(State.CLOSED));
+
+        assertThat(taskManager.getTaskOffsetSums(), is(expectedOffsetSums));
+    }
+    
     @Test
     public void shouldNotReportOffsetSumsForTaskWeCantLock() throws Exception {
         expectLockFailedFor(taskId00);
@@ -1730,7 +1783,7 @@ public class TaskManagerTest {
         task03.setCommitNeeded();
         task04.setCommitNeeded();
 
-        assertThat(taskManager.commit(Arrays.asList(task00, task02, task03, task05)), equalTo(2));
+        assertThat(taskManager.commit(mkSet(task00, task02, task03, task05)), equalTo(2));
         assertThat(task00.commitNeeded, is(false));
         assertThat(task01.commitNeeded, is(true));
         assertThat(task02.commitNeeded, is(false));
@@ -1818,8 +1871,9 @@ public class TaskManagerTest {
     @Test
     public void shouldCommitViaProducerIfEosAlphaEnabled() {
         final StreamsProducer producer = mock(StreamsProducer.class);
-        expect(activeTaskCreator.streamsProducerForTask(taskId01)).andReturn(producer);
-        expect(activeTaskCreator.streamsProducerForTask(taskId02)).andReturn(producer);
+        expect(activeTaskCreator.streamsProducerForTask(anyObject(TaskId.class)))
+            .andReturn(producer)
+            .andReturn(producer);
 
         final Map<TopicPartition, OffsetAndMetadata> offsetsT01 = singletonMap(t1p1, new OffsetAndMetadata(0L, null));
         final Map<TopicPartition, OffsetAndMetadata> offsetsT02 = singletonMap(t1p2, new OffsetAndMetadata(1L, null));
@@ -2450,8 +2504,10 @@ public class TaskManagerTest {
                                            .map(t -> new StateMachineTask(t.getKey(), t.getValue(), false))
                                            .collect(Collectors.toSet());
         final Set<Task> restoringTasks = restoringActiveAssignment.entrySet().stream()
-                                             .map(t -> new StateMachineTask(t.getKey(), t.getValue(), true))
-                                             .collect(Collectors.toSet());
+                                           .map(t -> new StateMachineTask(t.getKey(), t.getValue(), true))
+                                           .collect(Collectors.toSet());
+        // give the restoring tasks some uncompleted changelog partitions so they'll stay in restoring
+        restoringTasks.forEach(t -> ((StateMachineTask) t).setChangelogOffsets(singletonMap(new TopicPartition("changelog", 0), 0L)));
 
         // Initially assign only the active tasks we want to complete restoration
         final Map<TaskId, Set<TopicPartition>> allActiveTasksAssignment = new HashMap<>(runningActiveAssignment);
@@ -2459,17 +2515,14 @@ public class TaskManagerTest {
         final Set<Task> allActiveTasks = new HashSet<>(runningTasks);
         allActiveTasks.addAll(restoringTasks);
 
-        expect(activeTaskCreator.createTasks(anyObject(), eq(runningActiveAssignment))).andStubReturn(runningTasks);
         expect(standbyTaskCreator.createTasks(eq(standbyAssignment))).andStubReturn(standbyTasks);
         expect(activeTaskCreator.createTasks(anyObject(), eq(allActiveTasksAssignment))).andStubReturn(allActiveTasks);
 
         expectRestoreToBeCompleted(consumer, changeLogReader);
         replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
 
-        taskManager.handleAssignment(runningActiveAssignment, standbyAssignment);
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds()), is(true));
-
         taskManager.handleAssignment(allActiveTasksAssignment, standbyAssignment);
+        taskManager.tryToCompleteRestoration(time.milliseconds());
 
         final Map<TaskId, StateMachineTask> allTasks = new HashMap<>();
 
@@ -2479,7 +2532,7 @@ public class TaskManagerTest {
             allTasks.put(task.id(), (StateMachineTask) task);
         }
         for (final Task task : restoringTasks) {
-            assertThat(task.state(), not(Task.State.RUNNING));
+            assertThat(task.state(), is(Task.State.RESTORING));
             allTasks.put(task.id(), (StateMachineTask) task);
         }
         for (final Task task : standbyTasks) {
@@ -2540,26 +2593,117 @@ public class TaskManagerTest {
         assertThat(task01.state(), is(Task.State.CREATED));
     }
 
+    @SuppressWarnings("unchecked")
     @Test
-    public void shouldThrowStreamsExceptionOnCommitTimeout() {
+    public void shouldNotFailForTimeoutExceptionOnConsumerCommit() {
+        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true);
-        final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
-        task01.setCommittableOffsetsAndMetadata(offsets);
-        task01.setCommitNeeded();
-        taskManager.tasks().put(taskId01, task01);
 
-        consumer.commitSync(offsets);
-        expectLastCall().andThrow(new TimeoutException());
+        consumer.commitSync(anyObject(Map.class));
+        expectLastCall().andThrow(new TimeoutException("KABOOM!"));
+        consumer.commitSync(anyObject(Map.class));
+        expectLastCall();
         replay(consumer);
 
-        final StreamsException thrown = assertThrows(
-            StreamsException.class,
-            () -> taskManager.commitAll()
-        );
+        task00.setCommitNeeded();
 
-        assertThat(thrown.getCause(), instanceOf(TimeoutException.class));
-        assertThat(thrown.getMessage(), equalTo("Timed out while committing offsets via consumer"));
-        assertThat(task01.state(), is(Task.State.CREATED));
+        assertThat(taskManager.commit(mkSet(task00, task01)), equalTo(0));
+        assertThat(task00.timeout, equalTo(time.milliseconds()));
+        assertNull(task01.timeout);
+
+        assertThat(taskManager.commit(mkSet(task00, task01)), equalTo(1));
+        assertNull(task00.timeout);
+        assertNull(task01.timeout);
+    }
+
+    @Test
+    public void shouldNotFailForTimeoutExceptionOnCommitWithEosAlpha() {
+        setUpTaskManager(ProcessingMode.EXACTLY_ONCE_ALPHA);
+
+        final StreamsProducer producer = mock(StreamsProducer.class);
+        expect(activeTaskCreator.streamsProducerForTask(anyObject(TaskId.class)))
+            .andReturn(producer)
+            .andReturn(producer)
+            .andReturn(producer);
+
+        final Map<TopicPartition, OffsetAndMetadata> offsetsT00 = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
+        final Map<TopicPartition, OffsetAndMetadata> offsetsT01 = singletonMap(t1p1, new OffsetAndMetadata(1L, null));
+
+        producer.commitTransaction(offsetsT00, null);
+        expectLastCall().andThrow(new TimeoutException("KABOOM!"));
+        producer.commitTransaction(offsetsT00, null);
+        expectLastCall();
+
+        producer.commitTransaction(offsetsT01, null);
+        expectLastCall();
+        producer.commitTransaction(offsetsT01, null);
+        expectLastCall();
+
+        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
+        task00.setCommittableOffsetsAndMetadata(offsetsT00);
+        final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true);
+        task01.setCommittableOffsetsAndMetadata(offsetsT01);
+        final StateMachineTask task02 = new StateMachineTask(taskId02, taskId02Partitions, true);
+
+        consumer.groupMetadata();
+        expectLastCall().andReturn(null).anyTimes();
+        replay(producer, activeTaskCreator, consumer);
+
+        task00.setCommitNeeded();
+        task01.setCommitNeeded();
+
+        assertThat(taskManager.commit(mkSet(task00, task01, task02)), equalTo(1));
+        assertThat(task00.timeout, equalTo(time.milliseconds()));
+        assertNull(task01.timeout);
+        assertNull(task02.timeout);
+
+        assertThat(taskManager.commit(mkSet(task00, task01, task02)), equalTo(1));
+        assertNull(task00.timeout);
+        assertNull(task01.timeout);
+        assertNull(task02.timeout);
+    }
+
+    @Test
+    public void shouldNotFailForTimeoutExceptionOnCommitWithEosBeta() {
+        setUpTaskManager(ProcessingMode.EXACTLY_ONCE_BETA);
+
+        final StreamsProducer producer = mock(StreamsProducer.class);
+        expect(activeTaskCreator.threadProducer())
+            .andReturn(producer)
+            .andReturn(producer);
+
+        final Map<TopicPartition, OffsetAndMetadata> offsetsT00 = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
+        final Map<TopicPartition, OffsetAndMetadata> offsetsT01 = singletonMap(t1p1, new OffsetAndMetadata(1L, null));
+        final Map<TopicPartition, OffsetAndMetadata> allOffsets = new HashMap<>(offsetsT00);
+        allOffsets.putAll(offsetsT01);
+
+        producer.commitTransaction(allOffsets, null);
+        expectLastCall().andThrow(new TimeoutException("KABOOM!"));
+        producer.commitTransaction(allOffsets, null);
+        expectLastCall();
+
+        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
+        task00.setCommittableOffsetsAndMetadata(offsetsT00);
+        final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true);
+        task01.setCommittableOffsetsAndMetadata(offsetsT01);
+        final StateMachineTask task02 = new StateMachineTask(taskId02, taskId02Partitions, true);
+
+        consumer.groupMetadata();
+        expectLastCall().andReturn(null).anyTimes();
+        replay(producer, activeTaskCreator, consumer);
+
+        task00.setCommitNeeded();
+        task01.setCommitNeeded();
+
+        assertThat(taskManager.commit(mkSet(task00, task01, task02)), equalTo(0));
+        assertThat(task00.timeout, equalTo(time.milliseconds()));
+        assertThat(task01.timeout, equalTo(time.milliseconds()));
+        assertNull(task02.timeout);
+
+        assertThat(taskManager.commit(mkSet(task00, task01, task02)), equalTo(2));
+        assertNull(task00.timeout);
+        assertNull(task01.timeout);
+        assertNull(task02.timeout);
     }
 
     @Test
@@ -2685,6 +2829,7 @@ public class TaskManagerTest {
         private Map<TopicPartition, OffsetAndMetadata> committableOffsets = Collections.emptyMap();
         private Map<TopicPartition, Long> purgeableOffsets;
         private Map<TopicPartition, Long> changelogOffsets = Collections.emptyMap();
+        private Long timeout = null;
 
         private final Map<TopicPartition, LinkedList<ConsumerRecord<byte[], byte[]>>> queue = new HashMap<>();
 
@@ -2774,10 +2919,14 @@ public class TaskManagerTest {
 
         @Override
         public void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
-                                                final Exception cause) {}
+                                                final Exception cause) {
+            timeout = currentWallClockMs;
+        }
 
         @Override
-        public void clearTaskTimeout() {}
+        public void clearTaskTimeout() {
+            timeout = null;
+        }
 
         @Override
         public void closeClean() {
@@ -2795,7 +2944,7 @@ public class TaskManagerTest {
         }
 
         @Override
-        public void update(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> nodeToSourceTopics) {
+        public void update(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> allTopologyNodesToSourceTopics) {
             inputPartitions = topicPartitions;
         }
 

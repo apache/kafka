@@ -20,6 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Writable;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.protocol.types.Type;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -28,7 +29,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.MockLog.LogBatch;
 import org.apache.kafka.raft.MockLog.LogEntry;
 import org.apache.kafka.raft.internals.BatchMemoryPool;
-import org.apache.kafka.raft.internals.LogOffset;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -750,8 +750,6 @@ public class RaftEventSimulationTest {
             MockNetworkChannel channel = new MockNetworkChannel(correlationIdCounter);
             QuorumState quorum = new QuorumState(nodeId, voters(), ELECTION_TIMEOUT_MS,
                 FETCH_TIMEOUT_MS, persistentState.store, time, logContext, random);
-            MockFuturePurgatory<LogOffset> fetchPurgatory = new MockFuturePurgatory<>(time);
-            MockFuturePurgatory<LogOffset> appendPurgatory = new MockFuturePurgatory<>(time);
             Metrics metrics = new Metrics(time);
 
             Map<Integer, InetSocketAddress> voterConnectionMap = voters.stream()
@@ -773,8 +771,7 @@ public class RaftEventSimulationTest {
                 memoryPool,
                 time,
                 metrics,
-                fetchPurgatory,
-                appendPurgatory,
+                new MockExpirationService(time),
                 voterConnectionMap,
                 ELECTION_JITTER_MS,
                 RETRY_BACKOFF_MS,
@@ -820,7 +817,8 @@ public class RaftEventSimulationTest {
 
         void initialize() {
             try {
-                client.initialize(counter);
+                client.register(this.counter);
+                client.initialize();
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -829,7 +827,6 @@ public class RaftEventSimulationTest {
         void poll() {
             try {
                 client.poll();
-                counter.poll();
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -923,7 +920,7 @@ public class RaftEventSimulationTest {
                 Integer newEpoch = state.store.readElectionState().epoch;
 
                 if (oldEpoch > newEpoch) {
-                    fail("Non-monotonic update of high watermark detected: " +
+                    fail("Non-monotonic update of epoch detected on node " + nodeId + ": " +
                             oldEpoch + " -> " + newEpoch);
                 }
                 cluster.ifRunning(nodeId, nodeState -> {
@@ -1132,7 +1129,6 @@ public class RaftEventSimulationTest {
     }
 
     private static class IntSerde implements RecordSerde<Integer> {
-
         @Override
         public int recordSize(Integer data, Object context) {
             return Type.INT32.sizeOf(data);
@@ -1141,6 +1137,11 @@ public class RaftEventSimulationTest {
         @Override
         public void write(Integer data, Object context, Writable out) {
             out.writeInt(data);
+        }
+
+        @Override
+        public Integer read(Readable input, int size) {
+            return input.readInt();
         }
     }
 

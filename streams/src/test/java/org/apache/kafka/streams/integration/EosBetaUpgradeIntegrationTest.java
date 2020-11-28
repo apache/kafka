@@ -832,7 +832,7 @@ public class EosBetaUpgradeIntegrationTest {
             }
         }
     }
-
+    @SuppressWarnings("deprecation") //Thread should no longer die by themselves
     private KafkaStreams getKafkaStreams(final String appDir,
                                          final String processingGuarantee) {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -935,7 +935,6 @@ public class EosBetaUpgradeIntegrationTest {
         );
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), config, new TestKafkaClientSupplier());
-
         streams.setUncaughtExceptionHandler((t, e) -> {
             if (uncaughtException != null) {
                 e.printStackTrace(System.err);

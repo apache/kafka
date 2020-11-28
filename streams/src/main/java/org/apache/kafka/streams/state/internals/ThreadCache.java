@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.CircularIterator;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -35,7 +36,7 @@ import java.util.NoSuchElementException;
  */
 public class ThreadCache {
     private final Logger log;
-    private final long maxCacheSizeBytes;
+    private volatile long maxCacheSizeBytes;
     private final StreamsMetricsImpl metrics;
     private final Map<String, NamedCache> caches = new HashMap<>();
 
@@ -69,6 +70,22 @@ public class ThreadCache {
 
     public long flushes() {
         return numFlushes;
+    }
+
+    public void resize(final long newCacheSizeBytes) {
+        final boolean shrink = newCacheSizeBytes < maxCacheSizeBytes;
+        maxCacheSizeBytes = newCacheSizeBytes;
+        if (shrink) {
+            final CircularIterator<NamedCache> circularIterator = new CircularIterator<>(caches.values());
+            while (sizeBytes() > maxCacheSizeBytes) {
+                final NamedCache cache = circularIterator.next();
+                if (cache.isEmpty()) {
+                    circularIterator.remove();
+                }
+                cache.evict();
+                numEvicts++;
+            }
+        }
     }
 
     /**

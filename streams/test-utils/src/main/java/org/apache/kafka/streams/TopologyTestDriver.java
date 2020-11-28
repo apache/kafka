@@ -117,7 +117,7 @@ import static org.apache.kafka.streams.processor.internals.StreamThread.Processi
  * Best of all, the class works without a real Kafka broker, so the tests execute very quickly with very little overhead.
  * <p>
  * Using the {@code TopologyTestDriver} in tests is easy: simply instantiate the driver and provide a {@link Topology}
- * (cf. {@link StreamsBuilder#build()}) and {@link Properties configs}, {@link #createInputTopic(String, Serializer, Serializer) create}
+ * (cf. {@link StreamsBuilder#build()}) and {@link Properties config}, {@link #createInputTopic(String, Serializer, Serializer) create}
  * and use a {@link TestInputTopic} to supply an input records to the topology,
  * and then {@link #createOutputTopic(String, Deserializer, Deserializer) create} and use a {@link TestOutputTopic} to read and
  * verify any output records by the topology.
@@ -131,12 +131,11 @@ import static org.apache.kafka.streams.processor.internals.StreamThread.Processi
  * In order to create a {@code TopologyTestDriver} instance, you need a {@link Topology} and a {@link Properties config}.
  * The configuration needs to be representative of what you'd supply to the real topology, so that means including
  * several key properties (cf. {@link StreamsConfig}).
- * For example, the following code fragment creates a configuration that specifies a local Kafka broker list (which is
- * needed but not used), a timestamp extractor, and default serializers and deserializers for string keys and values:
+ * For example, the following code fragment creates a configuration that specifies a timestamp extractor,
+ * default serializers and deserializers for string keys and values:
  *
  * <pre>{@code
  * Properties props = new Properties();
- * props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9091");
  * props.setProperty(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, CustomTimestampExtractor.class.getName());
  * props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
  * props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());

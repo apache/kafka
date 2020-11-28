@@ -143,7 +143,13 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     val partitionData = response.topics.asScala.find(_.name == topic).get
       .partitions.asScala.find(_.partitionIndex == partition.partition).get
 
-    (partitionData.offset, partitionData.leaderEpoch)
+    if (version == 0) {
+      if (partitionData.oldStyleOffsets().isEmpty)
+        (-1, partitionData.leaderEpoch)
+      else
+        (partitionData.oldStyleOffsets().asScala.head, partitionData.leaderEpoch)
+    } else
+      (partitionData.offset, partitionData.leaderEpoch)
   }
 
   @Test
@@ -174,17 +180,27 @@ class ListOffsetsRequestTest extends BaseRequestTest {
   }
 
   @Test
-  def testResponseDefaultOffsetAndLeaderEpochForLowerVersions(): Unit = {
+  def testResponseDefaultOffsetAndLeaderEpochForAllVersions(): Unit = {
     val partitionToLeader = TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 3, servers)
     val firstLeaderId = partitionToLeader(partition.partition)
 
     TestUtils.generateAndProduceMessages(servers, topic, 10)
 
-    assertEquals((-1L, -1), fetchOffsetAndEpoch(firstLeaderId, 0L, 0))
-    assertEquals((0L, -1), fetchOffsetAndEpoch(firstLeaderId, 0L, 1))
-    assertEquals((0L, -1), fetchOffsetAndEpoch(firstLeaderId, 0L, 2))
-    assertEquals((0L, -1), fetchOffsetAndEpoch(firstLeaderId, 0L, 3))
-    assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, 0L, 4))
+    for (version <- ApiKeys.LIST_OFFSETS.oldestVersion to ApiKeys.LIST_OFFSETS.latestVersion) {
+      if (version == 0) {
+        assertEquals((-1L, -1), fetchOffsetAndEpoch(firstLeaderId, 0L, version.toShort))
+        assertEquals((0L, -1), fetchOffsetAndEpoch(firstLeaderId, ListOffsetRequest.EARLIEST_TIMESTAMP, version.toShort))
+        assertEquals((10L, -1), fetchOffsetAndEpoch(firstLeaderId, ListOffsetRequest.LATEST_TIMESTAMP, version.toShort))
+      } else if (version >= 1 && version <= 3) {
+        assertEquals((0L, -1), fetchOffsetAndEpoch(firstLeaderId, 0L, version.toShort))
+        assertEquals((0L, -1), fetchOffsetAndEpoch(firstLeaderId, ListOffsetRequest.EARLIEST_TIMESTAMP, version.toShort))
+        assertEquals((10L, -1), fetchOffsetAndEpoch(firstLeaderId, ListOffsetRequest.LATEST_TIMESTAMP, version.toShort))
+      } else if (version >= 4) {
+        assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, 0L, version.toShort))
+        assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetRequest.EARLIEST_TIMESTAMP, version.toShort))
+        assertEquals((10L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetRequest.LATEST_TIMESTAMP, version.toShort))
+      }
+    }
   }
 
   private def assertResponseError(error: Errors, brokerId: Int, request: ListOffsetRequest): Unit = {

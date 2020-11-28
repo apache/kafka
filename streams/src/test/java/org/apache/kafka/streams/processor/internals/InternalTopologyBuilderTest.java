@@ -25,9 +25,11 @@ import org.apache.kafka.streams.TopologyDescription;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
+import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
 import org.apache.kafka.test.MockTimestampExtractor;
@@ -51,6 +53,7 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -177,6 +180,34 @@ public class InternalTopologyBuilderTest {
     @Test(expected = NullPointerException.class)
     public void testAddProcessorWithNullParents() {
         builder.addProcessor("processor", new MockApiProcessorSupplier<>(), (String) null);
+    }
+
+    @Test
+    public void testAddProcessorWithBadSupplier() {
+        final Processor<Object, Object, Object, Object> processor = new MockApiProcessor<>();
+        final IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+            () -> builder.addProcessor("processor", () -> processor, (String) null)
+        );
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+    }
+
+    @Test
+    public void testAddGlobalStoreWithBadSupplier() {
+        final org.apache.kafka.streams.processor.api.Processor<?, ?, Void, Void> processor = new MockApiProcessorSupplier<Object, Object, Void, Void>().get();
+        final IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+            () -> builder.addGlobalStore(
+                        new MockKeyValueStoreBuilder("global-store", false).withLoggingDisabled(),
+                        "globalSource",
+                        null,
+                        null,
+                        null,
+                        "globalTopic",
+                        "global-processor",
+                () -> processor)
+        );
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
     }
 
     @Test

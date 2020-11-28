@@ -90,6 +90,7 @@ public class ElectLeadersResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         HashMap<Errors, Integer> counts = new HashMap<>();
+        updateErrorCounts(counts, Errors.forCode(data.errorCode()));
         data.replicaElectionResults().forEach(result ->
             result.partitionResult().forEach(partitionResult ->
                 updateErrorCounts(counts, Errors.forCode(partitionResult.errorCode()))

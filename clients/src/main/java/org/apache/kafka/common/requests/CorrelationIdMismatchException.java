@@ -14,14 +14,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.raft;
+package org.apache.kafka.common.requests;
 
-import java.util.Locale;
+/**
+ * Raised if the correlationId in a response header does not match
+ * the expected value from the request header.
+ */
+public class CorrelationIdMismatchException extends IllegalStateException {
+    private final int requestCorrelationId;
+    private final int responseCorrelationId;
 
-public enum AckMode {
-    LEADER, QUORUM;
-
-    public static AckMode forConfig(String config) {
-        return AckMode.valueOf(config.toUpperCase(Locale.ROOT));
+    public CorrelationIdMismatchException(
+        String message,
+        int requestCorrelationId,
+        int responseCorrelationId
+    ) {
+        super(message);
+        this.requestCorrelationId = requestCorrelationId;
+        this.responseCorrelationId = responseCorrelationId;
     }
+
+    public int requestCorrelationId() {
+        return requestCorrelationId;
+    }
+
+    public int responseCorrelationId() {
+        return responseCorrelationId;
+    }
+
 }

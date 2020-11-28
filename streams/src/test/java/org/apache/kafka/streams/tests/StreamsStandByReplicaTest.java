@@ -26,6 +26,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -127,11 +128,11 @@ public class StreamsStandByReplicaTest {
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), streamsProperties);
 
-        streams.setUncaughtExceptionHandler((t, e) -> {
+        streams.setUncaughtExceptionHandler(e -> {
             System.err.println("FATAL: An unexpected exception " + e);
             e.printStackTrace(System.err);
             System.err.flush();
-            shutdown(streams);
+            return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
         });
 
         streams.setStateListener((newState, oldState) -> {

@@ -17,13 +17,18 @@
 package org.apache.kafka.common.security.authenticator;
 
 import javax.security.auth.x500.X500Principal;
+
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.message.DefaultPrincipalData;
 import org.apache.kafka.common.network.Authenticator;
 import org.apache.kafka.common.network.TransportLayer;
+import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.security.auth.AuthenticationContext;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
+import org.apache.kafka.common.security.auth.KafkaPrincipalSerde;
 import org.apache.kafka.common.security.auth.PlaintextAuthenticationContext;
 import org.apache.kafka.common.security.auth.SaslAuthenticationContext;
 import org.apache.kafka.common.security.auth.SslAuthenticationContext;
@@ -37,6 +42,7 @@ import org.apache.kafka.common.security.ssl.SslPrincipalMapper;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.security.Principal;
 
 import static java.util.Objects.requireNonNull;
@@ -51,7 +57,7 @@ import static java.util.Objects.requireNonNull;
  * of {@link KafkaPrincipalBuilder}, there is no default no-arg constructor since this class
  * must adapt implementations of the older {@link org.apache.kafka.common.security.auth.PrincipalBuilder} interface.
  */
-public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, Closeable {
+public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, KafkaPrincipalSerde, Closeable {
     // Use FQN to avoid import deprecation warnings
     @SuppressWarnings("deprecation")
     private final org.apache.kafka.common.security.auth.PrincipalBuilder oldPrincipalBuilder;
@@ -162,9 +168,35 @@ public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, Clos
     }
 
     @Override
+    public byte[] serialize(KafkaPrincipal principal) {
+        DefaultPrincipalData data = new DefaultPrincipalData()
+                                        .setType(principal.getPrincipalType())
+                                        .setName(principal.getName())
+                                        .setTokenAuthenticated(principal.tokenAuthenticated());
+        Struct dataStruct = data.toStruct(DefaultPrincipalData.HIGHEST_SUPPORTED_VERSION);
+        ByteBuffer buffer = ByteBuffer.allocate(2 + dataStruct.sizeOf());
+        buffer.putShort(DefaultPrincipalData.HIGHEST_SUPPORTED_VERSION);
+        dataStruct.writeTo(buffer);
+        return buffer.array();
+    }
+
+    @Override
+    public KafkaPrincipal deserialize(byte[] bytes) {
+        ByteBuffer buffer = ByteBuffer.wrap(bytes);
+        short version = buffer.getShort();
+        if (version < 0 || version >= DefaultPrincipalData.SCHEMAS.length) {
+            throw new SerializationException("Invalid principal data version " + version);
+        }
+
+        DefaultPrincipalData data = new DefaultPrincipalData(
+            DefaultPrincipalData.SCHEMAS[version].read(buffer),
+            version);
+        return new KafkaPrincipal(data.type(), data.name(), data.tokenAuthenticated());
+    }
+
+    @Override
     public void close() {
         if (oldPrincipalBuilder != null)
             oldPrincipalBuilder.close();
     }
-
 }

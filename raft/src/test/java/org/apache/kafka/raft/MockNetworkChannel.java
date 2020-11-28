@@ -72,6 +72,39 @@ public class MockNetworkChannel implements NetworkChannel {
         addressCache.put(id, address);
     }
 
+    public RaftRequest.Outbound drainNextRequest(int destinationId) {
+        Iterator<RaftMessage> iterator = sendQueue.iterator();
+        while (iterator.hasNext()) {
+            RaftMessage message = iterator.next();
+            if (message instanceof RaftRequest.Outbound) {
+                RaftRequest.Outbound request = (RaftRequest.Outbound) message;
+                if (request.destinationId() == destinationId) {
+                    iterator.remove();
+                    return request;
+                }
+            }
+        }
+        return null;
+    }
+
+    public RaftResponse.Outbound drainNextResponse(int correlationId) {
+        Iterator<RaftMessage> iterator = sendQueue.iterator();
+        while (iterator.hasNext()) {
+            RaftMessage message = iterator.next();
+            if (message.correlationId() == correlationId) {
+                if (!(message instanceof RaftResponse.Outbound)) {
+                    throw new IllegalStateException("Message " + message +
+                        " is not an outbound response as we expected");
+                }
+
+                RaftResponse.Outbound response = (RaftResponse.Outbound) message;
+                iterator.remove();
+                return response;
+            }
+        }
+        return null;
+    }
+
     public List<RaftMessage> drainSendQueue() {
         List<RaftMessage> messages = sendQueue;
         sendQueue = new ArrayList<>();

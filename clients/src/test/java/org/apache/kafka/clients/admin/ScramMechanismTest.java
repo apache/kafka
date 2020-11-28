@@ -14,13 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.raft;
 
-import org.apache.kafka.common.KafkaException;
+package org.apache.kafka.clients.admin;
 
-public class LogTruncationException extends KafkaException {
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-    public LogTruncationException(String message) {
-        super(message);
+import org.junit.jupiter.api.Test;
+
+class ScramMechanismTest {
+
+    @Test
+    public void testFromMechanismName() {
+        assertEquals(ScramMechanism.UNKNOWN, ScramMechanism.fromMechanismName("UNKNOWN"));
+        assertEquals(ScramMechanism.SCRAM_SHA_256, ScramMechanism.fromMechanismName("SCRAM-SHA-256"));
+        assertEquals(ScramMechanism.SCRAM_SHA_512, ScramMechanism.fromMechanismName("SCRAM-SHA-512"));
+        assertEquals(ScramMechanism.UNKNOWN, ScramMechanism.fromMechanismName("some string"));
+        assertEquals(ScramMechanism.UNKNOWN, ScramMechanism.fromMechanismName("scram-sha-256"));
     }
+
 }

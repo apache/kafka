@@ -62,7 +62,7 @@ public abstract class AbstractRecords implements Records {
     }
 
     @Override
-    public RecordsSend toSend(String destination) {
+    public DefaultRecordsSend toSend(String destination) {
         return new DefaultRecordsSend(destination, this);
     }
 

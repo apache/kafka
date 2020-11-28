@@ -85,11 +85,11 @@ public final class ClientRequest {
     public RequestHeader makeHeader(short version) {
         short requestApiKey = requestBuilder.apiKey().id;
         return new RequestHeader(
-            new RequestHeaderData().
-                setRequestApiKey(requestApiKey).
-                setRequestApiVersion(version).
-                setClientId(clientId).
-                setCorrelationId(correlationId),
+            new RequestHeaderData()
+                .setRequestApiKey(requestApiKey)
+                .setRequestApiVersion(version)
+                .setClientId(clientId)
+                .setCorrelationId(correlationId),
             ApiKeys.forId(requestApiKey).requestHeaderVersion(version));
     }
 

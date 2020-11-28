@@ -34,6 +34,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.kstream.Grouped;
 
 import java.io.IOException;
@@ -88,7 +89,7 @@ public class BrokerCompatibilityTest {
             .to(SINK_TOPIC);
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), streamsProperties);
-        streams.setUncaughtExceptionHandler((t, e) -> {
+        streams.setUncaughtExceptionHandler(e -> {
             Throwable cause = e;
             if (cause instanceof StreamsException) {
                 while (cause.getCause() != null) {
@@ -98,7 +99,7 @@ public class BrokerCompatibilityTest {
             System.err.println("FATAL: An unexpected exception " + cause);
             e.printStackTrace(System.err);
             System.err.flush();
-            streams.close(Duration.ofSeconds(30));
+            return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
         });
         System.out.println("start Kafka Streams");
         streams.start();

@@ -833,7 +833,7 @@ public class IntegrationTestUtils {
      * {@link State#RUNNING} state at the same time. Note that states may change between the time
      * that this method returns and the calling function executes its next statement.<p>
      *
-     * When the application is already started use {@link #waitForApplicationState(List, State, Duration)}
+     * If the application is already started, use {@link #waitForApplicationState(List, State, Duration)}
      * to wait for instances to reach {@link State#RUNNING} state.
      *
      * @param streamsList the list of streams instances to run.
@@ -903,16 +903,19 @@ public class IntegrationTestUtils {
     }
 
     /**
-     * Waits for the given {@link KafkaStreams} instances to all be in a {@link State#RUNNING}
-     * state. Prefer {@link #startApplicationAndWaitUntilRunning(List, Duration)} when possible
+     * Waits for the given {@link KafkaStreams} instances to all be in a specific {@link State}.
+     * Prefer {@link #startApplicationAndWaitUntilRunning(List, Duration)} when possible
      * because this method uses polling, which can be more error prone and slightly slower.
      *
      * @param streamsList the list of streams instances to run.
-     * @param timeout the time to wait for the streams to all be in {@link State#RUNNING} state.
+     * @param state the expected state that all the streams to be in within timeout
+     * @param timeout the time to wait for the streams to all be in the specific state.
+     *
+     * @throws InterruptedException if the streams doesn't change to the expected state in time.
      */
     public static void waitForApplicationState(final List<KafkaStreams> streamsList,
                                                final State state,
-                                               final Duration timeout) throws Exception {
+                                               final Duration timeout) throws InterruptedException {
         retryOnExceptionWithTimeout(timeout.toMillis(), () -> {
             final Map<KafkaStreams, State> streamsToStates = streamsList
                 .stream()
