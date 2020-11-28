@@ -322,14 +322,9 @@ public class TopologyTestDriver implements Closeable {
                                final long initialWallClockTimeMs) {
         final Properties configCopy = new Properties();
         configCopy.putAll(config);
-        if (!configCopy.containsKey(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG)) {
-            configCopy.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-bootstrap-host:0");
-        }
-        if (!configCopy.containsKey(StreamsConfig.APPLICATION_ID_CONFIG)) {
-            // provide randomized dummy app-id if it's not specified
-            configCopy.setProperty(StreamsConfig.APPLICATION_ID_CONFIG,
-                    "dummy-topology-test-driver-app-id-" + ThreadLocalRandom.current().nextInt());
-        }
+        configCopy.putIfAbsent(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-bootstrap-host:0");
+        // provide randomized dummy app-id if it's not specified
+        configCopy.putIfAbsent(StreamsConfig.APPLICATION_ID_CONFIG,  "dummy-topology-test-driver-app-id-" + ThreadLocalRandom.current().nextInt());
         final StreamsConfig streamsConfig = new ClientUtils.QuietStreamsConfig(configCopy);
         logIfTaskIdleEnabled(streamsConfig);
 
