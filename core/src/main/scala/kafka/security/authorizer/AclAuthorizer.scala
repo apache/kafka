@@ -131,8 +131,7 @@ class AclAuthorizer extends Authorizer with Logging {
   @volatile
   private var aclCache = new scala.collection.immutable.TreeMap[ResourcePattern, VersionedAcls]()(new ResourceOrdering)
 
-  @volatile
-  private var resourceCache = new scala.collection.immutable.HashMap[AccessControlEntry,
+  private val resourceCache = new scala.collection.mutable.HashMap[AccessControlEntry,
     scala.collection.mutable.HashSet[ResourcePattern]]()
 
   private val lock = new Object()
@@ -675,7 +674,7 @@ class AclAuthorizer extends Authorizer with Logging {
     acesToAdd.foreach(ace => {
       resourceCache.get(ace) match {
         case Some(resources) => resources.add(resource)
-        case None => resourceCache += (ace -> scala.collection.mutable.HashSet(resource))
+        case None => resourceCache.put(ace, scala.collection.mutable.HashSet(resource))
       }
     })
     acesToRemove.foreach(ace => {
@@ -683,7 +682,7 @@ class AclAuthorizer extends Authorizer with Logging {
         case Some(resources) =>
           resources.remove(resource)
           if (resources.isEmpty) {
-            resourceCache -= ace
+            resourceCache.remove(ace)
           }
         case None =>
       }
