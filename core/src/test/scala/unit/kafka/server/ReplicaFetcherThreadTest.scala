@@ -437,8 +437,8 @@ class ReplicaFetcherThreadTest {
     thread.doWork()
     assertEquals(2, mockNetwork.epochFetchCount)
     assertEquals(1, mockNetwork.fetchCount)
-    assertEquals("OffsetsForLeaderEpochRequest version.",
-      3, mockNetwork.lastUsedOffsetForLeaderEpochVersion)
+    assertTrue("OffsetsForLeaderEpochRequest version.",
+      mockNetwork.lastUsedOffsetForLeaderEpochVersion >= 3)
 
     //Loop 3 we should not fetch epochs
     thread.doWork()

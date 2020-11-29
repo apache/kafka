@@ -1883,9 +1883,9 @@ public class RequestResponseTest {
     }
 
     private WriteTxnMarkersRequest createWriteTxnMarkersRequest() {
-        return new WriteTxnMarkersRequest.Builder(
-            Collections.singletonList(new WriteTxnMarkersRequest.TxnMarkerEntry(21L, (short) 42, 73, TransactionResult.ABORT,                     Collections.singletonList(new TopicPartition("topic", 73)))),
-                ApiKeys.WRITE_TXN_MARKERS.latestVersion()).build();
+        List<TopicPartition> partitions = Collections.singletonList(new TopicPartition("topic", 73));
+        WriteTxnMarkersRequest.TxnMarkerEntry txnMarkerEntry = new WriteTxnMarkersRequest.TxnMarkerEntry(21L, (short) 42, 73, TransactionResult.ABORT, partitions);
+        return new WriteTxnMarkersRequest.Builder(Collections.singletonList(txnMarkerEntry), ApiKeys.WRITE_TXN_MARKERS.latestVersion()).build();
     }
 
     private WriteTxnMarkersResponse createWriteTxnMarkersResponse() {
