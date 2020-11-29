@@ -57,7 +57,7 @@ public class MetricsUtils {
     public static Map<String, String> getTags(String... keyValue) {
         if ((keyValue.length % 2) != 0)
             throw new IllegalArgumentException("keyValue needs to be specified in pairs");
-        Map<String, String> tags = new LinkedHashMap<>();
+        Map<String, String> tags = new LinkedHashMap<>(keyValue.length / 2);
 
         for (int i = 0; i < keyValue.length; i += 2)
             tags.put(keyValue[i], keyValue[i + 1]);
