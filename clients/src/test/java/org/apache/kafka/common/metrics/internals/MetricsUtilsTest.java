@@ -21,6 +21,7 @@ import org.junit.Test;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 public class MetricsUtilsTest {
 
@@ -32,8 +33,8 @@ public class MetricsUtilsTest {
         assertEquals(2, tags.size());
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testCreatingTagsWithOddNumberOfTags() {
-        MetricsUtils.getTags("k1", "v1", "k2", "v2", "extra");
+        assertThrows(IllegalArgumentException.class, () -> MetricsUtils.getTags("k1", "v1", "k2", "v2", "extra"));
     }
 }
