@@ -96,7 +96,7 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Offs
               .setTopic(tp.topic)
             data.topics.add(topic)
           }
-          topic.partitions.add(offsetForLeaderPartition.setPartition(tp.partition))
+          topic.partitions.add(offsetForLeaderPartition)
         })
 
         new OffsetsForLeaderEpochResponse(data)
