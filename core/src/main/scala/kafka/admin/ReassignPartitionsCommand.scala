@@ -479,8 +479,7 @@ object ReassignPartitionsCommand extends Logging {
 
   private def topicDescriptionFutureToState(partition: Int,
                                             future: KafkaFuture[TopicDescription],
-                                            targetReplicas: Seq[Int])
-                                            : PartitionReassignmentState = {
+                                            targetReplicas: Seq[Int]): PartitionReassignmentState = {
     try {
       val topicDescription = future.get()
       if (topicDescription.partitions().size() < partition) {
@@ -494,7 +493,8 @@ object ReassignPartitionsCommand extends Logging {
       case t: ExecutionException =>
         t.getCause match {
           case _: UnknownTopicOrPartitionException =>
-            new PartitionReassignmentState(Seq(), targetReplicas, true)
+            PartitionReassignmentState(Seq(), targetReplicas, true)
+          case e => throw e
         }
     }
   }

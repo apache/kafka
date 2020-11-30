@@ -45,6 +45,8 @@ object KafkaNetworkChannel {
         new EndQuorumEpochResponse(endEpochResponse)
       case fetchResponse: FetchResponseData =>
         new FetchResponse(fetchResponse)
+      case _ =>
+        throw new IllegalArgumentException(s"Unexpected type for responseData: $responseData")
     }
   }
 
@@ -61,6 +63,8 @@ object KafkaNetworkChannel {
         new AbstractRequest.Builder[FetchRequest](ApiKeys.FETCH) {
           override def build(version: Short): FetchRequest = new FetchRequest(fetchRequest, version)
         }
+      case _ =>
+        throw new IllegalArgumentException(s"Unexpected type for requestData: $requestData")
     }
   }
 
@@ -70,6 +74,7 @@ object KafkaNetworkChannel {
       case beginEpochResponse: BeginQuorumEpochResponse => beginEpochResponse.data
       case endEpochResponse: EndQuorumEpochResponse => endEpochResponse.data
       case fetchResponse: FetchResponse[_] => fetchResponse.data
+      case _ => throw new IllegalArgumentException(s"Unexpected type for response: $response")
     }
   }
 
@@ -79,6 +84,7 @@ object KafkaNetworkChannel {
       case beginEpochRequest: BeginQuorumEpochRequest => beginEpochRequest.data
       case endEpochRequest: EndQuorumEpochRequest => endEpochRequest.data
       case fetchRequest: FetchRequest => fetchRequest.data
+      case _ => throw new IllegalArgumentException(s"Unexpected type for request: $request")
     }
   }
 

@@ -59,6 +59,8 @@ import java.util.Set;
 import java.util.function.Supplier;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -168,6 +170,20 @@ public class ProcessorTopologyTest {
         processorTopology.updateSourceTopics(Collections.singletonMap("source-1", Collections.singletonList("topic-1")));
 
         assertNull(processorTopology.source("topic-2"));
+    }
+
+    @Test
+    public void shouldUpdateSourceTopicsOnlyForSourceNodesWithinTheSubtopology() {
+        topology.addSource("source-1", "topic-1");
+        final ProcessorTopology processorTopology = topology.getInternalBuilder("X").buildTopology();
+
+        processorTopology.updateSourceTopics(mkMap(
+            mkEntry("source-1", Collections.singletonList("topic-1")),
+            mkEntry("source-2", Collections.singletonList("topic-2")))
+        );
+
+        assertNull(processorTopology.source("topic-2"));
+        assertThat(processorTopology.sources().size(), equalTo(1));
     }
 
     @Test

@@ -174,6 +174,10 @@ public class ProduceResponse extends AbstractResponse {
             this(error, INVALID_OFFSET, RecordBatch.NO_TIMESTAMP, INVALID_OFFSET);
         }
 
+        public PartitionResponse(Errors error, String errorMessage) {
+            this(error, INVALID_OFFSET, RecordBatch.NO_TIMESTAMP, INVALID_OFFSET, Collections.emptyList(), errorMessage);
+        }
+
         public PartitionResponse(Errors error, long baseOffset, long logAppendTime, long logStartOffset) {
             this(error, baseOffset, logAppendTime, logStartOffset, Collections.emptyList(), null);
         }

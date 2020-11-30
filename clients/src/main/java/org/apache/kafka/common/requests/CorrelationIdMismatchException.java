@@ -14,21 +14,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.record;
+package org.apache.kafka.common.requests;
 
 /**
- * Base interface for accessing records which could be contained in the log, or an in-memory materialization of log records.
+ * Raised if the correlationId in a response header does not match
+ * the expected value from the request header.
  */
-public interface BaseRecords {
-    /**
-     * The size of these records in bytes.
-     * @return The size in bytes of the records
-     */
-    int sizeInBytes();
+public class CorrelationIdMismatchException extends IllegalStateException {
+    private final int requestCorrelationId;
+    private final int responseCorrelationId;
 
-    /**
-     * Encapsulate this {@link BaseRecords} object into {@link RecordsSend}
-     * @return Initialized {@link RecordsSend} object
-     */
-    RecordsSend<? extends BaseRecords> toSend(String destination);
+    public CorrelationIdMismatchException(
+        String message,
+        int requestCorrelationId,
+        int responseCorrelationId
+    ) {
+        super(message);
+        this.requestCorrelationId = requestCorrelationId;
+        this.responseCorrelationId = responseCorrelationId;
+    }
+
+    public int requestCorrelationId() {
+        return requestCorrelationId;
+    }
+
+    public int responseCorrelationId() {
+        return responseCorrelationId;
+    }
+
 }

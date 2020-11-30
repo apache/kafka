@@ -17,25 +17,17 @@
 
 package kafka.server
 
-import kafka.metrics.KafkaMetricsGroup
+import java.nio.ByteBuffer
+
 import kafka.network.RequestChannel
+import kafka.utils.Logging
 import org.apache.kafka.clients.ClientResponse
-import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EnvelopeRequest, EnvelopeResponse}
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EnvelopeRequest, EnvelopeResponse, RequestHeader}
 
 import scala.compat.java8.OptionConverters._
 
-class ForwardingManager(metadataCache: kafka.server.MetadataCache,
-                        time: Time,
-                        metrics: Metrics,
-                        config: KafkaConfig,
-                        threadNamePrefix: Option[String] = None) extends
-  BrokerToControllerChannelManagerImpl(metadataCache, time, metrics,
-    config, "forwardingChannel", threadNamePrefix) with KafkaMetricsGroup {
-
-  private val forwardingMetricName = "NumRequestsForwardingToControllerPerSec"
+class ForwardingManager(channelManager: BrokerToControllerChannelManager) extends Logging {
 
   def forwardRequest(request: RequestChannel.Request,
                      responseCallback: AbstractResponse => Unit): Unit = {
@@ -55,6 +47,7 @@ class ForwardingManager(metadataCache: kafka.server.MetadataCache,
     def onClientResponse(clientResponse: ClientResponse): Unit = {
       val envelopeResponse = clientResponse.responseBody.asInstanceOf[EnvelopeResponse]
       val envelopeError = envelopeResponse.error()
+      val requestBody = request.body[AbstractRequest]
 
       val response = if (envelopeError != Errors.NONE) {
         // An envelope error indicates broker misconfiguration (e.g. the principal serde
@@ -62,24 +55,29 @@ class ForwardingManager(metadataCache: kafka.server.MetadataCache,
         // the error directly to the client since it would not be expected. Instead we
         // return `UNKNOWN_SERVER_ERROR` so that the user knows that there is a problem
         // on the broker.
-        debug(s"Forwarded request $request failed with an error in envelope response $envelopeError")
-        request.body[AbstractRequest].getErrorResponse(Errors.UNKNOWN_SERVER_ERROR.exception())
+        debug(s"Forwarded request $request failed with an error in the envelope response $envelopeError")
+        requestBody.getErrorResponse(Errors.UNKNOWN_SERVER_ERROR.exception)
       } else {
-        AbstractResponse.parseResponse(envelopeResponse.responseData, request.header)
+        parseResponse(envelopeResponse.responseData, requestBody, request.header)
       }
       responseCallback(response)
     }
 
-    sendRequest(envelopeRequest, onClientResponse)
+    channelManager.sendRequest(envelopeRequest, onClientResponse)
   }
 
-  override def start(): Unit = {
-    super.start()
-    newGauge(forwardingMetricName, () => requestQueue.size())
+  private def parseResponse(
+    buffer: ByteBuffer,
+    request: AbstractRequest,
+    header: RequestHeader
+  ): AbstractResponse = {
+    try {
+      AbstractResponse.parseResponse(buffer, header)
+    } catch {
+      case e: Exception =>
+        error(s"Failed to parse response from envelope for request with header $header", e)
+        request.getErrorResponse(Errors.UNKNOWN_SERVER_ERROR.exception)
+    }
   }
 
-  override def shutdown(): Unit = {
-    removeMetric(forwardingMetricName)
-    super.shutdown()
-  }
 }

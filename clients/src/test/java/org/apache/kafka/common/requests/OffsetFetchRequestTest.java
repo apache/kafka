@@ -84,7 +84,8 @@ public class OffsetFetchRequestTest {
             OffsetFetchResponse response = request.getErrorResponse(throttleTimeMs, Errors.NONE);
             assertEquals(Errors.NONE, response.error());
             assertFalse(response.hasError());
-            assertEquals(Collections.singletonMap(Errors.NONE, 1), response.errorCounts());
+            assertEquals("Incorrect error count for version " + version,
+                    Collections.singletonMap(Errors.NONE, version <= (short) 1 ? 3 : 1), response.errorCounts());
 
             if (version <= 1) {
                 assertEquals(expectedData, response.responseData());

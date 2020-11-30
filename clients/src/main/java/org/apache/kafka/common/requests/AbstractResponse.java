@@ -50,6 +50,11 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
         return RequestUtils.serialize(header.toStruct(), toStruct(version));
     }
 
+    /**
+     * The number of each type of error in the response, including {@link Errors#NONE} and top-level errors as well as
+     * more specifically scoped errors (such as topic or partition-level errors).
+     * @return A count of errors.
+     */
     public abstract Map<Errors, Integer> errorCounts();
 
     protected Map<Errors, Integer> errorCounts(Errors error) {
@@ -85,11 +90,18 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
      * Parse a response from the provided buffer. The buffer is expected to hold both
      * the {@link ResponseHeader} as well as the response payload.
      */
-    public static AbstractResponse parseResponse(ByteBuffer byteBuffer, RequestHeader header) {
-        ApiKeys apiKey = header.apiKey();
-        short apiVersion = header.apiVersion();
+    public static AbstractResponse parseResponse(ByteBuffer byteBuffer, RequestHeader requestHeader) {
+        ApiKeys apiKey = requestHeader.apiKey();
+        short apiVersion = requestHeader.apiVersion();
 
-        ResponseHeader.parse(byteBuffer, apiKey.responseHeaderVersion(apiVersion));
+        ResponseHeader responseHeader = ResponseHeader.parse(byteBuffer, apiKey.responseHeaderVersion(apiVersion));
+        if (requestHeader.correlationId() != responseHeader.correlationId()) {
+            throw new CorrelationIdMismatchException("Correlation id for response ("
+                + responseHeader.correlationId() + ") does not match request ("
+                + requestHeader.correlationId() + "), request header: " + requestHeader,
+                requestHeader.correlationId(), responseHeader.correlationId());
+        }
+
         Struct struct = apiKey.parseResponse(apiVersion, byteBuffer);
         return AbstractResponse.parseResponse(apiKey, struct, apiVersion);
     }

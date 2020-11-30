@@ -14,21 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.record;
 
-/**
- * Base interface for accessing records which could be contained in the log, or an in-memory materialization of log records.
- */
-public interface BaseRecords {
-    /**
-     * The size of these records in bytes.
-     * @return The size in bytes of the records
-     */
-    int sizeInBytes();
+package org.apache.kafka.clients.admin;
 
-    /**
-     * Encapsulate this {@link BaseRecords} object into {@link RecordsSend}
-     * @return Initialized {@link RecordsSend} object
-     */
-    RecordsSend<? extends BaseRecords> toSend(String destination);
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import org.junit.jupiter.api.Test;
+
+class ScramMechanismTest {
+
+    @Test
+    public void testFromMechanismName() {
+        assertEquals(ScramMechanism.UNKNOWN, ScramMechanism.fromMechanismName("UNKNOWN"));
+        assertEquals(ScramMechanism.SCRAM_SHA_256, ScramMechanism.fromMechanismName("SCRAM-SHA-256"));
+        assertEquals(ScramMechanism.SCRAM_SHA_512, ScramMechanism.fromMechanismName("SCRAM-SHA-512"));
+        assertEquals(ScramMechanism.UNKNOWN, ScramMechanism.fromMechanismName("some string"));
+        assertEquals(ScramMechanism.UNKNOWN, ScramMechanism.fromMechanismName("scram-sha-256"));
+    }
+
 }

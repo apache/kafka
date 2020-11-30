@@ -312,6 +312,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
+        updateErrorCounts(errorCounts, error());
         responseDataMap.values().forEach(response ->
             updateErrorCounts(errorCounts, response.error())
         );

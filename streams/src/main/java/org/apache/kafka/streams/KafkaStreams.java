@@ -350,7 +350,7 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     /**
-     * Set the handler invoked when a {@link StreamsConfig#NUM_STREAM_THREADS_CONFIG internal thread} abruptly
+     * Set the handler invoked when an internal {@link StreamsConfig#NUM_STREAM_THREADS_CONFIG stream thread} abruptly
      * terminates due to an uncaught exception.
      *
      * @param uncaughtExceptionHandler the uncaught exception handler for all internal threads; {@code null} deletes the current handler
@@ -379,13 +379,12 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     /**
-     * Set the handler invoked when an {@link StreamsConfig#NUM_STREAM_THREADS_CONFIG internal thread}
+     * Set the handler invoked when an internal {@link StreamsConfig#NUM_STREAM_THREADS_CONFIG stream thread}
      * throws an unexpected exception.
      * These might be exceptions indicating rare bugs in Kafka Streams, or they
-     * might be exceptions thrown by your code, for example a NullPointerException thrown from your processor
-     * logic.
+     * might be exceptions thrown by your code, for example a NullPointerException thrown from your processor logic.
      * The handler will execute on the thread that produced the exception.
-     * In order to get the thread that threw the exception, Thread.currentThread().
+     * In order to get the thread that threw the exception, use {@code Thread.currentThread()}.
      * <p>
      * Note, this handler must be threadsafe, since it will be shared among all threads, and invoked from any
      * thread that encounters such an exception.

@@ -2944,7 +2944,7 @@ public class TaskManagerTest {
         }
 
         @Override
-        public void update(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> nodeToSourceTopics) {
+        public void update(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> allTopologyNodesToSourceTopics) {
             inputPartitions = topicPartitions;
         }
 
