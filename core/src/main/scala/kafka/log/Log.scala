@@ -533,6 +533,7 @@ class Log(@volatile private var _dir: File,
   def name  = dir.getName()
 
   def recordVersion: RecordVersion = config.messageFormatVersion.recordVersion
+  def producersCount: Int = producerStateManager.producersCount
 
   private def initializeLeaderEpochCache(): Unit = lock synchronized {
     val leaderEpochFile = LeaderEpochCheckpointFile.newFile(dir)

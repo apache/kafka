@@ -589,6 +589,8 @@ class ProducerStateManager(val topicPartition: TopicPartition,
    */
   def activeProducers: immutable.Map[Long, ProducerStateEntry] = producers.toMap
 
+  def producersCount: Int = producers.size
+
   def isEmpty: Boolean = producers.isEmpty && unreplicatedTxns.isEmpty
 
   private def loadFromSnapshot(logStartOffset: Long, currentTime: Long): Unit = {
