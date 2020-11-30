@@ -4411,9 +4411,11 @@ class LogTest {
     assertEquals(0L, log.lastStableOffset)
 
     // Try the append a second time. The appended offset in the log should still increase.
-    assertThrows[KafkaStorageException] {
-      appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, coordinatorEpoch = 1)
-    }
+    // Note that the second append does not write to the transaction index because the producer
+    // state has already been updated and we do not write index entries for empty transactions.
+    // In the future, we may strengthen the fencing logic so that additional writes to the
+    // log are not possible after an IO error (see KAFKA-10778).
+    appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, coordinatorEpoch = 1)
     assertEquals(12L, log.logEndOffset)
     assertEquals(0L, log.lastStableOffset)
 
@@ -4425,7 +4427,7 @@ class LogTest {
 
     val reopenedLog = createLog(logDir, logConfig, lastShutdownClean = false)
     assertEquals(12L, reopenedLog.logEndOffset)
-    assertEquals(2, reopenedLog.activeSegment.txnIndex.allAbortedTxns.size)
+    assertEquals(1, reopenedLog.activeSegment.txnIndex.allAbortedTxns.size)
     reopenedLog.updateHighWatermark(12L)
     assertEquals(None, reopenedLog.firstUnstableOffset)
   }
