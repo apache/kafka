@@ -515,13 +515,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         sendErrorResponseMaybeThrottle(request, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED.exception)
         return
       }
-      // Note that authorization to a transactionalId implies ProducerId authorization
-
-    } else if (produceRequest.hasIdempotentRecords
-        && !authorize(request.context, IDEMPOTENT_WRITE, CLUSTER, CLUSTER_NAME)
-        && !authorizeByResourceType(request.context, WRITE, TOPIC)) {
-      sendErrorResponseMaybeThrottle(request, Errors.CLUSTER_AUTHORIZATION_FAILED.exception)
-      return
     }
 
     val produceRecords = produceRequest.partitionRecordsOrFail.asScala
@@ -2036,7 +2029,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         sendErrorResponseMaybeThrottle(request, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED.exception)
         return
       }
-    } else if (!authorize(request.context, IDEMPOTENT_WRITE, CLUSTER, CLUSTER_NAME)
+    } else if (!authorize(request.context, IDEMPOTENT_WRITE, CLUSTER, CLUSTER_NAME, true, false)
         || !authorizeByResourceType(request.context, AclOperation.WRITE, ResourceType.TOPIC)) {
       sendErrorResponseMaybeThrottle(request, Errors.CLUSTER_AUTHORIZATION_FAILED.exception)
       return

@@ -341,11 +341,15 @@ class AclAuthorizer extends Authorizer with Logging {
       AclPermissionType.DENY
     )
 
-    if (denyAll(denyPatterns))
+    if (denyAll(denyPatterns)) {
+      logAuditMessage(requestContext, new Action(op, null,0, true, true), false, false)
       return AuthorizationResult.DENIED
+    }
 
-    if (shouldAllowEveryoneIfNoAclIsFound)
+    if (shouldAllowEveryoneIfNoAclIsFound) {
+      logAuditMessage(requestContext, new Action(op, null, 0, true, true), true, false)
       return AuthorizationResult.ALLOWED
+    }
 
     val allowPatterns = matchingPatterns(
       principal,
@@ -355,9 +359,12 @@ class AclAuthorizer extends Authorizer with Logging {
       AclPermissionType.ALLOW
     )
 
-    if (allowAny(allowPatterns, denyPatterns))
+    if (allowAny(allowPatterns, denyPatterns)) {
+      logAuditMessage(requestContext, new Action(op,null, 0, true, true), true, false)
       return AuthorizationResult.ALLOWED
+    }
 
+    logAuditMessage(requestContext, new Action(op, null, 0, true, true), false, false)
     AuthorizationResult.DENIED
   }
 
@@ -471,7 +478,7 @@ class AclAuthorizer extends Authorizer with Logging {
     // Evaluate if operation is allowed
     val authorized = isSuperUser(principal) || aclsAllowAccess
 
-    logAuditMessage(requestContext, action, authorized)
+    logAuditMessage(requestContext, action, authorized, false)
     if (authorized) AuthorizationResult.ALLOWED else AuthorizationResult.DENIED
   }
 
@@ -561,7 +568,7 @@ class AclAuthorizer extends Authorizer with Logging {
     }
   }
 
-  def logAuditMessage(requestContext: AuthorizableRequestContext, action: Action, authorized: Boolean): Unit = {
+  def logAuditMessage(requestContext: AuthorizableRequestContext, action: Action, authorized: Boolean, byResourceType: Boolean): Unit = {
     def logMessage: String = {
       val principal = requestContext.principal
       val operation = SecurityUtils.operationName(action.operation)
@@ -572,7 +579,10 @@ class AclAuthorizer extends Authorizer with Logging {
       val apiKey = if (ApiKeys.hasId(requestContext.requestType)) ApiKeys.forId(requestContext.requestType).name else requestContext.requestType
       val refCount = action.resourceReferenceCount
 
-      s"Principal = $principal is $authResult Operation = $operation from host = $host on resource = $resource for request = $apiKey with resourceRefCount = $refCount"
+      if (byResourceType)
+        s"Principal = $principal is $authResult Operation = $operation from host = $host on at least one resource of type $resourceType for request = $apiKey"
+      else
+        s"Principal = $principal is $authResult Operation = $operation from host = $host on resource = $resource for request = $apiKey with resourceRefCount = $refCount"
     }
 
     if (authorized) {
