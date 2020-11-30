@@ -1783,7 +1783,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testAuthorizeAnyDurability(): Unit = {
+  def testAuthorizeAnyMultipleAddAndRemove(): Unit = {
     createTopic(topic)
 
     for (_ <- 1 to 3) {

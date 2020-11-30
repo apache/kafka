@@ -86,7 +86,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
   override def setUp(): Unit = {
     super.setUp()
 
-    val authorizers = Seq(aclAuthorizer, aclAuthorizer2, MockAuthorizer.authorizer)
+    val authorizers = Seq(aclAuthorizer, aclAuthorizer2, interfaceDefaultAuthorizer.authorizer)
 
     // Increase maxUpdateRetries to avoid transient failures
     authorizers.foreach(a => a.maxUpdateRetries = Int.MaxValue)
@@ -1001,16 +1001,16 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testAuthorizeAnyDurability(): Unit = {
-    testAuthorizeAnyDurability(aclAuthorizer)
+  def testAuthorizeAnyMultipleAddAndRemove(): Unit = {
+    testAuthorizeAnyMultipleAddAndRemove(aclAuthorizer)
   }
 
   @Test
-  def testAuthorizeAnyDurabilityInterfaceDefault(): Unit = {
-    testAuthorizeAnyDurability(interfaceDefaultAuthorizer)
+  def testAuthorizeAnyMultipleAddAndRemoveInterfaceDefault(): Unit = {
+    testAuthorizeAnyMultipleAddAndRemove(interfaceDefaultAuthorizer)
   }
 
-  private def testAuthorizeAnyDurability(authorizer: Authorizer): Unit = {
+  private def testAuthorizeAnyMultipleAddAndRemove(authorizer: Authorizer): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1")
     val host1 = InetAddress.getByName("192.168.1.1")
     val resource1 = new ResourcePattern(TOPIC, "sb1" + UUID.randomUUID(), LITERAL)
