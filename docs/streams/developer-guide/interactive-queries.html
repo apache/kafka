@@ -143,8 +143,7 @@
 
 <span class="c1">// Start an instance of the topology</span>
 <span class="n">KafkaStreams</span> <span class="n">streams</span> <span class="o">=</span> <span class="k">new</span> <span class="n">KafkaStreams</span><span class="o">(</span><span class="n">builder</span><span class="o">,</span> <span class="n">props</span><span class="o">);</span>
-<span class="n">streams</span><span class="o">.</span><span class="na">start</span><span class="o">();</span>
-</pre></div>
+<span class="n">streams</span><span class="o">.</span><span class="na">start</span><span class="o">();</span></code></pre></div>
                 </div>
                 <p>After the application has started, you can get access to &#8220;CountsKeyValueStore&#8221; and then query it via the <a class="reference external" href="https://github.com/apache/kafka/blob/{{dotVersion}}/streams/src/main/java/org/apache/kafka/streams/state/ReadOnlyKeyValueStore.java">ReadOnlyKeyValueStore</a> API:</p>
                 <div class="highlight-java"><div class="highlight"><pre><span></span><span class="c1">// Get the key-value store CountsKeyValueStore</span>
@@ -166,8 +165,7 @@
 <span class="k">while</span> <span class="o">(</span><span class="n">range</span><span class="o">.</span><span class="na">hasNext</span><span class="o">())</span> <span class="o">{</span>
   <span class="n">KeyValue</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">next</span> <span class="o">=</span> <span class="n">range</span><span class="o">.</span><span class="na">next</span><span class="o">();</span>
   <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&quot;count for &quot;</span> <span class="o">+</span> <span class="n">next</span><span class="o">.</span><span class="na">key</span> <span class="o">+</span> <span class="s">&quot;: &quot;</span> <span class="o">+</span> <span class="n">next</span><span class="o">.</span><span class="na">value</span><span class="o">);</span>
-<span class="o">}</span>
-</pre></div>
+<span class="o">}</span></code></pre></div>
                 </div>
                 <p>You can also materialize the results of stateless operators by using the overloaded methods that take a <code class="docutils literal"><span class="pre">queryableStoreName</span></code>
                     as shown in the example below:</p>
@@ -182,8 +180,7 @@
 
 <span class="c1">// do not materialize the result of filtering corresponding to even numbers</span>
 <span class="c1">// this means that these results will not be materialized and cannot be queried.</span>
-<span class="n">KTable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Integer</span><span class="o">&gt;</span> <span class="n">oddCounts</span> <span class="o">=</span> <span class="n">numberLines</span><span class="o">.</span><span class="na">filter</span><span class="o">((</span><span class="n">region</span><span class="o">,</span> <span class="n">count</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="o">(</span><span class="n">count</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">==</span> <span class="mi">0</span><span class="o">));</span>
-</pre></div>
+<span class="n">KTable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Integer</span><span class="o">&gt;</span> <span class="n">oddCounts</span> <span class="o">=</span> <span class="n">numberLines</span><span class="o">.</span><span class="na">filter</span><span class="o">((</span><span class="n">region</span><span class="o">,</span> <span class="n">count</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="o">(</span><span class="n">count</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">==</span> <span class="mi">0</span><span class="o">));</span></code></pre></div>
                 </div>
             </div>
             <div class="section" id="querying-local-window-stores">
@@ -203,8 +200,7 @@
 
 <span class="c1">// Create a window state store named &quot;CountsWindowStore&quot; that contains the word counts for every minute</span>
 <span class="n">groupedByWord</span><span class="o">.</span><span class="na">windowedBy</span><span class="o">(</span><span class="n">TimeWindows</span><span class="o">.</span><span class="na">of</span><span class="o">(<span class="n">Duration</span><span class="o">.</span><span class="na">ofSeconds</span><span class="o">(</span><span class="mi">60</span><span class="o">)))</span>
-  <span class="o">.</span><span class="na">count</span><span class="o">(</span><span class="n">Materialized</span><span class="o">.&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">,</span> <span class="n">WindowStore</span><span class="o">&lt;</span><span class="n">Bytes</span><span class="o">,</span> <span class="kt">byte</span><span class="o">[]&gt;</span><span class="n">as</span><span class="o">(</span><span class="s">&quot;CountsWindowStore&quot;</span><span class="o">));</span>
-</pre></div>
+  <span class="o">.</span><span class="na">count</span><span class="o">(</span><span class="n">Materialized</span><span class="o">.&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">,</span> <span class="n">WindowStore</span><span class="o">&lt;</span><span class="n">Bytes</span><span class="o">,</span> <span class="kt">byte</span><span class="o">[]&gt;</span><span class="n">as</span><span class="o">(</span><span class="s">&quot;CountsWindowStore&quot;</span><span class="o">));</span></code></pre></div>
                 </div>
                 <p>After the application has started, you can get access to &#8220;CountsWindowStore&#8221; and then query it via the <a class="reference external" href="https://github.com/apache/kafka/blob/{{dotVersion}}/streams/src/main/java/org/apache/kafka/streams/state/ReadOnlyWindowStore.java">ReadOnlyWindowStore</a> API:</p>
                 <div class="highlight-java"><div class="highlight"><pre><span></span><span class="c1">// Get the window store named &quot;CountsWindowStore&quot;</span>
@@ -220,8 +216,7 @@
   <span class="n">KeyValue</span><span class="o">&lt;</span><span class="n">Long</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">next</span> <span class="o">=</span> <span class="n">iterator</span><span class="o">.</span><span class="na">next</span><span class="o">();</span>
   <span class="kt">long</span> <span class="n">windowTimestamp</span> <span class="o">=</span> <span class="n">next</span><span class="o">.</span><span class="na">key</span><span class="o">;</span>
   <span class="n">System</span><span class="o">.</span><span class="na">out</span><span class="o">.</span><span class="na">println</span><span class="o">(</span><span class="s">&quot;Count of &#39;world&#39; @ time &quot;</span> <span class="o">+</span> <span class="n">windowTimestamp</span> <span class="o">+</span> <span class="s">&quot; is &quot;</span> <span class="o">+</span> <span class="n">next</span><span class="o">.</span><span class="na">value</span><span class="o">);</span>
-<span class="o">}</span>
-</pre></div>
+<span class="o">}</span></code></pre></div>
                 </div>
             </div>
             <div class="section" id="querying-local-custom-state-stores">
@@ -238,7 +233,7 @@
                     <li>It is recommended that you provide an interface that restricts access to read-only operations. This prevents users of this API from mutating the state of your running Kafka Streams application out-of-band.</li>
                 </ul>
                 <p>The class/interface hierarchy for your custom store might look something like:</p>
-                <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kd">public</span> <span class="kd">class</span> <span class="nc">MyCustomStore</span><span class="o">&lt;</span><span class="n">K</span><span class="o">,</span><span class="n">V</span><span class="o">&gt;</span> <span class="kd">implements</span> <span class="n">StateStore</span><span class="o">,</span> <span class="n">MyWriteableCustomStore</span><span class="o">&lt;</span><span class="n">K</span><span class="o">,</span><span class="n">V</span><span class="o">&gt;</span> <span class="o">{</span>
+                <div class="highlight-java"><div class="highlight"><pre><code><span></span><span class="kd">public</span> <span class="kd">class</span> <span class="nc">MyCustomStore</span><span class="o">&lt;</span><span class="n">K</span><span class="o">,</span><span class="n">V</span><span class="o">&gt;</span> <span class="kd">implements</span> <span class="n">StateStore</span><span class="o">,</span> <span class="n">MyWriteableCustomStore</span><span class="o">&lt;</span><span class="n">K</span><span class="o">,</span><span class="n">V</span><span class="o">&gt;</span> <span class="o">{</span>
   <span class="c1">// implementation of the actual store</span>
 <span class="o">}</span>
 
@@ -254,8 +249,7 @@
 
 <span class="kd">public</span> <span class="kd">class</span> <span class="nc">MyCustomStoreBuilder</span> <span class="kd">implements</span> <span class="n">StoreBuilder</span> <span class="o">{</span>
   <span class="c1">// implementation of the supplier for MyCustomStore</span>
-<span class="o">}</span>
-</pre></div>
+<span class="o">}</span></code></pre></div>
                 </div>
                 <p>To make this store queryable you must:</p>
                 <ul class="simple">
@@ -274,8 +268,7 @@
       <span class="k">return</span> <span class="k">new</span> <span class="n">MyCustomStoreTypeWrapper</span><span class="o">(</span><span class="n">storeProvider</span><span class="o">,</span> <span class="n">storeName</span><span class="o">,</span> <span class="k">this</span><span class="o">);</span>
   <span class="o">}</span>
 
-<span class="o">}</span>
-</pre></div>
+<span class="o">}</span></code></pre></div>
                 </div>
                 <p>A wrapper class is required because each instance of a Kafka Streams application may run multiple stream tasks and manage
                     multiple local instances of a particular state store.  The wrapper class hides this complexity and lets you query a &#8220;logical&#8221;
@@ -286,7 +279,7 @@
                     <code class="docutils literal"><span class="pre">StateStoreProvider#stores(String</span> <span class="pre">storeName,</span> <span class="pre">QueryableStoreType&lt;T&gt;</span> <span class="pre">queryableStoreType)</span></code> returns a <code class="docutils literal"><span class="pre">List</span></code> of state
                     stores with the given storeName and of the type as defined by <code class="docutils literal"><span class="pre">queryableStoreType</span></code>.</p>
                 <p>Here is an example implementation of the wrapper follows (Java 8+):</p>
-                <div class="highlight-java"><div class="highlight"><pre><span></span><span class="c1">// We strongly recommended implementing a read-only interface</span>
+                <div class="highlight-java"><div class="highlight"><pre><code><span></span><span class="c1">// We strongly recommended implementing a read-only interface</span>
 <span class="c1">// to restrict usage of the store to safe read operations!</span>
 <span class="kd">public</span> <span class="kd">class</span> <span class="nc">MyCustomStoreTypeWrapper</span><span class="o">&lt;</span><span class="n">K</span><span class="o">,</span><span class="n">V</span><span class="o">&gt;</span> <span class="kd">implements</span> <span class="n">MyReadableCustomStore</span><span class="o">&lt;</span><span class="n">K</span><span class="o">,</span><span class="n">V</span><span class="o">&gt;</span> <span class="o">{</span>
 
@@ -312,8 +305,7 @@
     <span class="k">return</span> <span class="n">value</span><span class="o">.</span><span class="na">orElse</span><span class="o">(</span><span class="kc">null</span><span class="o">);</span>
   <span class="o">}</span>
 
-<span class="o">}</span>
-</pre></div>
+<span class="o">}</span></code></pre></div>
                 </div>
                 <p>You can now find and query your custom store:</p>
                 <div class="highlight-java"><div class="highlight"><pre><span></span>
@@ -335,8 +327,7 @@
 <span class="c1">// Get access to the custom store</span>
 <span class="n">MyReadableCustomStore</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span><span class="n">String</span><span class="o">&gt;</span> <span class="n">store</span> <span class="o">=</span> <span class="n">streams</span><span class="o">.</span><span class="na">store</span><span class="o">(</span><span class="s">&quot;the-custom-store&quot;</span><span class="o">,</span> <span class="k">new</span> <span class="n">MyCustomStoreType</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span><span class="n">String</span><span class="o">&gt;());</span>
 <span class="c1">// Query the store</span>
-<span class="n">String</span> <span class="n">value</span> <span class="o">=</span> <span class="n">store</span><span class="o">.</span><span class="na">read</span><span class="o">(</span><span class="s">&quot;key&quot;</span><span class="o">);</span>
-</pre></div>
+<span class="n">String</span> <span class="n">value</span> <span class="o">=</span> <span class="n">store</span><span class="o">.</span><span class="na">read</span><span class="o">(</span><span class="s">&quot;key&quot;</span><span class="o">);</span></code></pre></div>
                 </div>
             </div>
         </div>
@@ -410,8 +401,7 @@ interactive queries</span></p>
 <span class="c1">// fictitious, but we provide end-to-end demo applications (such as KafkaMusicExample)</span>
 <span class="c1">// that showcase how to implement such a service to get you started.</span>
 <span class="n">MyRPCService</span> <span class="n">rpcService</span> <span class="o">=</span> <span class="o">...;</span>
-<span class="n">rpcService</span><span class="o">.</span><span class="na">listenAt</span><span class="o">(</span><span class="n">rpcEndpoint</span><span class="o">);</span>
-</pre></div>
+<span class="n">rpcService</span><span class="o">.</span><span class="na">listenAt</span><span class="o">(</span><span class="n">rpcEndpoint</span><span class="o">);</span></code></pre></div>
                 </div>
             </div>
             <div class="section" id="discovering-and-accessing-application-instances-and-their-local-state-stores">
@@ -460,8 +450,7 @@ interactive queries</span></p>
         <span class="k">return</span> <span class="n">http</span><span class="o">.</span><span class="na">getLong</span><span class="o">(</span><span class="n">url</span><span class="o">);</span>
     <span class="o">})</span>
     <span class="o">.</span><span class="na">filter</span><span class="o">(</span><span class="n">s</span> <span class="o">-&gt;</span> <span class="n">s</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">)</span>
-    <span class="o">.</span><span class="na">findFirst</span><span class="o">();</span>
-</pre></div>
+    <span class="o">.</span><span class="na">findFirst</span><span class="o">();</span></code></pre></div>
                 </div>
                 <p>At this point the full state of the application is interactively queryable:</p>
                 <ul class="simple">
@@ -490,10 +479,10 @@ interactive queries</span></p>
 
                 <!--#include virtual="../../../includes/_header.htm" -->
                 <!--#include virtual="../../../includes/_top.htm" -->
-                    <div class="content documentation documentation--current">
+                    <div class="content documentation ">
                     <!--#include virtual="../../../includes/_nav.htm" -->
                     <div class="right">
-                    <!--#include virtual="../../../includes/_docs_banner.htm" -->
+                    <!--//#include virtual="../../../includes/_docs_banner.htm" -->
                     <ul class="breadcrumbs">
                     <li><a href="/documentation">Documentation</a></li>
                     <li><a href="/documentation/streams">Kafka Streams</a></li>

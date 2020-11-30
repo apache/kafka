@@ -51,7 +51,8 @@ public class ApiVersionsResponse extends AbstractResponse {
             RecordBatch.CURRENT_MAGIC_VALUE,
             Features.emptySupportedFeatures(),
             Features.emptyFinalizedFeatures(),
-            UNKNOWN_FINALIZED_FEATURES_EPOCH);
+            UNKNOWN_FINALIZED_FEATURES_EPOCH
+        );
 
     public final ApiVersionsResponseData data;
 
@@ -131,33 +132,6 @@ public class ApiVersionsResponse extends AbstractResponse {
         }
     }
 
-    public static ApiVersionsResponse apiVersionsResponse(
-        int throttleTimeMs,
-        byte maxMagic,
-        Features<SupportedVersionRange> latestSupportedFeatures) {
-        return apiVersionsResponse(
-            throttleTimeMs, maxMagic, latestSupportedFeatures, Features.emptyFinalizedFeatures(), UNKNOWN_FINALIZED_FEATURES_EPOCH);
-    }
-
-    public static ApiVersionsResponse apiVersionsResponse(
-        int throttleTimeMs,
-        byte maxMagic,
-        Features<SupportedVersionRange> latestSupportedFeatures,
-        Features<FinalizedVersionRange> finalizedFeatures,
-        long finalizedFeaturesEpoch) {
-        if (maxMagic == RecordBatch.CURRENT_MAGIC_VALUE && throttleTimeMs == DEFAULT_THROTTLE_TIME) {
-            return new ApiVersionsResponse(createApiVersionsResponseData(
-                DEFAULT_API_VERSIONS_RESPONSE.throttleTimeMs(),
-                Errors.forCode(DEFAULT_API_VERSIONS_RESPONSE.data().errorCode()),
-                DEFAULT_API_VERSIONS_RESPONSE.data().apiKeys(),
-                latestSupportedFeatures,
-                finalizedFeatures,
-                finalizedFeaturesEpoch));
-        }
-        return createApiVersionsResponse(
-            throttleTimeMs, maxMagic, latestSupportedFeatures, finalizedFeatures, finalizedFeaturesEpoch);
-    }
-
     public static ApiVersionsResponse createApiVersionsResponse(
         final int throttleTimeMs,
         final byte minMagic) {
@@ -166,7 +140,8 @@ public class ApiVersionsResponse extends AbstractResponse {
             minMagic,
             Features.emptySupportedFeatures(),
             Features.emptyFinalizedFeatures(),
-            UNKNOWN_FINALIZED_FEATURES_EPOCH);
+            UNKNOWN_FINALIZED_FEATURES_EPOCH
+        );
     }
 
     private static ApiVersionsResponse createApiVersionsResponse(
@@ -174,26 +149,28 @@ public class ApiVersionsResponse extends AbstractResponse {
         final byte minMagic,
         final Features<SupportedVersionRange> latestSupportedFeatures,
         final Features<FinalizedVersionRange> finalizedFeatures,
-        final long finalizedFeaturesEpoch
-    ) {
-        ApiVersionsResponseKeyCollection apiKeys = new ApiVersionsResponseKeyCollection();
-        for (ApiKeys apiKey : ApiKeys.enabledApis()) {
-            if (apiKey.minRequiredInterBrokerMagic <= minMagic) {
-                apiKeys.add(new ApiVersionsResponseKey()
-                    .setApiKey(apiKey.id)
-                    .setMinVersion(apiKey.oldestVersion())
-                    .setMaxVersion(apiKey.latestVersion()));
-            }
-        }
-
+        final long finalizedFeaturesEpoch) {
         return new ApiVersionsResponse(
             createApiVersionsResponseData(
                 throttleTimeMs,
                 Errors.NONE,
-                apiKeys,
+                defaultApiKeys(minMagic),
                 latestSupportedFeatures,
                 finalizedFeatures,
                 finalizedFeaturesEpoch));
+    }
+
+    public static ApiVersionsResponseKeyCollection defaultApiKeys(final byte minMagic) {
+        ApiVersionsResponseKeyCollection apiKeys = new ApiVersionsResponseKeyCollection();
+        for (ApiKeys apiKey : ApiKeys.enabledApis()) {
+            if (apiKey.minRequiredInterBrokerMagic <= minMagic) {
+                apiKeys.add(new ApiVersionsResponseKey()
+                                .setApiKey(apiKey.id)
+                                .setMinVersion(apiKey.oldestVersion())
+                                .setMaxVersion(apiKey.latestVersion()));
+            }
+        }
+        return apiKeys;
     }
 
     public static ApiVersionsResponseData createApiVersionsResponseData(

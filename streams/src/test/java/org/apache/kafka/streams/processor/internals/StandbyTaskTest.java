@@ -49,7 +49,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.slf4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
@@ -564,15 +563,14 @@ public class StandbyTaskTest {
     public void shouldInitTaskTimeoutAndEventuallyThrow() {
         EasyMock.replay(stateManager);
 
-        final Logger log = new LogContext().logger(StreamTaskTest.class);
         task = createStandbyTask();
 
-        task.maybeInitTaskTimeoutOrThrow(0L, null, log);
-        task.maybeInitTaskTimeoutOrThrow(Duration.ofMinutes(5).toMillis(), null, log);
+        task.maybeInitTaskTimeoutOrThrow(0L, null);
+        task.maybeInitTaskTimeoutOrThrow(Duration.ofMinutes(5).toMillis(), null);
 
         assertThrows(
             TimeoutException.class,
-            () -> task.maybeInitTaskTimeoutOrThrow(Duration.ofMinutes(5).plus(Duration.ofMillis(1L)).toMillis(), null, log)
+            () -> task.maybeInitTaskTimeoutOrThrow(Duration.ofMinutes(5).plus(Duration.ofMillis(1L)).toMillis(), null)
         );
     }
 
@@ -580,12 +578,11 @@ public class StandbyTaskTest {
     public void shouldCLearTaskTimeout() {
         EasyMock.replay(stateManager);
 
-        final Logger log = new LogContext().logger(StreamTaskTest.class);
         task = createStandbyTask();
 
-        task.maybeInitTaskTimeoutOrThrow(0L, null, log);
-        task.clearTaskTimeout(log);
-        task.maybeInitTaskTimeoutOrThrow(Duration.ofMinutes(5).plus(Duration.ofMillis(1L)).toMillis(), null, log);
+        task.maybeInitTaskTimeoutOrThrow(0L, null);
+        task.clearTaskTimeout();
+        task.maybeInitTaskTimeoutOrThrow(Duration.ofMinutes(5).plus(Duration.ofMillis(1L)).toMillis(), null);
     }
 
     private StandbyTask createStandbyTask() {

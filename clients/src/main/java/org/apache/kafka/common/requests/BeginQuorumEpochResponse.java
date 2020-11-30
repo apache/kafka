@@ -87,10 +87,7 @@ public class BeginQuorumEpochResponse extends AbstractResponse {
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errors = new HashMap<>();
 
-        Errors topLevelError = Errors.forCode(data.errorCode());
-        if (topLevelError != Errors.NONE) {
-            errors.put(topLevelError, 1);
-        }
+        errors.put(Errors.forCode(data.errorCode()), 1);
 
         for (BeginQuorumEpochResponseData.TopicData topicResponse : data.topics()) {
             for (BeginQuorumEpochResponseData.PartitionData partitionResponse : topicResponse.partitions()) {

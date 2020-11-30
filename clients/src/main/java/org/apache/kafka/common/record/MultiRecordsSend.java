@@ -58,6 +58,13 @@ public class MultiRecordsSend implements Send {
         this.current = sendQueue.poll();
     }
 
+    public MultiRecordsSend(String dest, Queue<Send> sends, long size) {
+        this.dest = dest;
+        this.sendQueue = sends;
+        this.size = size;
+        this.current = sendQueue.poll();
+    }
+
     @Override
     public long size() {
         return size;

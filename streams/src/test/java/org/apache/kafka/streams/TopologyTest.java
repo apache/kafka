@@ -45,10 +45,12 @@ import org.junit.Test;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static java.time.Duration.ofMillis;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -339,10 +341,6 @@ public class TopologyTest {
         final String goodNodeName = "goodGuy";
         final String badNodeName = "badGuy";
 
-        final Properties config = new Properties();
-        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "host:1");
-        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
-        config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
         mockStoreBuilder();
         EasyMock.expect(storeBuilder.build()).andReturn(new MockKeyValueStore("store", false));
         EasyMock.replay(storeBuilder);
@@ -355,7 +353,8 @@ public class TopologyTest {
             .addProcessor(badNodeName, new LocalMockProcessorSupplier(), sourceNodeName);
 
         try {
-            new TopologyTestDriver(topology, config);
+            new TopologyTestDriver(topology, mkProperties(
+                mkMap(mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath()))));
             fail("Should have thrown StreamsException");
         } catch (final StreamsException e) {
             final String error = e.toString();
@@ -382,6 +381,7 @@ public class TopologyTest {
         }
     }
 
+    @Deprecated // testing old PAPI
     @Test(expected = TopologyException.class)
     public void shouldNotAllowToAddGlobalStoreWithSourceNameEqualsProcessorName() {
         EasyMock.expect(globalStoreBuilder.name()).andReturn("anyName").anyTimes();
@@ -1227,6 +1227,7 @@ public class TopologyTest {
         return expectedSinkNode;
     }
 
+    @Deprecated // testing old PAPI
     private void addGlobalStoreToTopologyAndExpectedDescription(final String globalStoreName,
                                                                 final String sourceName,
                                                                 final String globalTopicName,

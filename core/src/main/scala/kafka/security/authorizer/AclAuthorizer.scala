@@ -291,12 +291,9 @@ class AclAuthorizer extends Authorizer with Logging {
     }.map(CompletableFuture.completedFuture[AclDeleteResult]).asJava
   }
 
-  @nowarn("cat=optimizer")
   override def acls(filter: AclBindingFilter): lang.Iterable[AclBinding] = {
     val aclBindings = new util.ArrayList[AclBinding]()
-    // Using `forKeyValue` triggers a scalac bug related to suppression of optimizer warnings, we
-    // should change this code once that's fixed
-    aclCache.foreach { case (resource, versionedAcls) =>
+    aclCache.forKeyValue { case (resource, versionedAcls) =>
       versionedAcls.acls.foreach { acl =>
         val binding = new AclBinding(resource, acl.ace)
         if (filter.matches(binding))
@@ -469,8 +466,8 @@ class AclAuthorizer extends Authorizer with Logging {
     }
 
     def aclsAllowAccess = {
-      //we allow an operation if no acls are found and user has configured to allow all users
-      //when no acls are found or if no deny acls are found and at least one allow acls matches.
+      // we allow an operation if no acls are found and user has configured to allow all users
+      // when no acls are found or if no deny acls are found and at least one allow acls matches.
       val acls = matchingAcls(resource.resourceType, resource.name)
       isEmptyAclAndAuthorized(acls) || (!denyAclExists(acls) && allowAclExists(acls))
     }
@@ -580,9 +577,11 @@ class AclAuthorizer extends Authorizer with Logging {
       val refCount = action.resourceReferenceCount
 
       if (byResourceType)
-        s"Principal = $principal is $authResult Operation = $operation from host = $host on at least one resource of type $resourceType for request = $apiKey"
+        s"Principal = $principal is $authResult Operation = $operation " +
+          s"from host = $host on at least one resource of type $resourceType for request = $apiKey"
       else
-        s"Principal = $principal is $authResult Operation = $operation from host = $host on resource = $resource for request = $apiKey with resourceRefCount = $refCount"
+        s"Principal = $principal is $authResult Operation = $operation " +
+          s"from host = $host on resource = $resource for request = $apiKey with resourceRefCount = $refCount"
     }
 
     if (authorized) {
@@ -652,7 +651,8 @@ class AclAuthorizer extends Authorizer with Logging {
       throw new IllegalStateException(s"Failed to update ACLs for $resource after trying a maximum of $maxUpdateRetries times")
 
     if (newVersionedAcls.acls != currentVersionedAcls.acls) {
-      debug(s"Updated ACLs for $resource to ${newVersionedAcls.acls} with version ${newVersionedAcls.zkVersion}")
+      info(s"Updated ACLs for $resource with new version ${newVersionedAcls.zkVersion}")
+      debug(s"Updated ACLs for $resource to $newVersionedAcls")
       updateCache(resource, newVersionedAcls)
       updateAclChangedFlag(resource)
       true
@@ -663,7 +663,6 @@ class AclAuthorizer extends Authorizer with Logging {
     }
   }
 
-  @nowarn("cat=optimizer")
   private def getAclsFromCache(resource: ResourcePattern): VersionedAcls = {
     aclCache.getOrElse(resource, throw new IllegalArgumentException(s"ACLs do not exist in the cache for resource $resource"))
   }

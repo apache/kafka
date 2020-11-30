@@ -31,15 +31,21 @@ public class LeaderState implements EpochState {
     private final int epoch;
     private final long epochStartOffset;
 
-    private Optional<LogOffsetMetadata> highWatermark = Optional.empty();
+    private Optional<LogOffsetMetadata> highWatermark;
     private final Map<Integer, VoterState> voterReplicaStates = new HashMap<>();
     private final Map<Integer, ReplicaState> observerReplicaStates = new HashMap<>();
     private static final long OBSERVER_SESSION_TIMEOUT_MS = 300_000L;
 
-    protected LeaderState(int localId, int epoch, long epochStartOffset, Set<Integer> voters) {
+    protected LeaderState(
+        int localId,
+        int epoch,
+        long epochStartOffset,
+        Set<Integer> voters
+    ) {
         this.localId = localId;
         this.epoch = epoch;
         this.epochStartOffset = epochStartOffset;
+        this.highWatermark = Optional.empty();
 
         for (int voterId : voters) {
             boolean hasEndorsedLeader = voterId == localId;
@@ -183,6 +189,10 @@ public class LeaderState implements EpochState {
         if (state == null)
             throw new IllegalArgumentException("Unexpected endorsement from non-voter " + remoteNodeId);
         return state;
+    }
+
+    public long epochStartOffset() {
+        return epochStartOffset;
     }
 
     ReplicaState getReplicaState(int remoteNodeId) {

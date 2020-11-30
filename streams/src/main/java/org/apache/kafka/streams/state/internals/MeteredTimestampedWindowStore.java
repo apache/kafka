@@ -19,11 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
-import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
-import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
@@ -50,32 +45,13 @@ class MeteredTimestampedWindowStore<K, V>
         super(inner, windowSizeMs, metricScope, time, keySerde, valueSerde);
     }
 
-    @Deprecated
     @SuppressWarnings("unchecked")
     @Override
-    void initStoreSerde(final ProcessorContext context) {
-        final String storeName = name();
-        final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
-        serdes = new StateSerdes<>(
-            changelogTopic != null ?
-                changelogTopic :
-                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName),
-            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-            valueSerde == null ? new ValueAndTimestampSerde<>((Serde<V>) context.valueSerde()) : valueSerde
-        );
-    }
-
-    @SuppressWarnings("unchecked")
-    @Override
-    void initStoreSerde(final StateStoreContext context) {
-        final String storeName = name();
-        final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
-        serdes = new StateSerdes<>(
-            changelogTopic != null ?
-                changelogTopic :
-                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName),
-            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-            valueSerde == null ? new ValueAndTimestampSerde<>((Serde<V>) context.valueSerde()) : valueSerde
-        );
+    protected Serde<ValueAndTimestamp<V>> prepareValueSerde(final Serde<ValueAndTimestamp<V>> valueSerde, final Serde<?> contextKeySerde, final Serde<?> contextValueSerde) {
+        if (valueSerde == null) {
+            return new ValueAndTimestampSerde<>((Serde<V>) contextValueSerde);
+        } else {
+            return super.prepareValueSerde(valueSerde, contextKeySerde, contextValueSerde);
+        }
     }
 }

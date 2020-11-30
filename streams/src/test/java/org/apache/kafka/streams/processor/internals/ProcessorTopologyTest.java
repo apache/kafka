@@ -59,6 +59,8 @@ import java.util.Set;
 import java.util.function.Supplier;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -93,8 +95,6 @@ public class ProcessorTopologyTest {
     public void setup() {
         // Create a new directory in which we'll put all of the state for this test, enabling running tests in parallel ...
         final File localState = TestUtils.tempDirectory();
-        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "processor-topology-test");
-        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9091");
         props.setProperty(StreamsConfig.STATE_DIR_CONFIG, localState.getAbsolutePath());
         props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
@@ -170,6 +170,20 @@ public class ProcessorTopologyTest {
         processorTopology.updateSourceTopics(Collections.singletonMap("source-1", Collections.singletonList("topic-1")));
 
         assertNull(processorTopology.source("topic-2"));
+    }
+
+    @Test
+    public void shouldUpdateSourceTopicsOnlyForSourceNodesWithinTheSubtopology() {
+        topology.addSource("source-1", "topic-1");
+        final ProcessorTopology processorTopology = topology.getInternalBuilder("X").buildTopology();
+
+        processorTopology.updateSourceTopics(mkMap(
+            mkEntry("source-1", Collections.singletonList("topic-1")),
+            mkEntry("source-2", Collections.singletonList("topic-2")))
+        );
+
+        assertNull(processorTopology.source("topic-2"));
+        assertThat(processorTopology.sources().size(), equalTo(1));
     }
 
     @Test
@@ -293,6 +307,7 @@ public class ProcessorTopologyTest {
         assertNull(store.get("key4"));
     }
 
+    @Deprecated // testing old PAPI
     @Test
     public void testDrivingConnectedStateStoreInDifferentProcessorsTopologyWithOldAPI() {
         final String storeName = "connectedStore";
@@ -355,6 +370,7 @@ public class ProcessorTopologyTest {
         assertNull(store.get("key4"));
     }
 
+    @Deprecated // testing old PAPI
     @Test
     public void shouldDriveGlobalStore() {
         final String storeName = "my-store";
@@ -621,6 +637,7 @@ public class ProcessorTopologyTest {
         return topology.getInternalBuilder("anyAppId").buildTopology();
     }
 
+    @Deprecated // testing old PAPI
     private ProcessorTopology createGlobalStoreTopology(final KeyValueBytesStoreSupplier storeSupplier) {
         final TopologyWrapper topology = new TopologyWrapper();
         final StoreBuilder<KeyValueStore<String, String>> storeBuilder =
@@ -661,27 +678,28 @@ public class ProcessorTopologyTest {
     private Topology createSimpleTopology(final int partition) {
         return topology
             .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-            .addProcessor("processor", define(new ForwardingProcessor()), "source")
+            .addProcessor("processor", () -> (Processor<String, String, String, String>) new ForwardingProcessor(), "source")
             .addSink("sink", OUTPUT_TOPIC_1, constantPartitioner(partition), "processor");
     }
 
     private Topology createTimestampTopology(final int partition) {
         return topology
             .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-            .addProcessor("processor", define(new TimestampProcessor()), "source")
+            .addProcessor("processor", () -> (Processor<String, String, String, String>) new TimestampProcessor(), "source")
             .addSink("sink", OUTPUT_TOPIC_1, constantPartitioner(partition), "processor");
     }
 
     private Topology createMultiProcessorTimestampTopology(final int partition) {
         return topology
             .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-            .addProcessor("processor", define(new FanOutTimestampProcessor("child1", "child2")), "source")
-            .addProcessor("child1", define(new ForwardingProcessor()), "processor")
-            .addProcessor("child2", define(new TimestampProcessor()), "processor")
+            .addProcessor("processor", () -> (Processor<String, String, String, String>) new FanOutTimestampProcessor("child1", "child2"), "source")
+            .addProcessor("child1", () -> (Processor<String, String, String, String>) new ForwardingProcessor(), "processor")
+            .addProcessor("child2", () -> (Processor<String, String, String, String>) new TimestampProcessor(), "processor")
             .addSink("sink1", OUTPUT_TOPIC_1, constantPartitioner(partition), "child1")
             .addSink("sink2", OUTPUT_TOPIC_2, constantPartitioner(partition), "child2");
     }
 
+    @Deprecated // testing old PAPI
     private Topology createMultiplexingTopology() {
         return topology
             .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
@@ -690,6 +708,7 @@ public class ProcessorTopologyTest {
             .addSink("sink2", OUTPUT_TOPIC_2, "processor");
     }
 
+    @Deprecated // testing old PAPI
     private Topology createMultiplexByNameTopology() {
         return topology
             .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
@@ -698,6 +717,7 @@ public class ProcessorTopologyTest {
             .addSink("sink1", OUTPUT_TOPIC_2, "processor");
     }
 
+    @Deprecated // testing old PAPI
     private Topology createStatefulTopology(final String storeName) {
         return topology
             .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
@@ -706,6 +726,7 @@ public class ProcessorTopologyTest {
             .addSink("counts", OUTPUT_TOPIC_1, "processor");
     }
 
+    @Deprecated // testing old PAPI
     private Topology createConnectedStateStoreTopology(final String storeName) {
         final StoreBuilder<KeyValueStore<String, String>> storeBuilder = Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore(storeName), Serdes.String(), Serdes.String());
         return topology
@@ -729,7 +750,7 @@ public class ProcessorTopologyTest {
 
     private Topology createInternalRepartitioningWithValueTimestampTopology() {
         topology.addSource("source", INPUT_TOPIC_1)
-                .addProcessor("processor", define(new ValueTimestampProcessor()), "source")
+                .addProcessor("processor", () -> (Processor<String, String, String, String>) new ValueTimestampProcessor(), "source")
                 .addSink("sink0", THROUGH_TOPIC_1, "processor")
                 .addSource("source1", THROUGH_TOPIC_1)
                 .addSink("sink1", OUTPUT_TOPIC_1, "source1");
@@ -750,16 +771,16 @@ public class ProcessorTopologyTest {
 
     private Topology createSimpleMultiSourceTopology(final int partition) {
         return topology.addSource("source-1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-                .addProcessor("processor-1", define(new ForwardingProcessor()), "source-1")
+                .addProcessor("processor-1", () -> (Processor<String, String, String, String>) new ForwardingProcessor(), "source-1")
                 .addSink("sink-1", OUTPUT_TOPIC_1, constantPartitioner(partition), "processor-1")
                 .addSource("source-2", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_2)
-                .addProcessor("processor-2", define(new ForwardingProcessor()), "source-2")
+                .addProcessor("processor-2", () -> (Processor<String, String, String, String>) new ForwardingProcessor(), "source-2")
                 .addSink("sink-2", OUTPUT_TOPIC_2, constantPartitioner(partition), "processor-2");
     }
 
     private Topology createAddHeaderTopology() {
         return topology.addSource("source-1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-                .addProcessor("processor-1", define(new AddHeaderProcessor()), "source-1")
+                .addProcessor("processor-1", () -> (Processor<String, String, String, String>) new AddHeaderProcessor(), "source-1")
                 .addSink("sink-1", OUTPUT_TOPIC_1, "processor-1");
     }
 
@@ -943,10 +964,6 @@ public class ProcessorTopologyTest {
     }
 
     private <K, V> org.apache.kafka.streams.processor.ProcessorSupplier<K, V> define(final org.apache.kafka.streams.processor.Processor<K, V> processor) {
-        return () -> processor;
-    }
-
-    private <KIn, VIn, KOut, VOut> ProcessorSupplier<KIn, VIn, KOut, VOut> define(final Processor<KIn, VIn, KOut, VOut> processor) {
         return () -> processor;
     }
 

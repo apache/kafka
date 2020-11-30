@@ -22,6 +22,7 @@ import java.util.concurrent.TimeUnit
 import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors._
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.replica.ClientMetadata
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 
@@ -77,6 +78,7 @@ class DelayedFetch(delayMs: Long,
    * Case E: This broker is the leader, but the requested epoch is now fenced
    * Case F: The fetch offset locates not on the last segment of the log
    * Case G: The accumulated bytes from all the fetching partitions exceeds the minimum bytes
+   * Case H: A diverging epoch was found, return response to trigger truncation
    * Upon completion, should return whatever data is available for each valid partition
    */
   override def tryComplete(): Boolean = {
@@ -116,6 +118,19 @@ class DelayedFetch(delayMs: Long,
                 val bytesAvailable = math.min(endOffset.positionDiff(fetchOffset), fetchStatus.fetchInfo.maxBytes)
                 if (!replicaManager.shouldLeaderThrottle(quota, partition, fetchMetadata.replicaId))
                   accumulatedSize += bytesAvailable
+              }
+            }
+
+            // Case H: If truncation has caused diverging epoch while this request was in purgatory, return to trigger truncation
+            fetchStatus.fetchInfo.lastFetchedEpoch.ifPresent { fetchEpoch =>
+              val epochEndOffset = partition.lastOffsetForLeaderEpoch(fetchLeaderEpoch, fetchEpoch, fetchOnlyFromLeader = false)
+              if (epochEndOffset.error != Errors.NONE || epochEndOffset.hasUndefinedEpochOrOffset) {
+                debug(s"Could not obtain last offset for leader epoch for partition $topicPartition, epochEndOffset=$epochEndOffset.")
+                return forceComplete()
+              } else if (epochEndOffset.leaderEpoch < fetchEpoch || epochEndOffset.endOffset < fetchStatus.fetchInfo.fetchOffset) {
+                debug(s"Satisfying fetch $fetchMetadata since it has diverging epoch requiring truncation for partition " +
+                  s"$topicPartition epochEndOffset=$epochEndOffset fetchEpoch=$fetchEpoch fetchOffset=${fetchStatus.fetchInfo.fetchOffset}.")
+                return forceComplete()
               }
             }
           }

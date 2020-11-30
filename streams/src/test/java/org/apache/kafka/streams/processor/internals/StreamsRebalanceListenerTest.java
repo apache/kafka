@@ -19,8 +19,10 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.errors.MissingSourceTopicException;
+import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.internals.StreamThread.State;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
+import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
 import org.slf4j.LoggerFactory;
@@ -30,6 +32,7 @@ import java.util.Collections;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
@@ -59,6 +62,8 @@ public class StreamsRebalanceListenerTest {
 
     @Test
     public void shouldThrowMissingSourceTopicException() {
+        taskManager.handleRebalanceComplete();
+        expectLastCall();
         replay(taskManager, streamThread);
         assignmentErrorCode.set(AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.code());
 
@@ -67,6 +72,56 @@ public class StreamsRebalanceListenerTest {
             () -> streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList())
         );
         assertThat(exception.getMessage(), is("One or more source topics were missing during rebalance"));
+        verify(taskManager, streamThread);
+    }
+
+    @Test
+    public void shouldSwallowVersionProbingError() {
+        expect(streamThread.setState(State.PARTITIONS_ASSIGNED)).andStubReturn(State.PARTITIONS_REVOKED);
+        taskManager.handleRebalanceComplete();
+        replay(taskManager, streamThread);
+        assignmentErrorCode.set(AssignorError.VERSION_PROBING.code());
+        streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList());
+        verify(taskManager, streamThread);
+    }
+
+    @Test
+    public void shouldSendShutdown() {
+        streamThread.shutdownToError();
+        EasyMock.expectLastCall();
+        taskManager.handleRebalanceComplete();
+        EasyMock.expectLastCall();
+        replay(taskManager, streamThread);
+        assignmentErrorCode.set(AssignorError.SHUTDOWN_REQUESTED.code());
+        streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList());
+        verify(taskManager, streamThread);
+    }
+
+    @Test
+    public void shouldThrowTaskAssignmentException() {
+        taskManager.handleRebalanceComplete();
+        expectLastCall();
+        replay(taskManager, streamThread);
+        assignmentErrorCode.set(AssignorError.ASSIGNMENT_ERROR.code());
+
+        final TaskAssignmentException exception = assertThrows(
+            TaskAssignmentException.class,
+            () -> streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList())
+        );
+        assertThat(exception.getMessage(), is("Hit an unexpected exception during task assignment phase of rebalance"));
+        verify(taskManager, streamThread);
+    }
+
+    @Test
+    public void shouldThrowTaskAssignmentExceptionOnUnrecognizedErrorCode() {
+        replay(taskManager, streamThread);
+        assignmentErrorCode.set(Integer.MAX_VALUE);
+
+        final TaskAssignmentException exception = assertThrows(
+            TaskAssignmentException.class,
+            () -> streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList())
+        );
+        assertThat(exception.getMessage(), is("Hit an unrecognized exception during rebalance"));
         verify(taskManager, streamThread);
     }
 

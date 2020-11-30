@@ -53,14 +53,14 @@ class BaseClientQuotaManagerTest {
 
   protected def callback(response: RequestChannel.Response): Unit = {
     // Count how many times this callback is called for notifyThrottlingDone().
-    response match {
+    (response: @unchecked) match {
       case _: StartThrottlingResponse =>
       case _: EndThrottlingResponse => numCallbacks += 1
     }
   }
 
   protected def buildRequest[T <: AbstractRequest](builder: AbstractRequest.Builder[T],
-                                                   listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)): (T, RequestChannel.Request) = {
+                                                 listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)): (T, RequestChannel.Request) = {
 
     val request = builder.build()
     val buffer = request.serialize(new RequestHeader(builder.apiKey, request.version, "", 0))

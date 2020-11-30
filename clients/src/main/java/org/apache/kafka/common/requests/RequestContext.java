@@ -24,11 +24,13 @@ import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.security.auth.KafkaPrincipalSerde;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
-import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
+import java.util.Optional;
 
 import static org.apache.kafka.common.protocol.ApiKeys.API_VERSIONS;
 
@@ -41,6 +43,7 @@ public class RequestContext implements AuthorizableRequestContext {
     public final SecurityProtocol securityProtocol;
     public final ClientInformation clientInformation;
     public final boolean fromPrivilegedListener;
+    public final Optional<KafkaPrincipalSerde> principalSerde;
 
     public RequestContext(RequestHeader header,
                           String connectionId,
@@ -50,6 +53,26 @@ public class RequestContext implements AuthorizableRequestContext {
                           SecurityProtocol securityProtocol,
                           ClientInformation clientInformation,
                           boolean fromPrivilegedListener) {
+        this(header,
+            connectionId,
+            clientAddress,
+            principal,
+            listenerName,
+            securityProtocol,
+            clientInformation,
+            fromPrivilegedListener,
+            Optional.empty());
+    }
+
+    public RequestContext(RequestHeader header,
+                          String connectionId,
+                          InetAddress clientAddress,
+                          KafkaPrincipal principal,
+                          ListenerName listenerName,
+                          SecurityProtocol securityProtocol,
+                          ClientInformation clientInformation,
+                          boolean fromPrivilegedListener,
+                          Optional<KafkaPrincipalSerde> principalSerde) {
         this.header = header;
         this.connectionId = connectionId;
         this.clientAddress = clientAddress;
@@ -58,6 +81,7 @@ public class RequestContext implements AuthorizableRequestContext {
         this.securityProtocol = securityProtocol;
         this.clientInformation = clientInformation;
         this.fromPrivilegedListener = fromPrivilegedListener;
+        this.principalSerde = principalSerde;
     }
 
     public RequestAndSize parseRequest(ByteBuffer buffer) {
@@ -77,16 +101,33 @@ public class RequestContext implements AuthorizableRequestContext {
                         ", apiVersion: " + header.apiVersion() +
                         ", connectionId: " + connectionId +
                         ", listenerName: " + listenerName +
-                        ", principal: " + principal +
-                        ", initialPrincipal: " + initialPrincipalName() +
-                        ", initialClientId: " + header.initialClientId(), ex);
+                        ", principal: " + principal, ex);
             }
         }
     }
 
-    public Send buildResponse(AbstractResponse body) {
+    /**
+     * Build a {@link Send} for direct transmission of the provided response
+     * over the network.
+     */
+    public Send buildResponseSend(AbstractResponse body) {
         ResponseHeader responseHeader = header.toResponseHeader();
         return body.toSend(connectionId, responseHeader, apiVersion());
+    }
+
+    /**
+     * Serialize a response into a {@link ByteBuffer}. This is used when the response
+     * will be encapsulated in an {@link EnvelopeResponse}. The buffer will contain
+     * both the serialized {@link ResponseHeader} as well as the bytes from the response.
+     * There is no `size` prefix unlike the output from {@link #buildResponseSend(AbstractResponse)}.
+     *
+     * Note that envelope requests are reserved only for APIs which have set the
+     * {@link ApiKeys#forwardable} flag. Notably the `Fetch` API cannot be forwarded,
+     * so we do not lose the benefit of "zero copy" transfers from disk.
+     */
+    public ByteBuffer buildResponseEnvelopePayload(AbstractResponse body) {
+        ResponseHeader responseHeader = header.toResponseHeader();
+        return RequestUtils.serialize(responseHeader.toStruct(), body.toStruct(header.apiVersion()));
     }
 
     private boolean isUnsupportedApiVersionsRequest() {
@@ -138,10 +179,5 @@ public class RequestContext implements AuthorizableRequestContext {
     @Override
     public int correlationId() {
         return header.correlationId();
-    }
-
-    @Override
-    public String initialPrincipalName() {
-        return header.initialPrincipalName();
     }
 }

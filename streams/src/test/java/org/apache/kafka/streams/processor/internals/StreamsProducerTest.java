@@ -27,6 +27,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
@@ -931,6 +932,24 @@ public class StreamsProducerTest {
     }
 
     @Test
+    public void shouldThrowTaskMigratedExceptionOnEosWithInvalidProducerEpoch() {
+        eosAlphaMockProducer.commitTransactionException = new InvalidProducerEpochException("KABOOM!");
+
+        final TaskMigratedException thrown = assertThrows(
+            TaskMigratedException.class,
+            () -> eosAlphaStreamsProducer.commitTransaction(offsetsAndMetadata, new ConsumerGroupMetadata("appId"))
+        );
+
+        assertThat(eosAlphaMockProducer.sentOffsets(), is(true));
+        assertThat(thrown.getCause(), is(eosAlphaMockProducer.commitTransactionException));
+        assertThat(
+            thrown.getMessage(),
+            is("Producer got fenced trying to commit a transaction [test];" +
+                   " it means all tasks belonging to this thread should be migrated.")
+        );
+    }
+
+    @Test
     public void shouldFailOnEosSendOffsetFatal() {
         eosAlphaMockProducer.sendOffsetsToTransactionException = new RuntimeException("KABOOM!");
 
@@ -961,21 +980,6 @@ public class StreamsProducerTest {
             is("Producer got fenced trying to commit a transaction [test];" +
                    " it means all tasks belonging to this thread should be migrated.")
         );
-    }
-
-    @Test
-    public void shouldThrowStreamsExceptionOnEosCommitTxTimeout() {
-        // cannot use `eosMockProducer.fenceProducer()` because this would already trigger in `beginTransaction()`
-        eosAlphaMockProducer.commitTransactionException = new TimeoutException("KABOOM!");
-
-        final StreamsException thrown = assertThrows(
-            StreamsException.class,
-            () -> eosAlphaStreamsProducer.commitTransaction(offsetsAndMetadata, new ConsumerGroupMetadata("appId"))
-        );
-
-        assertThat(eosAlphaMockProducer.sentOffsets(), is(true));
-        assertThat(thrown.getCause(), is(eosAlphaMockProducer.commitTransactionException));
-        assertThat(thrown.getMessage(), is("Timed out trying to commit a transaction [test]"));
     }
 
     @Test

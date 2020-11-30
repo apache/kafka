@@ -75,6 +75,7 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -124,11 +125,7 @@ public class TopologyTestDriverTest {
         consumerRecordFactory.create(SOURCE_TOPIC_2, key2, value2, timestamp2);
 
     private TopologyTestDriver testDriver;
-    private final Properties config = mkProperties(mkMap(
-        mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "test-TopologyTestDriver"),
-        mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
-        mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath())
-    ));
+    private final Properties config;
     private KeyValueStore<String, Long> store;
 
     private final StringDeserializer stringDeserializer = new StringDeserializer();
@@ -144,8 +141,12 @@ public class TopologyTestDriverTest {
     }
 
     public TopologyTestDriverTest(final boolean eosEnabled) {
+        config = mkProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "test-TopologyTestDriver"),
+            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath())
+        ));
         if (eosEnabled) {
-            config.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+            config.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
         }
     }
 
@@ -299,8 +300,22 @@ public class TopologyTestDriverTest {
         @Override
         public Processor<Object, Object, Object, Object> get() {
             final MockProcessor mockProcessor = new MockProcessor(punctuations);
-            mockProcessors.add(mockProcessor);
+
+            // to keep tests simple, ignore calls from ApiUtils.checkSupplier
+            if (!isCheckSupplierCall()) {
+                mockProcessors.add(mockProcessor);
+            }
+
             return mockProcessor;
+        }
+
+        /**
+         * Used to keep tests simple, and ignore calls from {@link org.apache.kafka.streams.internals.ApiUtils#checkSupplier(Supplier)} )}.
+         * @return true if the the stack context is within a {@link org.apache.kafka.streams.internals.ApiUtils#checkSupplier(Supplier)} )} call
+         */
+        public boolean isCheckSupplierCall() {
+            return Arrays.stream(Thread.currentThread().getStackTrace())
+                    .anyMatch(caller -> "org.apache.kafka.streams.internals.ApiUtils".equals(caller.getClassName()) && "checkSupplier".equals(caller.getMethodName()));
         }
     }
 
@@ -431,6 +446,11 @@ public class TopologyTestDriverTest {
             .join(t1, v -> v, (v1, v2) -> v2, Named.as(joinName));
 
         return builder.build(config);
+    }
+
+    @Test
+    public void shouldNotRequireParameters() {
+        new TopologyTestDriver(setupSingleProcessorTopology(), new Properties());
     }
 
     @Test
@@ -1011,7 +1031,7 @@ public class TopologyTestDriverTest {
     @Test
     public void shouldReturnAllStores() {
         final Topology topology = setupSourceSinkTopology();
-        topology.addProcessor("processor", (ProcessorSupplier<Object, Object, Object, Object>) () -> null, "source");
+        topology.addProcessor("processor", new MockProcessorSupplier(), "source");
         topology.addStateStore(
             new KeyValueStoreBuilder<>(
                 Stores.inMemoryKeyValueStore("store"),
@@ -1030,7 +1050,7 @@ public class TopologyTestDriverTest {
             Serdes.ByteArray().deserializer(),
             "globalTopicName",
             "globalProcessorName",
-            (ProcessorSupplier<byte[], byte[], Void, Void>) () -> null);
+            voidProcessorSupplier);
 
         testDriver = new TopologyTestDriver(topology, config);
 
@@ -1222,6 +1242,12 @@ public class TopologyTestDriverTest {
         }
     }
 
+    final ProcessorSupplier<byte[], byte[], Void, Void> voidProcessorSupplier = () -> new Processor<byte[], byte[], Void, Void>() {
+        @Override
+        public void process(final Record<byte[], byte[]> record) {
+        }
+    };
+
     private void addStoresToTopology(final Topology topology,
                                      final boolean persistent,
                                      final String keyValueStoreName,
@@ -1231,6 +1257,7 @@ public class TopologyTestDriverTest {
                                      final String sessionStoreName,
                                      final String globalKeyValueStoreName,
                                      final String globalTimestampedKeyValueStoreName) {
+
         // add state stores
         topology.addStateStore(
             Stores.keyValueStoreBuilder(
@@ -1297,7 +1324,7 @@ public class TopologyTestDriverTest {
             Serdes.ByteArray().deserializer(),
             "topicDummy1",
             "processorDummy1",
-            (ProcessorSupplier<byte[], byte[], Void, Void>) () -> null);
+            voidProcessorSupplier);
         topology.addGlobalStore(
             persistent ?
                 Stores.timestampedKeyValueStoreBuilder(
@@ -1315,7 +1342,7 @@ public class TopologyTestDriverTest {
             Serdes.ByteArray().deserializer(),
             "topicDummy2",
             "processorDummy2",
-            (ProcessorSupplier<byte[], byte[], Void, Void>) () -> null);
+            voidProcessorSupplier);
     }
 
     @Test
@@ -1338,7 +1365,7 @@ public class TopologyTestDriverTest {
             Serdes.ByteArray().deserializer(),
             "globalTopicName",
             "globalProcessorName",
-            (ProcessorSupplier<byte[], byte[], Void, Void>) () -> null);
+            voidProcessorSupplier);
 
         testDriver = new TopologyTestDriver(topology, config);
 
@@ -1527,7 +1554,6 @@ public class TopologyTestDriverTest {
 
         final Properties config = new Properties();
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-TopologyTestDriver-cleanup");
-        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
         config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
         config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass().getName());
@@ -1685,10 +1711,6 @@ public class TopologyTestDriverTest {
 
     @Test
     public void shouldEnqueueLaterOutputsAfterEarlierOnes() {
-        final Properties properties = new Properties();
-        properties.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "dummy");
-        properties.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy");
-
         final Topology topology = new Topology();
         topology.addSource("source", new StringDeserializer(), new StringDeserializer(), "input");
         topology.addProcessor(
@@ -1715,7 +1737,7 @@ public class TopologyTestDriverTest {
         topology.addSink("recursiveSink", "input", new StringSerializer(), new StringSerializer(), "recursiveProcessor");
         topology.addSink("sink", "output", new StringSerializer(), new StringSerializer(), "recursiveProcessor");
 
-        try (final TopologyTestDriver topologyTestDriver = new TopologyTestDriver(topology, properties)) {
+        try (final TopologyTestDriver topologyTestDriver = new TopologyTestDriver(topology, new Properties())) {
             final TestInputTopic<String, String> in = topologyTestDriver.createInputTopic("input", new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> out = topologyTestDriver.createOutputTopic("output", new StringDeserializer(), new StringDeserializer());
 
@@ -1737,10 +1759,6 @@ public class TopologyTestDriverTest {
 
     @Test
     public void shouldApplyGlobalUpdatesCorrectlyInRecursiveTopologies() {
-        final Properties properties = new Properties();
-        properties.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "dummy");
-        properties.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy");
-
         final Topology topology = new Topology();
         topology.addSource("source", new StringDeserializer(), new StringDeserializer(), "input");
         topology.addGlobalStore(
@@ -1791,7 +1809,7 @@ public class TopologyTestDriverTest {
         topology.addSink("sink", "output", new StringSerializer(), new StringSerializer(), "recursiveProcessor");
         topology.addSink("globalSink", "global-topic", new StringSerializer(), new StringSerializer(), "recursiveProcessor");
 
-        try (final TopologyTestDriver topologyTestDriver = new TopologyTestDriver(topology, properties)) {
+        try (final TopologyTestDriver topologyTestDriver = new TopologyTestDriver(topology, new Properties())) {
             final TestInputTopic<String, String> in = topologyTestDriver.createInputTopic("input", new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> globalTopic = topologyTestDriver.createOutputTopic("global-topic", new StringDeserializer(), new StringDeserializer());
 
@@ -1817,9 +1835,6 @@ public class TopologyTestDriverTest {
     @Test
     public void shouldRespectTaskIdling() {
         final Properties properties = new Properties();
-        properties.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "dummy");
-        properties.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy");
-
         // This is the key to this test. Wall-clock time doesn't advance automatically in TopologyTestDriver,
         // so with an idle time specified, TTD can't just expect all enqueued records to be processable.
         properties.setProperty(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, "1000");

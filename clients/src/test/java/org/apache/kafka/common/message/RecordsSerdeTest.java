@@ -16,22 +16,17 @@
  */
 package org.apache.kafka.common.message;
 
-import org.apache.kafka.common.network.Send;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
-import org.apache.kafka.common.protocol.RecordsReadable;
-import org.apache.kafka.common.protocol.RecordsWritable;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MultiRecordsSend;
 import org.apache.kafka.common.record.SimpleRecord;
-import org.apache.kafka.common.requests.ByteBufferChannel;
 import org.junit.Test;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.ArrayDeque;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -97,7 +92,7 @@ public class RecordsSerdeTest {
     }
 
     private SimpleRecordsMessageData deserialize(ByteBuffer buffer, short version) {
-        RecordsReadable readable = new RecordsReadable(buffer);
+        ByteBufferAccessor readable = new ByteBufferAccessor(buffer);
         return new SimpleRecordsMessageData(readable, version);
     }
 
@@ -109,22 +104,14 @@ public class RecordsSerdeTest {
         return buffer;
     }
 
-    private ByteBuffer serialize(SimpleRecordsMessageData message, short version) throws IOException {
-        ArrayDeque<Send> sends = new ArrayDeque<>();
+    private ByteBuffer serialize(SimpleRecordsMessageData message, short version) {
         ObjectSerializationCache cache = new ObjectSerializationCache();
         int totalMessageSize = message.size(cache, version);
-
-        int recordsSize = message.recordSet() == null ? 0 : message.recordSet().sizeInBytes();
-        RecordsWritable writer = new RecordsWritable("0",
-            totalMessageSize - recordsSize, sends::add);
+        ByteBuffer buffer = ByteBuffer.allocate(totalMessageSize);
+        ByteBufferAccessor writer = new ByteBufferAccessor(buffer);
         message.write(writer, cache, version);
-        writer.flush();
-
-        MultiRecordsSend send = new MultiRecordsSend("0", sends);
-        ByteBufferChannel channel = new ByteBufferChannel(send.size());
-        send.writeTo(channel);
-        channel.close();
-        return channel.buffer();
+        buffer.flip();
+        return buffer;
     }
 
 }
