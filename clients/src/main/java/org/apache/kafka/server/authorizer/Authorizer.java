@@ -190,8 +190,8 @@ public interface Authorizer extends Configurable, Closeable {
         AclBindingFilter aclFilter = new AclBindingFilter(
             resourceTypeFilter, AccessControlEntryFilter.ANY);
 
-        final int TYPE_LITERAL = 0;
-        final int TYPE_PREFIX = 1;
+        final int typeLiteral = 0;
+        final int typePrefix = 1;
 
         List<Set<String>> deny = new ArrayList<>(
             Arrays.asList(new HashSet<>(), new HashSet<>()));
@@ -222,10 +222,10 @@ public interface Authorizer extends Configurable, Closeable {
                     case LITERAL:
                         if (binding.pattern().name().equals(ResourcePattern.WILDCARD_RESOURCE))
                             return AuthorizationResult.DENIED;
-                        deny.get(TYPE_LITERAL).add(binding.pattern().name());
+                        deny.get(typeLiteral).add(binding.pattern().name());
                         break;
                     case PREFIXED:
-                        deny.get(TYPE_PREFIX).add(binding.pattern().name());
+                        deny.get(typePrefix).add(binding.pattern().name());
                         break;
                 }
                 continue;
@@ -240,10 +240,10 @@ public interface Authorizer extends Configurable, Closeable {
                         hasWildCardAllow = true;
                         continue;
                     }
-                    allow.get(TYPE_LITERAL).add(binding.pattern().name());
+                    allow.get(typeLiteral).add(binding.pattern().name());
                     break;
                 case PREFIXED:
-                    allow.get(TYPE_PREFIX).add(binding.pattern().name());
+                    allow.get(typePrefix).add(binding.pattern().name());
                     break;
             }
         }
@@ -252,15 +252,15 @@ public interface Authorizer extends Configurable, Closeable {
             return AuthorizationResult.ALLOWED;
         }
 
-        for (int allowType : Arrays.asList(TYPE_PREFIX, TYPE_LITERAL)) {
+        for (int allowType : Arrays.asList(typePrefix, typeLiteral)) {
             for (String allowStr : allow.get(allowType)) {
-                if (allowType == TYPE_LITERAL && deny.get(TYPE_LITERAL).contains(allowStr))
+                if (allowType == typeLiteral && deny.get(typeLiteral).contains(allowStr))
                     continue;
                 StringBuilder sb = new StringBuilder();
                 boolean hasDominatedDeny = false;
                 for (char ch : allowStr.toCharArray()) {
                     sb.append(ch);
-                    if (deny.get(TYPE_PREFIX).contains(sb.toString())) {
+                    if (deny.get(typePrefix).contains(sb.toString())) {
                         hasDominatedDeny = true;
                         break;
                     }
