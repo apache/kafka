@@ -22,10 +22,12 @@ import java.util.Properties
 
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.core.JsonProcessingException
+import com.fasterxml.jackson.databind.node.{ObjectNode, ShortNode}
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, KAFKA_2_7_IV0, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch, ReplicaAssignment}
+import kafka.internals.generated.{FeatureZNodeData, FeatureZNodeDataJsonConverter}
 import kafka.security.authorizer.AclAuthorizer.VersionedAcls
 import kafka.security.authorizer.AclEntry
 import kafka.server.{ConfigType, DelegationTokenManager}
@@ -166,7 +168,7 @@ object BrokerIdZNode {
   }
 
   def featuresAsJavaMap(brokerInfo: JsonObject): util.Map[String, util.Map[String, java.lang.Short]] = {
-    FeatureZNode.asJavaMap(brokerInfo
+    asJavaMap(brokerInfo
       .get(FeaturesKey)
       .flatMap(_.to[Option[Map[String, Map[String, Int]]]])
       .map(theMap => theMap.map {
@@ -175,6 +177,15 @@ object BrokerIdZNode {
          }.toMap
       }.toMap)
       .getOrElse(Map[String, Map[String, Short]]()))
+  }
+
+  def asJavaMap(scalaMap: Map[String, Map[String, Short]]): util.Map[String, util.Map[String, java.lang.Short]] = {
+    scalaMap
+      .map {
+        case(featureName, versionInfo) => featureName -> versionInfo.map {
+          case(label, version) => label -> java.lang.Short.valueOf(version)
+        }.asJava
+      }.asJava
   }
 
   /**
@@ -830,110 +841,69 @@ object FeatureZNodeStatus {
   }
 }
 
-/**
- * Represents the contents of the ZK node containing finalized feature information.
- *
- * @param status     the status of the ZK node
- * @param features   the cluster-wide finalized features
- */
-case class FeatureZNode(status: FeatureZNodeStatus, features: Features[FinalizedVersionRange]) {
-}
-
 object FeatureZNode {
   private val VersionKey = "version"
-  private val StatusKey = "status"
-  private val FeaturesKey = "features"
-
-  // V1 contains 'version', 'status' and 'features' keys.
-  val V1 = 1
-  val CurrentVersion = V1
 
   def path = "/feature"
 
-  def asJavaMap(scalaMap: Map[String, Map[String, Short]]): util.Map[String, util.Map[String, java.lang.Short]] = {
-    scalaMap
-      .map {
-        case(featureName, versionInfo) => featureName -> versionInfo.map {
-          case(label, version) => label -> java.lang.Short.valueOf(version)
-        }.asJava
-      }.asJava
-  }
-
   /**
-   * Encodes a FeatureZNode to JSON.
+   * Encodes a FeatureZNodeData to JSON.
    *
-   * @param featureZNode   FeatureZNode to be encoded
+   * @param data FeatureZNodeData to be encoded
    *
-   * @return               JSON representation of the FeatureZNode, as an Array[Byte]
+   * @return JSON representation of the FeatureZNodeData, as an Array[Byte]
    */
-  def encode(featureZNode: FeatureZNode): Array[Byte] = {
-    val jsonMap = collection.mutable.Map(
-      VersionKey -> CurrentVersion,
-      StatusKey -> featureZNode.status.id,
-      FeaturesKey -> featureZNode.features.toMap)
-    Json.encodeAsBytes(jsonMap.asJava)
+  def encode(data: FeatureZNodeData): Array[Byte] = {
+    val version = data.highestSupportedVersion()
+    val node = FeatureZNodeDataJsonConverter.write(data, version).asInstanceOf[ObjectNode]
+    node.set(VersionKey, new ShortNode(version))
+    Json.encodeAsBytes(node)
   }
 
   /**
-   * Decodes the contents of the feature ZK node from Array[Byte] to a FeatureZNode.
+   * Decodes the contents of the feature ZK node from Array[Byte] to a FeatureZNodeData.
    *
-   * @param jsonBytes   the contents of the feature ZK node
+   * @param jsonBytes the contents of the feature ZK node
    *
-   * @return            the FeatureZNode created from jsonBytes
+   * @return the FeatureZNodeData created from jsonBytes
    *
    * @throws IllegalArgumentException   if the Array[Byte] can not be decoded.
    */
-  def decode(jsonBytes: Array[Byte]): FeatureZNode = {
-    Json.tryParseBytes(jsonBytes) match {
-      case Right(js) =>
-        val featureInfo = js.asJsonObject
-        val version = featureInfo(VersionKey).to[Int]
-        if (version < V1) {
-          throw new IllegalArgumentException(s"Unsupported version: $version of feature information: " +
-            s"${new String(jsonBytes, UTF_8)}")
-        }
+  def decode(jsonBytes: Array[Byte]): FeatureZNodeData = {
+    Json.parseBytesAs[ObjectNode](jsonBytes) match {
+      case Right(dataObject) =>
+        val dataVersion = dataObject.get(VersionKey).shortValue()
 
-        val featuresMap = featureInfo
-          .get(FeaturesKey)
-          .flatMap(_.to[Option[Map[String, Map[String, Int]]]])
-
-        if (featuresMap.isEmpty) {
-          throw new IllegalArgumentException("Features map can not be absent in: " +
-            s"${new String(jsonBytes, UTF_8)}")
-        }
-        val features = asJavaMap(
-          featuresMap
-            .map(theMap => theMap.map {
-              case (featureName, versionInfo) => featureName -> versionInfo.map {
-                case (label, version) => label -> version.asInstanceOf[Short]
-              }
-            }).getOrElse(Map[String, Map[String, Short]]()))
-
-        val statusInt = featureInfo
-          .get(StatusKey)
-          .flatMap(_.to[Option[Int]])
-        if (statusInt.isEmpty) {
-          throw new IllegalArgumentException("Status can not be absent in feature information: " +
-            s"${new String(jsonBytes, UTF_8)}")
-        }
-        val status = FeatureZNodeStatus.withNameOpt(statusInt.get)
-        if (status.isEmpty) {
-          throw new IllegalArgumentException(
-            s"Malformed status: $statusInt found in feature information: ${new String(jsonBytes, UTF_8)}")
-        }
-
-        var finalizedFeatures: Features[FinalizedVersionRange] = null
-        try {
-          finalizedFeatures = fromFinalizedFeaturesMap(features)
+        val data = try {
+          FeatureZNodeDataJsonConverter.read(dataObject, dataVersion)
         } catch {
-          case e: Exception => throw new IllegalArgumentException(
-            "Unable to convert to finalized features from map: " + features, e)
+          case e: Throwable =>
+            throw new IllegalArgumentException(s"Failed to parse feature information: " +
+              s"${new String(jsonBytes, UTF_8)}", e)
         }
-        FeatureZNode(status.get, finalizedFeatures)
+
+        if (data.status() != FeatureZNodeStatus.Disabled.id && data.status() != FeatureZNodeStatus.Enabled.id) {
+          throw new IllegalArgumentException(
+            s"Malformed status: ${data.status()} found in feature information: ${new String(jsonBytes, UTF_8)}")
+        }
+        if (dataVersion < data.lowestSupportedVersion() || dataVersion > data.highestSupportedVersion()) {
+          throw new IllegalArgumentException(s"Unsupported version: $dataVersion of feature information: " +
+            s"${new String(jsonBytes, UTF_8)}")
+        }
+        data
       case Left(e) =>
         throw new IllegalArgumentException(s"Failed to parse feature information: " +
           s"${new String(jsonBytes, UTF_8)}", e)
     }
+  }
+
+  def getFeatures(data: FeatureZNodeData): Features[FinalizedVersionRange] = {
+    val featuresMap = data.features().asScala.map{ feature =>
+      val versionRange = feature.versionRange()
+      (feature.featureName(),
+        new FinalizedVersionRange(versionRange.minValue(), versionRange.maxValue()))
+    }.toMap.asJava
+    Features.finalizedFeatures(featuresMap)
   }
 }
 

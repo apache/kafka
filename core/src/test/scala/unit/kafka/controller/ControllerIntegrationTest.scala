@@ -17,17 +17,17 @@
 
 package kafka.controller
 
-import java.util.Properties
+import java.util.{Collections, Properties}
 import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue}
 
 import com.yammer.metrics.core.Timer
 import kafka.api.{ApiVersion, KAFKA_2_6_IV0, KAFKA_2_7_IV0, LeaderAndIsr}
+import kafka.internals.generated.FeatureZNodeData
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{LogCaptureAppender, TestUtils}
 import kafka.zk.{FeatureZNodeStatus, _}
 import org.apache.kafka.common.errors.{ControllerMovedException, StaleBrokerEpochException}
-import org.apache.kafka.common.feature.Features
 import org.apache.kafka.common.metrics.KafkaMetric
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.{ElectionType, TopicPartition, Uuid}
@@ -603,12 +603,16 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
 
   @Test
   def testControllerFeatureZNodeSetupWhenFeatureVersioningIsEnabledWithDisabledExistingFeatureZNode(): Unit = {
-    testControllerFeatureZNodeSetup(Some(new FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures())), KAFKA_2_7_IV0)
+    testControllerFeatureZNodeSetup(Some(new FeatureZNodeData()
+      .setStatus(FeatureZNodeStatus.Disabled.id)
+      .setFeatures(Collections.emptyList())), KAFKA_2_7_IV0)
   }
 
   @Test
   def testControllerFeatureZNodeSetupWhenFeatureVersioningIsEnabledWithEnabledExistingFeatureZNode(): Unit = {
-    testControllerFeatureZNodeSetup(Some(new FeatureZNode(FeatureZNodeStatus.Enabled, Features.emptyFinalizedFeatures())), KAFKA_2_7_IV0)
+    testControllerFeatureZNodeSetup(Some(new FeatureZNodeData()
+      .setStatus(FeatureZNodeStatus.Enabled.id)
+      .setFeatures(Collections.emptyList())), KAFKA_2_7_IV0)
   }
 
   @Test
@@ -618,12 +622,16 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
 
   @Test
   def testControllerFeatureZNodeSetupWhenFeatureVersioningIsDisabledWithDisabledExistingFeatureZNode(): Unit = {
-    testControllerFeatureZNodeSetup(Some(new FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures())), KAFKA_2_6_IV0)
+    testControllerFeatureZNodeSetup(Some(new FeatureZNodeData()
+      .setStatus(FeatureZNodeStatus.Disabled.id)
+      .setFeatures(Collections.emptyList())), KAFKA_2_6_IV0)
   }
 
   @Test
   def testControllerFeatureZNodeSetupWhenFeatureVersioningIsDisabledWithEnabledExistingFeatureZNode(): Unit = {
-    testControllerFeatureZNodeSetup(Some(new FeatureZNode(FeatureZNodeStatus.Enabled, Features.emptyFinalizedFeatures())), KAFKA_2_6_IV0)
+    testControllerFeatureZNodeSetup(Some(new FeatureZNodeData()
+      .setStatus(FeatureZNodeStatus.Enabled.id)
+      .setFeatures(Collections.emptyList())), KAFKA_2_6_IV0)
   }
 
   @Test
@@ -749,11 +757,11 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     controller.shutdown()
   }
 
-  private def testControllerFeatureZNodeSetup(initialZNode: Option[FeatureZNode],
+  private def testControllerFeatureZNodeSetup(initialZNodeData: Option[FeatureZNodeData],
                                               interBrokerProtocolVersion: ApiVersion): Unit = {
-    val versionBeforeOpt = initialZNode match {
-      case Some(node) =>
-        zkClient.createFeatureZNode(node)
+    val versionBeforeOpt = initialZNodeData match {
+      case Some(newNodeData) =>
+        zkClient.createFeatureZNode(newNodeData)
         Some(zkClient.getDataAndVersion(FeatureZNode.path)._2)
       case None =>
         Option.empty
@@ -776,40 +784,46 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     latch.await()
 
     val (mayBeFeatureZNodeBytes, versionAfter) = zkClient.getDataAndVersion(FeatureZNode.path)
-    val newZNode = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
+    val newZNodeData = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
     if (interBrokerProtocolVersion >= KAFKA_2_7_IV0) {
-      val emptyZNode = new FeatureZNode(FeatureZNodeStatus.Enabled, Features.emptyFinalizedFeatures)
-      initialZNode match {
-        case Some(node) => {
-          node.status match {
-            case FeatureZNodeStatus.Enabled =>
+      val emptyZNodeData = new FeatureZNodeData()
+        .setStatus(FeatureZNodeStatus.Enabled.id)
+        .setFeatures(Collections.emptyList())
+      initialZNodeData match {
+        case Some(data) => {
+          data.status match {
+            case FeatureZNodeStatus.Enabled.id =>
               assertEquals(versionBeforeOpt.get, versionAfter)
-              assertEquals(node, newZNode)
-            case FeatureZNodeStatus.Disabled =>
+              assertEquals(data, newZNodeData)
+            case FeatureZNodeStatus.Disabled.id =>
               assertEquals(versionBeforeOpt.get + 1, versionAfter)
-              assertEquals(emptyZNode, newZNode)
+              assertEquals(emptyZNodeData, newZNodeData)
+            case _ => assertTrue(s"status can not be ${data.status}", false)
           }
         }
         case None =>
           assertEquals(0, versionAfter)
-          assertEquals(new FeatureZNode(FeatureZNodeStatus.Enabled, Features.emptyFinalizedFeatures), newZNode)
+          assertEquals(emptyZNodeData, newZNodeData)
       }
     } else {
-      val emptyZNode = new FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures)
-      initialZNode match {
-        case Some(node) => {
-          node.status match {
-            case FeatureZNodeStatus.Enabled =>
+      val emptyZNodeData = new FeatureZNodeData()
+        .setStatus(FeatureZNodeStatus.Disabled.id)
+        .setFeatures(Collections.emptyList())
+      initialZNodeData match {
+        case Some(data) => {
+          data.status match {
+            case FeatureZNodeStatus.Enabled.id =>
               assertEquals(versionBeforeOpt.get + 1, versionAfter)
-              assertEquals(emptyZNode, newZNode)
-            case FeatureZNodeStatus.Disabled =>
+              assertEquals(emptyZNodeData, newZNodeData)
+            case FeatureZNodeStatus.Disabled.id =>
               assertEquals(versionBeforeOpt.get, versionAfter)
-              assertEquals(emptyZNode, newZNode)
+              assertEquals(emptyZNodeData, newZNodeData)
+            case _ => assertTrue(s"status can not be ${data.status}", false)
           }
         }
         case None =>
           assertEquals(0, versionAfter)
-          assertEquals(new FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures), newZNode)
+          assertEquals(emptyZNodeData, newZNodeData)
       }
     }
   }

@@ -22,6 +22,7 @@ import com.yammer.metrics.core.MetricName
 import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
 import kafka.controller.{KafkaController, LeaderIsrAndControllerEpoch, ReplicaAssignment}
+import kafka.internals.generated.FeatureZNodeData
 import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
 import kafka.security.authorizer.AclAuthorizer.{NoAcls, VersionedAcls}
@@ -1629,7 +1630,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     createRecursive(path, data = null, throwIfPathExists = false)
   }
 
-  def createFeatureZNode(nodeContents: FeatureZNode): Unit = {
+  def createFeatureZNode(nodeContents: FeatureZNodeData): Unit = {
     val createRequest = CreateRequest(
       FeatureZNode.path,
       FeatureZNode.encode(nodeContents),
@@ -1639,7 +1640,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     response.maybeThrow()
   }
 
-  def updateFeatureZNode(nodeContents: FeatureZNode): Int = {
+  def updateFeatureZNode(nodeContents: FeatureZNodeData): Int = {
     val setRequest = SetDataRequest(
       FeatureZNode.path,
       FeatureZNode.encode(nodeContents),

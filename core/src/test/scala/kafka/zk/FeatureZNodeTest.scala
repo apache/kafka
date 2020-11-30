@@ -18,26 +18,30 @@
 package kafka.zk
 
 import java.nio.charset.StandardCharsets
+import java.util
 
-import org.apache.kafka.common.feature.{Features, FinalizedVersionRange}
-import org.apache.kafka.common.feature.Features._
+import kafka.internals.generated.FeatureZNodeData
 import org.junit.Assert.{assertEquals, assertThrows}
 import org.junit.Test
 
-import scala.jdk.CollectionConverters._
 
 class FeatureZNodeTest {
 
   @Test
   def testEncodeDecode(): Unit = {
-    val featureZNode = FeatureZNode(
-      FeatureZNodeStatus.Enabled,
-      Features.finalizedFeatures(
-        Map[String, FinalizedVersionRange](
-          "feature1" -> new FinalizedVersionRange(1, 2),
-          "feature2" -> new FinalizedVersionRange(2, 4)).asJava))
-    val decoded = FeatureZNode.decode(FeatureZNode.encode(featureZNode))
-    assertEquals(featureZNode, decoded)
+    val features = util.Arrays.asList(
+      new FeatureZNodeData.Feature()
+        .setFeatureName("feature1")
+        .setVersionRange(new FeatureZNodeData.FinalizedVersionRange().setMinValue(1).setMaxValue(2)),
+      new FeatureZNodeData.Feature()
+        .setFeatureName("feature2")
+        .setVersionRange(new FeatureZNodeData.FinalizedVersionRange().setMinValue(2).setMaxValue(4)),
+    )
+    val featureZNodeData = new FeatureZNodeData()
+      .setStatus( FeatureZNodeStatus.Enabled.id)
+      .setFeatures(features)
+    val decoded = FeatureZNode.decode(FeatureZNode.encode(featureZNodeData))
+    assertEquals(featureZNodeData, decoded)
   }
 
   @Test
@@ -48,19 +52,26 @@ class FeatureZNodeTest {
       "features":%s
     }"""
 
-    val validFeatures = """{"feature1": {"min_version_level": 1, "max_version_level": 2}, "feature2": {"min_version_level": 2, "max_version_level": 4}}"""
+    val validFeatures =
+      """[
+          {"featureName":"feature1","versionRange":{"minValue":1,"maxValue":2}},
+          {"featureName":"feature2","versionRange":{"minValue":2,"maxValue":4}}
+         ]"""
     val node1 = FeatureZNode.decode(featureZNodeStrTemplate.format(validFeatures).getBytes(StandardCharsets.UTF_8))
-    assertEquals(FeatureZNodeStatus.Enabled, node1.status)
+    assertEquals(FeatureZNodeStatus.Enabled.id, node1.status)
     assertEquals(
-      Features.finalizedFeatures(
-        Map[String, FinalizedVersionRange](
-          "feature1" -> new FinalizedVersionRange(1, 2),
-          "feature2" -> new FinalizedVersionRange(2, 4)).asJava), node1.features)
-
-    val emptyFeatures = "{}"
+      util.Arrays.asList(
+        new FeatureZNodeData.Feature()
+          .setFeatureName("feature1")
+          .setVersionRange(new FeatureZNodeData.FinalizedVersionRange().setMinValue(1).setMaxValue(2)),
+        new FeatureZNodeData.Feature()
+          .setFeatureName("feature2")
+          .setVersionRange(new FeatureZNodeData.FinalizedVersionRange().setMinValue(2).setMaxValue(4)),
+      ), node1.features)
+    val emptyFeatures = "[]"
     val node2 = FeatureZNode.decode(featureZNodeStrTemplate.format(emptyFeatures).getBytes(StandardCharsets.UTF_8))
-    assertEquals(FeatureZNodeStatus.Enabled, node2.status)
-    assertEquals(emptyFinalizedFeatures, node2.features)
+    assertEquals(FeatureZNodeStatus.Enabled.id, node2.status)
+    assertEquals(0, node2.features.size())
   }
 
   @Test
@@ -69,17 +80,17 @@ class FeatureZNodeTest {
       """{
       "version":%d,
       "status":%d,
-      "features":{"feature1": {"min_version_level": 1, "max_version_level": 2}, "feature2": {"min_version_level": 2, "max_version_level": 4}}
+      "features":[{"featureName":"feature1","versionRange":{"minValue":1,"maxValue":2}},{"featureName":"feature2","versionRange":{"minValue":2,"maxValue":4}}]
     }"""
     assertThrows(
       classOf[IllegalArgumentException],
       () => FeatureZNode.decode(
-        featureZNodeStrTemplate.format(FeatureZNode.V1 - 1, 1).getBytes(StandardCharsets.UTF_8)))
+        featureZNodeStrTemplate.format(FeatureZNodeData.LOWEST_SUPPORTED_VERSION - 1, 1).getBytes(StandardCharsets.UTF_8)))
     val invalidStatus = FeatureZNodeStatus.Enabled.id + 1
     assertThrows(
       classOf[IllegalArgumentException],
       () => FeatureZNode.decode(
-        featureZNodeStrTemplate.format(FeatureZNode.CurrentVersion, invalidStatus).getBytes(StandardCharsets.UTF_8)))
+        featureZNodeStrTemplate.format(FeatureZNodeData.HIGHEST_SUPPORTED_VERSION, invalidStatus).getBytes(StandardCharsets.UTF_8)))
   }
 
   @Test
@@ -102,19 +113,21 @@ class FeatureZNodeTest {
       () => FeatureZNode.decode(
         featureZNodeStrTemplate.format(malformedFeatures).getBytes(StandardCharsets.UTF_8)))
 
-    val invalidFeaturesMinVersionLevel = ""","features":{"feature1": {"min_version_level": 0, "max_version_level": 2}}"""
+    val invalidFeaturesMinVersionLevel = ""","features":[{"featureName":"feature1","versionRange":{"minValue":0,"maxValue":2}}]"""
     assertThrows(
       classOf[IllegalArgumentException],
-      () => FeatureZNode.decode(
-        featureZNodeStrTemplate.format(invalidFeaturesMinVersionLevel).getBytes(StandardCharsets.UTF_8)))
+      () => FeatureZNode.getFeatures(
+        FeatureZNode.decode(
+          featureZNodeStrTemplate.format(invalidFeaturesMinVersionLevel).getBytes(StandardCharsets.UTF_8))))
 
-    val invalidFeaturesMaxVersionLevel = ""","features":{"feature1": {"min_version_level": 2, "max_version_level": 1}}"""
+    val invalidFeaturesMaxVersionLevel = ""","features":[{"featureName":"feature1","versionRange":{"minValue":2,"maxValue":1}}]"""
     assertThrows(
       classOf[IllegalArgumentException],
-      () => FeatureZNode.decode(
-        featureZNodeStrTemplate.format(invalidFeaturesMaxVersionLevel).getBytes(StandardCharsets.UTF_8)))
+      () => FeatureZNode.getFeatures(
+        FeatureZNode.decode(
+          featureZNodeStrTemplate.format(invalidFeaturesMaxVersionLevel).getBytes(StandardCharsets.UTF_8))))
 
-    val invalidFeaturesMissingMinVersionLevel = ""","features":{"feature1": {"max_version_level": 1}}"""
+    val invalidFeaturesMissingMinVersionLevel = ""","features":[{"featureName":"feature1","versionRange":{"maxValue":1}}]"""
     assertThrows(
       classOf[IllegalArgumentException],
       () => FeatureZNode.decode(

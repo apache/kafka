@@ -17,6 +17,7 @@
 package kafka.controller
 
 import java.util
+import java.util.Collections
 import java.util.concurrent.TimeUnit
 
 import kafka.admin.AdminOperationException
@@ -25,6 +26,7 @@ import kafka.common._
 import kafka.controller.KafkaController.AlterIsrCallback
 import kafka.cluster.Broker
 import kafka.controller.KafkaController.{AlterReassignmentsCallback, ElectLeadersCallback, ListReassignmentsCallback, UpdateFeaturesCallback}
+import kafka.internals.generated.FeatureZNodeData
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.server._
 import kafka.utils._
@@ -283,14 +285,14 @@ class KafkaController(val config: KafkaConfig,
     }
   }
 
-  private def createFeatureZNode(newNode: FeatureZNode): Int = {
+  private def createFeatureZNode(newNode: FeatureZNodeData): Int = {
     info(s"Creating FeatureZNode at path: ${FeatureZNode.path} with contents: $newNode")
     zkClient.createFeatureZNode(newNode)
     val (_, newVersion) = zkClient.getDataAndVersion(FeatureZNode.path)
     newVersion
   }
 
-  private def updateFeatureZNode(updatedNode: FeatureZNode): Int = {
+  private def updateFeatureZNode(updatedNode: FeatureZNodeData): Int = {
     info(s"Updating FeatureZNode at path: ${FeatureZNode.path} with contents: $updatedNode")
     zkClient.updateFeatureZNode(updatedNode)
   }
@@ -375,23 +377,38 @@ class KafkaController(val config: KafkaConfig,
   private def enableFeatureVersioning(): Unit = {
     val (mayBeFeatureZNodeBytes, version) = zkClient.getDataAndVersion(FeatureZNode.path)
     if (version == ZkVersion.UnknownVersion) {
-      val newVersion = createFeatureZNode(new FeatureZNode(FeatureZNodeStatus.Enabled,
-                                          brokerFeatures.defaultFinalizedFeatures))
+      val newNodeData = new FeatureZNodeData()
+        .setStatus(FeatureZNodeStatus.Enabled.id)
+        .setFeatures(brokerFeatures.defaultFinalizedFeatures.features().asScala.map{case (featureName, versionRange) =>
+          new FeatureZNodeData.Feature()
+            .setFeatureName(featureName)
+            .setVersionRange(new FeatureZNodeData.FinalizedVersionRange()
+              .setMinValue(versionRange.min())
+              .setMaxValue(versionRange.max()))
+        }.toSeq.asJava)
+
+      brokerFeatures.defaultFinalizedFeatures
+      val newVersion = createFeatureZNode(newNodeData)
       featureCache.waitUntilEpochOrThrow(newVersion, config.zkConnectionTimeoutMs)
     } else {
-      val existingFeatureZNode = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
-      val newFeatures = existingFeatureZNode.status match {
-        case FeatureZNodeStatus.Enabled => existingFeatureZNode.features
-        case FeatureZNodeStatus.Disabled =>
-          if (!existingFeatureZNode.features.empty()) {
+      val existingFeatureZNodeData = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
+      val newFeatures = existingFeatureZNodeData.status match {
+        case FeatureZNodeStatus.Enabled.id => existingFeatureZNodeData.features()
+        case FeatureZNodeStatus.Disabled.id =>
+          if (!existingFeatureZNodeData.features.isEmpty) {
             warn(s"FeatureZNode at path: ${FeatureZNode.path} with disabled status" +
-                 s" contains non-empty features: ${existingFeatureZNode.features}")
+                 s" contains non-empty features: ${existingFeatureZNodeData.features}")
           }
-          Features.emptyFinalizedFeatures
+          Collections.emptyList[FeatureZNodeData.Feature]()
+        case _ =>
+          error(s"FeatureZNode at path: ${FeatureZNode.path} with unknown status id: ${existingFeatureZNodeData.status()}")
+          Collections.emptyList[FeatureZNodeData.Feature]()
       }
-      val newFeatureZNode = new FeatureZNode(FeatureZNodeStatus.Enabled, newFeatures)
-      if (!newFeatureZNode.equals(existingFeatureZNode)) {
-        val newVersion = updateFeatureZNode(newFeatureZNode)
+      val newFeatureZNodeData = new FeatureZNodeData()
+        .setStatus(FeatureZNodeStatus.Enabled.id)
+        .setFeatures(newFeatures)
+      if (!existingFeatureZNodeData.equals(newFeatureZNodeData)) {
+        val newVersion = updateFeatureZNode(newFeatureZNodeData)
         featureCache.waitUntilEpochOrThrow(newVersion, config.zkConnectionTimeoutMs)
       }
     }
@@ -413,19 +430,21 @@ class KafkaController(val config: KafkaConfig,
    *    are disabled when IBP config is < than KAFKA_2_7_IV0.
    */
   private def disableFeatureVersioning(): Unit = {
-    val newNode = FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures())
+    val newNodeData = new FeatureZNodeData()
+      .setStatus(FeatureZNodeStatus.Disabled.id)
+      .setFeatures(Collections.emptyList())
     val (mayBeFeatureZNodeBytes, version) = zkClient.getDataAndVersion(FeatureZNode.path)
     if (version == ZkVersion.UnknownVersion) {
-      createFeatureZNode(newNode)
+      createFeatureZNode(newNodeData)
     } else {
-      val existingFeatureZNode = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
-      if (existingFeatureZNode.status == FeatureZNodeStatus.Disabled &&
-          !existingFeatureZNode.features.empty()) {
+      val existingFeatureZNodeData = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
+      if (existingFeatureZNodeData.status == FeatureZNodeStatus.Disabled.id &&
+          !existingFeatureZNodeData.features.isEmpty) {
         warn(s"FeatureZNode at path: ${FeatureZNode.path} with disabled status" +
-             s" contains non-empty features: ${existingFeatureZNode.features}")
+             s" contains non-empty features: ${existingFeatureZNodeData.features}")
       }
-      if (!newNode.equals(existingFeatureZNode)) {
-        updateFeatureZNode(newNode)
+      if (!existingFeatureZNodeData.equals(newNodeData)) {
+        updateFeatureZNode(newNodeData)
       }
     }
   }
@@ -2072,8 +2091,16 @@ class KafkaController(val config: KafkaConfig,
     // of the existing finalized features in ZK.
     try {
       if (!existingFeatures.equals(targetFeatures)) {
-        val newNode = new FeatureZNode(FeatureZNodeStatus.Enabled, Features.finalizedFeatures(targetFeatures.asJava))
-        val newVersion = updateFeatureZNode(newNode)
+        val newNodeData = new FeatureZNodeData()
+          .setStatus(FeatureZNodeStatus.Enabled.id)
+          .setFeatures(targetFeatures.map{case (featureName, versionRange) =>
+            new FeatureZNodeData.Feature()
+              .setFeatureName(featureName)
+              .setVersionRange(new FeatureZNodeData.FinalizedVersionRange()
+                .setMinValue(versionRange.min())
+                .setMaxValue(versionRange.max()))
+          }.toSeq.asJava)
+        val newVersion = updateFeatureZNode(newNodeData)
         featureCache.waitUntilEpochOrThrow(newVersion, request.data().timeoutMs())
       }
     } catch {
