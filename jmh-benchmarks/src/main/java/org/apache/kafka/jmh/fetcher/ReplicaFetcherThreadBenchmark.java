@@ -56,6 +56,7 @@ import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -70,11 +71,6 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
-import scala.Option;
-import scala.collection.Iterator;
-import scala.collection.JavaConverters;
-import scala.compat.java8.OptionConverters;
-import scala.collection.Map;
 
 import java.io.File;
 import java.io.IOException;
@@ -88,6 +84,12 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+
+import scala.Option;
+import scala.collection.Iterator;
+import scala.collection.JavaConverters;
+import scala.collection.Map;
+import scala.compat.java8.OptionConverters;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)

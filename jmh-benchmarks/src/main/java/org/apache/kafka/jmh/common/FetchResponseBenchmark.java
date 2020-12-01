@@ -27,6 +27,7 @@ import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.requests.ByteBufferChannel;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.ResponseHeader;
+
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;

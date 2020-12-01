@@ -36,6 +36,7 @@ import kafka.utils.KafkaScheduler;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
 import org.apache.kafka.common.utils.Time;
+
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -49,8 +50,6 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
-import scala.Option;
-import scala.collection.JavaConverters;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -59,6 +58,9 @@ import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+
+import scala.Option;
+import scala.collection.JavaConverters;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
