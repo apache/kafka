@@ -36,7 +36,7 @@ import scala.jdk.CollectionConverters._
 trait BrokerToControllerChannelManager {
   def sendRequest(request: AbstractRequest.Builder[_ <: AbstractRequest],
                   callback: BrokerToControllerRequestCompletionHandler,
-                  requestTimeout: Long): Unit
+                  retryDeadlineMs: Long): Unit
 
   def start(): Unit
 
@@ -127,17 +127,16 @@ class BrokerToControllerChannelManagerImpl(metadataCache: kafka.server.MetadataC
 
   override def sendRequest(request: AbstractRequest.Builder[_ <: AbstractRequest],
                            callback: BrokerToControllerRequestCompletionHandler,
-                           requestTimeout: Long): Unit = {
-    requestQueue.put(BrokerToControllerQueueItem(request, callback, time.milliseconds() + requestTimeout))
+                           retryDeadlineMs: Long): Unit = {
+    requestQueue.put(BrokerToControllerQueueItem(request, callback, retryDeadlineMs))
     requestThread.wakeup()
   }
-
 }
 
 abstract class BrokerToControllerRequestCompletionHandler extends RequestCompletionHandler {
 
   /**
-   * Fire when the request transmission hits a fatal exception.
+   * Fire when the request transmission hits timeout.
    */
   def onTimeout(): Unit
 }
@@ -176,7 +175,7 @@ class BrokerToControllerRequestThread(networkClient: KafkaClient,
   }
 
   private[server] def handleResponse(request: BrokerToControllerQueueItem)(response: ClientResponse): Unit = {
-    if (isTimedOut(request)) {
+    if (hasTimedOut(request, response)) {
       request.callback.onTimeout()
     } else if (response.wasDisconnected()) {
       activeController = None
@@ -191,8 +190,10 @@ class BrokerToControllerRequestThread(networkClient: KafkaClient,
     }
   }
 
-  private def isTimedOut(request: BrokerToControllerQueueItem): Boolean = {
-    time.milliseconds() > request.deadlineMs
+  // The timeout will only be checked after receiving a response. This means that in the worst case,
+  // the total timeout would be twice of the configured timeout.
+  private def hasTimedOut(request: BrokerToControllerQueueItem, response: ClientResponse): Boolean = {
+    response.receivedTimeMs() > request.deadlineMs
   }
 
   private[server] def backoff(): Unit = pause(100, TimeUnit.MILLISECONDS)

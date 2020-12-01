@@ -24,12 +24,14 @@ import kafka.utils.Logging
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EnvelopeRequest, EnvelopeResponse, RequestHeader}
+import org.apache.kafka.common.utils.Time
 
 import scala.compat.java8.OptionConverters._
 import scala.concurrent.TimeoutException
 
 class ForwardingManager(channelManager: BrokerToControllerChannelManager,
-                        requestTimeoutMs: Long) extends Logging {
+                        time: Time,
+                        retryTimeoutMs: Long) extends Logging {
 
   def forwardRequest(request: RequestChannel.Request,
                      responseCallback: AbstractResponse => Unit): Unit = {
@@ -67,13 +69,20 @@ class ForwardingManager(channelManager: BrokerToControllerChannelManager,
       }
 
       override def onTimeout(): Unit = {
-        error(s"Forwarding of the request $request failed due to timeout exception")
+        debug(s"Forwarding of the request $request failed due to timeout exception")
         val response = request.body[AbstractRequest].getErrorResponse(new TimeoutException)
         responseCallback(response)
       }
     }
 
-    channelManager.sendRequest(envelopeRequest, new ForwardingResponseHandler, requestTimeoutMs)
+    val currentTime = time.milliseconds()
+    val deadlineMs =
+      if (Long.MaxValue - currentTime < retryTimeoutMs)
+        Long.MaxValue
+      else
+        currentTime + retryTimeoutMs
+
+    channelManager.sendRequest(envelopeRequest, new ForwardingResponseHandler, deadlineMs)
   }
 
   private def parseResponse(

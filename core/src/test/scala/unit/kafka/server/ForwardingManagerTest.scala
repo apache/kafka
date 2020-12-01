@@ -35,7 +35,7 @@ import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuild
 import org.junit.Assert._
 import org.junit.Test
 import org.mockito.ArgumentMatchers._
-import org.mockito.Mockito
+import org.mockito.{ArgumentMatchers, Mockito}
 
 import scala.jdk.CollectionConverters._
 
@@ -46,7 +46,7 @@ class ForwardingManagerTest {
 
   @Test
   def testResponseCorrelationIdMismatch(): Unit = {
-    val forwardingManager = new ForwardingManager(brokerToController, Long.MaxValue)
+    val forwardingManager = new ForwardingManager(brokerToController, time, Long.MaxValue)
     val requestCorrelationId = 27
     val envelopeCorrelationId = 39
     val clientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "client")
@@ -66,7 +66,7 @@ class ForwardingManagerTest {
     Mockito.when(brokerToController.sendRequest(
       any(classOf[EnvelopeRequest.Builder]),
       any(classOf[BrokerToControllerRequestCompletionHandler]),
-      anyLong()
+      ArgumentMatchers.eq(Long.MaxValue)
     )).thenAnswer(invocation => {
       val completionHandler = invocation.getArgument[RequestCompletionHandler](1)
       val response = buildEnvelopeResponse(responseBuffer, envelopeCorrelationId, completionHandler)

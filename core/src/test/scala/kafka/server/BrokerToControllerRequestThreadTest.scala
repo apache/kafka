@@ -223,7 +223,7 @@ class BrokerToControllerRequestThreadTest {
         override def onTimeout(): Unit = {
           responseLatch.countDown()
         }
-      }, requestTimeout)
+      }, requestTimeout + time.milliseconds())
     requestQueue.put(queueItem)
 
     // initialize to the controller

@@ -107,7 +107,7 @@ class AlterIsrManagerImpl(val controllerChannelManager: BrokerToControllerChanne
       }
 
       override def onTimeout(): Unit = {
-        warn(s"Encountered request when sending AlterIsr to the controller")
+        throw new IllegalStateException("Encountered unexpected timeout when sending AlterIsr to the controller")
       }
     }
 
