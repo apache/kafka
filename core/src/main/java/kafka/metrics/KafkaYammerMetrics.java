@@ -17,11 +17,11 @@
 
 package kafka.metrics;
 
-import com.yammer.metrics.core.MetricsRegistry;
-
 import org.apache.kafka.common.Reconfigurable;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.JmxReporter;
+
+import com.yammer.metrics.core.MetricsRegistry;
 
 import java.util.Map;
 import java.util.Set;
