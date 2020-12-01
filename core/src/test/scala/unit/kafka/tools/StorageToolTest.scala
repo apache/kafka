@@ -112,7 +112,7 @@ Found problem:
     try {
       Files.write(tempDir.toPath.resolve("meta.properties"),
         String.join("\n", util.Arrays.asList(
-          "version=1", "kip.500=true",
+          "version=1",
           "cluster.id=26c36907-4158-4a35-919d-6534229f5241")).
             getBytes(StandardCharsets.UTF_8))
       assertEquals(1, StorageTool.
