@@ -35,6 +35,7 @@ import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.requests.DescribeQuorumRequest;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 

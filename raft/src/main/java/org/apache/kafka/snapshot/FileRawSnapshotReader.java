@@ -16,14 +16,15 @@
  */
 package org.apache.kafka.snapshot;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.file.Path;
-import java.util.Iterator;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.OffsetAndEpoch;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.file.Path;
+import java.util.Iterator;
 
 public final class FileRawSnapshotReader implements RawSnapshotReader {
     private final FileRecords fileRecords;

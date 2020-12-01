@@ -17,10 +17,11 @@
 
 package org.apache.kafka.snapshot;
 
+import org.apache.kafka.raft.OffsetAndEpoch;
+
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import org.apache.kafka.raft.OffsetAndEpoch;
 
 /**
  * Interface for writing snapshot as a sequence of records.

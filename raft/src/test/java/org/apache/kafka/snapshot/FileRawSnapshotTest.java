@@ -16,6 +16,17 @@
  */
 package org.apache.kafka.snapshot;
 
+import org.apache.kafka.common.record.BufferSupplier.GrowableBufferSupplier;
+import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.SimpleRecord;
+import org.apache.kafka.raft.OffsetAndEpoch;
+import org.apache.kafka.test.TestUtils;
+
+import org.junit.jupiter.api.Test;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
@@ -23,15 +34,7 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.stream.IntStream;
-import org.apache.kafka.common.record.BufferSupplier.GrowableBufferSupplier;
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.SimpleRecord;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.raft.OffsetAndEpoch;
-import org.apache.kafka.test.TestUtils;
-import org.junit.jupiter.api.Test;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;

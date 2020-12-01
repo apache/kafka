@@ -16,17 +16,20 @@
  */
 package org.apache.kafka.snapshot;
 
+import org.apache.kafka.common.record.BufferSupplier.GrowableBufferSupplier;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.raft.OffsetAndEpoch;
+import org.apache.kafka.raft.RaftClientTestContext;
+
+import org.junit.jupiter.api.Test;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
-import org.apache.kafka.common.record.BufferSupplier.GrowableBufferSupplier;
-import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.raft.OffsetAndEpoch;
-import org.apache.kafka.raft.RaftClientTestContext;
-import org.junit.jupiter.api.Test;
+
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

@@ -21,6 +21,7 @@ import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 

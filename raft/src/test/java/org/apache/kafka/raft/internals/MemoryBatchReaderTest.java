@@ -17,6 +17,7 @@
 package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.raft.BatchReader;
+
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 

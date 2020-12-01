@@ -18,6 +18,7 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;

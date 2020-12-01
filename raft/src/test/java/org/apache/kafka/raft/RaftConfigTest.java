@@ -17,6 +17,7 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.config.ConfigException;
+
 import org.junit.jupiter.api.Test;
 
 import java.net.InetSocketAddress;

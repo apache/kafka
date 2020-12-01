@@ -30,6 +30,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.MockLog.LogBatch;
 import org.apache.kafka.raft.MockLog.LogEntry;
 import org.apache.kafka.raft.internals.BatchMemoryPool;
+
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;

@@ -57,6 +57,7 @@ import org.apache.kafka.raft.internals.BatchBuilder;
 import org.apache.kafka.raft.internals.StringSerde;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
+
 import org.mockito.Mockito;
 
 import java.io.IOException;

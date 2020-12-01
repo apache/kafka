@@ -16,12 +16,6 @@
  */
 package org.apache.kafka.raft;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.FetchResponseData;
@@ -37,7 +31,16 @@ import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotWriterTest;
+
 import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
