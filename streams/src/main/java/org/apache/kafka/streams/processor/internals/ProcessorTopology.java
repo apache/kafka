@@ -172,7 +172,6 @@ public class ProcessorTopology {
                 }
                 sourceNodesByTopic.put(topic, sourceNode);
             }
-
         }
     }
 
