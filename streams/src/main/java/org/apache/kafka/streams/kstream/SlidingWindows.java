@@ -17,8 +17,10 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.processor.TimestampExtractor;
+
 import java.time.Duration;
 import java.util.Objects;
+
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDuration;
 

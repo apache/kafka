@@ -32,6 +32,7 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;

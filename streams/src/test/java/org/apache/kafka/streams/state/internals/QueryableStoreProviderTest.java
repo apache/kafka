@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
@@ -24,6 +23,7 @@ import org.apache.kafka.streams.state.NoOpWindowStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.test.NoOpReadOnlyStore;
 import org.apache.kafka.test.StateStoreProviderStub;
+
 import org.junit.Before;
 import org.junit.Test;
 
@@ -32,8 +32,8 @@ import java.util.HashMap;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
-import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 
 public class QueryableStoreProviderTest {
 

@@ -22,11 +22,11 @@ import org.apache.kafka.common.metrics.Sensor;
 
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
-import java.util.Iterator;
-import java.util.HashSet;
 import java.util.function.Function;
 
 /**

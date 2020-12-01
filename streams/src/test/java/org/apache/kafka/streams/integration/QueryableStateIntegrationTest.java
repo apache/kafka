@@ -60,6 +60,7 @@ import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.NoRetryException;
 import org.apache.kafka.test.TestUtils;
+
 import org.hamcrest.Matchers;
 import org.junit.After;
 import org.junit.Before;

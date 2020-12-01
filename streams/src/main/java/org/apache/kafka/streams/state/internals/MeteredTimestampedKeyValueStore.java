@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
-
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
@@ -25,6 +23,8 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
 /**
  * A Metered {@link TimestampedKeyValueStore} wrapper that is used for recording operation metrics, and hence its

@@ -44,6 +44,7 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.test.KeyValueIteratorStub;
+
 import org.easymock.EasyMockRule;
 import org.easymock.Mock;
 import org.easymock.MockType;

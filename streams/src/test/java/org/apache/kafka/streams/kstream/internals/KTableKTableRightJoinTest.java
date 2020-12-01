@@ -24,6 +24,7 @@ import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.test.StreamsTestUtils;
+
 import org.junit.Test;
 
 import java.util.Properties;

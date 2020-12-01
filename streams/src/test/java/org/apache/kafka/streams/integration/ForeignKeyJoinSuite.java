@@ -22,6 +22,7 @@ import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.CombinedKeySche
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionResolverJoinProcessorSupplierTest;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionResponseWrapperSerdeTest;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapperSerdeTest;
+
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
 

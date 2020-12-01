@@ -52,10 +52,10 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignorConfigura
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.rules.TestName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import scala.Option;
 
 import java.io.File;
 import java.io.IOException;
@@ -94,6 +94,8 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.fail;
+
+import scala.Option;
 
 /**
  * Utility functions to make integration testing more convenient.

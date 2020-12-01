@@ -49,6 +49,7 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;

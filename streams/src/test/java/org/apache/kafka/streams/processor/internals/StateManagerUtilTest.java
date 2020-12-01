@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.List;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.LockException;
@@ -27,6 +26,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.TestUtils;
+
 import org.easymock.IMocksControl;
 import org.easymock.Mock;
 import org.easymock.MockType;
@@ -40,6 +40,7 @@ import org.slf4j.Logger;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.List;
 
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;

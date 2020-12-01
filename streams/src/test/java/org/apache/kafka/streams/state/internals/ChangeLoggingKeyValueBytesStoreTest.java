@@ -29,6 +29,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
+
 import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;

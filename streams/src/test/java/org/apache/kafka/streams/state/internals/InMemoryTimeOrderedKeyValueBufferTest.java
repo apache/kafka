@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.state.StoreBuilder;
+
 import org.junit.Test;
 
 import java.util.HashMap;

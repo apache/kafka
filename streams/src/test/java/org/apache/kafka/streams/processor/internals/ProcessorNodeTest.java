@@ -31,12 +31,12 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
+
 import org.junit.Test;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
-
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
 import static org.hamcrest.CoreMatchers.containsString;

@@ -22,6 +22,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.GenericInMemoryKeyValueStore;
+
 import org.junit.Before;
 import org.junit.Test;
 

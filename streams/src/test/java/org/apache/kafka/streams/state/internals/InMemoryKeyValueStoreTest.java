@@ -21,6 +21,7 @@ import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+
 import org.junit.Test;
 
 import static org.hamcrest.CoreMatchers.nullValue;

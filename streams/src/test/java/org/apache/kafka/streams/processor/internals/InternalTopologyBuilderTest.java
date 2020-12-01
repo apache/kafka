@@ -34,6 +34,7 @@ import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.StreamsTestUtils;
+
 import org.junit.Test;
 
 import java.util.Arrays;

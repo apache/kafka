@@ -42,6 +42,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;

@@ -16,13 +16,14 @@
  */
 package org.apache.kafka.streams.kstream.internals.graph;
 
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
+
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.regex.Pattern;
-import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 
 abstract public class SourceGraphNode<K, V> extends GraphNode {
 

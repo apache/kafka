@@ -51,6 +51,7 @@ import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.NoopValueTransformer;
 import org.apache.kafka.test.NoopValueTransformerWithKey;
 import org.apache.kafka.test.StreamsTestUtils;
+
 import org.junit.Test;
 
 import java.time.Duration;

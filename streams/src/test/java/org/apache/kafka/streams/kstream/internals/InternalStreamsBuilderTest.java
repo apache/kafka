@@ -33,6 +33,7 @@ import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
+
 import org.junit.Test;
 
 import java.util.Collections;
@@ -44,8 +45,8 @@ import java.util.regex.Pattern;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.streams.Topology.AutoOffsetReset;
-import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;

@@ -42,6 +42,7 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.NoRetryException;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;

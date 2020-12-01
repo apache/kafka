@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.common.config.ConfigException;
+
 import org.junit.Test;
 
 import static org.hamcrest.MatcherAssert.assertThat;

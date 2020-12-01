@@ -38,6 +38,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateS
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.StreamsTestUtils;
+
 import org.easymock.EasyMock;
 import org.easymock.EasyMockRule;
 import org.easymock.EasyMockSupport;

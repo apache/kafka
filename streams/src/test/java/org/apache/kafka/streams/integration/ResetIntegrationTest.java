@@ -18,7 +18,6 @@ package org.apache.kafka.streams.integration;
 
 import kafka.server.KafkaConfig$;
 import kafka.tools.StreamsResetter;
-
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;

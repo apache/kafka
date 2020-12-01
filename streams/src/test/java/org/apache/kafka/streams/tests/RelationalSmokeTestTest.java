@@ -23,6 +23,7 @@ import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.Test;
 
 import java.util.Map;

@@ -23,6 +23,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
 import org.junit.Before;

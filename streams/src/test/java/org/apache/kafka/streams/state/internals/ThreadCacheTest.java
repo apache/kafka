@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+
 import org.junit.Test;
 
 import java.util.ArrayList;

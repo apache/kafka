@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state;
 
-
 import org.apache.kafka.streams.kstream.Windowed;
 
 /**

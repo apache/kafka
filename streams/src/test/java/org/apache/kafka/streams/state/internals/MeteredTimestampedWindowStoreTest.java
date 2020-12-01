@@ -38,6 +38,7 @@ import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
+
 import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;

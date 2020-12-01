@@ -24,6 +24,7 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
+
 import org.junit.Before;
 import org.junit.Test;
 

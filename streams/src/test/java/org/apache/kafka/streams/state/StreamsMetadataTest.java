@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.TopicPartition;
+
 import org.junit.Before;
 import org.junit.Test;
 

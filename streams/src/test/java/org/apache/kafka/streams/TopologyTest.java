@@ -37,6 +37,7 @@ import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.MockProcessorSupplier;
+
 import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Test;

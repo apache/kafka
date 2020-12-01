@@ -23,6 +23,7 @@ import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.kstream.internals.graph.TableSourceNode.TableSourceNodeBuilder;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+
 import org.easymock.EasyMock;
 import org.junit.Test;
 import org.junit.runner.RunWith;

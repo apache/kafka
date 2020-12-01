@@ -78,6 +78,7 @@ import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
+
 import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Before;

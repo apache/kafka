@@ -25,6 +25,7 @@ import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.StoreBuilder;
+
 import org.junit.Test;
 
 import static java.time.Duration.ofMillis;

@@ -39,6 +39,7 @@ import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Rule;

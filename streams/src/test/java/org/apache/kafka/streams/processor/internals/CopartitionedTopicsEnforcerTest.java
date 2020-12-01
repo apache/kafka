@@ -22,6 +22,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.internals.assignment.CopartitionedTopicsEnforcer;
+
 import org.junit.Before;
 import org.junit.Test;
 

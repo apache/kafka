@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.streams.errors.StreamsException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

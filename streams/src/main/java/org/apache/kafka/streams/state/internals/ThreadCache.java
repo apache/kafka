@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.CircularIterator;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+
 import org.slf4j.Logger;
 
 import java.util.Collections;

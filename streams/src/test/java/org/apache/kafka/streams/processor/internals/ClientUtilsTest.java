@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ExecutionException;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
@@ -29,8 +26,13 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.streams.errors.StreamsException;
+
 import org.easymock.EasyMock;
 import org.junit.Test;
+
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ExecutionException;
 
 import static java.util.Collections.emptySet;
 import static org.apache.kafka.common.utils.Utils.mkSet;

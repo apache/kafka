@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream;
 
-
 import org.apache.kafka.streams.processor.ConnectedStoreProvider;
 
 import java.util.function.Supplier;

@@ -42,6 +42,7 @@ import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockInternalTopicManager;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
+
 import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;

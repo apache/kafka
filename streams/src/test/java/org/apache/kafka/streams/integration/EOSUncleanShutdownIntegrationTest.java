@@ -33,6 +33,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;

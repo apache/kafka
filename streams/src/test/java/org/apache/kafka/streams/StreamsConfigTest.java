@@ -33,6 +33,7 @@ import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+
 import org.junit.Before;
 import org.junit.Test;
 

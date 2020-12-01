@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.integration;
 
-
 import kafka.utils.MockTime;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -41,6 +40,7 @@ import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;

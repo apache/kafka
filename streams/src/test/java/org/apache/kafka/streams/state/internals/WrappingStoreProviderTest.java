@@ -16,16 +16,16 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.state.NoOpWindowStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
-import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.StateStoreProviderStub;
+
 import org.junit.Before;
 import org.junit.Test;
 

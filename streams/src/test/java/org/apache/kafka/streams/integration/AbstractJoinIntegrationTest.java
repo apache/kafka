@@ -36,6 +36,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.experimental.categories.Category;

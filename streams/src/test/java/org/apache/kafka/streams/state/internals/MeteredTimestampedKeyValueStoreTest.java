@@ -44,6 +44,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStore.RawAndDeserializedValue;
 import org.apache.kafka.test.KeyValueIteratorStub;
+
 import org.easymock.EasyMockRule;
 import org.easymock.Mock;
 import org.easymock.MockType;

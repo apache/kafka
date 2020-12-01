@@ -37,11 +37,12 @@ import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.Test;
-import java.util.Properties;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Properties;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;

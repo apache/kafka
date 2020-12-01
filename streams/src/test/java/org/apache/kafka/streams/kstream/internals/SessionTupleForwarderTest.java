@@ -21,6 +21,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
+
 import org.junit.Test;
 
 import static org.easymock.EasyMock.expect;

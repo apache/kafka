@@ -22,6 +22,7 @@ import org.apache.kafka.streams.kstream.internals.PrintedInternal;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;

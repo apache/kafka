@@ -22,6 +22,7 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;

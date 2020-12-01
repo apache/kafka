@@ -43,6 +43,7 @@ import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRocksDbConfigSetter;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
+
 import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;

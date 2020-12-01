@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+
 import org.junit.Test;
 
 import java.nio.ByteBuffer;

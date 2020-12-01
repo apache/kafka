@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
+
 import org.junit.Test;
 
 import java.util.Map;

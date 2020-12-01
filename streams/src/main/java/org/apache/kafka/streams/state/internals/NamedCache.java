@@ -16,15 +16,12 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.NavigableMap;
-import java.util.TreeMap;
-import java.util.TreeSet;
-
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.metrics.NamedCacheMetrics;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,7 +29,10 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.NavigableMap;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 
 class NamedCache {
     private static final Logger log = LoggerFactory.getLogger(NamedCache.class);

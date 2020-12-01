@@ -35,6 +35,7 @@ import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;

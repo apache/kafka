@@ -20,6 +20,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
 import org.junit.Before;

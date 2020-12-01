@@ -60,6 +60,7 @@ import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockRocksDbConfigSetter;
 import org.apache.kafka.test.TestUtils;
+
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.junit.Assert;

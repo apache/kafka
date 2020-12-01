@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.state.internals.Murmur3;
+
 import org.junit.Test;
 
 import java.util.Map;

@@ -26,6 +26,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.test.KeyValueIteratorStub;
+
 import org.junit.Before;
 import org.junit.Test;
 

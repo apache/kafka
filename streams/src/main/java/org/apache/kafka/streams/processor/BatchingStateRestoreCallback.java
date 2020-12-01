@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.processor;
 
-
 import org.apache.kafka.streams.KeyValue;
 
 import java.util.Collection;

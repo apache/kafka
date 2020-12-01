@@ -32,6 +32,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
 import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

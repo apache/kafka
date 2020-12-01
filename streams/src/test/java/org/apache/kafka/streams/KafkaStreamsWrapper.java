@@ -16,10 +16,9 @@
  */
 package org.apache.kafka.streams;
 
-import java.util.Properties;
-
-import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.processor.internals.StreamThread;
+
+import java.util.Properties;
 
 /**
  *  This class allows to access the {@link KafkaStreams} a {@link StreamThread.StateListener} object.

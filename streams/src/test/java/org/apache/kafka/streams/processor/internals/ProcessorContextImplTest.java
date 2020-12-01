@@ -39,6 +39,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+
 import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;

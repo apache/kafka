@@ -35,6 +35,7 @@ import org.apache.kafka.streams.kstream.Repartitioned;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.StreamsTestUtils;
+
 import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
 import org.junit.Before;
@@ -56,8 +57,8 @@ import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 @RunWith(EasyMockRunner.class)
 public class KStreamRepartitionTest {

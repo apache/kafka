@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import static org.junit.Assert.*;
-
 import org.junit.Test;
 
 import java.util.Map;
+
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
 
 /**
  * This class was taken from Hive org.apache.hive.common.util;

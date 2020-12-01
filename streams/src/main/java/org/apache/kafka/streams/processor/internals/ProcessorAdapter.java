@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;

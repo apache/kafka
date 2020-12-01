@@ -34,6 +34,7 @@ import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueBuffe
 import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
+
 import org.easymock.EasyMock;
 import org.hamcrest.Matcher;
 import org.junit.Test;

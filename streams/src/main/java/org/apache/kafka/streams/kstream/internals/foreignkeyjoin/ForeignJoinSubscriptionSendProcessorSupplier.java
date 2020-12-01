@@ -28,6 +28,7 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.internals.Murmur3;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

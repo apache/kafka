@@ -20,6 +20,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.state.internals.ValueAndTimestampSerde;
+
 import org.junit.Assert;
 import org.junit.Test;
 

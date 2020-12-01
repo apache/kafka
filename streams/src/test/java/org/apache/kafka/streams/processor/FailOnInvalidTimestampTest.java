@@ -18,8 +18,10 @@ package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.streams.errors.StreamsException;
-import static org.junit.Assert.assertThrows;
+
 import org.junit.Test;
+
+import static org.junit.Assert.assertThrows;
 
 public class FailOnInvalidTimestampTest extends TimestampExtractorTest {
 

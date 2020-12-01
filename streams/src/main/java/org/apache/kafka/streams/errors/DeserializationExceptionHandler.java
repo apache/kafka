@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.errors;
 
-
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.streams.processor.ProcessorContext;

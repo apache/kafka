@@ -19,8 +19,6 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.test.NoopValueTransformer;
-import org.apache.kafka.test.NoopValueTransformerWithKey;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
@@ -34,6 +32,9 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.NoopValueTransformer;
+import org.apache.kafka.test.NoopValueTransformerWithKey;
+
 import org.junit.Test;
 
 import java.util.Random;

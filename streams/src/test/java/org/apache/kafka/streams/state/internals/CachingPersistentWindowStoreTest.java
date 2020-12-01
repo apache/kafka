@@ -45,6 +45,7 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.TestUtils;
+
 import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;

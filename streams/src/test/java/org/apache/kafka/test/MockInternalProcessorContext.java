@@ -32,13 +32,13 @@ import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
 import java.io.File;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
-import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
 public class MockInternalProcessorContext extends MockProcessorContext implements InternalProcessorContext {
 

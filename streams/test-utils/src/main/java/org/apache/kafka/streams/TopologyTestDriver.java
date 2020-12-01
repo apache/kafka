@@ -80,6 +80,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.test.TestRecord;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

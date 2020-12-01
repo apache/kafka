@@ -25,6 +25,7 @@ import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.StateStoreProviderStub;
 import org.apache.kafka.test.StreamsTestUtils;
+
 import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Before;

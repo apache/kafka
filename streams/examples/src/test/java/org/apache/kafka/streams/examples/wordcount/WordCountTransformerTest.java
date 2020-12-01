@@ -21,6 +21,7 @@ import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.StoreBuilder;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Iterator;

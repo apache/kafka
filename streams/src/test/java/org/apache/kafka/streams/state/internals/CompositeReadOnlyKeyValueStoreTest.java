@@ -31,6 +31,7 @@ import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.NoOpReadOnlyStore;
 import org.apache.kafka.test.StateStoreProviderStub;
+
 import org.junit.Before;
 import org.junit.Test;
 

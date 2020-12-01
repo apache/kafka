@@ -33,6 +33,7 @@ import org.apache.kafka.streams.state.internals.ChangeLoggingTimestampedKeyValue
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStore;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
+
 import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;

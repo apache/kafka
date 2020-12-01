@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;

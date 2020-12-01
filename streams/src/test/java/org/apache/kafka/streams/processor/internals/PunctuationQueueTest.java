@@ -22,6 +22,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.test.MockProcessorNode;
+
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;

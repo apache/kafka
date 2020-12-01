@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.integration;
 
-import java.time.Duration;
 import kafka.log.LogConfig;
 import kafka.utils.MockTime;
 import org.apache.kafka.clients.admin.Admin;
@@ -44,6 +43,7 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -52,6 +52,7 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;

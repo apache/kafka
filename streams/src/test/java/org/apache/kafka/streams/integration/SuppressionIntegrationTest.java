@@ -44,6 +44,7 @@ import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
+
 import org.hamcrest.Matchers;
 import org.junit.ClassRule;
 import org.junit.Test;

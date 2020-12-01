@@ -47,6 +47,7 @@ import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.StreamsTestUtils;
+
 import org.junit.Before;
 import org.junit.Test;
 

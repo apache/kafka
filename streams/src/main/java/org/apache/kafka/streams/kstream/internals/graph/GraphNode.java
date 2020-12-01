@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
-
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 import java.util.Arrays;

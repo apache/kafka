@@ -22,6 +22,7 @@ import org.apache.kafka.streams.errors.MissingSourceTopicException;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.internals.StreamThread.State;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
+
 import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
