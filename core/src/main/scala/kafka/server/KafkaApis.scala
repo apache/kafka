@@ -1896,6 +1896,11 @@ class KafkaApis(val requestChannel: RequestChannel,
               .setTopicConfigErrorCode(Errors.NONE.code)
           }
         }
+        val topicIds = zkClient.getTopicIdsForTopics(results.asScala.map(result => result.name()).toSet)
+        topicIds.foreach { case (name, id) =>
+          val result = results.find(name)
+          result.setTopicId(id)
+        }
         sendResponseCallback(results)
       }
       adminManager.createTopics(

@@ -64,7 +64,7 @@ import org.apache.kafka.common.requests.{FetchMetadata => JFetchMetadata, _}
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.utils.ProducerIdAndEpoch
-import org.apache.kafka.common.{IsolationLevel, Node, TopicPartition}
+import org.apache.kafka.common.{IsolationLevel, Node, TopicPartition, Uuid}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.easymock.EasyMock._
 import org.easymock.{Capture, EasyMock, IAnswer, IArgumentMatcher}
@@ -744,9 +744,12 @@ class KafkaApisTest {
       anyObject(),
       EasyMock.eq(UnboundedControllerMutationQuota),
       EasyMock.capture(capturedCallback)))
+    
+    EasyMock.expect(zkClient.getTopicIdsForTopics(Set(authorizedTopic, unauthorizedTopic))).andReturn(
+      Map(authorizedTopic -> Uuid.ZERO_UUID, unauthorizedTopic -> Uuid.ZERO_UUID))
 
     EasyMock.replay(replicaManager, clientRequestQuotaManager, clientControllerQuotaManager,
-      requestChannel, authorizer, adminManager, controller)
+      requestChannel, authorizer, adminManager, controller, zkClient)
 
     createKafkaApis(authorizer = Some(authorizer)).handleCreateTopicsRequest(request)
 

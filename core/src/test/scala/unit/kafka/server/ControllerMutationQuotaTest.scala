@@ -176,7 +176,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
   }
 
   @Test
-  def testPermissiveCreateTopicsRequest(): Unit = {
+  def OtestPermissiveCreateTopicsRequest(): Unit = {
     asPrincipal(ThrottledPrincipal) {
       // Create two topics worth of 30 partitions each. As we use a permissive quota, we
       // expect both topics to be created.

@@ -20,6 +20,7 @@ import kafka.server.{Defaults, KafkaConfig}
 import kafka.utils.{CoreUtils, JaasTestUtils, TestUtils}
 import kafka.utils.TestUtils._
 import org.apache.kafka.clients.admin._
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.acl.AclOperation.{ALTER, ALTER_CONFIGS, CLUSTER_ACTION, CREATE, DELETE, DESCRIBE}
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
@@ -27,7 +28,7 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{ClusterAuthorizationException, InvalidRequestException, TopicAuthorizationException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.junit.Assert.{assertEquals, assertTrue}
+import org.junit.Assert.{assertEquals, assertNotEquals, assertTrue}
 import org.junit.{After, Assert, Before, Test}
 
 import scala.annotation.nowarn
@@ -427,6 +428,11 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     createResult.all.get()
     waitForTopics(client, topics, List())
     validateMetadataAndConfigs(createResult)
+    val topicIds = zkClient.getTopicIdsForTopics(topics.toSet)
+    assertNotEquals(Uuid.ZERO_UUID, createResult.topicId(topic1).get())
+    assertEquals(topicIds(topic1), createResult.topicId(topic1).get())
+    assertFutureExceptionTypeEquals(createResult.topicId(topic2), classOf[TopicAuthorizationException])
+    
     val createResponseConfig = createResult.config(topic1).get().entries.asScala
 
     val describeResponseConfig = describeConfigs(topic1)

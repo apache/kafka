@@ -621,10 +621,10 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
         case Code.NONODE => None
         case _ => throw getDataResponse.resultException.get
       }
-    }.map(_.get)
-      .map(topicIdAssignment => (topicIdAssignment.topic,
-        topicIdAssignment.topicId.getOrElse(
-          throw new IllegalStateException("Topic " + topicIdAssignment.topic + " does not have a topic ID."))))
+    }.filter(_.isDefined)
+      .map(_.get)
+      .map(topicIdAssignment => (topicIdAssignment.topic, topicIdAssignment.topicId.getOrElse( 
+        throw new IllegalStateException("Topic " + topicIdAssignment.topic + " does not have a topic ID."))))
       .toMap
   }
 

@@ -1552,7 +1552,7 @@ public class KafkaAdminClient extends AdminClient {
                                 Config topicConfig = new Config(configs.stream()
                                     .map(this::configEntry)
                                     .collect(Collectors.toSet()));
-                                topicMetadataAndConfig = new TopicMetadataAndConfig(result.numPartitions(),
+                                topicMetadataAndConfig = new TopicMetadataAndConfig(result.topicId(), result.numPartitions(),
                                     result.replicationFactor(),
                                     topicConfig);
                             }
