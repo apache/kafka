@@ -870,7 +870,7 @@ public class KafkaStreams implements AutoCloseable {
             globalStreamThread.setStateListener(streamStateListener);
         }
         for (int i = 1; i <= numStreamThreads; i++) {
-            createStreamThread(cacheSizePerThread, i + 1);
+            createStreamThread(cacheSizePerThread, i);
         }
 
         ClientMetrics.addNumAliveStreamThreadMetric(streamsMetrics, (metricsConfig, now) ->
@@ -934,6 +934,7 @@ public class KafkaStreams implements AutoCloseable {
                     return Optional.of(streamThread.getName());
                 } else {
                     threads.remove(streamThread);
+                    resizeThreadCache(getCacheSizePerThread(threads.size()));
                     return Optional.empty();
                 }
             }
@@ -947,8 +948,9 @@ public class KafkaStreams implements AutoCloseable {
         for (final StreamThread streamThread: threads) {
             names.add(streamThread.getName());
         }
+        final String baseName = clientId + "-StreamThread-";
         for (int i = 0; i < threads.size(); i++) {
-            final String name = clientId + "-StreamThread-" + i;
+            final String name = baseName + i;
             if (!names.contains(name)) {
                 return i;
             }
