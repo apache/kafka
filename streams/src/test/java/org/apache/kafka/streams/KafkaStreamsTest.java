@@ -593,7 +593,7 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void shouldAddThread() throws InterruptedException {
+    public void shouldAddThreadWhenRunning() throws InterruptedException {
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         streams.start();
@@ -604,12 +604,33 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void shouldNotAddThread() {
+    public void shouldNotAddThreadWhenCreated() {
         final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         final int oldSize = streams.threads.size();
         assertThat(streams.addStreamThread(), equalTo(Optional.empty()));
         assertThat(streams.threads.size(), equalTo(oldSize));
     }
+
+    @Test
+    public void shouldNotAddThreadWhenClosed() {
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
+        final int oldSize = streams.threads.size();
+        streams.close();
+        assertThat(streams.addStreamThread(), equalTo(Optional.empty()));
+        assertThat(streams.threads.size(), equalTo(oldSize));
+    }
+
+    @Test
+    public void shouldNotAddThreadWhenError() {
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
+        final int oldSize = streams.threads.size();
+        streams.start();
+        streamThreadOne.shutdown();
+        streamThreadTwo.shutdown();
+        assertThat(streams.addStreamThread(), equalTo(Optional.empty()));
+        assertThat(streams.threads.size(), equalTo(oldSize));
+    }
+
 
     @Test
     public void testCannotStartOnceClosed() {

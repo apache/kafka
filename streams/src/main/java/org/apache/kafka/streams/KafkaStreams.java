@@ -865,20 +865,16 @@ public class KafkaStreams implements AutoCloseable {
 
         threadState = new HashMap<>(numStreamThreads);
         storeProviders = new ArrayList<>();
-        for (int i = 0; i < numStreamThreads; i++) {
+        streamStateListener = new StreamStateListener(threadState, globalThreadState);
+        if (hasGlobalTopology) {
+            globalStreamThread.setStateListener(streamStateListener);
+        }
+        for (int i = 1; i <= numStreamThreads; i++) {
             createStreamThread(cacheSizePerThread, i + 1);
         }
 
         ClientMetrics.addNumAliveStreamThreadMetric(streamsMetrics, (metricsConfig, now) ->
             Math.toIntExact(threads.stream().filter(thread -> thread.state().isAlive()).count()));
-
-        streamStateListener = new StreamStateListener(threadState, globalThreadState);
-        if (hasGlobalTopology) {
-            globalStreamThread.setStateListener(streamStateListener);
-        }
-        for (final StreamThread thread : threads) {
-            thread.setStateListener(streamStateListener);
-        }
 
         final GlobalStateStoreProvider globalStateStoreProvider = new GlobalStateStoreProvider(internalTopologyBuilder.globalStateStores());
         queryableStoreProvider = new QueryableStoreProvider(storeProviders, globalStateStoreProvider);
@@ -906,6 +902,7 @@ public class KafkaStreams implements AutoCloseable {
                 KafkaStreams.this::closeToError,
                 streamsUncaughtExceptionHandler
         );
+        streamThread.setStateListener(streamStateListener);
         threads.add(streamThread);
         threadState.put(streamThread.getId(), streamThread.state());
         storeProviders.add(new StreamThreadStateStoreProvider(streamThread));
@@ -915,12 +912,12 @@ public class KafkaStreams implements AutoCloseable {
     /**
      * Adds and starts a stream thread in addition to the stream threads that are already running in this
      * Kafka Streams client.
-     *
+     * <p>
      * Since the number of stream threads increases, the sizes of the caches in the new stream thread
      * and the existing stream threads are adapted so that the sum of the cache sizes over all stream
      * threads does not exceed the total cache size specified in configuration
-     * {@code cache.max.bytes.buffering}.
-     *
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG}.
+     * <p>
      * Stream threads can only be added if this Kafka Streams client is in state RUNNING or REBALANCING.
      *
      * @return name of the added stream thread or empty if a new stream thread could not be added
@@ -931,12 +928,12 @@ public class KafkaStreams implements AutoCloseable {
             final long cacheSizePerThread = getCacheSizePerThread(threads.size() + 1);
             resizeThreadCache(cacheSizePerThread);
             final StreamThread streamThread = createStreamThread(cacheSizePerThread, threadIdx);
-            streamThread.setStateListener(streamStateListener);
             synchronized (stateLock) {
                 if (isRunningOrRebalancing()) {
                     streamThread.start();
                     return Optional.of(streamThread.getName());
                 } else {
+                    threads.remove(streamThread);
                     return Optional.empty();
                 }
             }
