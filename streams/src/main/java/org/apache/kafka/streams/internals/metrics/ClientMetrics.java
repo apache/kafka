@@ -131,6 +131,7 @@ public class ClientMetrics {
             stateProvider
         );
     }
+
     public static Sensor failedStreamThreadSensor(final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor = streamsMetrics.clientLevelSensor(FAILED_STREAM_THREADS, RecordingLevel.INFO);
         addSumMetricToSensor(

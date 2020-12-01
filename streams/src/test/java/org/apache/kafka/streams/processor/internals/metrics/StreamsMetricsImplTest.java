@@ -647,8 +647,7 @@ public class StreamsMetricsImplTest {
     }
 
     private void setupRemoveSensorsTest(final Metrics metrics,
-                                        final String level,
-                                        final RecordingLevel recordingLevel) {
+                                        final String level) {
         final String fullSensorNamePrefix = INTERNAL_PREFIX + SENSOR_PREFIX_DELIMITER + level + SENSOR_NAME_DELIMITER;
         resetToDefault(metrics);
         metrics.removeSensor(fullSensorNamePrefix + SENSOR_NAME_1);
@@ -665,8 +664,8 @@ public class StreamsMetricsImplTest {
 
         metrics.removeSensor(sensorKeys.getValues().get(0));
         metrics.removeSensor(sensorKeys.getValues().get(1));
-        expect(metrics.removeMetric(metricName1)).andReturn(mock(KafkaMetric.class));
-        expect(metrics.removeMetric(metricName2)).andReturn(mock(KafkaMetric.class));
+        expect(metrics.removeMetric(metricName1)).andStubReturn(null);
+        expect(metrics.removeMetric(metricName2)).andStubReturn(null);
         replay(metrics);
         streamsMetrics.removeAllClientLevelSensorsAndMetrics();
 
@@ -678,7 +677,7 @@ public class StreamsMetricsImplTest {
         final Metrics metrics = niceMock(Metrics.class);
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
         addSensorsOnAllLevels(metrics, streamsMetrics);
-        setupRemoveSensorsTest(metrics, THREAD_ID1, RecordingLevel.INFO);
+        setupRemoveSensorsTest(metrics, THREAD_ID1);
 
         streamsMetrics.removeAllThreadLevelSensors(THREAD_ID1);
 
