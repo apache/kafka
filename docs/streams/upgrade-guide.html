@@ -55,7 +55,7 @@
     <p>
         Starting in Kafka Streams 2.6.x, a new processing mode is available, named EOS version 2, which is configurable by setting 
         <code>processing.guarantee</code> to <code>"exactly_once_beta"</code>.
-        Note: The <code>"exactly_once_beta"</code> processing mode is ready for production (<i>i.e.</i>, it's not "beta" software). 
+        <b>NOTE:</b> The <code>"exactly_once_beta"</code> processing mode is ready for production (<i>i.e.</i>, it's not "beta" software). 
         To use this new feature, your brokers must be on version 2.5.x or newer.
         A switch from <code>"exactly_once"</code> to <code>"exactly_once_beta"</code> (or the other way around) is
         only possible if the application is on version 2.6.x.
