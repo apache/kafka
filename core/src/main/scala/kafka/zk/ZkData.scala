@@ -22,10 +22,12 @@ import java.util.Properties
 
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.core.JsonProcessingException
+import com.fasterxml.jackson.databind.node.{ObjectNode, ShortNode}
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, KAFKA_2_7_IV0, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch, ReplicaAssignment}
+import kafka.internals.generated.{ControllerZNodeData, ControllerZNodeDataJsonConverter}
 import kafka.security.authorizer.AclAuthorizer.VersionedAcls
 import kafka.security.authorizer.AclEntry
 import kafka.server.{ConfigType, DelegationTokenManager}
@@ -54,10 +56,29 @@ import scala.util.{Failure, Success, Try}
 object ControllerZNode {
   def path = "/controller"
   def encode(brokerId: Int, timestamp: Long): Array[Byte] = {
-    Json.encodeAsBytes(Map("version" -> 1, "brokerid" -> brokerId, "timestamp" -> timestamp.toString).asJava)
+    val data =
+      new ControllerZNodeData()
+        .setBrokerid(brokerId)
+        .setTimestamp(timestamp.toString)
+    val version = data.highestSupportedVersion()
+    val node = ControllerZNodeDataJsonConverter.write(data, version).asInstanceOf[ObjectNode]
+    node.set(ZkData.VersionKey, new ShortNode(version))
+    Json.encodeAsBytes(node)
   }
-  def decode(bytes: Array[Byte]): Option[Int] = Json.parseBytes(bytes).map { js =>
-    js.asJsonObject("brokerid").to[Int]
+
+  def decode(bytes: Array[Byte]): Option[Int] = {
+    Json.parseBytesAs[ObjectNode](bytes) match {
+      case Right(dataObject) =>
+        try {
+          val dataVersion = dataObject.get(ZkData.VersionKey).shortValue()
+          val data = ControllerZNodeDataJsonConverter.read(dataObject, dataVersion)
+          Some(data.brokerid())
+        } catch {
+          case _: Throwable => None
+        }
+
+      case Left(_) => None
+    }
   }
 }
 
@@ -938,6 +959,8 @@ object FeatureZNode {
 }
 
 object ZkData {
+
+  val VersionKey = "version"
 
   // Important: it is necessary to add any new top level Zookeeper path to the Seq
   val SecureRootPaths = Seq(AdminZNode.path,

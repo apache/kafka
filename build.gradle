@@ -830,7 +830,7 @@ project(':core') {
     args = [ "-p", "kafka.internals.generated",
              "-o", "src/generated/java/kafka/internals/generated",
              "-i", "src/main/resources/common/message",
-             "-m", "MessageDataGenerator"
+             "-m", "MessageDataGenerator", "JsonConverterGenerator"
     ]
     inputs.dir("src/main/resources/common/message")
     outputs.dir("src/generated/java/kafka/internals/generated")
