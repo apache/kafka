@@ -28,28 +28,28 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 public final class GraphGraceSearchUtil {
     private GraphGraceSearchUtil() {}
 
-    public static long findAndVerifyWindowGrace(final StreamsGraphNode streamsGraphNode) {
-        return findAndVerifyWindowGrace(streamsGraphNode, "");
+    public static long findAndVerifyWindowGrace(final GraphNode graphNode) {
+        return findAndVerifyWindowGrace(graphNode, "");
     }
 
-    private static long findAndVerifyWindowGrace(final StreamsGraphNode streamsGraphNode, final String chain) {
+    private static long findAndVerifyWindowGrace(final GraphNode graphNode, final String chain) {
         // error base case: we traversed off the end of the graph without finding a window definition
-        if (streamsGraphNode == null) {
+        if (graphNode == null) {
             throw new TopologyException(
                 "Window close time is only defined for windowed computations. Got [" + chain + "]."
             );
         }
         // base case: return if this node defines a grace period.
         {
-            final Long gracePeriod = extractGracePeriod(streamsGraphNode);
+            final Long gracePeriod = extractGracePeriod(graphNode);
             if (gracePeriod != null) {
                 return gracePeriod;
             }
         }
 
-        final String newChain = chain.equals("") ? streamsGraphNode.nodeName() : streamsGraphNode.nodeName() + "->" + chain;
+        final String newChain = chain.equals("") ? graphNode.nodeName() : graphNode.nodeName() + "->" + chain;
 
-        if (streamsGraphNode.parentNodes().isEmpty()) {
+        if (graphNode.parentNodes().isEmpty()) {
             // error base case: we traversed to the end of the graph without finding a window definition
             throw new TopologyException(
                 "Window close time is only defined for windowed computations. Got [" + newChain + "]."
@@ -58,7 +58,7 @@ public final class GraphGraceSearchUtil {
 
         // recursive case: all parents must define a grace period, and we use the max of our parents' graces.
         long inheritedGrace = -1;
-        for (final StreamsGraphNode parentNode : streamsGraphNode.parentNodes()) {
+        for (final GraphNode parentNode : graphNode.parentNodes()) {
             final long parentGrace = findAndVerifyWindowGrace(parentNode, newChain);
             inheritedGrace = Math.max(inheritedGrace, parentGrace);
         }
@@ -70,7 +70,7 @@ public final class GraphGraceSearchUtil {
         return inheritedGrace;
     }
 
-    private static Long extractGracePeriod(final StreamsGraphNode node) {
+    private static Long extractGracePeriod(final GraphNode node) {
         if (node instanceof StatefulProcessorNode) {
             final ProcessorSupplier processorSupplier = ((StatefulProcessorNode) node).processorParameters().oldProcessorSupplier();
             if (processorSupplier instanceof KStreamWindowAggregate) {

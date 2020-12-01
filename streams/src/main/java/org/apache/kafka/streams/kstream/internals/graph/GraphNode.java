@@ -24,10 +24,10 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 
-public abstract class StreamsGraphNode {
+public abstract class GraphNode {
 
-    private final Collection<StreamsGraphNode> childNodes = new LinkedHashSet<>();
-    private final Collection<StreamsGraphNode> parentNodes = new LinkedHashSet<>();
+    private final Collection<GraphNode> childNodes = new LinkedHashSet<>();
+    private final Collection<GraphNode> parentNodes = new LinkedHashSet<>();
     private final String nodeName;
     private boolean keyChangingOperation;
     private boolean valueChangingOperation;
@@ -35,25 +35,25 @@ public abstract class StreamsGraphNode {
     private Integer buildPriority;
     private boolean hasWrittenToTopology = false;
 
-    public StreamsGraphNode(final String nodeName) {
+    public GraphNode(final String nodeName) {
         this.nodeName = nodeName;
     }
 
-    public Collection<StreamsGraphNode> parentNodes() {
+    public Collection<GraphNode> parentNodes() {
         return parentNodes;
     }
 
     String[] parentNodeNames() {
         final String[] parentNames = new String[parentNodes.size()];
         int index = 0;
-        for (final StreamsGraphNode parentNode : parentNodes) {
+        for (final GraphNode parentNode : parentNodes) {
             parentNames[index++] = parentNode.nodeName();
         }
         return parentNames;
     }
 
     public boolean allParentsWrittenToTopology() {
-        for (final StreamsGraphNode parentNode : parentNodes) {
+        for (final GraphNode parentNode : parentNodes) {
             if (!parentNode.hasWrittenToTopology()) {
                 return false;
             }
@@ -61,22 +61,22 @@ public abstract class StreamsGraphNode {
         return true;
     }
 
-    public Collection<StreamsGraphNode> children() {
+    public Collection<GraphNode> children() {
         return new LinkedHashSet<>(childNodes);
     }
 
     public void clearChildren() {
-        for (final StreamsGraphNode childNode : childNodes) {
+        for (final GraphNode childNode : childNodes) {
             childNode.parentNodes.remove(this);
         }
         childNodes.clear();
     }
 
-    public boolean removeChild(final StreamsGraphNode child) {
+    public boolean removeChild(final GraphNode child) {
         return childNodes.remove(child) && child.parentNodes.remove(this);
     }
 
-    public void addChild(final StreamsGraphNode childNode) {
+    public void addChild(final GraphNode childNode) {
         this.childNodes.add(childNode);
         childNode.parentNodes.add(this);
     }

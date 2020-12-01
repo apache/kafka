@@ -903,20 +903,6 @@ public class StreamsBuilderTest {
     }
 
     @Test
-    public void shouldAllowTablesFromSameTopic() {
-        builder.table("topic");
-        builder.table("topic");
-        assertBuildDoesNotThrow(builder);
-    }
-
-    @Test
-    public void shouldAllowStreamAndTableFromSameTopic() {
-        builder.stream("topic");
-        builder.table("topic");
-        assertBuildDoesNotThrow(builder);
-    }
-
-    @Test
     public void shouldAllowSubscribingToSamePattern() {
         builder.stream(Pattern.compile("some-regex"));
         builder.stream(Pattern.compile("some-regex"));
@@ -969,6 +955,20 @@ public class StreamsBuilderTest {
     public void shouldThrowWhenSubscribedToAPatternWithSetAndUnsetResetPolicies() {
         builder.stream(Pattern.compile("some-regex"), Consumed.with(AutoOffsetReset.EARLIEST));
         builder.stream(Pattern.compile("some-regex"));
+        assertThrows(TopologyException.class, builder::build);
+    }
+
+    @Test
+    public void shouldNotAllowTablesFromSameTopic() {
+        builder.table("topic");
+        builder.table("topic");
+        assertThrows(TopologyException.class, builder::build);
+    }
+
+    @Test
+    public void shouldNowAllowStreamAndTableFromSameTopic() {
+        builder.stream("topic");
+        builder.table("topic");
         assertThrows(TopologyException.class, builder::build);
     }
 

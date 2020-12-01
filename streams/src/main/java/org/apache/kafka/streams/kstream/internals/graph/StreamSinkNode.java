@@ -26,7 +26,7 @@ import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
 
-public class StreamSinkNode<K, V> extends StreamsGraphNode {
+public class StreamSinkNode<K, V> extends GraphNode {
 
     private final TopicNameExtractor<K, V> topicNameExtractor;
     private final ProducedInternal<K, V> producedInternal;
