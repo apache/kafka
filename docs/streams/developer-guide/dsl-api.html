@@ -870,6 +870,12 @@
                 <p id="streams-developer-guide-dsl-transformations-stateful-overview">Stateful transformations depend on state for processing inputs and producing outputs and require a <a class="reference internal" href="../architecture.html#streams_architecture_state"><span class="std std-ref">state store</span></a> associated with the stream processor. For example, in aggregating operations, a windowing state store is used to collect the latest aggregation results per
                     window. In join operations, a windowing state store is used to collect all of the records received so far within the
                     defined window boundary.</p>
+		<p><b>Note:</b> Following store types are used regardless of the possibly specified type (via the parameter <code class="docutils literal"><span class="pre">materialized</span></code>):
+		<ul class="simple">
+		    <li>non-windowed aggregations and non-windowed KTables use <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/TimestampedKeyValueStore.html">TimestampedKeyValueStore</a>s</li>
+		    <li>time-windowed aggregations and KStream-KStream joins use <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/TimestampedWindowStore.html">TimestampedWindowStore</a>s</li>
+		    <li>session windowed aggregations use <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/SessionStore.html">SessionStore</a>s (there is no timestamped session store as of now)</li>
+		</ul>
                 <p>Note, that state stores are fault-tolerant.
                     In case of failure, Kafka Streams guarantees to fully restore all state stores prior to resuming the processing.
                     See <a class="reference internal" href="../architecture.html#streams_architecture_recovery"><span class="std std-ref">Fault Tolerance</span></a> for further information.</p>
