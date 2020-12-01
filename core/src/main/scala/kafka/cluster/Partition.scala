@@ -1373,9 +1373,9 @@ class Partition(val topicPartition: TopicPartition,
     }
 
     val newLeaderAndIsr = new LeaderAndIsr(localBrokerId, leaderEpoch, isrToSend.toList, zkVersion)
-    val callbackPartial = handleAlterIsrResponse(proposedIsrState, _ : Either[Errors, LeaderAndIsr])
+    val alterIsrItem = AlterIsrItem(topicPartition, newLeaderAndIsr, handleAlterIsrResponse(proposedIsrState))
 
-    if (!alterIsrManager.enqueue(AlterIsrItem(topicPartition, newLeaderAndIsr, callbackPartial))) {
+    if (!alterIsrManager.enqueue(alterIsrItem)) {
       throw new IllegalStateException(s"Failed to enqueue `AlterIsr` request with state " +
         s"$newLeaderAndIsr for partition $topicPartition")
     }
@@ -1390,7 +1390,7 @@ class Partition(val topicPartition: TopicPartition,
    * Since our error was non-retryable we are okay staying in this state until we see new metadata from UpdateMetadata
    * or LeaderAndIsr
    */
-  private def handleAlterIsrResponse(proposedIsrState: IsrState, result: Either[Errors, LeaderAndIsr]): Unit = {
+  private def handleAlterIsrResponse(proposedIsrState: IsrState)(result: Either[Errors, LeaderAndIsr]): Unit = {
     inWriteLock(leaderIsrUpdateLock) {
       if (isrState != proposedIsrState) {
         // This means isrState was updated through leader election or some other mechanism before we got the AlterIsr
