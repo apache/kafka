@@ -98,17 +98,9 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
         return new NetworkSend(destination, serializeWithHeader(header));
     }
 
-    /**
-     * Use with care, typically {@link #toSend(String, RequestHeader)} should be used instead.
-     */
+    // Visible for testing
     public ByteBuffer serializeWithHeader(RequestHeader header) {
-        Message data = data();
-        ObjectSerializationCache serializationCache = new ObjectSerializationCache();
-        ByteBuffer buffer = ByteBuffer.allocate(header.size(serializationCache) + data.size(serializationCache, version));
-        header.write(buffer, serializationCache);
-        data.write(new ByteBufferAccessor(buffer), serializationCache, version);
-        buffer.rewind();
-        return buffer;
+        return serialize(header, data(), version);
     }
 
     /**
@@ -120,9 +112,15 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
 
     // Visible for testing
     ByteBuffer serializeBody() {
-        Message data = data();
+        return serialize(null, data(), version);
+    }
+
+    private static ByteBuffer serialize(RequestHeader header, Message data, short version) {
         ObjectSerializationCache serializationCache = new ObjectSerializationCache();
-        ByteBuffer buffer = ByteBuffer.allocate(data.size(serializationCache, version));
+        int headerSize = header == null ? 0 : header.size(serializationCache);
+        ByteBuffer buffer = ByteBuffer.allocate(headerSize + data.size(serializationCache, version));
+        if (header != null)
+            header.write(buffer, serializationCache);
         data.write(new ByteBufferAccessor(buffer), serializationCache, version);
         buffer.rewind();
         return buffer;

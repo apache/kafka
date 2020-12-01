@@ -29,6 +29,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -53,11 +54,21 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
     }
 
     protected ByteBuffer serializeWithHeader(ResponseHeader header, short version) {
-        Message data = data();
+        Objects.requireNonNull(header, "header should not be null");
+        return serialize(header, data(), version);
+    }
+
+    // Visible for testing
+    ByteBuffer serializeBody(short version) {
+        return serialize(null, data(), version);
+    }
+
+    private static ByteBuffer serialize(ResponseHeader header, Message data, short version) {
         ObjectSerializationCache serializationCache = new ObjectSerializationCache();
-        ByteBuffer buffer = ByteBuffer.allocate(header.size(serializationCache, version) +
-            data.size(serializationCache, version));
-        header.write(buffer, serializationCache, version);
+        int headerSize = header == null ? 0 : header.size(serializationCache);
+        ByteBuffer buffer = ByteBuffer.allocate(headerSize + data.size(serializationCache, version));
+        if (header != null)
+            header.write(buffer, serializationCache);
         data.write(new ByteBufferAccessor(buffer), serializationCache, version);
         buffer.rewind();
         return buffer;
@@ -214,6 +225,10 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
      */
     public boolean shouldClientThrottle(short version) {
         return false;
+    }
+
+    public ApiKeys apiKey() {
+        return apiKey;
     }
 
     public abstract int throttleTimeMs();

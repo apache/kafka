@@ -38,8 +38,8 @@ public class ResponseHeader implements AbstractRequestResponse {
         this.headerVersion = headerVersion;
     }
 
-    public int size(ObjectSerializationCache serializationCache, short apiVersion) {
-        return data().size(serializationCache, apiVersion);
+    public int size(ObjectSerializationCache serializationCache) {
+        return data().size(serializationCache, headerVersion);
     }
 
     public int correlationId() {
@@ -54,8 +54,8 @@ public class ResponseHeader implements AbstractRequestResponse {
         return data;
     }
 
-    public void write(ByteBuffer buffer, ObjectSerializationCache serializationCache, short apiVersion) {
-        data.write(new ByteBufferAccessor(buffer), serializationCache, apiVersion);
+    public void write(ByteBuffer buffer, ObjectSerializationCache serializationCache) {
+        data.write(new ByteBufferAccessor(buffer), serializationCache, headerVersion);
     }
 
     @Override

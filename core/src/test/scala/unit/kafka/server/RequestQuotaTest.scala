@@ -561,10 +561,6 @@ class RequestQuotaTest extends BaseRequestTest {
 
   case class Client(clientId: String, apiKey: ApiKeys) {
     var correlationId: Int = 0
-<<<<<<< HEAD
-    val builder = requestBuilder(apiKey)
-=======
->>>>>>> apache-github/trunk
     def runUntil(until: AbstractResponse => Boolean): Boolean = {
       val startMs = System.currentTimeMillis
       var done = false
@@ -572,14 +568,9 @@ class RequestQuotaTest extends BaseRequestTest {
       try {
         while (!done && System.currentTimeMillis < startMs + 10000) {
           correlationId += 1
-<<<<<<< HEAD
-          val response = requestResponse(socket, clientId, correlationId, builder)
-          done = until(response)
-=======
           val request = requestBuilder(apiKey).build()
           val response = sendAndReceive[AbstractResponse](request, socket, clientId, Some(correlationId))
           done = until.apply(response)
->>>>>>> apache-github/trunk
         }
       } finally {
         socket.close()
@@ -622,26 +613,16 @@ class RequestQuotaTest extends BaseRequestTest {
     // Request until throttled using client-id with default small quota
     val clientId = apiKey.toString
     val client = Client(clientId, apiKey)
-<<<<<<< HEAD
-=======
-
->>>>>>> apache-github/trunk
     val throttled = client.runUntil(_.throttleTimeMs > 0)
 
     assertTrue(s"Response not throttled: $client", throttled)
     assertTrue(s"Throttle time metrics not updated: $client" , throttleTimeMetricValue(clientId) > 0)
   }
 
-<<<<<<< HEAD
-  private def checkSmallQuotaProducerRequestThrottleTime(apiKey: ApiKeys): Unit = {
-    // Request until throttled using client-id with default small producer quota
-    val smallQuotaProducerClient = Client(smallQuotaProducerClientId, apiKey)
-=======
   private def checkSmallQuotaProducerRequestThrottleTime(): Unit = {
 
     // Request until throttled using client-id with default small producer quota
     val smallQuotaProducerClient = Client(smallQuotaProducerClientId, ApiKeys.PRODUCE)
->>>>>>> apache-github/trunk
     val throttled = smallQuotaProducerClient.runUntil(_.throttleTimeMs > 0)
 
     assertTrue(s"Response not throttled: $smallQuotaProducerClient", throttled)
@@ -651,16 +632,10 @@ class RequestQuotaTest extends BaseRequestTest {
       throttleTimeMetricValueForQuotaType(smallQuotaProducerClientId, QuotaType.Request).isNaN)
   }
 
-<<<<<<< HEAD
-  private def checkSmallQuotaConsumerRequestThrottleTime(apiKey: ApiKeys): Unit = {
-    // Request until throttled using client-id with default small consumer quota
-    val smallQuotaConsumerClient =   Client(smallQuotaConsumerClientId, apiKey)
-=======
   private def checkSmallQuotaConsumerRequestThrottleTime(): Unit = {
 
     // Request until throttled using client-id with default small consumer quota
     val smallQuotaConsumerClient =   Client(smallQuotaConsumerClientId, ApiKeys.FETCH)
->>>>>>> apache-github/trunk
     val throttled = smallQuotaConsumerClient.runUntil(_.throttleTimeMs > 0)
 
     assertTrue(s"Response not throttled: $smallQuotaConsumerClientId", throttled)
@@ -671,13 +646,10 @@ class RequestQuotaTest extends BaseRequestTest {
   }
 
   private def checkUnthrottledClient(apiKey: ApiKeys): Unit = {
+
     // Test that request from client with large quota is not throttled
     val unthrottledClient = Client(unthrottledClientId, apiKey)
-<<<<<<< HEAD
-    unthrottledClient.runUntil(_.throttleTimeMs <= 0)
-=======
     unthrottledClient.runUntil(_.throttleTimeMs <= 0.0)
->>>>>>> apache-github/trunk
     assertEquals(1, unthrottledClient.correlationId)
     assertTrue(s"Client should not have been throttled: $unthrottledClient", throttleTimeMetricValue(unthrottledClientId).isNaN)
   }

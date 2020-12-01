@@ -87,7 +87,7 @@ public class AlterClientQuotasRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public Collection<ClientQuotaAlteration> entries() {
+    public List<ClientQuotaAlteration> entries() {
         List<ClientQuotaAlteration> entries = new ArrayList<>(data.entries().size());
         for (EntryData entryData : data.entries()) {
             Map<String, String> entity = new HashMap<>(entryData.entity().size());

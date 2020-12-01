@@ -2001,12 +2001,7 @@ class KafkaApisTest {
   private def buildRequest[T <: AbstractRequest](request: AbstractRequest,
                                                  listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)): RequestChannel.Request = {
 
-<<<<<<< HEAD
-    val request = builder.build()
-    val buffer = request.serializeWithHeader(new RequestHeader(builder.apiKey, request.version, "", 0))
-=======
-    val buffer = request.serialize(new RequestHeader(request.api, request.version, clientId, 0))
->>>>>>> apache-github/trunk
+    val buffer = request.serializeWithHeader(new RequestHeader(request.apiKey, request.version, clientId, 0))
 
     // read the header from the buffer first so that the body can be read next from the Request constructor
     val header = RequestHeader.parse(buffer)
@@ -2026,12 +2021,7 @@ class KafkaApisTest {
     channel.close()
     channel.buffer.getInt() // read the size
     ResponseHeader.parse(channel.buffer, api.responseHeaderVersion(request.version))
-<<<<<<< HEAD
     AbstractResponse.parseResponse(api, channel.buffer, request.version)
-=======
-    val struct = api.responseSchema(request.version).read(channel.buffer)
-    AbstractResponse.parseResponse(api, struct, request.version)
->>>>>>> apache-github/trunk
   }
 
   private def expectNoThrottling(): Capture[RequestChannel.Response] = {

@@ -212,7 +212,7 @@ public class StopReplicaRequest extends AbstractControlRequest {
     }
 
     @Override
-    protected Message data() {
+    protected StopReplicaRequestData data() {
         return data;
     }
 }

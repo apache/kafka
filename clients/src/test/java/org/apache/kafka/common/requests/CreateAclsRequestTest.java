@@ -29,6 +29,7 @@ import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
 import org.junit.Test;
 
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -64,9 +65,9 @@ public class CreateAclsRequestTest {
     @Test
     public void shouldRoundTripV0() {
         final CreateAclsRequest original = new CreateAclsRequest(V0, data(LITERAL_ACL1, LITERAL_ACL2));
-        final Struct struct = original.toStruct();
+        final ByteBuffer buffer = original.serializeBody();
 
-        final CreateAclsRequest result = new CreateAclsRequest(struct, V0);
+        final CreateAclsRequest result = CreateAclsRequest.parse(buffer, V0);
 
         assertRequestEquals(original, result);
     }
@@ -74,9 +75,9 @@ public class CreateAclsRequestTest {
     @Test
     public void shouldRoundTripV1() {
         final CreateAclsRequest original = new CreateAclsRequest(V1, data(LITERAL_ACL1, PREFIXED_ACL1));
-        final Struct struct = original.toStruct();
+        final ByteBuffer buffer = original.serializeBody();
 
-        final CreateAclsRequest result = new CreateAclsRequest(struct, V1);
+        final CreateAclsRequest result = CreateAclsRequest.parse(buffer, V1);
 
         assertRequestEquals(original, result);
     }

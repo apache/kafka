@@ -430,63 +430,24 @@ public class MetadataResponse extends AbstractResponse {
 
     }
 
-
-    public static MetadataResponse prepareResponse(short version, int throttleTimeMs,
-                                                   Collection<Node> brokers, String clusterId, int controllerId,
-                                                   List<TopicMetadata> topicMetadataList,
-                                                   int clusterAuthorizedOperations) {
-        return prepareResponse(hasReliableLeaderEpochs(version), throttleTimeMs, brokers, clusterId, controllerId,
-            topicMetadataList, clusterAuthorizedOperations, version);
-    }
-
-    // Visible for testing
-    public static MetadataResponse prepareResponse(boolean hasReliableLeaderEpochs, int throttleTimeMs,
-                                                   Collection<Node> brokers, String clusterId, int controllerId,
-                                                   List<TopicMetadata> topicMetadataList,
-                                                   int clusterAuthorizedOperations,
-                                                   short responseVersion) {
-        MetadataResponseData responseData = new MetadataResponseData();
-        responseData.setThrottleTimeMs(throttleTimeMs);
-        brokers.forEach(broker ->
-            responseData.brokers().add(new MetadataResponseBroker()
-                .setNodeId(broker.id())
-                .setHost(broker.host())
-                .setPort(broker.port())
-                .setRack(broker.rack()))
-        );
-
-        responseData.setClusterId(clusterId);
-        responseData.setControllerId(controllerId);
-        responseData.setClusterAuthorizedOperations(clusterAuthorizedOperations);
-
-        topicMetadataList.forEach(topicMetadata -> {
-            MetadataResponseTopic metadataResponseTopic = new MetadataResponseTopic();
-            metadataResponseTopic
-                .setErrorCode(topicMetadata.error.code())
-                .setName(topicMetadata.topic)
-                .setIsInternal(topicMetadata.isInternal)
-                .setTopicAuthorizedOperations(topicMetadata.authorizedOperations);
-
-            for (PartitionMetadata partitionMetadata : topicMetadata.partitionMetadata) {
-                metadataResponseTopic.partitions().add(new MetadataResponsePartition()
-                    .setErrorCode(partitionMetadata.error.code())
-                    .setPartitionIndex(partitionMetadata.partition())
-                    .setLeaderId(partitionMetadata.leaderId.orElse(NO_LEADER_ID))
-                    .setLeaderEpoch(partitionMetadata.leaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
-                    .setReplicaNodes(partitionMetadata.replicaIds)
-                    .setIsrNodes(partitionMetadata.inSyncReplicaIds)
-                    .setOfflineReplicas(partitionMetadata.offlineReplicaIds));
-            }
-            responseData.topics().add(metadataResponseTopic);
-        });
-        return new MetadataResponse(responseData, hasReliableLeaderEpochs);
-    }
-
-    public static MetadataResponse prepareResponse(int throttleTimeMs,
-                                                   List<MetadataResponseTopic> topicMetadataList,
+    public static MetadataResponse prepareResponse(short version,
+                                                   int throttleTimeMs,
                                                    Collection<Node> brokers,
                                                    String clusterId,
                                                    int controllerId,
+                                                   List<MetadataResponseTopic> topics,
+                                                   int clusterAuthorizedOperations) {
+        return prepareResponse(hasReliableLeaderEpochs(version), throttleTimeMs, brokers, clusterId, controllerId,
+                topics, clusterAuthorizedOperations);
+    }
+
+    // Visible for testing
+    public static MetadataResponse prepareResponse(boolean hasReliableEpoch,
+                                                   int throttleTimeMs,
+                                                   Collection<Node> brokers,
+                                                   String clusterId,
+                                                   int controllerId,
+                                                   List<MetadataResponseTopic> topics,
                                                    int clusterAuthorizedOperations) {
         MetadataResponseData responseData = new MetadataResponseData();
         responseData.setThrottleTimeMs(throttleTimeMs);
@@ -502,8 +463,8 @@ public class MetadataResponse extends AbstractResponse {
         responseData.setControllerId(controllerId);
         responseData.setClusterAuthorizedOperations(clusterAuthorizedOperations);
 
-        topicMetadataList.forEach(topicMetadata -> responseData.topics().add(topicMetadata));
-        return new MetadataResponse(responseData, true);
+        topics.forEach(topicMetadata -> responseData.topics().add(topicMetadata));
+        return new MetadataResponse(responseData, hasReliableEpoch);
     }
 
     @Override

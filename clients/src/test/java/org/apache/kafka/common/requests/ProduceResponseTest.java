@@ -45,7 +45,7 @@ public class ProduceResponseTest {
         ProduceResponse v5Response = new ProduceResponse(responseData, 10);
         short version = 5;
 
-        ByteBuffer buffer = v5Response.serializeWithHeader(ApiKeys.PRODUCE, version, 0);
+        ByteBuffer buffer = v5Response.serializeWithHeader(version, 0);
         buffer.rewind();
 
         ResponseHeader.parse(buffer, ApiKeys.PRODUCE.responseHeaderVersion(version)); // throw away.

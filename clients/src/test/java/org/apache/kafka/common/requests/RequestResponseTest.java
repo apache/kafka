@@ -35,6 +35,7 @@ import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.AddOffsetsToTxnRequestData;
 import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
+import org.apache.kafka.common.message.AlterClientQuotasResponseData;
 import org.apache.kafka.common.message.AlterConfigsResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
@@ -80,6 +81,7 @@ import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicRe
 import org.apache.kafka.common.message.DescribeAclsResponseData;
 import org.apache.kafka.common.message.DescribeAclsResponseData.AclDescription;
 import org.apache.kafka.common.message.DescribeAclsResponseData.DescribeAclsResource;
+import org.apache.kafka.common.message.DescribeClientQuotasResponseData;
 import org.apache.kafka.common.message.DescribeConfigsRequestData;
 import org.apache.kafka.common.message.DescribeConfigsResponseData;
 import org.apache.kafka.common.message.DescribeConfigsResponseData.DescribeConfigsResourceResult;
@@ -144,7 +146,9 @@ import org.apache.kafka.common.message.UpdateMetadataResponseData;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
@@ -167,6 +171,7 @@ import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
 import java.lang.reflect.InvocationTargetException;
@@ -190,7 +195,6 @@ import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.protocol.ApiKeys.FETCH;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
-import static org.apache.kafka.test.TestUtils.toBuffer;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -434,7 +438,7 @@ public class RequestResponseTest {
         checkResponse(createCreateAclsResponse(), ApiKeys.CREATE_ACLS.latestVersion(), true);
         checkRequest(createDeleteAclsRequest(), true);
         checkErrorResponse(createDeleteAclsRequest(), new SecurityDisabledException("Security is not enabled."), true);
-        checkResponse(createDeleteAclsResponse(), ApiKeys.DELETE_ACLS.latestVersion(), true);
+        checkResponse(createDeleteAclsResponse(ApiKeys.DELETE_ACLS.latestVersion()), ApiKeys.DELETE_ACLS.latestVersion(), true);
         checkRequest(createAlterConfigsRequest(), false);
         checkErrorResponse(createAlterConfigsRequest(), unknownServerException, true);
         checkResponse(createAlterConfigsResponse(), 0, false);
@@ -493,12 +497,14 @@ public class RequestResponseTest {
     @Test
     public void testResponseHeader() {
         ResponseHeader header = createResponseHeader((short) 1);
-        ByteBuffer buffer = toBuffer(header.toStruct());
+        ObjectSerializationCache serializationCache = new ObjectSerializationCache();
+        ByteBuffer buffer = ByteBuffer.allocate(header.size(serializationCache));
+        header.write(buffer, serializationCache);
         ResponseHeader deserialized = ResponseHeader.parse(buffer, header.headerVersion());
         assertEquals(header.correlationId(), deserialized.correlationId());
     }
 
-    private void checkOlderFetchVersions() throws Exception {
+    private void checkOlderFetchVersions() {
         int latestVersion = FETCH.latestVersion();
         for (int i = 0; i < latestVersion; ++i) {
             checkErrorResponse(createFetchRequest(i), unknownServerException, true);
@@ -539,71 +545,55 @@ public class RequestResponseTest {
     }
 
     private void checkDescribeConfigsResponseVersions() throws Exception {
-        DescribeConfigsResponse response = createDescribeConfigsResponse((short) 0);
-        DescribeConfigsResponse deserialized0 = (DescribeConfigsResponse) deserialize(response,
-                response.toStruct((short) 0), (short) 0);
-        verifyDescribeConfigsResponse(response, deserialized0, 0);
+        for (int version = ApiKeys.DESCRIBE_CONFIGS.oldestVersion(); version < ApiKeys.DESCRIBE_CONFIGS.latestVersion(); ++version) {
+            short apiVersion = (short) version;
+            DescribeConfigsResponse response = createDescribeConfigsResponse(apiVersion);
+            DescribeConfigsResponse deserialized0 = (DescribeConfigsResponse) AbstractResponse.parseResponse(ApiKeys.DESCRIBE_CONFIGS,
+                    response.serializeBody(apiVersion), apiVersion);
+            verifyDescribeConfigsResponse(response, deserialized0, apiVersion);
 
-        response = createDescribeConfigsResponse((short) 1);
-        DescribeConfigsResponse deserialized1 = (DescribeConfigsResponse) deserialize(response,
-                response.toStruct((short) 1), (short) 1);
-        verifyDescribeConfigsResponse(response, deserialized1, 1);
-
-        response = createDescribeConfigsResponse((short) 3);
-        DescribeConfigsResponse deserialized3 = (DescribeConfigsResponse) deserialize(response,
-            response.toStruct((short) 3), (short) 3);
-        verifyDescribeConfigsResponse(response, deserialized3, 3);
+        }
     }
 
     private void checkErrorResponse(AbstractRequest req, Throwable e, boolean checkEqualityAndHashCode) {
         AbstractResponse response = req.getErrorResponse(e);
         checkResponse(response, req.version(), checkEqualityAndHashCode);
         if (e instanceof UnknownServerException) {
-            String responseStr = response.toStruct(req.version()).toString();
-            assertFalse(String.format("Unknown message included in response for %s: %s ", req.api, responseStr),
+            String responseStr = response.toString(req.version());
+            assertFalse(String.format("Unknown message included in response for %s: %s ", req.apiKey, responseStr),
                     responseStr.contains(e.getMessage()));
         }
     }
 
-    private void checkRequest(AbstractRequest req, boolean checkEqualityAndHashCode) {
+    private void checkRequest(AbstractRequest req, boolean checkEquality) {
         // Check that we can serialize, deserialize and serialize again
-        // Check for equality and hashCode of the Struct only if indicated (it is likely to fail if any of the fields
+        // Check for equality of the ByteBuffer only if indicated (it is likely to fail if any of the fields
         // in the request is a HashMap with multiple elements since ordering of the elements may vary)
         try {
-            Struct struct = req.toStruct();
             ByteBuffer serializedBytes = req.serializeBody();
             AbstractRequest deserialized = AbstractRequest.parseRequest(req.apiKey, req.version(), serializedBytes).request;
-            Struct struct2 = deserialized.toStruct();
-            if (checkEqualityAndHashCode) {
-                assertEquals(struct, struct2);
-                assertEquals(struct.hashCode(), struct2.hashCode());
-            }
+            ByteBuffer serializedBytes2 = deserialized.serializeBody();
+            assertEquals(req.data(), deserialized.data()); //FIXME
+            if (checkEquality)
+                assertEquals(serializedBytes, serializedBytes2);
         } catch (Exception e) {
             throw new RuntimeException("Failed to deserialize request " + req + " with type " + req.getClass(), e);
         }
     }
 
-    private void checkResponse(AbstractResponse response, int version, boolean checkEqualityAndHashCode) {
+    private void checkResponse(AbstractResponse response, int version, boolean checkEquality) {
         // Check that we can serialize, deserialize and serialize again
         // Check for equality and hashCode of the Struct only if indicated (it is likely to fail if any of the fields
         // in the response is a HashMap with multiple elements since ordering of the elements may vary)
         try {
-            Struct struct = response.toStruct((short) version);
-            AbstractResponse deserialized = (AbstractResponse) deserialize(response, struct, (short) version);
-            Struct struct2 = deserialized.toStruct((short) version);
-            if (checkEqualityAndHashCode) {
-                assertEquals(struct, struct2);
-                assertEquals(struct.hashCode(), struct2.hashCode());
-            }
+            ByteBuffer serializedBytes = response.serializeBody((short) version);
+            AbstractResponse deserialized = AbstractResponse.parseResponse(response.apiKey(), serializedBytes, (short) version);
+            ByteBuffer serializedBytes2 = deserialized.serializeBody((short) version);
+            if (checkEquality)
+                assertEquals(serializedBytes, serializedBytes2);
         } catch (Exception e) {
             throw new RuntimeException("Failed to deserialize response " + response + " with type " + response.getClass(), e);
         }
-    }
-
-    private AbstractRequestResponse deserialize(AbstractRequestResponse req, Struct struct, short version) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
-        ByteBuffer buffer = toBuffer(struct);
-        Method deserializer = req.getClass().getDeclaredMethod("parse", ByteBuffer.class, Short.TYPE);
-        return (AbstractRequestResponse) deserializer.invoke(null, buffer, version);
     }
 
     @Test(expected = UnsupportedVersionException.class)
@@ -700,7 +690,7 @@ public class RequestResponseTest {
                 6, FetchResponse.INVALID_LOG_START_OFFSET, Optional.empty(), emptyList(), records));
 
         FetchResponse<MemoryRecords> response = new FetchResponse<>(Errors.NONE, responseData, 10, INVALID_SESSION_ID);
-        FetchResponse<MemoryRecords> deserialized = FetchResponse.parse(toBuffer(response.toStruct((short) 4)), (short) 4);
+        FetchResponse<MemoryRecords> deserialized = FetchResponse.parse(response.serializeBody((short) 4), (short) 4);
         assertEquals(responseData, deserialized.responseData());
     }
 
@@ -735,17 +725,16 @@ public class RequestResponseTest {
 
         // read the body
         Struct responseBody = FETCH.responseSchema(apiVersion).read(buf);
-        assertEquals(fetchResponse.toStruct(apiVersion), responseBody);
+        assertEquals(fetchResponse.serializeBody(apiVersion), responseBody);
 
-        assertEquals(size, responseHeader.sizeOf() + responseBody.sizeOf());
+        assertEquals(size, responseHeader.size(new ObjectSerializationCache()) + responseBody.sizeOf());
     }
 
     @Test
     public void testControlledShutdownResponse() {
         ControlledShutdownResponse response = createControlledShutdownResponse();
         short version = ApiKeys.CONTROLLED_SHUTDOWN.latestVersion();
-        Struct struct = response.toStruct(version);
-        ByteBuffer buffer = toBuffer(struct);
+        ByteBuffer buffer = response.serializeBody(version);
         ControlledShutdownResponse deserialized = ControlledShutdownResponse.parse(buffer, version);
         assertEquals(response.error(), deserialized.error());
         assertEquals(response.data().remainingPartitions(), deserialized.data().remainingPartitions());
@@ -779,7 +768,7 @@ public class RequestResponseTest {
     }
 
     @Test
-    public void testFetchRequestMaxBytesOldVersions() throws Exception {
+    public void testFetchRequestMaxBytesOldVersions() {
         final short version = 1;
         FetchRequest fr = createFetchRequest(version);
         FetchRequest fr2 = new FetchRequest(fr.toStruct(), version);
@@ -789,26 +778,26 @@ public class RequestResponseTest {
     @Test
     public void testFetchRequestIsolationLevel() throws Exception {
         FetchRequest request = createFetchRequest(4, IsolationLevel.READ_COMMITTED);
-        Struct struct = request.toStruct();
-        FetchRequest deserialized = (FetchRequest) deserialize(request, struct, request.version());
+        FetchRequest deserialized = (FetchRequest) AbstractRequest.parseRequest(request.apiKey, request.version(),
+                request.serializeBody()).request;
         assertEquals(request.isolationLevel(), deserialized.isolationLevel());
 
         request = createFetchRequest(4, IsolationLevel.READ_UNCOMMITTED);
-        struct = request.toStruct();
-        deserialized = (FetchRequest) deserialize(request, struct, request.version());
+        deserialized = (FetchRequest) AbstractRequest.parseRequest(request.apiKey, request.version(),
+                request.serializeBody()).request;
         assertEquals(request.isolationLevel(), deserialized.isolationLevel());
     }
 
     @Test
     public void testFetchRequestWithMetadata() throws Exception {
         FetchRequest request = createFetchRequest(4, IsolationLevel.READ_COMMITTED);
-        Struct struct = request.toStruct();
-        FetchRequest deserialized = (FetchRequest) deserialize(request, struct, request.version());
+        FetchRequest deserialized = (FetchRequest) AbstractRequest.parseRequest(ApiKeys.FETCH, request.version(),
+                request.serializeBody()).request;
         assertEquals(request.isolationLevel(), deserialized.isolationLevel());
 
         request = createFetchRequest(4, IsolationLevel.READ_UNCOMMITTED);
-        struct = request.toStruct();
-        deserialized = (FetchRequest) deserialize(request, struct, request.version());
+        deserialized = (FetchRequest) AbstractRequest.parseRequest(ApiKeys.FETCH, request.version(),
+                request.serializeBody()).request;
         assertEquals(request.isolationLevel(), deserialized.isolationLevel());
     }
 
@@ -907,25 +896,23 @@ public class RequestResponseTest {
     }
 
     @Test
-    public void testApiVersionResponseStructParsingFallback() {
-        Struct struct = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.toStruct((short) 0);
-        ApiVersionsResponse response = ApiVersionsResponse.
-            fromStruct(struct, ApiKeys.API_VERSIONS.latestVersion());
+    public void testApiVersionResponseParsingFallback() {
+        ByteBuffer buffer = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.serializeBody((short) 0);
+        ApiVersionsResponse response = ApiVersionsResponse.parse(buffer, ApiKeys.API_VERSIONS.latestVersion());
 
         assertEquals(Errors.NONE.code(), response.data.errorCode());
     }
 
-    @Test(expected = SchemaException.class)
-    public void testApiVersionResponseStructParsingFallbackException() {
+    @Test
+    public void testApiVersionResponseParsingFallbackException() {
         short version = 0;
-        ApiVersionsResponse.fromStruct(new Struct(ApiKeys.API_VERSIONS.requestSchema(version)), version);
+        assertThrows(SchemaException.class, () -> ApiVersionsResponse.parse(ByteBuffer.allocate(0), version));
     }
 
     @Test
-    public void testApiVersionResponseStructParsing() {
-        Struct struct = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.toStruct(ApiKeys.API_VERSIONS.latestVersion());
-        ApiVersionsResponse response = ApiVersionsResponse.
-            fromStruct(struct, ApiKeys.API_VERSIONS.latestVersion());
+    public void testApiVersionResponseParsing() {
+        ByteBuffer buffer = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.serializeBody(ApiKeys.API_VERSIONS.latestVersion());
+        ApiVersionsResponse response = ApiVersionsResponse.parse(buffer, ApiKeys.API_VERSIONS.latestVersion());
 
         assertEquals(Errors.NONE.code(), response.data.errorCode());
     }
@@ -937,7 +924,7 @@ public class RequestResponseTest {
                 setTransactionalId("abracadabra").
                 setProducerId(123));
         final UnsupportedVersionException exception = assertThrows(
-            UnsupportedVersionException.class, () -> bld.build((short) 2).toStruct());
+            UnsupportedVersionException.class, () -> bld.build((short) 2).serializeBody());
         assertTrue(exception.getMessage().contains("Attempted to write a non-default producerId at version 2"));
         bld.build((short) 3);
     }
@@ -1261,7 +1248,7 @@ public class RequestResponseTest {
                     new TopicPartition("topic3", 0), Optional.empty(),
                     Optional.empty(), replicas, isr, offlineReplicas))));
 
-        return MetadataResponse.prepareResponse(asList(node), null, MetadataResponse.NO_CONTROLLER_ID, allTopicMetadata);
+        return TestUtils.metadataResponse(asList(node), null, MetadataResponse.NO_CONTROLLER_ID, allTopicMetadata);
     }
 
     private OffsetCommitRequest createOffsetCommitRequest(int version) {
@@ -1877,7 +1864,7 @@ public class RequestResponseTest {
         return new DeleteAclsRequest.Builder(data).build();
     }
 
-    private DeleteAclsResponse createDeleteAclsResponse() {
+    private DeleteAclsResponse createDeleteAclsResponse(int version) {
         List<DeleteAclsResponseData.DeleteAclsFilterResult> filterResults = new ArrayList<>();
         filterResults.add(new DeleteAclsResponseData.DeleteAclsFilterResult().setMatchingAcls(asList(
                 new DeleteAclsResponseData.DeleteAclsMatchingAcl()
@@ -1901,7 +1888,7 @@ public class RequestResponseTest {
             .setErrorMessage("No security"));
         return new DeleteAclsResponse(new DeleteAclsResponseData()
             .setThrottleTimeMs(0)
-            .setFilterResults(filterResults));
+            .setFilterResults(filterResults), (short) version);
     }
 
     private DescribeConfigsRequest createDescribeConfigsRequest(int version) {
@@ -2347,8 +2334,15 @@ public class RequestResponseTest {
     }
 
     private DescribeClientQuotasResponse createDescribeClientQuotasResponse() {
-        ClientQuotaEntity entity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, "user"));
-        return new DescribeClientQuotasResponse(Collections.singletonMap(entity, Collections.singletonMap("request_percentage", 1.0)), 0);
+        DescribeClientQuotasResponseData data = new DescribeClientQuotasResponseData().setEntries(asList(
+                new DescribeClientQuotasResponseData.EntryData()
+                        .setEntity(asList(new DescribeClientQuotasResponseData.EntityData()
+                            .setEntityType(ClientQuotaEntity.USER)
+                            .setEntityName("user")))
+                        .setValues(asList(new DescribeClientQuotasResponseData.ValueData()
+                            .setKey("request_percentage")
+                            .setValue(1.0)))));
+        return new DescribeClientQuotasResponse(data);
     }
 
     private AlterClientQuotasRequest createAlterClientQuotasRequest() {
@@ -2359,7 +2353,11 @@ public class RequestResponseTest {
     }
 
     private AlterClientQuotasResponse createAlterClientQuotasResponse() {
-        ClientQuotaEntity entity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, "user"));
-        return new AlterClientQuotasResponse(Collections.singletonMap(entity, ApiError.NONE), 0);
+        AlterClientQuotasResponseData data = new AlterClientQuotasResponseData()
+            .setEntries(asList(new AlterClientQuotasResponseData.EntryData()
+                .setEntity(asList(new AlterClientQuotasResponseData.EntityData()
+                    .setEntityType(ClientQuotaEntity.USER)
+                    .setEntityName("user")))));
+        return new AlterClientQuotasResponse(data);
     }
 }

@@ -32,6 +32,7 @@ import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
 import org.junit.Test;
 
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -82,21 +83,21 @@ public class DescribeAclsResponseTest {
 
     @Test(expected = UnsupportedVersionException.class)
     public void shouldThrowOnV0IfNotLiteral() {
-        buildResponse(10, Errors.NONE, Collections.singletonList(PREFIXED_ACL1)).toStruct(V0);
+        buildResponse(10, Errors.NONE, Collections.singletonList(PREFIXED_ACL1)).serializeBody(V0);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowIfUnknown() {
-        buildResponse(10, Errors.NONE, Collections.singletonList(UNKNOWN_ACL)).toStruct(V0);
+        buildResponse(10, Errors.NONE, Collections.singletonList(UNKNOWN_ACL)).serializeBody(V0);
     }
 
     @Test
     public void shouldRoundTripV0() {
         List<DescribeAclsResource> resources = Arrays.asList(LITERAL_ACL1, LITERAL_ACL2);
         final DescribeAclsResponse original = buildResponse(10, Errors.NONE, resources);
-        final Struct struct = original.toStruct(V0);
+        final ByteBuffer buffer = original.serializeBody(V0);
 
-        final DescribeAclsResponse result = new DescribeAclsResponse(struct, V0);
+        final DescribeAclsResponse result = DescribeAclsResponse.parse(buffer, V0);
         assertResponseEquals(original, result);
 
         final DescribeAclsResponse result2 = buildResponse(10, Errors.NONE, DescribeAclsResponse.aclsResources(
@@ -108,9 +109,9 @@ public class DescribeAclsResponseTest {
     public void shouldRoundTripV1() {
         List<DescribeAclsResource> resources = Arrays.asList(LITERAL_ACL1, PREFIXED_ACL1);
         final DescribeAclsResponse original = buildResponse(100, Errors.NONE, resources);
-        final Struct struct = original.toStruct(V1);
+        final ByteBuffer buffer = original.serializeBody(V1);
 
-        final DescribeAclsResponse result = new DescribeAclsResponse(struct, V1);
+        final DescribeAclsResponse result = DescribeAclsResponse.parse(buffer, V1);
         assertResponseEquals(original, result);
 
         final DescribeAclsResponse result2 = buildResponse(100, Errors.NONE, DescribeAclsResponse.aclsResources(

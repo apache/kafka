@@ -24,6 +24,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.Topic;
+import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
@@ -31,6 +32,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.Exit;
@@ -127,11 +129,31 @@ public class TestUtils {
 
     public static MetadataResponse metadataResponse(int throttleTimeMs, Collection<Node> brokers,
                                                     String clusterId, int controllerId,
-                                                    List<MetadataResponse.TopicMetadata> topicMetadataList,
+                                                    List<MetadataResponse.TopicMetadata> topicMetadatas,
                                                     int clusterAuthorizedOperations) {
-        return MetadataResponse.prepareResponse(true, throttleTimeMs, brokers, clusterId,
-                controllerId, topicMetadataList, clusterAuthorizedOperations);
-    }
+        List<MetadataResponseData.MetadataResponseTopic> topics = new ArrayList<>();
+        topicMetadatas.forEach(topicMetadata -> {
+            MetadataResponseData.MetadataResponseTopic metadataResponseTopic = new MetadataResponseData.MetadataResponseTopic();
+            metadataResponseTopic
+                    .setErrorCode(topicMetadata.error().code())
+                    .setName(topicMetadata.topic())
+                    .setIsInternal(topicMetadata.isInternal())
+                    .setTopicAuthorizedOperations(topicMetadata.authorizedOperations());
+
+            for (MetadataResponse.PartitionMetadata partitionMetadata : topicMetadata.partitionMetadata()) {
+                metadataResponseTopic.partitions().add(new MetadataResponseData.MetadataResponsePartition()
+                        .setErrorCode(partitionMetadata.error.code())
+                        .setPartitionIndex(partitionMetadata.partition())
+                        .setLeaderId(partitionMetadata.leaderId.orElse(MetadataResponse.NO_LEADER_ID))
+                        .setLeaderEpoch(partitionMetadata.leaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
+                        .setReplicaNodes(partitionMetadata.replicaIds)
+                        .setIsrNodes(partitionMetadata.inSyncReplicaIds)
+                        .setOfflineReplicas(partitionMetadata.offlineReplicaIds));
+            }
+            topics.add(metadataResponseTopic);
+        });
+        return MetadataResponse.prepareResponse(true, throttleTimeMs, brokers, clusterId, controllerId,
+                topics, clusterAuthorizedOperations); }
 
     public static MetadataResponse metadataUpdateWith(final int numNodes,
                                                       final Map<String, Integer> topicPartitionCounts) {
@@ -555,13 +577,6 @@ public class TestUtils {
 
     public static <T> Set<T> toSet(Collection<T> collection) {
         return new HashSet<>(collection);
-    }
-
-    public static ByteBuffer toBuffer(Struct struct) {
-        ByteBuffer buffer = ByteBuffer.allocate(struct.sizeOf());
-        struct.writeTo(buffer);
-        buffer.rewind();
-        return buffer;
     }
 
     public static Set<TopicPartition> generateRandomTopicPartitions(int numTopic, int numPartitionPerTopic) {

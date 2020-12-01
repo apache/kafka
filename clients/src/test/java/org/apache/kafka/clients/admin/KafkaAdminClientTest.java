@@ -441,11 +441,12 @@ public class KafkaAdminClientTest {
                 .setPartitions(pms);
             metadata.add(tm);
         }
-        return MetadataResponse.prepareResponse(0,
-            metadata,
+        return MetadataResponse.prepareResponse(true,
+            0,
             cluster.nodes(),
             cluster.clusterResource().clusterId(),
             cluster.controller().id(),
+            metadata,
             MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED);
     }
 

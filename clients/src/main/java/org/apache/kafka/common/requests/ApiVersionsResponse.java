@@ -114,22 +114,6 @@ public class ApiVersionsResponse extends AbstractResponse {
         }
     }
 
-    public static ApiVersionsResponse fromStruct(Struct struct, short version) {
-        // Fallback to version 0 for ApiVersions response. If a client sends an ApiVersionsRequest
-        // using a version higher than that supported by the broker, a version 0 response is sent
-        // to the client indicating UNSUPPORTED_VERSION. When the client receives the response, it
-        // falls back while parsing it into a Struct which means that the version received by this
-        // method is not necessary the real one. It may be version 0 as well.
-        try {
-            return new ApiVersionsResponse(struct, version);
-        } catch (SchemaException e) {
-            if (version != 0)
-                return new ApiVersionsResponse(struct, (short) 0);
-            else
-                throw e;
-        }
-    }
-
     public static ApiVersionsResponse apiVersionsResponse(
         int throttleTimeMs,
         byte maxMagic,

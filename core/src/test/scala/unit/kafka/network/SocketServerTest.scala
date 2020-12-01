@@ -114,7 +114,7 @@ class SocketServerTest {
   }
 
   def sendApiRequest(socket: Socket, request: AbstractRequest, header: RequestHeader) = {
-    val byteBuffer = request.serialize(header)
+    val byteBuffer = request.serializeWithHeader(header)
     byteBuffer.rewind()
     val serializedBytes = new Array[Byte](byteBuffer.remaining)
     byteBuffer.get(serializedBytes)
@@ -223,7 +223,7 @@ class SocketServerTest {
   private def apiVersionRequestBytes(clientId: String, version: Short): Array[Byte] = {
     val request = new ApiVersionsRequest.Builder().build(version)
     val header = new RequestHeader(ApiKeys.API_VERSIONS, request.version(), clientId, -1)
-    val buffer = request.serialize(header)
+    val buffer = request.serializeWithHeader(header)
     buffer.rewind()
     val bytes = new Array[Byte](buffer.remaining())
     buffer.get(bytes)

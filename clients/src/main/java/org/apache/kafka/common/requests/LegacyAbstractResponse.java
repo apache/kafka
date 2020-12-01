@@ -5,6 +5,7 @@ import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
+// This should be removed once all responses are converted to use the generated response classes
 public abstract class LegacyAbstractResponse extends AbstractResponse {
 
     protected LegacyAbstractResponse(ApiKeys apiKey) {

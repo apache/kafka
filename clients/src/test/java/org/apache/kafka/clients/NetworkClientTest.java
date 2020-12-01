@@ -32,10 +32,12 @@ import org.apache.kafka.common.protocol.CommonFields;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.ProduceRequest;
+import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.ResponseHeader;
 import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator;
@@ -186,9 +188,10 @@ public class NetworkClientTest {
 
     private void checkSimpleRequestResponse(NetworkClient networkClient) {
         awaitReady(networkClient, node); // has to be before creating any request, as it may send ApiVersionsRequest and its response is mocked with correlation id 0
+        short requestVersion = PRODUCE.latestVersion();
         ProduceRequest.Builder builder = new ProduceRequest.Builder(
-                PRODUCE.latestVersion(),
-                PRODUCE.latestVersion(),
+                requestVersion,
+                requestVersion,
                 (short) 1,
                 1000,
                 Collections.emptyMap(),
@@ -199,16 +202,8 @@ public class NetworkClientTest {
         networkClient.send(request, time.milliseconds());
         networkClient.poll(1, time.milliseconds());
         assertEquals(1, networkClient.inFlightRequestCount());
-        ResponseHeader respHeader =
-            new ResponseHeader(request.correlationId(),
-                request.apiKey().responseHeaderVersion(PRODUCE.latestVersion()));
-        Struct resp = new Struct(PRODUCE.responseSchema(PRODUCE.latestVersion()));
-        resp.set("responses", new Object[0]);
-        Struct responseHeaderStruct = respHeader.toStruct();
-        int size = responseHeaderStruct.sizeOf() + resp.sizeOf();
-        ByteBuffer buffer = ByteBuffer.allocate(size);
-        responseHeaderStruct.writeTo(buffer);
-        resp.writeTo(buffer);
+        ProduceResponse produceResponse = new ProduceResponse(Collections.emptyMap());
+        ByteBuffer buffer = produceResponse.serializeWithHeader(requestVersion, request.correlationId());
         buffer.flip();
         selector.completeReceive(new NetworkReceive(node.idString(), buffer));
         List<ClientResponse> responses = networkClient.poll(1, time.milliseconds());
@@ -220,7 +215,7 @@ public class NetworkClientTest {
     }
 
     private void delayedApiVersionsResponse(int correlationId, short version, ApiVersionsResponse response) {
-        ByteBuffer buffer = response.serializeWithHeader(ApiKeys.API_VERSIONS, version, correlationId);
+        ByteBuffer buffer = response.serializeWithHeader(version, correlationId);
         selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));
     }
 
@@ -499,9 +494,10 @@ public class NetworkClientTest {
     public void testConnectionThrottling() {
         // Instrument the test to return a response with a 100ms throttle delay.
         awaitReady(client, node);
+        short requestVersion = PRODUCE.latestVersion();
         ProduceRequest.Builder builder = new ProduceRequest.Builder(
-            PRODUCE.latestVersion(),
-            PRODUCE.latestVersion(),
+            requestVersion,
+            requestVersion,
             (short) 1,
             1000,
             Collections.emptyMap(),
@@ -511,17 +507,9 @@ public class NetworkClientTest {
                 defaultRequestTimeoutMs, handler);
         client.send(request, time.milliseconds());
         client.poll(1, time.milliseconds());
-        ResponseHeader respHeader =
-            new ResponseHeader(request.correlationId(),
-                request.apiKey().responseHeaderVersion(PRODUCE.latestVersion()));
-        Struct resp = new Struct(PRODUCE.responseSchema(PRODUCE.latestVersion()));
-        resp.set("responses", new Object[0]);
-        resp.set(CommonFields.THROTTLE_TIME_MS, 100);
-        Struct responseHeaderStruct = respHeader.toStruct();
-        int size = responseHeaderStruct.sizeOf() + resp.sizeOf();
-        ByteBuffer buffer = ByteBuffer.allocate(size);
-        responseHeaderStruct.writeTo(buffer);
-        resp.writeTo(buffer);
+        int throttleTime = 100;
+        ProduceResponse produceResponse = new ProduceResponse(Collections.emptyMap(), throttleTime);
+        ByteBuffer buffer = produceResponse.serializeWithHeader(requestVersion, request.correlationId());
         buffer.flip();
         selector.completeReceive(new NetworkReceive(node.idString(), buffer));
         client.poll(1, time.milliseconds());
@@ -599,23 +587,16 @@ public class NetworkClientTest {
         return request.correlationId();
     }
 
-    private void sendResponse(ResponseHeader respHeader, Struct response) {
-        Struct responseHeaderStruct = respHeader.toStruct();
-        int size = responseHeaderStruct.sizeOf() + response.sizeOf();
-        ByteBuffer buffer = ByteBuffer.allocate(size);
-        responseHeaderStruct.writeTo(buffer);
-        response.writeTo(buffer);
+    private void sendResponse(AbstractResponse response, short version, int correlationId) {
+        ByteBuffer buffer = response.serializeWithHeader(version, correlationId);
         buffer.flip();
         selector.completeReceive(new NetworkReceive(node.idString(), buffer));
     }
 
     private void sendThrottledProduceResponse(int correlationId, int throttleMs) {
-        Struct resp = new Struct(PRODUCE.responseSchema(PRODUCE.latestVersion()));
-        resp.set("responses", new Object[0]);
-        resp.set(CommonFields.THROTTLE_TIME_MS, throttleMs);
-        sendResponse(new ResponseHeader(correlationId,
-            PRODUCE.responseHeaderVersion(PRODUCE.latestVersion())),
-            resp);
+        short requestVersion = PRODUCE.latestVersion();
+        ProduceResponse response = new ProduceResponse(Collections.emptyMap(), throttleMs);
+        sendResponse(response, requestVersion, correlationId);
     }
 
     @Test
@@ -702,7 +683,7 @@ public class NetworkClientTest {
         RequestHeader header = parseHeader(requestBuffer);
         assertEquals(ApiKeys.METADATA, header.apiKey());
 
-        ByteBuffer responseBuffer = metadataResponse.serialize(ApiKeys.METADATA, header.apiVersion(), header.correlationId());
+        ByteBuffer responseBuffer = metadataResponse.serializeWithHeader(header.apiVersion(), header.correlationId());
         selector.delayedReceive(new DelayedReceive(node1.idString(), new NetworkReceive(node1.idString(), responseBuffer)));
 
         int initialUpdateVersion = metadata.updateVersion();

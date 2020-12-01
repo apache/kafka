@@ -5,6 +5,7 @@ import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
+// This should be removed once all requests are converted to use the generated request classes
 public abstract class LegacyAbstractRequest extends AbstractRequest {
 
     protected LegacyAbstractRequest(ApiKeys apiKeys, short version) {

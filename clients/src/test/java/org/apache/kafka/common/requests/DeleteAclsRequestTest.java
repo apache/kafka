@@ -29,6 +29,7 @@ import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
 import org.junit.Test;
 
+import java.nio.ByteBuffer;
 import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
@@ -64,9 +65,9 @@ public class DeleteAclsRequestTest {
     @Test
     public void shouldRoundTripLiteralV0() {
         final DeleteAclsRequest original = new DeleteAclsRequest.Builder(requestData(LITERAL_FILTER)).build(V0);
-        final Struct struct = original.toStruct();
+        final ByteBuffer buffer = original.serializeBody();
 
-        final DeleteAclsRequest result = new DeleteAclsRequest(struct, V0);
+        final DeleteAclsRequest result = DeleteAclsRequest.parse(buffer, V0);
 
         assertRequestEquals(original, result);
     }
@@ -82,7 +83,7 @@ public class DeleteAclsRequestTest {
                 ANY_FILTER.entryFilter()))
         ).build(V0);
 
-        final DeleteAclsRequest result = new DeleteAclsRequest(original.toStruct(), V0);
+        final DeleteAclsRequest result = DeleteAclsRequest.parse(original.serializeBody(), V0);
 
         assertRequestEquals(expected, result);
     }
@@ -92,9 +93,9 @@ public class DeleteAclsRequestTest {
         final DeleteAclsRequest original = new DeleteAclsRequest.Builder(
                 requestData(LITERAL_FILTER, PREFIXED_FILTER, ANY_FILTER)
         ).build(V1);
-        final Struct struct = original.toStruct();
+        final ByteBuffer buffer = original.serializeBody();
 
-        final DeleteAclsRequest result = new DeleteAclsRequest(struct, V1);
+        final DeleteAclsRequest result = DeleteAclsRequest.parse(buffer, V1);
 
         assertRequestEquals(original, result);
     }

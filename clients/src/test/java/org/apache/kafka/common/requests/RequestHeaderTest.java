@@ -17,7 +17,6 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
@@ -51,14 +50,6 @@ public class RequestHeaderTest {
         assertEquals(0, serializedBuffer.getShort(2));
         assertEquals(correlationId, serializedBuffer.getInt(4));
         assertEquals(8, serializedBuffer.limit());
-
-        Struct serialized = deserialized.data().toStruct(apiVersion);
-        serializedBuffer = TestUtils.toBuffer(serialized);
-
-        assertEquals(ApiKeys.CONTROLLED_SHUTDOWN.id, serializedBuffer.getShort(0));
-        assertEquals(0, serializedBuffer.getShort(2));
-        assertEquals(correlationId, serializedBuffer.getInt(4));
-        assertEquals(8, serializedBuffer.limit());
     }
 
     @Test
@@ -71,11 +62,6 @@ public class RequestHeaderTest {
         assertEquals(10, buffer.remaining());
         RequestHeader deserialized = RequestHeader.parse(buffer);
         assertEquals(header, deserialized);
-
-        buffer = TestUtils.toBuffer(header.data().toStruct(apiVersion));
-        assertEquals(10, buffer.remaining());
-        deserialized = RequestHeader.parse(buffer);
-        assertEquals(header, deserialized);
     }
 
     @Test
@@ -87,11 +73,6 @@ public class RequestHeaderTest {
         ByteBuffer buffer = toBuffer(header);
         assertEquals(11, buffer.remaining());
         RequestHeader deserialized = RequestHeader.parse(buffer);
-        assertEquals(header, deserialized);
-
-        buffer = TestUtils.toBuffer(header.data().toStruct(apiVersion));
-        assertEquals(11, buffer.remaining());
-        deserialized = RequestHeader.parse(buffer);
         assertEquals(header, deserialized);
     }
 

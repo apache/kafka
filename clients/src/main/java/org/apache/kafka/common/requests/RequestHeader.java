@@ -71,11 +71,11 @@ public class RequestHeader implements AbstractRequestResponse {
     }
 
     public void write(ByteBuffer buffer, ObjectSerializationCache serializationCache) {
-        data.write(new ByteBufferAccessor(buffer), serializationCache, apiVersion());
+        data.write(new ByteBufferAccessor(buffer), serializationCache, headerVersion);
     }
 
     public int size(ObjectSerializationCache serializationCache) {
-        return data.size(serializationCache, apiVersion());
+        return data.size(serializationCache, headerVersion);
     }
 
     public ResponseHeader toResponseHeader() {
@@ -85,6 +85,8 @@ public class RequestHeader implements AbstractRequestResponse {
     public static RequestHeader parse(ByteBuffer buffer) {
         short apiKey = -1;
         try {
+            // We derive the header version from the request api version, so we read that first.
+            // The request api version is part of `RequestHeaderData`, so we rewind the buffer after the read.
             apiKey = buffer.getShort();
             short apiVersion = buffer.getShort();
             short headerVersion = ApiKeys.forId(apiKey).requestHeaderVersion(apiVersion);
