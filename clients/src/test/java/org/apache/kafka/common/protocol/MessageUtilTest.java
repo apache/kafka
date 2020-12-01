@@ -18,6 +18,7 @@
 package org.apache.kafka.common.protocol;
 
 import org.apache.kafka.common.protocol.types.RawTaggedField;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 

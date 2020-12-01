@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.common.metrics.stats;
 
-import java.util.Locale;
-import java.util.concurrent.TimeUnit;
-
 import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.MetricConfig;
+
+import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.metrics.internals.MetricsUtils.convert;
 

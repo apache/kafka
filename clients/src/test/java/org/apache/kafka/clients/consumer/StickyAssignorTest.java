@@ -16,11 +16,15 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import static org.apache.kafka.clients.consumer.StickyAssignor.serializeTopicPartitionAssignment;
-import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
+import org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor;
+import org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.MemberData;
+import org.apache.kafka.clients.consumer.internals.AbstractStickyAssignorTest;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.utils.CollectionUtils;
+
+import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -29,14 +33,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
-import org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor;
-import org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.MemberData;
-import org.apache.kafka.clients.consumer.internals.AbstractStickyAssignorTest;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.utils.CollectionUtils;
-import org.junit.jupiter.api.Test;
+
+import static org.apache.kafka.clients.consumer.StickyAssignor.serializeTopicPartitionAssignment;
+import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class StickyAssignorTest extends AbstractStickyAssignorTest {
 

@@ -17,6 +17,7 @@
 package org.apache.kafka.common;
 
 import org.apache.kafka.common.utils.Utils;
+
 import org.junit.jupiter.api.Test;
 
 import java.net.InetSocketAddress;

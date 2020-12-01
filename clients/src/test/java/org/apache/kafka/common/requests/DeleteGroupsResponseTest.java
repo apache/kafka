@@ -20,6 +20,7 @@ import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResult;
 import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResultCollection;
 import org.apache.kafka.common.protocol.Errors;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;

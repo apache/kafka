@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.network;
 
-
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.Collection;

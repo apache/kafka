@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.requests;
 
-
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
 import org.apache.kafka.common.message.SaslHandshakeResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;

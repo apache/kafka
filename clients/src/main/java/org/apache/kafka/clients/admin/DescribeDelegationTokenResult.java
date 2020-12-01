@@ -17,11 +17,11 @@
 
 package org.apache.kafka.clients.admin;
 
-import java.util.List;
-
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
+
+import java.util.List;
 
 /**
  * The result of the {@link KafkaAdminClient#describeDelegationToken(DescribeDelegationTokenOptions)} call.

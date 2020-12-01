@@ -23,7 +23,6 @@ import java.util.Base64;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 import javax.security.sasl.SaslException;
 
 /**

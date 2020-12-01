@@ -29,6 +29,7 @@ import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
+
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;

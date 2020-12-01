@@ -23,6 +23,7 @@ import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.SimpleRecord;
+
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;

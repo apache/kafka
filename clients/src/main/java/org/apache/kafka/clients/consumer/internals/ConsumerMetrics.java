@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.common.MetricNameTemplate;
+import org.apache.kafka.common.metrics.Metrics;
+
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-
-import org.apache.kafka.common.MetricNameTemplate;
-import org.apache.kafka.common.metrics.Metrics;
 
 public class ConsumerMetrics {
     

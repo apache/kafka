@@ -22,10 +22,11 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.StopReplicaRequestData;
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState;
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionV0;
-import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaTopicV1;
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaTopicState;
+import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaTopicV1;
 import org.apache.kafka.common.message.StopReplicaResponseData.StopReplicaPartitionError;
 import org.apache.kafka.common.protocol.Errors;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;

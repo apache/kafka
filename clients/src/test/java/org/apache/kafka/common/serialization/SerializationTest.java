@@ -18,6 +18,7 @@ package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.utils.Bytes;
+
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;

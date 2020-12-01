@@ -17,6 +17,7 @@
 package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.security.auth.SaslExtensions;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;

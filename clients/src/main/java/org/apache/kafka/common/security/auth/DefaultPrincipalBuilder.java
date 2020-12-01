@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.common.security.auth;
 
-import java.util.Map;
-import java.security.Principal;
-
-import org.apache.kafka.common.network.TransportLayer;
-import org.apache.kafka.common.network.Authenticator;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.network.Authenticator;
+import org.apache.kafka.common.network.TransportLayer;
+
+import java.security.Principal;
+import java.util.Map;
 
 /**
  * DefaultPrincipalBuilder which return transportLayer's peer Principal

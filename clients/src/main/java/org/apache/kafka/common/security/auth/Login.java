@@ -17,7 +17,6 @@
 package org.apache.kafka.common.security.auth;
 
 import java.util.Map;
-
 import javax.security.auth.Subject;
 import javax.security.auth.login.Configuration;
 import javax.security.auth.login.LoginContext;

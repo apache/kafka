@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-
 import org.apache.kafka.clients.producer.ProducerInterceptor;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.RecordBatch;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

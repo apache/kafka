@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.common.memory;
 
-import java.nio.ByteBuffer;
-import java.util.concurrent.TimeUnit;
-
 import org.apache.kafka.common.utils.Utils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+
+import java.nio.ByteBuffer;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;

@@ -28,6 +28,7 @@ import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.security.ssl.SslPrincipalMapper;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 
 import java.io.Closeable;

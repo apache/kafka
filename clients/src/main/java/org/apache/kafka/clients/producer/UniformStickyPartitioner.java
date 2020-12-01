@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.clients.producer;
 
-import java.util.Map;
-
 import org.apache.kafka.clients.producer.internals.StickyPartitionCache;
 import org.apache.kafka.common.Cluster;
+
+import java.util.Map;
 
 
 /**

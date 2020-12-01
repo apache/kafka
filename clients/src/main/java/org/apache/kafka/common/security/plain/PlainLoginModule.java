@@ -19,7 +19,6 @@ package org.apache.kafka.common.security.plain;
 import org.apache.kafka.common.security.plain.internals.PlainSaslServerProvider;
 
 import java.util.Map;
-
 import javax.security.auth.Subject;
 import javax.security.auth.callback.CallbackHandler;
 import javax.security.auth.spi.LoginModule;

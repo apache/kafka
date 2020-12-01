@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
 

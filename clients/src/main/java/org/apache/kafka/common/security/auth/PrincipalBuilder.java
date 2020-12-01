@@ -16,14 +16,14 @@
  */
 package org.apache.kafka.common.security.auth;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.network.TransportLayer;
-import org.apache.kafka.common.network.Authenticator;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.network.Authenticator;
+import org.apache.kafka.common.network.TransportLayer;
 
-import java.util.Map;
 import java.security.Principal;
+import java.util.Map;
 
 /**
  * PrincipalBuilder for Authenticator

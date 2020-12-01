@@ -18,7 +18,6 @@
 package org.apache.kafka.common.security.auth;
 
 import java.util.Objects;
-
 import javax.security.auth.callback.Callback;
 
 /**

@@ -16,14 +16,15 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.TopicPartition;
+
 import java.nio.ByteBuffer;
-import java.util.Optional;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
-import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.TopicPartition;
 
 /**
  * This interface is used to define custom partition assignment for use in

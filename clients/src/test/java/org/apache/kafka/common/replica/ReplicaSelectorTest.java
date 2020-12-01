@@ -19,6 +19,7 @@ package org.apache.kafka.common.replica;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+
 import org.junit.jupiter.api.Test;
 
 import java.net.InetAddress;

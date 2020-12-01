@@ -29,6 +29,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
+
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;

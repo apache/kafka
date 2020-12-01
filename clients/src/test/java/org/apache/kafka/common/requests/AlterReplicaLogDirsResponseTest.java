@@ -16,13 +16,14 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.util.Map;
-
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirPartitionResult;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirTopicResult;
 import org.apache.kafka.common.protocol.Errors;
+
 import org.junit.jupiter.api.Test;
+
+import java.util.Map;
 
 import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;

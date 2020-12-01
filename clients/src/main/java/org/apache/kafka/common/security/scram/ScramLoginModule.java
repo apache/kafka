@@ -21,7 +21,6 @@ import org.apache.kafka.common.security.scram.internals.ScramSaslServerProvider;
 
 import java.util.Collections;
 import java.util.Map;
-
 import javax.security.auth.Subject;
 import javax.security.auth.callback.CallbackHandler;
 import javax.security.auth.spi.LoginModule;

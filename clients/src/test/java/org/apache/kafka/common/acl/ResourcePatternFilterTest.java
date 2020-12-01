@@ -20,6 +20,7 @@ package org.apache.kafka.common.acl;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
+
 import org.junit.jupiter.api.Test;
 
 import static org.apache.kafka.common.resource.PatternType.LITERAL;

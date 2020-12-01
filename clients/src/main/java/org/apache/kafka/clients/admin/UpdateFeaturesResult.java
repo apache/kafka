@@ -16,8 +16,9 @@
  */
 package org.apache.kafka.clients.admin;
 
-import java.util.Map;
 import org.apache.kafka.common.KafkaFuture;
+
+import java.util.Map;
 
 /**
  * The result of the {@link Admin#updateFeatures(Map, UpdateFeaturesOptions)} call.

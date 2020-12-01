@@ -23,6 +23,7 @@ import org.apache.kafka.common.message.OffsetFetchRequestData.OffsetFetchRequest
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

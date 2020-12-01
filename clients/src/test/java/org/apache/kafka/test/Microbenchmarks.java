@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.common.utils.CopyOnWriteMap;
+import org.apache.kafka.common.utils.Time;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -25,9 +28,6 @@ import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
-
-import org.apache.kafka.common.utils.CopyOnWriteMap;
-import org.apache.kafka.common.utils.Time;
 
 public class Microbenchmarks {
 

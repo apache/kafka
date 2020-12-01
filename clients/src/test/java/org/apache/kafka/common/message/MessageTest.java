@@ -17,8 +17,6 @@
 
 package org.apache.kafka.common.message;
 
-import com.fasterxml.jackson.databind.JsonNode;
-
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -52,6 +50,8 @@ import org.apache.kafka.common.protocol.types.RawTaggedField;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
+
+import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 

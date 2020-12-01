@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.security.auth;
 
-import javax.security.auth.x500.X500Principal;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.network.Authenticator;
 import org.apache.kafka.common.network.TransportLayer;
@@ -24,12 +23,14 @@ import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuild
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.security.ssl.SslPrincipalMapper;
+
 import org.junit.jupiter.api.Test;
 
-import javax.net.ssl.SSLSession;
-import javax.security.sasl.SaslServer;
 import java.net.InetAddress;
 import java.security.Principal;
+import javax.net.ssl.SSLSession;
+import javax.security.auth.x500.X500Principal;
+import javax.security.sasl.SaslServer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;

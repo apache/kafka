@@ -16,14 +16,14 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
-
-import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
  * The result of the {@link AdminClient#listOffsets(Map)} call.

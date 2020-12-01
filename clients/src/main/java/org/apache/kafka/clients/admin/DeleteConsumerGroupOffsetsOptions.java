@@ -16,8 +16,9 @@
  */
 package org.apache.kafka.clients.admin;
 
-import java.util.Set;
 import org.apache.kafka.common.annotation.InterfaceStability;
+
+import java.util.Set;
 
 /**
  * Options for the {@link Admin#deleteConsumerGroupOffsets(String, Set)} call.

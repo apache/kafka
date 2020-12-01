@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.common.serialization;
 
-import java.util.Map;
-
 import org.apache.kafka.common.header.Headers;
+
+import java.util.Map;
 
 /**
  * A Serializer that has access to the headers associated with the record.

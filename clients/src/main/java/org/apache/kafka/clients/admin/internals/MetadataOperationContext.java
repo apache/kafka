@@ -17,10 +17,6 @@
 
 package org.apache.kafka.clients.admin.internals;
 
-import java.util.Collection;
-import java.util.Map;
-import java.util.Optional;
-
 import org.apache.kafka.clients.admin.AbstractOptions;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidMetadataException;
@@ -29,6 +25,10 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
 import org.apache.kafka.common.requests.MetadataResponse.TopicMetadata;
+
+import java.util.Collection;
+import java.util.Map;
+import java.util.Optional;
 
 /**
  * Context class to encapsulate parameters of a call to fetch and use cluster metadata.

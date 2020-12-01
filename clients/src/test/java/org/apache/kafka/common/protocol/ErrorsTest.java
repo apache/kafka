@@ -16,16 +16,17 @@
  */
 package org.apache.kafka.common.protocol;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.TimeoutException;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
 import java.util.Set;
 
-import org.apache.kafka.common.errors.ApiException;
-import org.apache.kafka.common.errors.TimeoutException;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class ErrorsTest {
 

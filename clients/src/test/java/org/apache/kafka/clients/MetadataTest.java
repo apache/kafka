@@ -38,6 +38,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.MockClusterResourceListener;
+
 import org.junit.jupiter.api.Test;
 
 import java.net.InetSocketAddress;

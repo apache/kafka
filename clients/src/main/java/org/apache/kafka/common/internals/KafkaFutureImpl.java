@@ -16,14 +16,14 @@
  */
 package org.apache.kafka.common.internals;
 
+import org.apache.kafka.common.KafkaFuture;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-
-import org.apache.kafka.common.KafkaFuture;
 
 /**
  * A flexible future which supports call chaining and other asynchronous programming patterns.

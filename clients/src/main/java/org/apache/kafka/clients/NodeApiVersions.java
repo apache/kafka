@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.clients;
 
-import java.util.Collection;
-import java.util.Collections;
-import java.util.LinkedList;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
@@ -27,7 +24,10 @@ import org.apache.kafka.common.protocol.ApiVersion;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.EnumMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;

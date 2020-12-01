@@ -17,6 +17,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.errors.CorruptRecordException;
+
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;

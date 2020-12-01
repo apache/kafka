@@ -25,6 +25,7 @@ import org.apache.kafka.common.message.DeleteAclsResponseData.DeleteAclsFilterRe
 import org.apache.kafka.common.message.DeleteAclsResponseData.DeleteAclsMatchingAcl;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourceType;
+
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;

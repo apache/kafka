@@ -21,9 +21,9 @@ import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Collection;
 import java.util.concurrent.ExecutionException;
 
 

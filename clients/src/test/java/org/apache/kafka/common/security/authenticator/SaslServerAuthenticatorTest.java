@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.security.authenticator;
 
-import java.net.InetAddress;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
 import org.apache.kafka.common.network.ChannelMetadataRegistry;
@@ -27,23 +26,24 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
+import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Time;
 
-import javax.security.auth.Subject;
+import org.junit.jupiter.api.Test;
+import org.mockito.Answers;
+
 import java.io.IOException;
+import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-
-import org.junit.jupiter.api.Test;
-import org.mockito.Answers;
+import javax.security.auth.Subject;
 
 import static org.apache.kafka.common.security.scram.internals.ScramMechanism.SCRAM_SHA_256;
 import static org.junit.jupiter.api.Assertions.assertEquals;

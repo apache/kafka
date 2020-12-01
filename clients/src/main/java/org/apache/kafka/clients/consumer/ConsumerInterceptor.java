@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer;
 
-
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.TopicPartition;
 

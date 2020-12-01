@@ -16,8 +16,9 @@
  */
 package org.apache.kafka.common.security.oauthbearer;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslClientCallbackHandler;
+
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.security.AccessController;
@@ -25,12 +26,11 @@ import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.Collections;
 import java.util.Set;
-
 import javax.security.auth.Subject;
 import javax.security.auth.callback.Callback;
 
-import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslClientCallbackHandler;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class OAuthBearerSaslClienCallbackHandlerTest {
     private static OAuthBearerToken createTokenWithLifetimeMillis(final long lifetimeMillis) {

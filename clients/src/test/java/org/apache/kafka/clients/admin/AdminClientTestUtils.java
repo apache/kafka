@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.clients.admin;
 
-import java.util.Collections;
-import java.util.Map;
 import org.apache.kafka.clients.admin.CreateTopicsResult.TopicMetadataAndConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+
+import java.util.Collections;
+import java.util.Map;
 
 public class AdminClientTestUtils {
 

@@ -17,6 +17,7 @@
 package org.apache.kafka.common.utils;
 
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollectionTest.TestElement;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 

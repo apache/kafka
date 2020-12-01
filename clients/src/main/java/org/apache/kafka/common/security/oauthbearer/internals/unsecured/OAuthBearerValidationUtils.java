@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.unsecured;
 
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
+
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 
 public class OAuthBearerValidationUtils {
     /**

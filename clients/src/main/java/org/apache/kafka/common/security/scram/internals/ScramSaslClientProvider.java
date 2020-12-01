@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.common.security.scram.internals;
 
+import org.apache.kafka.common.security.scram.internals.ScramSaslClient.ScramSaslClientFactory;
+
 import java.security.Provider;
 import java.security.Security;
-
-import org.apache.kafka.common.security.scram.internals.ScramSaslClient.ScramSaslClientFactory;
 
 public class ScramSaslClientProvider extends Provider {
 

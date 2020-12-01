@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.metrics.stats;
 
-
 import org.apache.kafka.common.MetricName;
 
 /**

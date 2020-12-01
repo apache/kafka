@@ -16,22 +16,12 @@
  */
 package org.apache.kafka.common.security.ssl;
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.security.GeneralSecurityException;
-import java.security.KeyStore;
-import java.util.Arrays;
-import java.util.Map;
-
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLEngine;
-
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.auth.SslEngineFactory;
 import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory.FileBasedStore;
@@ -42,8 +32,20 @@ import org.apache.kafka.common.security.ssl.mock.TestProviderCreator;
 import org.apache.kafka.common.security.ssl.mock.TestTrustManagerFactory;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestSslUtils;
-import org.apache.kafka.common.network.Mode;
+
 import org.junit.jupiter.api.Test;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.security.GeneralSecurityException;
+import java.security.KeyStore;
+import java.security.Security;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.Properties;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLEngine;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -54,8 +56,6 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
-import java.security.Security;
-import java.util.Properties;
 
 public abstract class SslFactoryTest {
     private final String tlsProtocol;

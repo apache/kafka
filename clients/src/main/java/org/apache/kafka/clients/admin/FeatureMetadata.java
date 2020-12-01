@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.clients.admin;
 
-import static java.util.stream.Collectors.joining;
-
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+
+import static java.util.stream.Collectors.joining;
 
 /**
  * Encapsulates details about finalized as well as supported features. This is particularly useful

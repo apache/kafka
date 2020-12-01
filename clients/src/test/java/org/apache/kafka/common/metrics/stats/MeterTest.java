@@ -16,16 +16,17 @@
  */
 package org.apache.kafka.common.metrics.stats;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.CompoundStat.NamedMeasurable;
+import org.apache.kafka.common.metrics.MetricConfig;
+
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.metrics.CompoundStat.NamedMeasurable;
-import org.apache.kafka.common.metrics.MetricConfig;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class MeterTest {
 

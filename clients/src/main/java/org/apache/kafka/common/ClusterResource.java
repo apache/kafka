@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common;
 
-
 import java.util.Objects;
 
 /**

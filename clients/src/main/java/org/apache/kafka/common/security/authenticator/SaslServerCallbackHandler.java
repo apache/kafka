@@ -16,20 +16,19 @@
  */
 package org.apache.kafka.common.security.authenticator;
 
-import java.util.List;
-import java.util.Map;
-
-import javax.security.auth.callback.Callback;
-import javax.security.auth.callback.UnsupportedCallbackException;
-import javax.security.auth.login.AppConfigurationEntry;
-import javax.security.sasl.AuthorizeCallback;
-import javax.security.sasl.RealmCallback;
-
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.List;
+import java.util.Map;
+import javax.security.auth.callback.Callback;
+import javax.security.auth.callback.UnsupportedCallbackException;
+import javax.security.auth.login.AppConfigurationEntry;
+import javax.security.sasl.AuthorizeCallback;
+import javax.security.sasl.RealmCallback;
 
 /**
  * Default callback handler for Sasl servers. The callbacks required for all the SASL

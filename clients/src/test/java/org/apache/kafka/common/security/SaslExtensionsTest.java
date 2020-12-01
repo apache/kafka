@@ -17,6 +17,7 @@
 package org.apache.kafka.common.security;
 
 import org.apache.kafka.common.security.auth.SaslExtensions;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

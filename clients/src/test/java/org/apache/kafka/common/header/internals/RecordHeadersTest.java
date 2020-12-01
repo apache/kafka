@@ -18,6 +18,7 @@ package org.apache.kafka.common.header.internals;
 
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
+
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
