@@ -17,8 +17,9 @@
 
 package org.apache.kafka.trogdor.task;
 
-import com.fasterxml.jackson.databind.exc.InvalidTypeIdException;
 import org.apache.kafka.trogdor.common.JsonUtil;
+
+import com.fasterxml.jackson.databind.exc.InvalidTypeIdException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 

@@ -19,6 +19,7 @@ package org.apache.kafka.trogdor.common;
 
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.trogdor.basic.BasicPlatform;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

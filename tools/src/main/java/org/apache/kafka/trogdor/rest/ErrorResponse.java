@@ -17,9 +17,10 @@
 
 package org.apache.kafka.trogdor.rest;
 
+import org.apache.kafka.trogdor.common.JsonUtil;
+
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.kafka.trogdor.common.JsonUtil;
 
 import java.util.Objects;
 

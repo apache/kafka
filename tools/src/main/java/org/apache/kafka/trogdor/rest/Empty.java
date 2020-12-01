@@ -17,8 +17,9 @@
 
 package org.apache.kafka.trogdor.rest;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
 import org.apache.kafka.trogdor.common.JsonUtil;
+
+import com.fasterxml.jackson.annotation.JsonCreator;
 
 /**
  * An empty request or response.

@@ -18,6 +18,7 @@
 package org.apache.kafka.trogdor.task;
 
 import org.apache.kafka.trogdor.common.Topology;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

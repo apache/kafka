@@ -17,9 +17,10 @@
 
 package org.apache.kafka.trogdor.rest;
 
+import org.apache.kafka.trogdor.task.TaskSpec;
+
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.kafka.trogdor.task.TaskSpec;
 
 /**
  * A request to the Trogdor agent to create a worker.

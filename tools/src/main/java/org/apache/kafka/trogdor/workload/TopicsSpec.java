@@ -17,11 +17,12 @@
 
 package org.apache.kafka.trogdor.workload;
 
+import org.apache.kafka.trogdor.common.StringExpander;
+import org.apache.kafka.trogdor.rest.Message;
+
 import com.fasterxml.jackson.annotation.JsonAnyGetter;
 import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.fasterxml.jackson.annotation.JsonCreator;
-import org.apache.kafka.trogdor.common.StringExpander;
-import org.apache.kafka.trogdor.rest.Message;
 
 import java.util.Collections;
 import java.util.HashMap;
