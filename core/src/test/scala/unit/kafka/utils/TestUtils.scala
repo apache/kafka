@@ -1535,7 +1535,7 @@ object TestUtils extends Logging {
       val ops = alter.map { case (key, value) =>
         new ClientQuotaAlteration.Op(key, value.map(Double.box).getOrElse(null))
       }.asJavaCollection
-        new ClientQuotaAlteration(entity, ops)
+      new ClientQuotaAlteration(entity, ops)
     }.asJavaCollection
     adminClient.alterClientQuotas(entries)
   }

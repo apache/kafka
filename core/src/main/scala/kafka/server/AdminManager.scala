@@ -807,7 +807,7 @@ class AdminManager(val config: KafkaConfig,
       case name => Sanitizer.desanitize(name)
     }
 
-  private def entityToSanitizedUserClientId(entity: ClientQuotaEntity): (Option[String], Option[String], Option[String]) = {
+  private def parseAndSanitizeQuotaEntity(entity: ClientQuotaEntity): (Option[String], Option[String], Option[String]) = {
     if (entity.entries.isEmpty)
       throw new InvalidRequestException("Invalid empty client quota entity")
 
@@ -858,7 +858,8 @@ class AdminManager(val config: KafkaConfig,
       }
     }
     if ((userComponent.isDefined || clientIdComponent.isDefined) && ipComponent.isDefined)
-      throw new InvalidRequestException(s"Invalid entity filter component combination")
+      throw new InvalidRequestException(s"Invalid entity filter component combination, IP filter component should not be used with " +
+        s"user or clientId filter component.")
 
     val userClientQuotas = if (ipComponent.isEmpty)
       handleDescribeClientQuotas(userComponent, clientIdComponent, filter.strict)
@@ -990,7 +991,7 @@ class AdminManager(val config: KafkaConfig,
 
   def alterClientQuotas(entries: Seq[ClientQuotaAlteration], validateOnly: Boolean): Map[ClientQuotaEntity, ApiError] = {
     def alterEntityQuotas(entity: ClientQuotaEntity, ops: Iterable[ClientQuotaAlteration.Op]): Unit = {
-      val (path, configType, configKeys) = entityToSanitizedUserClientId(entity) match {
+      val (path, configType, configKeys) = parseAndSanitizeQuotaEntity(entity) match {
         case (Some(user), Some(clientId), None) => (user + "/clients/" + clientId, ConfigType.User, DynamicConfig.User.configKeys)
         case (Some(user), None, None) => (user, ConfigType.User, DynamicConfig.User.configKeys)
         case (None, Some(clientId), None) => (clientId, ConfigType.Client, DynamicConfig.Client.configKeys)
