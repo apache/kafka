@@ -1246,30 +1246,31 @@ class KafkaApis(val requestChannel: RequestChannel,
       topicResponses
     } else {
       val nonExistentTopics = topics.diff(topicResponses.map(_.name).toSet)
-      val responsesForNonExistentTopics = nonExistentTopics.map { topic =>
+      val responsesForNonExistentTopics = nonExistentTopics.flatMap { topic =>
         if (isInternal(topic)) {
           val topicMetadata = createInternalTopic(topic)
-          if (topicMetadata.errorCode == Errors.COORDINATOR_NOT_AVAILABLE.code)
-            metadataResponseTopic(Errors.INVALID_REPLICATION_FACTOR, topic, true, util.Collections.emptyList())
-          else
-            topicMetadata
-        } else if (!isFetchAllMetadata && allowAutoTopicCreation && config.autoCreateTopicsEnable) {
+          List(
+            if (topicMetadata.errorCode == Errors.COORDINATOR_NOT_AVAILABLE.code)
+              metadataResponseTopic(Errors.INVALID_REPLICATION_FACTOR, topic, true, util.Collections.emptyList())
+            else
+              topicMetadata
+          )
+        } else if (isFetchAllMetadata) {
           // KAFKA-10606: If this request is to get metadata for all topics, auto topic creation should not be allowed
           // The special handling is necessary on broker side because allowAutoTopicCreation is hard coded to true
           // for backward compatibility on client side.
-          createTopic(topic, config.numPartitions, config.defaultReplicationFactor)
+          //
+          // However, in previous versions, UNKNOWN_TOPIC_OR_PARTITION won't happen on fetch all metadata,
+          // so, for backward-compatibility, we need to skip these not founds during fetch all metadata here.
+          Nil
+        } else if (allowAutoTopicCreation && config.autoCreateTopicsEnable) {
+          List(createTopic(topic, config.numPartitions, config.defaultReplicationFactor))
         } else {
-          metadataResponseTopic(Errors.UNKNOWN_TOPIC_OR_PARTITION, topic, false, util.Collections.emptyList())
+          List(metadataResponseTopic(Errors.UNKNOWN_TOPIC_OR_PARTITION, topic, false, util.Collections.emptyList()))
         }
       }
-      topicResponses ++ (
-        if (isFetchAllMetadata)
-          // KAFKA-10606: In previous versions, UNKNOWN_TOPIC_OR_PARTITION won't happen on fetch all metadata,
-          // so we filter out those UNKNOWN_TOPIC_OR_PARTITION during fetch all metadata for backward-compatibility.
-          responsesForNonExistentTopics.filter { _.errorCode() != Errors.UNKNOWN_TOPIC_OR_PARTITION.code() }
-        else
-          responsesForNonExistentTopics
-      )
+
+      topicResponses ++ responsesForNonExistentTopics
     }
   }
 

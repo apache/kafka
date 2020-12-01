@@ -1838,13 +1838,17 @@ class KafkaApisTest {
     assertEquals(Set(0), response.brokers.asScala.map(_.id).toSet)
   }
 
+
+  /**
+   * Test case for KAKFA-10606
+   */
   @Test
-  def getAllTopicMetadataShouldNotCreateTopicWhenAutoTopicCreationDisabled(): Unit = {
+  def getAllTopicMetadataShouldNotCreateTopicOrReturnUnknownTopicPartition(): Unit = {
     // Setup: authorizer authorizes 2 topics, but one got deleted in metadata cache
     metadataCache =
       EasyMock.partialMockBuilder(classOf[MetadataCache])
         .withConstructor(classOf[Int])
-        .withArgs(Int.box(brokerId))  // Need to box it for <= Scala 2.12
+        .withArgs(Int.box(brokerId))  // Need to box it for Scala 2.12 and before
         .addMockedMethod("getAllTopics")
         .addMockedMethod("getTopicMetadata")
         .createMock()
@@ -1887,9 +1891,10 @@ class KafkaApisTest {
     EasyMock.replay(zkClient)
 
     val (requestListener, _) = updateMetadataCacheWithInconsistentListeners()
-    sendMetadataRequestWithInconsistentListeners(requestListener)
+    val response = sendMetadataRequestWithInconsistentListeners(requestListener)
 
     assertFalse(createTopicIsCalled)
+    assertTrue(response.topicsByError(Errors.UNKNOWN_TOPIC_OR_PARTITION).isEmpty)
   }
 
   /**
