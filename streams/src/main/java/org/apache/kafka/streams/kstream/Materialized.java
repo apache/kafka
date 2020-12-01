@@ -219,8 +219,7 @@ public class Materialized<K, V, S extends StateStore> {
 
     /**
      * Enable caching for the materialized {@link StateStore}.
-     * @return itself
-     */
+     * @return itself     */
     public Materialized<K, V, S> withCachingEnabled() {
         cachingEnabled = true;
         return this;

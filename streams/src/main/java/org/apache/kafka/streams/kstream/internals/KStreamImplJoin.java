@@ -91,7 +91,7 @@ class KStreamImplJoin {
 
         if (thisStoreSupplier == null) {
             final String thisJoinStoreName = userProvidedBaseStoreName == null ? joinThisGeneratedName : userProvidedBaseStoreName + joinThisSuffix;
-            thisWindowStore = joinWindowStoreBuilder(thisJoinStoreName, windows, streamJoinedInternal.keySerde(), streamJoinedInternal.valueSerde());
+            thisWindowStore = joinWindowStoreBuilder(thisJoinStoreName, windows, streamJoinedInternal.keySerde(), streamJoinedInternal.valueSerde(), streamJoinedInternal.loggingEnabled(), streamJoinedInternal.cachingEnabled());
         } else {
             assertWindowSettings(thisStoreSupplier, windows);
             thisWindowStore = joinWindowStoreBuilderFromSupplier(thisStoreSupplier, streamJoinedInternal.keySerde(), streamJoinedInternal.valueSerde());
@@ -188,8 +188,10 @@ class KStreamImplJoin {
     private static <K, V> StoreBuilder<WindowStore<K, V>> joinWindowStoreBuilder(final String storeName,
                                                                                  final JoinWindows windows,
                                                                                  final Serde<K> keySerde,
-                                                                                 final Serde<V> valueSerde) {
-        return Stores.windowStoreBuilder(
+                                                                                 final Serde<V> valueSerde,
+                                                                                 final boolean loggingEnabled,
+                                                                                 final boolean cachingEnabled) {
+        final StoreBuilder<WindowStore<K, V>> builder = Stores.windowStoreBuilder(
             Stores.persistentWindowStore(
                 storeName + "-store",
                 Duration.ofMillis(windows.size() + windows.gracePeriodMs()),
@@ -199,6 +201,14 @@ class KStreamImplJoin {
             keySerde,
             valueSerde
         );
+        if (!loggingEnabled) {
+            builder.withLoggingDisabled();
+        }
+
+        if (!cachingEnabled) {
+            builder.withCachingDisabled();
+        }
+        return builder;
     }
 
     private static <K, V> StoreBuilder<WindowStore<K, V>> joinWindowStoreBuilderFromSupplier(final WindowBytesStoreSupplier storeSupplier,

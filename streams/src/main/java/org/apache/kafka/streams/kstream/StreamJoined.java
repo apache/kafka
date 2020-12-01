@@ -36,6 +36,8 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
     protected final WindowBytesStoreSupplier otherStoreSupplier;
     protected final String name;
     protected final String storeName;
+    protected boolean loggingEnabled = true;
+    protected boolean cachingEnabled = true;
 
     protected StreamJoined(final StreamJoined<K, V1, V2> streamJoined) {
         this(streamJoined.keySerde,
@@ -44,7 +46,9 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             streamJoined.thisStoreSupplier,
             streamJoined.otherStoreSupplier,
             streamJoined.name,
-            streamJoined.storeName);
+            streamJoined.storeName,
+            streamJoined.loggingEnabled,
+            streamJoined.cachingEnabled);
     }
 
     private StreamJoined(final Serde<K> keySerde,
@@ -53,7 +57,9 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
                          final WindowBytesStoreSupplier thisStoreSupplier,
                          final WindowBytesStoreSupplier otherStoreSupplier,
                          final String name,
-                         final String storeName) {
+                         final String storeName,
+                         final boolean loggingEnabled,
+                         final boolean cachingEnabled) {
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.otherValueSerde = otherValueSerde;
@@ -61,6 +67,8 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
         this.otherStoreSupplier = otherStoreSupplier;
         this.name = name;
         this.storeName = storeName;
+        this.loggingEnabled = loggingEnabled;
+        this.cachingEnabled = cachingEnabled;
     }
 
     /**
@@ -84,7 +92,9 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             storeSupplier,
             otherStoreSupplier,
             null,
-            null
+            null,
+            true,
+            true
         );
     }
 
@@ -109,7 +119,9 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             null,
             null,
             null,
-            storeName
+            storeName,
+            true,
+            true
         );
     }
 
@@ -136,7 +148,9 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             null,
             null,
             null,
-            null
+            null,
+            true,
+            true
         );
     }
 
@@ -154,7 +168,9 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             thisStoreSupplier,
             otherStoreSupplier,
             name,
-            storeName
+            storeName,
+            loggingEnabled,
+            cachingEnabled
         );
     }
 
@@ -176,7 +192,9 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             thisStoreSupplier,
             otherStoreSupplier,
             name,
-            storeName
+            storeName,
+            loggingEnabled,
+            cachingEnabled
         );
     }
 
@@ -193,7 +211,9 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             thisStoreSupplier,
             otherStoreSupplier,
             name,
-            storeName
+            storeName,
+            loggingEnabled,
+            cachingEnabled
         );
     }
 
@@ -210,7 +230,9 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             thisStoreSupplier,
             otherStoreSupplier,
             name,
-            storeName
+            storeName,
+            loggingEnabled,
+            cachingEnabled
         );
     }
 
@@ -227,7 +249,9 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             thisStoreSupplier,
             otherStoreSupplier,
             name,
-            storeName
+            storeName,
+            loggingEnabled,
+            cachingEnabled
         );
     }
 
@@ -247,7 +271,9 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             thisStoreSupplier,
             otherStoreSupplier,
             name,
-            storeName
+            storeName,
+            loggingEnabled,
+            cachingEnabled
         );
     }
 
@@ -267,7 +293,65 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             thisStoreSupplier,
             otherStoreSupplier,
             name,
-            storeName
+            storeName,
+            loggingEnabled,
+            cachingEnabled
+        );
+    }
+
+    public StreamJoined<K, V1, V2> withLoggingEnabled() {
+        return new StreamJoined<>(
+            keySerde,
+            valueSerde,
+            otherValueSerde,
+            thisStoreSupplier,
+            otherStoreSupplier,
+            name,
+            storeName,
+            true,
+            cachingEnabled
+        );
+    }
+
+    public StreamJoined<K, V1, V2> withLoggingDisabled() {
+        return new StreamJoined<>(
+            keySerde,
+            valueSerde,
+            otherValueSerde,
+            thisStoreSupplier,
+            otherStoreSupplier,
+            name,
+            storeName,
+            false,
+            cachingEnabled
+        );
+    }
+
+    public StreamJoined<K, V1, V2> withCachingEnabled(final WindowBytesStoreSupplier otherStoreSupplier) {
+        return new StreamJoined<>(
+            keySerde,
+            valueSerde,
+            otherValueSerde,
+            thisStoreSupplier,
+            otherStoreSupplier,
+            name,
+            storeName,
+            loggingEnabled,
+            true
+        );
+    }
+
+    public StreamJoined<K, V1, V2> withCachingDisabled(final WindowBytesStoreSupplier otherStoreSupplier) {
+        return new StreamJoined<>(
+            keySerde,
+            valueSerde,
+            otherValueSerde,
+            thisStoreSupplier,
+            otherStoreSupplier,
+            name,
+            storeName,
+            loggingEnabled,
+            false
         );
     }
 
@@ -281,6 +365,8 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             ", otherStoreSupplier=" + otherStoreSupplier +
             ", name='" + name + '\'' +
             ", storeName='" + storeName + '\'' +
+            ", loggingEnabled=" + loggingEnabled +
+            ", cachingEnabled=" + cachingEnabled +
             '}';
     }
 }

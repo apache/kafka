@@ -56,5 +56,12 @@ public class StreamJoinedInternal<K, V1, V2> extends StreamJoined<K, V1, V2> {
         return otherStoreSupplier;
     }
 
+    public boolean loggingEnabled() {
+        return loggingEnabled;
+    }
+
+    public boolean cachingEnabled() {
+        return cachingEnabled;
+    }
 
 }
