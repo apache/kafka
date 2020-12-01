@@ -194,8 +194,6 @@ public class KafkaClusterTestKit implements AutoCloseable {
                             StorageTool.formatCommand(out,
                                 JavaConverters.asScalaBuffer(Collections.singletonList(
                                     controller.config().metadataLogDir())).toSeq(),
-                                OptionConverters.toScala(Optional.of(
-                                    nodes.controllerNodes().get(nodeId).incarnationId().toString())),
                                 nodes.clusterId().toString(),
                                 false);
                         } finally {

@@ -61,9 +61,6 @@ object StorageTool extends Logging {
           required(true).
           help("The Kafka configuration file to use.")
       })
-      formatParser.addArgument("--incarnation-id", "-i").
-        action(store()).
-        help("The node incarnation ID to use.  You usually do not need to specify this.")
       formatParser.addArgument("--cluster-id", "-t").
         action(store()).
         required(true).
@@ -84,15 +81,13 @@ object StorageTool extends Logging {
         }
         case "format" => {
           val directories = configToLogDirectories(config.get)
-          val incarnationId = Option(namespace.getString("incarnation_id"))
           val clusterId = namespace.getString("cluster_id")
           val ignoreFormatted = namespace.getBoolean("ignore_formatted")
           if (!configToKip500Mode(config.get)) {
             throw new TerseFailure("The kafka configuration file appears to be for " +
               "a legacy cluster. Formatting is only supported for kip-500 clusters.")
           }
-          Exit.exit(formatCommand(System.out, directories, incarnationId,
-            clusterId, ignoreFormatted ))
+          Exit.exit(formatCommand(System.out, directories, clusterId, ignoreFormatted ))
         }
         case "random-uuid" => {
           System.out.println(UUID.randomUUID())
@@ -205,7 +200,6 @@ object StorageTool extends Logging {
 
   def formatCommand(stream: PrintStream,
                     directories: Seq[String],
-                    incarnationId: Option[String],
                     clusterId: String,
                     ignoreFormatted: Boolean): Int = {
     if (directories.isEmpty) {
@@ -224,26 +218,13 @@ object StorageTool extends Logging {
     if (unformattedDirectories.isEmpty) {
       throw new TerseFailure("All of the log directories are already formatted.")
     }
-    val effectiveIncarnationId = incarnationId match {
-      case None => {
-        val newUuid = UUID.randomUUID()
-        stream.println(s"Generating random incarnation ID: ${newUuid}")
-        newUuid
-      }
-      case Some(str) => try {
-        UUID.fromString(str)
-      } catch {
-        case e: Throwable => throw new TerseFailure(s"Incarnation ID string ${str} " +
-          s"does not appear to be a valid UUID: ${e.getMessage}")
-      }
-    }
     val effectiveClusterId = try {
       UUID.fromString(clusterId)
     } catch {
       case e: Throwable => throw new TerseFailure(s"Cluster ID string ${clusterId} " +
         s"does not appear to be a valid UUID: ${e.getMessage}")
     }
-    val metaProperties = new MetaProperties(effectiveIncarnationId, effectiveClusterId)
+    val metaProperties = new MetaProperties(effectiveClusterId)
     unformattedDirectories.foreach(directory => {
       try {
         Files.createDirectories(Paths.get(directory))

@@ -42,8 +42,7 @@ class BrokerMetadataCheckpointTest {
 
   @Test
   def testCreateMetadataProperties(): Unit = {
-    val meta = new MetaProperties(UUID.fromString("3512fe11-f6ae-419e-ae98-59478b1f953d"),
-      UUID.fromString("623c048c-787a-41ac-9e86-7d9d4b07c1a3"))
+    val meta = new MetaProperties(UUID.fromString("623c048c-787a-41ac-9e86-7d9d4b07c1a3"))
     val properties = meta.toProperties()
     val meta2 = MetaProperties(properties)
     assertEquals(meta, meta2)

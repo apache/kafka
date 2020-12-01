@@ -71,8 +71,7 @@ class ControllerApisTest {
       supportedFeatures,
       controller,
       new KafkaConfig(new Properties()),
-      new MetaProperties(UUID.fromString("a2c197eb-0789-442d-8e53-3478e58d0070"),
-        UUID.fromString("7ace6e94-d39e-4a2f-a722-167eab2d0d9d")),
+      new MetaProperties(UUID.fromString("7ace6e94-d39e-4a2f-a722-167eab2d0d9d")),
       Seq.empty
     )
   }

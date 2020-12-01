@@ -36,13 +36,8 @@ object LegacyMetaProperties {
 object MetaProperties {
   def apply(properties: Properties): MetaProperties = {
     MetaProperties.verifyVersion(properties, 1)
-    val kip500 = getRequiredStringProperty(properties, "kip.500")
-    if (!kip500.equals("true")) {
-      throw new RuntimeException("Expected the kip.500 property to be set to true.")
-    }
-    val incarnationId = getRequiredUuidProperty(properties, "incarnation.id")
     val clusterId = getRequiredUuidProperty(properties, "cluster.id")
-    new MetaProperties(incarnationId, clusterId)
+    new MetaProperties(clusterId)
   }
 
   def version(properties: Properties): Int = {
@@ -100,19 +95,16 @@ case class LegacyMetaProperties(brokerId: Int,
   }
 }
 
-case class MetaProperties(incarnationId: UUID,
-                          clusterId: UUID) {
+case class MetaProperties(clusterId: UUID) {
   def toProperties(): Properties = {
     val properties = new Properties()
     properties.setProperty("version", 1.toString)
-    properties.setProperty("kip.500", "true")
-    properties.setProperty("incarnation.id", incarnationId.toString)
     properties.setProperty("cluster.id", clusterId.toString)
     properties
   }
 
   override def toString: String  = {
-    s"MetaProperties(incarnation.id=$incarnationId, clusterId=$clusterId)"
+    s"MetaProperties(clusterId=$clusterId)"
   }
 }
 

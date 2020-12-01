@@ -113,7 +113,6 @@ Found problem:
       Files.write(tempDir.toPath.resolve("meta.properties"),
         String.join("\n", util.Arrays.asList(
           "version=1", "kip.500=true",
-          "incarnation.id=dbb6e889-19e7-4437-b4c3-dd5fa7ffb973",
           "cluster.id=26c36907-4158-4a35-919d-6534229f5241")).
             getBytes(StandardCharsets.UTF_8))
       assertEquals(1, StorageTool.
@@ -121,7 +120,7 @@ Found problem:
       assertEquals(s"""Found log directory:
   ${tempDir.toString}
 
-Found metadata: MetaProperties(incarnation.id=dbb6e889-19e7-4437-b4c3-dd5fa7ffb973, clusterId=26c36907-4158-4a35-919d-6534229f5241)
+Found metadata: MetaProperties(clusterId=26c36907-4158-4a35-919d-6534229f5241)
 
 Found problem:
   The kafka configuration file appears to be for a legacy cluster, but the directories are formatted for kip-500.
@@ -162,19 +161,16 @@ Found problem:
   @Test
   def testFormatEmptyDirectory(): Unit = {
     val tempDir = TestUtils.tempDir()
-    val incarnationId = "dbb6e889-19e7-4437-b4c3-dd5fa7ffb973"
     val clusterId = "26c36907-4158-4a35-919d-6534229f5241"
     try {
       val stream = new ByteArrayOutputStream()
       assertEquals(0, StorageTool.
-        formatCommand(new PrintStream(stream), Seq(tempDir.toString),
-          Some(incarnationId), clusterId, false))
+        formatCommand(new PrintStream(stream), Seq(tempDir.toString), clusterId, false))
       assertEquals("Formatting %s%n".format(tempDir), stream.toString())
 
       try {
         assertEquals(1, StorageTool.
-          formatCommand(new PrintStream(new ByteArrayOutputStream()), Seq(tempDir.toString),
-            Some(incarnationId), clusterId, false))
+          formatCommand(new PrintStream(new ByteArrayOutputStream()), Seq(tempDir.toString), clusterId, false))
       } catch {
         case e: TerseFailure => assertEquals(s"Log directory ${tempDir} is already " +
           "formatted. Use --ignore-formatted to ignore this directory and format the " +
@@ -183,8 +179,7 @@ Found problem:
 
       try {
         assertEquals(1, StorageTool.
-          formatCommand(new PrintStream(new ByteArrayOutputStream()), Seq(tempDir.toString),
-            Some(incarnationId), clusterId, true))
+          formatCommand(new PrintStream(new ByteArrayOutputStream()), Seq(tempDir.toString), clusterId, true))
       } catch {
         case e: TerseFailure => assertEquals("All of the log directories are already " +
           "formatted.", e.getMessage)
@@ -197,33 +192,13 @@ Found problem:
   @Test
   def testFormatWithInvalidClusterId(): Unit = {
     val tempDir = TestUtils.tempDir()
-    val incarnationId = "dbb6e889-19e7-4437-b4c3-dd5fa7ffb973"
     val clusterId = "invalid"
     try {
       assertEquals(1, StorageTool.
-        formatCommand(new PrintStream(new ByteArrayOutputStream()), Seq(tempDir.toString),
-          Some(incarnationId), clusterId, false))
+        formatCommand(new PrintStream(new ByteArrayOutputStream()), Seq(tempDir.toString), clusterId, false))
     } catch {
       case e: TerseFailure =>
         assertEquals("Cluster ID string invalid does not appear to be a valid UUID: " +
-          "Invalid UUID string: invalid", e.getMessage)
-    } finally {
-      Utils.delete(tempDir)
-    }
-  }
-
-  @Test
-  def testFormatWithInvalidIncarnationId(): Unit = {
-    val tempDir = TestUtils.tempDir()
-    val incarnationId = "invalid"
-    val clusterId = "dbb6e889-19e7-4437-b4c3-dd5fa7ffb973"
-    try {
-      assertEquals(1, StorageTool.
-        formatCommand(new PrintStream(new ByteArrayOutputStream()), Seq(tempDir.toString),
-          Some(incarnationId), clusterId, false))
-    } catch {
-      case e: TerseFailure =>
-        assertEquals("Incarnation ID string invalid does not appear to be a valid UUID: " +
           "Invalid UUID string: invalid", e.getMessage)
     } finally {
       Utils.delete(tempDir)
