@@ -227,6 +227,7 @@ public interface Authorizer extends Configurable, Closeable {
                     case PREFIXED:
                         deny.get(typePrefix).add(binding.pattern().name());
                         break;
+                    default:
                 }
                 continue;
             }
@@ -245,6 +246,7 @@ public interface Authorizer extends Configurable, Closeable {
                 case PREFIXED:
                     allow.get(typePrefix).add(binding.pattern().name());
                     break;
+                default:
             }
         }
 

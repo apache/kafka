@@ -30,30 +30,30 @@ class MockAuthorizer extends Authorizer {
     val authorizer = new AclAuthorizer
 
     override def start(serverInfo: AuthorizerServerInfo): util.Map[Endpoint, _ <: CompletionStage[Void]] = {
-        MockAuthorizer.authorizer.start(serverInfo)
+        authorizer.start(serverInfo)
     }
 
     override def authorize(requestContext: AuthorizableRequestContext, actions: util.List[Action]): util.List[AuthorizationResult] = {
-        MockAuthorizer.authorizer.authorize(requestContext, actions)
+        authorizer.authorize(requestContext, actions)
     }
 
     override def createAcls(requestContext: AuthorizableRequestContext, aclBindings: util.List[AclBinding]): util.List[_ <: CompletionStage[AclCreateResult]] = {
-        MockAuthorizer.authorizer.createAcls(requestContext, aclBindings)
+        authorizer.createAcls(requestContext, aclBindings)
     }
 
     override def deleteAcls(requestContext: AuthorizableRequestContext, aclBindingFilters: util.List[AclBindingFilter]): util.List[_ <: CompletionStage[AclDeleteResult]] = {
-        MockAuthorizer.authorizer.deleteAcls(requestContext, aclBindingFilters)
+        authorizer.deleteAcls(requestContext, aclBindingFilters)
     }
 
     override def acls(filter: AclBindingFilter): lang.Iterable[AclBinding] = {
-        MockAuthorizer.authorizer.acls(filter)
+        authorizer.acls(filter)
     }
 
     override def configure(configs: util.Map[String, _]): Unit = {
-        MockAuthorizer.authorizer.configure(configs)
+        authorizer.configure(configs)
     }
 
     override def close(): Unit = {
-        MockAuthorizer.authorizer.close()
+        authorizer.close()
     }
 }
