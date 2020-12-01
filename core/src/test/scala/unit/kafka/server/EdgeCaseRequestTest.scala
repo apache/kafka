@@ -94,7 +94,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
         2 /* version id */ +
         4 /* correlation id */ +
         Type.NULLABLE_STRING.sizeOf(clientId)  /* client id */ +
-        (if (flexVersion) ByteUtils.sizeOfUnsignedVarint(0) else 0)
+        (if (flexVersion) ByteUtils.sizeOfUnsignedVarint(0) else 0) /* Empty tagged fields for flexible versions */
     }
 
     val buffer = ByteBuffer.allocate(size)
