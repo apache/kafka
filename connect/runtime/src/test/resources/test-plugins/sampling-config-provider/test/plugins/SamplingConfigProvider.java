@@ -17,17 +17,14 @@
 
 package test.plugins;
 
-import java.util.Set;
-import java.util.Map;
-import java.util.HashMap;
-import org.apache.kafka.common.config.provider.ConfigProvider;
-import org.apache.kafka.common.config.ConfigData;
 import org.apache.kafka.common.config.ConfigChangeCallback;
-import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.connect.data.SchemaAndValue;
-import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.common.config.ConfigData;
+import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.connect.runtime.isolation.SamplingTestPlugin;
-import org.apache.kafka.connect.storage.HeaderConverter;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Samples data about its initialization environment for later analysis

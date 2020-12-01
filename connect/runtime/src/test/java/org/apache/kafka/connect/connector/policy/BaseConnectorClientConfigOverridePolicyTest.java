@@ -20,6 +20,7 @@ package org.apache.kafka.connect.connector.policy;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.health.ConnectorType;
 import org.apache.kafka.connect.runtime.WorkerTest;
+
 import org.junit.Assert;
 
 import java.util.List;

@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.connect.transforms.predicates;
 
-import java.util.Map;
-
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectRecord;
+
+import java.util.Map;
 
 /**
  * A predicate which is true for records which are tombstones (i.e. have null value).

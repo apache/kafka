@@ -20,6 +20,7 @@ package org.apache.kafka.connect.converters;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.DataException;
+
 import org.junit.Before;
 import org.junit.Test;
 

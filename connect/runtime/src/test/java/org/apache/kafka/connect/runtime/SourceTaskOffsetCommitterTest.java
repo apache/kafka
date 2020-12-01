@@ -20,6 +20,7 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.ThreadedTest;
+
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.junit.Test;

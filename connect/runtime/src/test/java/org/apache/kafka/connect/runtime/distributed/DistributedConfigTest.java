@@ -18,14 +18,15 @@
 package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.common.config.ConfigException;
+
 import org.junit.Test;
 
-import javax.crypto.KeyGenerator;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import javax.crypto.KeyGenerator;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;

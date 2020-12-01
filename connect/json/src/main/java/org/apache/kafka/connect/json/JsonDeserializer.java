@@ -16,14 +16,16 @@
  */
 package org.apache.kafka.connect.json;
 
+import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.serialization.Deserializer;
+
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+
 import java.util.Collections;
 import java.util.Set;
-import org.apache.kafka.common.errors.SerializationException;
-import org.apache.kafka.common.serialization.Deserializer;
 
 /**
  * JSON deserializer for Jackson's JsonNode tree model. Using the tree model allows it to work with arbitrarily

@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.connect.mirror.formatters;
 
-import java.io.PrintStream;
-
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.MessageFormatter;
 import org.apache.kafka.connect.mirror.Heartbeat;
+
+import java.io.PrintStream;
 
 public class HeartbeatFormatter implements MessageFormatter {
 

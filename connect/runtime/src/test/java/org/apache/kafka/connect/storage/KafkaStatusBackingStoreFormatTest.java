@@ -26,6 +26,7 @@ import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.runtime.TopicStatus;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
+
 import org.easymock.Capture;
 import org.easymock.EasyMockSupport;
 import org.easymock.Mock;

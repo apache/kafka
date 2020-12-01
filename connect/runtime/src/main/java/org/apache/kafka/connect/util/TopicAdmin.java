@@ -39,6 +39,7 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

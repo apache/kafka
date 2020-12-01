@@ -31,6 +31,7 @@ import org.apache.kafka.connect.runtime.isolation.PluginsTest.TestConverter;
 import org.apache.kafka.connect.runtime.isolation.PluginsTest.TestableWorkerConfig;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+
 import org.easymock.EasyMock;
 import org.easymock.Mock;
 import org.junit.Test;

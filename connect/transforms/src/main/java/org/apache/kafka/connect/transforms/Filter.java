@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.connect.transforms;
 
-import java.util.Map;
-
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectRecord;
+
+import java.util.Map;
 
 /**
  * Drops all records, filtering them from subsequent transformations in the chain.

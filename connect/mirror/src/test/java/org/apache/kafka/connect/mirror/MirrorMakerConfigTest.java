@@ -16,18 +16,18 @@
  */
 package org.apache.kafka.connect.mirror;
 
-import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.config.ConfigData;
+import org.apache.kafka.common.config.provider.ConfigProvider;
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.metrics.FakeMetricsReporter;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Map;
-import java.util.Set;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Arrays;
+import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

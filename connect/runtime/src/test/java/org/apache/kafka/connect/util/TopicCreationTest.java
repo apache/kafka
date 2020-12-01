@@ -27,6 +27,7 @@ import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.transforms.Cast;
 import org.apache.kafka.connect.transforms.RegexRouter;
 import org.apache.kafka.connect.transforms.Transformation;
+
 import org.junit.Before;
 import org.junit.Test;
 

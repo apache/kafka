@@ -31,6 +31,7 @@ import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+
 import org.easymock.EasyMock;
 import org.easymock.Mock;
 import org.junit.After;

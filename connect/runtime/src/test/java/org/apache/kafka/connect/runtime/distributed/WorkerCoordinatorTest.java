@@ -39,6 +39,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.storage.KafkaConfigBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+
 import org.easymock.EasyMock;
 import org.easymock.Mock;
 import org.junit.After;

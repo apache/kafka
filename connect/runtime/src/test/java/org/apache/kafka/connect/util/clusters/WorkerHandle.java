@@ -18,6 +18,7 @@ package org.apache.kafka.connect.util.clusters;
 
 import org.apache.kafka.connect.cli.ConnectDistributed;
 import org.apache.kafka.connect.runtime.Connect;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

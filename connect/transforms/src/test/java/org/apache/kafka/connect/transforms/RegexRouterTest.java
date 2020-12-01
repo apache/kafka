@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.connect.sink.SinkRecord;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;

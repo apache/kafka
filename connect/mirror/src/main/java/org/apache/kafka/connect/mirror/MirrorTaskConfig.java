@@ -16,14 +16,14 @@
  */
 package org.apache.kafka.connect.mirror;
 
-import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.ConfigDef;
 
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.List;
-import java.util.HashSet;
-import java.util.Collections;
 import java.util.stream.Collectors;
 
 public class MirrorTaskConfig extends MirrorConnectorConfig {

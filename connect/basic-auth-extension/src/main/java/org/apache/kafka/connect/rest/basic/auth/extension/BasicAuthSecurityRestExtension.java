@@ -20,6 +20,7 @@ package org.apache.kafka.connect.rest.basic.auth.extension;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.rest.ConnectRestExtensionContext;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

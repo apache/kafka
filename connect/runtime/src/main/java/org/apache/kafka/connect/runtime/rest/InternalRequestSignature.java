@@ -18,16 +18,17 @@ package org.apache.kafka.connect.runtime.rest;
 
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
+
 import org.eclipse.jetty.client.api.Request;
 
-import javax.crypto.Mac;
-import javax.crypto.SecretKey;
-import javax.ws.rs.core.HttpHeaders;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Objects;
+import javax.crypto.Mac;
+import javax.crypto.SecretKey;
+import javax.ws.rs.core.HttpHeaders;
 
 public class InternalRequestSignature {
 

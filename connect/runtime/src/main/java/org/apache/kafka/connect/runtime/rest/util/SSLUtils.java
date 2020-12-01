@@ -20,6 +20,7 @@ import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.connect.runtime.WorkerConfig;
+
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 
 import java.util.Arrays;

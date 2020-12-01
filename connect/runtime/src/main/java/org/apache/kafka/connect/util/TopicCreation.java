@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.util;
 
 import org.apache.kafka.connect.runtime.WorkerConfig;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

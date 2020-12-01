@@ -38,6 +38,7 @@ import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.source.SourceTaskContext;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.test.IntegrationTest;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;

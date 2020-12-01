@@ -19,6 +19,7 @@ package org.apache.kafka.connect.runtime.errors;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

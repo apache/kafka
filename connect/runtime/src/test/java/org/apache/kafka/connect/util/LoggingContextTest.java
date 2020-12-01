@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.util;
 
 import org.apache.kafka.connect.util.LoggingContext.Scope;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;

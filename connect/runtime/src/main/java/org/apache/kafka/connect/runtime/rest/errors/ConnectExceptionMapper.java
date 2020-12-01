@@ -19,6 +19,7 @@ package org.apache.kafka.connect.runtime.rest.errors;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.rest.entities.ErrorMessage;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

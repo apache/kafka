@@ -16,13 +16,14 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import java.util.Map;
-
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
+
 import org.junit.Test;
+
+import java.util.Map;
 
 import static java.util.Collections.singletonMap;
 import static org.junit.Assert.assertEquals;

@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.connect.mirror;
 
-import static org.apache.kafka.connect.mirror.TestUtils.makeProps;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import org.junit.jupiter.api.Test;
+
 import java.util.List;
 import java.util.Map;
-import org.junit.jupiter.api.Test;
+
+import static org.apache.kafka.connect.mirror.TestUtils.makeProps;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class MirrorHeartBeatConnectorTest {
 

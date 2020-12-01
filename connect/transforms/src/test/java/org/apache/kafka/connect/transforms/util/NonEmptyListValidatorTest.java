@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.transforms.util;
 
 import org.apache.kafka.common.config.ConfigException;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;

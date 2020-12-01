@@ -17,12 +17,13 @@
 
 package test.plugins;
 
-import java.util.Map;
-import java.util.HashMap;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
-import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.runtime.isolation.SamplingTestPlugin;
+import org.apache.kafka.connect.storage.Converter;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Samples data about its initialization environment for later analysis

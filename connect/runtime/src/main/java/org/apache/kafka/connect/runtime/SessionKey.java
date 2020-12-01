@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import javax.crypto.SecretKey;
 import java.util.Objects;
+import javax.crypto.SecretKey;
 
 /**
  * A session key, which can be used to validate internal REST requests between workers.

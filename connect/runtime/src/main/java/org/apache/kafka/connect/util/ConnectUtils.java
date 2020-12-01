@@ -18,8 +18,8 @@ package org.apache.kafka.connect.util;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.InvalidRecordException;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -27,6 +27,7 @@ import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.source.SourceConnector;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

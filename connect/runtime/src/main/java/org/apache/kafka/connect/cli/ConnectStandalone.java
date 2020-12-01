@@ -35,6 +35,7 @@ import org.apache.kafka.connect.storage.FileOffsetBackingStore;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.FutureCallback;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

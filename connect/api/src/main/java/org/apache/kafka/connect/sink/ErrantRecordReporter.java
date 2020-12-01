@@ -16,8 +16,9 @@
  */
 package org.apache.kafka.connect.sink;
 
-import java.util.concurrent.Future;
 import org.apache.kafka.connect.errors.ConnectException;
+
+import java.util.concurrent.Future;
 
 /**
  * Component that the sink task can use as it {@link SinkTask#put(java.util.Collection)}.

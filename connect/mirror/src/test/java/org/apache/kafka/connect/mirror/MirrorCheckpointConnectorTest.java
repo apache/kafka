@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.admin.ConsumerGroupListing;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;

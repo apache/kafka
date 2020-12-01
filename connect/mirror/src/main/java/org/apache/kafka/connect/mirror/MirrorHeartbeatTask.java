@@ -17,16 +17,16 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.connect.source.SourceTask;
-import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.source.SourceRecord;
+import org.apache.kafka.connect.source.SourceTask;
 
-import java.util.Map;
-import java.util.List;
+import java.time.Duration;
 import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.time.Duration;
 
 /** Emits heartbeats. */
 public class MirrorHeartbeatTask extends SourceTask {

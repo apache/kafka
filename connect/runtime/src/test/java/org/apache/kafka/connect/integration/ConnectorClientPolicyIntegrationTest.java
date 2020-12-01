@@ -25,6 +25,7 @@ import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.test.IntegrationTest;
+
 import org.junit.After;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;

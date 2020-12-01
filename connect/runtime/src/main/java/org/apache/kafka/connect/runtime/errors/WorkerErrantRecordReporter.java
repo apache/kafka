@@ -24,10 +24,10 @@ import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.runtime.InternalSinkRecord;
 import org.apache.kafka.connect.sink.ErrantRecordReporter;
 import org.apache.kafka.connect.sink.SinkRecord;
-
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

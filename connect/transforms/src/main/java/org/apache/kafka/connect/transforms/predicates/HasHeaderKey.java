@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.connect.transforms.predicates;
 
-import java.util.Iterator;
-import java.util.Map;
-
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
+
+import java.util.Iterator;
+import java.util.Map;
 
 /**
  * A predicate which is true for records with at least one header with the configured name.

@@ -16,14 +16,14 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import java.util.Map;
-
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
+
+import java.util.Map;
 
 /**
  * Decorator for a {@link Transformation} which applies the delegate only when a

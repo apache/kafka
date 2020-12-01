@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.connect.source;
 
-import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.connect.connector.Task;
 
 import java.util.List;
 import java.util.Map;

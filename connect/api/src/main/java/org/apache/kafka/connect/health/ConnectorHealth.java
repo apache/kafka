@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.health;
 
-
 import java.util.Map;
 import java.util.Objects;
 

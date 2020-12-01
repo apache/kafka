@@ -18,6 +18,7 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.config.ConfigException;
+
 import org.junit.Test;
 
 import java.util.HashMap;
