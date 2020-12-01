@@ -2600,7 +2600,6 @@ public class KafkaConsumerTest {
         props.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLS");
         ConsumerConfig config = new ConsumerConfig(ConsumerConfig.appendDeserializerToConfig(props, new StringDeserializer(), new StringDeserializer()));
 
-        assertTrue(new ConsumerConfig(config.originals(), false).unused().contains(SslConfigs.SSL_PROTOCOL_CONFIG));
         assertTrue(config.unused().contains(SslConfigs.SSL_PROTOCOL_CONFIG));
 
         try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(config, null, null)) {

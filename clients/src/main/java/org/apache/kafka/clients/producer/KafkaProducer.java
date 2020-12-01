@@ -331,7 +331,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.producerConfig = config;
             this.time = time;
 
-            String transactionalId = (String) config.originals().get(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
+            String transactionalId = config.getString(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
 
             this.clientId = config.getString(ProducerConfig.CLIENT_ID_CONFIG);
 

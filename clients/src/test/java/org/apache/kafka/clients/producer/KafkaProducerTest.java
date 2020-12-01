@@ -1300,7 +1300,6 @@ public class KafkaProducerTest {
         ProducerConfig config = new ProducerConfig(ProducerConfig.appendSerializerToConfig(props,
                 new StringSerializer(), new StringSerializer()));
 
-        assertTrue(new ProducerConfig(config.originals(), false).unused().contains(SslConfigs.SSL_PROTOCOL_CONFIG));
         assertTrue(config.unused().contains(SslConfigs.SSL_PROTOCOL_CONFIG));
 
         try (KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(config, null, null,

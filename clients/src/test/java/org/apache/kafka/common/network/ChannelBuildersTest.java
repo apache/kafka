@@ -88,7 +88,7 @@ public class ChannelBuildersTest {
         assertFalse(securityConfig.unused().contains("gssapi.sasl.kerberos.service.name"));
 
         assertEquals(configs.get("sasl.kerberos.service.name"), "testkafkaglobal");
-        assertFalse(securityConfig.unused().contains("gssapi.sasl.kerberos.service.name"));
+        assertFalse(securityConfig.unused().contains("sasl.kerberos.service.name"));
 
         assertNull(configs.get("listener.name.listener1.sasl.kerberos.service.name"));
         assertFalse(securityConfig.unused().contains("listener.name.listener1.sasl.kerberos.service.name"));

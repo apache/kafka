@@ -105,9 +105,7 @@ public class AbstractConfig {
                 throw new ConfigException(entry.getKey().toString(), entry.getValue(), "Key must be a string.");
 
         this.originals = resolveConfigVariables(configProviderProps, (Map<String, Object>) originals);
-        // Noted that we have to pass a copy of originals to definition#parse to avoid definition#parse add all elements
-        // to "used" group when checking all definitions.
-        this.values = definition.parse(new HashMap<>(this.originals));
+        this.values = definition.parse(this.originals);
         this.used = Collections.synchronizedSet(new HashSet<>());
         Map<String, Object> configUpdates = postProcessParsedConfig(Collections.unmodifiableMap(this.values));
         for (Map.Entry<String, Object> update : configUpdates.entrySet()) {
