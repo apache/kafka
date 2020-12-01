@@ -102,8 +102,7 @@ class WorkerSourceTask extends WorkerTask {
     private CountDownLatch stopRequestedLatch;
 
     private Map<String, String> taskConfig;
-    private boolean finishedStart = false;
-    private boolean startedShutdownBeforeStartCompleted = false;
+    private boolean started = false;
     private boolean stopped = false;
 
     public WorkerSourceTask(ConnectorTaskId id,
@@ -166,9 +165,7 @@ class WorkerSourceTask extends WorkerTask {
 
     @Override
     protected void close() {
-        if (!shouldPause()) {
-            tryStop();
-        }
+        tryStop();
         if (producer != null) {
             try {
                 producer.close(Duration.ofSeconds(30));
@@ -206,16 +203,13 @@ class WorkerSourceTask extends WorkerTask {
     public void stop() {
         super.stop();
         stopRequestedLatch.countDown();
-        synchronized (this) {
-            if (finishedStart)
-                tryStop();
-            else
-                startedShutdownBeforeStartCompleted = true;
-        }
     }
 
-    private synchronized void tryStop() {
-        if (!stopped) {
+    // Note: This method is not thread-safe
+    private void tryStop() {
+        // If the task is scheduled for shutdown before we invoke initialize or start on it (which
+        // can happy reliably if it's started in the PAUSED state), we don't have to invoke stop on it
+        if (!stopped && started) {
             try {
                 task.stop();
                 stopped = true;
@@ -228,17 +222,16 @@ class WorkerSourceTask extends WorkerTask {
     @Override
     public void execute() {
         try {
+            // If we try to start the task at all (by invoking initialize and possibly start), we count this as
+            // "started" in order to properly clean up any resources allocated by those invocations when the task is
+            // shut down by calling stop. If the task throws an exception during startup, it should still be able to
+            // clean up any allocated resources when stop is called, and if it isn't able to or even throws another
+            // exception during stop, the worst thing that happens is another exception gets logged for an already-
+            // failed task
+            started = true;
             task.initialize(new WorkerSourceTaskContext(offsetReader, this, configState));
             task.start(taskConfig);
             log.info("{} Source task finished initialization and start", this);
-            synchronized (this) {
-                if (startedShutdownBeforeStartCompleted) {
-                    tryStop();
-                    return;
-                }
-                finishedStart = true;
-            }
-
             while (!isStopping()) {
                 if (shouldPause()) {
                     onPause();
