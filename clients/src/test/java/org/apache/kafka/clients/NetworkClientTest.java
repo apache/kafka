@@ -578,7 +578,7 @@ public class NetworkClientTest {
         int correlationId = sendEmptyProduceRequest();
         client.poll(1, time.milliseconds());
 
-        sendThrottledProduceResponse(correlationId, 100);
+        sendThrottledProduceResponse(correlationId, 100, (short) 5);
         client.poll(1, time.milliseconds());
 
         // Since client-side throttling is disabled, the connection is ready even though the response indicated a
@@ -613,12 +613,12 @@ public class NetworkClientTest {
         selector.completeReceive(new NetworkReceive(node.idString(), buffer));
     }
 
-    private void sendThrottledProduceResponse(int correlationId, int throttleMs) {
+    private void sendThrottledProduceResponse(int correlationId, int throttleMs, short version) {
         Struct resp = new ProduceResponseData()
                 .setThrottleTimeMs(throttleMs)
-                .toStruct(PRODUCE.latestVersion());
+                .toStruct(version);
         sendResponse(new ResponseHeader(correlationId,
-            PRODUCE.responseHeaderVersion(PRODUCE.latestVersion())),
+            PRODUCE.responseHeaderVersion(version)),
             resp);
     }
 
@@ -724,7 +724,7 @@ public class NetworkClientTest {
         int correlationId = sendEmptyProduceRequest();
         client.poll(1, time.milliseconds());
 
-        sendThrottledProduceResponse(correlationId, 100);
+        sendThrottledProduceResponse(correlationId, 100, PRODUCE.latestVersion());
         client.poll(1, time.milliseconds());
 
         // leastloadednode should return null since the node is throttled

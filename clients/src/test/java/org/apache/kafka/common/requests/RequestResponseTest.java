@@ -1295,7 +1295,7 @@ public class RequestResponseTest {
                     .forConsumer(true, IsolationLevel.READ_UNCOMMITTED)
                     .setTargetTimes(Collections.singletonList(topic))
                     .build((short) version);
-        } else if (version >= 2 && version <= 5) {
+        } else if (version >= 2 && version <= LIST_OFFSETS.latestVersion()) {
             ListOffsetPartition partition = new ListOffsetPartition()
                     .setPartitionIndex(0)
                     .setTimestamp(1000000L)
@@ -1323,7 +1323,7 @@ public class RequestResponseTest {
                                     .setErrorCode(Errors.NONE.code())
                                     .setOldStyleOffsets(asList(100L))))));
             return new ListOffsetResponse(data);
-        } else if (version >= 1 && version <= 5) {
+        } else if (version >= 1 && version <= LIST_OFFSETS.latestVersion()) {
             ListOffsetPartitionResponse partition = new ListOffsetPartitionResponse()
                     .setPartitionIndex(0)
                     .setErrorCode(Errors.NONE.code())
@@ -1891,9 +1891,9 @@ public class RequestResponseTest {
     }
 
     private WriteTxnMarkersRequest createWriteTxnMarkersRequest() {
-        return new WriteTxnMarkersRequest.Builder(
-            Collections.singletonList(new WriteTxnMarkersRequest.TxnMarkerEntry(21L, (short) 42, 73, TransactionResult.ABORT,
-                                                                                Collections.singletonList(new TopicPartition("topic", 73))))).build();
+        List<TopicPartition> partitions = Collections.singletonList(new TopicPartition("topic", 73));
+        WriteTxnMarkersRequest.TxnMarkerEntry txnMarkerEntry = new WriteTxnMarkersRequest.TxnMarkerEntry(21L, (short) 42, 73, TransactionResult.ABORT, partitions);
+        return new WriteTxnMarkersRequest.Builder(ApiKeys.WRITE_TXN_MARKERS.latestVersion(), Collections.singletonList(txnMarkerEntry)).build();
     }
 
     private WriteTxnMarkersResponse createWriteTxnMarkersResponse() {

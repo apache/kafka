@@ -26,9 +26,11 @@
   //
   // Version 4 adds the current leader epoch, which is used for fencing.
   //
-  // Version 5 is the same as version 5.
-  "validVersions": "0-5",
-  "flexibleVersions": "none",
+  // Version 5 is the same as version 4.
+  //
+  // Version 6 enables flexible versions.
+  "validVersions": "0-6",
+  "flexibleVersions": "6+",
   "fields": [
     { "name": "ReplicaId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The broker ID of the requestor, or -1 if this request is being made by a normal consumer." },

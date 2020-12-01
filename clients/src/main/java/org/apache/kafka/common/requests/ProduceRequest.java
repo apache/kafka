@@ -272,6 +272,10 @@ public class ProduceRequest extends AbstractRequest {
     }
 
     public static byte requiredMagicForVersion(short produceRequestVersion) {
+        if (produceRequestVersion < ApiKeys.PRODUCE.oldestVersion() || produceRequestVersion > ApiKeys.PRODUCE.latestVersion())
+            throw new IllegalArgumentException("Magic value to use for produce request version " +
+                    produceRequestVersion + " is not known");
+
         switch (produceRequestVersion) {
             case 0:
             case 1:
@@ -280,21 +284,8 @@ public class ProduceRequest extends AbstractRequest {
             case 2:
                 return RecordBatch.MAGIC_VALUE_V1;
 
-            case 3:
-            case 4:
-            case 5:
-            case 6:
-            case 7:
-            case 8:
-                return RecordBatch.MAGIC_VALUE_V2;
-
             default:
-                // raise an exception if the version has not been explicitly added to this method.
-                // this ensures that we cannot accidentally use the wrong magic value if we forget
-                // to update this method on a bump to the produce request version.
-                throw new IllegalArgumentException("Magic value to use for produce request version " +
-                        produceRequestVersion + " is not known");
+                return RecordBatch.MAGIC_VALUE_V2;
         }
     }
-
 }
