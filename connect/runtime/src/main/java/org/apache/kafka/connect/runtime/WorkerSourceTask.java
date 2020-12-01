@@ -208,7 +208,7 @@ class WorkerSourceTask extends WorkerTask {
     // Note: This method is not thread-safe
     private void tryStop() {
         // If the task is scheduled for shutdown before we invoke initialize or start on it (which
-        // can happy reliably if it's started in the PAUSED state), we don't have to invoke stop on it
+        // can happen reliably if it's started in the PAUSED state), we don't have to invoke stop on it
         if (!stopped && started) {
             try {
                 task.stop();
