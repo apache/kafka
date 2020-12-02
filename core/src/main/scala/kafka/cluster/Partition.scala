@@ -180,7 +180,6 @@ case class OngoingReassignmentState(addingReplicas: Seq[Int],
 case class SimpleAssignmentState(replicas: Seq[Int]) extends AssignmentState
 
 
-
 sealed trait IsrState {
   /**
    * Includes only the in-sync replicas which have been committed to ZK.
@@ -1346,8 +1345,24 @@ class Partition(val topicPartition: TopicPartition,
     val newInSyncReplicaIds = isrState.isr + newInSyncReplica
     info(s"Expanding ISR from ${isrState.isr.mkString(",")} to ${newInSyncReplicaIds.mkString(",")}")
     val newLeaderAndIsr = new LeaderAndIsr(localBrokerId, leaderEpoch, newInSyncReplicaIds.toList, zkVersion)
-    val zkVersionOpt = stateStore.expandIsr(controllerEpoch, newLeaderAndIsr)
-    maybeUpdateIsrAndVersionWithZk(newInSyncReplicaIds, zkVersionOpt)
+    val callback = (result: Either[Errors, LeaderAndIsr]) => {
+      result match {
+        case Left(e: Errors) =>
+          e match {
+            case Errors.INVALID_UPDATE_VERSION =>
+              info(s"Cached zkVersion $zkVersion not equal to that in zookeeper, skip updating ISR")
+            case _ =>
+              error(s"Had unexpected ${e.exceptionName} error when updating ISR in ZK", e.exception)
+          }
+          isrChangeListener.markFailed()
+        case Right(leaderAndIsr: LeaderAndIsr) =>
+          isrState = CommittedIsr(leaderAndIsr.isr.toSet)
+          zkVersion = leaderAndIsr.zkVersion
+          info("ISR updated to [%s] and zkVersion updated to [%d]".format(leaderAndIsr.isr.mkString(","), zkVersion))
+          isrChangeListener.markExpand()
+      }
+    }
+    alterIsrManager.enqueue(AlterIsrItem(topicPartition, newLeaderAndIsr, callback, controllerEpoch))
   }
 
   private[cluster] def shrinkIsr(outOfSyncReplicas: Set[Int]): Unit = {
@@ -1372,8 +1387,24 @@ class Partition(val topicPartition: TopicPartition,
 
   private def shrinkIsrWithZk(newIsr: Set[Int]): Unit = {
     val newLeaderAndIsr = new LeaderAndIsr(localBrokerId, leaderEpoch, newIsr.toList, zkVersion)
-    val zkVersionOpt = stateStore.shrinkIsr(controllerEpoch, newLeaderAndIsr)
-    maybeUpdateIsrAndVersionWithZk(newIsr, zkVersionOpt)
+    val callback = (result: Either[Errors, LeaderAndIsr]) => {
+      result match {
+        case Left(e: Errors) =>
+          e match {
+            case Errors.INVALID_UPDATE_VERSION =>
+              info(s"Cached zkVersion $zkVersion not equal to that in zookeeper, skip updating ISR")
+            case _ =>
+              error(s"Had unexpected ${e.exceptionName} error when updating ISR in ZK", e.exception)
+          }
+          isrChangeListener.markFailed()
+        case Right(leaderAndIsr: LeaderAndIsr) =>
+          isrState = CommittedIsr(leaderAndIsr.isr.toSet)
+          zkVersion = leaderAndIsr.zkVersion
+          info("ISR updated to [%s] and zkVersion updated to [%d]".format(leaderAndIsr.isr.mkString(","), zkVersion))
+          isrChangeListener.markShrink()
+      }
+    }
+    alterIsrManager.enqueue(AlterIsrItem(topicPartition, newLeaderAndIsr, callback, controllerEpoch))
   }
 
   private def maybeUpdateIsrAndVersionWithZk(isr: Set[Int], zkVersionOpt: Option[Int]): Unit = {

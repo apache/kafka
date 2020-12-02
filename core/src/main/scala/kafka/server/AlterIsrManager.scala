@@ -46,7 +46,10 @@ trait AlterIsrManager {
   def clearPending(topicPartition: TopicPartition): Unit
 }
 
-case class AlterIsrItem(topicPartition: TopicPartition, leaderAndIsr: LeaderAndIsr, callback: Either[Errors, LeaderAndIsr] => Unit)
+case class AlterIsrItem(topicPartition: TopicPartition,
+                        leaderAndIsr: LeaderAndIsr,
+                        callback: Either[Errors, LeaderAndIsr] => Unit,
+                        controllerEpoch: Int = 0)
 
 class AlterIsrManagerImpl(val controllerChannelManager: BrokerToControllerChannelManager,
                           val scheduler: Scheduler,
