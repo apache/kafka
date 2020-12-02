@@ -865,7 +865,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private static Metrics buildMetrics(ConsumerConfig config, Time time, String clientId, String groupId) {
         Map<String, String> metricsTags = new HashMap<>();
         metricsTags.put(CLIENT_ID_METRIC_TAG, clientId);
-        if (groupId != null && !groupId.isEmpty()) {
+        if (groupId != null && !groupId.trim().isEmpty()) {
             metricsTags.put(GROUP_ID_METRIC_TAG, groupId);
         }
         MetricConfig metricConfig = new MetricConfig().samples(config.getInt(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG))
@@ -874,7 +874,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 .tags(metricsTags);
         final Map<String, Object> reporterConfigOverrides = new HashMap<>();
         reporterConfigOverrides.put(ConsumerConfig.CLIENT_ID_CONFIG, clientId);
-        if (groupId != null && !groupId.isEmpty()) {
+        if (groupId != null && !groupId.trim().isEmpty()) {
             reporterConfigOverrides.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         }
         List<MetricsReporter> reporters = config.getConfiguredInstances(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG,
