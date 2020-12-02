@@ -220,12 +220,11 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                           final Sensor... parents) {
         synchronized (clientLevelSensors) {
             final String fullSensorName = CLIENT_LEVEL_GROUP + SENSOR_NAME_DELIMITER + sensorName;
-            final Sensor sensor = metrics.getSensor(fullSensorName);
-            if (sensor == null) {
-                clientLevelSensors.push(fullSensorName);
-                return metrics.sensor(fullSensorName, recordingLevel, parents);
-            }
-            return sensor;
+            return Optional.ofNullable(metrics.getSensor(fullSensorName))
+                .orElseGet(() -> {
+                    clientLevelSensors.push(fullSensorName);
+                    return metrics.sensor(fullSensorName, recordingLevel, parents);
+                });
         }
     }
 
