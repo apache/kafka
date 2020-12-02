@@ -66,9 +66,9 @@ class AbstractFetcherThreadTest {
       .batches.asScala.head
   }
 
-  private def initialFetchState(fetchOffset: Long, leaderEpoch: Int, lastFetchedEpoch: Option[Int] = None): InitialFetchState = {
+  private def initialFetchState(fetchOffset: Long, leaderEpoch: Int): InitialFetchState = {
     InitialFetchState(leader = new BrokerEndPoint(0, "localhost", 9092),
-      initOffset = fetchOffset, currentLeaderEpoch = leaderEpoch, lastFetchedEpoch = lastFetchedEpoch)
+      initOffset = fetchOffset, currentLeaderEpoch = leaderEpoch)
   }
 
   @Test
@@ -311,9 +311,9 @@ class AbstractFetcherThreadTest {
       override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] =
         throw new UnsupportedOperationException
 
-      override protected def isOffsetForLeaderEpochSupported: Boolean = false
+      override protected val isOffsetForLeaderEpochSupported: Boolean = false
 
-      override protected def isTruncationOnFetchSupported: Boolean = false
+      override protected val isTruncationOnFetchSupported: Boolean = false
     }
 
     val replicaLog = Seq(
@@ -526,6 +526,11 @@ class AbstractFetcherThreadTest {
 
     // initial truncation and verify that the log start offset is updated
     fetcher.doWork()
+    if (truncateOnFetch) {
+      // Second iteration required here since first iteration is required to
+      // perform initial truncaton based on diverging epoch.
+      fetcher.doWork()
+    }
     assertEquals(Option(Fetching), fetcher.fetchState(partition).map(_.state))
     assertEquals(2, replicaState.logStartOffset)
     assertEquals(List(), replicaState.log.toList)
@@ -813,7 +818,7 @@ class AbstractFetcherThreadTest {
 
     val replicaState = MockFetcherThread.PartitionState(replicaLog, leaderEpoch = 5, highWatermark = 0L)
     fetcher.setReplicaState(partition, replicaState)
-    fetcher.addPartitions(Map(partition -> initialFetchState(3L, leaderEpoch = 5, lastFetchedEpoch = Some(4))))
+    fetcher.addPartitions(Map(partition -> initialFetchState(3L, leaderEpoch = 5)))
     assertEquals(3L, replicaState.logEndOffset)
     fetcher.verifyLastFetchedEpoch(partition, expectedEpoch = Some(4))
 
@@ -889,6 +894,12 @@ class AbstractFetcherThreadTest {
                                       fetchOffset: Long,
                                       partitionData: FetchData): Option[LogAppendInfo] = {
       val state = replicaPartitionState(topicPartition)
+
+      if (isTruncationOnFetchSupported && partitionData.divergingEpoch.isPresent) {
+        val divergingEpoch = partitionData.divergingEpoch.get
+        truncateOnFetchResponse(Map(topicPartition -> new EpochEndOffset(Errors.NONE, divergingEpoch.epoch, divergingEpoch.endOffset)))
+        return None
+      }
 
       // Throw exception if the fetchOffset does not match the fetcherThread partition state
       if (fetchOffset != state.logEndOffset)
@@ -1055,9 +1066,9 @@ class AbstractFetcherThreadTest {
       endOffsets
     }
 
-    override protected def isOffsetForLeaderEpochSupported: Boolean = true
+    override protected val isOffsetForLeaderEpochSupported: Boolean = true
 
-    override protected def isTruncationOnFetchSupported: Boolean = truncateOnFetch
+    override protected val isTruncationOnFetchSupported: Boolean = truncateOnFetch
 
     override def fetchFromLeader(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = {
       fetchRequest.fetchData.asScala.map { case (partition, fetchData) =>

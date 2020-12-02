@@ -1544,7 +1544,7 @@ class ReplicaManagerTest {
                 // add it here (it's a no-op if already added)
                 val initialOffset = InitialFetchState(
                   leader = new BrokerEndPoint(0, "localhost", 9092),
-                  initOffset = 0L, currentLeaderEpoch = leaderEpochInLeaderAndIsr, lastFetchedEpoch = None)
+                  initOffset = 0L, currentLeaderEpoch = leaderEpochInLeaderAndIsr)
                 addPartitions(Map(new TopicPartition(topic, topicPartition) -> initialOffset))
                 super.doWork()
 

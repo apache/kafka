@@ -104,8 +104,8 @@ class ReplicaFetcherThread(name: String,
   private val minBytes = brokerConfig.replicaFetchMinBytes
   private val maxBytes = brokerConfig.replicaFetchResponseMaxBytes
   private val fetchSize = brokerConfig.replicaFetchMaxBytes
-  private val brokerSupportsLeaderEpochRequest = brokerConfig.interBrokerProtocolVersion >= KAFKA_0_11_0_IV2
-  private val brokerSupportsTruncationOnFetch = ApiVersion.isTruncationOnFetchSupported(brokerConfig.interBrokerProtocolVersion)
+  override protected val isOffsetForLeaderEpochSupported: Boolean = brokerConfig.interBrokerProtocolVersion >= KAFKA_0_11_0_IV2
+  override protected val isTruncationOnFetchSupported = ApiVersion.isTruncationOnFetchSupported(brokerConfig.interBrokerProtocolVersion)
   val fetchSessionHandler = new FetchSessionHandler(logContext, sourceBroker.id)
 
   override protected def latestEpoch(topicPartition: TopicPartition): Option[Int] = {
@@ -354,10 +354,6 @@ class ReplicaFetcherThread(name: String,
         }
     }
   }
-
-  override def isOffsetForLeaderEpochSupported: Boolean = brokerSupportsLeaderEpochRequest
-
-  override def isTruncationOnFetchSupported: Boolean = brokerSupportsTruncationOnFetch
 
   /**
    *  To avoid ISR thrashing, we only throttle a replica on the follower if it's in the throttled replica list,

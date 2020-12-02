@@ -54,8 +54,7 @@ class AbstractFetcherManagerTest {
     val initialFetchState = InitialFetchState(
       leader = new BrokerEndPoint(0, "localhost", 9092),
       currentLeaderEpoch = leaderEpoch,
-      initOffset = fetchOffset,
-      lastFetchedEpoch = None)
+      initOffset = fetchOffset)
 
     EasyMock.expect(fetcher.start())
     EasyMock.expect(fetcher.addPartitions(Map(tp -> initialFetchState)))
@@ -114,8 +113,7 @@ class AbstractFetcherManagerTest {
     val initialFetchState = InitialFetchState(
       leader = new BrokerEndPoint(0, "localhost", 9092),
       currentLeaderEpoch = leaderEpoch,
-      initOffset = fetchOffset,
-      lastFetchedEpoch = None)
+      initOffset = fetchOffset)
 
     EasyMock.expect(fetcher.start())
     EasyMock.expect(fetcher.addPartitions(Map(tp -> initialFetchState)))

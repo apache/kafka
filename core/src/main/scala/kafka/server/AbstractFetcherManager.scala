@@ -64,8 +64,8 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   def resizeThreadPool(newSize: Int): Unit = {
     def migratePartitions(newSize: Int): Unit = {
       fetcherThreadMap.forKeyValue { (id, thread) =>
-        val removedPartitions = thread.partitionsAndOffsets
-        removeFetcherForPartitions(removedPartitions.keySet)
+        val removedPartitions = thread.removeAllPartitions()
+        removeFetcherForPartitions(removedPartitions.keySet) // clear state for removed partitions
         if (id.fetcherId >= newSize)
           thread.shutdown()
         addFetcherForPartitions(removedPartitions)
@@ -223,6 +223,6 @@ class FailedPartitions {
 
 case class BrokerAndFetcherId(broker: BrokerEndPoint, fetcherId: Int)
 
-case class InitialFetchState(leader: BrokerEndPoint, currentLeaderEpoch: Int, initOffset: Long, lastFetchedEpoch: Option[Int])
+case class InitialFetchState(leader: BrokerEndPoint, currentLeaderEpoch: Int, initOffset: Long)
 
 case class BrokerIdAndFetcherId(brokerId: Int, fetcherId: Int)

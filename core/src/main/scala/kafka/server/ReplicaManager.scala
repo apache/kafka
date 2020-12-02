@@ -770,7 +770,7 @@ class ReplicaManager(val config: KafkaConfig,
             logManager.abortAndPauseCleaning(topicPartition)
 
             val initialFetchState = InitialFetchState(BrokerEndPoint(config.brokerId, "localhost", -1),
-              partition.getLeaderEpoch, futureLog.highWatermark, lastFetchedEpoch = None)
+              partition.getLeaderEpoch, futureLog.highWatermark)
             replicaAlterLogDirsManager.addFetcherForPartitions(Map(topicPartition -> initialFetchState))
           }
 
@@ -1484,7 +1484,7 @@ class ReplicaManager(val config: KafkaConfig,
           logManager.abortAndPauseCleaning(topicPartition)
 
           futureReplicasAndInitialOffset.put(topicPartition, InitialFetchState(leader,
-            partition.getLeaderEpoch, log.highWatermark, lastFetchedEpoch = None))
+            partition.getLeaderEpoch, log.highWatermark))
         }
       }
     }
@@ -1668,8 +1668,8 @@ class ReplicaManager(val config: KafkaConfig,
           val leader = metadataCache.getAliveBrokers.find(_.id == partition.leaderReplicaIdOpt.get).get
             .brokerEndPoint(config.interBrokerListenerName)
           val log = partition.localLogOrException
-          val (fetchOffset, lastFetchedEpoch) = initialFetchOffsetAndEpoch(log)
-          partition.topicPartition -> InitialFetchState(leader, partition.getLeaderEpoch, fetchOffset, lastFetchedEpoch)
+          val fetchOffset = initialFetchOffset(log)
+          partition.topicPartition -> InitialFetchState(leader, partition.getLeaderEpoch, fetchOffset)
         }.toMap
 
         replicaFetcherManager.addFetcherForPartitions(partitionsToMakeFollowerWithLeaderAndOffset)
@@ -1694,15 +1694,14 @@ class ReplicaManager(val config: KafkaConfig,
 
   /**
    * From IBP 2.7 onwards, we send latest fetch epoch in the request and truncate if a
-   * diverging epoch is returned in the response, avoiding the need for a separate OffsetForLeaderEpoch
-   * request. We use log end offset as the next fetch offset and include the corresponding epoch.
+   * diverging epoch is returned in the response, avoiding the need for a separate
+   * OffsetForLeaderEpoch request.
    */
-  private def initialFetchOffsetAndEpoch(log: Log): (Long, Option[Int]) = {
-    val latestEpoch = log.latestEpoch
-    if (ApiVersion.isTruncationOnFetchSupported(config.interBrokerProtocolVersion) && latestEpoch.nonEmpty)
-      (log.logEndOffset, latestEpoch)
+  private def initialFetchOffset(log: Log): Long = {
+    if (ApiVersion.isTruncationOnFetchSupported(config.interBrokerProtocolVersion) && log.latestEpoch.nonEmpty)
+      log.logEndOffset
     else
-      (log.highWatermark, None)
+      log.highWatermark
   }
 
   private def maybeShrinkIsr(): Unit = {

@@ -48,7 +48,7 @@ class ReplicaAlterLogDirsThreadTest {
 
   private def initialFetchState(fetchOffset: Long, leaderEpoch: Int = 1): InitialFetchState = {
     InitialFetchState(leader = new BrokerEndPoint(0, "localhost", 9092),
-      initOffset = fetchOffset, currentLeaderEpoch = leaderEpoch, lastFetchedEpoch = None)
+      initOffset = fetchOffset, currentLeaderEpoch = leaderEpoch)
   }
 
   @Test

@@ -99,9 +99,9 @@ abstract class AbstractFetcherThread(name: String,
 
   protected def fetchLatestOffsetFromLeader(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long
 
-  protected def isOffsetForLeaderEpochSupported: Boolean
+  protected val isOffsetForLeaderEpochSupported: Boolean
 
-  protected def isTruncationOnFetchSupported: Boolean
+  protected val isTruncationOnFetchSupported: Boolean
 
   override def shutdown(): Unit = {
     initiateShutdown()
@@ -227,7 +227,7 @@ abstract class AbstractFetcherThread(name: String,
     }
   }
 
-  private def truncateOnFetchResponse(epochEndOffsets: Map[TopicPartition, EpochEndOffset]): Unit = {
+  protected def truncateOnFetchResponse(epochEndOffsets: Map[TopicPartition, EpochEndOffset]): Unit = {
     inLock(partitionMapLock) {
       val ResultWithPartitions(fetchOffsets, partitionsWithError) = maybeTruncateToEpochEndOffsets(epochEndOffsets, Map.empty)
       handlePartitionsWithErrors(partitionsWithError, "truncateOnFetchResponse")
@@ -459,12 +459,13 @@ abstract class AbstractFetcherThread(name: String,
   private def partitionFetchState(tp: TopicPartition, initialFetchState: InitialFetchState, currentState: PartitionFetchState): PartitionFetchState = {
     if (currentState != null && currentState.currentLeaderEpoch == initialFetchState.currentLeaderEpoch) {
       currentState
-    } else if (isTruncationOnFetchSupported && initialFetchState.initOffset >= 0 &&
-               initialFetchState.lastFetchedEpoch.nonEmpty && currentState == null) {
-      PartitionFetchState(initialFetchState.initOffset, None, initialFetchState.currentLeaderEpoch,
-          state = Fetching, initialFetchState.lastFetchedEpoch)
     } else if (initialFetchState.initOffset < 0) {
       fetchOffsetAndTruncate(tp, initialFetchState.currentLeaderEpoch)
+    } else if (isTruncationOnFetchSupported) {
+      val lastFetchedEpoch = latestEpoch(tp)
+      val state = if (lastFetchedEpoch.exists(_ != EpochEndOffset.UNDEFINED_EPOCH)) Fetching else Truncating
+      PartitionFetchState(initialFetchState.initOffset, None, initialFetchState.currentLeaderEpoch,
+          state, lastFetchedEpoch)
     } else {
       PartitionFetchState(initialFetchState.initOffset, None, initialFetchState.currentLeaderEpoch,
         state = Truncating, lastFetchedEpoch = None)
@@ -715,19 +716,18 @@ abstract class AbstractFetcherThread(name: String,
   }
 
   /**
-   * Returns current fetch state for each partition assigned to this thread. This is used to reassign
-   * partitions when thread pool is resized. We return `lastFetchedEpoch=None` to ensure we go through
-   * the truncation path to simplify the code path where this thread makes progress after this method
-   * before the thread is shutdown.
+   * Removes all partitions assigned to this thread and returns current fetch state
+   * for each partition. This is used to reassign partitions when thread pool is resized.
    */
-  private[server] def partitionsAndOffsets: Map[TopicPartition, InitialFetchState] = inLock(partitionMapLock) {
-    partitionStates.partitionStateMap.asScala.map { case (topicPartition, currentFetchState) =>
+  private[server] def removeAllPartitions(): Map[TopicPartition, InitialFetchState] = inLock(partitionMapLock) {
+    val fetchStates = partitionStates.partitionStateMap.asScala.map { case (topicPartition, currentFetchState) =>
       val initialFetchState = InitialFetchState(sourceBroker,
         currentLeaderEpoch = currentFetchState.currentLeaderEpoch,
-        initOffset = currentFetchState.fetchOffset,
-        lastFetchedEpoch = None)
+        initOffset = currentFetchState.fetchOffset)
       topicPartition -> initialFetchState
     }
+    partitionStates.clear()
+    fetchStates
   }
 
   protected def toMemoryRecords(records: Records): MemoryRecords = {
