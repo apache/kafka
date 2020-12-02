@@ -33,7 +33,6 @@ import kafka.log.LogManager
 import kafka.metrics.{KafkaMetricsReporter, KafkaYammerMetrics}
 import kafka.network.SocketServer
 import kafka.security.CredentialProvider
-import kafka.server.metadata.BrokerMetadataListener
 import kafka.utils._
 import kafka.zk.{BrokerInfo, KafkaZkClient}
 import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ManualMetadataUpdater, NetworkClient, NetworkClientUtils}
@@ -127,9 +126,7 @@ class LegacyBroker(val config: KafkaConfig,
 
   var kafkaController: KafkaController = null
 
-  var brokerMetadataListener: BrokerMetadataListener = null
-
-  var brokerToControllerChannelManager: BrokerToControllerChannelManager = null
+  var brokerToControllerChannelManager: LegacyBrokerToControllerChannelManager = null
 
   var kafkaScheduler: KafkaScheduler = null
 
@@ -156,6 +153,8 @@ class LegacyBroker(val config: KafkaConfig,
 
   // Visible for testing
   private[kafka] def zkClient = _zkClient
+
+  override def legacyController: Option[KafkaController] = Some(kafkaController)
 
   private[kafka] def brokerTopicStats = _brokerTopicStats
 
@@ -237,7 +236,11 @@ class LegacyBroker(val config: KafkaConfig,
         logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
 
         /* start log manager */
-        logManager = LogManager(config, initialOfflineDirs, zkClient, brokerState, kafkaScheduler, time, brokerTopicStats, logDirFailureChannel)
+        val cleanShutdownCompletableFuture = new CompletableFuture[Boolean]()
+        logManager = LogManager(config, initialOfflineDirs, Some(zkClient), cleanShutdownCompletableFuture, kafkaScheduler, time, brokerTopicStats, logDirFailureChannel)
+        if (!cleanShutdownCompletableFuture.get()) {
+          brokerState.set(BrokerState.RECOVERING_FROM_UNCLEAN_SHUTDOWN)
+        }
         logManager.startup()
 
         metadataCache = new MetadataCache(config.brokerId)
@@ -253,7 +256,7 @@ class LegacyBroker(val config: KafkaConfig,
         socketServer.startup(startProcessingRequests = false)
 
         /* start replica manager */
-        brokerToControllerChannelManager = new BrokerToControllerChannelManagerImpl(metadataCache, time, metrics, config, threadNamePrefix)
+        brokerToControllerChannelManager = new LegacyBrokerToControllerChannelManager(metadataCache, time, metrics, config, _clusterId, threadNamePrefix)
         replicaManager = createReplicaManager(isShuttingDown)
         replicaManager.startup()
         brokerToControllerChannelManager.start()
@@ -284,13 +287,6 @@ class LegacyBroker(val config: KafkaConfig,
         transactionCoordinator = TransactionCoordinator(config, replicaManager, new KafkaScheduler(threads = 1, threadNamePrefix = "transaction-log-manager-"), zkClient, metrics, metadataCache, Time.SYSTEM)
         transactionCoordinator.startup()
 
-        brokerMetadataListener = new BrokerMetadataListener(
-          config, time,
-          BrokerMetadataListener.defaultProcessors(
-            config, _clusterId, metadataCache, groupCoordinator, quotaManagers, replicaManager, transactionCoordinator,
-            logManager))
-        brokerMetadataListener.start()
-
         /* Get the authorizer and initialize it if one is specified.*/
         authorizer = config.authorizer
         authorizer.foreach(_.configure(config.originals))
@@ -313,7 +309,7 @@ class LegacyBroker(val config: KafkaConfig,
         dataPlaneRequestProcessor = new KafkaApis(socketServer.dataPlaneRequestChannel,
           replicaManager, adminManager, groupCoordinator, transactionCoordinator,
           kafkaController, zkClient, config.brokerId, config, metadataCache, metrics, authorizer, quotaManagers,
-          fetchManager, brokerTopicStats, _clusterId, time, tokenManager, brokerFeatures, featureCache)
+          fetchManager, brokerTopicStats, _clusterId, time, tokenManager, brokerFeatures, featureCache, null)
 
         dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.dataPlaneRequestChannel, dataPlaneRequestProcessor, time,
           config.numIoThreads, s"${SocketServer.DataPlaneMetricPrefix}RequestHandlerAvgIdlePercent", SocketServer.DataPlaneThreadPrefix)
@@ -322,7 +318,7 @@ class LegacyBroker(val config: KafkaConfig,
           controlPlaneRequestProcessor = new KafkaApis(controlPlaneRequestChannel,
             replicaManager, adminManager, groupCoordinator, transactionCoordinator,
             kafkaController, zkClient, config.brokerId, config, metadataCache, metrics, authorizer, quotaManagers,
-            fetchManager, brokerTopicStats, _clusterId, time, tokenManager, brokerFeatures, featureCache)
+            fetchManager, brokerTopicStats, _clusterId, time, tokenManager, brokerFeatures, featureCache, null)
 
           controlPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.controlPlaneRequestChannelOpt.get, controlPlaneRequestProcessor, time,
             1, s"${SocketServer.ControlPlaneMetricPrefix}RequestHandlerAvgIdlePercent", SocketServer.ControlPlaneThreadPrefix)
@@ -366,7 +362,7 @@ class LegacyBroker(val config: KafkaConfig,
     val alterIsrManager = new AlterIsrManagerImpl(brokerToControllerChannelManager, kafkaScheduler,
       time, config.brokerId, () => kafkaController.brokerEpoch)
     new ReplicaManager(config, metrics, time, zkClient, kafkaScheduler, logManager, isShuttingDown, quotaManagers,
-      brokerTopicStats, metadataCache, logDirFailureChannel, alterIsrManager)
+      brokerTopicStats, metadataCache, logDirFailureChannel, alterIsrManager, None)
   }
 
   private def initZkClient(time: Time): Unit = {
@@ -407,7 +403,7 @@ class LegacyBroker(val config: KafkaConfig,
     zkClient.getClusterId.getOrElse(zkClient.createOrGetClusterId(CoreUtils.generateUuidAsBase64()))
   }
 
-  def createBrokerInfo: BrokerInfo = {
+  override def createBrokerInfo: BrokerInfo = {
     val endPoints = config.advertisedListeners.map(e => s"${e.host}:${e.port}")
     zkClient.getAllBrokersInCluster.filter(_.id != config.brokerId).foreach { broker =>
       val commonEndPoints = broker.endPoints.map(e => s"${e.host}:${e.port}").intersect(endPoints)
@@ -612,9 +608,6 @@ class LegacyBroker(val config: KafkaConfig,
         CoreUtils.swallow(controlledShutdown(), this)
         brokerState.set(BrokerState.SHUTTING_DOWN)
 
-        if (brokerMetadataListener != null)
-          brokerMetadataListener.close()
-
         if (dynamicConfigManager != null)
           CoreUtils.swallow(dynamicConfigManager.shutdown(), this)
 
@@ -700,8 +693,6 @@ class LegacyBroker(val config: KafkaConfig,
    * After calling shutdown(), use this API to wait until the shutdown is complete
    */
   def awaitShutdown(): Unit = shutdownLatch.await()
-
-  def getLogManager: LogManager = logManager
 
   def boundPort(listenerName: ListenerName): Int = socketServer.boundPort(listenerName)
 

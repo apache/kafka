@@ -54,7 +54,6 @@ import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.metadata.BrokerState;
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -86,8 +85,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
@@ -132,7 +131,7 @@ public class ReplicaFetcherThreadBenchmark {
                 1000L,
                 60000,
                 scheduler,
-                new AtomicReference<BrokerState>(BrokerState.NOT_RUNNING),
+                new CompletableFuture<>(),
                 brokerTopicStats,
                 logDirFailureChannel,
                 Time.SYSTEM);

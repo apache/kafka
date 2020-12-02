@@ -62,7 +62,7 @@ class ReplicationUtilsTest extends ZooKeeperTestHarness {
     EasyMock.expect(replicaManager.config).andReturn(configs.head)
     EasyMock.expect(replicaManager.logManager).andReturn(logManager)
     EasyMock.expect(replicaManager.replicaFetcherManager).andReturn(EasyMock.createMock(classOf[ReplicaFetcherManager]))
-    EasyMock.expect(replicaManager.zkClient).andReturn(zkClient)
+    EasyMock.expect(replicaManager.zkClient).andReturn(Some(zkClient))
     EasyMock.replay(replicaManager)
 
     zkClient.makeSurePersistentPathExists(IsrChangeNotificationZNode.path)

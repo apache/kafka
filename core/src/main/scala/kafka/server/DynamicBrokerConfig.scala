@@ -207,13 +207,23 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private var currentConfig = kafkaConfig
   private val dynamicConfigPasswordEncoder = maybeCreatePasswordEncoder(kafkaConfig.passwordEncoderSecret)
 
+  private[server] def initialize(): Unit = {
+    initialize(None)
+  }
+
   private[server] def initialize(zkClient: KafkaZkClient): Unit = {
+    initialize(Some(zkClient))
+  }
+
+  private def initialize(maybeZkClient: Option[KafkaZkClient]): Unit = {
     currentConfig = new KafkaConfig(kafkaConfig.props, false, None)
-    val adminZkClient = new AdminZkClient(zkClient)
-    updateDefaultConfig(adminZkClient.fetchEntityConfig(ConfigType.Broker, ConfigEntityName.Default))
-    val props = adminZkClient.fetchEntityConfig(ConfigType.Broker, kafkaConfig.brokerId.toString)
-    val brokerConfig = maybeReEncodePasswords(props, adminZkClient)
-    updateBrokerConfig(kafkaConfig.brokerId, brokerConfig)
+    maybeZkClient.foreach { zkClient =>
+      val adminZkClient = new AdminZkClient(zkClient)
+      updateDefaultConfig(adminZkClient.fetchEntityConfig(ConfigType.Broker, ConfigEntityName.Default))
+      val props = adminZkClient.fetchEntityConfig(ConfigType.Broker, kafkaConfig.brokerId.toString)
+      val brokerConfig = maybeReEncodePasswords(props, adminZkClient)
+      updateBrokerConfig(kafkaConfig.brokerId, brokerConfig)
+    }
   }
 
   /**
@@ -239,7 +249,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
    * reconfigured after `KafkaConfig` is updated so that they can access `KafkaConfig`
    * directly. They are provided both old and new configs.
    */
-  def addReconfigurables(kafkaServer: LegacyBroker): Unit = {
+  def addReconfigurables(kafkaServer: KafkaBroker): Unit = {
     kafkaServer.authorizer match {
       case Some(authz: Reconfigurable) => addReconfigurable(authz)
       case _ =>
@@ -625,7 +635,7 @@ object DynamicLogConfig {
   val KafkaConfigToLogConfigName = LogConfig.TopicConfigSynonyms.map { case (k, v) => (v, k) }
 }
 
-class DynamicLogConfig(logManager: LogManager, server: LegacyBroker) extends BrokerReconfigurable with Logging {
+class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends BrokerReconfigurable with Logging {
 
   override def reconfigurableConfigs: Set[String] = {
     DynamicLogConfig.ReconfigurableConfigs
@@ -669,7 +679,7 @@ class DynamicLogConfig(logManager: LogManager, server: LegacyBroker) extends Bro
     updateLogsConfig(newBrokerDefaults.asScala)
 
     if (logManager.currentDefaultConfig.uncleanLeaderElectionEnable && !origUncleanLeaderElectionEnable) {
-      server.kafkaController.enableDefaultUncleanLeaderElection()
+      server.legacyController.foreach { _.enableDefaultUncleanLeaderElection() }
     }
   }
 }
@@ -683,7 +693,7 @@ object DynamicThreadPool {
     KafkaConfig.BackgroundThreadsProp)
 }
 
-class DynamicThreadPool(server: LegacyBroker) extends BrokerReconfigurable {
+class DynamicThreadPool(server: KafkaBroker) extends BrokerReconfigurable {
 
   override def reconfigurableConfigs: Set[String] = {
     DynamicThreadPool.ReconfigurableConfigs
@@ -715,7 +725,7 @@ class DynamicThreadPool(server: LegacyBroker) extends BrokerReconfigurable {
     if (newConfig.numReplicaFetchers != oldConfig.numReplicaFetchers)
       server.replicaManager.replicaFetcherManager.resizeThreadPool(newConfig.numReplicaFetchers)
     if (newConfig.numRecoveryThreadsPerDataDir != oldConfig.numRecoveryThreadsPerDataDir)
-      server.getLogManager.resizeRecoveryThreadPool(newConfig.numRecoveryThreadsPerDataDir)
+      server.logManager.resizeRecoveryThreadPool(newConfig.numRecoveryThreadsPerDataDir)
     if (newConfig.backgroundThreads != oldConfig.backgroundThreads)
       server.kafkaScheduler.resizeThreadPool(newConfig.backgroundThreads)
   }
@@ -732,10 +742,10 @@ class DynamicThreadPool(server: LegacyBroker) extends BrokerReconfigurable {
   }
 }
 
-class DynamicMetricsReporters(brokerId: Int, server: LegacyBroker) extends Reconfigurable {
+class DynamicMetricsReporters(brokerId: Int, server: KafkaBroker) extends Reconfigurable {
 
   private val dynamicConfig = server.config.dynamicConfig
-  private val metrics = server.metrics
+  private val metrics = server.metrics()
   private val propsOverride = Map[String, AnyRef](KafkaConfig.BrokerIdProp -> brokerId.toString)
   private val currentReporters = mutable.Map[String, MetricsReporter]()
 
@@ -808,6 +818,7 @@ class DynamicMetricsReporters(brokerId: Int, server: LegacyBroker) extends Recon
     configs.get(KafkaConfig.MetricReporterClassesProp).asInstanceOf[util.List[String]].asScala
   }
 }
+
 object DynamicListenerConfig {
 
   val ReconfigurableConfigs = Set(
@@ -857,7 +868,7 @@ object DynamicListenerConfig {
   )
 }
 
-class DynamicClientQuotaCallback(brokerId: Int, server: LegacyBroker) extends Reconfigurable {
+class DynamicClientQuotaCallback(brokerId: Int, server: KafkaBroker) extends Reconfigurable {
 
   override def configure(configs: util.Map[String, _]): Unit = {}
 
@@ -888,7 +899,7 @@ class DynamicClientQuotaCallback(brokerId: Int, server: LegacyBroker) extends Re
   }
 }
 
-class DynamicListenerConfig(server: LegacyBroker) extends BrokerReconfigurable with Logging {
+class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable with Logging {
 
   override def reconfigurableConfigs: Set[String] = {
     DynamicListenerConfig.ReconfigurableConfigs
@@ -936,13 +947,10 @@ class DynamicListenerConfig(server: LegacyBroker) extends BrokerReconfigurable w
     if (listenersAdded.nonEmpty)
       server.socketServer.addListeners(listenersAdded)
 
-    server.kafkaController.updateBrokerInfo(server.createBrokerInfo)
+    server.legacyController.foreach { _.updateBrokerInfo(server.createBrokerInfo) }
   }
 
   private def listenersToMap(listeners: Seq[EndPoint]): Map[ListenerName, EndPoint] =
     listeners.map(e => (e.listenerName, e)).toMap
 
 }
-
-
-

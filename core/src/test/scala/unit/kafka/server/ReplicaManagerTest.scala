@@ -1509,7 +1509,7 @@ class ReplicaManagerTest {
     val quota = QuotaFactory.instantiate(config, metrics, time, "")
     val blockingSend = new ReplicaFetcherMockBlockingSend(Map(topicPartitionObj ->
       new EpochEndOffset(leaderEpochFromLeader, offsetFromLeader)).asJava, BrokerEndPoint(1, "host1" ,1), time)
-    val replicaManager = new ReplicaManager(config, metrics, time, kafkaZkClient, mockScheduler, mockLogMgr,
+    val replicaManager = new ReplicaManager(config, metrics, time, Some(kafkaZkClient), mockScheduler, mockLogMgr,
       new AtomicBoolean(false), quota, mockBrokerTopicStats,
       metadataCache, mockLogDirFailureChannel, mockProducePurgatory, mockFetchPurgatory,
       mockDeleteRecordsPurgatory, mockElectLeaderPurgatory, Option(this.getClass.getName), alterIsrManager) {
@@ -1683,7 +1683,7 @@ class ReplicaManagerTest {
     val mockDelayedElectLeaderPurgatory = new DelayedOperationPurgatory[DelayedElectLeader](
       purgatoryName = "DelayedElectLeader", timer, reaperEnabled = false)
 
-    new ReplicaManager(config, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr,
+    new ReplicaManager(config, metrics, time, Some(kafkaZkClient), new MockScheduler(time), mockLogMgr,
       new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time, ""), new BrokerTopicStats,
       metadataCache, new LogDirFailureChannel(config.logDirs.size), mockProducePurgatory, mockFetchPurgatory,
       mockDeleteRecordsPurgatory, mockDelayedElectLeaderPurgatory, Option(this.getClass.getName), alterIsrManager)

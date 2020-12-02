@@ -43,7 +43,7 @@ object KafkaServerManager extends Logging {
       if (roles.asScala.distinct.length != roles.size()) {
         throw new RuntimeException(s"Duplicate role names found in roles config ${roles}")
       }
-      if (config.controllerConnect.isEmpty) {
+      if (config.controllerConnect == null || config.controllerConnect.isEmpty) {
         throw new RuntimeException(s"You must specify a value for ${KafkaConfig.ControllerConnectProp}")
       }
       roles.asScala.foreach {

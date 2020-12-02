@@ -217,7 +217,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
 
   private def waitForOffsetsToMatch(offset: Int, partitionId: Int, brokerId: Int): Unit = {
     waitUntilTrue(() => {
-      offset == brokerFor(brokerId).getLogManager.getLog(new TopicPartition(topic, partitionId))
+      offset == brokerFor(brokerId).logManager.getLog(new TopicPartition(topic, partitionId))
         .map(_.logEndOffset).getOrElse(0)
     }, s"Offsets did not match for partition $partitionId on broker $brokerId", 60000)
   }

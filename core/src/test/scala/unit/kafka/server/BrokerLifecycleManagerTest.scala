@@ -21,7 +21,7 @@ import java.io.IOException
 import java.util.Properties
 import java.util.concurrent.{Executors, TimeUnit}
 
-import kafka.server.metadata.{BrokerMetadataEvent, BrokerMetadataListener, FenceBrokerEvent, RegisterBrokerEvent, QueuedEvent}
+import kafka.server.metadata.{BrokerMetadataEvent, BrokerMetadataListener, FenceBrokerEvent, QueuedEvent, RegisterBrokerEvent}
 import org.apache.kafka.common.KafkaException
 import kafka.server.{BrokerLifecycleManagerImpl, BrokerToControllerChannelManager, Defaults, KafkaConfig}
 import kafka.utils.{MockTime, TestUtils}

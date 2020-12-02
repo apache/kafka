@@ -175,7 +175,7 @@ object ReplicationQuotasTestRig {
       //Validate that offsets are correct in all brokers
       for (broker <- servers) {
         (0 until config.partitions).foreach { partitionId =>
-          val offset = broker.getLogManager.getLog(new TopicPartition(topicName, partitionId)).map(_.logEndOffset).getOrElse(-1L)
+          val offset = broker.logManager.getLog(new TopicPartition(topicName, partitionId)).map(_.logEndOffset).getOrElse(-1L)
           if (offset >= 0 && offset != config.msgsPerPartition) {
             throw new RuntimeException(s"Run failed as offsets did not match for partition $partitionId on broker ${broker.config.brokerId}. Expected ${config.msgsPerPartition} but was $offset.")
           }

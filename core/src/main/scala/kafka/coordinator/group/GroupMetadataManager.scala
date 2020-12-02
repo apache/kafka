@@ -58,9 +58,19 @@ class GroupMetadataManager(brokerId: Int,
                            interBrokerProtocolVersion: ApiVersion,
                            config: OffsetConfig,
                            val replicaManager: ReplicaManager,
-                           zkClient: KafkaZkClient,
+                           groupMetadataTopicPartitionCountFunc: () => Int,
                            time: Time,
                            metrics: Metrics) extends Logging with KafkaMetricsGroup {
+
+  def this(brokerId: Int,
+           interBrokerProtocolVersion: ApiVersion,
+           config: OffsetConfig,
+           replicaManager: ReplicaManager,
+           zkClient: KafkaZkClient,
+           time: Time,
+           metrics: Metrics) = this(brokerId, interBrokerProtocolVersion, config, replicaManager,
+    () => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicNumPartitions),
+    time, metrics)
 
   private val compressionType: CompressionType = CompressionType.forId(config.offsetsTopicCompressionCodec.codec)
 
@@ -79,7 +89,20 @@ class GroupMetadataManager(brokerId: Int,
   private val shuttingDown = new AtomicBoolean(false)
 
   /* number of partitions for the consumer metadata topic */
-  private val groupMetadataTopicPartitionCount = getGroupMetadataTopicPartitionCount
+  private var _groupMetadataTopicPartitionCount: Option[Int] = Option.empty // lazy, once-only evaluation
+  private def groupMetadataTopicPartitionCount: Int = {
+    _groupMetadataTopicPartitionCount match {
+      case Some(partitionCount) => partitionCount
+      case None => synchronized { // make sure we only invoke the function once
+        _groupMetadataTopicPartitionCount match {
+          case Some(partitionCount) => partitionCount // another thread beat us to it
+          case None =>
+            _groupMetadataTopicPartitionCount = Some(groupMetadataTopicPartitionCountFunc())
+            _groupMetadataTopicPartitionCount.get
+        }
+      }
+    }
+  }
 
   /* single-thread scheduler to handle offset/group metadata cache loading and unloading */
   private val scheduler = new KafkaScheduler(threads = 1, threadNamePrefix = "group-metadata-manager-")
@@ -933,14 +956,6 @@ class GroupMetadataManager(brokerId: Int,
       scheduler.shutdown()
 
     // TODO: clear the caches
-  }
-
-  /**
-   * Gets the partition count of the group metadata topic from ZooKeeper.
-   * If the topic does not exist, the configured partition count is returned.
-   */
-  private def getGroupMetadataTopicPartitionCount: Int = {
-    zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicNumPartitions)
   }
 
   /**

@@ -23,9 +23,8 @@ import java.nio.charset.{Charset, StandardCharsets}
 import java.nio.file.{Files, StandardOpenOption}
 import java.security.cert.X509Certificate
 import java.time.Duration
-import java.util.concurrent.atomic.AtomicReference
 import java.util.{Arrays, Collections, Properties}
-import java.util.concurrent.{Callable, ExecutionException, Executors, TimeUnit}
+import java.util.concurrent.{Callable, CompletableFuture, ExecutionException, Executors, TimeUnit}
 
 import javax.net.ssl.X509TrustManager
 import kafka.api._
@@ -57,7 +56,6 @@ import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySe
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.utils.Utils._
 import org.apache.kafka.common.{KafkaFuture, TopicPartition}
-import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.server.authorizer.{Authorizer => JAuthorizer}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.zookeeper.KeeperException.SessionExpiredException
@@ -1060,7 +1058,7 @@ object TestUtils extends Logging {
                    maxPidExpirationMs = 60 * 60 * 1000,
                    scheduler = time.scheduler,
                    time = time,
-                   brokerState = new AtomicReference[BrokerState](BrokerState.NOT_RUNNING),
+                   cleanShutdownCompletableFuture = new CompletableFuture[Boolean](),
                    brokerTopicStats = new BrokerTopicStats,
                    logDirFailureChannel = new LogDirFailureChannel(logDirs.size))
   }
@@ -1136,10 +1134,10 @@ object TestUtils extends Logging {
       "Replica manager's should have deleted all of this topic's partitions")
     // ensure that logs from all replicas are deleted if delete topic is marked successful in ZooKeeper
     assertTrue("Replica logs not deleted after delete topic is complete",
-      servers.forall(server => topicPartitions.forall(tp => server.getLogManager.getLog(tp).isEmpty)))
+      servers.forall(server => topicPartitions.forall(tp => server.logManager.getLog(tp).isEmpty)))
     // ensure that topic is removed from all cleaner offsets
     waitUntilTrue(() => servers.forall(server => topicPartitions.forall { tp =>
-      val checkpoints = server.getLogManager.liveLogDirs.map { logDir =>
+      val checkpoints = server.logManager.liveLogDirs.map { logDir =>
         new OffsetCheckpointFile(new File(logDir, "cleaner-offset-checkpoint")).read()
       }
       checkpoints.forall(checkpointsPerLogDir => !checkpointsPerLogDir.contains(tp))

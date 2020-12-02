@@ -18,6 +18,7 @@
 package kafka.server.metadata
 
 import java.util
+import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
 import java.util.{Collections, Properties}
 
 import kafka.api.LeaderAndIsr
@@ -107,19 +108,25 @@ class PartitionMetadataProcessor(kafkaConfig: KafkaConfig,
                                  quotaManagers: QuotaFactory.QuotaManagers,
                                  replicaManager: ReplicaManager,
                                  txnCoordinator: TransactionCoordinator,
-                                 configHandlers: Map[ConfigResource.Type, ConfigHandler]) extends BrokerMetadataProcessor with Logging {
+                                 configHandlers: Map[ConfigResource.Type, ConfigHandler]) extends BrokerMetadataProcessor
+  with ConfigRepository with Logging {
   // used only for onLeadershipChange()
   private val apisUtils = new ApisUtils(null, None, null, null, Some(groupCoordinator), Some(txnCoordinator))
 
   // visible for testing
   private[metadata] var brokerEpoch: Long = -1
 
-  // Define an immutable map for configs.  Every config change at the topic or broker level effectively results in this
-  // var being set to a new map.  Every instance is immutable, and updates (always performed by the same thread) replace
-  // the var with a completely new value. This means reads (which can occur from any thread) need to grab the value of
-  // this var (into a val) ONCE and retain that read copy for the duration of their operation. Multiple reads of the var
-  // risk getting different values.
-  @volatile private var configMap: Map[ConfigResource, Map[String, String]] = Map.empty
+  // Define a concurrent map for configs.
+  private val configMap: ConcurrentMap[ConfigResource, Map[String, String]] = new ConcurrentHashMap[ConfigResource, Map[String, String]]
+
+  override def configProperties(configResource: ConfigResource): Properties = {
+    if (configResource.`type`() != ConfigResource.Type.TOPIC && configResource.`type`() != ConfigResource.Type.BROKER) {
+      throw new IllegalArgumentException(s"Unknown config resource type: ${configResource.`type`()}")
+    }
+    val retval = new Properties()
+    configMap.getOrDefault(configResource, Map.empty).foreach { case (key, value) => retval.put(key, value) }
+    retval
+  }
 
   // visible for testing
   private[metadata] object MetadataMgr {
@@ -152,49 +159,16 @@ class PartitionMetadataProcessor(kafkaConfig: KafkaConfig,
       if (configResourceChanges.isEmpty) {
         List.empty
       } else {
-        var configMapToWrite: Map[ConfigResource, Map[String, String]] = configMap
         configResourceChanges.foreach { case (configResource, changedConfigsForResource) =>
-          val oldConfigsForResource: Map[String, String] = configMapToWrite.getOrElse(configResource, Map.empty)
+          val oldConfigsForResource: Map[String, String] = configMap.getOrDefault(configResource, Map.empty)
           val newConfigsForResource: Map[String, String] = oldConfigsForResource ++ changedConfigsForResource
           // be sure to remove anything overwritten with a null value -- those are deletes
-          configMapToWrite = configMapToWrite ++ Map(configResource ->
-            newConfigsForResource.filter(tuple => tuple._2 != null))
+          configMap.put(configResource, newConfigsForResource.filter(tuple => tuple._2 != null))
         }
-        configMap = configMapToWrite
         val retval = configResourceChanges.keySet.toSeq
         configResourceChanges.clear()
         retval
       }
-    }
-
-    def allTopicConfigs(): Map[String, Map[String, String]] = {
-      val configs = configMap
-      configs.filter {case (key, _) => key.`type`() == ConfigResource.Type.TOPIC}
-        .map {case (key, nameValuePairsMap) => (key.name(), nameValuePairsMap)}
-    }
-
-    def topicConfigProperties(topicName: String): Properties = {
-      configProperties(new ConfigResource(ConfigResource.Type.TOPIC, topicName))
-    }
-
-    def allBrokerConfigs(): Map[Int, Map[String, String]] = {
-      val configs = configMap
-      configs.filter {case (key, _) => key.`type`() == ConfigResource.Type.BROKER}
-        .map {case (key, nameValuePairsMap) => (key.name().toInt, nameValuePairsMap)}
-    }
-
-    def brokerConfigProperties(brokerId: Int): Properties = {
-      configProperties(new ConfigResource(ConfigResource.Type.BROKER, brokerId.toString))
-    }
-
-    def configProperties(configResource: ConfigResource): Properties = {
-      if (configResource.`type`() != ConfigResource.Type.TOPIC && configResource.`type`() != ConfigResource.Type.BROKER) {
-        throw new IllegalArgumentException(s"Unknown config resource type: ${configResource.`type`()}")
-      }
-      val configs = configMap
-      val retval = new Properties()
-      configs.get(configResource).getOrElse(Map.empty).foreach { case (key, value) => retval.put(key, value) }
-      retval
     }
 
     // define functions to retrieve and copy stuff on-demand
@@ -457,7 +431,7 @@ class PartitionMetadataProcessor(kafkaConfig: KafkaConfig,
       if (configHandler.isEmpty) {
         warn(s"No config handler for $configResource")
       } else {
-        configHandler.get.processConfigChanges(configResource.name(), mgr.configProperties(configResource))
+        configHandler.get.processConfigChanges(configResource.name(), configProperties(configResource))
       }
     })
     // send stop replica as required

@@ -39,6 +39,19 @@ object TransactionCoordinator {
             metrics: Metrics,
             metadataCache: MetadataCache,
             time: Time): TransactionCoordinator = {
+    TransactionCoordinator(config, replicaManager, scheduler, new ProducerIdManager(config.brokerId, zkClient),
+      () => zkClient.getTopicPartitionCount(Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(config.transactionTopicPartitions),
+      metrics, metadataCache, time)
+  }
+
+  def apply(config: KafkaConfig,
+            replicaManager: ReplicaManager,
+            scheduler: Scheduler,
+            producerIdGenerator: ProducerIdGenerator,
+            transactionTopicPartitionCountFunc: () => Int,
+            metrics: Metrics,
+            metadataCache: MetadataCache,
+            time: Time): TransactionCoordinator = {
 
     val txnConfig = TransactionConfig(config.transactionalIdExpirationMs,
       config.transactionMaxTimeoutMs,
@@ -51,15 +64,14 @@ object TransactionCoordinator {
       config.transactionRemoveExpiredTransactionalIdCleanupIntervalMs,
       config.requestTimeoutMs)
 
-    val producerIdManager = new ProducerIdManager(config.brokerId, zkClient)
-    val txnStateManager = new TransactionStateManager(config.brokerId, zkClient, scheduler, replicaManager, txnConfig,
+    val txnStateManager = new TransactionStateManager(config.brokerId, transactionTopicPartitionCountFunc, scheduler, replicaManager, txnConfig,
       time, metrics)
 
     val logContext = new LogContext(s"[TransactionCoordinator id=${config.brokerId}] ")
     val txnMarkerChannelManager = TransactionMarkerChannelManager(config, metrics, metadataCache, txnStateManager,
       time, logContext)
 
-    new TransactionCoordinator(config.brokerId, txnConfig, scheduler, producerIdManager, txnStateManager, txnMarkerChannelManager,
+    new TransactionCoordinator(txnConfig, scheduler, producerIdGenerator, txnStateManager, txnMarkerChannelManager,
       time, logContext)
   }
 
@@ -80,10 +92,9 @@ object TransactionCoordinator {
  * producers. Producers with specific transactional ids are assigned to their corresponding coordinators;
  * Producers with no specific transactional id may talk to a random broker as their coordinators.
  */
-class TransactionCoordinator(brokerId: Int,
-                             txnConfig: TransactionConfig,
+class TransactionCoordinator(txnConfig: TransactionConfig,
                              scheduler: Scheduler,
-                             producerIdManager: ProducerIdManager,
+                             producerIdManager: ProducerIdGenerator,
                              txnManager: TransactionStateManager,
                              txnMarkerChannelManager: TransactionMarkerChannelManager,
                              time: Time,

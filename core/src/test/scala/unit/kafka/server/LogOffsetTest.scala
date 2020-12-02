@@ -72,7 +72,7 @@ class LogOffsetTest extends BaseRequestTest {
 
     createTopic(topic, 1, 1)
 
-    val logManager = server.getLogManager
+    val logManager = server.logManager
     TestUtils.waitUntilTrue(() => logManager.getLog(topicPartition).isDefined,
                   "Log for partition [topic,0] should be created")
     val log = logManager.getLog(topicPartition).get
@@ -103,7 +103,7 @@ class LogOffsetTest extends BaseRequestTest {
 
     createTopic(topic, 1, 1)
 
-    val logManager = server.getLogManager
+    val logManager = server.logManager
     TestUtils.waitUntilTrue(() => logManager.getLog(topicPartition).isDefined,
       s"Log for partition $topicPartition should be created")
     val log = logManager.getLog(topicPartition).get
@@ -162,7 +162,7 @@ class LogOffsetTest extends BaseRequestTest {
 
     createTopic(topic, 3, 1)
 
-    val logManager = server.getLogManager
+    val logManager = server.logManager
     val log = logManager.getOrCreateLog(topicPartition, () => logManager.initialDefaultConfig)
 
     for (_ <- 0 until 20)
@@ -191,7 +191,7 @@ class LogOffsetTest extends BaseRequestTest {
 
     createTopic(topic, 3, 1)
 
-    val logManager = server.getLogManager
+    val logManager = server.logManager
     val log = logManager.getOrCreateLog(topicPartition, () => logManager.initialDefaultConfig)
     for (_ <- 0 until 20)
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)

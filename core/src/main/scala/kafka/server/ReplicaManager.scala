@@ -18,7 +18,7 @@ package kafka.server
 
 import java.io.File
 import java.util.Optional
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{Future, TimeUnit}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import java.util.concurrent.locks.Lock
 
@@ -33,6 +33,7 @@ import kafka.server.{FetchMetadata => SFetchMetadata}
 import kafka.server.HostedPartition.Online
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
+import kafka.server.metadata.BrokerMetadataListener
 import kafka.utils._
 import kafka.utils.Implicits._
 import kafka.zk.KafkaZkClient
@@ -189,7 +190,7 @@ object ReplicaManager {
 class ReplicaManager(val config: KafkaConfig,
                      metrics: Metrics,
                      time: Time,
-                     val zkClient: KafkaZkClient,
+                     val zkClient: Option[KafkaZkClient], // must be supplied with IBP < KAFKA_2_7_IV2
                      scheduler: Scheduler,
                      val logManager: LogManager,
                      val isShuttingDown: AtomicBoolean,
@@ -202,12 +203,17 @@ class ReplicaManager(val config: KafkaConfig,
                      val delayedDeleteRecordsPurgatory: DelayedOperationPurgatory[DelayedDeleteRecords],
                      val delayedElectLeaderPurgatory: DelayedOperationPurgatory[DelayedElectLeader],
                      threadNamePrefix: Option[String],
-                     val alterIsrManager: AlterIsrManager) extends Logging with KafkaMetricsGroup {
+                     val alterIsrManager: AlterIsrManager,
+                     val brokerMetadataListenerFuture: Option[Future[BrokerMetadataListener]] = None // must be supplied in KIP-500 mode, see kafka.cluster.Partition
+                    ) extends Logging with KafkaMetricsGroup {
 
+  if (zkClient.isEmpty && brokerMetadataListenerFuture.isEmpty) {
+    throw new IllegalArgumentException("Must supply either ZooKeeper client or broker metadata listener to Replica Manager")
+  }
   def this(config: KafkaConfig,
            metrics: Metrics,
            time: Time,
-           zkClient: KafkaZkClient,
+           zkClient: Option[KafkaZkClient],
            scheduler: Scheduler,
            logManager: LogManager,
            isShuttingDown: AtomicBoolean,
@@ -216,7 +222,8 @@ class ReplicaManager(val config: KafkaConfig,
            metadataCache: MetadataCache,
            logDirFailureChannel: LogDirFailureChannel,
            alterIsrManager: AlterIsrManager,
-           threadNamePrefix: Option[String] = None) = {
+           threadNamePrefix: Option[String],
+           brokerMetadataListenerFuture: Option[Future[BrokerMetadataListener]]) = {
     this(config, metrics, time, zkClient, scheduler, logManager, isShuttingDown,
       quotaManagers, brokerTopicStats, metadataCache, logDirFailureChannel,
       DelayedOperationPurgatory[DelayedProduce](
@@ -230,7 +237,40 @@ class ReplicaManager(val config: KafkaConfig,
         purgeInterval = config.deleteRecordsPurgatoryPurgeIntervalRequests),
       DelayedOperationPurgatory[DelayedElectLeader](
         purgatoryName = "ElectLeader", brokerId = config.brokerId),
-      threadNamePrefix, alterIsrManager)
+      threadNamePrefix, alterIsrManager, brokerMetadataListenerFuture)
+  }
+
+  def this(config: KafkaConfig,
+           metrics: Metrics,
+           time: Time,
+           zkClient: KafkaZkClient,
+           scheduler: Scheduler,
+           logManager: LogManager,
+           isShuttingDown: AtomicBoolean,
+           quotaManagers: QuotaManagers,
+           brokerTopicStats: BrokerTopicStats,
+           metadataCache: MetadataCache,
+           logDirFailureChannel: LogDirFailureChannel,
+           alterIsrManager: AlterIsrManager,
+           threadNamePrefix: Option[String]) = {
+    this(config, metrics, time, Some(zkClient), scheduler, logManager, isShuttingDown,
+      quotaManagers, brokerTopicStats, metadataCache, logDirFailureChannel, alterIsrManager, threadNamePrefix, None)
+  }
+
+  def this(config: KafkaConfig,
+           metrics: Metrics,
+           time: Time,
+           zkClient: KafkaZkClient,
+           scheduler: Scheduler,
+           logManager: LogManager,
+           isShuttingDown: AtomicBoolean,
+           quotaManagers: QuotaManagers,
+           brokerTopicStats: BrokerTopicStats,
+           metadataCache: MetadataCache,
+           logDirFailureChannel: LogDirFailureChannel,
+           alterIsrManager: AlterIsrManager) = {
+    this(config, metrics, time, zkClient, scheduler, logManager, isShuttingDown,
+      quotaManagers, brokerTopicStats, metadataCache, logDirFailureChannel, alterIsrManager, None)
   }
 
   /* epoch of the controller that last changed the leader */
@@ -312,7 +352,7 @@ class ReplicaManager(val config: KafkaConfig,
       if (isrChangeSet.nonEmpty &&
         (lastIsrChangeMs.get() + isrChangeNotificationConfig.lingerMs < now ||
           lastIsrPropagationMs.get() + isrChangeNotificationConfig.maxDelayMs < now)) {
-        zkClient.propagateIsrChanges(isrChangeSet)
+        zkClient.foreach(_.propagateIsrChanges(isrChangeSet))
         isrChangeSet.clear()
         lastIsrPropagationMs.set(now)
       }
@@ -342,6 +382,9 @@ class ReplicaManager(val config: KafkaConfig,
     scheduler.schedule("isr-expiration", maybeShrinkIsr _, period = config.replicaLagTimeMaxMs / 2, unit = TimeUnit.MILLISECONDS)
     // If using AlterIsr, we don't need the znode ISR propagation
     if (config.interBrokerProtocolVersion < KAFKA_2_7_IV2) {
+      if (zkClient.isEmpty) {
+        throw new IllegalStateException(s"Must supply zkClient with IBP < KAFKA_2_7_IV2: ${config.interBrokerProtocolVersion}")
+      }
       scheduler.schedule("isr-change-propagation", maybePropagateIsrChanges _,
         period = isrChangeNotificationConfig.checkIntervalMs, unit = TimeUnit.MILLISECONDS)
     } else {
@@ -1823,8 +1866,13 @@ class ReplicaManager(val config: KafkaConfig,
     }
     logManager.handleLogDirFailure(dir)
 
-    if (sendZkNotification)
-      zkClient.propagateLogDirEvent(localBrokerId)
+    if (sendZkNotification) {
+      if (zkClient.isEmpty) {
+        warn("Unable to propagate log dir failure via Zookeeper in KIP-500 mode") // will be handled via KIP-589
+      } else {
+        zkClient.get.propagateLogDirEvent(localBrokerId)
+      }
+    }
     warn(s"Stopped serving replicas in dir $dir")
   }
 

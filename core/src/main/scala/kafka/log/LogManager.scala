@@ -20,7 +20,7 @@ package kafka.log
 import java.io._
 import java.nio.file.Files
 import java.util.concurrent._
-import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
+import java.util.concurrent.atomic.AtomicInteger
 
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.{BrokerTopicStats, KafkaBroker, KafkaConfig, LogDirFailureChannel}
@@ -30,7 +30,6 @@ import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.errors.{KafkaStorageException, LogDirNotFoundException}
-import org.apache.kafka.metadata.BrokerState
 
 import scala.jdk.CollectionConverters._
 import scala.collection._
@@ -60,7 +59,7 @@ class LogManager(logDirs: Seq[File],
                  val retentionCheckMs: Long,
                  val maxPidExpirationMs: Int,
                  scheduler: Scheduler,
-                 val brokerState: AtomicReference[BrokerState],
+                 val cleanShutdownCompletableFuture: CompletableFuture[Boolean], // completes true if the shutdown was clean, otherwise false,
                  brokerTopicStats: BrokerTopicStats,
                  logDirFailureChannel: LogDirFailureChannel,
                  time: Time) extends Logging with KafkaMetricsGroup {
@@ -68,7 +67,7 @@ class LogManager(logDirs: Seq[File],
   import LogManager._
 
   val LockFile = ".lock"
-  val InitialTaskDelayMs = 30 * 1000
+  val InitialTaskDelayMs: Int = 30 * 1000
 
   private val logCreationOrDeletionLock = new Object
   private val currentLogs = new Pool[TopicPartition, Log]()
@@ -323,10 +322,11 @@ class LogManager(logDirs: Seq[File],
           // so that if broker crashes while loading the log, it is considered hard shutdown during the next boot up. KAFKA-10471
           cleanShutdownFile.delete()
           hadCleanShutdown = true
+          cleanShutdownCompletableFuture.complete(true)
         } else {
           // log recovery itself is being performed by `Log` class during initialization
           info(s"Attempting recovery for all logs in $logDirAbsolutePath since no clean shutdown file was found")
-          brokerState.set(BrokerState.RECOVERING_FROM_UNCLEAN_SHUTDOWN)
+          cleanShutdownCompletableFuture.complete(false)
         }
 
         var recoveryPoints = Map[TopicPartition, Long]()
@@ -1167,31 +1167,49 @@ object LogManager {
   val LogStartOffsetCheckpointFile = "log-start-offset-checkpoint"
   val ProducerIdExpirationCheckIntervalMs = 10 * 60 * 1000
 
+//  def mutateBrokerStateForUncleanShutdown(brokerState: AtomicReference[BrokerState]): Boolean => Unit = {
+//    cleanShutdown => if (!cleanShutdown) brokerState.set(BrokerState.RECOVERING_FROM_UNCLEAN_SHUTDOWN)
+//  }
+//
+//  def apply(config: KafkaConfig,
+//            initialOfflineDirs: Seq[String],
+//            zkClient: KafkaZkClient,
+//            brokerState: AtomicReference[BrokerState],
+//            kafkaScheduler: KafkaScheduler,
+//            time: Time,
+//            brokerTopicStats: BrokerTopicStats,
+//            logDirFailureChannel: LogDirFailureChannel): LogManager = {
+//    this(config, initialOfflineDirs, Some(zkClient),
+//      mutateBrokerStateForUncleanShutdown(brokerState),
+//      kafkaScheduler, time, brokerTopicStats, logDirFailureChannel)
+//  }
+//
+//  def apply(config: KafkaConfig,
+//            initialOfflineDirs: Seq[String],
+//            brokerState: AtomicReference[BrokerState],
+//            kafkaScheduler: KafkaScheduler,
+//            time: Time,
+//            brokerTopicStats: BrokerTopicStats,
+//            logDirFailureChannel: LogDirFailureChannel): LogManager = {
+//    this(config, initialOfflineDirs, None,
+//      mutateBrokerStateForUncleanShutdown(brokerState),
+//      kafkaScheduler, time, brokerTopicStats, logDirFailureChannel)
+//  }
+//
   def apply(config: KafkaConfig,
             initialOfflineDirs: Seq[String],
-            zkClient: KafkaZkClient,
-            brokerState: AtomicReference[BrokerState],
+            cleanShutdownCompletableFuture: CompletableFuture[Boolean], // completes true if the shutdown was clean, otherwise false,
             kafkaScheduler: KafkaScheduler,
             time: Time,
             brokerTopicStats: BrokerTopicStats,
             logDirFailureChannel: LogDirFailureChannel): LogManager = {
-    this(config, initialOfflineDirs, Some(zkClient), brokerState, kafkaScheduler, time, brokerTopicStats, logDirFailureChannel)
-  }
-
-  def apply(config: KafkaConfig,
-            initialOfflineDirs: Seq[String],
-            brokerState: AtomicReference[BrokerState],
-            kafkaScheduler: KafkaScheduler,
-            time: Time,
-            brokerTopicStats: BrokerTopicStats,
-            logDirFailureChannel: LogDirFailureChannel): LogManager = {
-    this(config, initialOfflineDirs, None, brokerState, kafkaScheduler, time, brokerTopicStats, logDirFailureChannel)
+    this(config, initialOfflineDirs, None, cleanShutdownCompletableFuture, kafkaScheduler, time, brokerTopicStats, logDirFailureChannel)
   }
 
   def apply(config: KafkaConfig,
             initialOfflineDirs: Seq[String],
             maybeZkClient: Option[KafkaZkClient],
-            brokerState: AtomicReference[BrokerState],
+            cleanShutdownCompletableFuture: CompletableFuture[Boolean], // completes true if the shutdown was clean, otherwise false,
             kafkaScheduler: KafkaScheduler,
             time: Time,
             brokerTopicStats: BrokerTopicStats,
@@ -1203,12 +1221,14 @@ object LogManager {
 
     val topicConfigs: Map[String, LogConfig] =
       if (maybeZkClient.isDefined) {
+        // do this to get rid of a spotbugs error in Scala 2.12
+        val zkClient: KafkaZkClient = maybeZkClient.iterator.next()
         // read the log configurations from zookeeper
-        val (topicConfigs, failed) = maybeZkClient.get.getLogConfigs(
-          maybeZkClient.get.getAllTopicsInCluster(),
+        val (topicConfigs, failed) = zkClient.getLogConfigs(
+          zkClient.getAllTopicsInCluster(),
           defaultProps
         )
-        if (!failed.isEmpty) throw failed.head._2
+        if (failed.nonEmpty) throw failed.head._2
         topicConfigs
       } else {
         Map.empty
@@ -1227,7 +1247,7 @@ object LogManager {
       retentionCheckMs = config.logCleanupIntervalMs,
       maxPidExpirationMs = config.transactionalIdExpirationMs,
       scheduler = kafkaScheduler,
-      brokerState = brokerState,
+      cleanShutdownCompletableFuture = cleanShutdownCompletableFuture,
       brokerTopicStats = brokerTopicStats,
       logDirFailureChannel = logDirFailureChannel,
       time = time)

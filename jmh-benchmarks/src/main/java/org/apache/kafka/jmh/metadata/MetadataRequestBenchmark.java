@@ -188,7 +188,8 @@ public class MetadataRequestBenchmark {
             time,
             null,
             brokerFeatures,
-            new FinalizedFeatureCache(brokerFeatures));
+            new FinalizedFeatureCache(brokerFeatures),
+            null);
     }
 
     @TearDown(Level.Trial)

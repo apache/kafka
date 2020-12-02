@@ -20,7 +20,7 @@ package kafka.server
 import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
 import java.util
-import java.util.{Collections, Optional}
+import java.util.{Collections, Optional, Properties}
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -31,19 +31,19 @@ import kafka.common.OffsetAndMetadata
 import kafka.controller.{KafkaController, ReplicaAssignment}
 import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult, LeaveGroupResult, SyncGroupResult}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
-import kafka.log.AppendOrigin
+import kafka.log.{AppendOrigin, LogConfig}
 import kafka.message.ZStdCompressionCodec
 import kafka.network.RequestChannel
 import kafka.security.authorizer.AuthorizerUtils
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
-import kafka.utils.{CoreUtils, Logging}
+import kafka.utils.{CoreUtils, Log4jController, Logging}
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.acl.{AclBinding, AclOperation}
 import org.apache.kafka.common.acl.AclOperation._
-import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigResource}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.{FatalExitError, Topic}
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
@@ -88,6 +88,9 @@ import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.util.{Failure, Success, Try}
 import kafka.coordinator.group.GroupOverview
+import kafka.server.metadata.BrokerMetadataListener
+import org.apache.kafka.common.message.DescribeConfigsRequestData.DescribeConfigsResource
+import org.apache.kafka.common.requests.DescribeConfigsResponse.ConfigSource
 
 /**
  * Logic to handle the various Kafka requests
@@ -97,7 +100,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val adminManager: LegacyAdminManager,
                 val groupCoordinator: GroupCoordinator,
                 val txnCoordinator: TransactionCoordinator,
-                val controller: KafkaController,
+                val legacyController: KafkaController,
                 val zkClient: KafkaZkClient,
                 val brokerId: Int,
                 val config: KafkaConfig,
@@ -111,13 +114,14 @@ class KafkaApis(val requestChannel: RequestChannel,
                 time: Time,
                 val tokenManager: DelegationTokenManager,
                 val brokerFeatures: BrokerFeatures,
-                val finalizedFeatureCache: FinalizedFeatureCache) extends ApiRequestHandler with Logging {
+                val finalizedFeatureCache: FinalizedFeatureCache,
+                brokerMetadataListener: BrokerMetadataListener) extends ApiRequestHandler with Logging {
 
   val apisUtils = new ApisUtils(requestChannel, authorizer, quotas, time, Some(groupCoordinator), Some(txnCoordinator))
 
   type FetchResponseStats = Map[TopicPartition, RecordConversionStats]
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
-  val adminZkClient = new AdminZkClient(zkClient)
+  val adminZkClient = if (zkClient == null) null else new AdminZkClient(zkClient)
   private val alterAclsPurgatory = new DelayedFuturePurgatory(purgatoryName = "AlterAcls", brokerId = config.brokerId)
 
   def close(): Unit = {
@@ -220,11 +224,14 @@ class KafkaApis(val requestChannel: RequestChannel,
     val leaderAndIsrRequest = request.body[LeaderAndIsrRequest]
 
     apisUtils.authorizeClusterOperation(request, CLUSTER_ACTION)
+    if (legacyController == null) {
+      throw new UnsupportedVersionException(s"Request $request should never happen in KIP-500 mode.")
+    }
     if (isBrokerEpochStale(leaderAndIsrRequest.brokerEpoch)) {
       // When the broker restarts very quickly, it is possible for this broker to receive request intended
       // for its previous generation so the broker should skip the stale request.
       info("Received LeaderAndIsr request with broker epoch " +
-        s"${leaderAndIsrRequest.brokerEpoch} smaller than the current broker epoch ${controller.brokerEpoch}")
+        s"${leaderAndIsrRequest.brokerEpoch} smaller than the current broker epoch ${legacyController.brokerEpoch}")
       apisUtils.sendResponseExemptThrottle(request, leaderAndIsrRequest.getErrorResponse(0, Errors.STALE_BROKER_EPOCH.exception))
     } else {
       val response = replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest, apisUtils.onLeadershipChange)
@@ -238,11 +245,14 @@ class KafkaApis(val requestChannel: RequestChannel,
     // stop serving data to clients for the topic being deleted
     val stopReplicaRequest = request.body[StopReplicaRequest]
     apisUtils.authorizeClusterOperation(request, CLUSTER_ACTION)
+    if (legacyController == null) {
+      throw new UnsupportedVersionException(s"Request $request should never happen in KIP-500 mode.")
+    }
     if (isBrokerEpochStale(stopReplicaRequest.brokerEpoch)) {
       // When the broker restarts very quickly, it is possible for this broker to receive request intended
       // for its previous generation so the broker should skip the stale request.
       info("Received StopReplica request with broker epoch " +
-        s"${stopReplicaRequest.brokerEpoch} smaller than the current broker epoch ${controller.brokerEpoch}")
+        s"${stopReplicaRequest.brokerEpoch} smaller than the current broker epoch ${legacyController.brokerEpoch}")
       apisUtils.sendResponseExemptThrottle(request, new StopReplicaResponse(
         new StopReplicaResponseData().setErrorCode(Errors.STALE_BROKER_EPOCH.code)))
     } else {
@@ -293,11 +303,14 @@ class KafkaApis(val requestChannel: RequestChannel,
     val updateMetadataRequest = request.body[UpdateMetadataRequest]
 
     apisUtils.authorizeClusterOperation(request, CLUSTER_ACTION)
+    if (legacyController == null) {
+      throw new UnsupportedVersionException(s"Request $request should never happen in KIP-500 mode.")
+    }
     if (isBrokerEpochStale(updateMetadataRequest.brokerEpoch)) {
       // When the broker restarts very quickly, it is possible for this broker to receive request intended
       // for its previous generation so the broker should skip the stale request.
       info("Received update metadata request with broker epoch " +
-        s"${updateMetadataRequest.brokerEpoch} smaller than the current broker epoch ${controller.brokerEpoch}")
+        s"${updateMetadataRequest.brokerEpoch} smaller than the current broker epoch ${legacyController.brokerEpoch}")
       apisUtils.sendResponseExemptThrottle(request,
         new UpdateMetadataResponse(new UpdateMetadataResponseData().setErrorCode(Errors.STALE_BROKER_EPOCH.code)))
     } else {
@@ -335,6 +348,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     // stop serving data to clients for the topic being deleted
     val controlledShutdownRequest = request.body[ControlledShutdownRequest]
     apisUtils.authorizeClusterOperation(request, CLUSTER_ACTION)
+    if (legacyController == null) {
+      throw new UnsupportedVersionException(s"Request $request should never happen in KIP-500 mode.")
+    }
 
     def controlledShutdownCallback(controlledShutdownResult: Try[Set[TopicPartition]]): Unit = {
       val response = controlledShutdownResult match {
@@ -346,7 +362,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
       apisUtils.sendResponseExemptThrottle(request, response)
     }
-    controller.controlledShutdown(controlledShutdownRequest.data.brokerId, controlledShutdownRequest.data.brokerEpoch, controlledShutdownCallback)
+    legacyController.controlledShutdown(controlledShutdownRequest.data.brokerId, controlledShutdownRequest.data.brokerEpoch, controlledShutdownCallback)
   }
 
   /**
@@ -418,6 +434,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (authorizedTopicRequestInfo.isEmpty)
         sendResponseCallback(Map.empty)
       else if (header.apiVersion == 0) {
+        if (zkClient == null) {
+          throw new UnsupportedOperationException("Storing offsets in ZooKeeper is unsupported in KIP-500 mode")
+        }
         // for version 0 always store offsets to ZK
         val responseInfo = authorizedTopicRequestInfo.map {
           case (topicPartition, partitionData) =>
@@ -1085,6 +1104,9 @@ class KafkaApis(val requestChannel: RequestChannel,
                           replicationFactor: Int,
                           properties: util.Properties = new util.Properties()): MetadataResponseTopic = {
     try {
+      if (adminZkClient == null) {
+        throw new UnsupportedOperationException("Auto topic creation is not yet supported in KIP-500 mode")
+      }
       adminZkClient.createTopic(topic, numPartitions, replicationFactor, properties, RackAwareMode.Safe)
       info("Auto creation of topic %s with %d partitions and replication factor %d is successful"
         .format(topic, numPartitions, replicationFactor))
@@ -1282,6 +1304,9 @@ class KafkaApis(val requestChannel: RequestChannel,
               offsetFetchRequest.partitions.asScala)
 
             // version 0 reads offsets from ZK
+            if (zkClient == null) {
+              throw new UnsupportedOperationException("Reading offsets from ZooKeeper is unsupported in KIP-500 mode")
+            }
             val authorizedPartitionData = authorizedPartitions.map { topicPartition =>
               try {
                 if (!metadataCache.contains(topicPartition))
@@ -1756,7 +1781,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val createTopicsRequest = request.body[CreateTopicsRequest]
     val results = new CreatableTopicResultCollection(createTopicsRequest.data.topics.size)
-    if (!controller.isActive) {
+    if (legacyController == null || !legacyController.isActive) {
       createTopicsRequest.data.topics.forEach { topic =>
         results.add(new CreatableTopicResult().setName(topic.name)
           .setErrorCode(Errors.NOT_CONTROLLER.code))
@@ -1840,7 +1865,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       apisUtils.sendResponseMaybeThrottle(controllerMutationQuota, request, createResponse, onComplete = None)
     }
 
-    if (!controller.isActive) {
+    if (legacyController == null || !legacyController.isActive) {
       val result = createPartitionsRequest.data.topics.asScala.map { topic =>
         (topic.name, new ApiError(Errors.NOT_CONTROLLER, null))
       }.toMap
@@ -1856,7 +1881,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         notDuped)(_.name)
 
       val (queuedForDeletion, valid) = authorized.partition { topic =>
-        controller.topicDeletionManager.isTopicQueuedUpForDeletion(topic.name)
+        legacyController.topicDeletionManager.isTopicQueuedUpForDeletion(topic.name)
       }
 
       val errors = dupes.map(_ -> new ApiError(Errors.INVALID_REQUEST, "Duplicate topic in request.")) ++
@@ -1890,7 +1915,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val deleteTopicRequest = request.body[DeleteTopicsRequest]
     val results = new DeletableTopicResultCollection(deleteTopicRequest.data.topicNames.size)
     val toDelete = mutable.Set[String]()
-    if (!controller.isActive) {
+    if (legacyController == null || !legacyController.isActive) {
       deleteTopicRequest.data.topicNames.forEach { topic =>
         results.add(new DeletableTopicResult()
           .setName(topic)
@@ -2536,9 +2561,17 @@ class KafkaApis(val requestChannel: RequestChannel,
         case rt => throw new InvalidRequestException(s"Unexpected resource type $rt")
       }
     }
-    val authorizedResult = adminManager.alterConfigs(authorizedResources, alterConfigsRequest.validateOnly)
-    val unauthorizedResult = unauthorizedResources.keys.map { resource =>
-      resource -> configsAuthorizationApiError(resource)
+    // unsupported in KIP-500 mode until forwarding is available
+    val authorizedResult: Map[ConfigResource, ApiError] = if (adminManager == null) {
+      Map.empty
+    } else {
+      adminManager.alterConfigs(authorizedResources, alterConfigsRequest.validateOnly)
+    }
+    val unauthorizedResult = if (adminManager == null) {
+      unauthorizedResources.keys.map { resource => resource -> configsAuthorizationApiError(resource) } ++
+        authorizedResources.keys.map { resource => resource -> configsAuthorizationApiError(resource) }
+    } else {
+      unauthorizedResources.keys.map { resource => resource -> configsAuthorizationApiError(resource) }
     }
     def responseCallback(requestThrottleMs: Int): AlterConfigsResponse = {
       val data = new AlterConfigsResponseData()
@@ -2557,6 +2590,9 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleAlterPartitionReassignmentsRequest(request: RequestChannel.Request): Unit = {
     apisUtils.authorizeClusterOperation(request, ALTER)
+    if (legacyController == null) {
+      throw new ClusterAuthorizationException(s"Request $request is not authorized in KIP-500 mode.")
+    }
     val alterPartitionReassignmentsRequest = request.body[AlterPartitionReassignmentsRequest]
 
     def sendResponseCallback(result: Either[Map[TopicPartition, ApiError], ApiError]): Unit = {
@@ -2593,11 +2629,14 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }.toMap
 
-    controller.alterPartitionReassignments(reassignments, sendResponseCallback)
+    legacyController.alterPartitionReassignments(reassignments, sendResponseCallback)
   }
 
   def handleListPartitionReassignmentsRequest(request: RequestChannel.Request): Unit = {
     apisUtils.authorizeClusterOperation(request, DESCRIBE)
+    if (legacyController == null) {
+      throw new ClusterAuthorizationException(s"Request $request is not authorized in KIP-500 mode.")
+    }
     val listPartitionReassignmentsRequest = request.body[ListPartitionReassignmentsRequest]
 
     def sendResponseCallback(result: Either[Map[TopicPartition, ReplicaAssignment], ApiError]): Unit = {
@@ -2637,7 +2676,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       case _ => None
     }
 
-    controller.listPartitionReassignments(partitionsOpt, sendResponseCallback)
+    legacyController.listPartitionReassignments(partitionsOpt, sendResponseCallback)
   }
 
   private def configsAuthorizationApiError(resource: ConfigResource): ApiError = {
@@ -2671,9 +2710,17 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    val authorizedResult = adminManager.incrementalAlterConfigs(authorizedResources, alterConfigsRequest.data.validateOnly)
-    val unauthorizedResult = unauthorizedResources.keys.map { resource =>
-      resource -> configsAuthorizationApiError(resource)
+    // unsupported in KIP-500 mode until forwarding is available
+    val authorizedResult: Map[ConfigResource, ApiError] = if (adminManager == null) {
+      Map.empty
+    } else {
+      adminManager.incrementalAlterConfigs(authorizedResources, alterConfigsRequest.data.validateOnly)
+    }
+    val unauthorizedResult = if (adminManager == null) {
+      unauthorizedResources.keys.map { resource => resource -> configsAuthorizationApiError(resource) } ++
+        authorizedResources.keys.map { resource => resource -> configsAuthorizationApiError(resource) }
+    } else {
+      unauthorizedResources.keys.map { resource => resource -> configsAuthorizationApiError(resource) }
     }
     apisUtils.sendResponseMaybeThrottle(request, requestThrottleMs =>
       new IncrementalAlterConfigsResponse(IncrementalAlterConfigsResponse.toResponseData(requestThrottleMs,
@@ -2691,7 +2738,11 @@ class KafkaApis(val requestChannel: RequestChannel,
         case rt => throw new InvalidRequestException(s"Unexpected resource type $rt for resource ${resource.resourceName}")
       }
     }
-    val authorizedConfigs = adminManager.describeConfigs(authorizedResources.toList, describeConfigsRequest.data.includeSynonyms, describeConfigsRequest.data.includeDocumentation)
+    val authorizedConfigs: List[DescribeConfigsResponseData.DescribeConfigsResult] = if (adminManager == null) {
+      describeConfigs(authorizedResources.toList, describeConfigsRequest.data.includeSynonyms, describeConfigsRequest.data.includeDocumentation)
+    } else {
+      adminManager.describeConfigs(authorizedResources.toList, describeConfigsRequest.data.includeSynonyms, describeConfigsRequest.data.includeDocumentation)
+    }
     val unauthorizedConfigs = unauthorizedResources.map { resource =>
       val error = ConfigResource.Type.forId(resource.resourceType) match {
         case ConfigResource.Type.BROKER | ConfigResource.Type.BROKER_LOGGER => Errors.CLUSTER_AUTHORIZATION_FAILED
@@ -2935,7 +2986,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       })
     }
 
-    if (!apisUtils.authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME)) {
+    if (legacyController == null || !apisUtils.authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME)) {
       val error = new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, null)
       val partitionErrors: Map[TopicPartition, ApiError] =
         electionRequest.topicPartitions.iterator.map(partition => partition -> error).toMap
@@ -2949,7 +3000,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       replicaManager.electLeaders(
-        controller,
+        legacyController,
         partitions,
         electionRequest.electionType,
         sendResponseCallback(ApiError.NONE),
@@ -3019,7 +3070,8 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleDescribeClientQuotasRequest(request: RequestChannel.Request): Unit = {
     val describeClientQuotasRequest = request.body[DescribeClientQuotasRequest]
 
-    if (apisUtils.authorize(request.context, DESCRIBE_CONFIGS, CLUSTER, CLUSTER_NAME)) {
+    // unsupported in KIP-500 mode until we implement client quotas
+    if (adminManager != null && apisUtils.authorize(request.context, DESCRIBE_CONFIGS, CLUSTER, CLUSTER_NAME)) {
       val result = adminManager.describeClientQuotas(describeClientQuotasRequest.filter).map { case (quotaEntity, quotaConfigs) =>
         quotaEntity -> quotaConfigs.map { case (key, value) => key -> Double.box(value) }.asJava
       }.asJava
@@ -3034,7 +3086,8 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleAlterClientQuotasRequest(request: RequestChannel.Request): Unit = {
     val alterClientQuotasRequest = request.body[AlterClientQuotasRequest]
 
-    if (apisUtils.authorize(request.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)) {
+    // unsupported in KIP-500 mode until we implement client quotas
+    if (adminManager != null && apisUtils.authorize(request.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)) {
       val result = adminManager.alterClientQuotas(alterClientQuotasRequest.entries().asScala.toSeq,
         alterClientQuotasRequest.validateOnly()).asJava
       apisUtils.sendResponseMaybeThrottle(request, requestThrottleMs =>
@@ -3048,7 +3101,8 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleDescribeUserScramCredentialsRequest(request: RequestChannel.Request): Unit = {
     val describeUserScramCredentialsRequest = request.body[DescribeUserScramCredentialsRequest]
 
-    if (apisUtils.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME)) {
+    // unsupported in KIP-500 mode until we implement user SCRAM credentials
+    if (adminManager != null && apisUtils.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME)) {
       val result = adminManager.describeUserScramCredentials(
         Option(describeUserScramCredentialsRequest.data.users).map(_.asScala.map(_.name).toList))
       apisUtils.sendResponseMaybeThrottle(request, requestThrottleMs =>
@@ -3062,7 +3116,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleAlterUserScramCredentialsRequest(request: RequestChannel.Request): Unit = {
     val alterUserScramCredentialsRequest = request.body[AlterUserScramCredentialsRequest]
 
-    if (!controller.isActive) {
+    if (legacyController == null || !legacyController.isActive) {
       apisUtils.sendResponseMaybeThrottle(request, requestThrottleMs =>
         alterUserScramCredentialsRequest.getErrorResponse(requestThrottleMs, Errors.NOT_CONTROLLER.exception))
     } else if (apisUtils.authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME)) {
@@ -3082,11 +3136,11 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (!apisUtils.authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
       apisUtils.sendResponseMaybeThrottle(request, requestThrottleMs =>
         alterIsrRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
-    } else if (!controller.isActive) {
+    } else if (legacyController == null || !legacyController.isActive) {
       apisUtils.sendResponseMaybeThrottle(request, requestThrottleMs =>
         alterIsrRequest.getErrorResponse(requestThrottleMs, Errors.NOT_CONTROLLER.exception()))
     } else {
-      controller.alterIsrs(alterIsrRequest.data,
+      legacyController.alterIsrs(alterIsrRequest.data,
         alterIsrResp => apisUtils.sendResponseMaybeThrottle(request, requestThrottleMs =>
           new AlterIsrResponse(alterIsrResp.setThrottleTimeMs(requestThrottleMs))
         )
@@ -3117,12 +3171,12 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     if (!apisUtils.authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME)) {
       sendResponseCallback(Left(new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED)))
-    } else if (!controller.isActive) {
+    } else if (legacyController == null || !legacyController.isActive) {
       sendResponseCallback(Left(new ApiError(Errors.NOT_CONTROLLER)))
     } else if (!config.isFeatureVersioningSupported) {
       sendResponseCallback(Left(new ApiError(Errors.INVALID_REQUEST, "Feature versioning system is disabled.")))
     } else {
-      controller.updateFeatures(updateFeaturesRequest, sendResponseCallback)
+      legacyController.updateFeatures(updateFeaturesRequest, sendResponseCallback)
     }
   }
 
@@ -3222,8 +3276,186 @@ class KafkaApis(val requestChannel: RequestChannel,
     else {
       // brokerEpochInRequest > controller.brokerEpoch is possible in rare scenarios where the controller gets notified
       // about the new broker epoch and sends a control request with this epoch before the broker learns about it
-      brokerEpochInRequest < controller.brokerEpoch
+      brokerEpochInRequest < legacyController.brokerEpoch
     }
   }
 
+  // visible for testing
+  private[server] def describeConfigs(resourceToConfigNames: List[DescribeConfigsResource],
+                              includeSynonyms: Boolean,
+                              includeDocumentation: Boolean): List[DescribeConfigsResponseData.DescribeConfigsResult] = {
+    resourceToConfigNames.map { case resource =>
+
+      def allConfigs(config: AbstractConfig) = {
+        config.originals.asScala.filter(_._2 != null) ++ config.values.asScala
+      }
+
+      def createResponseConfig(configs: Map[String, Any],
+                               createConfigEntry: (String, Any) => DescribeConfigsResponseData.DescribeConfigsResourceResult): DescribeConfigsResponseData.DescribeConfigsResult = {
+        val filteredConfigPairs = if (resource.configurationKeys == null)
+          configs.toBuffer
+        else
+          configs.filter { case (configName, _) =>
+            resource.configurationKeys.asScala.forall(_.contains(configName))
+          }.toBuffer
+
+        val configEntries = filteredConfigPairs.map { case (name, value) => createConfigEntry(name, value) }
+        new DescribeConfigsResponseData.DescribeConfigsResult().setErrorCode(Errors.NONE.code)
+          .setConfigs(configEntries.asJava)
+      }
+
+      try {
+        val configResult = ConfigResource.Type.forId(resource.resourceType) match {
+          case ConfigResource.Type.TOPIC =>
+            val topic = resource.resourceName
+            Topic.validate(topic)
+            if (metadataCache.contains(topic)) {
+              val topicProps = brokerMetadataListener.initiallyCaughtUpFuture.get.configProperties(new ConfigResource(ConfigResource.Type.TOPIC, topic))
+              val logConfig = LogConfig.fromProps(KafkaBroker.copyKafkaConfigToLog(config), topicProps)
+              createResponseConfig(allConfigs(logConfig), createTopicConfigEntry(logConfig, topicProps, includeSynonyms, includeDocumentation))
+            } else {
+              new DescribeConfigsResponseData.DescribeConfigsResult().setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
+                .setConfigs(Collections.emptyList[DescribeConfigsResponseData.DescribeConfigsResourceResult])
+            }
+
+          case ConfigResource.Type.BROKER =>
+            if (resource.resourceName == null || resource.resourceName.isEmpty)
+              createResponseConfig(config.dynamicConfig.currentDynamicDefaultConfigs,
+                createBrokerConfigEntry(perBrokerConfig = false, includeSynonyms, includeDocumentation))
+            else if (resourceNameToBrokerId(resource.resourceName) == config.brokerId)
+              createResponseConfig(allConfigs(config),
+                createBrokerConfigEntry(perBrokerConfig = true, includeSynonyms, includeDocumentation))
+            else
+              throw new InvalidRequestException(s"Unexpected broker id, expected ${config.brokerId} or empty string, but received ${resource.resourceName}")
+
+          case ConfigResource.Type.BROKER_LOGGER =>
+            if (resource.resourceName == null || resource.resourceName.isEmpty)
+              throw new InvalidRequestException("Broker id must not be empty")
+            else if (resourceNameToBrokerId(resource.resourceName) != config.brokerId)
+              throw new InvalidRequestException(s"Unexpected broker id, expected ${config.brokerId} but received ${resource.resourceName}")
+            else
+              createResponseConfig(Log4jController.loggers,
+                (name, value) => new DescribeConfigsResponseData.DescribeConfigsResourceResult().setName(name)
+                  .setValue(value.toString).setConfigSource(ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG.id)
+                  .setIsSensitive(false).setReadOnly(false).setSynonyms(List.empty.asJava))
+          case resourceType => throw new InvalidRequestException(s"Unsupported resource type: $resourceType")
+        }
+        configResult.setResourceName(resource.resourceName).setResourceType(resource.resourceType)
+      } catch {
+        case e: Throwable =>
+          // Log client errors at a lower level than unexpected exceptions
+          val message = s"Error processing describe configs request for resource $resource"
+          if (e.isInstanceOf[ApiException])
+            info(message, e)
+          else
+            error(message, e)
+          val err = ApiError.fromThrowable(e)
+          new DescribeConfigsResponseData.DescribeConfigsResult()
+            .setResourceName(resource.resourceName)
+            .setResourceType(resource.resourceType)
+            .setErrorMessage(err.message)
+            .setErrorCode(err.error.code)
+            .setConfigs(Collections.emptyList[DescribeConfigsResponseData.DescribeConfigsResourceResult])
+      }
+    }
+  }
+
+  private def createTopicConfigEntry(logConfig: LogConfig, topicProps: Properties, includeSynonyms: Boolean, includeDocumentation: Boolean)
+                                    (name: String, value: Any): DescribeConfigsResponseData.DescribeConfigsResourceResult = {
+    val configEntryType = LogConfig.configType(name)
+    val isSensitive = KafkaConfig.maybeSensitive(configEntryType)
+    val valueAsString = if (isSensitive) null else ConfigDef.convertToString(value, configEntryType.orNull)
+    val allSynonyms = {
+      val list = LogConfig.TopicConfigSynonyms.get(name)
+        .map(s => configSynonyms(s, brokerSynonyms(s), isSensitive))
+        .getOrElse(List.empty)
+      if (!topicProps.containsKey(name))
+        list
+      else
+        new DescribeConfigsResponseData.DescribeConfigsSynonym().setName(name).setValue(valueAsString)
+          .setSource(ConfigSource.TOPIC_CONFIG.id) +: list
+    }
+    val source = if (allSynonyms.isEmpty) ConfigSource.DEFAULT_CONFIG.id else allSynonyms.head.source
+    val synonyms = if (!includeSynonyms) List.empty else allSynonyms
+    val dataType = configResponseType(configEntryType)
+    val configDocumentation = if (includeDocumentation) logConfig.documentationOf(name) else null
+    new DescribeConfigsResponseData.DescribeConfigsResourceResult()
+      .setName(name).setValue(valueAsString).setConfigSource(source)
+      .setIsSensitive(isSensitive).setReadOnly(false).setSynonyms(synonyms.asJava)
+      .setDocumentation(configDocumentation).setConfigType(dataType.id)
+  }
+
+  private def createBrokerConfigEntry(perBrokerConfig: Boolean, includeSynonyms: Boolean, includeDocumentation: Boolean)
+                                     (name: String, value: Any): DescribeConfigsResponseData.DescribeConfigsResourceResult = {
+    val allNames = brokerSynonyms(name)
+    val configEntryType = KafkaConfig.configType(name)
+    val isSensitive = KafkaConfig.maybeSensitive(configEntryType)
+    val valueAsString = if (isSensitive)
+      null
+    else value match {
+      case v: String => v
+      case _ => ConfigDef.convertToString(value, configEntryType.orNull)
+    }
+    val allSynonyms = configSynonyms(name, allNames, isSensitive)
+      .filter(perBrokerConfig || _.source == ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG.id)
+    val synonyms = if (!includeSynonyms) List.empty else allSynonyms
+    val source = if (allSynonyms.isEmpty) ConfigSource.DEFAULT_CONFIG.id else allSynonyms.head.source
+    val readOnly = !DynamicBrokerConfig.AllDynamicConfigs.contains(name)
+
+    val dataType = configResponseType(configEntryType)
+    val configDocumentation = if (includeDocumentation) brokerDocumentation(name) else null
+    new DescribeConfigsResponseData.DescribeConfigsResourceResult().setName(name).setValue(valueAsString).setConfigSource(source)
+      .setIsSensitive(isSensitive).setReadOnly(readOnly).setSynonyms(synonyms.asJava)
+      .setDocumentation(configDocumentation).setConfigType(dataType.id)
+  }
+
+  private def configSynonyms(name: String, synonyms: List[String], isSensitive: Boolean): List[DescribeConfigsResponseData.DescribeConfigsSynonym] = {
+    val dynamicConfig = config.dynamicConfig
+    val allSynonyms = mutable.Buffer[DescribeConfigsResponseData.DescribeConfigsSynonym]()
+
+    def maybeAddSynonym(map: Map[String, String], source: ConfigSource)(name: String): Unit = {
+      map.get(name).map { value =>
+        val configValue = if (isSensitive) null else value
+        allSynonyms += new DescribeConfigsResponseData.DescribeConfigsSynonym().setName(name).setValue(configValue).setSource(source.id)
+      }
+    }
+
+    synonyms.foreach(maybeAddSynonym(dynamicConfig.currentDynamicBrokerConfigs, ConfigSource.DYNAMIC_BROKER_CONFIG))
+    synonyms.foreach(maybeAddSynonym(dynamicConfig.currentDynamicDefaultConfigs, ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG))
+    synonyms.foreach(maybeAddSynonym(dynamicConfig.staticBrokerConfigs, ConfigSource.STATIC_BROKER_CONFIG))
+    synonyms.foreach(maybeAddSynonym(dynamicConfig.staticDefaultConfigs, ConfigSource.DEFAULT_CONFIG))
+    allSynonyms.dropWhile(s => s.name != name).toList // e.g. drop listener overrides when describing base config
+  }
+
+  private def brokerSynonyms(name: String): List[String] = {
+    DynamicBrokerConfig.brokerConfigSynonyms(name, matchListenerOverride = true)
+  }
+
+  private def brokerDocumentation(name: String): String = {
+    config.documentationOf(name)
+  }
+
+  private def configResponseType(configType: Option[ConfigDef.Type]): DescribeConfigsResponse.ConfigType = {
+    if (configType.isEmpty)
+      DescribeConfigsResponse.ConfigType.UNKNOWN
+    else configType.get match {
+      case ConfigDef.Type.BOOLEAN => DescribeConfigsResponse.ConfigType.BOOLEAN
+      case ConfigDef.Type.STRING => DescribeConfigsResponse.ConfigType.STRING
+      case ConfigDef.Type.INT => DescribeConfigsResponse.ConfigType.INT
+      case ConfigDef.Type.SHORT => DescribeConfigsResponse.ConfigType.SHORT
+      case ConfigDef.Type.LONG => DescribeConfigsResponse.ConfigType.LONG
+      case ConfigDef.Type.DOUBLE => DescribeConfigsResponse.ConfigType.DOUBLE
+      case ConfigDef.Type.LIST => DescribeConfigsResponse.ConfigType.LIST
+      case ConfigDef.Type.CLASS => DescribeConfigsResponse.ConfigType.CLASS
+      case ConfigDef.Type.PASSWORD => DescribeConfigsResponse.ConfigType.PASSWORD
+      case _ => DescribeConfigsResponse.ConfigType.UNKNOWN
+    }
+  }
+
+  private def resourceNameToBrokerId(resourceName: String): Int = {
+    try resourceName.toInt catch {
+      case _: NumberFormatException =>
+        throw new InvalidRequestException(s"Broker id must be an integer, but it is: $resourceName")
+    }
+  }
 }

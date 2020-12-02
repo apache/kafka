@@ -38,7 +38,6 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.metadata.BrokerState;
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -64,10 +63,10 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
@@ -109,7 +108,7 @@ public class PartitionMakeFollowerBenchmark {
             1000L,
             60000,
             scheduler,
-            new AtomicReference<BrokerState>(BrokerState.NOT_RUNNING),
+            new CompletableFuture<>(),
             brokerTopicStats,
             logDirFailureChannel,
             Time.SYSTEM);

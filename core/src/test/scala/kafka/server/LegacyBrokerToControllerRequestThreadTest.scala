@@ -36,7 +36,7 @@ import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.Test
 import org.mockito.Mockito._
 
-class BrokerToControllerRequestThreadTest {
+class LegacyBrokerToControllerRequestThreadTest {
 
   @Test
   def testRequestsSent(): Unit = {
@@ -59,7 +59,7 @@ class BrokerToControllerRequestThreadTest {
     when(metadataCache.getAliveBroker(controllerId)).thenReturn(Some(activeController))
 
     val expectedResponse = ClientsTestUtils.metadataUpdateWith(2, Collections.singletonMap("a", new Integer(2)))
-    val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), requestQueue, metadataCache,
+    val testRequestThread = new LegacyBrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), requestQueue, metadataCache,
       config, listenerName, time, "")
     mockClient.prepareResponse(expectedResponse)
 
@@ -104,7 +104,7 @@ class BrokerToControllerRequestThreadTest {
     when(metadataCache.getAliveBrokers).thenReturn(Seq(oldController, newController))
 
     val expectedResponse = ClientsTestUtils.metadataUpdateWith(3, Collections.singletonMap("a", new Integer(2)))
-    val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(),
+    val testRequestThread = new LegacyBrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(),
       requestQueue, metadataCache, config, listenerName, time, "")
 
     val responseLatch = new CountDownLatch(1)
@@ -163,7 +163,7 @@ class BrokerToControllerRequestThreadTest {
       Collections.singletonMap("a", Errors.NOT_CONTROLLER),
       Collections.singletonMap("a", new Integer(2)))
     val expectedResponse = ClientsTestUtils.metadataUpdateWith(3, Collections.singletonMap("a", new Integer(2)))
-    val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), requestQueue, metadataCache,
+    val testRequestThread = new LegacyBrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), requestQueue, metadataCache,
       config, listenerName, time, "")
 
     val responseLatch = new CountDownLatch(1)

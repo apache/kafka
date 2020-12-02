@@ -44,7 +44,7 @@ class GroupCoordinatorIntegrationTest extends KafkaServerTestHarness {
       new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0) -> new OffsetAndMetadata(10, "")
     ).asJava
     consumer.commitSync(offsetMap)
-    val logManager = servers.head.getLogManager
+    val logManager = servers.head.logManager
     def getGroupMetadataLogOpt: Option[Log] =
       logManager.getLog(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0))
 

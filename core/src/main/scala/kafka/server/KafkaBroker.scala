@@ -21,15 +21,19 @@ import java.util
 import java.util.concurrent._
 
 import com.yammer.metrics.{core => yammer}
-import kafka.log.LogConfig
+import kafka.controller.KafkaController
+import kafka.log.{LogConfig, LogManager}
 import kafka.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
-import kafka.utils.Logging
+import kafka.network.SocketServer
+import kafka.utils.{KafkaScheduler, Logging}
+import kafka.zk.BrokerInfo
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.internals.ClusterResourceListeners
 import org.apache.kafka.common.metrics.{KafkaMetricsContext, MetricConfig, Metrics, MetricsReporter, Sensor}
 import org.apache.kafka.common.ClusterResource
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.BrokerState
+import org.apache.kafka.server.authorizer.Authorizer
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
@@ -120,6 +124,19 @@ trait KafkaBroker extends Logging with KafkaMetricsGroup {
   def metrics(): Metrics
   def currentState(): BrokerState
   def clusterId(): String
+
+  // methods required for legacy/kip500-agnostic dynamic configuration
+  def config: KafkaConfig
+  def authorizer: Option[Authorizer]
+  def kafkaYammerMetrics: KafkaYammerMetrics
+  def quotaManagers: QuotaFactory.QuotaManagers
+  def dataPlaneRequestHandlerPool: KafkaRequestHandlerPool
+  def socketServer: SocketServer
+  def replicaManager: ReplicaManager
+  def logManager: LogManager
+  def kafkaScheduler: KafkaScheduler
+  def legacyController: Option[KafkaController] = None // must override in legacy broker
+  def createBrokerInfo: BrokerInfo = throw new UnsupportedOperationException("Unsupported in KIP-500 mode") // must override in legacy broker
 
   newKafkaServerGauge("BrokerState", () => currentState().value())
   newKafkaServerGauge("ClusterId", () => clusterId())
