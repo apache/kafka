@@ -50,7 +50,7 @@ final public class FetchSnapshotRequest extends AbstractRequest {
         UnaryOperator<FetchSnapshotRequestData.PartitionSnapshot> operator
     ) {
         FetchSnapshotRequestData.PartitionSnapshot partitionSnapshot = operator.apply(
-            new FetchSnapshotRequestData.PartitionSnapshot().setIndex(topicPartition.partition())
+            new FetchSnapshotRequestData.PartitionSnapshot().setPartition(topicPartition.partition())
         );
 
         return new FetchSnapshotRequestData()
@@ -73,7 +73,7 @@ final public class FetchSnapshotRequest extends AbstractRequest {
             .stream()
             .filter(topic -> topic.name().equals(topicPartition.topic()))
             .flatMap(topic -> topic.partitions().stream())
-            .filter(parition -> parition.index() == topicPartition.partition())
+            .filter(partition -> partition.partition() == topicPartition.partition())
             .findAny();
     }
 }

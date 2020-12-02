@@ -61,24 +61,7 @@ final public class FetchSnapshotResponse extends AbstractResponse {
         return new FetchSnapshotResponseData().setErrorCode(error.code());
     }
 
-    public static FetchSnapshotResponseData singletonWithError(TopicPartition topicPartition, Errors error) {
-        return new FetchSnapshotResponseData()
-            .setTopics(
-                Collections.singletonList(
-                    new FetchSnapshotResponseData.TopicSnapshot()
-                        .setName(topicPartition.topic())
-                        .setPartitions(
-                            Collections.singletonList(
-                                new FetchSnapshotResponseData.PartitionSnapshot()
-                                    .setIndex(topicPartition.partition())
-                                    .setErrorCode(error.code())
-                            )
-                        )
-                )
-            );
-    }
-
-    public static FetchSnapshotResponseData singletonWithData(
+    public static FetchSnapshotResponseData singleton(
         TopicPartition topicPartition,
         UnaryOperator<FetchSnapshotResponseData.PartitionSnapshot> operator
     ) {
