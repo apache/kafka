@@ -175,6 +175,7 @@ public class KafkaStreams implements AutoCloseable {
     private StateRestoreListener globalStateRestoreListener;
     private boolean oldHandler;
     private java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler;
+    private final Object newThread = new Object();
 
     // container states
     /**
@@ -923,24 +924,26 @@ public class KafkaStreams implements AutoCloseable {
      * @return name of the added stream thread or empty if a new stream thread could not be added
      */
     public Optional<String> addStreamThread() {
-        if (isRunningOrRebalancing()) {
-            final int threadIdx = getNextThreadIndex();
-            final long cacheSizePerThread = getCacheSizePerThread(threads.size() + 1);
-            resizeThreadCache(cacheSizePerThread);
-            final StreamThread streamThread = createStreamThread(cacheSizePerThread, threadIdx);
-            synchronized (stateLock) {
-                if (isRunningOrRebalancing()) {
-                    streamThread.start();
-                    return Optional.of(streamThread.getName());
-                } else {
-                    threads.remove(streamThread);
-                    resizeThreadCache(getCacheSizePerThread(threads.size()));
-                    return Optional.empty();
+        synchronized (newThread) {
+            if (isRunningOrRebalancing()) {
+                final int threadIdx = getNextThreadIndex();
+                final long cacheSizePerThread = getCacheSizePerThread(threads.size() + 1);
+                resizeThreadCache(cacheSizePerThread);
+                final StreamThread streamThread = createStreamThread(cacheSizePerThread, threadIdx);
+                synchronized (stateLock) {
+                    if (isRunningOrRebalancing()) {
+                        streamThread.start();
+                        return Optional.of(streamThread.getName());
+                    } else {
+                        streamThread.shutdown();
+                        threads.remove(streamThread);
+                        resizeThreadCache(getCacheSizePerThread(threads.size()));
+                        return Optional.empty();
+                    }
                 }
             }
-        } else {
-            return Optional.empty();
         }
+        return Optional.empty();
     }
 
     private int getNextThreadIndex() {
