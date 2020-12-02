@@ -103,6 +103,7 @@ public class AdjustStreamThreadCountTest {
                 "Wait for the thread to be added"
             );
             assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount + 1));
+            TestUtils.waitForCondition(() -> kafkaStreams.state() == KafkaStreams.State.RUNNING, "wait for running");
         }
     }
 }
