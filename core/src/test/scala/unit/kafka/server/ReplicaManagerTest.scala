@@ -36,7 +36,7 @@ import kafka.utils.timer.MockTimer
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -1524,7 +1524,7 @@ class ReplicaManagerTest {
 
     // Mock network client to show leader offset of 5
     val blockingSend = new ReplicaFetcherMockBlockingSend(
-      Map(topicPartitionObj -> new OffsetForLeaderPartitionResult()
+      Map(topicPartitionObj -> new EpochEndOffset()
         .setPartition(topicPartitionObj.partition)
         .setLeaderEpoch(leaderEpochFromLeader)
         .setEndOffset(offsetFromLeader)).asJava,

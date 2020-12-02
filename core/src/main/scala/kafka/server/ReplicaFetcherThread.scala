@@ -30,7 +30,7 @@ import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.message.ListOffsetRequestData.{ListOffsetPartition, ListOffsetTopic}
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, Records}
@@ -328,7 +328,7 @@ class ReplicaFetcherThread(name: String,
     partition.truncateFullyAndStartAt(offset, isFuture = false)
   }
 
-  override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, OffsetForLeaderPartitionResult] = {
+  override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
 
     if (partitions.isEmpty) {
       debug("Skipping leaderEpoch request since all partitions do not have an epoch")
@@ -355,7 +355,7 @@ class ReplicaFetcherThread(name: String,
         // if we get any unexpected exception, mark all partitions with an error
         val error = Errors.forException(t)
         partitions.map { case (tp, _) =>
-          tp -> new OffsetForLeaderPartitionResult()
+          tp -> new EpochEndOffset()
             .setPartition(tp.partition)
             .setErrorCode(error.code)
         }

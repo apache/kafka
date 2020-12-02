@@ -135,7 +135,7 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetFor
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopicCollection;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData;
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult;
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
@@ -1845,18 +1845,18 @@ public class RequestResponseTest {
         data.topics().add(new OffsetForLeaderTopicResult()
             .setTopic("topic1")
             .setPartitions(Arrays.asList(
-                new OffsetForLeaderPartitionResult()
+                new EpochEndOffset()
                     .setPartition(0)
                     .setLeaderEpoch(1)
                     .setEndOffset(0),
-                new OffsetForLeaderPartitionResult()
+                new EpochEndOffset()
                     .setPartition(1)
                     .setLeaderEpoch(1)
                     .setEndOffset(1))));
         data.topics().add(new OffsetForLeaderTopicResult()
             .setTopic("topic2")
             .setPartitions(Arrays.asList(
-                new OffsetForLeaderPartitionResult()
+                new EpochEndOffset()
                     .setPartition(2)
                     .setLeaderEpoch(1)
                     .setEndOffset(1))));

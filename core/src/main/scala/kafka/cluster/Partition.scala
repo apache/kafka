@@ -33,7 +33,7 @@ import kafka.zookeeper.ZooKeeperClientException
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
@@ -1287,20 +1287,20 @@ class Partition(val topicPartition: TopicPartition,
    */
   def lastOffsetForLeaderEpoch(currentLeaderEpoch: Optional[Integer],
                                leaderEpoch: Int,
-                               fetchOnlyFromLeader: Boolean): OffsetForLeaderPartitionResult = {
+                               fetchOnlyFromLeader: Boolean): EpochEndOffset = {
     inReadLock(leaderIsrUpdateLock) {
       val localLogOrError = getLocalLog(currentLeaderEpoch, fetchOnlyFromLeader)
       localLogOrError match {
         case Left(localLog) =>
           localLog.endOffsetForEpoch(leaderEpoch) match {
-            case Some(epochAndOffset) => new OffsetForLeaderPartitionResult()
+            case Some(epochAndOffset) => new EpochEndOffset()
               .setPartition(partitionId)
               .setLeaderEpoch(epochAndOffset.leaderEpoch)
               .setEndOffset(epochAndOffset.offset)
-            case None => new OffsetForLeaderPartitionResult()
+            case None => new EpochEndOffset()
               .setPartition(partitionId)
           }
-        case Right(error) => new OffsetForLeaderPartitionResult()
+        case Right(error) => new EpochEndOffset()
           .setPartition(partitionId)
           .setErrorCode(error.code)
       }

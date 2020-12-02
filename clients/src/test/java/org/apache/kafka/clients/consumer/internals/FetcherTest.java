@@ -56,7 +56,7 @@ import org.apache.kafka.common.message.ListOffsetResponseData.ListOffsetPartitio
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData;
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult;
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -3740,7 +3740,7 @@ public class FetcherTest {
                     topic = new OffsetForLeaderTopicResult().setTopic(tp.topic());
                     data.topics().add(topic);
                 }
-                topic.partitions().add(new OffsetForLeaderPartitionResult()
+                topic.partitions().add(new EpochEndOffset()
                     .setPartition(tp.partition())
                     .setLeaderEpoch(4)
                     .setEndOffset(0));
@@ -4383,7 +4383,7 @@ public class FetcherTest {
         OffsetForLeaderEpochResponseData data = new OffsetForLeaderEpochResponseData();
         data.topics().add(new OffsetForLeaderTopicResult()
             .setTopic(topicPartition.topic())
-            .setPartitions(Collections.singletonList(new OffsetForLeaderPartitionResult()
+            .setPartitions(Collections.singletonList(new EpochEndOffset()
                 .setPartition(topicPartition.partition())
                 .setErrorCode(error.code())
                 .setLeaderEpoch(leaderEpoch)

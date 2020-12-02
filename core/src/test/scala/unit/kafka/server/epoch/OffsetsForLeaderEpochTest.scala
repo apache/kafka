@@ -25,7 +25,7 @@ import kafka.server._
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetForLeaderTopic, OffsetForLeaderPartition}
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{OffsetForLeaderTopicResult, OffsetForLeaderPartitionResult}
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{OffsetForLeaderTopicResult, EpochEndOffset}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
@@ -158,7 +158,7 @@ class OffsetsForLeaderEpochTest {
   ): OffsetForLeaderTopicResult = {
     new OffsetForLeaderTopicResult()
       .setTopic(tp.topic)
-      .setPartitions(List(new OffsetForLeaderPartitionResult()
+      .setPartitions(List(new EpochEndOffset()
         .setPartition(tp.partition)
         .setErrorCode(error.code)
         .setLeaderEpoch(leaderEpoch)

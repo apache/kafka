@@ -25,7 +25,7 @@ import kafka.server.BlockingSend
 import org.apache.kafka.clients.MockClient.MockMetadataUpdater
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, MockClient, NetworkClientUtils}
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{OffsetForLeaderTopicResult, OffsetForLeaderPartitionResult}
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{OffsetForLeaderTopicResult, EpochEndOffset}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.requests.AbstractRequest.Builder
@@ -43,7 +43,7 @@ import scala.collection.Map
   * OFFSET_FOR_LEADER_EPOCH with different offsets in response, it should update offsets using
   * setOffsetsForNextResponse
   */
-class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, OffsetForLeaderPartitionResult],
+class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, EpochEndOffset],
                                      sourceBroker: BrokerEndPoint,
                                      time: Time)
   extends BlockingSend {
@@ -57,7 +57,7 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Offs
   var epochFetchCount = 0
   var lastUsedOffsetForLeaderEpochVersion = -1
   var callback: Option[() => Unit] = None
-  var currentOffsets: util.Map[TopicPartition, OffsetForLeaderPartitionResult] = offsets
+  var currentOffsets: util.Map[TopicPartition, EpochEndOffset] = offsets
   var fetchPartitionData: Map[TopicPartition, FetchResponse.PartitionData[Records]] = Map.empty
   private val sourceNode = new Node(sourceBroker.id, sourceBroker.host, sourceBroker.port)
 
@@ -65,7 +65,7 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Offs
     callback = Some(postEpochFunction)
   }
 
-  def setOffsetsForNextResponse(newOffsets: util.Map[TopicPartition, OffsetForLeaderPartitionResult]): Unit = {
+  def setOffsetsForNextResponse(newOffsets: util.Map[TopicPartition, EpochEndOffset]): Unit = {
     currentOffsets = newOffsets
   }
 

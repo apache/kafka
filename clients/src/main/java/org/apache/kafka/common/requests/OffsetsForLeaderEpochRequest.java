@@ -23,7 +23,7 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetFor
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopicCollection;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData;
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult;
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -140,7 +140,7 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
             OffsetForLeaderTopicResult topicData = new OffsetForLeaderTopicResult()
                 .setTopic(topic.topic());
             topic.partitions().forEach(partition ->
-                topicData.partitions().add(new OffsetForLeaderPartitionResult()
+                topicData.partitions().add(new EpochEndOffset()
                     .setPartition(partition.partition())
                     .setErrorCode(error.code())
                     .setLeaderEpoch(UNDEFINED_EPOCH)

@@ -27,7 +27,7 @@ import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.FetchResponseData
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -910,7 +910,7 @@ class ReplicaFetcherThreadTest {
    tp: TopicPartition,
    leaderEpoch: Int,
    endOffset: Long
- ): OffsetForLeaderPartitionResult = {
+ ): EpochEndOffset = {
     newOffsetForLeaderPartitionResult(tp, Errors.NONE, leaderEpoch, endOffset)
   }
 
@@ -919,8 +919,8 @@ class ReplicaFetcherThreadTest {
     error: Errors,
     leaderEpoch: Int,
     endOffset: Long
-  ): OffsetForLeaderPartitionResult = {
-    new OffsetForLeaderPartitionResult()
+  ): EpochEndOffset = {
+    new EpochEndOffset()
       .setPartition(tp.partition)
       .setErrorCode(error.code)
       .setLeaderEpoch(leaderEpoch)

@@ -29,7 +29,7 @@ import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.serialization.StringSerializer
 import org.apache.kafka.common.utils.{LogContext, SystemTime}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{OffsetsForLeaderEpochRequest, OffsetsForLeaderEpochResponse}
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET
@@ -273,7 +273,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     */
   private[epoch] class TestFetcherThread(sender: BlockingSend) extends Logging {
 
-    def leaderOffsetsFor(partitions: Map[TopicPartition, Int]): Map[TopicPartition, OffsetForLeaderPartitionResult] = {
+    def leaderOffsetsFor(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = {
       val partitionData = partitions.map { case (k, v) =>
         k -> new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty(), v)
       }
