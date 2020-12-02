@@ -729,11 +729,11 @@ public class NetworkClient implements KafkaClient {
             throw new SchemaException("Buffer underflow while parsing response for request with header " + requestHeader, e);
         } catch (CorrelationIdMismatchException e) {
             if (SaslClientAuthenticator.isReserved(requestHeader.correlationId())
-                    && !SaslClientAuthenticator.isReserved(e.responseCorrelationId()))
+                && !SaslClientAuthenticator.isReserved(e.responseCorrelationId()))
                 throw new SchemaException("The response is unrelated to Sasl request since its correlation id is "
-                        + e.responseCorrelationId() + " and the reserved range for Sasl request is [ "
-                        + SaslClientAuthenticator.MIN_RESERVED_CORRELATION_ID + ","
-                        + SaslClientAuthenticator.MAX_RESERVED_CORRELATION_ID + "]");
+                    + e.responseCorrelationId() + " and the reserved range for Sasl request is [ "
+                    + SaslClientAuthenticator.MIN_RESERVED_CORRELATION_ID + ","
+                    + SaslClientAuthenticator.MAX_RESERVED_CORRELATION_ID + "]");
             else {
                 throw e;
             }
@@ -868,24 +868,24 @@ public class NetworkClient implements KafkaClient {
         for (NetworkReceive receive : this.selector.completedReceives()) {
             String source = receive.source();
             InFlightRequest req = inFlightRequests.completeNext(source);
-            AbstractResponse responseBody = parseResponse(receive.payload(), req.header);
 
+            AbstractResponse response = parseResponse(receive.payload(), req.header);
             if (throttleTimeSensor != null)
-                throttleTimeSensor.record(responseBody.throttleTimeMs(), now);
+                throttleTimeSensor.record(response.throttleTimeMs(), now);
 
             if (log.isDebugEnabled()) {
                 log.debug("Received {} response from node {} for request with header {}: {}",
-                    req.header.apiKey(), req.destination, req.header, responseBody);
+                    req.header.apiKey(), req.destination, req.header, response);
             }
 
             // If the received response includes a throttle delay, throttle the connection.
-            maybeThrottle(responseBody, req.header.apiVersion(), req.destination, now);
-            if (req.isInternalRequest && responseBody instanceof MetadataResponse)
-                metadataUpdater.handleSuccessfulResponse(req.header, now, (MetadataResponse) responseBody);
-            else if (req.isInternalRequest && responseBody instanceof ApiVersionsResponse)
-                handleApiVersionsResponse(responses, req, now, (ApiVersionsResponse) responseBody);
+            maybeThrottle(response, req.header.apiVersion(), req.destination, now);
+            if (req.isInternalRequest && response instanceof MetadataResponse)
+                metadataUpdater.handleSuccessfulResponse(req.header, now, (MetadataResponse) response);
+            else if (req.isInternalRequest && response instanceof ApiVersionsResponse)
+                handleApiVersionsResponse(responses, req, now, (ApiVersionsResponse) response);
             else
-                responses.add(req.completed(responseBody, now));
+                responses.add(req.completed(response, now));
         }
     }
 
