@@ -45,6 +45,12 @@ import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
 
+trait IsrChangeListener {
+  def markExpand(): Unit
+  def markShrink(): Unit
+  def markFailed(): Unit
+}
+
 trait PartitionStateStore {
   def fetchTopicConfig(): Properties
   def shrinkIsr(controllerEpoch: Int, leaderAndIsr: LeaderAndIsr): Option[Int]
@@ -53,7 +59,7 @@ trait PartitionStateStore {
 
 class ZkPartitionStateStore(topicPartition: TopicPartition,
                             zkClient: KafkaZkClient,
-                            replicaManager: ReplicaManager) extends PartitionStateStore {
+                            isrChangeListener: IsrChangeListener) extends PartitionStateStore {
 
   override def fetchTopicConfig(): Properties = {
     val adminZkClient = new AdminZkClient(zkClient)
@@ -63,14 +69,14 @@ class ZkPartitionStateStore(topicPartition: TopicPartition,
   override def shrinkIsr(controllerEpoch: Int, leaderAndIsr: LeaderAndIsr): Option[Int] = {
     val newVersionOpt = updateIsr(controllerEpoch, leaderAndIsr)
     if (newVersionOpt.isDefined)
-      replicaManager.isrShrinkRate.mark()
+      isrChangeListener.markShrink()
     newVersionOpt
   }
 
   override def expandIsr(controllerEpoch: Int, leaderAndIsr: LeaderAndIsr): Option[Int] = {
     val newVersionOpt = updateIsr(controllerEpoch, leaderAndIsr)
     if (newVersionOpt.isDefined)
-      replicaManager.isrExpandRate.mark()
+      isrChangeListener.markExpand()
     newVersionOpt
   }
 
@@ -79,10 +85,9 @@ class ZkPartitionStateStore(topicPartition: TopicPartition,
       leaderAndIsr, controllerEpoch)
 
     if (updateSucceeded) {
-      replicaManager.recordIsrChange(topicPartition)
       Some(newVersion)
     } else {
-      replicaManager.failedIsrUpdatesRate.mark()
+      isrChangeListener.markFailed()
       None
     }
   }
@@ -107,10 +112,25 @@ object Partition extends KafkaMetricsGroup {
   def apply(topicPartition: TopicPartition,
             time: Time,
             replicaManager: ReplicaManager): Partition = {
+
+    val isrChangeListener = new IsrChangeListener {
+      override def markExpand(): Unit = {
+        replicaManager.recordIsrChange(topicPartition)
+        replicaManager.isrExpandRate.mark()
+      }
+
+      override def markShrink(): Unit = {
+        replicaManager.recordIsrChange(topicPartition)
+        replicaManager.isrShrinkRate.mark()
+      }
+
+      override def markFailed(): Unit = replicaManager.failedIsrUpdatesRate.mark()
+    }
+
     val zkIsrBackingStore = new ZkPartitionStateStore(
       topicPartition,
       replicaManager.zkClient,
-      replicaManager)
+      isrChangeListener)
 
     val delayedOperations = new DelayedOperations(
       topicPartition,
@@ -124,6 +144,7 @@ object Partition extends KafkaMetricsGroup {
       localBrokerId = replicaManager.config.brokerId,
       time = time,
       stateStore = zkIsrBackingStore,
+      isrChangeListener = isrChangeListener,
       delayedOperations = delayedOperations,
       metadataCache = replicaManager.metadataCache,
       logManager = replicaManager.logManager,
@@ -246,6 +267,7 @@ class Partition(val topicPartition: TopicPartition,
                 localBrokerId: Int,
                 time: Time,
                 stateStore: PartitionStateStore,
+                isrChangeListener: IsrChangeListener,
                 delayedOperations: DelayedOperations,
                 metadataCache: MetadataCache,
                 logManager: LogManager,
