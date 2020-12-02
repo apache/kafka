@@ -123,12 +123,12 @@ public class AclAuthorizerBenchmark {
             Set<AclEntry> entries = aclEntries.computeIfAbsent(resource, k -> new HashSet<>());
 
             for (int aclId = 0; aclId < aclCount / 2; aclId++) {
-                String acePrinciple = principal.toString() + (aclId == 0 ? "" : aclId);
+                String acePrincipal = principal.toString() + (aclId == 0 ? "" : aclId);
                 AccessControlEntry allowAce = new AccessControlEntry(
-                    acePrinciple,
+                    acePrincipal,
                     "*", AclOperation.WRITE, AclPermissionType.ALLOW);
                 AccessControlEntry denyAce = new AccessControlEntry(
-                    acePrinciple,
+                    acePrincipal,
                     "*", AclOperation.WRITE, AclPermissionType.DENY);
                 entries.add(new AclEntry(allowAce));
                 // dominantly deny all the literal resource

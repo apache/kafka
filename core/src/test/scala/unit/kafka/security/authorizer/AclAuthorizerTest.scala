@@ -1199,10 +1199,6 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
       authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.GROUP))
   }
 
-
-  /**
-   * TODO: Confirm that we won't allow 1. wildcard host 2. wildcard principle 3. all operation in our interface default
-   */
   @Test
   def testAuthorizeAnyWithAllOperationAce(): Unit = {
     testAuthorizeAnyWithAllOperationAce(aclAuthorizer)
@@ -1285,16 +1281,16 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testAuthorizeAnyWithAllPrincipleAce(): Unit = {
-    testAuthorizeAnyWithAllPrincipleAce(aclAuthorizer)
+  def testAuthorizeAnyWithAllPrincipalAce(): Unit = {
+    testAuthorizeAnyWithAllPrincipalAce(aclAuthorizer)
   }
 
   @Test
-  def testAuthorizeAnyWithAllPrincipleAceInterfaceDefault(): Unit = {
-    testAuthorizeAnyWithAllPrincipleAce(interfaceDefaultAuthorizer)
+  def testAuthorizeAnyWithAllPrincipalAceInterfaceDefault(): Unit = {
+    testAuthorizeAnyWithAllPrincipalAce(interfaceDefaultAuthorizer)
   }
 
-  private def testAuthorizeAnyWithAllPrincipleAce(authorizer: Authorizer): Unit = {
+  private def testAuthorizeAnyWithAllPrincipalAce(authorizer: Authorizer): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1")
     val user2 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user2")
     val allUser = AclEntry.WildcardPrincipalString

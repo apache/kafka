@@ -213,7 +213,7 @@ class AuthorizerWrapper(private[kafka] val baseAuthorizer: kafka.security.auth.A
   private def aceMatched(requestContext: AuthorizableRequestContext,
                  op: AclOperation,
                  binding: AclBinding): Boolean = {
-    (hostMatched(requestContext, binding) && principleMatched(requestContext, binding)
+    (hostMatched(requestContext, binding) && principalMatched(requestContext, binding)
       && operationMatched(op, binding))
   }
 
@@ -224,7 +224,7 @@ class AuthorizerWrapper(private[kafka] val baseAuthorizer: kafka.security.auth.A
       || binding.entry().host().equals(AclEntry.WildcardHost))
 
   @inline
-  private def principleMatched(requestContext: AuthorizableRequestContext,
+  private def principalMatched(requestContext: AuthorizableRequestContext,
                   binding: AclBinding): Boolean =
     (binding.entry().principal().equals(requestContext.principal().toString)
       || binding.entry().principal().equals(AclEntry.WildcardPrincipal.toString))

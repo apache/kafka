@@ -1821,12 +1821,12 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     createTopic("topic-2")
     createTopic("to")
 
-    val unrelatedPrincipleString = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "unrelated").toString
+    val unrelatedPrincipalString = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "unrelated").toString
     val unrelatedTopicResource = new ResourcePattern(TOPIC, "topic-2", LITERAL)
     val unrelatedGroupResource = new ResourcePattern(GROUP, "to", PREFIXED)
 
     val acl1 = new AccessControlEntry(clientPrincipalString, WildcardHost, READ, DENY)
-    val acl2 = new AccessControlEntry(unrelatedPrincipleString, WildcardHost, READ, DENY)
+    val acl2 = new AccessControlEntry(unrelatedPrincipalString, WildcardHost, READ, DENY)
     val acl3 = new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, DENY)
     val acl4 = new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)
     val acl5 = new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)
