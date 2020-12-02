@@ -470,7 +470,7 @@ public class SaslServerAuthenticator implements Authenticator {
                     String errorMessage = "Authentication failed during "
                             + reauthInfo.authenticationOrReauthenticationText()
                             + " due to invalid credentials with SASL mechanism " + saslMechanism;
-                    sendKafkaResponse(requestContext, new SaslAuthenticateResponse(
+                    buildResponseOnAuthenticateFailure(requestContext, new SaslAuthenticateResponse(
                             new SaslAuthenticateResponseData()
                             .setErrorCode(Errors.SASL_AUTHENTICATION_FAILED.code())
                             .setErrorMessage(errorMessage)));
