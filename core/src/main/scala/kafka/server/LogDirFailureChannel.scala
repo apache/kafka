@@ -50,6 +50,13 @@ class LogDirFailureChannel(logDirNum: Int) extends Logging {
   }
 
   /*
+   * Return whether the given log dir is offline.
+   */
+  def logDirIsFailed(logDir: String): Boolean = {
+    offlineLogDirs.containsKey(logDir)
+  }
+
+  /*
    * Get the next offline log dir from logDirFailureEvent queue.
    * The method will wait if necessary until a new offline log directory becomes available
    */

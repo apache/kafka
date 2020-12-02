@@ -2819,6 +2819,21 @@ class LogTest {
   }
 
   @Test
+  def testAppendToLogInFailedLogDir(): Unit = {
+    val log = createLog(logDir, LogConfig())
+    log.appendAsLeader(TestUtils.singletonRecords(value = null), leaderEpoch = 0)
+    assertEquals(0, readLog(log, 0, 4096).records.records.iterator.next().offset)
+    log.logDirFailureChannel.maybeAddOfflineLogDir(logDir.getParent, "Simulating failed log dir", new IOException("Test failure"))
+    try {
+      log.appendAsLeader(TestUtils.singletonRecords(value = null), leaderEpoch = 0)
+      fail()
+    } catch {
+      case _: KafkaStorageException => // good!
+    }
+    assertEquals(0, readLog(log, 0, 4096).records.records.iterator.next().offset)
+  }
+
+  @Test
   def testCorruptLog(): Unit = {
     // append some messages to create some segments
     val logConfig = LogTest.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1, maxMessageBytes = 64 * 1024)
