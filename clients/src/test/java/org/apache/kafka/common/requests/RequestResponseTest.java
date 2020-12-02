@@ -1847,12 +1847,10 @@ public class RequestResponseTest {
             .setPartitions(Arrays.asList(
                 new OffsetForLeaderPartitionResult()
                     .setPartition(0)
-                    .setErrorCode(Errors.NONE.code())
                     .setLeaderEpoch(1)
                     .setEndOffset(0),
                 new OffsetForLeaderPartitionResult()
                     .setPartition(1)
-                    .setErrorCode(Errors.NONE.code())
                     .setLeaderEpoch(1)
                     .setEndOffset(1))));
         data.topics().add(new OffsetForLeaderTopicResult()
@@ -1860,7 +1858,6 @@ public class RequestResponseTest {
             .setPartitions(Arrays.asList(
                 new OffsetForLeaderPartitionResult()
                     .setPartition(2)
-                    .setErrorCode(Errors.NONE.code())
                     .setLeaderEpoch(1)
                     .setEndOffset(1))));
 

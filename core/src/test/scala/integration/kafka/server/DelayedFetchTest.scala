@@ -159,7 +159,6 @@ class DelayedFetchTest extends EasyMockSupport {
     EasyMock.expect(partition.lastOffsetForLeaderEpoch(currentLeaderEpoch, lastFetchedEpoch.get, fetchOnlyFromLeader = false))
       .andReturn(new OffsetForLeaderPartitionResult()
         .setPartition(topicPartition.partition)
-        .setErrorCode(Errors.NONE.code)
         .setLeaderEpoch(lastFetchedEpoch.get)
         .setEndOffset(fetchOffset - 1))
     EasyMock.expect(replicaManager.isAddingReplica(EasyMock.anyObject(), EasyMock.anyInt())).andReturn(false)

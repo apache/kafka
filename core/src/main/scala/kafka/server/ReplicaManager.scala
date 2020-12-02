@@ -57,7 +57,6 @@ import org.apache.kafka.common.replica.{ClientMetadata, _}
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
-import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
 
@@ -1900,22 +1899,16 @@ class ReplicaManager(val config: KafkaConfig,
             new OffsetForLeaderPartitionResult()
               .setPartition(offsetForLeaderPartition.partition)
               .setErrorCode(Errors.KAFKA_STORAGE_ERROR.code)
-              .setLeaderEpoch(UNDEFINED_EPOCH)
-              .setEndOffset(UNDEFINED_EPOCH_OFFSET)
 
           case HostedPartition.None if metadataCache.contains(tp) =>
             new OffsetForLeaderPartitionResult()
               .setPartition(offsetForLeaderPartition.partition)
               .setErrorCode(Errors.NOT_LEADER_OR_FOLLOWER.code)
-              .setLeaderEpoch(UNDEFINED_EPOCH)
-              .setEndOffset(UNDEFINED_EPOCH_OFFSET)
 
           case HostedPartition.None =>
             new OffsetForLeaderPartitionResult()
               .setPartition(offsetForLeaderPartition.partition)
               .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
-              .setLeaderEpoch(UNDEFINED_EPOCH)
-              .setEndOffset(UNDEFINED_EPOCH_OFFSET)
         }
       }
 

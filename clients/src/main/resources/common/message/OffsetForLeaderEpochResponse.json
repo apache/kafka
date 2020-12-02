@@ -41,7 +41,7 @@
           "about": "The partition index." },
         { "name": "LeaderEpoch", "type": "int32", "versions": "1+", "default": "-1", "ignorable": true,
           "about": "The leader epoch of the partition." },
-        { "name": "EndOffset", "type": "int64", "versions": "0+",
+        { "name": "EndOffset", "type": "int64", "versions": "0+", "default": "-1",
           "about": "The end offset of the epoch." }
       ]}
     ]}

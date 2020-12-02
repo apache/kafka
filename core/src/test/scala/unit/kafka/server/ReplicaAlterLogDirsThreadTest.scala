@@ -29,7 +29,6 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetFo
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.{FetchRequest, OffsetsForLeaderEpochRequest}
-import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.easymock.EasyMock._
 import org.easymock.{Capture, CaptureType, EasyMock, IExpectationSetters}
@@ -103,7 +102,6 @@ class ReplicaAlterLogDirsThreadTest {
     when(partition.lastOffsetForLeaderEpoch(Optional.empty(), leaderEpoch, fetchOnlyFromLeader = false))
       .thenReturn(new OffsetForLeaderPartitionResult()
         .setPartition(partitionId)
-        .setErrorCode(Errors.NONE.code)
         .setLeaderEpoch(leaderEpoch)
         .setEndOffset(logEndOffset))
     when(partition.futureLocalLogOrException).thenReturn(futureLog)
@@ -200,7 +198,6 @@ class ReplicaAlterLogDirsThreadTest {
     when(partition.lastOffsetForLeaderEpoch(Optional.empty(), leaderEpoch, fetchOnlyFromLeader = false))
       .thenReturn(new OffsetForLeaderPartitionResult()
         .setPartition(partitionId)
-        .setErrorCode(Errors.NONE.code)
         .setLeaderEpoch(leaderEpoch)
         .setEndOffset(logEndOffset))
     when(partition.futureLocalLogOrException).thenReturn(futureLog)
@@ -294,7 +291,6 @@ class ReplicaAlterLogDirsThreadTest {
     expect(partitionT1p0.lastOffsetForLeaderEpoch(Optional.empty(), leaderEpochT1p0, fetchOnlyFromLeader = false))
       .andReturn(new OffsetForLeaderPartitionResult()
         .setPartition(partitionT1p0Id)
-        .setErrorCode(Errors.NONE.code)
         .setLeaderEpoch(leaderEpochT1p0)
         .setEndOffset(leoT1p0))
       .anyTimes()
@@ -304,7 +300,6 @@ class ReplicaAlterLogDirsThreadTest {
     expect(partitionT1p1.lastOffsetForLeaderEpoch(Optional.empty(), leaderEpochT1p1, fetchOnlyFromLeader = false))
       .andReturn(new OffsetForLeaderPartitionResult()
         .setPartition(partitionT1p1Id)
-        .setErrorCode(Errors.NONE.code)
         .setLeaderEpoch(leaderEpochT1p1)
         .setEndOffset(leoT1p1))
       .anyTimes()
@@ -328,12 +323,10 @@ class ReplicaAlterLogDirsThreadTest {
     val expected = Map(
       t1p0 -> new OffsetForLeaderPartitionResult()
         .setPartition(t1p0.partition)
-        .setErrorCode(Errors.NONE.code)
         .setLeaderEpoch(leaderEpochT1p0)
         .setEndOffset(leoT1p0),
       t1p1 -> new OffsetForLeaderPartitionResult()
         .setPartition(t1p1.partition)
-        .setErrorCode(Errors.NONE.code)
         .setLeaderEpoch(leaderEpochT1p1)
         .setEndOffset(leoT1p1)
     )
@@ -362,7 +355,6 @@ class ReplicaAlterLogDirsThreadTest {
     expect(partitionT1p0.lastOffsetForLeaderEpoch(Optional.empty(), leaderEpoch, fetchOnlyFromLeader = false))
       .andReturn(new OffsetForLeaderPartitionResult()
         .setPartition(partitionId)
-        .setErrorCode(Errors.NONE.code)
         .setLeaderEpoch(leaderEpoch)
         .setEndOffset(leo))
       .anyTimes()
@@ -389,14 +381,11 @@ class ReplicaAlterLogDirsThreadTest {
     val expected = Map(
       t1p0 -> new OffsetForLeaderPartitionResult()
         .setPartition(t1p0.partition)
-        .setErrorCode(Errors.NONE.code)
         .setLeaderEpoch(leaderEpoch)
         .setEndOffset(leo),
       t1p1 -> new OffsetForLeaderPartitionResult()
         .setPartition(t1p1.partition)
         .setErrorCode(Errors.KAFKA_STORAGE_ERROR.code)
-        .setLeaderEpoch(UNDEFINED_EPOCH)
-        .setEndOffset(UNDEFINED_EPOCH_OFFSET)
     )
 
     assertEquals(expected, result)
@@ -454,7 +443,6 @@ class ReplicaAlterLogDirsThreadTest {
     expect(partitionT1p0.lastOffsetForLeaderEpoch(Optional.of(1), leaderEpoch, fetchOnlyFromLeader = false))
       .andReturn(new OffsetForLeaderPartitionResult()
         .setPartition(partitionT1p0Id)
-        .setErrorCode(Errors.NONE.code)
         .setLeaderEpoch(leaderEpoch)
         .setEndOffset(replicaT1p0LEO))
       .anyTimes()
@@ -465,7 +453,6 @@ class ReplicaAlterLogDirsThreadTest {
     expect(partitionT1p1.lastOffsetForLeaderEpoch(Optional.of(1), leaderEpoch, fetchOnlyFromLeader = false))
       .andReturn(new OffsetForLeaderPartitionResult()
         .setPartition(partitionT1p1Id)
-        .setErrorCode(Errors.NONE.code)
         .setLeaderEpoch(leaderEpoch)
         .setEndOffset(replicaT1p1LEO))
       .anyTimes()
@@ -536,7 +523,6 @@ class ReplicaAlterLogDirsThreadTest {
     expect(partition.lastOffsetForLeaderEpoch(Optional.of(1), leaderEpoch, fetchOnlyFromLeader = false))
       .andReturn(new OffsetForLeaderPartitionResult()
         .setPartition(partitionId)
-        .setErrorCode(Errors.NONE.code)
         .setLeaderEpoch(leaderEpoch - 1)
         .setEndOffset(replicaLEO))
       .anyTimes()
@@ -547,7 +533,6 @@ class ReplicaAlterLogDirsThreadTest {
     expect(partition.lastOffsetForLeaderEpoch(Optional.of(1), leaderEpoch - 2, fetchOnlyFromLeader = false))
       .andReturn(new OffsetForLeaderPartitionResult()
         .setPartition(partitionId)
-        .setErrorCode(Errors.NONE.code)
         .setLeaderEpoch(leaderEpoch - 2)
         .setEndOffset(replicaEpochEndOffset))
       .anyTimes()
@@ -674,13 +659,10 @@ class ReplicaAlterLogDirsThreadTest {
     expect(partition.lastOffsetForLeaderEpoch(Optional.of(1), futureReplicaLeaderEpoch, fetchOnlyFromLeader = false))
       .andReturn(new OffsetForLeaderPartitionResult()
         .setPartition(partitionId)
-        .setErrorCode(Errors.REPLICA_NOT_AVAILABLE.code)
-        .setLeaderEpoch(UNDEFINED_EPOCH)
-        .setEndOffset(UNDEFINED_EPOCH_OFFSET))
+        .setErrorCode(Errors.REPLICA_NOT_AVAILABLE.code))
       .times(3)
       .andReturn(new OffsetForLeaderPartitionResult()
         .setPartition(partitionId)
-        .setErrorCode(Errors.NONE.code)
         .setLeaderEpoch(futureReplicaLeaderEpoch)
         .setEndOffset(replicaLEO))
 
@@ -752,7 +734,6 @@ class ReplicaAlterLogDirsThreadTest {
     expect(partition.lastOffsetForLeaderEpoch(Optional.of(1), leaderEpoch, fetchOnlyFromLeader = false))
         .andReturn(new OffsetForLeaderPartitionResult()
           .setPartition(partitionId)
-          .setErrorCode(Errors.NONE.code)
           .setLeaderEpoch(leaderEpoch)
           .setEndOffset(replicaLEO))
     expect(partition.truncateTo(futureReplicaLEO, isFuture = true)).once()

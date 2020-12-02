@@ -33,7 +33,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.requests.FetchResponse.PartitionData
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
-import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
+import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq, Set, mutable}
@@ -168,9 +168,6 @@ class ReplicaAlterLogDirsThread(name: String,
         val endOffset = if (epochData.leaderEpoch == UNDEFINED_EPOCH) {
           new OffsetForLeaderPartitionResult()
             .setPartition(tp.partition)
-            .setErrorCode(Errors.NONE.code)
-            .setLeaderEpoch(UNDEFINED_EPOCH)
-            .setEndOffset(UNDEFINED_EPOCH_OFFSET)
         } else {
           val partition = replicaMgr.getPartitionOrException(tp)
           partition.lastOffsetForLeaderEpoch(
@@ -185,8 +182,6 @@ class ReplicaAlterLogDirsThread(name: String,
           tp -> new OffsetForLeaderPartitionResult()
             .setPartition(tp.partition)
             .setErrorCode(Errors.forException(t).code)
-            .setLeaderEpoch(UNDEFINED_EPOCH)
-            .setEndOffset(UNDEFINED_EPOCH_OFFSET)
       }
     }
   }

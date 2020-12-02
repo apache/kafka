@@ -74,7 +74,6 @@ import org.apache.kafka.common.replica.ClientMetadata
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
-import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType._
@@ -2612,8 +2611,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         new OffsetForLeaderPartitionResult()
           .setPartition(offsetForLeaderPartition.partition)
           .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
-          .setLeaderEpoch(UNDEFINED_EPOCH)
-          .setEndOffset(UNDEFINED_EPOCH_OFFSET)
       }
 
       new OffsetForLeaderTopicResult()

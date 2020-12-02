@@ -35,7 +35,6 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, Records}
 import org.apache.kafka.common.requests._
-import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.utils.{LogContext, Time}
 
 import scala.jdk.CollectionConverters._
@@ -359,8 +358,6 @@ class ReplicaFetcherThread(name: String,
           tp -> new OffsetForLeaderPartitionResult()
             .setPartition(tp.partition)
             .setErrorCode(error.code)
-            .setLeaderEpoch(UNDEFINED_EPOCH)
-            .setEndOffset(UNDEFINED_EPOCH_OFFSET)
         }
     }
   }

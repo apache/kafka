@@ -3742,7 +3742,6 @@ public class FetcherTest {
                 }
                 topic.partitions().add(new OffsetForLeaderPartitionResult()
                     .setPartition(tp.partition())
-                    .setErrorCode(Errors.NONE.code())
                     .setLeaderEpoch(4)
                     .setEndOffset(0));
             });
