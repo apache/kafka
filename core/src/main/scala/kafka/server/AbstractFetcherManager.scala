@@ -26,6 +26,7 @@ import org.apache.kafka.common.utils.Utils
 
 import scala.collection.mutable
 import scala.collection.{Map, Set}
+import scala.jdk.CollectionConverters._
 
 abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: String, clientId: String, numFetchers: Int)
   extends Logging with KafkaMetricsGroup {
@@ -64,11 +65,16 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   def resizeThreadPool(newSize: Int): Unit = {
     def migratePartitions(newSize: Int): Unit = {
       fetcherThreadMap.forKeyValue { (id, thread) =>
-        val removedPartitions = thread.removeAllPartitions()
-        removeFetcherForPartitions(removedPartitions.keySet) // clear state for removed partitions
+        val partitionStates = removeFetcherForPartitions(thread.partitions.asScala)
         if (id.fetcherId >= newSize)
           thread.shutdown()
-        addFetcherForPartitions(removedPartitions)
+        val fetchStates = partitionStates.map { case (topicPartition, currentFetchState) =>
+          val initialFetchState = InitialFetchState(thread.sourceBroker,
+            currentLeaderEpoch = currentFetchState.currentLeaderEpoch,
+            initOffset = currentFetchState.fetchOffset)
+          topicPartition -> initialFetchState
+        }
+        addFetcherForPartitions(fetchStates)
       }
     }
     lock synchronized {
@@ -153,14 +159,16 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
     info(s"Added fetcher to broker ${fetcherThread.sourceBroker.id} for partitions $initialOffsetAndEpochs")
   }
 
-  def removeFetcherForPartitions(partitions: Set[TopicPartition]): Unit = {
+  def removeFetcherForPartitions(partitions: Set[TopicPartition]): Map[TopicPartition, PartitionFetchState] = {
+    val fetchStates = mutable.Map.empty[TopicPartition, PartitionFetchState]
     lock synchronized {
       for (fetcher <- fetcherThreadMap.values)
-        fetcher.removePartitions(partitions)
+        fetchStates ++= fetcher.removePartitions(partitions)
       failedPartitions.removeAll(partitions)
     }
     if (partitions.nonEmpty)
       info(s"Removed fetcher for partitions $partitions")
+    fetchStates
   }
 
   def shutdownIdleFetcherThreads(): Unit = {

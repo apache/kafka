@@ -510,8 +510,8 @@ class ReplicaFetcherThreadTest {
     thread.addPartitions(Map(t1p0 -> initialFetchState(initialLEO), t1p1 -> initialFetchState(initialLEO)))
     val partitions = Set(t1p0, t1p1)
 
-    // Loop 1 -- both topic partitions skip epoch fetch and send fetch request since
-    // lastFetchedEpoch is set in initial fetch state.
+    // Loop 1 -- both topic partitions skip epoch fetch and send fetch request since we can truncate
+    // later based on diverging epochs in fetch response.
     thread.doWork()
     assertEquals(0, mockNetwork.epochFetchCount)
     assertEquals(1, mockNetwork.fetchCount)

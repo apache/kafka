@@ -462,8 +462,10 @@ abstract class AbstractFetcherThread(name: String,
     } else if (initialFetchState.initOffset < 0) {
       fetchOffsetAndTruncate(tp, initialFetchState.currentLeaderEpoch)
     } else if (isTruncationOnFetchSupported) {
+      // With old message format, `latestEpoch` will be empty and we use Truncating state
+      // to truncate to high watermark.
       val lastFetchedEpoch = latestEpoch(tp)
-      val state = if (lastFetchedEpoch.exists(_ != EpochEndOffset.UNDEFINED_EPOCH)) Fetching else Truncating
+      val state = if (lastFetchedEpoch.nonEmpty) Fetching else Truncating
       PartitionFetchState(initialFetchState.initOffset, None, initialFetchState.currentLeaderEpoch,
           state, lastFetchedEpoch)
     } else {
@@ -694,13 +696,15 @@ abstract class AbstractFetcherThread(name: String,
     } finally partitionMapLock.unlock()
   }
 
-  def removePartitions(topicPartitions: Set[TopicPartition]): Unit = {
+  def removePartitions(topicPartitions: Set[TopicPartition]): Map[TopicPartition, PartitionFetchState] = {
     partitionMapLock.lockInterruptibly()
     try {
-      topicPartitions.foreach { topicPartition =>
+      topicPartitions.map { topicPartition =>
+        val state = partitionStates.stateValue(topicPartition)
         partitionStates.remove(topicPartition)
         fetcherLagStats.unregister(topicPartition)
-      }
+        topicPartition -> state
+      }.filter(_._2 != null).toMap
     } finally partitionMapLock.unlock()
   }
 
@@ -710,24 +714,15 @@ abstract class AbstractFetcherThread(name: String,
     finally partitionMapLock.unlock()
   }
 
+  def partitions: util.Set[TopicPartition] = {
+    partitionMapLock.lockInterruptibly()
+    try new util.HashSet(partitionStates.partitionSet)
+    finally partitionMapLock.unlock()
+  }
+
   // Visible for testing
   private[server] def fetchState(topicPartition: TopicPartition): Option[PartitionFetchState] = inLock(partitionMapLock) {
     Option(partitionStates.stateValue(topicPartition))
-  }
-
-  /**
-   * Removes all partitions assigned to this thread and returns current fetch state
-   * for each partition. This is used to reassign partitions when thread pool is resized.
-   */
-  private[server] def removeAllPartitions(): Map[TopicPartition, InitialFetchState] = inLock(partitionMapLock) {
-    val fetchStates = partitionStates.partitionStateMap.asScala.map { case (topicPartition, currentFetchState) =>
-      val initialFetchState = InitialFetchState(sourceBroker,
-        currentLeaderEpoch = currentFetchState.currentLeaderEpoch,
-        initOffset = currentFetchState.fetchOffset)
-      topicPartition -> initialFetchState
-    }
-    partitionStates.clear()
-    fetchStates
   }
 
   protected def toMemoryRecords(records: Records): MemoryRecords = {
