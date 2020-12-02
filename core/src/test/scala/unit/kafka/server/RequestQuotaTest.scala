@@ -14,6 +14,7 @@
 
 package kafka.server
 
+import java.net.InetAddress
 import java.util
 import java.util.concurrent.{Executors, Future, TimeUnit}
 import java.util.{Collections, Optional, Properties}
@@ -25,15 +26,18 @@ import kafka.security.authorizer.AclAuthorizer
 import kafka.utils.TestUtils
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.message.AddOffsetsToTxnRequestData
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
+import org.apache.kafka.common.message.ListOffsetRequestData.{ListOffsetPartition, ListOffsetTopic}
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopicCollection
 import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
-import org.apache.kafka.common.message._
+import org.apache.kafka.common.message.{AddOffsetsToTxnRequestData, _}
 import org.apache.kafka.common.metrics.{KafkaMetric, Quota, Sensor}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
@@ -41,15 +45,15 @@ import org.apache.kafka.common.quota.ClientQuotaFilter
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.{PatternType, ResourceType => AdminResourceType}
-import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder, SecurityProtocol}
+import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.utils.{Sanitizer, SecurityUtils}
-import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicPartition}
+import org.apache.kafka.common._
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
-import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
+import scala.jdk.CollectionConverters._
 
 class RequestQuotaTest extends BaseRequestTest {
 
@@ -146,16 +150,18 @@ class RequestQuotaTest extends BaseRequestTest {
 
   @Test
   def testUnthrottledClient(): Unit = {
-    for (apiKey <- RequestQuotaTest.ClientActions)
+    for (apiKey <- RequestQuotaTest.ClientActions) {
       submitTest(apiKey, () => checkUnthrottledClient(apiKey))
+    }
 
     waitAndCheckResults()
   }
 
   @Test
   def testExemptRequestTime(): Unit = {
-    for (apiKey <- RequestQuotaTest.ClusterActions)
+    for (apiKey <- RequestQuotaTest.ClusterActions) {
       submitTest(apiKey, () => checkExemptRequestMetric(apiKey))
+    }
 
     waitAndCheckResults()
   }
@@ -164,8 +170,9 @@ class RequestQuotaTest extends BaseRequestTest {
   def testUnauthorizedThrottle(): Unit = {
     RequestQuotaTest.principal = RequestQuotaTest.UnauthorizedPrincipal
 
-    for (apiKey <- ApiKeys.values)
+    for (apiKey <- ApiKeys.enabledApis.asScala) {
       submitTest(apiKey, () => checkUnauthorizedRequestThrottle(apiKey))
+    }
 
     waitAndCheckResults()
   }
@@ -206,8 +213,16 @@ class RequestQuotaTest extends BaseRequestTest {
   private def requestBuilder(apiKey: ApiKeys): AbstractRequest.Builder[_ <: AbstractRequest] = {
     apiKey match {
         case ApiKeys.PRODUCE =>
-          ProduceRequest.Builder.forCurrentMagic(1, 5000,
-            collection.mutable.Map(tp -> MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("test".getBytes))).asJava)
+          requests.ProduceRequest.forCurrentMagic(new ProduceRequestData()
+            .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
+              Collections.singletonList(new ProduceRequestData.TopicProduceData()
+                .setName(tp.topic()).setPartitionData(Collections.singletonList(
+                new ProduceRequestData.PartitionProduceData()
+                  .setIndex(tp.partition())
+                  .setRecords(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("test".getBytes))))))
+                .iterator))
+            .setAcks(1.toShort)
+            .setTimeoutMs(5000))
 
         case ApiKeys.FETCH =>
           val partitionMap = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
@@ -218,9 +233,14 @@ class RequestQuotaTest extends BaseRequestTest {
           new MetadataRequest.Builder(List(topic).asJava, true)
 
         case ApiKeys.LIST_OFFSETS =>
+          val topic = new ListOffsetTopic()
+            .setName(tp.topic)
+            .setPartitions(List(new ListOffsetPartition()
+              .setPartitionIndex(tp.partition)
+              .setTimestamp(0L)
+              .setCurrentLeaderEpoch(15)).asJava)
           ListOffsetRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
-            .setTargetTimes(Map(tp -> new ListOffsetRequest.PartitionData(
-              0L, Optional.of[Integer](15))).asJava)
+            .setTargetTimes(List(topic).asJava)
 
         case ApiKeys.LEADER_AND_ISR =>
           new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, brokerId, Int.MaxValue, Long.MaxValue,
@@ -394,8 +414,14 @@ class RequestQuotaTest extends BaseRequestTest {
           new InitProducerIdRequest.Builder(requestData)
 
         case ApiKeys.OFFSET_FOR_LEADER_EPOCH =>
-          OffsetsForLeaderEpochRequest.Builder.forConsumer(Map(tp ->
-            new OffsetsForLeaderEpochRequest.PartitionData(Optional.of(15), 0)).asJava)
+          val epochs = new OffsetForLeaderTopicCollection()
+          epochs.add(new OffsetForLeaderTopic()
+            .setTopic(tp.topic())
+            .setPartitions(List(new OffsetForLeaderPartition()
+              .setPartition(tp.partition())
+              .setLeaderEpoch(0)
+              .setCurrentLeaderEpoch(15)).asJava))
+          OffsetsForLeaderEpochRequest.Builder.forConsumer(epochs)
 
         case ApiKeys.ADD_PARTITIONS_TO_TXN =>
           new AddPartitionsToTxnRequest.Builder("test-transactional-id", 1, 0, List(tp).asJava)
@@ -554,6 +580,40 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.ALTER_CLIENT_QUOTAS =>
           new AlterClientQuotasRequest.Builder(List.empty.asJava, false)
 
+        case ApiKeys.DESCRIBE_USER_SCRAM_CREDENTIALS =>
+          new DescribeUserScramCredentialsRequest.Builder(new DescribeUserScramCredentialsRequestData())
+
+        case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS =>
+          new AlterUserScramCredentialsRequest.Builder(new AlterUserScramCredentialsRequestData())
+
+        case ApiKeys.VOTE =>
+          new VoteRequest.Builder(VoteRequest.singletonRequest(tp, 1, 2, 0, 10))
+
+        case ApiKeys.BEGIN_QUORUM_EPOCH =>
+          new BeginQuorumEpochRequest.Builder(BeginQuorumEpochRequest.singletonRequest(tp, 2, 5))
+
+        case ApiKeys.END_QUORUM_EPOCH =>
+          new EndQuorumEpochRequest.Builder(EndQuorumEpochRequest.singletonRequest(
+            tp, 10, 5, Collections.singletonList(3)))
+
+        case ApiKeys.ALTER_ISR =>
+          new AlterIsrRequest.Builder(new AlterIsrRequestData())
+
+        case ApiKeys.UPDATE_FEATURES =>
+          new UpdateFeaturesRequest.Builder(new UpdateFeaturesRequestData())
+
+        case ApiKeys.ENVELOPE =>
+          val requestHeader = new RequestHeader(
+            ApiKeys.ALTER_CLIENT_QUOTAS,
+            ApiKeys.ALTER_CLIENT_QUOTAS.latestVersion,
+            "client-id",
+            0
+          )
+          val embedRequestData = new AlterClientQuotasRequest.Builder(
+            List.empty.asJava, false).build().serializeWithHeader(requestHeader)
+          new EnvelopeRequest.Builder(embedRequestData, new Array[Byte](0),
+            InetAddress.getByName("192.168.1.1").getAddress)
+
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }
@@ -673,9 +733,9 @@ class RequestQuotaTest extends BaseRequestTest {
 }
 
 object RequestQuotaTest {
-  val ClusterActions = ApiKeys.values.toSet.filter(apiKey => apiKey.clusterAction)
+  val ClusterActions = ApiKeys.enabledApis.asScala.toSet.filter(apiKey => apiKey.clusterAction)
   val SaslActions = Set(ApiKeys.SASL_HANDSHAKE, ApiKeys.SASL_AUTHENTICATE)
-  val ClientActions = ApiKeys.values.toSet -- ClusterActions -- SaslActions
+  val ClientActions = ApiKeys.enabledApis.asScala.toSet -- ClusterActions -- SaslActions
 
   val UnauthorizedPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Unauthorized")
   // Principal used for all client connections. This is modified by tests which
@@ -688,8 +748,16 @@ object RequestQuotaTest {
       }.asJava
     }
   }
-  class TestPrincipalBuilder extends KafkaPrincipalBuilder {
+  class TestPrincipalBuilder extends KafkaPrincipalBuilder with KafkaPrincipalSerde {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
+      principal
+    }
+
+    override def serialize(principal: KafkaPrincipal): Array[Byte] = {
+      new Array[Byte](0)
+    }
+
+    override def deserialize(bytes: Array[Byte]): KafkaPrincipal = {
       principal
     }
   }

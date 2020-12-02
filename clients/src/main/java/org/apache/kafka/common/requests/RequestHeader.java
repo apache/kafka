@@ -38,7 +38,7 @@ public class RequestHeader implements AbstractRequestResponse {
                 setRequestApiVersion(requestVersion).
                 setClientId(clientId).
                 setCorrelationId(correlationId),
-            ApiKeys.forId(requestApiKey.id).requestHeaderVersion(requestVersion));
+            requestApiKey.requestHeaderVersion(requestVersion));
     }
 
     public RequestHeader(RequestHeaderData data, short headerVersion) {
@@ -86,11 +86,12 @@ public class RequestHeader implements AbstractRequestResponse {
         short apiKey = -1;
         try {
             // We derive the header version from the request api version, so we read that first.
-            // The request api version is part of `RequestHeaderData`, so we rewind the buffer after the read.
+            // The request api version is part of `RequestHeaderData`, so we reset the buffer position after the read.
+            int position = buffer.position();
             apiKey = buffer.getShort();
             short apiVersion = buffer.getShort();
             short headerVersion = ApiKeys.forId(apiKey).requestHeaderVersion(apiVersion);
-            buffer.rewind();
+            buffer.position(position);
             return new RequestHeader(new RequestHeaderData(
                 new ByteBufferAccessor(buffer), headerVersion), headerVersion);
         } catch (UnsupportedVersionException e) {

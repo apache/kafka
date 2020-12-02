@@ -28,6 +28,8 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -41,6 +43,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.niceMock;
 import static org.easymock.EasyMock.replay;
@@ -81,7 +84,7 @@ public class MeteredTimestampedWindowStoreTest {
     @Before
     public void setUp() {
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST);
+            new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST, new MockTime());
 
         context = new InternalMockProcessorContext(
             TestUtils.tempDirectory(),
@@ -92,6 +95,45 @@ public class MeteredTimestampedWindowStoreTest {
             MockRecordCollector::new,
             new ThreadCache(new LogContext("testCache "), 0, streamsMetrics)
         );
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldDelegateDeprecatedInit() {
+        final WindowStore<Bytes, byte[]> inner = mock(WindowStore.class);
+        final MeteredTimestampedWindowStore<String, String> outer = new MeteredTimestampedWindowStore<>(
+            inner,
+            WINDOW_SIZE_MS, // any size
+            STORE_TYPE,
+            new MockTime(),
+            Serdes.String(),
+            new ValueAndTimestampSerde<>(new SerdeThatDoesntHandleNull())
+        );
+        expect(inner.name()).andStubReturn("store");
+        inner.init((ProcessorContext) context, outer);
+        expectLastCall();
+        replay(inner);
+        outer.init((ProcessorContext) context, outer);
+        verify(inner);
+    }
+
+    @Test
+    public void shouldDelegateInit() {
+        final WindowStore<Bytes, byte[]> inner = mock(WindowStore.class);
+        final MeteredTimestampedWindowStore<String, String> outer = new MeteredTimestampedWindowStore<>(
+            inner,
+            WINDOW_SIZE_MS, // any size
+            STORE_TYPE,
+            new MockTime(),
+            Serdes.String(),
+            new ValueAndTimestampSerde<>(new SerdeThatDoesntHandleNull())
+        );
+        expect(inner.name()).andStubReturn("store");
+        inner.init((StateStoreContext) context, outer);
+        expectLastCall();
+        replay(inner);
+        outer.init((StateStoreContext) context, outer);
+        verify(inner);
     }
 
     @Test
@@ -129,7 +171,7 @@ public class MeteredTimestampedWindowStoreTest {
             keySerde,
             valueSerde
         );
-        store.init(context, store);
+        store.init((StateStoreContext) context, store);
 
         store.fetch(KEY, TIMESTAMP);
         store.put(KEY, VALUE_AND_TIMESTAMP, TIMESTAMP);
@@ -143,7 +185,7 @@ public class MeteredTimestampedWindowStoreTest {
         EasyMock.expectLastCall();
         EasyMock.replay(innerStoreMock);
 
-        store.init(context, store);
+        store.init((StateStoreContext) context, store);
         store.close();
         EasyMock.verify(innerStoreMock);
     }
@@ -153,7 +195,7 @@ public class MeteredTimestampedWindowStoreTest {
         EasyMock.expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), 0)).andReturn(null);
         EasyMock.replay(innerStoreMock);
 
-        store.init(context, store);
+        store.init((StateStoreContext) context, store);
         assertNull(store.fetch("a", 0));
     }
 
@@ -170,7 +212,7 @@ public class MeteredTimestampedWindowStoreTest {
             null,
             null
         );
-        store.init(context, innerStoreMock);
+        store.init((StateStoreContext) context, innerStoreMock);
 
         try {
             store.put("key", ValueAndTimestamp.make(42L, 60000));
@@ -195,7 +237,7 @@ public class MeteredTimestampedWindowStoreTest {
             Serdes.String(),
             new ValueAndTimestampSerde<>(Serdes.Long())
         );
-        store.init(context, innerStoreMock);
+        store.init((StateStoreContext) context, innerStoreMock);
 
         try {
             store.put("key", ValueAndTimestamp.make(42L, 60000));

@@ -39,8 +39,7 @@ class TestVerifiableProducer(Test):
         self.num_messages = 1000
         # This will produce to source kafka cluster
         self.producer = VerifiableProducer(test_context, num_nodes=1, kafka=self.kafka, topic=self.topic,
-                                           max_messages=self.num_messages, throughput=self.num_messages/5)
-
+                                           max_messages=self.num_messages, throughput=self.num_messages // 10)
     def setUp(self):
         self.zk.start()
         self.kafka.start()

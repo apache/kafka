@@ -28,8 +28,8 @@ import org.apache.kafka.common.message.DeleteAclsRequestData.DeleteAclsFilter;
 import org.apache.kafka.common.message.DeleteAclsResponseData;
 import org.apache.kafka.common.message.DeleteAclsResponseData.DeleteAclsFilterResult;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Message;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
@@ -50,7 +50,7 @@ public class DeleteAclsRequest extends AbstractRequest {
 
         @Override
         public DeleteAclsRequest build(short version) {
-            return new DeleteAclsRequest(version, data);
+            return new DeleteAclsRequest(data, version);
         }
 
         @Override
@@ -62,7 +62,7 @@ public class DeleteAclsRequest extends AbstractRequest {
 
     private final DeleteAclsRequestData data;
 
-    private DeleteAclsRequest(short version, DeleteAclsRequestData data) {
+    private DeleteAclsRequest(DeleteAclsRequestData data, short version) {
         super(ApiKeys.DELETE_ACLS, version);
         this.data = data;
         normalizeAndValidate();
@@ -96,11 +96,6 @@ public class DeleteAclsRequest extends AbstractRequest {
         }
     }
 
-    public DeleteAclsRequest(Struct struct, short version) {
-        super(ApiKeys.DELETE_ACLS, version);
-        this.data = new DeleteAclsRequestData(struct, version);
-    }
-
     public List<AclBindingFilter> filters() {
         return data.filters().stream().map(DeleteAclsRequest::aclBindingFilter).collect(Collectors.toList());
     }
@@ -123,7 +118,7 @@ public class DeleteAclsRequest extends AbstractRequest {
     }
 
     public static DeleteAclsRequest parse(ByteBuffer buffer, short version) {
-        return new DeleteAclsRequest(DELETE_ACLS.parseRequest(version, buffer), version);
+        return new DeleteAclsRequest(new DeleteAclsRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
     public static DeleteAclsFilter deleteAclsFilter(AclBindingFilter filter) {

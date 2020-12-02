@@ -30,11 +30,8 @@ import org.apache.kafka.common.TopicPartitionInfo;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.util.Collections;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -43,7 +40,6 @@ import java.util.concurrent.ExecutionException;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 public class StreamsResetterTest {
 
@@ -261,38 +257,4 @@ public class StreamsResetterTest {
             Collections.<String>emptySet(), nodes.get(0));
     }
 
-    @Test
-    public void shouldAcceptValidDateFormats() throws ParseException {
-        //check valid formats
-        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS"));
-        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ"));
-        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX"));
-        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXX"));
-        invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX"));
-    }
-
-    @Test
-    public void shouldThrowOnInvalidDateFormat() throws ParseException {
-        //check some invalid formats
-        try {
-            invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss"));
-            fail("Call to getDateTime should fail");
-        } catch (final Exception e) {
-            e.printStackTrace();
-        }
-
-        try {
-            invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.X"));
-            fail("Call to getDateTime should fail");
-        } catch (final Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void invokeGetDateTimeMethod(final SimpleDateFormat format) throws ParseException {
-        final Date checkpoint = new Date();
-        final StreamsResetter streamsResetter = new StreamsResetter();
-        final String formattedCheckpoint = format.format(checkpoint);
-        streamsResetter.getDateTime(formattedCheckpoint);
-    }
 }

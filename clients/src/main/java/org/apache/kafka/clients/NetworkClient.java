@@ -36,10 +36,10 @@ import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
+import org.apache.kafka.common.requests.CorrelationIdMismatchException;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
-import org.apache.kafka.common.requests.ResponseHeader;
 import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -49,6 +49,7 @@ import org.slf4j.Logger;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -59,7 +60,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -722,34 +722,22 @@ public class NetworkClient implements KafkaClient {
         }
     }
 
-
-    public static AbstractResponse parseResponse(RequestHeader requestHeader, ByteBuffer responseBuffer) {
-        return parseResponse(requestHeader, responseBuffer, null, 0);
-    }
-
-    //FIXME Can we get BufferUnderflow here? If so
-    /*
-    try {
-            return AbstractResponse.parseResponse(requestHeader.apiKey(), responseStruct,
-                    requestHeader.apiVersion());
+    public static AbstractResponse parseResponse(ByteBuffer responseBuffer, RequestHeader requestHeader) {
+        try {
+            return AbstractResponse.parseResponse(responseBuffer, requestHeader);
         } catch (BufferUnderflowException e) {
             throw new SchemaException("Buffer underflow while parsing response for request with header " + requestHeader, e);
+        } catch (CorrelationIdMismatchException e) {
+            if (SaslClientAuthenticator.isReserved(requestHeader.correlationId())
+                    && !SaslClientAuthenticator.isReserved(e.responseCorrelationId()))
+                throw new SchemaException("The response is unrelated to Sasl request since its correlation id is "
+                        + e.responseCorrelationId() + " and the reserved range for Sasl request is [ "
+                        + SaslClientAuthenticator.MIN_RESERVED_CORRELATION_ID + ","
+                        + SaslClientAuthenticator.MAX_RESERVED_CORRELATION_ID + "]");
+            else {
+                throw e;
+            }
         }
-     */
-    private static AbstractResponse parseResponse(RequestHeader requestHeader, ByteBuffer responseBuffer,
-                                                  Sensor throttleTimeSensor, long now) {
-        // Always expect the response version to be the same as the request version
-        short responseVersion = requestHeader.apiVersion();
-        ResponseHeader responseHeader = ResponseHeader.parse(responseBuffer,
-                requestHeader.apiKey().responseHeaderVersion(responseVersion));
-        AbstractResponse response = AbstractResponse.parseResponse(requestHeader.apiKey(), responseBuffer,
-                responseVersion);
-        // We correlate after parsing the response to avoid spurious correlation errors when receiving malformed
-        // responses
-        correlate(requestHeader, responseHeader);
-        if (throttleTimeSensor != null && response.throttleTimeMs() != AbstractResponse.DEFAULT_THROTTLE_TIME)
-            throttleTimeSensor.record(response.throttleTimeMs(), now);
-        return response;
     }
 
     /**
@@ -823,7 +811,7 @@ public class NetworkClient implements KafkaClient {
      * @param now The current time
      */
     private void handleTimedOutConnections(List<ClientResponse> responses, long now) {
-        Set<String> nodes = connectionStates.nodesWithConnectionSetupTimeout(now);
+        List<String> nodes = connectionStates.nodesWithConnectionSetupTimeout(now);
         for (String nodeId : nodes) {
             this.selector.close(nodeId);
             log.debug(
@@ -880,7 +868,10 @@ public class NetworkClient implements KafkaClient {
         for (NetworkReceive receive : this.selector.completedReceives()) {
             String source = receive.source();
             InFlightRequest req = inFlightRequests.completeNext(source);
-            AbstractResponse responseBody = parseResponse(req.header, receive.payload(), throttleTimeSensor, now);
+            AbstractResponse responseBody = parseResponse(receive.payload(), req.header);
+
+            if (throttleTimeSensor != null)
+                throttleTimeSensor.record(responseBody.throttleTimeMs(), now);
 
             if (log.isDebugEnabled()) {
                 log.debug("Received {} response from node {} for request with header {}: {}",
@@ -974,21 +965,6 @@ public class NetworkClient implements KafkaClient {
                 doSend(clientRequest, true, now);
                 iter.remove();
             }
-        }
-    }
-
-    /**
-     * Validate that the response corresponds to the request we expect or else explode
-     */
-    private static void correlate(RequestHeader requestHeader, ResponseHeader responseHeader) {
-        if (requestHeader.correlationId() != responseHeader.correlationId()) {
-            if (SaslClientAuthenticator.isReserved(requestHeader.correlationId())
-                    && !SaslClientAuthenticator.isReserved(responseHeader.correlationId()))
-                throw new SchemaException("the response is unrelated to Sasl request since its correlation id is " + responseHeader.correlationId()
-                    + " and the reserved range for Sasl request is [ "
-                    + SaslClientAuthenticator.MIN_RESERVED_CORRELATION_ID + "," + SaslClientAuthenticator.MAX_RESERVED_CORRELATION_ID + "]");
-            throw new IllegalStateException("Correlation id for response (" + responseHeader.correlationId()
-                    + ") does not match request (" + requestHeader.correlationId() + "), request header: " + requestHeader);
         }
     }
 

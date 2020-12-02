@@ -23,7 +23,6 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.CreateAclsRequestData;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
@@ -54,17 +53,17 @@ public class CreateAclsRequestTest {
 
     @Test(expected = UnsupportedVersionException.class)
     public void shouldThrowOnV0IfNotLiteral() {
-        new CreateAclsRequest(V0, data(PREFIXED_ACL1));
+        new CreateAclsRequest(data(PREFIXED_ACL1), V0);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowOnIfUnknown() {
-        new CreateAclsRequest(V0, data(UNKNOWN_ACL1));
+        new CreateAclsRequest(data(UNKNOWN_ACL1), V0);
     }
 
     @Test
     public void shouldRoundTripV0() {
-        final CreateAclsRequest original = new CreateAclsRequest(V0, data(LITERAL_ACL1, LITERAL_ACL2));
+        final CreateAclsRequest original = new CreateAclsRequest(data(LITERAL_ACL1, LITERAL_ACL2), V0);
         final ByteBuffer buffer = original.serializeBody();
 
         final CreateAclsRequest result = CreateAclsRequest.parse(buffer, V0);
@@ -74,7 +73,7 @@ public class CreateAclsRequestTest {
 
     @Test
     public void shouldRoundTripV1() {
-        final CreateAclsRequest original = new CreateAclsRequest(V1, data(LITERAL_ACL1, PREFIXED_ACL1));
+        final CreateAclsRequest original = new CreateAclsRequest(data(LITERAL_ACL1, PREFIXED_ACL1), V1);
         final ByteBuffer buffer = original.serializeBody();
 
         final CreateAclsRequest result = CreateAclsRequest.parse(buffer, V1);

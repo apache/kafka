@@ -21,12 +21,9 @@ import org.apache.kafka.common.message.WriteTxnMarkersRequestData;
 import org.apache.kafka.common.message.WriteTxnMarkersRequestData.WritableTxnMarker;
 import org.apache.kafka.common.message.WriteTxnMarkersRequestData.WritableTxnMarkerTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
-import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.protocol.types.Schema;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -145,11 +142,6 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public WriteTxnMarkersRequest(Struct struct, short version) {
-        super(ApiKeys.WRITE_TXN_MARKERS, version);
-        this.data = new WriteTxnMarkersRequestData(struct, version);
-    }
-
     @Override
     protected Message data() {
         return data;
@@ -194,7 +186,7 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
     }
 
     public static WriteTxnMarkersRequest parse(ByteBuffer buffer, short version) {
-        return new WriteTxnMarkersRequest(ApiKeys.WRITE_TXN_MARKERS.parseRequest(version, buffer), version);
+        return new WriteTxnMarkersRequest(new WriteTxnMarkersRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
     @Override

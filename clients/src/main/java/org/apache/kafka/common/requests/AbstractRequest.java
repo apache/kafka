@@ -103,15 +103,10 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
         return serialize(header, data(), version);
     }
 
-    /**
-     * Return the auto-generated `Message` instance if this request/response relies on one for
-     * serialization/deserialization. If this class has not yet been updated to rely on the auto-generated protocol
-     * classes, return `null`.
-     */
     protected abstract Message data();
 
     // Visible for testing
-    ByteBuffer serializeBody() {
+    public ByteBuffer serializeBody() {
         return serialize(null, data(), version);
     }
 
@@ -274,6 +269,24 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return DescribeClientQuotasRequest.parse(buffer, apiVersion);
             case ALTER_CLIENT_QUOTAS:
                 return AlterClientQuotasRequest.parse(buffer, apiVersion);
+            case DESCRIBE_USER_SCRAM_CREDENTIALS:
+                return DescribeUserScramCredentialsRequest.parse(buffer, apiVersion);
+            case ALTER_USER_SCRAM_CREDENTIALS:
+                return AlterUserScramCredentialsRequest.parse(buffer, apiVersion);
+            case VOTE:
+                return VoteRequest.parse(buffer, apiVersion);
+            case BEGIN_QUORUM_EPOCH:
+                return BeginQuorumEpochRequest.parse(buffer, apiVersion);
+            case END_QUORUM_EPOCH:
+                return EndQuorumEpochRequest.parse(buffer, apiVersion);
+            case DESCRIBE_QUORUM:
+                return DescribeQuorumRequest.parse(buffer, apiVersion);
+            case ALTER_ISR:
+                return AlterIsrRequest.parse(buffer, apiVersion);
+            case UPDATE_FEATURES:
+                return UpdateFeaturesRequest.parse(buffer, apiVersion);
+            case ENVELOPE:
+                return EnvelopeRequest.parse(buffer, apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));

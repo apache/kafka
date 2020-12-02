@@ -27,7 +27,6 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.FlattenedIterator;
 import org.apache.kafka.common.utils.Utils;
@@ -95,7 +94,7 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
         private static Map<String, UpdateMetadataTopicState> groupByTopic(List<UpdateMetadataPartitionState> partitionStates) {
             Map<String, UpdateMetadataTopicState> topicStates = new HashMap<>();
             for (UpdateMetadataPartitionState partition : partitionStates) {
-                // We don't null out the topic name in UpdateMetadataTopicState since it's ignored by the generated
+                // We don't null out the topic name in UpdateMetadataPartitionState since it's ignored by the generated
                 // code if version >= 5
                 UpdateMetadataTopicState topicState = topicStates.computeIfAbsent(partition.topicName(),
                     t -> new UpdateMetadataTopicState().setTopicName(partition.topicName()));
@@ -202,7 +201,7 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
     }
 
     @Override
-    protected Message data() {
+    protected UpdateMetadataRequestData data() {
         return data;
     }
 

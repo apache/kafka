@@ -59,8 +59,10 @@ public class OffsetCheckpoint {
     private static final int VERSION = 0;
 
     // Use a negative sentinel when we don't know the offset instead of skipping it to distinguish it from dirty state
-    // and use -2 as the -1 sentinel may be taken by some producer errors
-    public static final long OFFSET_UNKNOWN = -2;
+    // and use -4 as the -1 sentinel may be taken by some producer errors and -2 in the
+    // subscription means that the state is used by an active task and hence caught-up and
+    // -3 is also used in the subscription.
+    public static final long OFFSET_UNKNOWN = -4L;
 
     private final File file;
     private final Object lock;
@@ -76,8 +78,10 @@ public class OffsetCheckpoint {
      * @throws IOException if any file operation fails with an IO exception
      */
     public void write(final Map<TopicPartition, Long> offsets) throws IOException {
-        // if there is no offsets, skip writing the file to save disk IOs
+        // if there are no offsets, skip writing the file to save disk IOs
+        // but make sure to delete the existing file if one exists
         if (offsets.isEmpty()) {
+            Utils.delete(file);
             return;
         }
 

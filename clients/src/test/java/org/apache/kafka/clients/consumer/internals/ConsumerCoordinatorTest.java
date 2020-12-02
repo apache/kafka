@@ -2119,7 +2119,7 @@ public class ConsumerCoordinatorTest {
             "memberId-new",
             null);
         coordinator.setNewGeneration(newGen);
-        coordinator.setNewState(AbstractCoordinator.MemberState.REBALANCING);
+        coordinator.setNewState(AbstractCoordinator.MemberState.PREPARING_REBALANCE);
 
         assertTrue(consumerClient.poll(future, time.timer(30000)));
         assertTrue(future.exception().getClass().isInstance(Errors.REBALANCE_IN_PROGRESS.exception()));
@@ -2174,7 +2174,7 @@ public class ConsumerCoordinatorTest {
             "memberId-new",
             null);
         coordinator.setNewGeneration(newGen);
-        coordinator.setNewState(AbstractCoordinator.MemberState.REBALANCING);
+        coordinator.setNewState(AbstractCoordinator.MemberState.PREPARING_REBALANCE);
 
         assertTrue(consumerClient.poll(future, time.timer(30000)));
         assertTrue(future.exception().getClass().isInstance(Errors.REBALANCE_IN_PROGRESS.exception()));
@@ -2218,7 +2218,7 @@ public class ConsumerCoordinatorTest {
             "memberId",
             null);
         coordinator.setNewGeneration(currGen);
-        coordinator.setNewState(AbstractCoordinator.MemberState.REBALANCING);
+        coordinator.setNewState(AbstractCoordinator.MemberState.PREPARING_REBALANCE);
 
         prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.FENCED_INSTANCE_ID);
         RequestFuture<Void> future = coordinator.sendOffsetCommitRequest(singletonMap(t1p,
@@ -2818,14 +2818,18 @@ public class ConsumerCoordinatorTest {
             res = coordinator.joinGroupIfNeeded(time.timer(1));
 
             assertFalse(res);
+
+            // should have retried sending a join group request already
             assertFalse(client.hasPendingResponses());
-            assertFalse(client.hasInFlightRequests());
+            assertEquals(1, client.inFlightRequestCount());
+
+            System.out.println(client.requests());
 
             // Retry join should then succeed
-            client.prepareResponse(joinGroupFollowerResponse(generationId, memberId, "leader", Errors.NONE));
+            client.respond(joinGroupFollowerResponse(generationId, memberId, "leader", Errors.NONE));
             client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
 
-            res = coordinator.joinGroupIfNeeded(time.timer(2));
+            res = coordinator.joinGroupIfNeeded(time.timer(3000));
 
             assertTrue(res);
             assertFalse(client.hasPendingResponses());

@@ -20,9 +20,9 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -54,11 +54,6 @@ public class AlterReplicaLogDirsRequest extends AbstractRequest {
         public String toString() {
             return data.toString();
         }
-    }
-
-    public AlterReplicaLogDirsRequest(Struct struct, short version) {
-        super(ApiKeys.ALTER_REPLICA_LOG_DIRS, version);
-        this.data = new AlterReplicaLogDirsRequestData(struct, version);
     }
 
     public AlterReplicaLogDirsRequest(AlterReplicaLogDirsRequestData data, short version) {
@@ -95,6 +90,6 @@ public class AlterReplicaLogDirsRequest extends AbstractRequest {
     }
 
     public static AlterReplicaLogDirsRequest parse(ByteBuffer buffer, short version) {
-        return new AlterReplicaLogDirsRequest(ApiKeys.ALTER_REPLICA_LOG_DIRS.parseRequest(version, buffer), version);
+        return new AlterReplicaLogDirsRequest(new AlterReplicaLogDirsRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 }

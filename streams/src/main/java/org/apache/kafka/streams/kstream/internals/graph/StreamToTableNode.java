@@ -29,13 +29,13 @@ import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 /**
  * Represents a KTable convert From KStream
  */
-public class StreamToTableNode<K, V> extends StreamsGraphNode {
+public class StreamToTableNode<K, V> extends GraphNode {
 
-    private final ProcessorParameters<K, V> processorParameters;
+    private final ProcessorParameters<K, V, ?, ?> processorParameters;
     private final MaterializedInternal<K, V, ?> materializedInternal;
 
     public StreamToTableNode(final String nodeName,
-                             final ProcessorParameters<K, V> processorParameters,
+                             final ProcessorParameters<K, V, ?, ?> processorParameters,
                              final MaterializedInternal<K, V, ?> materializedInternal) {
         super(nodeName);
         this.processorParameters = processorParameters;
@@ -57,7 +57,7 @@ public class StreamToTableNode<K, V> extends StreamsGraphNode {
             new TimestampedKeyValueStoreMaterializer<>((MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>>) materializedInternal).materialize();
 
         final String processorName = processorParameters.processorName();
-        final KTableSource<K, V> ktableSource = (KTableSource<K, V>) processorParameters.processorSupplier();
+        final KTableSource<K, V> ktableSource = processorParameters.kTableSourceSupplier();
         topologyBuilder.addProcessor(processorName, processorParameters.processorSupplier(), parentNodeNames());
 
         if (storeBuilder != null && ktableSource.materialized()) {

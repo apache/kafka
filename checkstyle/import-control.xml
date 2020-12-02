@@ -73,6 +73,7 @@
       <allow pkg="org.apache.kafka.common.protocol" />
       <allow pkg="org.apache.kafka.common.protocol.types" />
       <allow pkg="org.apache.kafka.common.message" />
+      <allow pkg="org.apache.kafka.common.record" />
     </subpackage>
 
     <subpackage name="metrics">
@@ -102,11 +103,16 @@
       <allow pkg="org.apache.kafka.common.config" />
       <allow pkg="org.apache.kafka.common.protocol" />
       <allow pkg="org.apache.kafka.common.errors" />
+      <!-- To access DefaultPrincipalData -->
+      <allow pkg="org.apache.kafka.common.message" />
       <subpackage name="authenticator">
         <allow pkg="org.apache.kafka.common.message" />
         <allow pkg="org.apache.kafka.common.protocol.types" />
         <allow pkg="org.apache.kafka.common.requests" />
         <allow pkg="org.apache.kafka.clients" />
+      </subpackage>
+      <subpackage name="ssl">
+        <allow pkg="javax.crypto" />
       </subpackage>
       <subpackage name="scram">
         <allow pkg="javax.crypto" />
@@ -119,6 +125,7 @@
     <subpackage name="protocol">
       <allow pkg="org.apache.kafka.common.errors" />
       <allow pkg="org.apache.kafka.common.message" />
+      <allow pkg="org.apache.kafka.common.network" />
       <allow pkg="org.apache.kafka.common.protocol" />
       <allow pkg="org.apache.kafka.common.protocol.types" />
       <allow pkg="org.apache.kafka.common.record" />
@@ -131,6 +138,7 @@
       <allow pkg="net.jpountz" />
       <allow pkg="org.apache.kafka.common.header" />
       <allow pkg="org.apache.kafka.common.record" />
+      <allow pkg="org.apache.kafka.common.message" />
       <allow pkg="org.apache.kafka.common.network" />
       <allow pkg="org.apache.kafka.common.protocol" />
       <allow pkg="org.apache.kafka.common.protocol.types" />
@@ -154,6 +162,8 @@
       <allow pkg="org.apache.kafka.common.record" />
       <!-- for AuthorizableRequestContext interface -->
       <allow pkg="org.apache.kafka.server.authorizer" />
+      <!-- for IncrementalAlterConfigsRequest Builder -->
+      <allow pkg="org.apache.kafka.clients.admin" />
       <!-- for testing -->
       <allow pkg="org.apache.kafka.common.errors" />
     </subpackage>
@@ -230,6 +240,8 @@
   <subpackage name="message">
     <allow pkg="com.fasterxml.jackson" />
     <allow pkg="com.fasterxml.jackson.annotation" />
+    <allow pkg="net.sourceforge.argparse4j" />
+    <allow pkg="org.apache.message" />
   </subpackage>
 
   <subpackage name="streams">
@@ -283,7 +295,6 @@
         <allow pkg="com.fasterxml.jackson" />
         <allow pkg="kafka.utils" />
         <allow pkg="org.apache.zookeeper" />
-        <allow pkg="org.apache.zookeeper" />
         <allow pkg="org.apache.log4j" />
         <subpackage name="testutil">
           <allow pkg="org.apache.log4j" />
@@ -302,6 +313,20 @@
   <subpackage name="test">
     <allow pkg="org.apache.kafka" />
     <allow pkg="org.bouncycastle" />
+    <allow pkg="org.rocksdb" />
+  </subpackage>
+
+  <subpackage name="raft">
+    <allow pkg="org.apache.kafka.raft" />
+    <allow pkg="org.apache.kafka.clients" />
+    <allow pkg="org.apache.kafka.common.config" />
+    <allow pkg="org.apache.kafka.common.message" />
+    <allow pkg="org.apache.kafka.common.metrics" />
+    <allow pkg="org.apache.kafka.common.record" />
+    <allow pkg="org.apache.kafka.common.requests" />
+    <allow pkg="org.apache.kafka.common.protocol" />
+    <allow pkg="org.apache.kafka.test"/>
+    <allow pkg="com.fasterxml.jackson" />
   </subpackage>
 
   <subpackage name="connect">

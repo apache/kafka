@@ -42,8 +42,10 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.CREATED;
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.DEAD;
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.PENDING_SHUTDOWN;
+import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.RUNNING;
 
 /**
  * This is the thread responsible for keeping all Global State Stores updated.
@@ -61,6 +63,7 @@ public class GlobalStreamThread extends Thread {
     private final StreamsMetricsImpl streamsMetrics;
     private final ProcessorTopology topology;
     private volatile StreamsException startupException;
+    private java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler;
 
     /**
      * The states that the global stream thread can be in
@@ -104,6 +107,10 @@ public class GlobalStreamThread extends Thread {
 
         public boolean isRunning() {
             return equals(RUNNING);
+        }
+
+        public boolean inErrorState() {
+            return equals(DEAD) || equals(PENDING_SHUTDOWN);
         }
 
         @Override
@@ -173,6 +180,18 @@ public class GlobalStreamThread extends Thread {
         }
     }
 
+    public boolean inErrorState() {
+        synchronized (stateLock) {
+            return state.inErrorState();
+        }
+    }
+
+    public boolean stillInitializing() {
+        synchronized (stateLock) {
+            return state.equals(CREATED);
+        }
+    }
+
     public GlobalStreamThread(final ProcessorTopology topology,
                               final StreamsConfig config,
                               final Consumer<byte[], byte[]> globalConsumer,
@@ -181,7 +200,8 @@ public class GlobalStreamThread extends Thread {
                               final StreamsMetricsImpl streamsMetrics,
                               final Time time,
                               final String threadClientId,
-                              final StateRestoreListener stateRestoreListener) {
+                              final StateRestoreListener stateRestoreListener,
+                              final java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler) {
         super(threadClientId);
         this.time = time;
         this.config = config;
@@ -194,6 +214,7 @@ public class GlobalStreamThread extends Thread {
         this.log = logContext.logger(getClass());
         this.cache = new ThreadCache(logContext, cacheSizeBytes, this.streamsMetrics);
         this.stateRestoreListener = stateRestoreListener;
+        this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
     }
 
     static class StateConsumer {
@@ -276,7 +297,7 @@ public class GlobalStreamThread extends Thread {
 
             return;
         }
-        setState(State.RUNNING);
+        setState(RUNNING);
 
         boolean wipeStateStore = false;
         try {
@@ -289,10 +310,13 @@ public class GlobalStreamThread extends Thread {
                 "Updating global state failed due to inconsistent local state. Will attempt to clean up the local state. You can restart KafkaStreams to recover from this error.",
                 recoverableException
             );
-            throw new StreamsException(
-                "Updating global state failed. You can restart KafkaStreams to recover from this error.",
+            final StreamsException e = new StreamsException(
+                "Updating global state failed. You can restart KafkaStreams to launch a new GlobalStreamThread to recover from this error.",
                 recoverableException
             );
+            this.streamsUncaughtExceptionHandler.accept(e);
+        } catch (final Exception e) {
+            this.streamsUncaughtExceptionHandler.accept(e);
         } finally {
             // set the state to pending shutdown first as it may be called due to error;
             // its state may already be PENDING_SHUTDOWN so it will return false but we
@@ -315,21 +339,28 @@ public class GlobalStreamThread extends Thread {
         }
     }
 
+    public void setUncaughtExceptionHandler(final java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler) {
+        this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
+    }
+
     private StateConsumer initialize() {
         try {
             final GlobalStateManager stateMgr = new GlobalStateManagerImpl(
                 logContext,
+                time,
                 topology,
                 globalConsumer,
                 stateDirectory,
                 stateRestoreListener,
-                config);
+                config
+            );
 
             final GlobalProcessorContextImpl globalProcessorContext = new GlobalProcessorContextImpl(
                 config,
                 stateMgr,
                 streamsMetrics,
-                cache);
+                cache
+            );
             stateMgr.setGlobalProcessorContext(globalProcessorContext);
 
             final StateConsumer stateConsumer = new StateConsumer(
@@ -384,11 +415,15 @@ public class GlobalStreamThread extends Thread {
     @Override
     public synchronized void start() {
         super.start();
-        while (!stillRunning()) {
+        while (stillInitializing()) {
             Utils.sleep(1);
             if (startupException != null) {
                 throw startupException;
             }
+        }
+
+        if (inErrorState()) {
+            throw new IllegalStateException("Initialization for the global stream thread failed");
         }
     }
 

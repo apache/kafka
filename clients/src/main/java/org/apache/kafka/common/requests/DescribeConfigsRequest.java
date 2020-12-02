@@ -19,13 +19,13 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.DescribeConfigsRequestData;
 import org.apache.kafka.common.message.DescribeConfigsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.stream.Collectors;
 
-public class DescribeConfigsRequest extends LegacyAbstractRequest {
+public class DescribeConfigsRequest extends AbstractRequest {
 
     public static class Builder extends AbstractRequest.Builder<DescribeConfigsRequest> {
         private final DescribeConfigsRequestData data;
@@ -48,19 +48,9 @@ public class DescribeConfigsRequest extends LegacyAbstractRequest {
         this.data = data;
     }
 
-    public DescribeConfigsRequest(Struct struct, short version) {
-        super(ApiKeys.DESCRIBE_CONFIGS, version);
-        this.data = new DescribeConfigsRequestData(struct, version);
-    }
-
     @Override
     public DescribeConfigsRequestData data() {
         return data;
-    }
-
-    @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
     }
 
     @Override
@@ -78,6 +68,6 @@ public class DescribeConfigsRequest extends LegacyAbstractRequest {
     }
 
     public static DescribeConfigsRequest parse(ByteBuffer buffer, short version) {
-        return new DescribeConfigsRequest(ApiKeys.DESCRIBE_CONFIGS.parseRequest(version, buffer), version);
+        return new DescribeConfigsRequest(new DescribeConfigsRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 }

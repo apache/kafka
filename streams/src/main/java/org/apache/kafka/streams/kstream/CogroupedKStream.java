@@ -181,7 +181,7 @@ public interface CogroupedKStream<K, VOut> {
      * <p>
      * To query the local {@link ReadOnlyKeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
-     * <pre>
+     * <pre>{@code
      * KafkaStreams streams = ... // some aggregation on value type double
      * String queryableStoreName = "storeName" // the store name should be the name of the store as defined by the Materialized instance
      * ReadOnlyKeyValueStore<K, ValueAndTimestamp<VOut>> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, ValueAndTimestamp<VOut>> timestampedKeyValueStore());
@@ -233,7 +233,7 @@ public interface CogroupedKStream<K, VOut> {
      * <p>
      * To query the local {@link org.apache.kafka.streams.state.ReadOnlyKeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
-     * <pre>
+     * <pre>{@code
      * KafkaStreams streams = ... // some aggregation on value type double
      * String queryableStoreName = "storeName" // the store name should be the name of the store as defined by the Materialized instance
      * ReadOnlyKeyValueStore<K, ValueAndTimestamp<VOut>> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, ValueAndTimestamp<VOut>> timestampedKeyValueStore());
@@ -274,6 +274,15 @@ public interface CogroupedKStream<K, VOut> {
      * @return an instance of {@link TimeWindowedCogroupedKStream}
      */
     <W extends Window> TimeWindowedCogroupedKStream<K, VOut> windowedBy(final Windows<W> windows);
+
+    /**
+     * Create a new {@link TimeWindowedCogroupedKStream} instance that can be used to perform sliding
+     * windowed aggregations.
+     *
+     * @param windows the specification of the aggregation {@link SlidingWindows}
+     * @return an instance of {@link TimeWindowedCogroupedKStream}
+     */
+    TimeWindowedCogroupedKStream<K, VOut> windowedBy(final SlidingWindows windows);
 
     /**
      * Create a new {@link SessionWindowedCogroupedKStream} instance that can be used to perform session

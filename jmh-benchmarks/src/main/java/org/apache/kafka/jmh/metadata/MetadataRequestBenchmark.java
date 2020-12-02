@@ -22,11 +22,14 @@ import kafka.coordinator.group.GroupCoordinator;
 import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
 import kafka.server.AdminManager;
+import kafka.server.BrokerFeatures;
 import kafka.server.BrokerTopicStats;
 import kafka.server.ClientQuotaManager;
 import kafka.server.ClientRequestQuotaManager;
 import kafka.server.ControllerMutationQuotaManager;
 import kafka.server.FetchManager;
+import kafka.server.FinalizedFeatureCache;
+import kafka.server.ForwardingManager;
 import kafka.server.KafkaApis;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaConfig$;
@@ -95,6 +98,7 @@ public class MetadataRequestBenchmark {
     private AdminManager adminManager = Mockito.mock(AdminManager.class);
     private TransactionCoordinator transactionCoordinator = Mockito.mock(TransactionCoordinator.class);
     private KafkaController kafkaController = Mockito.mock(KafkaController.class);
+    private ForwardingManager forwardingManager = Mockito.mock(ForwardingManager.class);
     private KafkaZkClient kafkaZkClient = Mockito.mock(KafkaZkClient.class);
     private Metrics metrics = new Metrics();
     private int brokerId = 1;
@@ -164,12 +168,14 @@ public class MetadataRequestBenchmark {
         Properties kafkaProps =  new Properties();
         kafkaProps.put(KafkaConfig$.MODULE$.ZkConnectProp(), "zk");
         kafkaProps.put(KafkaConfig$.MODULE$.BrokerIdProp(), brokerId + "");
+        BrokerFeatures brokerFeatures = BrokerFeatures.createDefault();
         return new KafkaApis(requestChannel,
             replicaManager,
             adminManager,
             groupCoordinator,
             transactionCoordinator,
             kafkaController,
+            forwardingManager,
             kafkaZkClient,
             brokerId,
             new KafkaConfig(kafkaProps),
@@ -181,7 +187,9 @@ public class MetadataRequestBenchmark {
             brokerTopicStats,
             "clusterId",
             new SystemTime(),
-            null);
+            null,
+            brokerFeatures,
+            new FinalizedFeatureCache(brokerFeatures));
     }
 
     @TearDown(Level.Trial)
@@ -197,8 +205,9 @@ public class MetadataRequestBenchmark {
         RequestHeader header = RequestHeader.parse(buffer);
 
         RequestContext context = new RequestContext(header, "1", null, principal,
-            ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY);
-        return new RequestChannel.Request(1, context, 0, MemoryPool.NONE, buffer, requestChannelMetrics);
+            ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+            SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false);
+        return new RequestChannel.Request(1, context, 0, MemoryPool.NONE, buffer, requestChannelMetrics, Option.empty());
     }
 
     @Benchmark

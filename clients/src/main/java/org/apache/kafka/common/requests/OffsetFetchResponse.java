@@ -92,10 +92,10 @@ public class OffsetFetchResponse extends AbstractResponse {
             if (!(other instanceof PartitionData))
                 return false;
             PartitionData otherPartition = (PartitionData) other;
-            return this.offset == otherPartition.offset
-                       && this.leaderEpoch.equals(otherPartition.leaderEpoch)
-                       && this.metadata.equals(otherPartition.metadata)
-                       && this.error.equals(otherPartition.error);
+            return Objects.equals(this.offset, otherPartition.offset)
+                   && Objects.equals(this.leaderEpoch, otherPartition.leaderEpoch)
+                   && Objects.equals(this.metadata, otherPartition.metadata)
+                   && Objects.equals(this.error, otherPartition.error);
         }
 
         @Override
@@ -192,7 +192,12 @@ public class OffsetFetchResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return errorCounts(error);
+        Map<Errors, Integer> counts = new HashMap<>();
+        updateErrorCounts(counts, error);
+        data.topics().forEach(topic ->
+                topic.partitions().forEach(partition ->
+                        updateErrorCounts(counts, Errors.forCode(partition.errorCode()))));
+        return counts;
     }
 
     public Map<TopicPartition, PartitionData> responseData() {

@@ -28,11 +28,13 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.kstream.Grouped;
 
 import java.io.IOException;
@@ -49,7 +51,7 @@ public class BrokerCompatibilityTest {
     public static void main(final String[] args) throws IOException {
         if (args.length < 2) {
             System.err.println("BrokerCompatibilityTest are expecting two parameters: propFile, processingMode; but only see " + args.length + " parameter");
-            System.exit(1);
+            Exit.exit(1);
         }
 
         System.out.println("StreamsTest instance started");
@@ -62,7 +64,7 @@ public class BrokerCompatibilityTest {
 
         if (kafka == null) {
             System.err.println("No bootstrap kafka servers specified in " + StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
-            System.exit(1);
+            Exit.exit(1);
         }
 
         streamsProperties.put(StreamsConfig.APPLICATION_ID_CONFIG, "kafka-streams-system-test-broker-compatibility");
@@ -87,7 +89,7 @@ public class BrokerCompatibilityTest {
             .to(SINK_TOPIC);
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), streamsProperties);
-        streams.setUncaughtExceptionHandler((t, e) -> {
+        streams.setUncaughtExceptionHandler(e -> {
             Throwable cause = e;
             if (cause instanceof StreamsException) {
                 while (cause.getCause() != null) {
@@ -97,7 +99,7 @@ public class BrokerCompatibilityTest {
             System.err.println("FATAL: An unexpected exception " + cause);
             e.printStackTrace(System.err);
             System.err.flush();
-            streams.close(Duration.ofSeconds(30));
+            return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
         });
         System.out.println("start Kafka Streams");
         streams.start();

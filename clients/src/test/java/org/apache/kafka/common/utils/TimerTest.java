@@ -30,18 +30,21 @@ public class TimerTest {
     @Test
     public void testTimerUpdate() {
         Timer timer = time.timer(500);
+        assertEquals(500, timer.timeoutMs());
         assertEquals(500, timer.remainingMs());
         assertEquals(0, timer.elapsedMs());
 
         time.sleep(100);
         timer.update();
 
+        assertEquals(500, timer.timeoutMs());
         assertEquals(400, timer.remainingMs());
         assertEquals(100, timer.elapsedMs());
 
         time.sleep(400);
         timer.update(time.milliseconds());
 
+        assertEquals(500, timer.timeoutMs());
         assertEquals(0, timer.remainingMs());
         assertEquals(500, timer.elapsedMs());
         assertTrue(timer.isExpired());
@@ -51,6 +54,7 @@ public class TimerTest {
         time.sleep(200);
         timer.update(time.milliseconds());
         assertTrue(timer.isExpired());
+        assertEquals(500, timer.timeoutMs());
         assertEquals(0, timer.remainingMs());
         assertEquals(700, timer.elapsedMs());
     }
@@ -59,10 +63,12 @@ public class TimerTest {
     public void testTimerUpdateAndReset() {
         Timer timer = time.timer(500);
         timer.sleep(200);
+        assertEquals(500, timer.timeoutMs());
         assertEquals(300, timer.remainingMs());
         assertEquals(200, timer.elapsedMs());
 
         timer.updateAndReset(400);
+        assertEquals(400, timer.timeoutMs());
         assertEquals(400, timer.remainingMs());
         assertEquals(0, timer.elapsedMs());
 
@@ -70,6 +76,7 @@ public class TimerTest {
         assertTrue(timer.isExpired());
 
         timer.updateAndReset(200);
+        assertEquals(200, timer.timeoutMs());
         assertEquals(200, timer.remainingMs());
         assertEquals(0, timer.elapsedMs());
         assertFalse(timer.isExpired());
@@ -88,6 +95,23 @@ public class TimerTest {
 
         timer.update();
         assertEquals(200, timer.remainingMs());
+    }
+
+    @Test
+    public void testTimerResetDeadlineUsesCurrentTime() {
+        Timer timer = time.timer(500);
+        timer.sleep(200);
+        assertEquals(300, timer.remainingMs());
+        assertEquals(200, timer.elapsedMs());
+
+        timer.sleep(100);
+        timer.resetDeadline(time.milliseconds() + 200);
+        assertEquals(200, timer.timeoutMs());
+        assertEquals(200, timer.remainingMs());
+
+        timer.sleep(100);
+        assertEquals(200, timer.timeoutMs());
+        assertEquals(100, timer.remainingMs());
     }
 
     @Test

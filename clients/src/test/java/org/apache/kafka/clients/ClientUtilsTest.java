@@ -25,6 +25,7 @@ import java.util.stream.Collectors;
 import org.apache.kafka.common.config.ConfigException;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
@@ -42,6 +43,8 @@ public class ClientUtilsTest {
         InetSocketAddress onlyAddress = validatedAddresses.get(0);
         assertEquals("localhost", onlyAddress.getHostName());
         assertEquals(10000, onlyAddress.getPort());
+        assertThrows(ConfigException.class, () -> ClientUtils.parseAndValidateAddresses(
+                Arrays.asList("localhost:8000;localhost:9000"), ClientDnsLookup.USE_ALL_DNS_IPS));
     }
 
     @Test
@@ -102,20 +105,20 @@ public class ClientUtilsTest {
 
     @Test
     public void testResolveDnsLookup() throws UnknownHostException {
-        // Note that kafka.apache.org resolves to 2 IP addresses
+        // Note that kafka.apache.org resolves to at least 2 IP addresses
         assertEquals(1, ClientUtils.resolve("kafka.apache.org", ClientDnsLookup.DEFAULT).size());
     }
 
     @Test
     public void testResolveDnsLookupAllIps() throws UnknownHostException {
-        // Note that kafka.apache.org resolves to 2 IP addresses
-        assertEquals(2, ClientUtils.resolve("kafka.apache.org", ClientDnsLookup.USE_ALL_DNS_IPS).size());
+        // Note that kafka.apache.org resolves to at least 2 IP addresses
+        assertTrue(ClientUtils.resolve("kafka.apache.org", ClientDnsLookup.USE_ALL_DNS_IPS).size() > 1);
     }
 
     @Test
     public void testResolveDnsLookupResolveCanonicalBootstrapServers() throws UnknownHostException {
-        // Note that kafka.apache.org resolves to 2 IP addresses
-        assertEquals(2, ClientUtils.resolve("kafka.apache.org", ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY).size());
+        // Note that kafka.apache.org resolves to at least 2 IP addresses
+        assertTrue(ClientUtils.resolve("kafka.apache.org", ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY).size() > 1);
     }
 
     private List<InetSocketAddress> checkWithoutLookup(String... url) {

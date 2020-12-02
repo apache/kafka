@@ -27,6 +27,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.internals.MetricsUtils;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
@@ -148,7 +149,7 @@ public class ConnectMetrics {
     }
 
     protected MetricGroupId groupId(String groupName, String... tagKeyValues) {
-        Map<String, String> tags = tags(tagKeyValues);
+        Map<String, String> tags = MetricsUtils.getTags(tagKeyValues);
         return new MetricGroupId(groupName, tags);
     }
 
@@ -431,22 +432,6 @@ public class ConnectMetrics {
          * @return the literal metric value; may not be null
          */
         T metricValue(long now);
-    }
-
-    /**
-     * Create a set of tags using the supplied key and value pairs. The order of the tags will be kept.
-     *
-     * @param keyValue the key and value pairs for the tags; must be an even number
-     * @return the map of tags that can be supplied to the {@link Metrics} methods; never null
-     */
-    static Map<String, String> tags(String... keyValue) {
-        if ((keyValue.length % 2) != 0)
-            throw new IllegalArgumentException("keyValue needs to be specified in pairs");
-        Map<String, String> tags = new LinkedHashMap<>();
-        for (int i = 0; i < keyValue.length; i += 2) {
-            tags.put(keyValue[i], keyValue[i + 1]);
-        }
-        return tags;
     }
 
     /**

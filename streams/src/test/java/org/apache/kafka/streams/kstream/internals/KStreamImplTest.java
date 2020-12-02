@@ -87,6 +87,7 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.emptyMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -1504,7 +1505,7 @@ public class KStreamImplTest {
                 driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             inputTopic.pipeInput("a", "b");
         }
-        assertThat(processorSupplier.theCapturedProcessor().processed, equalTo(Collections.singletonList(new KeyValueTimestamp<>("a", "b", 0))));
+        assertThat(processorSupplier.theCapturedProcessor().processed(), equalTo(Collections.singletonList(new KeyValueTimestamp<>("a", "b", 0))));
     }
 
     @Test
@@ -1519,7 +1520,7 @@ public class KStreamImplTest {
                 driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             inputTopic.pipeInput("a", "b");
         }
-        assertThat(processorSupplier.theCapturedProcessor().processed, equalTo(Collections.singletonList(new KeyValueTimestamp<>("a", "b", 0))));
+        assertThat(processorSupplier.theCapturedProcessor().processed(), equalTo(Collections.singletonList(new KeyValueTimestamp<>("a", "b", 0))));
     }
 
     @Test
@@ -1535,7 +1536,7 @@ public class KStreamImplTest {
                 driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             inputTopic.pipeInput("e", "f");
         }
-        assertThat(processorSupplier.theCapturedProcessor().processed, equalTo(Collections.singletonList(new KeyValueTimestamp<>("e", "f", 0))));
+        assertThat(processorSupplier.theCapturedProcessor().processed(), equalTo(Collections.singletonList(new KeyValueTimestamp<>("e", "f", 0))));
     }
 
     @Test
@@ -1556,9 +1557,9 @@ public class KStreamImplTest {
             inputTopic.pipeInput("b", "v1");
         }
         final List<MockProcessor<String, String>> mockProcessors = processorSupplier.capturedProcessors(2);
-        assertThat(mockProcessors.get(0).processed, equalTo(asList(new KeyValueTimestamp<>("a", "v1", 0),
+        assertThat(mockProcessors.get(0).processed(), equalTo(asList(new KeyValueTimestamp<>("a", "v1", 0),
             new KeyValueTimestamp<>("a", "v2", 0))));
-        assertThat(mockProcessors.get(1).processed, equalTo(Collections.singletonList(new KeyValueTimestamp<>("b", "v1", 0))));
+        assertThat(mockProcessors.get(1).processed(), equalTo(Collections.singletonList(new KeyValueTimestamp<>("b", "v1", 0))));
     }
 
     @SuppressWarnings("deprecation") // specifically testing the deprecated variant
@@ -1580,9 +1581,9 @@ public class KStreamImplTest {
 
         final ProcessorTopology topology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").buildTopology();
 
-        final SourceNode<?, ?> originalSourceNode = topology.source("topic-1");
+        final SourceNode<?, ?, ?, ?> originalSourceNode = topology.source("topic-1");
 
-        for (final SourceNode<?, ?> sourceNode : topology.sources()) {
+        for (final SourceNode<?, ?, ?, ?> sourceNode : topology.sources()) {
             if (sourceNode.name().equals(originalSourceNode.name())) {
                 assertNull(sourceNode.getTimestampExtractor());
             } else {
@@ -1609,9 +1610,9 @@ public class KStreamImplTest {
 
         final ProcessorTopology topology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").buildTopology();
 
-        final SourceNode<?, ?> originalSourceNode = topology.source("topic-1");
+        final SourceNode<?, ?, ?, ?> originalSourceNode = topology.source("topic-1");
 
-        for (final SourceNode<?, ?> sourceNode : topology.sources()) {
+        for (final SourceNode<?, ?, ?, ?> sourceNode : topology.sources()) {
             if (sourceNode.name().equals(originalSourceNode.name())) {
                 assertNull(sourceNode.getTimestampExtractor());
             } else {
@@ -1665,7 +1666,7 @@ public class KStreamImplTest {
         assertEquals(asList(new KeyValueTimestamp<>("A", "aa", 0),
             new KeyValueTimestamp<>("B", "bb", 0),
             new KeyValueTimestamp<>("C", "cc", 0),
-            new KeyValueTimestamp<>("D", "dd", 0)), processorSupplier.theCapturedProcessor().processed);
+            new KeyValueTimestamp<>("D", "dd", 0)), processorSupplier.theCapturedProcessor().processed());
     }
 
     @Test
@@ -1711,7 +1712,7 @@ public class KStreamImplTest {
             new KeyValueTimestamp<>("F", "ff", 7),
             new KeyValueTimestamp<>("G", "gg", 4),
             new KeyValueTimestamp<>("H", "hh", 6)),
-            processorSupplier.theCapturedProcessor().processed);
+            processorSupplier.theCapturedProcessor().processed());
     }
 
     @Test
@@ -1744,7 +1745,7 @@ public class KStreamImplTest {
             new KeyValueTimestamp<>("C", "cc", 10),
             new KeyValueTimestamp<>("D", "dd", 8),
             new KeyValueTimestamp<>("E", "ee", 3)),
-            processorSupplier.theCapturedProcessor().processed);
+            processorSupplier.theCapturedProcessor().processed());
     }
 
     @Test
@@ -1782,7 +1783,7 @@ public class KStreamImplTest {
             new KeyValueTimestamp<>("C", "cc", 10),
             new KeyValueTimestamp<>("D", "dd", 8),
             new KeyValueTimestamp<>("E", "ee", 3)),
-            processorSupplier.theCapturedProcessor().processed);
+            processorSupplier.theCapturedProcessor().processed());
     }
 
     @Test
@@ -1866,6 +1867,46 @@ public class KStreamImplTest {
     }
 
     @Test
+    public void shouldNotAllowBadTransformerSupplierOnFlatTransform() {
+        final Transformer<String, String, Iterable<KeyValue<String, String>>> transformer = flatTransformerSupplier.get();
+        final IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> testStream.flatTransform(() -> transformer)
+        );
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+    }
+
+    @Test
+    public void shouldNotAllowBadTransformerSupplierOnFlatTransformWithStores() {
+        final Transformer<String, String, Iterable<KeyValue<String, String>>> transformer = flatTransformerSupplier.get();
+        final IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+            () -> testStream.flatTransform(() -> transformer, "storeName")
+        );
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+    }
+
+    @Test
+    public void shouldNotAllowBadTransformerSupplierOnFlatTransformWithNamed() {
+        final Transformer<String, String, Iterable<KeyValue<String, String>>> transformer = flatTransformerSupplier.get();
+        final IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+            () -> testStream.flatTransform(() -> transformer, Named.as("flatTransformer"))
+        );
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+    }
+
+    @Test
+    public void shouldNotAllowBadTransformerSupplierOnFlatTransformWithNamedAndStores() {
+        final Transformer<String, String, Iterable<KeyValue<String, String>>> transformer = flatTransformerSupplier.get();
+        final IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+            () -> testStream.flatTransform(() -> transformer, Named.as("flatTransformer"), "storeName")
+        );
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+    }
+
+    @Test
     public void shouldNotAllowNullTransformerSupplierOnFlatTransform() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1946,11 +1987,51 @@ public class KStreamImplTest {
     }
 
     @Test
+    public void shouldNotAllowBadTransformerSupplierOnTransformValues() {
+        final ValueTransformer<String, String> transformer = valueTransformerSupplier.get();
+        final IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+            () -> testStream.transformValues(() -> transformer)
+        );
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+    }
+
+    @Test
+    public void shouldNotAllowBadTransformerSupplierOnTransformValuesWithNamed() {
+        final ValueTransformer<String, String> transformer = valueTransformerSupplier.get();
+        final IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+            () -> testStream.transformValues(() -> transformer, Named.as("transformer"))
+        );
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+    }
+
+    @Test
     public void shouldNotAllowNullValueTransformerSupplierOnTransformValues() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.transformValues((ValueTransformerSupplier<Object, Object>) null));
         assertThat(exception.getMessage(), equalTo("valueTransformerSupplier can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowBadValueTransformerWithKeySupplierOnTransformValues() {
+        final ValueTransformerWithKey<String, String, String> transformer = valueTransformerWithKeySupplier.get();
+        final IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+            () -> testStream.transformValues(() -> transformer)
+        );
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
+    }
+
+    @Test
+    public void shouldNotAllowBadValueTransformerWithKeySupplierOnTransformValuesWithNamed() {
+        final ValueTransformerWithKey<String, String, String> transformer = valueTransformerWithKeySupplier.get();
+        final IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+            () -> testStream.transformValues(() -> transformer, Named.as("transformer"))
+        );
+        assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
     }
 
     @Test

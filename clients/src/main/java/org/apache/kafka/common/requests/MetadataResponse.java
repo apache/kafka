@@ -28,7 +28,6 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
@@ -101,8 +100,10 @@ public class MetadataResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
-        data.topics().forEach(metadata ->
-            updateErrorCounts(errorCounts, Errors.forCode(metadata.errorCode())));
+        data.topics().forEach(metadata -> {
+            metadata.partitions().forEach(p -> updateErrorCounts(errorCounts, Errors.forCode(p.errorCode())));
+            updateErrorCounts(errorCounts, Errors.forCode(metadata.errorCode()));
+        });
         return errorCounts;
     }
 

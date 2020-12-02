@@ -26,7 +26,7 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StreamStreamJoinNode;
-import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
+import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
@@ -77,8 +77,8 @@ class KStreamImplJoin {
         final String joinMergeName = renamed.suffixWithOrElseGet(
             "-merge", builder, KStreamImpl.MERGE_NAME);
 
-        final StreamsGraphNode thisStreamsGraphNode = ((AbstractStream<?, ?>) lhs).streamsGraphNode;
-        final StreamsGraphNode otherStreamsGraphNode = ((AbstractStream<?, ?>) other).streamsGraphNode;
+        final GraphNode thisGraphNode = ((AbstractStream<?, ?>) lhs).graphNode;
+        final GraphNode otherGraphNode = ((AbstractStream<?, ?>) other).graphNode;
 
         final StoreBuilder<WindowStore<K1, V1>> thisWindowStore;
         final StoreBuilder<WindowStore<K1, V2>> otherWindowStore;
@@ -107,15 +107,15 @@ class KStreamImplJoin {
 
         final KStreamJoinWindow<K1, V1> thisWindowedStream = new KStreamJoinWindow<>(thisWindowStore.name());
 
-        final ProcessorParameters<K1, V1> thisWindowStreamProcessorParams = new ProcessorParameters<>(thisWindowedStream, thisWindowStreamProcessorName);
+        final ProcessorParameters<K1, V1, ?, ?> thisWindowStreamProcessorParams = new ProcessorParameters<>(thisWindowedStream, thisWindowStreamProcessorName);
         final ProcessorGraphNode<K1, V1> thisWindowedStreamsNode = new ProcessorGraphNode<>(thisWindowStreamProcessorName, thisWindowStreamProcessorParams);
-        builder.addGraphNode(thisStreamsGraphNode, thisWindowedStreamsNode);
+        builder.addGraphNode(thisGraphNode, thisWindowedStreamsNode);
 
         final KStreamJoinWindow<K1, V2> otherWindowedStream = new KStreamJoinWindow<>(otherWindowStore.name());
 
-        final ProcessorParameters<K1, V2> otherWindowStreamProcessorParams = new ProcessorParameters<>(otherWindowedStream, otherWindowStreamProcessorName);
+        final ProcessorParameters<K1, V2, ?, ?> otherWindowStreamProcessorParams = new ProcessorParameters<>(otherWindowedStream, otherWindowStreamProcessorName);
         final ProcessorGraphNode<K1, V2> otherWindowedStreamsNode = new ProcessorGraphNode<>(otherWindowStreamProcessorName, otherWindowStreamProcessorParams);
-        builder.addGraphNode(otherStreamsGraphNode, otherWindowedStreamsNode);
+        builder.addGraphNode(otherGraphNode, otherWindowedStreamsNode);
 
         final KStreamKStreamJoin<K1, R, V1, V2> joinThis = new KStreamKStreamJoin<>(
             otherWindowStore.name(),
@@ -137,9 +137,9 @@ class KStreamImplJoin {
 
         final StreamStreamJoinNode.StreamStreamJoinNodeBuilder<K1, V1, V2, R> joinBuilder = StreamStreamJoinNode.streamStreamJoinNodeBuilder();
 
-        final ProcessorParameters<K1, V1> joinThisProcessorParams = new ProcessorParameters<>(joinThis, joinThisName);
-        final ProcessorParameters<K1, V2> joinOtherProcessorParams = new ProcessorParameters<>(joinOther, joinOtherName);
-        final ProcessorParameters<K1, R> joinMergeProcessorParams = new ProcessorParameters<>(joinMerge, joinMergeName);
+        final ProcessorParameters<K1, V1, ?, ?> joinThisProcessorParams = new ProcessorParameters<>(joinThis, joinThisName);
+        final ProcessorParameters<K1, V2, ?, ?> joinOtherProcessorParams = new ProcessorParameters<>(joinOther, joinOtherName);
+        final ProcessorParameters<K1, R, ?, ?> joinMergeProcessorParams = new ProcessorParameters<>(joinMerge, joinMergeName);
 
         joinBuilder.withJoinMergeProcessorParameters(joinMergeProcessorParams)
                    .withJoinThisProcessorParameters(joinThisProcessorParams)
@@ -151,9 +151,9 @@ class KStreamImplJoin {
                    .withValueJoiner(joiner)
                    .withNodeName(joinMergeName);
 
-        final StreamsGraphNode joinGraphNode = joinBuilder.build();
+        final GraphNode joinGraphNode = joinBuilder.build();
 
-        builder.addGraphNode(Arrays.asList(thisStreamsGraphNode, otherStreamsGraphNode), joinGraphNode);
+        builder.addGraphNode(Arrays.asList(thisGraphNode, otherGraphNode), joinGraphNode);
 
         final Set<String> allSourceNodes = new HashSet<>(((KStreamImpl<K1, V1>) lhs).subTopologySourceNodes);
         allSourceNodes.addAll(((KStreamImpl<K1, V2>) other).subTopologySourceNodes);

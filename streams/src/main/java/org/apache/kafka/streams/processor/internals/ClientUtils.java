@@ -17,10 +17,10 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
@@ -30,6 +30,8 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -39,18 +41,22 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class ClientUtils {
     private static final Logger LOG = LoggerFactory.getLogger(ClientUtils.class);
 
-    public static final class QuietAdminClientConfig extends AdminClientConfig {
-        QuietAdminClientConfig(final StreamsConfig streamsConfig) {
-            // If you just want to look up admin configs, you don't care about the clientId
-            super(streamsConfig.getAdminConfigs("dummy"), false);
+    public static final class QuietStreamsConfig extends StreamsConfig {
+        public QuietStreamsConfig(final Map<?, ?> props) {
+            super(props, false);
         }
     }
+
+    public static final class QuietConsumerConfig extends ConsumerConfig {
+        public QuietConsumerConfig(final Map<String, Object> props) {
+            super(props, false);
+        }
+    }
+
 
     // currently admin client is shared among all threads
     public static String getSharedAdminClientId(final String clientId) {
@@ -114,12 +120,12 @@ public class ClientUtils {
             // those which do not have a committed offset would default to 0
             committedOffsets = consumer.committed(partitions).entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue() == null ? 0L : e.getValue().offset()));
-        } catch (final TimeoutException e) {
-            LOG.warn("The committed offsets request timed out, try increasing the consumer client's default.api.timeout.ms", e);
-            throw e;
-        } catch (final KafkaException e) {
-            LOG.warn("The committed offsets request failed.", e);
-            throw new StreamsException(String.format("Failed to retrieve end offsets for %s", partitions), e);
+        } catch (final TimeoutException timeoutException) {
+            LOG.warn("The committed offsets request timed out, try increasing the consumer client's default.api.timeout.ms", timeoutException);
+            throw timeoutException;
+        } catch (final KafkaException fatal) {
+            LOG.warn("The committed offsets request failed.", fatal);
+            throw new StreamsException(String.format("Failed to retrieve end offsets for %s", partitions), fatal);
         }
 
         return committedOffsets;
@@ -128,8 +134,8 @@ public class ClientUtils {
     public static KafkaFuture<Map<TopicPartition, ListOffsetsResultInfo>> fetchEndOffsetsFuture(final Collection<TopicPartition> partitions,
                                                                                                 final Admin adminClient) {
         return adminClient.listOffsets(
-            partitions.stream().collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest())))
-            .all();
+            partitions.stream().collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest()))
+        ).all();
     }
 
     /**

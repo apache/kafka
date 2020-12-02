@@ -26,12 +26,15 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.state.internals.CachedStateStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.RecordConverter;
+import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
 import org.slf4j.Logger;
 
 import java.io.File;
@@ -195,7 +198,7 @@ public class ProcessorStateManager implements StateManager {
             if (stores.containsKey(store.name())) {
                 maybeRegisterStoreWithChangelogReader(store.name());
             } else {
-                store.init(processorContext, store);
+                store.init((StateStoreContext) processorContext, store);
             }
             log.trace("Registered state store {}", store.name());
         }
@@ -266,7 +269,9 @@ public class ProcessorStateManager implements StateManager {
                 log.warn("Some loaded checkpoint offsets cannot find their corresponding state stores: {}", loadedCheckpoints);
             }
 
-            checkpointFile.delete();
+            if (eosEnabled) {
+                checkpointFile.delete();
+            }
         } catch (final TaskCorruptedException e) {
             throw e;
         } catch (final IOException | RuntimeException e) {
@@ -461,6 +466,44 @@ public class ProcessorStateManager implements StateManager {
         }
     }
 
+    public void flushCache() {
+        RuntimeException firstException = null;
+        // attempting to flush the stores
+        if (!stores.isEmpty()) {
+            log.debug("Flushing all store caches registered in the state manager: {}", stores);
+            for (final StateStoreMetadata metadata : stores.values()) {
+                final StateStore store = metadata.stateStore;
+
+                try {
+                    // buffer should be flushed to send all records to changelog
+                    if (store instanceof TimeOrderedKeyValueBuffer) {
+                        store.flush();
+                    } else if (store instanceof CachedStateStore) {
+                        ((CachedStateStore) store).flushCache();
+                    }
+                    log.trace("Flushed cache or buffer {}", store.name());
+                } catch (final RuntimeException exception) {
+                    if (firstException == null) {
+                        // do NOT wrap the error if it is actually caused by Streams itself
+                        if (exception instanceof StreamsException) {
+                            firstException = exception;
+                        } else {
+                            firstException = new ProcessorStateException(
+                                format("%sFailed to flush cache of store %s", logPrefix, store.name()),
+                                exception
+                            );
+                        }
+                    }
+                    log.error("Failed to flush cache of store {}: ", store.name(), exception);
+                }
+            }
+        }
+
+        if (firstException != null) {
+            throw firstException;
+        }
+    }
+
     /**
      * {@link StateStore#close() Close} all stores (even in case of failure).
      * Log all exceptions and re-throw the first exception that occurred at the end.
@@ -528,9 +571,7 @@ public class ProcessorStateManager implements StateManager {
     }
 
     @Override
-    public void checkpoint(final Map<TopicPartition, Long> writtenOffsets) {
-        // first update each state store's current offset, then checkpoint
-        // those stores that are only logged and persistent to the checkpoint file
+    public void updateChangelogOffsets(final Map<TopicPartition, Long> writtenOffsets) {
         for (final Map.Entry<TopicPartition, Long> entry : writtenOffsets.entrySet()) {
             final StateStoreMetadata store = findStore(entry.getKey());
 
@@ -538,10 +579,14 @@ public class ProcessorStateManager implements StateManager {
                 store.setOffset(entry.getValue());
 
                 log.debug("State store {} updated to written offset {} at changelog {}",
-                    store.stateStore.name(), store.offset, store.changelogPartition);
+                        store.stateStore.name(), store.offset, store.changelogPartition);
             }
         }
+    }
 
+    @Override
+    public void checkpoint() {
+        // checkpoint those stores that are only logged and persistent to the checkpoint file
         final Map<TopicPartition, Long> checkpointingOffsets = new HashMap<>();
         for (final StateStoreMetadata storeMetadata : stores.values()) {
             // store is logged, persistent, not corrupted, and has a valid current offset
@@ -558,7 +603,11 @@ public class ProcessorStateManager implements StateManager {
         try {
             checkpointFile.write(checkpointingOffsets);
         } catch (final IOException e) {
-            log.warn("Failed to write offset checkpoint file to [{}]", checkpointFile, e);
+            log.warn("Failed to write offset checkpoint file to [{}]." +
+                " This may occur if OS cleaned the state.dir in case when it located in /tmp directory." +
+                " This may also occur due to running multiple instances on the same machine using the same state dir." +
+                " Changing the location of state.dir may resolve the problem.",
+                checkpointFile, e);
         }
     }
 
@@ -617,5 +666,11 @@ public class ProcessorStateManager implements StateManager {
 
     public String changelogFor(final String storeName) {
         return storeToChangelogTopic.get(storeName);
+    }
+
+    public void deleteCheckPointFileIfEOSEnabled() throws IOException {
+        if (eosEnabled) {
+            checkpointFile.delete();
+        }
     }
 }

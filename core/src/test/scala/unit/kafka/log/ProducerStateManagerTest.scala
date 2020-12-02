@@ -22,6 +22,7 @@ import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.file.StandardOpenOption
 import java.util.Collections
+import java.util.concurrent.atomic.AtomicInteger
 
 import kafka.server.LogOffsetMetadata
 import kafka.utils.TestUtils
@@ -78,7 +79,7 @@ class ProducerStateManagerTest {
     append(stateManager, producerId, (epoch + 1).toShort, 0, 0L, 3L)
 
     // Incorrect epoch
-    assertThrows[ProducerFencedException] {
+    assertThrows[InvalidProducerEpochException] {
       append(stateManager, producerId, epoch, 0, 0L, 4L)
     }
   }
@@ -94,7 +95,7 @@ class ProducerStateManagerTest {
     assertEquals(RecordBatch.NO_SEQUENCE, firstEntry.lastSeq)
 
     // Fencing should continue to work even if the marker is the only thing left
-    assertThrows[ProducerFencedException] {
+    assertThrows[InvalidProducerEpochException] {
       append(stateManager, producerId, 0.toShort, 0, 0L, 4L)
     }
 
@@ -178,29 +179,24 @@ class ProducerStateManagerTest {
   }
 
   @Test
-  def testControlRecordBumpsEpoch(): Unit = {
-    val epoch = 0.toShort
-    append(stateManager, producerId, epoch, 0, 0L)
+  def testControlRecordBumpsProducerEpoch(): Unit = {
+    val producerEpoch = 0.toShort
+    append(stateManager, producerId, producerEpoch, 0, 0L)
 
-    val bumpedEpoch = 1.toShort
-    val (completedTxn, lastStableOffset) = appendEndTxnMarker(stateManager, producerId, bumpedEpoch, ControlRecordType.ABORT, 1L)
-    assertEquals(1L, completedTxn.firstOffset)
-    assertEquals(1L, completedTxn.lastOffset)
-    assertEquals(2L, lastStableOffset)
-    assertTrue(completedTxn.isAborted)
-    assertEquals(producerId, completedTxn.producerId)
+    val bumpedProducerEpoch = 1.toShort
+    appendEndTxnMarker(stateManager, producerId, bumpedProducerEpoch, ControlRecordType.ABORT, 1L)
 
     val maybeLastEntry = stateManager.lastEntry(producerId)
     assertTrue(maybeLastEntry.isDefined)
 
     val lastEntry = maybeLastEntry.get
-    assertEquals(bumpedEpoch, lastEntry.producerEpoch)
+    assertEquals(bumpedProducerEpoch, lastEntry.producerEpoch)
     assertEquals(None, lastEntry.currentTxnFirstOffset)
     assertEquals(RecordBatch.NO_SEQUENCE, lastEntry.firstSeq)
     assertEquals(RecordBatch.NO_SEQUENCE, lastEntry.lastSeq)
 
     // should be able to append with the new epoch if we start at sequence 0
-    append(stateManager, producerId, bumpedEpoch, 0, 2L)
+    append(stateManager, producerId, bumpedProducerEpoch, 0, 2L)
     assertEquals(Some(0), stateManager.lastEntry(producerId).map(_.firstSeq))
   }
 
@@ -218,6 +214,64 @@ class ProducerStateManagerTest {
     stateManager.update(producerAppendInfo)
 
     assertEquals(Some(firstOffsetMetadata), stateManager.firstUnstableOffset)
+  }
+
+  @Test
+  def testSkipEmptyTransactions(): Unit = {
+    val producerEpoch = 0.toShort
+    val coordinatorEpoch = 27
+    val seq = new AtomicInteger(0)
+
+    def appendEndTxn(
+      recordType: ControlRecordType,
+      offset: Long,
+      appendInfo: ProducerAppendInfo
+    ): Option[CompletedTxn] = {
+      appendInfo.appendEndTxnMarker(new EndTransactionMarker(recordType, coordinatorEpoch),
+        producerEpoch, offset, time.milliseconds())
+    }
+
+    def appendData(
+      startOffset: Long,
+      endOffset: Long,
+      appendInfo: ProducerAppendInfo
+    ): Unit = {
+      val count = (endOffset - startOffset).toInt
+      appendInfo.appendDataBatch(producerEpoch, seq.get(), seq.addAndGet(count), time.milliseconds(),
+        LogOffsetMetadata(startOffset), endOffset, isTransactional = true)
+      seq.incrementAndGet()
+    }
+
+    // Start one transaction in a separate append
+    val firstAppend = stateManager.prepareUpdate(producerId, origin = AppendOrigin.Client)
+    appendData(16L, 20L, firstAppend)
+    assertEquals(new TxnMetadata(producerId, 16L), firstAppend.startedTransactions.head)
+    stateManager.update(firstAppend)
+    stateManager.onHighWatermarkUpdated(21L)
+    assertEquals(Some(LogOffsetMetadata(16L)), stateManager.firstUnstableOffset)
+
+    // Now do a single append which completes the old transaction, mixes in
+    // some empty transactions, one non-empty complete transaction, and one
+    // incomplete transaction
+    val secondAppend = stateManager.prepareUpdate(producerId, origin = AppendOrigin.Client)
+    val firstCompletedTxn = appendEndTxn(ControlRecordType.COMMIT, 21, secondAppend)
+    assertEquals(Some(CompletedTxn(producerId, 16L, 21, isAborted = false)), firstCompletedTxn)
+    assertEquals(None, appendEndTxn(ControlRecordType.COMMIT, 22, secondAppend))
+    assertEquals(None, appendEndTxn(ControlRecordType.ABORT, 23, secondAppend))
+    appendData(24L, 27L, secondAppend)
+    val secondCompletedTxn = appendEndTxn(ControlRecordType.ABORT, 28L, secondAppend)
+    assertTrue(secondCompletedTxn.isDefined)
+    assertEquals(None, appendEndTxn(ControlRecordType.ABORT, 29L, secondAppend))
+    appendData(30L, 31L, secondAppend)
+
+    assertEquals(2, secondAppend.startedTransactions.size)
+    assertEquals(TxnMetadata(producerId, LogOffsetMetadata(24L)), secondAppend.startedTransactions.head)
+    assertEquals(TxnMetadata(producerId, LogOffsetMetadata(30L)), secondAppend.startedTransactions.last)
+    stateManager.update(secondAppend)
+    stateManager.completeTxn(firstCompletedTxn.get)
+    stateManager.completeTxn(secondCompletedTxn.get)
+    stateManager.onHighWatermarkUpdated(32L)
+    assertEquals(Some(LogOffsetMetadata(30L)), stateManager.firstUnstableOffset)
   }
 
   @Test
@@ -333,7 +387,10 @@ class ProducerStateManagerTest {
     assertEquals(List(new TxnMetadata(producerId, 16L)), appendInfo.startedTransactions)
 
     val endTxnMarker = new EndTransactionMarker(ControlRecordType.COMMIT, coordinatorEpoch)
-    val completedTxn = appendInfo.appendEndTxnMarker(endTxnMarker, producerEpoch, 40L, time.milliseconds())
+    val completedTxnOpt = appendInfo.appendEndTxnMarker(endTxnMarker, producerEpoch, 40L, time.milliseconds())
+    assertTrue(completedTxnOpt.isDefined)
+
+    val completedTxn = completedTxnOpt.get
     assertEquals(producerId, completedTxn.producerId)
     assertEquals(16L, completedTxn.firstOffset)
     assertEquals(40L, completedTxn.lastOffset)
@@ -742,7 +799,7 @@ class ProducerStateManagerTest {
       isTransactional = true, origin = AppendOrigin.Coordinator)
   }
 
-  @Test(expected = classOf[ProducerFencedException])
+  @Test(expected = classOf[InvalidProducerEpochException])
   def testOldEpochForControlRecord(): Unit = {
     val epoch = 5.toShort
     val sequence = 0
@@ -821,7 +878,6 @@ class ProducerStateManagerTest {
   @Test
   def testAppendEmptyControlBatch(): Unit = {
     val producerId = 23423L
-    val producerEpoch = 145.toShort
     val baseOffset = 15
 
     val batch: RecordBatch = EasyMock.createMock(classOf[RecordBatch])
@@ -830,8 +886,42 @@ class ProducerStateManagerTest {
     EasyMock.replay(batch)
 
     // Appending the empty control batch should not throw and a new transaction shouldn't be started
-    append(stateManager, producerId, producerEpoch, baseOffset, batch, origin = AppendOrigin.Client)
+    append(stateManager, producerId, baseOffset, batch, origin = AppendOrigin.Client)
     assertEquals(None, stateManager.lastEntry(producerId).get.currentTxnFirstOffset)
+  }
+
+  @Test
+  def testRemoveStraySnapshotsKeepCleanShutdownSnapshot(): Unit = {
+    // Test that when stray snapshots are removed, the largest stray snapshot is kept around. This covers the case where
+    // the broker shutdown cleanly and emitted a snapshot file larger than the base offset of the active segment.
+
+    // Create 3 snapshot files at different offsets.
+    Log.producerSnapshotFile(logDir, 5).createNewFile() // not stray
+    Log.producerSnapshotFile(logDir, 2).createNewFile() // stray
+    Log.producerSnapshotFile(logDir, 42).createNewFile() // not stray
+
+    // claim that we only have one segment with a base offset of 5
+    stateManager.removeStraySnapshots(Seq(5))
+
+    // The snapshot file at offset 2 should be considered a stray, but the snapshot at 42 should be kept
+    // around because it is the largest snapshot.
+    assertEquals(Some(42), stateManager.latestSnapshotOffset)
+    assertEquals(Some(5), stateManager.oldestSnapshotOffset)
+    assertEquals(Seq(5, 42), ProducerStateManager.listSnapshotFiles(logDir).map(_.offset).sorted)
+  }
+
+  @Test
+  def testRemoveAllStraySnapshots(): Unit = {
+    // Test that when stray snapshots are removed, we remove only the stray snapshots below the largest segment base offset.
+    // Snapshots associated with an offset in the list of segment base offsets should remain.
+
+    // Create 3 snapshot files at different offsets.
+    Log.producerSnapshotFile(logDir, 5).createNewFile() // stray
+    Log.producerSnapshotFile(logDir, 2).createNewFile() // stray
+    Log.producerSnapshotFile(logDir, 42).createNewFile() // not stray
+
+    stateManager.removeStraySnapshots(Seq(42))
+    assertEquals(Seq(42), ProducerStateManager.listSnapshotFiles(logDir).map(_.offset).sorted)
   }
 
   private def testLoadFromCorruptSnapshot(makeFileCorrupt: FileChannel => Unit): Unit = {
@@ -870,15 +960,14 @@ class ProducerStateManagerTest {
                                  controlType: ControlRecordType,
                                  offset: Long,
                                  coordinatorEpoch: Int = 0,
-                                 timestamp: Long = time.milliseconds()): (CompletedTxn, Long) = {
+                                 timestamp: Long = time.milliseconds()): Option[CompletedTxn] = {
     val producerAppendInfo = stateManager.prepareUpdate(producerId, origin = AppendOrigin.Coordinator)
     val endTxnMarker = new EndTransactionMarker(controlType, coordinatorEpoch)
-    val completedTxn = producerAppendInfo.appendEndTxnMarker(endTxnMarker, producerEpoch, offset, timestamp)
+    val completedTxnOpt = producerAppendInfo.appendEndTxnMarker(endTxnMarker, producerEpoch, offset, timestamp)
     mapping.update(producerAppendInfo)
-    val lastStableOffset = mapping.lastStableOffset(completedTxn)
-    mapping.completeTxn(completedTxn)
+    completedTxnOpt.foreach(mapping.completeTxn)
     mapping.updateMapEndOffset(offset + 1)
-    (completedTxn, lastStableOffset)
+    completedTxnOpt
   }
 
   private def append(stateManager: ProducerStateManager,
@@ -898,7 +987,6 @@ class ProducerStateManagerTest {
 
   private def append(stateManager: ProducerStateManager,
                      producerId: Long,
-                     producerEpoch: Short,
                      offset: Long,
                      batch: RecordBatch,
                      origin: AppendOrigin): Unit = {

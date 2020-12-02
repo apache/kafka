@@ -22,7 +22,6 @@ import org.apache.kafka.common.message.AlterConfigsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Message;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
@@ -57,7 +56,7 @@ public class AlterConfigsResponse extends AbstractResponse {
     }
 
     @Override
-    protected Message data() {
+    public AlterConfigsResponseData data() {
         return data;
     }
 

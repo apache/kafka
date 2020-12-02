@@ -24,7 +24,6 @@ import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsTo
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
@@ -56,11 +55,6 @@ public class DeleteRecordsRequest extends AbstractRequest {
     private DeleteRecordsRequest(DeleteRecordsRequestData data, short version) {
         super(ApiKeys.DELETE_RECORDS, version);
         this.data = data;
-    }
-
-    public DeleteRecordsRequest(Struct struct, short version) {
-        super(ApiKeys.DELETE_RECORDS, version);
-        this.data = new DeleteRecordsRequestData(struct, version);
     }
 
     @Override

@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
@@ -76,7 +77,23 @@ public class RequestHeaderTest {
         assertEquals(header, deserialized);
     }
 
+    @Test
+    public void parseHeaderFromBufferWithNonZeroPosition() {
+        ByteBuffer buffer = ByteBuffer.allocate(64);
+        buffer.position(10);
+
+        RequestHeader header = new RequestHeader(ApiKeys.FIND_COORDINATOR, (short) 1, "", 10);
+        header.write(buffer, new ObjectSerializationCache());
+        int limit = buffer.position();
+        buffer.position(10);
+        buffer.limit(limit);
+
+        RequestHeader parsed = RequestHeader.parse(buffer);
+        assertEquals(header, parsed);
+    }
+
     private ByteBuffer toBuffer(RequestHeader header) {
         return TestUtils.serializeRequestHeader(header);
+
     }
 }

@@ -220,6 +220,7 @@ public class DescribeConfigsResponse extends AbstractResponse {
     public DescribeConfigsResponse(DescribeConfigsResponseData data) {
         super(ApiKeys.DESCRIBE_CONFIGS);
         this.data = data;
+        //FIXME Post-process version 0
     }
 
 //    public DescribeConfigsResponse(Struct struct, short version) {

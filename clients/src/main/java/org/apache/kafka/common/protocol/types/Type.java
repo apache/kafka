@@ -16,15 +16,14 @@
  */
 package org.apache.kafka.common.protocol.types;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.Optional;
-import java.util.UUID;
 
 /**
  * A serializable type
@@ -332,14 +331,14 @@ public abstract class Type {
     public static final DocumentedType UUID = new DocumentedType() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
-            final java.util.UUID uuid = (java.util.UUID) o;
+            final Uuid uuid = (Uuid) o;
             buffer.putLong(uuid.getMostSignificantBits());
             buffer.putLong(uuid.getLeastSignificantBits());
         }
 
         @Override
         public Object read(ByteBuffer buffer) {
-            return new java.util.UUID(buffer.getLong(), buffer.getLong());
+            return new Uuid(buffer.getLong(), buffer.getLong());
         }
 
         @Override
@@ -353,16 +352,16 @@ public abstract class Type {
         }
 
         @Override
-        public UUID validate(Object item) {
-            if (item instanceof UUID)
-                return (UUID) item;
+        public Uuid validate(Object item) {
+            if (item instanceof Uuid)
+                return (Uuid) item;
             else
-                throw new SchemaException(item + " is not a UUID.");
+                throw new SchemaException(item + " is not a Uuid.");
         }
 
         @Override
         public String documentation() {
-            return "Represents a java.util.UUID. " +
+            return "Represents a type 4 immutable universally unique identifier (Uuid). " +
                     "The values are encoded using sixteen bytes in network byte order (big-endian).";
         }
     };
@@ -866,6 +865,69 @@ public abstract class Type {
         }
     };
 
+    public static final DocumentedType COMPACT_RECORDS = new DocumentedType() {
+        @Override
+        public boolean isNullable() {
+            return true;
+        }
+
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            if (o == null) {
+                COMPACT_NULLABLE_BYTES.write(buffer, null);
+            } else if (o instanceof MemoryRecords) {
+                MemoryRecords records = (MemoryRecords) o;
+                COMPACT_NULLABLE_BYTES.write(buffer, records.buffer().duplicate());
+            } else {
+                throw new IllegalArgumentException("Unexpected record type: " + o.getClass());
+            }
+        }
+
+        @Override
+        public MemoryRecords read(ByteBuffer buffer) {
+            ByteBuffer recordsBuffer = (ByteBuffer) COMPACT_NULLABLE_BYTES.read(buffer);
+            if (recordsBuffer == null) {
+                return null;
+            } else {
+                return MemoryRecords.readableRecords(recordsBuffer);
+            }
+        }
+
+        @Override
+        public int sizeOf(Object o) {
+            if (o == null) {
+                return 1;
+            }
+
+            BaseRecords records = (BaseRecords) o;
+            int recordsSize = records.sizeInBytes();
+            return ByteUtils.sizeOfUnsignedVarint(recordsSize + 1) + recordsSize;
+        }
+
+        @Override
+        public String typeName() {
+            return "COMPACT_RECORDS";
+        }
+
+        @Override
+        public BaseRecords validate(Object item) {
+            if (item == null)
+                return null;
+
+            if (item instanceof BaseRecords)
+                return (BaseRecords) item;
+
+            throw new SchemaException(item + " is not an instance of " + BaseRecords.class.getName());
+        }
+
+        @Override
+        public String documentation() {
+            return "Represents a sequence of Kafka records as " + COMPACT_NULLABLE_BYTES + ". " +
+                "For a detailed description of records see " +
+                "<a href=\"/documentation/#messageformat\">Message Sets</a>.";
+        }
+    };
+
     public static final DocumentedType RECORDS = new DocumentedType() {
         @Override
         public boolean isNullable() {
@@ -874,16 +936,24 @@ public abstract class Type {
 
         @Override
         public void write(ByteBuffer buffer, Object o) {
-            if (!(o instanceof MemoryRecords))
+            if (o == null) {
+                NULLABLE_BYTES.write(buffer, null);
+            } else if (o instanceof MemoryRecords) {
+                MemoryRecords records = (MemoryRecords) o;
+                NULLABLE_BYTES.write(buffer, records.buffer().duplicate());
+            } else {
                 throw new IllegalArgumentException("Unexpected record type: " + o.getClass());
-            MemoryRecords records = (MemoryRecords) o;
-            NULLABLE_BYTES.write(buffer, records.buffer().duplicate());
+            }
         }
 
         @Override
         public MemoryRecords read(ByteBuffer buffer) {
             ByteBuffer recordsBuffer = (ByteBuffer) NULLABLE_BYTES.read(buffer);
-            return MemoryRecords.readableRecords(recordsBuffer);
+            if (recordsBuffer == null) {
+                return null;
+            } else {
+                return MemoryRecords.readableRecords(recordsBuffer);
+            }
         }
 
         @Override
@@ -908,7 +978,7 @@ public abstract class Type {
             if (item instanceof BaseRecords)
                 return (BaseRecords) item;
 
-            throw new SchemaException(item + " is not an instance of " + Records.class.getName());
+            throw new SchemaException(item + " is not an instance of " + BaseRecords.class.getName());
         }
 
         @Override

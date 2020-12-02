@@ -126,7 +126,7 @@ public class MetadataRequest extends AbstractRequest {
         }
 
         responseData.setThrottleTimeMs(throttleTimeMs);
-        return new MetadataResponse(responseData,true);
+        return new MetadataResponse(responseData, true);
     }
 
     public boolean isAllTopics() {

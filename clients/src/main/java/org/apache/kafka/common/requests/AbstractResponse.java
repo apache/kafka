@@ -74,6 +74,11 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
         return buffer;
     }
 
+    /**
+     * The number of each type of error in the response, including {@link Errors#NONE} and top-level errors as well as
+     * more specifically scoped errors (such as topic or partition-level errors).
+     * @return A count of errors.
+     */
     public abstract Map<Errors, Integer> errorCounts();
 
     protected Map<Errors, Integer> errorCounts(Errors error) {
@@ -109,6 +114,29 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
      * classes, return `null`.
      */
     protected abstract Message data();
+
+    /**
+     * Parse a response from the provided buffer. The buffer is expected to hold both
+     * the {@link ResponseHeader} as well as the response payload.
+     */
+    public static AbstractResponse parseResponse(ByteBuffer buffer, RequestHeader requestHeader) {
+        ApiKeys apiKey = requestHeader.apiKey();
+        short apiVersion = requestHeader.apiVersion();
+
+        ResponseHeader responseHeader = ResponseHeader.parse(buffer, apiKey.responseHeaderVersion(apiVersion));
+        AbstractResponse response = AbstractResponse.parseResponse(apiKey, buffer, apiVersion);
+
+        // We correlate after parsing the response to avoid spurious correlation errors when receiving malformed
+        // responses
+        if (requestHeader.correlationId() != responseHeader.correlationId()) {
+            throw new CorrelationIdMismatchException("Correlation id for response ("
+                + responseHeader.correlationId() + ") does not match request ("
+                + requestHeader.correlationId() + "), request header: " + requestHeader,
+                requestHeader.correlationId(), responseHeader.correlationId());
+        }
+
+        return response;
+    }
 
     public static AbstractResponse parseResponse(ApiKeys apiKey, ByteBuffer responseBuffer, short version) {
         switch (apiKey) {
@@ -212,6 +240,24 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return DescribeClientQuotasResponse.parse(responseBuffer, version);
             case ALTER_CLIENT_QUOTAS:
                 return AlterClientQuotasResponse.parse(responseBuffer, version);
+            case DESCRIBE_USER_SCRAM_CREDENTIALS:
+                return DescribeUserScramCredentialsResponse.parse(responseBuffer, version);
+            case ALTER_USER_SCRAM_CREDENTIALS:
+                return AlterUserScramCredentialsResponse.parse(responseBuffer, version);
+            case VOTE:
+                return VoteResponse.parse(responseBuffer, version);
+            case BEGIN_QUORUM_EPOCH:
+                return BeginQuorumEpochResponse.parse(responseBuffer, version);
+            case END_QUORUM_EPOCH:
+                return EndQuorumEpochResponse.parse(responseBuffer, version);
+            case DESCRIBE_QUORUM:
+                return DescribeQuorumResponse.parse(responseBuffer, version);
+            case ALTER_ISR:
+                return AlterIsrResponse.parse(responseBuffer, version);
+            case UPDATE_FEATURES:
+                return UpdateFeaturesResponse.parse(responseBuffer, version);
+            case ENVELOPE:
+                return EnvelopeResponse.parse(responseBuffer, version);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

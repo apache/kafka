@@ -20,6 +20,7 @@ package org.apache.kafka.clients.admin;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -36,6 +37,7 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.FeatureUpdateFailedException;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
@@ -43,12 +45,76 @@ import org.apache.kafka.common.requests.LeaveGroupResponse;
 /**
  * The administrative client for Kafka, which supports managing and inspecting topics, brokers, configurations and ACLs.
  * <p>
+ * Instances returned from the {@code create} methods of this interface are guaranteed to be thread safe.
+ * <p>
+ * The operations exposed by Admin follow a consistent pattern:
+ * <ul>
+ *     <li>Admin instances should be created using {@link Admin#create(Properties)} or {@link Admin#create(Map)}</li>
+ *     <li>Each operation typically has two overloaded methods, one which uses a default set of options and an
+ *     overloaded method where the last parameter is an explicit options object.
+ *     <li>The operation method's first parameter is a {@code Collection} of items to perform
+ *     the operation on. Batching multiple requests into a single call is more efficient and should be
+ *     preferred over multiple calls to the same method.
+ *     <li>The operation methods execute asynchronously.
+ *     <li>Each {@code xxx} operation method returns an {@code XxxResult} class with methods which expose
+ *     {@link org.apache.kafka.common.KafkaFuture} for accessing the result(s) of the operation.
+ *     <li>Typically an {@code all()} method is provided for getting the overall success/failure of the batch and a
+ *     {@code values()} method provided access to each item in a request batch.
+ *     Other methods may also be provided.
+ *     <li>For synchronous behaviour use {@link org.apache.kafka.common.KafkaFuture#get()}
+ * </ul>
+ * <p>
+ * Here is a simple example of using an Admin client instance to create a new topic:
+ * <pre>
+ * {@code
+ * Properties props = new Properties();
+ * props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+ *
+ * try (Admin admin = Admin.create(props)) {
+ *   String topicName = "my-topic";
+ *   int partitions = 12;
+ *   short replicationFactor = 3;
+ *   // Create a compacted topic
+ *   CreateTopicsResult result = admin.createTopics(Collections.singleton(
+ *     new NewTopic(topicName, partitions, replicationFactor)
+ *       .configs(Collections.singletonMap(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)));
+ *
+ *   // Call values() to get the result for a specific topic
+ *   KafkaFuture<Void> future = result.values().get(topicName);
+ *
+ *   // Call get() to block until the topic creation is complete or has failed
+ *   // if creation failed the ExecutionException wraps the underlying cause.
+ *   future.get();
+ * }
+ * }
+ * </pre>
+ *
+ * <h3>Bootstrap and balancing</h3>
+ * <p>
+ * The {@code bootstrap.servers} config in the {@code Map} or {@code Properties} passed
+ * to {@link Admin#create(Properties)} is only used for discovering the brokers in the cluster,
+ * which the client will then connect to as needed.
+ * As such, it is sufficient to include only two or three broker addresses to cope with the possibility of brokers
+ * being unavailable.
+ * <p>
+ * Different operations necessitate requests being sent to different nodes in the cluster. For example
+ * {@link #createTopics(Collection)} communicates with the controller, but {@link #describeTopics(Collection)}
+ * can talk to any broker. When the recipient does not matter the instance will try to use the broker with the
+ * fewest outstanding requests.
+ * <p>
+ * The client will transparently retry certain errors which are usually transient.
+ * For example if the request for {@code createTopics()} get sent to a node which was not the controller
+ * the metadata would be refreshed and the request re-sent to the controller.
+ *
+ * <h3>Broker Compatibility</h3>
+ * <p>
  * The minimum broker version required is 0.10.0.0. Methods with stricter requirements will specify the minimum broker
  * version required.
  * <p>
  * This client was introduced in 0.11.0.0 and the API is still evolving. We will try to evolve the API in a compatible
  * manner, but we reserve the right to make breaking changes in minor releases, if necessary. We will update the
  * {@code InterfaceStability} annotation and this notice once the API is considered stable.
+ * <p>
  */
 @InterfaceStability.Evolving
 public interface Admin extends AutoCloseable {
@@ -453,7 +519,6 @@ public interface Admin extends AutoCloseable {
      *
      * @param replicaAssignment     The replicas with their log directory absolute path
      * @return                      The AlterReplicaLogDirsResult
-     * @throws InterruptedException Interrupted while joining I/O thread
      */
     default AlterReplicaLogDirsResult alterReplicaLogDirs(Map<TopicPartitionReplica, String> replicaAssignment) {
         return alterReplicaLogDirs(replicaAssignment, new AlterReplicaLogDirsOptions());
@@ -472,7 +537,6 @@ public interface Admin extends AutoCloseable {
      * @param replicaAssignment     The replicas with their log directory absolute path
      * @param options               The options to use when changing replica dir
      * @return                      The AlterReplicaLogDirsResult
-     * @throws InterruptedException Interrupted while joining I/O thread
      */
     AlterReplicaLogDirsResult alterReplicaLogDirs(Map<TopicPartitionReplica, String> replicaAssignment,
                                                   AlterReplicaLogDirsOptions options);
@@ -1213,6 +1277,172 @@ public interface Admin extends AutoCloseable {
      * @return the AlterClientQuotasResult containing the result
      */
     AlterClientQuotasResult alterClientQuotas(Collection<ClientQuotaAlteration> entries, AlterClientQuotasOptions options);
+
+    /**
+     * Describe all SASL/SCRAM credentials.
+     *
+     * <p>This is a convenience method for {@link #describeUserScramCredentials(List, DescribeUserScramCredentialsOptions)}
+     *
+     * @return The DescribeUserScramCredentialsResult.
+     */
+    default DescribeUserScramCredentialsResult describeUserScramCredentials() {
+        return describeUserScramCredentials(null, new DescribeUserScramCredentialsOptions());
+    }
+
+    /**
+     * Describe SASL/SCRAM credentials for the given users.
+     *
+     * <p>This is a convenience method for {@link #describeUserScramCredentials(List, DescribeUserScramCredentialsOptions)}
+     *
+     * @param users the users for which credentials are to be described; all users' credentials are described if null
+     *              or empty.
+     * @return The DescribeUserScramCredentialsResult.
+     */
+    default DescribeUserScramCredentialsResult describeUserScramCredentials(List<String> users) {
+        return describeUserScramCredentials(users, new DescribeUserScramCredentialsOptions());
+    }
+
+    /**
+     * Describe SASL/SCRAM credentials.
+     * <p>
+     * The following exceptions can be anticipated when calling {@code get()} on the futures from the
+     * returned {@link DescribeUserScramCredentialsResult}:
+     * <ul>
+     *   <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
+     *   If the authenticated user didn't have describe access to the cluster.</li>
+     *   <li>{@link org.apache.kafka.common.errors.ResourceNotFoundException}
+     *   If the user did not exist/had no SCRAM credentials.</li>
+     *   <li>{@link org.apache.kafka.common.errors.DuplicateResourceException}
+     *   If the user was requested to be described more than once in the original request.</li>
+     *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *   If the request timed out before the describe operation could finish.</li>
+     * </ul>
+     * <p>
+     * This operation is supported by brokers with version 2.7.0 or higher.
+     *
+     * @param users the users for which credentials are to be described; all users' credentials are described if null
+     *              or empty.
+     * @param options The options to use when describing the credentials
+     * @return The DescribeUserScramCredentialsResult.
+     */
+    DescribeUserScramCredentialsResult describeUserScramCredentials(List<String> users, DescribeUserScramCredentialsOptions options);
+
+    /**
+     * Alter SASL/SCRAM credentials for the given users.
+     *
+     * <p>This is a convenience method for {@link #alterUserScramCredentials(List, AlterUserScramCredentialsOptions)}
+     *
+     * @param alterations the alterations to be applied
+     * @return The AlterUserScramCredentialsResult.
+     */
+    default AlterUserScramCredentialsResult alterUserScramCredentials(List<UserScramCredentialAlteration> alterations) {
+        return alterUserScramCredentials(alterations, new AlterUserScramCredentialsOptions());
+    }
+
+    /**
+     * Alter SASL/SCRAM credentials.
+     *
+     * <p>
+     * The following exceptions can be anticipated when calling {@code get()} any of the futures from the
+     * returned {@link AlterUserScramCredentialsResult}:
+     * <ul>
+     *   <li>{@link org.apache.kafka.common.errors.NotControllerException}
+     *   If the request is not sent to the Controller broker.</li>
+     *   <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
+     *   If the authenticated user didn't have alter access to the cluster.</li>
+     *   <li>{@link org.apache.kafka.common.errors.UnsupportedByAuthenticationException}
+     *   If the user authenticated with a delegation token.</li>
+     *   <li>{@link org.apache.kafka.common.errors.UnsupportedSaslMechanismException}
+     *   If the requested SCRAM mechanism is unrecognized or otherwise unsupported.</li>
+     *   <li>{@link org.apache.kafka.common.errors.UnacceptableCredentialException}
+     *   If the username is empty or the requested number of iterations is too small or too large.</li>
+     *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *   If the request timed out before the describe could finish.</li>
+     * </ul>
+     * <p>
+     * This operation is supported by brokers with version 2.7.0 or higher.
+     *
+     * @param alterations the alterations to be applied
+     * @param options The options to use when altering the credentials
+     * @return The AlterUserScramCredentialsResult.
+     */
+    AlterUserScramCredentialsResult alterUserScramCredentials(List<UserScramCredentialAlteration> alterations,
+                                                              AlterUserScramCredentialsOptions options);
+    /**
+     * Describes finalized as well as supported features.
+     * <p>
+     * This is a convenience method for {@link #describeFeatures(DescribeFeaturesOptions)} with default options.
+     * See the overload for more details.
+     *
+     * @return the {@link DescribeFeaturesResult} containing the result
+     */
+    default DescribeFeaturesResult describeFeatures() {
+        return describeFeatures(new DescribeFeaturesOptions());
+    }
+
+    /**
+     * Describes finalized as well as supported features. The request is issued to any random
+     * broker.
+     * <p>
+     * The following exceptions can be anticipated when calling {@code get()} on the future from the
+     * returned {@link DescribeFeaturesResult}:
+     * <ul>
+     *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *   If the request timed out before the describe operation could finish.</li>
+     * </ul>
+     * <p>
+     *
+     * @param options the options to use
+     * @return the {@link DescribeFeaturesResult} containing the result
+     */
+    DescribeFeaturesResult describeFeatures(DescribeFeaturesOptions options);
+
+    /**
+     * Applies specified updates to finalized features. This operation is not transactional so some
+     * updates may succeed while the rest may fail.
+     * <p>
+     * The API takes in a map of finalized feature names to {@link FeatureUpdate} that needs to be
+     * applied. Each entry in the map specifies the finalized feature to be added or updated or
+     * deleted, along with the new max feature version level value. This request is issued only to
+     * the controller since the API is only served by the controller. The return value contains an
+     * error code for each supplied {@link FeatureUpdate}, and the code indicates if the update
+     * succeeded or failed in the controller.
+     * <ul>
+     * <li>Downgrade of feature version level is not a regular operation/intent. It is only allowed
+     * in the controller if the {@link FeatureUpdate} has the allowDowngrade flag set. Setting this
+     * flag conveys user intent to attempt downgrade of a feature max version level. Note that
+     * despite the allowDowngrade flag being set, certain downgrades may be rejected by the
+     * controller if it is deemed impossible.</li>
+     * <li>Deletion of a finalized feature version is not a regular operation/intent. It could be
+     * done by setting the allowDowngrade flag to true in the {@link FeatureUpdate}, and, setting
+     * the max version level to a value less than 1.</li>
+     * </ul>
+     * <p>
+     * The following exceptions can be anticipated when calling {@code get()} on the futures
+     * obtained from the returned {@link UpdateFeaturesResult}:
+     * <ul>
+     *   <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
+     *   If the authenticated user didn't have alter access to the cluster.</li>
+     *   <li>{@link org.apache.kafka.common.errors.InvalidRequestException}
+     *   If the request details are invalid. e.g., a non-existing finalized feature is attempted
+     *   to be deleted or downgraded.</li>
+     *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *   If the request timed out before the updates could finish. It cannot be guaranteed whether
+     *   the updates succeeded or not.</li>
+     *   <li>{@link FeatureUpdateFailedException}
+     *   This means there was an unexpected error encountered when the update was applied on
+     *   the controller. There is no guarantee on whether the update succeeded or failed. The best
+     *   way to find out is to issue a {@link Admin#describeFeatures(DescribeFeaturesOptions)}
+     *   request.</li>
+     * </ul>
+     * <p>
+     * This operation is supported by brokers with version 2.7.0 or higher.
+
+     * @param featureUpdates the map of finalized feature name to {@link FeatureUpdate}
+     * @param options the options to use
+     * @return the {@link UpdateFeaturesResult} containing the result
+     */
+    UpdateFeaturesResult updateFeatures(Map<String, FeatureUpdate> featureUpdates, UpdateFeaturesOptions options);
 
     /**
      * Get the metrics kept by the adminClient
