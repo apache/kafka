@@ -228,7 +228,7 @@ class PartitionTest extends AbstractPartitionTest {
       localBrokerId = brokerId,
       time,
       stateStore,
-      isrChangeMetrics,
+      isrChangeListener,
       delayedOperations,
       metadataCache,
       logManager,
@@ -1176,9 +1176,9 @@ class PartitionTest extends AbstractPartitionTest {
     isrItem.callback.apply(Right(new LeaderAndIsr(brokerId, leaderEpoch, List(brokerId, remoteBrokerId), 2)))
     assertEquals(Set(brokerId, remoteBrokerId), partition.isrState.isr)
 
-    assertEquals(isrChangeMetrics.expands.get, 1)
-    assertEquals(isrChangeMetrics.shrinks.get, 0)
-    assertEquals(isrChangeMetrics.failures.get, 0)
+    assertEquals(isrChangeListener.expands.get, 1)
+    assertEquals(isrChangeListener.shrinks.get, 0)
+    assertEquals(isrChangeListener.failures.get, 0)
   }
 
   @Test
@@ -1232,9 +1232,9 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(Set(brokerId, remoteBrokerId), partition.isrState.maximalIsr)
     assertEquals(alterIsrManager.isrUpdates.size, 0)
 
-    assertEquals(isrChangeMetrics.expands.get, 0)
-    assertEquals(isrChangeMetrics.shrinks.get, 0)
-    assertEquals(isrChangeMetrics.failures.get, 1)
+    assertEquals(isrChangeListener.expands.get, 0)
+    assertEquals(isrChangeListener.shrinks.get, 0)
+    assertEquals(isrChangeListener.failures.get, 1)
   }
 
   @Test
@@ -1653,7 +1653,7 @@ class PartitionTest extends AbstractPartitionTest {
     val topicPartition = new TopicPartition("test", 1)
     val partition = new Partition(
       topicPartition, 1000, ApiVersion.latestVersion, 0,
-      new SystemTime(), mock(classOf[PartitionStateStore]), mock(classOf[IsrChangeMetrics]), mock(classOf[DelayedOperations]),
+      new SystemTime(), mock(classOf[PartitionStateStore]), mock(classOf[IsrChangeListener]), mock(classOf[DelayedOperations]),
       mock(classOf[MetadataCache]), mock(classOf[LogManager]), mock(classOf[AlterIsrManager]))
 
     val replicas = Seq(0, 1, 2, 3)
@@ -1696,7 +1696,7 @@ class PartitionTest extends AbstractPartitionTest {
       localBrokerId = brokerId,
       time,
       stateStore,
-      isrChangeMetrics,
+      isrChangeListener,
       delayedOperations,
       metadataCache,
       spyLogManager,
@@ -1732,7 +1732,7 @@ class PartitionTest extends AbstractPartitionTest {
       localBrokerId = brokerId,
       time,
       stateStore,
-      isrChangeMetrics,
+      isrChangeListener,
       delayedOperations,
       metadataCache,
       spyLogManager,
@@ -1769,7 +1769,7 @@ class PartitionTest extends AbstractPartitionTest {
       localBrokerId = brokerId,
       time,
       stateStore,
-      isrChangeMetrics,
+      isrChangeListener,
       delayedOperations,
       metadataCache,
       spyLogManager,

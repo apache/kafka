@@ -29,7 +29,7 @@ import java.util.concurrent.{Callable, ExecutionException, Executors, TimeUnit}
 
 import javax.net.ssl.X509TrustManager
 import kafka.api._
-import kafka.cluster.{Broker, EndPoint, IsrChangeMetrics}
+import kafka.cluster.{Broker, EndPoint, IsrChangeListener}
 import kafka.log._
 import kafka.security.auth.{Acl, Resource, Authorizer => LegacyAuthorizer}
 import kafka.server._
@@ -1083,7 +1083,7 @@ object TestUtils extends Logging {
     new MockAlterIsrManager()
   }
 
-  class MockIsrChangeMetrics extends IsrChangeMetrics {
+  class MockIsrChangeListener extends IsrChangeListener {
     val expands: AtomicInteger = new AtomicInteger(0)
     val shrinks: AtomicInteger = new AtomicInteger(0)
     val failures: AtomicInteger = new AtomicInteger(0)
@@ -1101,8 +1101,8 @@ object TestUtils extends Logging {
     }
   }
 
-  def createIsrChangeListener(): MockIsrChangeMetrics = {
-    new MockIsrChangeMetrics()
+  def createIsrChangeListener(): MockIsrChangeListener = {
+    new MockIsrChangeListener()
   }
 
   def produceMessages(servers: Seq[KafkaServer],

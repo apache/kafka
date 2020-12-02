@@ -45,7 +45,7 @@ import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
 
-trait IsrChangeMetrics {
+trait IsrChangeListener {
   def markExpand(): Unit
   def markShrink(): Unit
   def markFailed(): Unit
@@ -107,7 +107,7 @@ object Partition extends KafkaMetricsGroup {
             time: Time,
             replicaManager: ReplicaManager): Partition = {
 
-    val isrChangeMetrics = new IsrChangeMetrics {
+    val isrChangeListener = new IsrChangeListener {
       override def markExpand(): Unit = {
         replicaManager.recordIsrChange(topicPartition)
         replicaManager.isrExpandRate.mark()
@@ -137,7 +137,7 @@ object Partition extends KafkaMetricsGroup {
       localBrokerId = replicaManager.config.brokerId,
       time = time,
       stateStore = zkIsrBackingStore,
-      isrChangeMetrics = isrChangeMetrics,
+      isrChangeListener = isrChangeListener,
       delayedOperations = delayedOperations,
       metadataCache = replicaManager.metadataCache,
       logManager = replicaManager.logManager,
@@ -260,7 +260,7 @@ class Partition(val topicPartition: TopicPartition,
                 localBrokerId: Int,
                 time: Time,
                 stateStore: PartitionStateStore,
-                isrChangeMetrics: IsrChangeMetrics,
+                isrChangeListener: IsrChangeListener,
                 delayedOperations: DelayedOperations,
                 metadataCache: MetadataCache,
                 logManager: LogManager,
@@ -1341,7 +1341,7 @@ class Partition(val topicPartition: TopicPartition,
     val newLeaderAndIsr = new LeaderAndIsr(localBrokerId, leaderEpoch, newInSyncReplicaIds.toList, zkVersion)
     val zkVersionOpt = stateStore.expandIsr(controllerEpoch, newLeaderAndIsr)
     if (zkVersionOpt.isDefined) {
-      isrChangeMetrics.markExpand()
+      isrChangeListener.markExpand()
     }
     maybeUpdateIsrAndVersionWithZk(newInSyncReplicaIds, zkVersionOpt)
   }
@@ -1370,7 +1370,7 @@ class Partition(val topicPartition: TopicPartition,
     val newLeaderAndIsr = new LeaderAndIsr(localBrokerId, leaderEpoch, newIsr.toList, zkVersion)
     val zkVersionOpt = stateStore.shrinkIsr(controllerEpoch, newLeaderAndIsr)
     if (zkVersionOpt.isDefined) {
-      isrChangeMetrics.markShrink()
+      isrChangeListener.markShrink()
     }
     maybeUpdateIsrAndVersionWithZk(newIsr, zkVersionOpt)
   }
@@ -1384,7 +1384,7 @@ class Partition(val topicPartition: TopicPartition,
 
       case None =>
         info(s"Cached zkVersion $zkVersion not equal to that in zookeeper, skip updating ISR")
-        isrChangeMetrics.markFailed()
+        isrChangeListener.markFailed()
     }
   }
 
@@ -1400,7 +1400,7 @@ class Partition(val topicPartition: TopicPartition,
     val alterIsrItem = AlterIsrItem(topicPartition, newLeaderAndIsr, handleAlterIsrResponse(proposedIsrState))
 
     if (!alterIsrManager.enqueue(alterIsrItem)) {
-      isrChangeMetrics.markFailed()
+      isrChangeListener.markFailed()
       throw new IllegalStateException(s"Failed to enqueue `AlterIsr` request with state " +
         s"$newLeaderAndIsr for partition $topicPartition")
     }
@@ -1429,13 +1429,13 @@ class Partition(val topicPartition: TopicPartition,
         case Left(error: Errors) => error match {
           case Errors.UNKNOWN_TOPIC_OR_PARTITION =>
             debug(s"Controller failed to update ISR to $proposedIsrState since it doesn't know about this topic or partition. Giving up.")
-            isrChangeMetrics.markFailed()
+            isrChangeListener.markFailed()
           case Errors.FENCED_LEADER_EPOCH =>
             debug(s"Controller failed to update ISR to $proposedIsrState since we sent an old leader epoch. Giving up.")
-            isrChangeMetrics.markFailed()
+            isrChangeListener.markFailed()
           case Errors.INVALID_UPDATE_VERSION =>
             debug(s"Controller failed to update ISR to $proposedIsrState due to invalid zk version. Giving up.")
-            isrChangeMetrics.markFailed()
+            isrChangeListener.markFailed()
           case _ =>
             warn(s"Controller failed to update ISR to $proposedIsrState due to unexpected $error. Retrying.")
             sendAlterIsrRequest(proposedIsrState)
@@ -1444,17 +1444,17 @@ class Partition(val topicPartition: TopicPartition,
           // Success from controller, still need to check a few things
           if (leaderAndIsr.leaderEpoch != leaderEpoch) {
             debug(s"Ignoring ISR from AlterIsr with ${leaderAndIsr} since we have a stale leader epoch $leaderEpoch.")
-            isrChangeMetrics.markFailed()
+            isrChangeListener.markFailed()
           } else if (leaderAndIsr.zkVersion <= zkVersion) {
             debug(s"Ignoring ISR from AlterIsr with ${leaderAndIsr} since we have a newer version $zkVersion.")
-            isrChangeMetrics.markFailed()
+            isrChangeListener.markFailed()
           } else {
             isrState = CommittedIsr(leaderAndIsr.isr.toSet)
             zkVersion = leaderAndIsr.zkVersion
             info(s"ISR updated from AlterIsr to ${isrState.isr.mkString(",")} and version updated to [$zkVersion]")
             proposedIsrState match {
-              case PendingExpandIsr(_, _) => isrChangeMetrics.markExpand()
-              case PendingShrinkIsr(_, _) => isrChangeMetrics.markShrink()
+              case PendingExpandIsr(_, _) => isrChangeListener.markExpand()
+              case PendingShrinkIsr(_, _) => isrChangeListener.markShrink()
               case _ => // nothing to do, shouldn't get here
             }
           }

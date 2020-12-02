@@ -23,7 +23,7 @@ import kafka.api.ApiVersion
 import kafka.log.{CleanerConfig, LogConfig, LogManager}
 import kafka.server.{Defaults, MetadataCache}
 import kafka.server.checkpoints.OffsetCheckpoints
-import kafka.utils.TestUtils.{MockAlterIsrManager, MockIsrChangeMetrics}
+import kafka.utils.TestUtils.{MockAlterIsrManager, MockIsrChangeListener}
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
@@ -41,7 +41,7 @@ class AbstractPartitionTest {
   var logDir2: File = _
   var logManager: LogManager = _
   var alterIsrManager: MockAlterIsrManager = _
-  var isrChangeMetrics: MockIsrChangeMetrics = _
+  var isrChangeListener: MockIsrChangeListener = _
   var logConfig: LogConfig = _
   val stateStore: PartitionStateStore = mock(classOf[PartitionStateStore])
   val delayedOperations: DelayedOperations = mock(classOf[DelayedOperations])
@@ -64,14 +64,14 @@ class AbstractPartitionTest {
     logManager.startup()
 
     alterIsrManager = TestUtils.createAlterIsrManager()
-    isrChangeMetrics = TestUtils.createIsrChangeListener()
+    isrChangeListener = TestUtils.createIsrChangeListener()
     partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       localBrokerId = brokerId,
       time,
       stateStore,
-      isrChangeMetrics,
+      isrChangeListener,
       delayedOperations,
       metadataCache,
       logManager,

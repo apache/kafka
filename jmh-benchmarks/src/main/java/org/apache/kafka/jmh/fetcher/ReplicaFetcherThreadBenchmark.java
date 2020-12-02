@@ -20,7 +20,7 @@ package org.apache.kafka.jmh.fetcher;
 import kafka.api.ApiVersion$;
 import kafka.cluster.BrokerEndPoint;
 import kafka.cluster.DelayedOperations;
-import kafka.cluster.IsrChangeMetrics;
+import kafka.cluster.IsrChangeListener;
 import kafka.cluster.Partition;
 import kafka.cluster.PartitionStateStore;
 import kafka.log.CleanerConfig;
@@ -154,12 +154,12 @@ public class ReplicaFetcherThreadBenchmark {
 
             PartitionStateStore partitionStateStore = Mockito.mock(PartitionStateStore.class);
             Mockito.when(partitionStateStore.fetchTopicConfig()).thenReturn(new Properties());
-            IsrChangeMetrics isrChangeMetrics = Mockito.mock(IsrChangeMetrics.class);
+            IsrChangeListener isrChangeListener = Mockito.mock(IsrChangeListener.class);
             OffsetCheckpoints offsetCheckpoints = Mockito.mock(OffsetCheckpoints.class);
             Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), tp)).thenReturn(Option.apply(0L));
             AlterIsrManager isrChannelManager = Mockito.mock(AlterIsrManager.class);
             Partition partition = new Partition(tp, 100, ApiVersion$.MODULE$.latestVersion(),
-                    0, Time.SYSTEM, partitionStateStore, isrChangeMetrics, new DelayedOperationsMock(tp),
+                    0, Time.SYSTEM, partitionStateStore, isrChangeListener, new DelayedOperationsMock(tp),
                     Mockito.mock(MetadataCache.class), logManager, isrChannelManager);
 
             partition.makeFollower(partitionState, offsetCheckpoints);
