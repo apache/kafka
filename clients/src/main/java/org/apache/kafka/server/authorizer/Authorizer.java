@@ -35,11 +35,15 @@ import org.apache.kafka.common.utils.SecurityUtils;
 import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
+
+import static javax.swing.UIManager.put;
 
 /**
  *
@@ -190,24 +194,25 @@ public interface Authorizer extends Configurable, Closeable {
         AclBindingFilter aclFilter = new AclBindingFilter(
             resourceTypeFilter, AccessControlEntryFilter.ANY);
 
-        final int typeLiteral = 0;
-        final int typePrefix = 1;
-
-        List<Set<String>> deny = new ArrayList<>(
-            Arrays.asList(new HashSet<>(), new HashSet<>()));
-        List<Set<String>> allow = new ArrayList<>(
-            Arrays.asList(new HashSet<>(), new HashSet<>()));
+        EnumMap<PatternType, Set<String>> deny = new EnumMap<PatternType, Set<String>>(PatternType.class){{
+            put(PatternType.LITERAL, new HashSet<>());
+            put(PatternType.PREFIXED, new HashSet<>());
+        }};
+        EnumMap<PatternType, Set<String>> allow = new EnumMap<PatternType, Set<String>>(PatternType.class){{
+            put(PatternType.LITERAL, new HashSet<>());
+            put(PatternType.PREFIXED, new HashSet<>());
+        }};
 
         boolean hasWildCardAllow = false;
+
+        KafkaPrincipal principal = new KafkaPrincipal(
+            requestContext.principal().getPrincipalType(),
+            requestContext.principal().getName());
 
         for (AclBinding binding : acls(aclFilter)) {
             if (!binding.entry().host().equals(requestContext.clientAddress().getHostAddress())
                     && !binding.entry().host().equals("*"))
                 continue;
-
-            KafkaPrincipal principal = new KafkaPrincipal(
-                requestContext.principal().getPrincipalType(),
-                requestContext.principal().getName());
 
             if (!SecurityUtils.parseKafkaPrincipal(binding.entry().principal()).equals(principal)
                     && !binding.entry().principal().equals("User:*"))
@@ -222,10 +227,10 @@ public interface Authorizer extends Configurable, Closeable {
                     case LITERAL:
                         if (binding.pattern().name().equals(ResourcePattern.WILDCARD_RESOURCE))
                             return AuthorizationResult.DENIED;
-                        deny.get(typeLiteral).add(binding.pattern().name());
+                        deny.get(PatternType.LITERAL).add(binding.pattern().name());
                         break;
                     case PREFIXED:
-                        deny.get(typePrefix).add(binding.pattern().name());
+                        deny.get(PatternType.PREFIXED).add(binding.pattern().name());
                         break;
                     default:
                 }
@@ -241,10 +246,10 @@ public interface Authorizer extends Configurable, Closeable {
                         hasWildCardAllow = true;
                         continue;
                     }
-                    allow.get(typeLiteral).add(binding.pattern().name());
+                    allow.get(PatternType.LITERAL).add(binding.pattern().name());
                     break;
                 case PREFIXED:
-                    allow.get(typePrefix).add(binding.pattern().name());
+                    allow.get(PatternType.PREFIXED).add(binding.pattern().name());
                     break;
                 default:
             }
@@ -254,15 +259,16 @@ public interface Authorizer extends Configurable, Closeable {
             return AuthorizationResult.ALLOWED;
         }
 
-        for (int allowType : Arrays.asList(typePrefix, typeLiteral)) {
-            for (String allowStr : allow.get(allowType)) {
-                if (allowType == typeLiteral && deny.get(typeLiteral).contains(allowStr))
+        for (Map.Entry<PatternType, Set<String>> entry : allow.entrySet()) {
+            for (String allowStr : entry.getValue()) {
+                if (entry.getKey() == PatternType.LITERAL
+                        && deny.get(PatternType.LITERAL).contains(allowStr))
                     continue;
                 StringBuilder sb = new StringBuilder();
                 boolean hasDominatedDeny = false;
                 for (char ch : allowStr.toCharArray()) {
                     sb.append(ch);
-                    if (deny.get(typePrefix).contains(sb.toString())) {
+                    if (deny.get(PatternType.PREFIXED).contains(sb.toString())) {
                         hasDominatedDeny = true;
                         break;
                     }
