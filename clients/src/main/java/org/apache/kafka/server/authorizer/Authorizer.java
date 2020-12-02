@@ -169,25 +169,7 @@ public interface Authorizer extends Configurable, Closeable {
      *                       Return {@link AuthorizationResult#DENIED} otherwise.
      */
     default AuthorizationResult authorizeByResourceType(AuthorizableRequestContext requestContext, AclOperation op, ResourceType resourceType) {
-        if (resourceType == ResourceType.ANY) {
-            throw new IllegalArgumentException(
-                "Must specify a non-filter resource type for authorizeByResourceType");
-        }
-
-        if (resourceType == ResourceType.UNKNOWN) {
-            throw new IllegalArgumentException(
-                "Unknown resource type");
-        }
-
-        if (op == AclOperation.ANY) {
-            throw new IllegalArgumentException(
-                "Must specify a non-filter operation type for authorizeByResourceType");
-        }
-
-        if (op == AclOperation.UNKNOWN) {
-            throw new IllegalArgumentException(
-                "Unknown operation type");
-        }
+        SecurityUtils.authorizeByResourceTypeCheckArgs(op, resourceType);
 
         ResourcePatternFilter resourceTypeFilter = new ResourcePatternFilter(
             resourceType, null, PatternType.ANY);

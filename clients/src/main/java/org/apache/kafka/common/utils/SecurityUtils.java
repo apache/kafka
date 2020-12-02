@@ -146,4 +146,27 @@ public class SecurityUtils {
         }
         return builder.toString();
     }
+
+    public static void authorizeByResourceTypeCheckArgs(AclOperation op,
+                                                         ResourceType type) {
+        if (type == ResourceType.ANY) {
+            throw new IllegalArgumentException(
+                "Must specify a non-filter resource type for authorizeByResourceType");
+        }
+
+        if (type == ResourceType.UNKNOWN) {
+            throw new IllegalArgumentException(
+                "Unknown resource type");
+        }
+
+        if (op == AclOperation.ANY) {
+            throw new IllegalArgumentException(
+                "Must specify a non-filter operation type for authorizeByResourceType");
+        }
+
+        if (op == AclOperation.UNKNOWN) {
+            throw new IllegalArgumentException(
+                "Unknown operation type");
+        }
+    }
 }

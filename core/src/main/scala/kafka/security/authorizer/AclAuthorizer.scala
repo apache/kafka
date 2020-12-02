@@ -314,17 +314,7 @@ class AclAuthorizer extends Authorizer with Logging {
   override def authorizeByResourceType(requestContext: AuthorizableRequestContext,
                                        op: AclOperation,
                                        resourceType: ResourceType): AuthorizationResult = {
-    if (resourceType eq ResourceType.ANY)
-      throw new IllegalArgumentException("Must specify a non-filter resource type for authorizeByResourceType")
-
-    if (resourceType eq ResourceType.UNKNOWN)
-      throw new IllegalArgumentException("Unknown resource type")
-
-    if (op eq AclOperation.ANY)
-      throw new IllegalArgumentException("Must specify a non-filter operation type for authorizeByResourceType")
-
-    if (op eq AclOperation.UNKNOWN)
-      throw new IllegalArgumentException("Unknown operation type")
+    SecurityUtils.authorizeByResourceTypeCheckArgs(op, resourceType)
 
     val principal = new KafkaPrincipal(
       requestContext.principal().getPrincipalType,

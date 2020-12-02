@@ -29,6 +29,7 @@ import org.apache.kafka.common.errors.{ApiException, InvalidRequestException}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.ApiError
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType}
+import org.apache.kafka.common.utils.SecurityUtils
 import org.apache.kafka.common.utils.SecurityUtils.parseKafkaPrincipal
 import org.apache.kafka.server.authorizer.AclDeleteResult.AclBindingDeleteResult
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, AuthorizerServerInfo, _}
@@ -183,17 +184,7 @@ class AuthorizerWrapper(private[kafka] val baseAuthorizer: kafka.security.auth.A
   override def authorizeByResourceType(requestContext: AuthorizableRequestContext,
                                        op: AclOperation,
                                        resourceType: ResourceType): AuthorizationResult = {
-    if (resourceType == ResourceType.ANY)
-      throw new IllegalArgumentException("Must specify a non-filter resource type for authorizeByResourceType")
-
-    if (resourceType == ResourceType.UNKNOWN)
-      throw new IllegalArgumentException("Unknown resource type")
-
-    if (op == AclOperation.ANY)
-      throw new IllegalArgumentException("Must specify a non-filter operation type for authorizeByResourceType")
-
-    if (op == AclOperation.UNKNOWN)
-      throw new IllegalArgumentException("Unknown operation type")
+    SecurityUtils.authorizeByResourceTypeCheckArgs(op, resourceType)
 
     if (shouldAllowEveryoneIfNoAclIsFound && !denyAllResource(requestContext, op, resourceType)) {
       AuthorizationResult.ALLOWED
