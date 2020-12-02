@@ -1455,6 +1455,7 @@ class Partition(val topicPartition: TopicPartition,
             proposedIsrState match {
               case PendingExpandIsr(_, _) => isrChangeListener.markExpand()
               case PendingShrinkIsr(_, _) => isrChangeListener.markShrink()
+              case _ => // nothing to do, shouldn't get here
             }
           }
       }
