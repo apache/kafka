@@ -32,6 +32,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.{ProduceResponse, ResponseHeader}
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.utils.ByteUtils
 import org.apache.kafka.common.{TopicPartition, requests}
 import org.junit.Assert._
 import org.junit.Test
@@ -84,12 +85,16 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
   }
 
   // Custom header serialization so that protocol assumptions are not forced
-  private def requestHeaderBytes(apiKey: Short, apiVersion: Short, clientId: String = "", correlationId: Int = -1): Array[Byte] = {
+  def requestHeaderBytes(apiKey: Short, apiVersion: Short, clientId: String = "", correlationId: Int = -1): Array[Byte] = {
+    // Check for flex versions, some tests here verify that an invalid apiKey is detected properly, so if -1 is used,
+    // assume the request is not using flex versions.
+    val flexVersion = if (apiKey >= 0) ApiKeys.forId(apiKey).requestHeaderVersion(apiVersion) >= 2 else false
     val size = {
       2 /* apiKey */ +
         2 /* version id */ +
         4 /* correlation id */ +
-        Type.NULLABLE_STRING.sizeOf(clientId) /* client id */
+        Type.NULLABLE_STRING.sizeOf(clientId)  /* client id */ +
+        (if (flexVersion) ByteUtils.sizeOfUnsignedVarint(0) else 0) /* Empty tagged fields for flexible versions */
     }
 
     val buffer = ByteBuffer.allocate(size)
@@ -97,6 +102,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
     buffer.putShort(apiVersion)
     buffer.putInt(correlationId)
     Type.NULLABLE_STRING.write(buffer, clientId)
+    if (flexVersion) ByteUtils.writeUnsignedVarint(0, buffer)
     buffer.array()
   }
 
@@ -120,8 +126,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
 
     val version = ApiKeys.PRODUCE.latestVersion: Short
     val (serializedBytes, responseHeaderVersion) = {
-      val headerBytes = requestHeaderBytes(ApiKeys.PRODUCE.id, version, null,
-        correlationId)
+      val headerBytes = requestHeaderBytes(ApiKeys.PRODUCE.id, version, "", correlationId)
       val request = requests.ProduceRequest.forCurrentMagic(new ProduceRequestData()
         .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
           Collections.singletonList(new ProduceRequestData.TopicProduceData()

@@ -563,7 +563,7 @@ public class NetworkClientTest {
         int correlationId = sendEmptyProduceRequest();
         client.poll(1, time.milliseconds());
 
-        sendThrottledProduceResponse(correlationId, 100);
+        sendThrottledProduceResponse(correlationId, 100, (short) 5);
         client.poll(1, time.milliseconds());
 
         // Since client-side throttling is disabled, the connection is ready even though the response indicated a
@@ -594,10 +594,9 @@ public class NetworkClientTest {
         selector.completeReceive(new NetworkReceive(node.idString(), buffer));
     }
 
-    private void sendThrottledProduceResponse(int correlationId, int throttleMs) {
-        short requestVersion = PRODUCE.latestVersion();
+    private void sendThrottledProduceResponse(int correlationId, int throttleMs, short version) {
         ProduceResponse response = new ProduceResponse(new ProduceResponseData().setThrottleTimeMs(throttleMs));
-        sendResponse(response, requestVersion, correlationId);
+        sendResponse(response, version, correlationId);
     }
 
     @Test
@@ -702,7 +701,7 @@ public class NetworkClientTest {
         int correlationId = sendEmptyProduceRequest();
         client.poll(1, time.milliseconds());
 
-        sendThrottledProduceResponse(correlationId, 100);
+        sendThrottledProduceResponse(correlationId, 100, PRODUCE.latestVersion());
         client.poll(1, time.milliseconds());
 
         // leastloadednode should return null since the node is throttled

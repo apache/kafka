@@ -704,7 +704,11 @@ class Partition(val topicPartition: TopicPartition,
         // check if the HW of the partition can now be incremented
         // since the replica may already be in the ISR and its LEO has just incremented
         val leaderHWIncremented = if (prevFollowerEndOffset != followerReplica.logEndOffset) {
-          leaderLogIfLocal.exists(leaderLog => maybeIncrementLeaderHW(leaderLog, followerFetchTimeMs))
+          // the leader log may be updated by ReplicaAlterLogDirsThread so the following method must be in lock of
+          // leaderIsrUpdateLock to prevent adding new hw to invalid log.
+          inReadLock(leaderIsrUpdateLock) {
+            leaderLogIfLocal.exists(leaderLog => maybeIncrementLeaderHW(leaderLog, followerFetchTimeMs))
+          }
         } else {
           false
         }
@@ -865,41 +869,39 @@ class Partition(val topicPartition: TopicPartition,
    * committed ISR. However, adding additional replicas to the ISR makes it more restrictive and therefor safe. We call
    * this set the "maximal" ISR. See KIP-497 for more details
    *
-   * Returns true if the HW was incremented, and false otherwise.
-   * Note There is no need to acquire the leaderIsrUpdate lock here
-   * since all callers of this private API acquire that lock
+   * Note There is no need to acquire the leaderIsrUpdate lock here since all callers of this private API acquire that lock
+   *
+   * @return true if the HW was incremented, and false otherwise.
    */
   private def maybeIncrementLeaderHW(leaderLog: Log, curTime: Long = time.milliseconds): Boolean = {
-    inReadLock(leaderIsrUpdateLock) {
-      // maybeIncrementLeaderHW is in the hot path, the following code is written to
-      // avoid unnecessary collection generation
-      var newHighWatermark = leaderLog.logEndOffsetMetadata
-      remoteReplicasMap.values.foreach { replica =>
-        // Note here we are using the "maximal", see explanation above
-        if (replica.logEndOffsetMetadata.messageOffset < newHighWatermark.messageOffset &&
-          (curTime - replica.lastCaughtUpTimeMs <= replicaLagTimeMaxMs || isrState.maximalIsr.contains(replica.brokerId))) {
-          newHighWatermark = replica.logEndOffsetMetadata
+    // maybeIncrementLeaderHW is in the hot path, the following code is written to
+    // avoid unnecessary collection generation
+    var newHighWatermark = leaderLog.logEndOffsetMetadata
+    remoteReplicasMap.values.foreach { replica =>
+      // Note here we are using the "maximal", see explanation above
+      if (replica.logEndOffsetMetadata.messageOffset < newHighWatermark.messageOffset &&
+        (curTime - replica.lastCaughtUpTimeMs <= replicaLagTimeMaxMs || isrState.maximalIsr.contains(replica.brokerId))) {
+        newHighWatermark = replica.logEndOffsetMetadata
+      }
+    }
+
+    leaderLog.maybeIncrementHighWatermark(newHighWatermark) match {
+      case Some(oldHighWatermark) =>
+        debug(s"High watermark updated from $oldHighWatermark to $newHighWatermark")
+        true
+
+      case None =>
+        def logEndOffsetString: ((Int, LogOffsetMetadata)) => String = {
+          case (brokerId, logEndOffsetMetadata) => s"replica $brokerId: $logEndOffsetMetadata"
         }
-      }
 
-      leaderLog.maybeIncrementHighWatermark(newHighWatermark) match {
-        case Some(oldHighWatermark) =>
-          debug(s"High watermark updated from $oldHighWatermark to $newHighWatermark")
-          true
-
-        case None =>
-          def logEndOffsetString: ((Int, LogOffsetMetadata)) => String = {
-            case (brokerId, logEndOffsetMetadata) => s"replica $brokerId: $logEndOffsetMetadata"
-          }
-
-          if (isTraceEnabled) {
-            val replicaInfo = remoteReplicas.map(replica => (replica.brokerId, replica.logEndOffsetMetadata)).toSet
-            val localLogInfo = (localBrokerId, localLogOrException.logEndOffsetMetadata)
-            trace(s"Skipping update high watermark since new hw $newHighWatermark is not larger than old value. " +
-              s"All current LEOs are ${(replicaInfo + localLogInfo).map(logEndOffsetString)}")
-          }
-          false
-      }
+        if (isTraceEnabled) {
+          val replicaInfo = remoteReplicas.map(replica => (replica.brokerId, replica.logEndOffsetMetadata)).toSet
+          val localLogInfo = (localBrokerId, localLogOrException.logEndOffsetMetadata)
+          trace(s"Skipping update high watermark since new hw $newHighWatermark is not larger than old value. " +
+            s"All current LEOs are ${(replicaInfo + localLogInfo).map(logEndOffsetString)}")
+        }
+        false
     }
   }
 

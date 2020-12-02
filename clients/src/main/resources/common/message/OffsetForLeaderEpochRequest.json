@@ -24,8 +24,10 @@
   // Version 3 adds ReplicaId (the default is -2 which conventionally represents a
   //    "debug" consumer which is allowed to see offsets beyond the high watermark).
   //    Followers will use this replicaId when using an older version of the protocol.
-  "validVersions": "0-3",
-  "flexibleVersions": "none",
+  //
+  // Version 4 enables flexible versions.
+  "validVersions": "0-4",
+  "flexibleVersions": "4+",
   "fields": [
     { "name": "ReplicaId", "type": "int32", "versions": "3+", "default": -2, "ignorable": true,
       "about": "The broker ID of the follower, of -1 if this request is from a consumer." },
