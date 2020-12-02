@@ -38,6 +38,7 @@ import org.apache.kafka.common.errors.EligibleLeadersNotAvailableException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.FeatureUpdateFailedException;
 import org.apache.kafka.common.errors.FencedLeaderEpochException;
+import org.apache.kafka.common.errors.InvalidClusterIdException;
 import org.apache.kafka.common.errors.InvalidUpdateVersionException;
 import org.apache.kafka.common.errors.FetchSessionIdNotFoundException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -340,7 +341,8 @@ public enum Errors {
             "voter-only request is not one of the expected voters", InconsistentVoterSetException::new),
     INVALID_UPDATE_VERSION(95, "The given update version was invalid.", InvalidUpdateVersionException::new),
     FEATURE_UPDATE_FAILED(96, "Unable to update finalized features due to an unexpected server error.", FeatureUpdateFailedException::new),
-    DUPLICATE_BROKER_REGISTRATION(97, "Duplicate broker registration", DuplicateBrokerRegistrationException::new);
+    DUPLICATE_BROKER_REGISTRATION(97, "Duplicate broker registration", DuplicateBrokerRegistrationException::new),
+    INVALID_CLUSTER_ID(98, "Invalid cluster ID.", InvalidClusterIdException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
