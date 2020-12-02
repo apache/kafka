@@ -346,7 +346,8 @@ public class BlockingConnectorTest {
                     ConfigDef.Type.STRING,
                     "",
                     ConfigDef.Importance.MEDIUM,
-                    "Where to block indefinitely, e.g., 'start', 'initialize', 'taskConfigs', 'version'"
+                    "Where to block indefinitely, e.g., 'Connector::start', 'Connector::initialize', " 
+                        + "'Connector::taskConfigs', 'Task::version', 'SinkTask::put', 'SourceTask::poll'"
                 );
         }
 
@@ -362,6 +363,10 @@ public class BlockingConnectorTest {
             log.debug("Connector should now be blocked");
         }
 
+        // Note that there is only ever at most one global block latch at a time, which makes tests that
+        // use blocks in multiple places impossible. If necessary, this can be addressed in the future by
+        // adding support for multiple block latches at a time, possibly identifiable by a connector/task
+        // ID, the location of the expected block, or both.
         public static void resetBlockLatch() {
             synchronized (Block.class) {
                 if (blockLatch != null) {
