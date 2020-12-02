@@ -52,7 +52,7 @@ object SimpleAclAuthorizer {
   val NoAcls = VersionedAcls(Set.empty, ZkVersion.UnknownVersion)
 
   private[auth] class BaseAuthorizer extends AclAuthorizer {
-    override def logAuditMessage(requestContext: AuthorizableRequestContext, action: Action, authorized: Boolean, byResourceType: Boolean): Unit = {
+    override def logAuditMessage(requestContext: AuthorizableRequestContext, action: Action, authorized: Boolean): Unit = {
       val principal = requestContext.principal
       val host = requestContext.clientAddress.getHostAddress
       val operation = Operation.fromJava(action.operation)
