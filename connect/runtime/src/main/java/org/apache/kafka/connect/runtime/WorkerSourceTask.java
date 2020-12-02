@@ -222,11 +222,11 @@ class WorkerSourceTask extends WorkerTask {
     @Override
     public void execute() {
         try {
-            // If we try to start the task at all (by invoking initialize and possibly start), we count this as
-            // "started" in order to properly clean up any resources allocated by those invocations when the task is
-            // shut down by calling stop. If the task throws an exception during startup, it should still be able to
-            // clean up any allocated resources when stop is called, and if it isn't able to or even throws another
-            // exception during stop, the worst thing that happens is another exception gets logged for an already-
+            // If we try to start the task at all by invoking initialize, then count this as
+            // "started" and expect a subsequent call to the task's stop() method
+            // to properly clean up any resources allocated by its initialize() or 
+            // start() methods. If the task throws an exception during stop(),
+            // the worst thing that happens is another exception gets logged for an already-
             // failed task
             started = true;
             task.initialize(new WorkerSourceTaskContext(offsetReader, this, configState));
