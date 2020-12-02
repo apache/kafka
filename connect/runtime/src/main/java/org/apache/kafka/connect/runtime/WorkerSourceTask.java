@@ -103,7 +103,6 @@ class WorkerSourceTask extends WorkerTask {
 
     private Map<String, String> taskConfig;
     private boolean started = false;
-    private boolean stopped = false;
 
     public WorkerSourceTask(ConnectorTaskId id,
                             SourceTask task,
@@ -165,7 +164,13 @@ class WorkerSourceTask extends WorkerTask {
 
     @Override
     protected void close() {
-        tryStop();
+        if (started) {
+            try {
+                task.stop();
+            } catch (Throwable t) {
+                log.warn("Could not stop task", t);
+            }
+        }
         if (producer != null) {
             try {
                 producer.close(Duration.ofSeconds(30));
@@ -203,20 +208,6 @@ class WorkerSourceTask extends WorkerTask {
     public void stop() {
         super.stop();
         stopRequestedLatch.countDown();
-    }
-
-    // Note: This method is not thread-safe
-    private void tryStop() {
-        // If the task is scheduled for shutdown before we invoke initialize or start on it (which
-        // can happen reliably if it's started in the PAUSED state), we don't have to invoke stop on it
-        if (!stopped && started) {
-            try {
-                task.stop();
-                stopped = true;
-            } catch (Throwable t) {
-                log.warn("Could not stop task", t);
-            }
-        }
     }
 
     @Override
