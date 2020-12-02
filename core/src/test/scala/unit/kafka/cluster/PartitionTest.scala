@@ -228,7 +228,7 @@ class PartitionTest extends AbstractPartitionTest {
       localBrokerId = brokerId,
       time,
       stateStore,
-      isrChangeListener,
+      isrChangeMetrics,
       delayedOperations,
       metadataCache,
       logManager,
@@ -1165,11 +1165,20 @@ class PartitionTest extends AbstractPartitionTest {
       leaderEndOffset = 6L)
 
     assertEquals(alterIsrManager.isrUpdates.size, 1)
-    assertEquals(alterIsrManager.isrUpdates.dequeue().leaderAndIsr.isr, List(brokerId, remoteBrokerId))
+    val isrItem = alterIsrManager.isrUpdates.dequeue()
+    assertEquals(isrItem.leaderAndIsr.isr, List(brokerId, remoteBrokerId))
     assertEquals(Set(brokerId), partition.isrState.isr)
     assertEquals(Set(brokerId, remoteBrokerId), partition.isrState.maximalIsr)
     assertEquals(10L, remoteReplica.logEndOffset)
     assertEquals(0L, remoteReplica.logStartOffset)
+
+    // Complete the ISR expansion
+    isrItem.callback.apply(Right(new LeaderAndIsr(brokerId, leaderEpoch, List(brokerId, remoteBrokerId), 2)))
+    assertEquals(Set(brokerId, remoteBrokerId), partition.isrState.isr)
+
+    assertEquals(isrChangeMetrics.expands.get, 1)
+    assertEquals(isrChangeMetrics.shrinks.get, 0)
+    assertEquals(isrChangeMetrics.failures.get, 0)
   }
 
   @Test
@@ -1222,6 +1231,10 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(Set(brokerId), partition.inSyncReplicaIds)
     assertEquals(Set(brokerId, remoteBrokerId), partition.isrState.maximalIsr)
     assertEquals(alterIsrManager.isrUpdates.size, 0)
+
+    assertEquals(isrChangeMetrics.expands.get, 0)
+    assertEquals(isrChangeMetrics.shrinks.get, 0)
+    assertEquals(isrChangeMetrics.failures.get, 1)
   }
 
   @Test
@@ -1640,7 +1653,7 @@ class PartitionTest extends AbstractPartitionTest {
     val topicPartition = new TopicPartition("test", 1)
     val partition = new Partition(
       topicPartition, 1000, ApiVersion.latestVersion, 0,
-      new SystemTime(), mock(classOf[PartitionStateStore]), mock(classOf[IsrChangeListener]), mock(classOf[DelayedOperations]),
+      new SystemTime(), mock(classOf[PartitionStateStore]), mock(classOf[IsrChangeMetrics]), mock(classOf[DelayedOperations]),
       mock(classOf[MetadataCache]), mock(classOf[LogManager]), mock(classOf[AlterIsrManager]))
 
     val replicas = Seq(0, 1, 2, 3)
@@ -1683,7 +1696,7 @@ class PartitionTest extends AbstractPartitionTest {
       localBrokerId = brokerId,
       time,
       stateStore,
-      isrChangeListener,
+      isrChangeMetrics,
       delayedOperations,
       metadataCache,
       spyLogManager,
@@ -1719,7 +1732,7 @@ class PartitionTest extends AbstractPartitionTest {
       localBrokerId = brokerId,
       time,
       stateStore,
-      isrChangeListener,
+      isrChangeMetrics,
       delayedOperations,
       metadataCache,
       spyLogManager,
@@ -1756,7 +1769,7 @@ class PartitionTest extends AbstractPartitionTest {
       localBrokerId = brokerId,
       time,
       stateStore,
-      isrChangeListener,
+      isrChangeMetrics,
       delayedOperations,
       metadataCache,
       spyLogManager,
