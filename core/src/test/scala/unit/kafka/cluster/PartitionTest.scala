@@ -228,6 +228,7 @@ class PartitionTest extends AbstractPartitionTest {
       localBrokerId = brokerId,
       time,
       stateStore,
+      isrChangeListener,
       delayedOperations,
       metadataCache,
       logManager,
@@ -1639,7 +1640,7 @@ class PartitionTest extends AbstractPartitionTest {
     val topicPartition = new TopicPartition("test", 1)
     val partition = new Partition(
       topicPartition, 1000, ApiVersion.latestVersion, 0,
-      new SystemTime(), mock(classOf[PartitionStateStore]), mock(classOf[DelayedOperations]),
+      new SystemTime(), mock(classOf[PartitionStateStore]), mock(classOf[IsrChangeListener]), mock(classOf[DelayedOperations]),
       mock(classOf[MetadataCache]), mock(classOf[LogManager]), mock(classOf[AlterIsrManager]))
 
     val replicas = Seq(0, 1, 2, 3)
@@ -1682,6 +1683,7 @@ class PartitionTest extends AbstractPartitionTest {
       localBrokerId = brokerId,
       time,
       stateStore,
+      isrChangeListener,
       delayedOperations,
       metadataCache,
       spyLogManager,
@@ -1717,6 +1719,7 @@ class PartitionTest extends AbstractPartitionTest {
       localBrokerId = brokerId,
       time,
       stateStore,
+      isrChangeListener,
       delayedOperations,
       metadataCache,
       spyLogManager,
@@ -1753,6 +1756,7 @@ class PartitionTest extends AbstractPartitionTest {
       localBrokerId = brokerId,
       time,
       stateStore,
+      isrChangeListener,
       delayedOperations,
       metadataCache,
       spyLogManager,
