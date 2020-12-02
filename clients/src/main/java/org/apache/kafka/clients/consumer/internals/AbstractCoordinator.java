@@ -137,10 +137,10 @@ public abstract class AbstractCoordinator implements Closeable {
     private HeartbeatThread heartbeatThread = null;
     private RequestFuture<ByteBuffer> joinFuture = null;
     private RequestFuture<Void> findCoordinatorFuture = null;
-    volatile private RuntimeException findCoordinatorException = null;
     private Generation generation = Generation.NO_GENERATION;
     private long lastRebalanceStartMs = -1L;
     private long lastRebalanceEndMs = -1L;
+    private long lastTimeOfConnectionMs = -1L; // starting logging a warning only after unable to connect for a while
 
     protected MemberState state = MemberState.UNJOINED;
 
@@ -235,11 +235,6 @@ public abstract class AbstractCoordinator implements Closeable {
             return true;
 
         do {
-            if (findCoordinatorException != null && !(findCoordinatorException instanceof RetriableException)) {
-                final RuntimeException fatalException = findCoordinatorException;
-                findCoordinatorException = null;
-                throw fatalException;
-            }
             final RequestFuture<Void> future = lookupCoordinator();
             client.poll(future, timer);
 
@@ -248,18 +243,26 @@ public abstract class AbstractCoordinator implements Closeable {
                 break;
             }
 
+            RuntimeException fatalException = null;
+
             if (future.failed()) {
                 if (future.isRetriable()) {
                     log.debug("Coordinator discovery failed, refreshing metadata", future.exception());
                     client.awaitMetadataUpdate(timer);
-                } else
-                    throw future.exception();
+                } else {
+                    log.info("FindCoordinator request hit fatal  exception", fatalException);
+                    fatalException = future.exception();
+                }
             } else if (coordinator != null && client.isUnavailable(coordinator)) {
                 // we found the coordinator, but the connection has failed, so mark
                 // it dead and backoff before retrying discovery
                 markCoordinatorUnknown("coordinator unavailable");
                 timer.sleep(rebalanceConfig.retryBackoffMs);
             }
+
+            clearFindCoordinatorFuture();
+            if (fatalException !=  null)
+                throw fatalException;
         } while (coordinatorUnknown() && timer.notExpired());
 
         return !coordinatorUnknown();
@@ -274,17 +277,6 @@ public abstract class AbstractCoordinator implements Closeable {
                 return RequestFuture.noBrokersAvailable();
             } else {
                 findCoordinatorFuture = sendFindCoordinatorRequest(node);
-                // remember the exception even after the future is cleared so that
-                // it can still be thrown by the ensureCoordinatorReady caller
-                findCoordinatorFuture.addListener(new RequestFutureListener<Void>() {
-                    @Override
-                    public void onSuccess(Void value) {} // do nothing
-
-                    @Override
-                    public void onFailure(RuntimeException e) {
-                        findCoordinatorException = e;
-                    }
-                });
             }
         }
         return findCoordinatorFuture;
@@ -834,7 +826,6 @@ public abstract class AbstractCoordinator implements Closeable {
         @Override
         public void onSuccess(ClientResponse resp, RequestFuture<Void> future) {
             log.debug("Received FindCoordinator response {}", resp);
-            clearFindCoordinatorFuture();
 
             FindCoordinatorResponse findCoordinatorResponse = (FindCoordinatorResponse) resp.responseBody();
             Errors error = findCoordinatorResponse.error();
@@ -863,7 +854,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
         @Override
         public void onFailure(RuntimeException e, RequestFuture<Void> future) {
-            clearFindCoordinatorFuture();
+            log.debug("FindCoordinator request failed", e);
             super.onFailure(e, future);
         }
     }
@@ -919,6 +910,12 @@ public abstract class AbstractCoordinator implements Closeable {
             // Pending callbacks will be invoked with a DisconnectException on the next call to poll.
             if (!isDisconnected)
                 client.disconnectAsync(oldCoordinator);
+
+            lastTimeOfConnectionMs = time.milliseconds();
+        } else {
+            long durationOfOngoingDisconnect = time.milliseconds() - lastTimeOfConnectionMs;
+            if (durationOfOngoingDisconnect > rebalanceConfig.rebalanceTimeoutMs)
+                log.warn("Consumer has been disconnected from the group coordinator for {}ms", durationOfOngoingDisconnect);
         }
     }
 
