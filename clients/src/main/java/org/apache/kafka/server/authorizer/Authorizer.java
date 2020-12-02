@@ -208,10 +208,10 @@ public interface Authorizer extends Configurable, Closeable {
         KafkaPrincipal principal = new KafkaPrincipal(
             requestContext.principal().getPrincipalType(),
             requestContext.principal().getName());
+        String hostAddr = requestContext.clientAddress().getHostAddress();
 
         for (AclBinding binding : acls(aclFilter)) {
-            if (!binding.entry().host().equals(requestContext.clientAddress().getHostAddress())
-                    && !binding.entry().host().equals("*"))
+            if (!binding.entry().host().equals(hostAddr) && !binding.entry().host().equals("*"))
                 continue;
 
             if (!SecurityUtils.parseKafkaPrincipal(binding.entry().principal()).equals(principal)
