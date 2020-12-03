@@ -646,9 +646,9 @@ public class RequestResponseTest {
                         .setTimeoutMs(5000)
                         .setTransactionalId("transactionalId"))
             .build((short) 3);
-        assertEquals(2, request.partitionSizes().size());
-        assertEquals(records0.sizeInBytes(), (int) request.partitionSizes().get(tp0));
-        assertEquals(records1.sizeInBytes(), (int) request.partitionSizes().get(tp1));
+        assertEquals(2, request.createOrGetPartitionSizes().size());
+        assertEquals(records0.sizeInBytes(), (int) request.createOrGetPartitionSizes().get(tp0));
+        assertEquals(records1.sizeInBytes(), (int) request.createOrGetPartitionSizes().get(tp1));
     }
 
     @Test
@@ -679,7 +679,7 @@ public class RequestResponseTest {
     @Test
     public void produceRequestGetErrorResponseTest() {
         ProduceRequest request = createProduceRequest(ApiKeys.PRODUCE.latestVersion());
-        Set<TopicPartition> partitions = new HashSet<>(request.partitionSizes().keySet());
+        Set<TopicPartition> partitions = new HashSet<>(request.createOrGetPartitionSizes().keySet());
 
         ProduceResponse errorResponse = (ProduceResponse) request.getErrorResponse(new NotEnoughReplicasException());
         assertEquals(partitions, errorResponse.responses().keySet());

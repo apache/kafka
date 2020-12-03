@@ -18,8 +18,9 @@
 package kafka.network
 
 import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.node.{DoubleNode, JsonNodeFactory, LongNode, NullNode, ObjectNode, TextNode}
+import com.fasterxml.jackson.databind.node.{ArrayNode, DoubleNode, IntNode, JsonNodeFactory, LongNode, NullNode, ObjectNode, ShortNode, TextNode}
 import kafka.network.RequestChannel.{Response, Session}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.network.ClientInformation
 import org.apache.kafka.common.requests._
@@ -75,7 +76,7 @@ object RequestConvertToJson {
       case req: OffsetDeleteRequest => OffsetDeleteRequestDataJsonConverter.write(req.data, request.version)
       case req: OffsetFetchRequest => OffsetFetchRequestDataJsonConverter.write(req.data, request.version)
       case req: OffsetsForLeaderEpochRequest => OffsetForLeaderEpochRequestDataJsonConverter.write(req.data, request.version)
-      case req: ProduceRequest => if (req.data == null) NullNode.instance else ProduceRequestDataJsonConverter.write(req.data, request.version)
+      case req: ProduceRequest => if (req.data == null) produceRequestJson(req, request.version, false) else ProduceRequestDataJsonConverter.write(req.data, request.version)
       case req: RenewDelegationTokenRequest => RenewDelegationTokenRequestDataJsonConverter.write(req.data, request.version)
       case req: SaslAuthenticateRequest => SaslAuthenticateRequestDataJsonConverter.write(req.data, request.version)
       case req: SaslHandshakeRequest => SaslHandshakeRequestDataJsonConverter.write(req.data, request.version)
@@ -158,7 +159,7 @@ object RequestConvertToJson {
   }
 
   def requestHeaderNode(header: RequestHeader): JsonNode = {
-    val node = RequestHeaderDataJsonConverter.write(header.data(), header.headerVersion(), false).asInstanceOf[ObjectNode]
+    val node = RequestHeaderDataJsonConverter.write(header.data, header.headerVersion, false).asInstanceOf[ObjectNode]
     node.set("requestApiKeyName", new TextNode(header.apiKey.toString))
     node
   }
@@ -172,8 +173,15 @@ object RequestConvertToJson {
 
   def clientInfoNode(clientInfo: ClientInformation): JsonNode = {
     val node = new ObjectNode(JsonNodeFactory.instance)
-    node.set("softwareName", new TextNode(clientInfo.softwareName()))
-    node.set("softwareVersion", new TextNode(clientInfo.softwareVersion()))
+    node.set("softwareName", new TextNode(clientInfo.softwareName))
+    node.set("softwareVersion", new TextNode(clientInfo.softwareVersion))
+    node
+  }
+
+  def topicPartitionNode(topicPartition: TopicPartition): JsonNode = {
+    val node = new ObjectNode(JsonNodeFactory.instance)
+    node.set("topic", new TextNode(topicPartition.topic))
+    node.set("partition", new IntNode(topicPartition.partition))
     node
   }
 
@@ -201,6 +209,38 @@ object RequestConvertToJson {
       node.set("temporaryMemoryBytes", new LongNode(temporaryMemoryBytes))
     if (messageConversionsTimeMs > 0)
       node.set("messageConversionsTime", new DoubleNode(messageConversionsTimeMs))
+    node
+  }
+
+  /**
+   * This specific handling of ProduceRequest is for when it goes into purgatory and its data becomes null.
+   */
+  def produceRequestJson(req: ProduceRequest, version: Short, serializeRecords: Boolean): JsonNode = {
+    val node = new ObjectNode(JsonNodeFactory.instance)
+    if (version >= 3) {
+      if (req.transactionalId == null)
+        node.set("transactionalId", NullNode.instance)
+      else
+        node.set("transactionalId", new TextNode(req.transactionalId))
+    }
+    node.set("acks", new ShortNode(req.acks))
+    node.set("timeoutMs", new IntNode(req.timeout))
+    if (serializeRecords) {
+      if (req.partitionSizes() != null) {
+        val topicDataNode = new ArrayNode(JsonNodeFactory.instance)
+        req.partitionSizes().forEach { (topicPartition, size) => {
+          val partitionNode = new ObjectNode(JsonNodeFactory.instance)
+          partitionNode.set("topicPartition", topicPartitionNode(topicPartition))
+          partitionNode.set("size", new IntNode(size))
+          topicDataNode.add(partitionNode)
+        }}
+        node.set("partitionSizes", topicDataNode)
+      } else {
+        node.set("partitionSizes", NullNode.instance)
+      }
+    } else {
+      node.set("numPartitions", new IntNode(req.partitionSizes().size()))
+    }
     node
   }
 }
