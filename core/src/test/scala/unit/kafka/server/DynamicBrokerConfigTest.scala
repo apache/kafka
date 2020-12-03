@@ -406,8 +406,8 @@ class DynamicBrokerConfigTest {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
     val configs = KafkaConfig(props)
 
-    assertEquals(Int.MaxValue, configs.maxConnections)
-    assertEquals(1048588, configs.messageMaxBytes)
+    assertEquals(Defaults.MaxConnections, configs.maxConnections)
+    assertEquals(Defaults.MessageMaxBytes, configs.messageMaxBytes)
 
     var newProps = new Properties()
     newProps.put(KafkaConfig.MaxConnectionsProp, "9999")
@@ -422,8 +422,8 @@ class DynamicBrokerConfigTest {
     newProps.put(KafkaConfig.MessageMaxBytesProp, "1111")
 
     configs.dynamicConfig.updateDefaultConfig(newProps)
-    // Invalid value should be skipped and reassigned as Originals
-    assertEquals(Int.MaxValue, configs.maxConnections)
+    // Invalid value should be skipped and reassigned as default value
+    assertEquals(Defaults.MaxConnections, configs.maxConnections)
     // Even if One property is invalid, the below should get correctly updated.
     assertEquals(1111, configs.messageMaxBytes)
   }
