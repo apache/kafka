@@ -22,7 +22,6 @@ import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Message;
 
 import java.nio.ByteBuffer;
 
@@ -73,7 +72,7 @@ public class HeartbeatRequest extends AbstractRequest {
     }
 
     @Override
-    protected Message data() {
+    protected HeartbeatRequestData data() {
         return data;
     }
 }

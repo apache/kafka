@@ -20,7 +20,6 @@ import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
-import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
@@ -52,7 +51,7 @@ public class DeleteAclsResponse extends AbstractResponse {
     }
 
     @Override
-    protected Message data() {
+    protected DeleteAclsResponseData data() {
         return data;
     }
 

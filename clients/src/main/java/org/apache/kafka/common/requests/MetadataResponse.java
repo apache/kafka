@@ -27,7 +27,6 @@ import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopi
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
@@ -75,7 +74,7 @@ public class MetadataResponse extends AbstractResponse {
     }
 
     @Override
-    protected Message data() {
+    protected MetadataResponseData data() {
         return data;
     }
 

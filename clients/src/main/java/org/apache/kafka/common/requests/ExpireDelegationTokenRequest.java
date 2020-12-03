@@ -23,7 +23,6 @@ import org.apache.kafka.common.message.ExpireDelegationTokenResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Message;
 
 public class ExpireDelegationTokenRequest extends AbstractRequest {
 
@@ -40,7 +39,7 @@ public class ExpireDelegationTokenRequest extends AbstractRequest {
     }
 
     @Override
-    protected Message data() {
+    protected ExpireDelegationTokenRequestData data() {
         return data;
     }
 

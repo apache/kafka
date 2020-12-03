@@ -25,7 +25,6 @@ import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.SendBuilder;
 import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.CompressionType;
@@ -167,7 +166,7 @@ public class ProduceRequest extends AbstractRequest {
     }
 
     @Override
-    protected Message data() {
+    protected ProduceRequestData data() {
         return data;
     }
 

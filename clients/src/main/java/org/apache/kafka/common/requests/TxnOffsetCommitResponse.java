@@ -23,7 +23,6 @@ import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetComm
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Message;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -79,7 +78,7 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
     }
 
     @Override
-    protected Message data() {
+    protected TxnOffsetCommitResponseData data() {
         return data;
     }
 

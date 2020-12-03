@@ -21,7 +21,6 @@ import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.record.RecordBatch;
 
 import java.nio.ByteBuffer;
@@ -74,7 +73,7 @@ public class InitProducerIdRequest extends AbstractRequest {
     }
 
     @Override
-    protected Message data() {
+    protected InitProducerIdRequestData data() {
         return data;
     }
 }

@@ -23,7 +23,6 @@ import org.apache.kafka.common.message.RenewDelegationTokenResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Message;
 
 public class RenewDelegationTokenResponse extends AbstractResponse {
 
@@ -45,7 +44,7 @@ public class RenewDelegationTokenResponse extends AbstractResponse {
     }
 
     @Override
-    protected Message data() {
+    protected RenewDelegationTokenResponseData data() {
         return data;
     }
 

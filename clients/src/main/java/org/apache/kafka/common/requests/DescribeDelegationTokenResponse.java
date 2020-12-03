@@ -22,7 +22,6 @@ import org.apache.kafka.common.message.DescribeDelegationTokenResponseData.Descr
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
@@ -81,7 +80,7 @@ public class DescribeDelegationTokenResponse extends AbstractResponse {
     }
 
     @Override
-    protected Message data() {
+    protected DescribeDelegationTokenResponseData data() {
         return data;
     }
 

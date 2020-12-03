@@ -20,7 +20,6 @@ import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Message;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
@@ -62,7 +61,7 @@ public class EndTxnResponse extends AbstractResponse {
     }
 
     @Override
-    protected Message data() {
+    protected EndTxnResponseData data() {
         return data;
     }
 

@@ -23,7 +23,6 @@ import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupRe
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Message;
 
 import java.nio.ByteBuffer;
 
@@ -76,7 +75,7 @@ public class DeleteGroupsRequest extends AbstractRequest {
     }
 
     @Override
-    protected Message data() {
+    protected DeleteGroupsRequestData data() {
         return data;
     }
 }
