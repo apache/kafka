@@ -71,6 +71,9 @@ public class KafkaChannelTest {
         MemoryPool pool = Mockito.mock(MemoryPool.class);
         ChannelMetadataRegistry metadataRegistry = Mockito.mock(ChannelMetadataRegistry.class);
 
+        ByteBuffer testData = (ByteBuffer) ByteBuffer.allocate(132).putInt(128)
+                .put(TestUtils.randomBytes(128)).rewind();
+
         ArgumentCaptor<Integer> sizeCaptor = ArgumentCaptor.forClass(Integer.class);
         Mockito.when(pool.tryAllocate(sizeCaptor.capture())).thenAnswer(invocation -> {
             return ByteBuffer.allocate(sizeCaptor.getValue());
@@ -81,29 +84,44 @@ public class KafkaChannelTest {
 
         ArgumentCaptor<ByteBuffer> bufferCaptor = ArgumentCaptor.forClass(ByteBuffer.class);
         Mockito.when(transport.read(bufferCaptor.capture())).thenAnswer(invocation -> {
-            bufferCaptor.getValue().putInt(128);
-            return 4;
+            int remaining = bufferCaptor.getValue().remaining();
+
+            ByteBuffer slice = testData.slice();
+            slice.limit(slice.position() + remaining);
+
+            // write the test data into to the test
+            bufferCaptor.getValue().put(slice);
+
+            testData.position(testData.position() + remaining);
+
+            return remaining;
         }).thenReturn(0);
+
         assertEquals(4, channel.read());
         assertEquals(4, channel.currentReceive().bytesRead());
         assertNull(channel.maybeCompleteReceive());
 
         Mockito.reset(transport);
         Mockito.when(transport.read(bufferCaptor.capture())).thenAnswer(invocation -> {
-            bufferCaptor.getValue().put(TestUtils.randomBytes(64));
-            return 64;
-        });
-        assertEquals(64, channel.read());
-        assertEquals(68, channel.currentReceive().bytesRead());
-        assertNull(channel.maybeCompleteReceive());
+            int remaining = bufferCaptor.getValue().remaining();
 
-        Mockito.reset(transport);
-        Mockito.when(transport.read(bufferCaptor.capture())).thenAnswer(invocation -> {
-            bufferCaptor.getValue().put(TestUtils.randomBytes(64));
-            return 64;
+            ByteBuffer slice = testData.slice();
+            slice.limit(slice.position() + remaining);
+
+            // write the test data into to the test
+            bufferCaptor.getValue().put(slice);
+
+            testData.position(testData.position() + remaining);
+
+            return remaining;
         });
-        assertEquals(64, channel.read());
+
+        // Read the remaining buffer
+        assertEquals(128, channel.read());
+
+        // Read the entire size (4) + payload (128)
         assertEquals(132, channel.currentReceive().bytesRead());
+
         assertNotNull(channel.maybeCompleteReceive());
         assertNull(channel.currentReceive());
     }

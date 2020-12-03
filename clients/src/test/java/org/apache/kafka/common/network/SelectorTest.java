@@ -1171,8 +1171,9 @@ public class SelectorTest {
     private void injectNetworkReceive(KafkaChannel channel, int size) throws Exception {
         NetworkReceive receive = new NetworkReceive();
         TestUtils.setFieldValue(channel, "receive", receive);
-        ByteBuffer sizeBuffer = TestUtils.fieldValue(receive, NetworkReceive.class, "size");
+        ByteBuffer sizeBuffer = TestUtils.fieldValue(receive, NetworkReceive.class, "sizeBuf");
         sizeBuffer.putInt(size);
-        TestUtils.setFieldValue(receive, "buffer", ByteBuffer.allocate(size));
+        TestUtils.setFieldValue(receive, "payloadBuffer", ByteBuffer.allocate(size));
+        TestUtils.setFieldValue(receive, "readState", NetworkReceive.ReadState.READ_PAYLOAD);
     }
 }

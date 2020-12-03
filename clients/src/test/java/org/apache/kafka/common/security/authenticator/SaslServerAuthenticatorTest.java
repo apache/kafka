@@ -46,10 +46,10 @@ import org.mockito.Answers;
 
 import static org.apache.kafka.common.security.scram.internals.ScramMechanism.SCRAM_SHA_256;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -63,10 +63,25 @@ public class SaslServerAuthenticatorTest {
         SaslServerAuthenticator authenticator = setupAuthenticator(configs, transportLayer,
             SCRAM_SHA_256.mechanismName(), new DefaultChannelMetadataRegistry());
 
+        ByteBuffer testData =
+                (ByteBuffer) ByteBuffer.allocate(4 + (SaslServerAuthenticator.MAX_RECEIVE_SIZE + 1))
+                        .putInt(SaslServerAuthenticator.MAX_RECEIVE_SIZE + 1)
+                        .put(new byte[SaslServerAuthenticator.MAX_RECEIVE_SIZE]).rewind();
+
         when(transportLayer.read(any(ByteBuffer.class))).then(invocation -> {
-            invocation.<ByteBuffer>getArgument(0).putInt(SaslServerAuthenticator.MAX_RECEIVE_SIZE + 1);
-            return 4;
+            ByteBuffer inputBuffer = invocation.<ByteBuffer>getArgument(0);
+            int remaining = Math.min(testData.remaining(), inputBuffer.remaining());
+
+            ByteBuffer slice = (ByteBuffer) testData.slice().limit(remaining);
+
+            // write the test data into to the test
+            inputBuffer.put(slice);
+
+            testData.position(testData.position() + remaining);
+
+            return remaining;
         });
+
         authenticator.authenticate();
         verify(transportLayer).read(any(ByteBuffer.class));
     }
@@ -82,13 +97,23 @@ public class SaslServerAuthenticatorTest {
         final RequestHeader header = new RequestHeader(ApiKeys.METADATA, (short) 0, "clientId", 13243);
         final Struct headerStruct = header.toStruct();
 
+        final ByteBuffer testData =
+                ByteBuffer.allocate(4 + headerStruct.sizeOf()).putInt(headerStruct.sizeOf());
+        headerStruct.writeTo(testData);
+        testData.rewind();
+
         when(transportLayer.read(any(ByteBuffer.class))).then(invocation -> {
-            invocation.<ByteBuffer>getArgument(0).putInt(headerStruct.sizeOf());
-            return 4;
-        }).then(invocation -> {
-            // serialize only the request header. the authenticator should not parse beyond this
-            headerStruct.writeTo(invocation.getArgument(0));
-            return headerStruct.sizeOf();
+            ByteBuffer inputBuffer = invocation.<ByteBuffer>getArgument(0);
+            int remaining = Math.min(testData.remaining(), inputBuffer.remaining());
+
+            ByteBuffer slice = (ByteBuffer) testData.slice().limit(remaining);
+
+            // write the test data into to the test
+            inputBuffer.put(slice);
+
+            testData.position(testData.position() + remaining);
+
+            return remaining;
         });
 
         try {
@@ -98,7 +123,7 @@ public class SaslServerAuthenticatorTest {
             // expected exception
         }
 
-        verify(transportLayer, times(2)).read(any(ByteBuffer.class));
+        assertFalse(testData.hasRemaining());
     }
 
     @Test
@@ -128,15 +153,26 @@ public class SaslServerAuthenticatorTest {
         final ApiVersionsRequest request = new ApiVersionsRequest.Builder().build(version);
         final Struct requestStruct = request.data.toStruct(version);
 
+        int sizeOfPayload = headerStruct.sizeOf() + requestStruct.sizeOf();
+        ByteBuffer testData = ByteBuffer.allocate(4 + sizeOfPayload).putInt(sizeOfPayload);
+        headerStruct.writeTo(testData);
+        requestStruct.writeTo(testData);
+        testData.rewind();
+
         when(transportLayer.socketChannel().socket().getInetAddress()).thenReturn(InetAddress.getLoopbackAddress());
 
         when(transportLayer.read(any(ByteBuffer.class))).then(invocation -> {
-            invocation.<ByteBuffer>getArgument(0).putInt(headerStruct.sizeOf() + requestStruct.sizeOf());
-            return 4;
-        }).then(invocation -> {
-            headerStruct.writeTo(invocation.getArgument(0));
-            requestStruct.writeTo(invocation.getArgument(0));
-            return headerStruct.sizeOf() + requestStruct.sizeOf();
+            ByteBuffer inputBuffer = invocation.<ByteBuffer>getArgument(0);
+            int remaining = Math.min(testData.remaining(), inputBuffer.remaining());
+
+            ByteBuffer slice = (ByteBuffer) testData.slice().limit(remaining);
+
+            // write the test data into to the test
+            inputBuffer.put(slice);
+
+            testData.position(testData.position() + remaining);
+
+            return remaining;
         });
 
         authenticator.authenticate();
@@ -144,7 +180,7 @@ public class SaslServerAuthenticatorTest {
         assertEquals(expectedSoftwareName, metadataRegistry.clientInformation().softwareName());
         assertEquals(expectedSoftwareVersion, metadataRegistry.clientInformation().softwareVersion());
 
-        verify(transportLayer, times(2)).read(any(ByteBuffer.class));
+        assertFalse(testData.hasRemaining());
     }
 
     private SaslServerAuthenticator setupAuthenticator(Map<String, ?> configs, TransportLayer transportLayer,
