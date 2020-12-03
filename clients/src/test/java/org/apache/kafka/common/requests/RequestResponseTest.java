@@ -96,6 +96,7 @@ import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.message.ExpireDelegationTokenRequestData;
 import org.apache.kafka.common.message.ExpireDelegationTokenResponseData;
 import org.apache.kafka.common.message.FetchRequestData;
+import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
@@ -159,8 +160,6 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
-import org.apache.kafka.common.protocol.types.SchemaException;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
@@ -184,6 +183,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -514,6 +514,7 @@ public class RequestResponseTest {
         ObjectSerializationCache serializationCache = new ObjectSerializationCache();
         ByteBuffer buffer = ByteBuffer.allocate(header.size(serializationCache));
         header.write(buffer, serializationCache);
+        buffer.flip();
         ResponseHeader deserialized = ResponseHeader.parse(buffer, header.headerVersion());
         assertEquals(header.correlationId(), deserialized.correlationId());
     }
@@ -560,14 +561,13 @@ public class RequestResponseTest {
         }
     }
 
-    private void checkDescribeConfigsResponseVersions() throws Exception {
+    private void checkDescribeConfigsResponseVersions() {
         for (int version = ApiKeys.DESCRIBE_CONFIGS.oldestVersion(); version < ApiKeys.DESCRIBE_CONFIGS.latestVersion(); ++version) {
             short apiVersion = (short) version;
             DescribeConfigsResponse response = createDescribeConfigsResponse(apiVersion);
             DescribeConfigsResponse deserialized0 = (DescribeConfigsResponse) AbstractResponse.parseResponse(ApiKeys.DESCRIBE_CONFIGS,
                     response.serializeBody(apiVersion), apiVersion);
             verifyDescribeConfigsResponse(response, deserialized0, apiVersion);
-
         }
     }
 
@@ -589,9 +589,9 @@ public class RequestResponseTest {
             ByteBuffer serializedBytes = req.serializeBody();
             AbstractRequest deserialized = AbstractRequest.parseRequest(req.apiKey(), req.version(), serializedBytes).request;
             ByteBuffer serializedBytes2 = deserialized.serializeBody();
-            assertEquals(req.data(), deserialized.data()); //FIXME
+            serializedBytes.rewind();
             if (checkEquality)
-                assertEquals(serializedBytes, serializedBytes2);
+                assertEquals("Request " + req + "failed equality test", serializedBytes, serializedBytes2);
         } catch (Exception e) {
             throw new RuntimeException("Failed to deserialize request " + req + " with type " + req.getClass(), e);
         }
@@ -605,8 +605,9 @@ public class RequestResponseTest {
             ByteBuffer serializedBytes = response.serializeBody((short) version);
             AbstractResponse deserialized = AbstractResponse.parseResponse(response.apiKey(), serializedBytes, (short) version);
             ByteBuffer serializedBytes2 = deserialized.serializeBody((short) version);
+            serializedBytes.rewind();
             if (checkEquality)
-                assertEquals(serializedBytes, serializedBytes2);
+                assertEquals("Response " + response + "failed equality test", serializedBytes, serializedBytes2);
         } catch (Exception e) {
             throw new RuntimeException("Failed to deserialize response " + response + " with type " + response.getClass(), e);
         }
@@ -761,11 +762,10 @@ public class RequestResponseTest {
         ResponseHeader responseHeader = ResponseHeader.parse(channel.buffer(), responseHeaderVersion);
         assertEquals(correlationId, responseHeader.correlationId());
 
-        // read the body
-        Struct responseBody = FETCH.responseSchema(apiVersion).read(buf);
-        assertEquals(fetchResponse.serializeBody(apiVersion), responseBody);
-
-        assertEquals(size, responseHeader.size(new ObjectSerializationCache()) + responseBody.sizeOf());
+        assertEquals(fetchResponse.serializeBody(apiVersion), buf);
+        FetchResponseData deserialized = new FetchResponseData(new ByteBufferAccessor(buf), apiVersion);
+        ObjectSerializationCache serializationCache = new ObjectSerializationCache();
+        assertEquals(size, responseHeader.size(serializationCache) + deserialized.size(serializationCache, apiVersion));
     }
 
     @Test
@@ -962,7 +962,7 @@ public class RequestResponseTest {
     @Test
     public void testApiVersionResponseParsingFallbackException() {
         short version = 0;
-        assertThrows(SchemaException.class, () -> ApiVersionsResponse.parse(ByteBuffer.allocate(0), version));
+        assertThrows(BufferUnderflowException.class, () -> ApiVersionsResponse.parse(ByteBuffer.allocate(0), version));
     }
 
     @Test
