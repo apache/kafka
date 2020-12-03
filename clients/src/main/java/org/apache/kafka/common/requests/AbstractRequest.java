@@ -78,7 +78,7 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
     }
 
     private final short version;
-    public final ApiKeys apiKey;
+    private final ApiKeys apiKey;
 
     public AbstractRequest(ApiKeys apiKey, short version) {
         if (!apiKey.isVersionSupported(version))
@@ -92,6 +92,10 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
      */
     public short version() {
         return version;
+    }
+
+    public ApiKeys apiKey() {
+        return apiKey;
     }
 
     public Send toSend(String destination, RequestHeader header) {

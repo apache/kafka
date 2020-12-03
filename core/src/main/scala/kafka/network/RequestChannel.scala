@@ -125,7 +125,7 @@ object RequestChannel extends Logging {
 
     def responseString(response: AbstractResponse): Option[String] = {
       if (RequestChannel.isRequestLoggingEnabled)
-        Some(response.toString(context.apiVersion))
+        Some(response.toString)
       else
         None
     }

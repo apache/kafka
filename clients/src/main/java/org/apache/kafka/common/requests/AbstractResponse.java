@@ -53,7 +53,7 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
         return serializeWithHeader(new ResponseHeader(correlationId, apiKey.responseHeaderVersion(version)), version);
     }
 
-    protected ByteBuffer serializeWithHeader(ResponseHeader header, short version) {
+    ByteBuffer serializeWithHeader(ResponseHeader header, short version) {
         Objects.requireNonNull(header, "header should not be null");
         return serialize(header, data(), version);
     }
@@ -108,11 +108,6 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
         errorCounts.put(error, count + 1);
     }
 
-    /**
-     * Return the auto-generated `Message` instance if this request/response relies on one for
-     * serialization/deserialization. If this class has not yet been updated to rely on the auto-generated protocol
-     * classes, return `null`.
-     */
     protected abstract Message data();
 
     /**
@@ -279,7 +274,7 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
 
     public abstract int throttleTimeMs();
 
-    public String toString(short version) {
+    public String toString() {
         return data().toString();
     }
 }

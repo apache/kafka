@@ -575,8 +575,8 @@ public class RequestResponseTest {
         AbstractResponse response = req.getErrorResponse(e);
         checkResponse(response, req.version(), checkEqualityAndHashCode);
         if (e instanceof UnknownServerException) {
-            String responseStr = response.toString(req.version());
-            assertFalse(String.format("Unknown message included in response for %s: %s ", req.apiKey, responseStr),
+            String responseStr = response.toString();
+            assertFalse(String.format("Unknown message included in response for %s: %s ", req.apiKey(), responseStr),
                     responseStr.contains(e.getMessage()));
         }
     }
@@ -587,7 +587,7 @@ public class RequestResponseTest {
         // in the request is a HashMap with multiple elements since ordering of the elements may vary)
         try {
             ByteBuffer serializedBytes = req.serializeBody();
-            AbstractRequest deserialized = AbstractRequest.parseRequest(req.apiKey, req.version(), serializedBytes).request;
+            AbstractRequest deserialized = AbstractRequest.parseRequest(req.apiKey(), req.version(), serializedBytes).request;
             ByteBuffer serializedBytes2 = deserialized.serializeBody();
             assertEquals(req.data(), deserialized.data()); //FIXME
             if (checkEquality)
@@ -816,12 +816,12 @@ public class RequestResponseTest {
     @Test
     public void testFetchRequestIsolationLevel() throws Exception {
         FetchRequest request = createFetchRequest(4, IsolationLevel.READ_COMMITTED);
-        FetchRequest deserialized = (FetchRequest) AbstractRequest.parseRequest(request.apiKey, request.version(),
+        FetchRequest deserialized = (FetchRequest) AbstractRequest.parseRequest(request.apiKey(), request.version(),
                 request.serializeBody()).request;
         assertEquals(request.isolationLevel(), deserialized.isolationLevel());
 
         request = createFetchRequest(4, IsolationLevel.READ_UNCOMMITTED);
-        deserialized = (FetchRequest) AbstractRequest.parseRequest(request.apiKey, request.version(),
+        deserialized = (FetchRequest) AbstractRequest.parseRequest(request.apiKey(), request.version(),
                 request.serializeBody()).request;
         assertEquals(request.isolationLevel(), deserialized.isolationLevel());
     }
