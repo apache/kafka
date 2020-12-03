@@ -45,7 +45,7 @@ public class RequestHeaderTest {
         assertEquals("", deserialized.clientId());
         assertEquals(0, deserialized.headerVersion());
 
-        ByteBuffer serializedBuffer = toBuffer(deserialized);
+        ByteBuffer serializedBuffer = TestUtils.serializeRequestHeader(deserialized);
 
         assertEquals(ApiKeys.CONTROLLED_SHUTDOWN.id, serializedBuffer.getShort(0));
         assertEquals(0, serializedBuffer.getShort(2));
@@ -59,7 +59,7 @@ public class RequestHeaderTest {
         RequestHeader header = new RequestHeader(ApiKeys.FIND_COORDINATOR, apiVersion, "", 10);
         assertEquals(1, header.headerVersion());
 
-        ByteBuffer buffer = toBuffer(header);
+        ByteBuffer buffer = TestUtils.serializeRequestHeader(header);
         assertEquals(10, buffer.remaining());
         RequestHeader deserialized = RequestHeader.parse(buffer);
         assertEquals(header, deserialized);
@@ -71,7 +71,7 @@ public class RequestHeaderTest {
         RequestHeader header = new RequestHeader(ApiKeys.CREATE_DELEGATION_TOKEN, apiVersion, "", 10);
         assertEquals(2, header.headerVersion());
 
-        ByteBuffer buffer = toBuffer(header);
+        ByteBuffer buffer = TestUtils.serializeRequestHeader(header);
         assertEquals(11, buffer.remaining());
         RequestHeader deserialized = RequestHeader.parse(buffer);
         assertEquals(header, deserialized);
@@ -83,17 +83,15 @@ public class RequestHeaderTest {
         buffer.position(10);
 
         RequestHeader header = new RequestHeader(ApiKeys.FIND_COORDINATOR, (short) 1, "", 10);
-        header.write(buffer, new ObjectSerializationCache());
+        ObjectSerializationCache serializationCache = new ObjectSerializationCache();
+        // size must be called before write to avoid an NPE with the current implementation
+        header.size(serializationCache);
+        header.write(buffer, serializationCache);
         int limit = buffer.position();
         buffer.position(10);
         buffer.limit(limit);
 
         RequestHeader parsed = RequestHeader.parse(buffer);
         assertEquals(header, parsed);
-    }
-
-    private ByteBuffer toBuffer(RequestHeader header) {
-        return TestUtils.serializeRequestHeader(header);
-
     }
 }

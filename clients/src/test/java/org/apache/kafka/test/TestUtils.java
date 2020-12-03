@@ -241,6 +241,7 @@ public class TestUtils {
         ObjectSerializationCache serializationCache = new ObjectSerializationCache();
         ByteBuffer buffer = ByteBuffer.allocate(header.size(serializationCache));
         header.write(buffer, serializationCache);
+        buffer.rewind();
         return buffer;
     }
 

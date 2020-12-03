@@ -20,6 +20,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -94,7 +95,16 @@ public class ListOffsetRequest extends AbstractRequest {
     private ListOffsetRequest(ListOffsetRequestData data, short version) {
         super(ApiKeys.LIST_OFFSETS, version);
         this.data = data;
-        this.duplicatePartitions = Collections.emptySet();
+        duplicatePartitions = new HashSet<>();
+        Set<TopicPartition> partitions = new HashSet<>();
+        for (ListOffsetTopic topic : data.topics()) {
+            for (ListOffsetPartition partition : topic.partitions()) {
+                TopicPartition tp = new TopicPartition(topic.name(), partition.partitionIndex());
+                if (!partitions.add(tp)) {
+                    duplicatePartitions.add(tp);
+                }
+            }
+        }
     }
 
     @Override

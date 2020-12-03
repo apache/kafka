@@ -1261,7 +1261,11 @@ public class KafkaAdminClientTest {
                             DeleteAclsResponse.matchingAcl(ACL1, ApiError.NONE),
                             new DeleteAclsResponseData.DeleteAclsMatchingAcl()
                                 .setErrorCode(Errors.SECURITY_DISABLED.code())
-                                .setErrorMessage("No security"))),
+                                .setErrorMessage("No security")
+                                .setPermissionType(AclPermissionType.ALLOW.code())
+                                .setOperation(AclOperation.ALTER.code())
+                                .setResourceType(ResourceType.CLUSTER.code())
+                                .setPatternType(FILTER2.patternFilter().patternType().code()))),
                     new DeleteAclsResponseData.DeleteAclsFilterResult())),
                     ApiKeys.DELETE_ACLS.latestVersion()));
             results = env.adminClient().deleteAcls(asList(FILTER1, FILTER2));

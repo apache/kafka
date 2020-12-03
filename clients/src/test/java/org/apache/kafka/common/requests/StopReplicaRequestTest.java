@@ -26,7 +26,6 @@ import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaTopicV1
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaTopicState;
 import org.apache.kafka.common.message.StopReplicaResponseData.StopReplicaPartitionError;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -36,7 +35,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.protocol.ApiKeys.STOP_REPLICA;
 import static org.junit.Assert.assertEquals;
@@ -80,21 +78,6 @@ public class StopReplicaRequestTest {
     }
 
     @Test
-    public void testStopReplicaRequestNormalization() {
-        List<StopReplicaTopicState> topicStates = TestUtils.generateRandomTopicPartitions(10, 10).stream()
-            .collect(Collectors.groupingBy(tp -> tp.topic()))
-            .entrySet()
-            .stream()
-            .map(entry -> new StopReplicaTopicState()
-                .setTopicName(entry.getKey())
-                .setPartitionStates(entry.getValue().stream()
-                    .map(tp -> new StopReplicaPartitionState().setPartitionIndex(tp.partition()))
-                    .collect(Collectors.toList())))
-            .collect(Collectors.toList());
-        StopReplicaRequest.Builder builder = new StopReplicaRequest.Builder((short) 5, 0, 0, 0, false, topicStates);
-        assertTrue(builder.build((short) 1).sizeInBytes() < builder.build((short) 0).sizeInBytes());
-    }
-
     public void testBuilderNormalizationWithAllDeletePartitionEqualToTrue() {
         testBuilderNormalization(true);
     }

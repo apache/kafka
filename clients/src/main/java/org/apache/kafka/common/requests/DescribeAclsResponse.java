@@ -54,7 +54,7 @@ public class DescribeAclsResponse extends AbstractResponse {
         validate(Optional.of(version));
     }
 
-    // Skips version validation, should only be called when `version` is not available and the input is known to be valid
+    // Skips version validation, visible for testing
     DescribeAclsResponse(DescribeAclsResponseData data) {
         super(ApiKeys.DESCRIBE_ACLS);
         this.data = data;

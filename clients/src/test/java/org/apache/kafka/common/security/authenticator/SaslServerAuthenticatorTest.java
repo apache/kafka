@@ -127,6 +127,7 @@ public class SaslServerAuthenticatorTest {
 
         ApiVersionsRequest request = new ApiVersionsRequest.Builder().build(version);
         ByteBuffer requestBuffer = request.serializeBody();
+        requestBuffer.rewind();
 
         when(transportLayer.socketChannel().socket().getInetAddress()).thenReturn(InetAddress.getLoopbackAddress());
 
@@ -134,9 +135,9 @@ public class SaslServerAuthenticatorTest {
             invocation.<ByteBuffer>getArgument(0).putInt(headerBuffer.remaining() + requestBuffer.remaining());
             return 4;
         }).then(invocation -> {
-            ByteBuffer buffer = invocation.<ByteBuffer>getArgument(0).put(headerBuffer.duplicate());
-            buffer.put(headerBuffer.duplicate());
-            buffer.put(requestBuffer.duplicate());
+            invocation.<ByteBuffer>getArgument(0)
+                .put(headerBuffer.duplicate())
+                .put(requestBuffer.duplicate());
             return headerBuffer.remaining() + requestBuffer.remaining();
         });
 

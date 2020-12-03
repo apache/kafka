@@ -100,7 +100,7 @@ public class DescribeAclsRequest extends AbstractRequest {
             .setThrottleTimeMs(throttleTimeMs)
             .setErrorCode(error.error().code())
             .setErrorMessage(error.message());
-        return new DescribeAclsResponse(response);
+        return new DescribeAclsResponse(response, version());
     }
 
     public static DescribeAclsRequest parse(ByteBuffer buffer, short version) {
