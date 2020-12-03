@@ -285,8 +285,6 @@ class Partition(val topicPartition: TopicPartition,
   @volatile private[cluster] var isrState: IsrState = CommittedIsr(Set.empty)
   @volatile var assignmentState: AssignmentState = SimpleAssignmentState(Seq.empty)
 
-  private val useAlterIsr: Boolean = interBrokerProtocolVersion.isAlterIsrSupported
-
   // Logs belonging to this partition. Majority of time it will be only one log, but if log directory
   // is getting changed (as a result of ReplicaAlterLogDirs command), we may have two logs until copy
   // completes and a switch to new location is performed.
@@ -1344,6 +1342,7 @@ class Partition(val topicPartition: TopicPartition,
       case PendingExpandIsr(isr, newInSyncReplicaId) => isr + newInSyncReplicaId
       case PendingShrinkIsr(isr, outOfSyncReplicaIds) => isr -- outOfSyncReplicaIds
       case state =>
+        isrChangeListener.markFailed()
         throw new IllegalStateException(s"Invalid state $state for `AlterIsr` request for partition $topicPartition")
     }
 

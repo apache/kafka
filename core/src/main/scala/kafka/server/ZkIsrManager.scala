@@ -23,11 +23,12 @@ import org.apache.kafka.common.protocol.Errors
 
 class ZkIsrManager(zkClient: KafkaZkClient) extends AlterIsrManager with Logging {
   override def start(): Unit = {
-    // No-op
+    // No async processing is done, so nothing to do here
   }
 
   override def clearPending(topicPartition: TopicPartition): Unit = {
-    // No-op
+    // Since we always immediately process ZK updates and never actually enqueue anything, there is nothing to
+    // clear here so this is a no-op
   }
 
   override def enqueue(alterIsrItem: AlterIsrItem): Boolean = {
@@ -37,10 +38,14 @@ class ZkIsrManager(zkClient: KafkaZkClient) extends AlterIsrManager with Logging
       alterIsrItem.leaderAndIsr, alterIsrItem.controllerEpoch)
 
     if (updateSucceeded) {
+      // Return the given LeaderAndIsr with the new Zk version
       alterIsrItem.callback.apply(Right(alterIsrItem.leaderAndIsr.withZkVersion(newVersion)))
     } else {
       alterIsrItem.callback.apply(Left(Errors.INVALID_UPDATE_VERSION))
     }
+
+    // Return true since we unconditionally accept the AlterIsrItem. The result of the operation is indicated by the
+    // callback, not the return value of this method
     true
   }
 }
