@@ -4935,7 +4935,7 @@ public class KafkaAdminClientTest {
 
             @Override
             public int throttleTimeMs() {
-                return 0;
+                return DEFAULT_THROTTLE_TIME;
             }
         };
 
