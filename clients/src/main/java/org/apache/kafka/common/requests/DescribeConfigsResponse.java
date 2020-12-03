@@ -220,29 +220,30 @@ public class DescribeConfigsResponse extends AbstractResponse {
     public DescribeConfigsResponse(DescribeConfigsResponseData data) {
         super(ApiKeys.DESCRIBE_CONFIGS);
         this.data = data;
-        //FIXME Post-process version 0
     }
 
-//    public DescribeConfigsResponse(Struct struct, short version) {
-//        this.data = new DescribeConfigsResponseData(struct, version);
-//        if (version == 0) {
-//            for (DescribeConfigsResult result : data.results()) {
-//                for (DescribeConfigsResponseData.DescribeConfigsResourceResult config : result.configs()) {
-//                    if (config.isDefault()) {
-//                        config.setConfigSource(ConfigSource.DEFAULT_CONFIG.id);
-//                    } else {
-//                        if (result.resourceType() == ConfigResource.Type.BROKER.id()) {
-//                            config.setConfigSource(ConfigSource.STATIC_BROKER_CONFIG.id);
-//                        } else if (result.resourceType() == ConfigResource.Type.TOPIC.id()) {
-//                            config.setConfigSource(ConfigSource.TOPIC_CONFIG.id);
-//                        } else {
-//                            config.setConfigSource(ConfigSource.UNKNOWN.id);
-//                        }
-//                    }
-//                }
-//            }
-//        }
-//    }
+    // This constructor should only be used after deserialization, it has special handling for version 0
+    private DescribeConfigsResponse(DescribeConfigsResponseData data, short version) {
+        super(ApiKeys.DESCRIBE_CONFIGS);
+        this.data = data;
+        if (version == 0) {
+            for (DescribeConfigsResponseData.DescribeConfigsResult result : data.results()) {
+                for (DescribeConfigsResponseData.DescribeConfigsResourceResult config : result.configs()) {
+                    if (config.isDefault()) {
+                        config.setConfigSource(ConfigSource.DEFAULT_CONFIG.id);
+                    } else {
+                        if (result.resourceType() == ConfigResource.Type.BROKER.id()) {
+                            config.setConfigSource(ConfigSource.STATIC_BROKER_CONFIG.id);
+                        } else if (result.resourceType() == ConfigResource.Type.TOPIC.id()) {
+                            config.setConfigSource(ConfigSource.TOPIC_CONFIG.id);
+                        } else {
+                            config.setConfigSource(ConfigSource.UNKNOWN.id);
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     @Override
     public DescribeConfigsResponseData data() {
@@ -264,7 +265,7 @@ public class DescribeConfigsResponse extends AbstractResponse {
     }
 
     public static DescribeConfigsResponse parse(ByteBuffer buffer, short version) {
-        return new DescribeConfigsResponse(new DescribeConfigsResponseData(new ByteBufferAccessor(buffer), version));
+        return new DescribeConfigsResponse(new DescribeConfigsResponseData(new ByteBufferAccessor(buffer), version), version);
     }
 
     @Override
