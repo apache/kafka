@@ -46,8 +46,8 @@ public class DeleteAclsResponse extends AbstractResponse {
 
     public DeleteAclsResponse(DeleteAclsResponseData data, short version) {
         super(ApiKeys.DELETE_ACLS);
-        validate(version);
         this.data = data;
+        validate(version);
     }
 
     @Override

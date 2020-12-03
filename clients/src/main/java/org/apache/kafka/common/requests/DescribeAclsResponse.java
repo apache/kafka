@@ -50,15 +50,15 @@ public class DescribeAclsResponse extends AbstractResponse {
 
     public DescribeAclsResponse(DescribeAclsResponseData data, short version) {
         super(ApiKeys.DESCRIBE_ACLS);
-        validate(Optional.of(version));
         this.data = data;
+        validate(Optional.of(version));
     }
 
     // Skips version validation, should only be called when `version` is not available and the input is known to be valid
     DescribeAclsResponse(DescribeAclsResponseData data) {
         super(ApiKeys.DESCRIBE_ACLS);
-        validate(Optional.empty());
         this.data = data;
+        validate(Optional.empty());
     }
 
     @Override
