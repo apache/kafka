@@ -69,7 +69,7 @@ public class DescribeQuorumResponse extends AbstractResponse {
 
     @Override
     public int throttleTimeMs() {
-        return 0;
+        return DEFAULT_THROTTLE_TIME;
     }
 
     public static DescribeQuorumResponseData singletonResponse(TopicPartition topicPartition,

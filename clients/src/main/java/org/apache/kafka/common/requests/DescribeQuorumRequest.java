@@ -81,8 +81,6 @@ public class DescribeQuorumRequest extends AbstractRequest {
         return new DescribeQuorumResponse(getTopLevelErrorResponse(Errors.forException(e)));
     }
 
-
-
     public static DescribeQuorumResponseData getPartitionLevelErrorResponse(DescribeQuorumRequestData data, Errors error) {
         short errorCode = error.code();
 

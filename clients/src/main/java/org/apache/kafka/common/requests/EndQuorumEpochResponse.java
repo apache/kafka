@@ -65,13 +65,13 @@ public class EndQuorumEpochResponse extends AbstractResponse {
     }
 
     @Override
-    protected Message data() {
+    protected EndQuorumEpochResponseData data() {
         return data;
     }
 
     @Override
     public int throttleTimeMs() {
-        return 0;
+        return DEFAULT_THROTTLE_TIME;
     }
 
     public static EndQuorumEpochResponseData singletonResponse(
