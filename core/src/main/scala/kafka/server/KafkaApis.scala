@@ -1242,6 +1242,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                                errorUnavailableListeners: Boolean): Seq[MetadataResponseTopic] = {
     val topicResponses = metadataCache.getTopicMetadata(topics, listenerName,
         errorUnavailableEndpoints, errorUnavailableListeners)
+
     if (topics.isEmpty || topicResponses.size == topics.size) {
       topicResponses
     } else {
@@ -1256,12 +1257,8 @@ class KafkaApis(val requestChannel: RequestChannel,
               topicMetadata
           )
         } else if (isFetchAllMetadata) {
-          // KAFKA-10606: If this request is to get metadata for all topics, auto topic creation should not be allowed
-          // The special handling is necessary on broker side because allowAutoTopicCreation is hard coded to true
-          // for backward compatibility on client side.
-          //
-          // However, in previous versions, UNKNOWN_TOPIC_OR_PARTITION won't happen on fetch all metadata,
-          // so, for backward-compatibility, we need to skip these not founds during fetch all metadata here.
+          // A metadata request for all topics should never result in topic auto creation, but a topic may be deleted
+          // in between the creation of the topics parameter and topicResponses, so make sure to return None for this case.
           None
         } else if (allowAutoTopicCreation && config.autoCreateTopicsEnable) {
           Some(createTopic(topic, config.numPartitions, config.defaultReplicationFactor))
