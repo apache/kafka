@@ -565,7 +565,7 @@ class KafkaApis(val requestChannel: RequestChannel,
    */
   def handleProduceRequest(request: RequestChannel.Request): Unit = {
     val produceRequest = request.body[ProduceRequest]
-    val requestSize = request.sizeOfBodyInBytes
+    val requestSize = request.sizeInBytes
 
     val (hasIdempotentRecords, hasTransactionalRecords) = {
       val flags = RequestUtils.flags(produceRequest)
