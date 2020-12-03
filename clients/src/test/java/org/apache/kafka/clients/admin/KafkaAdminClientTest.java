@@ -1134,7 +1134,7 @@ public class KafkaAdminClientTest {
         return body -> {
             if (body instanceof DeleteTopicsRequest) {
                 DeleteTopicsRequest request = (DeleteTopicsRequest) body;
-                return request.data().topicNames().equals(Arrays.asList(topics));
+                return request.topicNames().equals(Arrays.asList(topics));
             }
             return false;
         };

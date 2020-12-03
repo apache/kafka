@@ -61,6 +61,7 @@ public class MockAdminClient extends AdminClient {
 
     private final List<Node> brokers;
     private final Map<String, TopicMetadata> allTopics = new HashMap<>();
+    private final Map<String, Uuid> topicIds = new HashMap<>();
     private final Map<Uuid, String> topicNames = new HashMap<>();
     private final Map<TopicPartition, NewPartitionReassignment> reassignments =
         new HashMap<>();
@@ -209,6 +210,9 @@ public class MockAdminClient extends AdminClient {
             }
         }
         allTopics.put(name, new TopicMetadata(internal, partitions, logDirs, configs));
+        Uuid id = Uuid.randomUuid();
+        topicIds.put(name, id);
+        topicNames.put(id, name);
     }
 
     synchronized public void markTopicForDeletion(final String name) {
@@ -300,7 +304,9 @@ public class MockAdminClient extends AdminClient {
                 logDirs.add(brokerLogDirs.get(partitions.get(i).leader().id()).get(0));
             }
             allTopics.put(topicName, new TopicMetadata(false, partitions, logDirs, newTopic.configs()));
-            topicNames.put(Uuid.randomUuid(), topicName);
+            Uuid id = Uuid.randomUuid();
+            topicIds.put(topicName, id);
+            topicNames.put(id, topicName);
             future.complete(null);
             createTopicResult.put(topicName, future);
         }
@@ -396,6 +402,7 @@ public class MockAdminClient extends AdminClient {
             if (allTopics.remove(topicName) == null) {
                 future.completeExceptionally(new UnknownTopicOrPartitionException(String.format("Topic %s does not exist.", topicName)));
             } else {
+                topicNames.remove(topicIds.remove(topicName));
                 future.complete(null);
             }
             deleteTopicsResult.put(topicName, future);
@@ -423,9 +430,10 @@ public class MockAdminClient extends AdminClient {
             KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
 
             String name = topicNames.remove(topicId);
-            if (name == null) {
+            if (allTopics.remove(name) ==  null) {
                 future.completeExceptionally(new UnknownTopicOrPartitionException(String.format("Topic %s does not exist.", topicId)));
             } else {
+                topicIds.remove(name);
                 allTopics.remove(name);
                 future.complete(null);
             }

@@ -252,10 +252,10 @@ public interface Admin extends AutoCloseable {
      * This is a convenience method for {@link #deleteTopicsWithIds(Collection, DeleteTopicsOptions)}
      * with default options. See the overload for more details.
      * <p>
-     * This operation is supported by brokers with version x.x.x.x or higher.
+     * This operation is supported by brokers with version 2.8.0 or higher.
      *
      * @param topics The topic IDs for the topics to delete.
-     * @return The DeleteTopicsResult.
+     * @return The DeleteTopicsWithIdsResult.
      */
     default DeleteTopicsWithIdsResult deleteTopicsWithIds(Collection<Uuid> topics) {
         return deleteTopicsWithIds(topics, new DeleteTopicsOptions());
@@ -266,20 +266,20 @@ public interface Admin extends AutoCloseable {
      * <p>
      * This operation is not transactional so it may succeed for some topics while fail for others.
      * <p>
-     * It may take several seconds after the {@link DeleteTopicsResult} returns
+     * It may take several seconds after the {@link DeleteTopicsWithIdsResult} returns
      * success for all the brokers to become aware that the topics are gone.
      * During this time, {@link #listTopics()} and {@link #describeTopics(Collection)}
      * may continue to return information about the deleted topics.
      * <p>
-     * If delete.topic.enable is false on the brokers, deleteTopics will mark
+     * If delete.topic.enable is false on the brokers, deleteTopicsWithIds will mark
      * the topics for deletion, but not actually delete them. The futures will
      * return successfully in this case.
      * <p>
-     * This operation is supported by brokers with version x.x.x.x or higher.
+     * This operation is supported by brokers with version 2.8.0 or higher.
      *
      * @param topics  The topic IDs for the topics to delete.
      * @param options The options to use when deleting the topics.
-     * @return The DeleteTopicsResult.
+     * @return The DeleteTopicsWithIdsResult.
      */
     DeleteTopicsWithIdsResult deleteTopicsWithIds(Collection<Uuid> topics, DeleteTopicsOptions options);
 

@@ -25,7 +25,7 @@ import java.util.Collection;
 import java.util.Map;
 
 /**
- * The result of the {@link Admin#deleteTopics(Collection)} call.
+ * The result of the {@link Admin#deleteTopicsWithIds(Collection)} call.
  *
  * The API of this class is evolving, see {@link Admin} for details.
  */

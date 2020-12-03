@@ -2033,14 +2033,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         sendResponseCallback(results)
       else {
         def handleDeleteTopicsResults(errors: Map[String, Errors]): Unit = {
-          //def find( name: String, id: Uuid) = {
-          //  val _key = new DeleteTopicsResponseData.DeletableTopicResult
-          //  _key.setName(name).setTopicId(id)
-          //  results.find(_key)
-          //}
           errors.foreach {
             case (topicName, error) =>
-              //val topic = find(topicName, controller.controllerContext.topicIds(topicName))
               results.find(topicName)
                 .setErrorCode(error.code)
           }
