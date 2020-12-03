@@ -27,12 +27,13 @@ import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.FetchResponseData
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, Records, SimpleRecord}
-import org.apache.kafka.common.requests.EpochEndOffset._
-import org.apache.kafka.common.requests.{EpochEndOffset, FetchResponse, OffsetsForLeaderEpochRequest}
+import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
+import org.apache.kafka.common.requests.{FetchResponse, OffsetsForLeaderEpochRequest}
 import org.apache.kafka.common.utils.SystemTime
 import org.easymock.EasyMock._
 import org.easymock.{Capture, CaptureType}
@@ -118,8 +119,9 @@ class ReplicaFetcherThreadTest {
     replay(replicaManager, logManager, quota, partition, log)
 
     //Define the offsets for the OffsetsForLeaderEpochResponse
-    val offsets = Map(t1p0 -> new EpochEndOffset(leaderEpoch, 1),
-      t1p1 -> new EpochEndOffset(leaderEpoch, 1)).asJava
+    val offsets = Map(
+      t1p0 -> newOffsetForLeaderPartitionResult(t1p0, leaderEpoch, 1),
+      t1p1 -> newOffsetForLeaderPartitionResult(t1p1, leaderEpoch, 1)).asJava
 
     //Create the fetcher thread
     val mockNetwork = new ReplicaFetcherMockBlockingSend(offsets, brokerEndPoint, new SystemTime())
@@ -212,8 +214,8 @@ class ReplicaFetcherThreadTest {
       t1p1 -> new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty(), 0)))
 
     val expected = Map(
-      t1p0 -> new EpochEndOffset(Errors.UNKNOWN_SERVER_ERROR, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET),
-      t1p1 -> new EpochEndOffset(Errors.UNKNOWN_SERVER_ERROR, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
+      t1p0 -> newOffsetForLeaderPartitionResult(t1p0, Errors.UNKNOWN_SERVER_ERROR, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET),
+      t1p1 -> newOffsetForLeaderPartitionResult(t1p1, Errors.UNKNOWN_SERVER_ERROR, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
     )
 
     assertEquals("results from leader epoch request should have undefined offset", expected, result)
@@ -261,7 +263,9 @@ class ReplicaFetcherThreadTest {
     replay(replicaManager, logManager, partition, log)
 
     //Define the offsets for the OffsetsForLeaderEpochResponse
-    val offsets = Map(t1p0 -> new EpochEndOffset(leaderEpoch, 1), t1p1 -> new EpochEndOffset(leaderEpoch, 1)).asJava
+    val offsets = Map(
+      t1p0 -> newOffsetForLeaderPartitionResult(t1p0, leaderEpoch, 1),
+      t1p1 -> newOffsetForLeaderPartitionResult(t1p1, leaderEpoch, 1)).asJava
 
     //Create the fetcher thread
     val mockNetwork = new ReplicaFetcherMockBlockingSend(offsets, brokerEndPoint, new SystemTime())
@@ -323,7 +327,9 @@ class ReplicaFetcherThreadTest {
     replay(replicaManager, logManager, quota, partition, log)
 
     //Define the offsets for the OffsetsForLeaderEpochResponse, these are used for truncation
-    val offsetsReply = Map(t1p0 -> new EpochEndOffset(leaderEpoch, 156), t2p1 -> new EpochEndOffset(leaderEpoch, 172)).asJava
+    val offsetsReply = Map(
+      t1p0 -> newOffsetForLeaderPartitionResult(t1p0, leaderEpoch, 156),
+      t2p1 -> newOffsetForLeaderPartitionResult(t2p1, leaderEpoch, 172)).asJava
 
     //Create the thread
     val mockNetwork = new ReplicaFetcherMockBlockingSend(offsetsReply, brokerEndPoint, new SystemTime())
@@ -375,8 +381,9 @@ class ReplicaFetcherThreadTest {
     replay(replicaManager, logManager, quota, partition, log)
 
     //Define the offsets for the OffsetsForLeaderEpochResponse, these are used for truncation
-    val offsetsReply = Map(t1p0 -> new EpochEndOffset(leaderEpochAtLeader, 156),
-                           t2p1 -> new EpochEndOffset(leaderEpochAtLeader, 202)).asJava
+    val offsetsReply = Map(
+      t1p0 -> newOffsetForLeaderPartitionResult(t1p0, leaderEpochAtLeader, 156),
+      t2p1 -> newOffsetForLeaderPartitionResult(t2p1, leaderEpochAtLeader, 202)).asJava
 
     //Create the thread
     val mockNetwork = new ReplicaFetcherMockBlockingSend(offsetsReply, brokerEndPoint, new SystemTime())
@@ -431,7 +438,9 @@ class ReplicaFetcherThreadTest {
     replay(replicaManager, logManager, quota, partition, log)
 
     // Define the offsets for the OffsetsForLeaderEpochResponse
-    val offsets = Map(t1p0 -> new EpochEndOffset(4, 155), t1p1 -> new EpochEndOffset(4, 143)).asJava
+    val offsets = Map(
+      t1p0 -> newOffsetForLeaderPartitionResult(t1p0, 4, 155),
+      t1p1 -> newOffsetForLeaderPartitionResult(t1p1, 4, 143)).asJava
 
     // Create the fetcher thread
     val mockNetwork = new ReplicaFetcherMockBlockingSend(offsets, brokerEndPoint, new SystemTime())
@@ -445,8 +454,11 @@ class ReplicaFetcherThreadTest {
 
     // Loop 2 should do the second fetch for both topic partitions because the leader replied with
     // epoch 4 while follower knows only about epoch 3
-    val nextOffsets = Map(t1p0 -> new EpochEndOffset(3, 101), t1p1 -> new EpochEndOffset(3, 102)).asJava
+    val nextOffsets = Map(
+      t1p0 -> newOffsetForLeaderPartitionResult(t1p0, 3, 101),
+      t1p1 -> newOffsetForLeaderPartitionResult(t1p1, 3, 102)).asJava
     mockNetwork.setOffsetsForNextResponse(nextOffsets)
+
     thread.doWork()
     assertEquals(2, mockNetwork.epochFetchCount)
     assertEquals(1, mockNetwork.fetchCount)
@@ -607,7 +619,9 @@ class ReplicaFetcherThreadTest {
 
     // Define the offsets for the OffsetsForLeaderEpochResponse with undefined epoch to simulate
     // older protocol version
-    val offsets = Map(t1p0 -> new EpochEndOffset(EpochEndOffset.UNDEFINED_EPOCH, 155), t1p1 -> new EpochEndOffset(EpochEndOffset.UNDEFINED_EPOCH, 143)).asJava
+    val offsets = Map(
+      t1p0 -> newOffsetForLeaderPartitionResult(t1p0, UNDEFINED_EPOCH, 155),
+      t1p1 -> newOffsetForLeaderPartitionResult(t1p1, UNDEFINED_EPOCH, 143)).asJava
 
     // Create the fetcher thread
     val mockNetwork = new ReplicaFetcherMockBlockingSend(offsets, brokerEndPoint, new SystemTime())
@@ -663,7 +677,8 @@ class ReplicaFetcherThreadTest {
     replay(replicaManager, logManager, quota, partition, log)
 
     //Define the offsets for the OffsetsForLeaderEpochResponse, these are used for truncation
-    val offsetsReply = Map(t1p0 -> new EpochEndOffset(EpochEndOffset.UNDEFINED_EPOCH, EpochEndOffset.UNDEFINED_EPOCH_OFFSET)).asJava
+    val offsetsReply = Map(
+      t1p0 -> newOffsetForLeaderPartitionResult(t1p0, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)).asJava
 
     //Create the thread
     val mockNetwork = new ReplicaFetcherMockBlockingSend(offsetsReply, brokerEndPoint, new SystemTime())
@@ -714,8 +729,8 @@ class ReplicaFetcherThreadTest {
 
     //Define the offsets for the OffsetsForLeaderEpochResponse, these are used for truncation
     val offsetsReply = mutable.Map(
-      t1p0 -> new EpochEndOffset(NOT_LEADER_OR_FOLLOWER, EpochEndOffset.UNDEFINED_EPOCH, EpochEndOffset.UNDEFINED_EPOCH_OFFSET),
-      t1p1 -> new EpochEndOffset(UNKNOWN_SERVER_ERROR, EpochEndOffset.UNDEFINED_EPOCH, EpochEndOffset.UNDEFINED_EPOCH_OFFSET)
+      t1p0 -> newOffsetForLeaderPartitionResult(t1p0, NOT_LEADER_OR_FOLLOWER, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET),
+      t1p1 -> newOffsetForLeaderPartitionResult(t1p1, UNKNOWN_SERVER_ERROR, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
     ).asJava
 
     //Create the thread
@@ -732,7 +747,7 @@ class ReplicaFetcherThreadTest {
     assertEquals(0, truncated.getValues.size())
 
     //New leader elected and replies
-    offsetsReply.put(t1p0, new EpochEndOffset(leaderEpoch, 156))
+    offsetsReply.put(t1p0, newOffsetForLeaderPartitionResult(t1p0, leaderEpoch, 156))
 
     thread.doWork()
 
@@ -769,7 +784,8 @@ class ReplicaFetcherThreadTest {
 
     //Define the offsets for the OffsetsForLeaderEpochResponse
     val offsetsReply = Map(
-      t1p0 -> new EpochEndOffset(leaderEpoch, 1), t1p1 -> new EpochEndOffset(leaderEpoch, 1)
+      t1p0 -> newOffsetForLeaderPartitionResult(t1p0, leaderEpoch, 1),
+      t1p1 -> newOffsetForLeaderPartitionResult(t1p1, leaderEpoch, 1)
     ).asJava
 
     //Create the fetcher thread
@@ -821,7 +837,8 @@ class ReplicaFetcherThreadTest {
 
     //Define the offsets for the OffsetsForLeaderEpochResponse
     val offsetsReply = Map(
-      t1p0 -> new EpochEndOffset(5, 52), t1p1 -> new EpochEndOffset(5, 49)
+      t1p0 -> newOffsetForLeaderPartitionResult(t1p0, 5, 52),
+      t1p1 -> newOffsetForLeaderPartitionResult(t1p1, 5, 49)
     ).asJava
 
     //Create the fetcher thread
@@ -887,6 +904,27 @@ class ReplicaFetcherThreadTest {
   @Test
   def shouldNotUpdateReassignmentBytesInMetricsWhenNoReassignmentsInProgress(): Unit = {
     assertProcessPartitionDataWhen(isReassigning = false)
+  }
+
+  private def newOffsetForLeaderPartitionResult(
+   tp: TopicPartition,
+   leaderEpoch: Int,
+   endOffset: Long
+ ): EpochEndOffset = {
+    newOffsetForLeaderPartitionResult(tp, Errors.NONE, leaderEpoch, endOffset)
+  }
+
+  private def newOffsetForLeaderPartitionResult(
+    tp: TopicPartition,
+    error: Errors,
+    leaderEpoch: Int,
+    endOffset: Long
+  ): EpochEndOffset = {
+    new EpochEndOffset()
+      .setPartition(tp.partition)
+      .setErrorCode(error.code)
+      .setLeaderEpoch(leaderEpoch)
+      .setEndOffset(endOffset)
   }
 
   private def assertProcessPartitionDataWhen(isReassigning: Boolean): Unit = {

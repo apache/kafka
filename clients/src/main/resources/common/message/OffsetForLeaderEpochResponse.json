@@ -33,7 +33,7 @@
       "about": "Each topic we fetched offsets for.", "fields": [
       { "name": "Topic", "type": "string", "versions": "0+", "entityType": "topicName",
         "mapKey": true, "about": "The topic name." },
-      { "name": "Partitions", "type": "[]OffsetForLeaderPartitionResult", "versions": "0+",
+      { "name": "Partitions", "type": "[]EpochEndOffset", "versions": "0+",
         "about": "Each partition in the topic we fetched offsets for.", "fields": [
         { "name": "ErrorCode", "type": "int16", "versions": "0+",
           "about": "The error code 0, or if there was no error." },
@@ -41,7 +41,7 @@
           "about": "The partition index." },
         { "name": "LeaderEpoch", "type": "int32", "versions": "1+", "default": "-1", "ignorable": true,
           "about": "The leader epoch of the partition." },
-        { "name": "EndOffset", "type": "int64", "versions": "0+",
+        { "name": "EndOffset", "type": "int64", "versions": "0+", "default": "-1",
           "about": "The end offset of the epoch." }
       ]}
     ]}

@@ -16,10 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData;
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult;
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -27,6 +24,8 @@ import org.apache.kafka.common.protocol.types.Struct;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
+
+import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH;
 
 /**
  * Possible error codes:
@@ -41,6 +40,8 @@ import java.util.Map;
  * - {@link Errors#UNKNOWN_SERVER_ERROR} For any unexpected errors
  */
 public class OffsetsForLeaderEpochResponse extends AbstractResponse {
+    public static final long UNDEFINED_EPOCH_OFFSET = NO_PARTITION_LEADER_EPOCH;
+    public static final int UNDEFINED_EPOCH = NO_PARTITION_LEADER_EPOCH;
 
     private final OffsetForLeaderEpochResponseData data;
 
@@ -52,45 +53,8 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
         data = new OffsetForLeaderEpochResponseData(struct, version);
     }
 
-    public OffsetsForLeaderEpochResponse(Map<TopicPartition, EpochEndOffset> offsets) {
-        this(0, offsets);
-    }
-
-    public OffsetsForLeaderEpochResponse(int throttleTimeMs, Map<TopicPartition, EpochEndOffset> offsets) {
-        data = new OffsetForLeaderEpochResponseData();
-        data.setThrottleTimeMs(throttleTimeMs);
-
-        offsets.forEach((tp, offset) -> {
-            OffsetForLeaderTopicResult topic = data.topics().find(tp.topic());
-            if (topic == null) {
-                topic = new OffsetForLeaderTopicResult().setTopic(tp.topic());
-                data.topics().add(topic);
-            }
-            topic.partitions().add(new OffsetForLeaderPartitionResult()
-                .setPartition(tp.partition())
-                .setErrorCode(offset.error().code())
-                .setLeaderEpoch(offset.leaderEpoch())
-                .setEndOffset(offset.endOffset()));
-        });
-    }
-
     public OffsetForLeaderEpochResponseData data() {
         return data;
-    }
-
-    public Map<TopicPartition, EpochEndOffset> responses() {
-        Map<TopicPartition, EpochEndOffset> epochEndOffsetsByPartition = new HashMap<>();
-
-        data.topics().forEach(topic ->
-            topic.partitions().forEach(partition ->
-                epochEndOffsetsByPartition.put(
-                    new TopicPartition(topic.topic(), partition.partition()),
-                    new EpochEndOffset(
-                        Errors.forCode(partition.errorCode()),
-                        partition.leaderEpoch(),
-                        partition.endOffset()))));
-
-        return epochEndOffsetsByPartition;
     }
 
     @Override

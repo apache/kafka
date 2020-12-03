@@ -23,7 +23,7 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetFor
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopicCollection;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData;
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult;
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -31,9 +31,11 @@ import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.RecordBatch;
 
 import java.nio.ByteBuffer;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+
+import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH;
+import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET;
 
 public class OffsetsForLeaderEpochRequest extends AbstractRequest {
     /**
@@ -116,20 +118,6 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
         return data;
     }
 
-    public Map<TopicPartition, PartitionData> epochsByTopicPartition() {
-        Map<TopicPartition, PartitionData> epochsByTopicPartition = new HashMap<>();
-
-        data.topics().forEach(topic ->
-            topic.partitions().forEach(partition ->
-                epochsByTopicPartition.put(
-                    new TopicPartition(topic.topic(), partition.partition()),
-                    new PartitionData(
-                        RequestUtils.getLeaderEpoch(partition.currentLeaderEpoch()),
-                        partition.leaderEpoch()))));
-
-        return epochsByTopicPartition;
-    }
-
     public int replicaId() {
         return data.replicaId();
     }
@@ -152,11 +140,11 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
             OffsetForLeaderTopicResult topicData = new OffsetForLeaderTopicResult()
                 .setTopic(topic.topic());
             topic.partitions().forEach(partition ->
-                topicData.partitions().add(new OffsetForLeaderPartitionResult()
+                topicData.partitions().add(new EpochEndOffset()
                     .setPartition(partition.partition())
                     .setErrorCode(error.code())
-                    .setLeaderEpoch(EpochEndOffset.UNDEFINED_EPOCH)
-                    .setEndOffset(EpochEndOffset.UNDEFINED_EPOCH_OFFSET)));
+                    .setLeaderEpoch(UNDEFINED_EPOCH)
+                    .setEndOffset(UNDEFINED_EPOCH_OFFSET)));
             responseData.topics().add(topicData);
         });
 

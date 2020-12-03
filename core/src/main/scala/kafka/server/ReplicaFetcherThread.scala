@@ -30,10 +30,10 @@ import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.message.ListOffsetRequestData.{ListOffsetPartition, ListOffsetTopic}
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, Records}
-import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.{LogContext, Time}
 
@@ -342,7 +342,12 @@ class ReplicaFetcherThread(name: String,
       val response = leaderEndpoint.sendRequest(epochRequest)
       val responseBody = response.responseBody.asInstanceOf[OffsetsForLeaderEpochResponse]
       debug(s"Received leaderEpoch response $response")
-      responseBody.responses.asScala
+      responseBody.data.topics.asScala.flatMap { offsetForLeaderTopicResult =>
+        offsetForLeaderTopicResult.partitions().asScala.map { offsetForLeaderPartitionResult =>
+          val tp = new TopicPartition(offsetForLeaderTopicResult.topic, offsetForLeaderPartitionResult.partition)
+          tp -> offsetForLeaderPartitionResult
+        }
+      }.toMap
     } catch {
       case t: Throwable =>
         warn(s"Error when sending leader epoch request for $partitions", t)
@@ -350,7 +355,9 @@ class ReplicaFetcherThread(name: String,
         // if we get any unexpected exception, mark all partitions with an error
         val error = Errors.forException(t)
         partitions.map { case (tp, _) =>
-          tp -> new EpochEndOffset(error, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
+          tp -> new EpochEndOffset()
+            .setPartition(tp.partition)
+            .setErrorCode(error.code)
         }
     }
   }

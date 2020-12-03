@@ -33,12 +33,12 @@ import kafka.zookeeper.ZooKeeperClientException
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
-import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.requests._
+import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 
@@ -1096,11 +1096,12 @@ class Partition(val topicPartition: TopicPartition,
 
     lastFetchedEpoch.ifPresent { fetchEpoch =>
       val epochEndOffset = lastOffsetForLeaderEpoch(currentLeaderEpoch, fetchEpoch, fetchOnlyFromLeader = false)
-      if (epochEndOffset.error != Errors.NONE) {
-        throw epochEndOffset.error.exception()
+      val error = Errors.forCode(epochEndOffset.errorCode)
+      if (error != Errors.NONE) {
+        throw error.exception()
       }
 
-      if (epochEndOffset.hasUndefinedEpochOrOffset) {
+      if (epochEndOffset.endOffset == UNDEFINED_EPOCH_OFFSET || epochEndOffset.leaderEpoch == UNDEFINED_EPOCH) {
         throw new OffsetOutOfRangeException("Could not determine the end offset of the last fetched epoch " +
           s"$lastFetchedEpoch from the request")
       }
@@ -1292,11 +1293,18 @@ class Partition(val topicPartition: TopicPartition,
       localLogOrError match {
         case Left(localLog) =>
           localLog.endOffsetForEpoch(leaderEpoch) match {
-            case Some(epochAndOffset) => new EpochEndOffset(NONE, epochAndOffset.leaderEpoch, epochAndOffset.offset)
-            case None => new EpochEndOffset(NONE, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
+            case Some(epochAndOffset) => new EpochEndOffset()
+              .setPartition(partitionId)
+              .setErrorCode(Errors.NONE.code)
+              .setLeaderEpoch(epochAndOffset.leaderEpoch)
+              .setEndOffset(epochAndOffset.offset)
+            case None => new EpochEndOffset()
+              .setPartition(partitionId)
+              .setErrorCode(Errors.NONE.code)
           }
-        case Right(error) =>
-          new EpochEndOffset(error, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
+        case Right(error) => new EpochEndOffset()
+          .setPartition(partitionId)
+          .setErrorCode(error.code)
       }
     }
   }

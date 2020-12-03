@@ -26,13 +26,12 @@ import kafka.cluster.BrokerEndPoint
 import kafka.utils.{DelayedItem, Pool, ShutdownableThread}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.errors._
-import org.apache.kafka.common.requests.EpochEndOffset._
 import kafka.common.ClientIdAndBroker
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.CoreUtils.inLock
 import org.apache.kafka.common.protocol.Errors
 
-import scala.collection.{mutable, Map, Set}
+import scala.collection.{Map, Set, mutable}
 import scala.jdk.CollectionConverters._
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
@@ -42,8 +41,10 @@ import kafka.server.AbstractFetcherThread.ReplicaFetch
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import org.apache.kafka.common.{InvalidRecordException, TopicPartition}
 import org.apache.kafka.common.internals.PartitionStates
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.record.{FileRecords, MemoryRecords, Records}
 import org.apache.kafka.common.requests._
+import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 
 import scala.math._
 
@@ -260,7 +261,7 @@ abstract class AbstractFetcherThread(name: String,
     val partitionsWithError = mutable.HashSet.empty[TopicPartition]
 
     fetchedEpochs.forKeyValue { (tp, leaderEpochOffset) =>
-      leaderEpochOffset.error match {
+      Errors.forCode(leaderEpochOffset.errorCode) match {
         case Errors.NONE =>
           val offsetTruncationState = getOffsetTruncationState(tp, leaderEpochOffset)
           if (doTruncate(tp, offsetTruncationState))
@@ -361,7 +362,11 @@ abstract class AbstractFetcherThread(name: String,
                     }
                     if (isTruncationOnFetchSupported) {
                       partitionData.divergingEpoch.ifPresent { divergingEpoch =>
-                        divergingEndOffsets += topicPartition -> new EpochEndOffset(Errors.NONE, divergingEpoch.epoch, divergingEpoch.endOffset)
+                        divergingEndOffsets += topicPartition -> new EpochEndOffset()
+                          .setPartition(topicPartition.partition)
+                          .setErrorCode(Errors.NONE.code)
+                          .setLeaderEpoch(divergingEpoch.epoch)
+                          .setEndOffset(divergingEpoch.endOffset)
                       }
                     }
                   } catch {

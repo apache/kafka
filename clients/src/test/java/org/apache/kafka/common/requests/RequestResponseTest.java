@@ -134,6 +134,9 @@ import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResp
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopicCollection;
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData;
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
 import org.apache.kafka.common.message.RenewDelegationTokenResponseData;
@@ -1838,13 +1841,30 @@ public class RequestResponseTest {
     }
 
     private OffsetsForLeaderEpochResponse createLeaderEpochResponse() {
-        Map<TopicPartition, EpochEndOffset> epochs = new HashMap<>();
+        OffsetForLeaderEpochResponseData data = new OffsetForLeaderEpochResponseData();
+        data.topics().add(new OffsetForLeaderTopicResult()
+            .setTopic("topic1")
+            .setPartitions(Arrays.asList(
+                new EpochEndOffset()
+                    .setPartition(0)
+                    .setErrorCode(Errors.NONE.code())
+                    .setLeaderEpoch(1)
+                    .setEndOffset(0),
+                new EpochEndOffset()
+                    .setPartition(1)
+                    .setErrorCode(Errors.NONE.code())
+                    .setLeaderEpoch(1)
+                    .setEndOffset(1))));
+        data.topics().add(new OffsetForLeaderTopicResult()
+            .setTopic("topic2")
+            .setPartitions(Arrays.asList(
+                new EpochEndOffset()
+                    .setPartition(2)
+                    .setErrorCode(Errors.NONE.code())
+                    .setLeaderEpoch(1)
+                    .setEndOffset(1))));
 
-        epochs.put(new TopicPartition("topic1", 0), new EpochEndOffset(Errors.NONE, 1, 0));
-        epochs.put(new TopicPartition("topic1", 1), new EpochEndOffset(Errors.NONE, 1, 1));
-        epochs.put(new TopicPartition("topic2", 2), new EpochEndOffset(Errors.NONE, 1, 2));
-
-        return new OffsetsForLeaderEpochResponse(0, epochs);
+        return new OffsetsForLeaderEpochResponse(data);
     }
 
     private AddPartitionsToTxnRequest createAddPartitionsToTxnRequest() {
