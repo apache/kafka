@@ -20,10 +20,9 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.util.Iterator;
-import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.utils.AbstractIterator;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.OffsetAndEpoch;
 
 public final class FileRawSnapshotReader implements RawSnapshotReader {
@@ -47,19 +46,7 @@ public final class FileRawSnapshotReader implements RawSnapshotReader {
 
     @Override
     public Iterator<RecordBatch> iterator() {
-        return new Iterator<RecordBatch>() {
-            private final AbstractIterator<FileChannelRecordBatch> iterator = fileRecords.batchIterator();
-
-            @Override
-            public boolean hasNext() {
-                return iterator.hasNext();
-            }
-
-            @Override
-            public RecordBatch next() {
-                return iterator.next();
-            }
-        };
+        return Utils.covariantCast(fileRecords.batchIterator());
     }
 
     @Override

@@ -56,7 +56,7 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
     public void append(ByteBuffer buffer) throws IOException {
         if (frozen) {
             throw new IllegalStateException(
-                String.format("Append not supported. Snapshot is already frozen: id = %s; temp path = %s", snapshotId, tempSnapshotPath)
+                String.format("Append is not supported. Snapshot is already frozen: id = %s; temp path = %s", snapshotId, tempSnapshotPath)
             );
         }
 
@@ -70,6 +70,12 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
 
     @Override
     public void freeze() throws IOException {
+        if (frozen) {
+            throw new IllegalStateException(
+                String.format("Freeze is not supported. Snapshot is already frozen: id = %s; temp path = %s", snapshotId, tempSnapshotPath)
+            );
+        }
+
         channel.close();
         frozen = true;
 
@@ -84,9 +90,12 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
 
     @Override
     public void close() throws IOException {
-        channel.close();
-        // This is a noop if freeze was called before calling close
-        Files.deleteIfExists(tempSnapshotPath);
+        try {
+            channel.close();
+        } finally {
+            // This is a noop if freeze was called before calling close
+            Files.deleteIfExists(tempSnapshotPath);
+        }
     }
 
     /**
