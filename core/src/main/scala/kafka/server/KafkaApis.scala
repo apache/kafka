@@ -1249,7 +1249,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val responsesForNonExistentTopics = nonExistentTopics.flatMap { topic =>
         if (isInternal(topic)) {
           val topicMetadata = createInternalTopic(topic)
-          List(
+          Some(
             if (topicMetadata.errorCode == Errors.COORDINATOR_NOT_AVAILABLE.code)
               metadataResponseTopic(Errors.INVALID_REPLICATION_FACTOR, topic, true, util.Collections.emptyList())
             else
@@ -1262,11 +1262,11 @@ class KafkaApis(val requestChannel: RequestChannel,
           //
           // However, in previous versions, UNKNOWN_TOPIC_OR_PARTITION won't happen on fetch all metadata,
           // so, for backward-compatibility, we need to skip these not founds during fetch all metadata here.
-          Nil
+          None
         } else if (allowAutoTopicCreation && config.autoCreateTopicsEnable) {
-          List(createTopic(topic, config.numPartitions, config.defaultReplicationFactor))
+          Some(createTopic(topic, config.numPartitions, config.defaultReplicationFactor))
         } else {
-          List(metadataResponseTopic(Errors.UNKNOWN_TOPIC_OR_PARTITION, topic, false, util.Collections.emptyList()))
+          Some(metadataResponseTopic(Errors.UNKNOWN_TOPIC_OR_PARTITION, topic, false, util.Collections.emptyList()))
         }
       }
 
