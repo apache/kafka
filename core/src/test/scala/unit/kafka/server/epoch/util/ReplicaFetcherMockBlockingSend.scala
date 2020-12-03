@@ -31,6 +31,8 @@ import org.apache.kafka.common.requests.{AbstractRequest, EpochEndOffset, FetchR
 import org.apache.kafka.common.utils.{SystemTime, Time}
 import org.apache.kafka.common.{Node, TopicPartition}
 
+import scala.collection.Map
+
 /**
   * Stub network client used for testing the ReplicaFetcher, wraps the MockClient used for consumer testing
   *
@@ -53,15 +55,20 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
   var epochFetchCount = 0
   var lastUsedOffsetForLeaderEpochVersion = -1
   var callback: Option[() => Unit] = None
-  var currentOffsets: java.util.Map[TopicPartition, EpochEndOffset] = offsets
+  var currentOffsets: util.Map[TopicPartition, EpochEndOffset] = offsets
+  var fetchPartitionData: Map[TopicPartition, FetchResponse.PartitionData[Records]] = Map.empty
   private val sourceNode = new Node(sourceBroker.id, sourceBroker.host, sourceBroker.port)
 
   def setEpochRequestCallback(postEpochFunction: () => Unit): Unit = {
     callback = Some(postEpochFunction)
   }
 
-  def setOffsetsForNextResponse(newOffsets: java.util.Map[TopicPartition, EpochEndOffset]): Unit = {
+  def setOffsetsForNextResponse(newOffsets: util.Map[TopicPartition, EpochEndOffset]): Unit = {
     currentOffsets = newOffsets
+  }
+
+  def setFetchPartitionDataForNextResponse(partitionData: Map[TopicPartition, FetchResponse.PartitionData[Records]]): Unit = {
+    fetchPartitionData = partitionData
   }
 
   override def sendRequest(requestBuilder: Builder[_ <: AbstractRequest]): ClientResponse = {
@@ -82,8 +89,11 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
 
       case ApiKeys.FETCH =>
         fetchCount += 1
-        new FetchResponse(Errors.NONE, new java.util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]], 0,
-          JFetchMetadata.INVALID_SESSION_ID)
+        val partitionData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
+        fetchPartitionData.foreach { case (tp, data) => partitionData.put(tp, data) }
+        fetchPartitionData = Map.empty
+        new FetchResponse(Errors.NONE, partitionData, 0,
+          if (partitionData.isEmpty) JFetchMetadata.INVALID_SESSION_ID else 1)
 
       case _ =>
         throw new UnsupportedOperationException
