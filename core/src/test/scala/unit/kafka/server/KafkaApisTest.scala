@@ -1358,7 +1358,7 @@ class KafkaApisTest {
 
     val markersResponse = readResponse(writeTxnMarkersRequest, capturedResponse)
       .asInstanceOf[WriteTxnMarkersResponse]
-    assertEquals(expectedErrors, markersResponse.errors(1))
+    assertEquals(expectedErrors, markersResponse.errors.get(1))
   }
 
   @Test
@@ -1377,7 +1377,7 @@ class KafkaApisTest {
 
     val markersResponse = readResponse(writeTxnMarkersRequest, capturedResponse)
       .asInstanceOf[WriteTxnMarkersResponse]
-    assertEquals(expectedErrors, markersResponse.errors(1))
+    assertEquals(expectedErrors, markersResponse.errors.get(1))
   }
 
   @Test
@@ -1412,7 +1412,7 @@ class KafkaApisTest {
 
     val markersResponse = readResponse(writeTxnMarkersRequest, capturedResponse)
       .asInstanceOf[WriteTxnMarkersResponse]
-    assertEquals(expectedErrors, markersResponse.errors(1))
+    assertEquals(expectedErrors, markersResponse.errors.get(1))
     EasyMock.verify(replicaManager)
   }
 
@@ -1549,7 +1549,7 @@ class KafkaApisTest {
 
     val markersResponse = readResponse(writeTxnMarkersRequest, capturedResponse)
       .asInstanceOf[WriteTxnMarkersResponse]
-    assertEquals(expectedErrors, markersResponse.errors(1))
+    assertEquals(expectedErrors, markersResponse.errors.get(1))
     EasyMock.verify(replicaManager)
   }
 

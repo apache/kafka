@@ -88,9 +88,19 @@ public class WriteTxnMarkersResponse extends AbstractResponse {
         return data;
     }
 
-    public Map<TopicPartition, Errors> errors(long producerId) {
-        return null;
-        //FIXME
+    public Map<Long, Map<TopicPartition, Errors>> errors() {
+        Map<Long, Map<TopicPartition, Errors>> errors = new HashMap<>();
+        for (WritableTxnMarkerResult marker : data.markers()) {
+            Map<TopicPartition, Errors> topicPartitionErrorsMap = new HashMap<>();
+            for (WritableTxnMarkerTopicResult topic : marker.topics()) {
+                for (WritableTxnMarkerPartitionResult partitionResult : topic.partitions()) {
+                    topicPartitionErrorsMap.put(new TopicPartition(topic.name(), partitionResult.partitionIndex()),
+                            Errors.forCode(partitionResult.errorCode()));
+                }
+            }
+            errors.put(marker.producerId(), topicPartitionErrorsMap);
+        }
+        return errors;
     }
 
     @Override
@@ -100,15 +110,14 @@ public class WriteTxnMarkersResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        //FIXME
-//        Map<Errors, Integer> errorCounts = new HashMap<>();
-//        errors.values().forEach(allErrors ->
-//            allErrors.values().forEach(error ->
-//                updateErrorCounts(errorCounts, error)
-//            )
-//        );
-//        return errorCounts;
-        return null;
+        Map<Errors, Integer> errorCounts = new HashMap<>();
+        for (WritableTxnMarkerResult marker : data.markers()) {
+            for (WritableTxnMarkerTopicResult topic : marker.topics()) {
+                for (WritableTxnMarkerPartitionResult partitionResult : topic.partitions())
+                    updateErrorCounts(errorCounts, Errors.forCode(partitionResult.errorCode()));
+            }
+        }
+        return errorCounts;
     }
 
     public static WriteTxnMarkersResponse parse(ByteBuffer buffer, short version) {
