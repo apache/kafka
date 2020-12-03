@@ -3742,6 +3742,7 @@ public class FetcherTest {
                 }
                 topic.partitions().add(new EpochEndOffset()
                     .setPartition(tp.partition())
+                    .setErrorCode(Errors.NONE.code())
                     .setLeaderEpoch(4)
                     .setEndOffset(0));
             });

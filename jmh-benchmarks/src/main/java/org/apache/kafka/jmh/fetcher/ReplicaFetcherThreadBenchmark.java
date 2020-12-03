@@ -310,6 +310,7 @@ public class ReplicaFetcherThreadBenchmark {
                 TopicPartition tp = iterator.next();
                 endOffsets.put(tp, new EpochEndOffset()
                     .setPartition(tp.partition())
+                    .setErrorCode(Errors.NONE.code())
                     .setLeaderEpoch(0)
                     .setEndOffset(100));
             }

@@ -735,6 +735,7 @@ class AbstractFetcherThreadTest {
         val unrequestedTp = new TopicPartition("topic2", 0)
         super.fetchEpochEndOffsets(partitions).toMap + (unrequestedTp -> new EpochEndOffset()
           .setPartition(unrequestedTp.partition)
+          .setErrorCode(Errors.NONE.code)
           .setLeaderEpoch(0)
           .setEndOffset(0))
       }
@@ -1085,6 +1086,7 @@ class AbstractFetcherThreadTest {
       }
       new EpochEndOffset()
         .setPartition(topicPartition.partition)
+        .setErrorCode(Errors.NONE.code)
     }
 
     override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {

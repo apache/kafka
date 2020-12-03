@@ -1526,6 +1526,7 @@ class ReplicaManagerTest {
     val blockingSend = new ReplicaFetcherMockBlockingSend(
       Map(topicPartitionObj -> new EpochEndOffset()
         .setPartition(topicPartitionObj.partition)
+        .setErrorCode(Errors.NONE.code)
         .setLeaderEpoch(leaderEpochFromLeader)
         .setEndOffset(offsetFromLeader)).asJava,
       BrokerEndPoint(1, "host1" ,1), time)

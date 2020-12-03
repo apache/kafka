@@ -1295,10 +1295,12 @@ class Partition(val topicPartition: TopicPartition,
           localLog.endOffsetForEpoch(leaderEpoch) match {
             case Some(epochAndOffset) => new EpochEndOffset()
               .setPartition(partitionId)
+              .setErrorCode(Errors.NONE.code)
               .setLeaderEpoch(epochAndOffset.leaderEpoch)
               .setEndOffset(epochAndOffset.offset)
             case None => new EpochEndOffset()
               .setPartition(partitionId)
+              .setErrorCode(Errors.NONE.code)
           }
         case Right(error) => new EpochEndOffset()
           .setPartition(partitionId)
