@@ -161,6 +161,24 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     client.deleteTopics(topics.asJava).all.get()
     waitForTopics(client, List(), topics)
   }
+  
+  @Test
+  def testDeleteTopicsWithIds(): Unit = {
+    client = Admin.create(createConfig)
+    val topics = Seq("mytopic", "mytopic2", "mytopic3")
+    val newTopics = Seq(
+      new NewTopic("mytopic", Map((0: Integer) -> Seq[Integer](1, 2).asJava, (1: Integer) -> Seq[Integer](2, 0).asJava).asJava),
+      new NewTopic("mytopic2", 3, 3.toShort),
+      new NewTopic("mytopic3", Option.empty[Integer].asJava, Option.empty[java.lang.Short].asJava)
+    )
+    val createResult = client.createTopics(newTopics.asJava)
+    createResult.all.get()
+    waitForTopics(client, topics, List())
+    val topicIds = zkClient.getTopicIdsForTopics(topics.toSet).values.toSet
+    
+    client.deleteTopicsWithIds(topicIds.asJava).all.get()
+    waitForTopics(client, List(), topics)
+  }
 
   @Test
   def testAuthorizedOperations(): Unit = {

@@ -17,15 +17,16 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.TopicPartitionReplica;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
@@ -60,6 +61,7 @@ public class MockAdminClient extends AdminClient {
 
     private final List<Node> brokers;
     private final Map<String, TopicMetadata> allTopics = new HashMap<>();
+    private final Map<Uuid, String> topicNames = new HashMap<>();
     private final Map<TopicPartition, NewPartitionReassignment> reassignments =
         new HashMap<>();
     private final Map<TopicPartitionReplica, ReplicaLogDirInfo> replicaMoves =
@@ -298,6 +300,7 @@ public class MockAdminClient extends AdminClient {
                 logDirs.add(brokerLogDirs.get(partitions.get(i).leader().id()).get(0));
             }
             allTopics.put(topicName, new TopicMetadata(false, partitions, logDirs, newTopic.configs()));
+            topicNames.put(Uuid.randomUuid(), topicName);
             future.complete(null);
             createTopicResult.put(topicName, future);
         }
@@ -399,6 +402,37 @@ public class MockAdminClient extends AdminClient {
         }
 
         return new DeleteTopicsResult(deleteTopicsResult);
+    }
+
+    @Override
+    synchronized public DeleteTopicsWithIdsResult deleteTopicsWithIds(Collection<Uuid> topicsToDelete, DeleteTopicsOptions options) {
+        Map<Uuid, KafkaFuture<Void>> deleteTopicsWithIdsResult = new HashMap<>();
+
+        if (timeoutNextRequests > 0) {
+            for (final Uuid topicId : topicsToDelete) {
+                KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+                future.completeExceptionally(new TimeoutException());
+                deleteTopicsWithIdsResult.put(topicId, future);
+            }
+
+            --timeoutNextRequests;
+            return new DeleteTopicsWithIdsResult(deleteTopicsWithIdsResult);
+        }
+
+        for (final Uuid topicId : topicsToDelete) {
+            KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+
+            String name = topicNames.remove(topicId);
+            if (name == null) {
+                future.completeExceptionally(new UnknownTopicOrPartitionException(String.format("Topic %s does not exist.", topicId)));
+            } else {
+                allTopics.remove(name);
+                future.complete(null);
+            }
+            deleteTopicsWithIdsResult.put(topicId, future);
+        }
+
+        return new DeleteTopicsWithIdsResult(deleteTopicsWithIdsResult);
     }
 
     @Override

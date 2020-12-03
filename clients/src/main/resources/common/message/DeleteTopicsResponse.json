@@ -27,7 +27,9 @@
   //
   // Version 5 adds ErrorMessage in the response and may return a THROTTLING_QUOTA_EXCEEDED error
   // in the response if the topics deletion is throttled (KIP-599).
-  "validVersions": "0-5",
+  //
+  // Version 6 adds topic ID to responses and an UNKNOWN_TOPIC_ID error code may be returned.
+  "validVersions": "0-6",
   "flexibleVersions": "4+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,
@@ -36,6 +38,7 @@
       "about": "The results for each topic we tried to delete.", "fields": [
       { "name": "Name", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName",
         "about": "The topic name" },
+      {"name":  "TopicId", "type": "uuid", "versions": "6+", "ignorable": "true", "about": "the unique topic ID"},
       { "name": "ErrorCode", "type": "int16", "versions": "0+",
         "about": "The deletion error, or 0 if the deletion succeeded." },
       { "name": "ErrorMessage", "type": "string", "versions": "5+", "nullableVersions": "5+", "ignorable": true, "default": "null",

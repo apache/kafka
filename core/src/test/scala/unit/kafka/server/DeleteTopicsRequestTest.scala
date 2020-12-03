@@ -21,7 +21,9 @@ import java.util.{Arrays, Collections}
 
 import kafka.network.SocketServer
 import kafka.utils._
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.message.DeleteTopicsRequestData
+import org.apache.kafka.common.message.DeleteTopicsRequestData.DeleteTopicState
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{DeleteTopicsRequest, DeleteTopicsResponse, MetadataRequest, MetadataResponse}
 import org.junit.Assert._
@@ -47,6 +49,17 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
         new DeleteTopicsRequestData()
           .setTopicNames(Arrays.asList("topic-3", "topic-4"))
           .setTimeoutMs(timeout)).build())
+
+    // Topic Ids
+    createTopic("topic-7", 3, 2)
+    createTopic("topic-6", 1, 2)
+    val ids = zkClient.getTopicIdsForTopics(Set("topic-7", "topic-6"))
+    validateValidDeleteTopicRequestsWithIds(new DeleteTopicsRequest.Builder(
+      new DeleteTopicsRequestData()
+        .setTopics(Arrays.asList(new DeleteTopicState().setTopicId(ids("topic-7"))
+             //new DeleteTopicState().setTopicId(ids("topic-6"))
+        )
+      ).setTimeoutMs(timeout)).build())
   }
 
   private def validateValidDeleteTopicRequests(request: DeleteTopicsRequest): Unit = {
@@ -55,6 +68,15 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
     assertTrue(s"There should be no errors, found ${response.data.responses.asScala}", error.isEmpty)
     request.data.topicNames.forEach { topic =>
       validateTopicIsDeleted(topic)
+    }
+  }
+
+  private def validateValidDeleteTopicRequestsWithIds(request: DeleteTopicsRequest): Unit = {
+    val response = sendDeleteTopicsRequest(request)
+    val error = response.errorCounts.asScala.find(_._1 != Errors.NONE)
+    assertTrue(s"There should be no errors, found ${response.data.responses.asScala}", error.isEmpty)
+    response.data().responses().forEach { response =>
+      validateTopicIsDeleted(response.name())
     }
   }
 
@@ -79,6 +101,21 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
       Map(
         "partial-topic-1" -> Errors.NONE,
         "partial-invalid-topic" -> Errors.UNKNOWN_TOPIC_OR_PARTITION
+      )
+    )
+    
+    // Topic IDs
+    createTopic("topic-id-1", 1, 1)
+    val validId = zkClient.getTopicIdsForTopics(Set("topic-id-1"))("topic-id-1")
+    val invalidId = Uuid.randomUuid
+    validateErrorDeleteTopicRequestsWithIds(new DeleteTopicsRequest.Builder(
+      new DeleteTopicsRequestData()
+        .setTopics(Arrays.asList(new DeleteTopicState().setTopicId(invalidId), 
+            new DeleteTopicState().setTopicId(validId)))
+        .setTimeoutMs(timeout)).build(),
+      Map(
+        invalidId -> Errors.UNKNOWN_TOPIC_ID,
+        validId -> Errors.NONE
       )
     )
 
@@ -107,6 +144,24 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
       // If no error validate the topic was deleted
       if (expectedError == Errors.NONE) {
         validateTopicIsDeleted(topic)
+      }
+    }
+  }
+
+  private def validateErrorDeleteTopicRequestsWithIds(request: DeleteTopicsRequest, expectedResponse: Map[Uuid, Errors]): Unit = {
+    val response = sendDeleteTopicsRequest(request)
+    val responses = response.data.responses
+    val errors = responses.asScala.map(result => result.topicId() -> result.errorCode()).toMap
+    val names = responses.asScala.map(result => result.topicId() -> result.name()).toMap
+
+    val errorCount = response.errorCounts().asScala.foldLeft(0)(_+_._2)
+    assertEquals("The response size should match", expectedResponse.size, errorCount)
+
+    expectedResponse.foreach { case (topic, expectedError) =>
+      assertEquals("The response error should match", expectedResponse(topic).code, errors(topic))
+      // If no error validate the topic was deleted
+      if (expectedError == Errors.NONE) {
+        validateTopicIsDeleted(names(topic))
       }
     }
   }

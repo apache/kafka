@@ -108,6 +108,7 @@ import org.apache.kafka.common.errors.UnknownLeaderEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
+import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnstableOffsetCommitException;
 import org.apache.kafka.common.errors.UnsupportedByAuthenticationException;
@@ -341,7 +342,8 @@ public enum Errors {
     INVALID_UPDATE_VERSION(95, "The given update version was invalid.", InvalidUpdateVersionException::new),
     FEATURE_UPDATE_FAILED(96, "Unable to update finalized features due to an unexpected server error.", FeatureUpdateFailedException::new),
     PRINCIPAL_DESERIALIZATION_FAILURE(97, "Request principal deserialization failed during forwarding. " +
-         "This indicates an internal error on the broker cluster security setup.", PrincipalDeserializationException::new);
+         "This indicates an internal error on the broker cluster security setup.", PrincipalDeserializationException::new),
+    UNKNOWN_TOPIC_ID(98, "This server does not host this topic ID.", UnknownTopicIdException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

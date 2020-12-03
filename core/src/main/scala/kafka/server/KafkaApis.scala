@@ -78,7 +78,7 @@ import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern,
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time, Utils}
-import org.apache.kafka.common.{Node, TopicPartition}
+import org.apache.kafka.common.{Node, TopicPartition, Uuid}
 import org.apache.kafka.common.message.AlterConfigsResponseData.AlterConfigsResourceResponse
 import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePartition, MetadataResponseTopic}
 import org.apache.kafka.server.authorizer._
@@ -1986,42 +1986,61 @@ class KafkaApis(val requestChannel: RequestChannel,
     val results = new DeletableTopicResultCollection(deleteTopicRequest.data.topicNames.size)
     val toDelete = mutable.Set[String]()
     if (!controller.isActive) {
-      deleteTopicRequest.data.topicNames.forEach { topic =>
+      deleteTopicRequest.topics().forEach { topic =>
         results.add(new DeletableTopicResult()
-          .setName(topic)
+          .setName(topic.name())
+          .setTopicId(topic.topicId())
           .setErrorCode(Errors.NOT_CONTROLLER.code))
       }
       sendResponseCallback(results)
     } else if (!config.deleteTopicEnable) {
       val error = if (request.context.apiVersion < 3) Errors.INVALID_REQUEST else Errors.TOPIC_DELETION_DISABLED
-      deleteTopicRequest.data.topicNames.forEach { topic =>
+      deleteTopicRequest.topics().forEach { topic =>
         results.add(new DeletableTopicResult()
-          .setName(topic)
+          .setName(topic.name())
+          .setTopicId(topic.topicId())
           .setErrorCode(error.code))
       }
       sendResponseCallback(results)
     } else {
-      deleteTopicRequest.data.topicNames.forEach { topic =>
+      deleteTopicRequest.topics().forEach { topic =>
+        val name = if (topic.name() != null) topic.name() 
+          else controller.controllerContext.topicNames.getOrElse(topic.topicId(), "")
         results.add(new DeletableTopicResult()
-          .setName(topic))
+          .setName(name)
+          .setTopicId(topic.topicId()))
       }
+      
       val authorizedTopics = filterByAuthorized(request.context, DELETE, TOPIC,
         results.asScala)(_.name)
       results.forEach { topic =>
-         if (!authorizedTopics.contains(topic.name))
+         val foundTopicId = !topic.topicId().equals(Uuid.ZERO_UUID) && !topic.name().equals("")
+         val topicIdZero = topic.topicId().equals(Uuid.ZERO_UUID)
+         if (!foundTopicId && !topicIdZero)
+           topic.setErrorCode(Errors.UNKNOWN_TOPIC_ID.code)
+         else if (!authorizedTopics.contains(topic.name))
            topic.setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
          else if (!metadataCache.contains(topic.name))
            topic.setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
-         else
+         else {
+           if (topicIdZero)
+             topic.setTopicId(controller.controllerContext.topicIds(topic.name()))
            toDelete += topic.name
+         }
       }
       // If no authorized topics return immediately
       if (toDelete.isEmpty)
         sendResponseCallback(results)
       else {
         def handleDeleteTopicsResults(errors: Map[String, Errors]): Unit = {
+          //def find( name: String, id: Uuid) = {
+          //  val _key = new DeleteTopicsResponseData.DeletableTopicResult
+          //  _key.setName(name).setTopicId(id)
+          //  results.find(_key)
+          //}
           errors.foreach {
             case (topicName, error) =>
+              //val topic = find(topicName, controller.controllerContext.topicIds(topicName))
               results.find(topicName)
                 .setErrorCode(error.code)
           }
