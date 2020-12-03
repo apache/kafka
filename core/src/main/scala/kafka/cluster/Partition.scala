@@ -1379,16 +1379,16 @@ class Partition(val topicPartition: TopicPartition,
         case Left(error: Errors) =>
           isrChangeListener.markFailed()
           error match {
-          case Errors.UNKNOWN_TOPIC_OR_PARTITION =>
-            debug(s"Failed to update ISR to $proposedIsrState since it doesn't know about this topic or partition. Giving up.")
-          case Errors.FENCED_LEADER_EPOCH =>
-            debug(s"Failed to update ISR to $proposedIsrState since we sent an old leader epoch. Giving up.")
-          case Errors.INVALID_UPDATE_VERSION =>
-            debug(s"Failed to update ISR to $proposedIsrState due to invalid zk version. Giving up.")
-          case _ =>
-            warn(s"Failed to update ISR to $proposedIsrState due to unexpected $error. Retrying.")
-            sendAlterIsrRequest(proposedIsrState)
-        }
+            case Errors.UNKNOWN_TOPIC_OR_PARTITION =>
+              debug(s"Failed to update ISR to $proposedIsrState since it doesn't know about this topic or partition. Giving up.")
+            case Errors.FENCED_LEADER_EPOCH =>
+              debug(s"Failed to update ISR to $proposedIsrState since we sent an old leader epoch. Giving up.")
+            case Errors.INVALID_UPDATE_VERSION =>
+              debug(s"Failed to update ISR to $proposedIsrState due to invalid zk version. Giving up.")
+            case _ =>
+              warn(s"Failed to update ISR to $proposedIsrState due to unexpected $error. Retrying.")
+              sendAlterIsrRequest(proposedIsrState)
+          }
         case Right(leaderAndIsr: LeaderAndIsr) =>
           // Success from controller, still need to check a few things
           if (leaderAndIsr.leaderEpoch != leaderEpoch) {
