@@ -15,22 +15,21 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.controller;
+package org.apache.kafka.metalog;
 
 import org.apache.kafka.common.protocol.ApiMessage;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class MockMetaLogManagerListener implements MetaLogManager.Listener {
+public class MockMetaLogManagerListener implements MetaLogListener {
     public static final String COMMIT = "COMMIT";
     public static final String LAST_COMMITTED_OFFSET = "LAST_COMMITTED_OFFSET";
-    public static final String CLAIM = "CLAIM";
+    public static final String NEW_LEADER = "NEW_LEADER";
     public static final String RENOUNCE = "RENOUNCE";
     public static final String SHUTDOWN = "SHUTDOWN";
 
     private final List<String> serializedEvents = new ArrayList<>();
-    private long currentClaimEpoch = -1;
 
     @Override
     public synchronized void handleCommits(long lastCommittedOffset, List<ApiMessage> messages) {
@@ -45,12 +44,12 @@ public class MockMetaLogManagerListener implements MetaLogManager.Listener {
     }
 
     @Override
-    public void handleClaim(long epoch) {
+    public void handleNewLeader(MetaLogLeader leader) {
         StringBuilder bld = new StringBuilder();
-        bld.append(CLAIM).append(" ").append(epoch);
+        bld.append(NEW_LEADER).append(" ").
+            append(leader.nodeId()).append(" ").append(leader.epoch());
         synchronized (this) {
             serializedEvents.add(bld.toString());
-            currentClaimEpoch = epoch;
         }
     }
 
@@ -60,7 +59,6 @@ public class MockMetaLogManagerListener implements MetaLogManager.Listener {
         bld.append(RENOUNCE).append(" ").append(epoch);
         synchronized (this) {
             serializedEvents.add(bld.toString());
-            currentClaimEpoch = -1;
         }
     }
 
@@ -71,11 +69,6 @@ public class MockMetaLogManagerListener implements MetaLogManager.Listener {
         synchronized (this) {
             serializedEvents.add(bld.toString());
         }
-    }
-
-    @Override
-    public synchronized long currentClaimEpoch() {
-        return currentClaimEpoch;
     }
 
     public synchronized List<String> serializedEvents() {

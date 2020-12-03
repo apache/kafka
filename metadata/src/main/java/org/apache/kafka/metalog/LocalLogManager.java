@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.controller;
+package org.apache.kafka.metalog;
 
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.ApiMessageAndVersion;
@@ -41,7 +41,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
@@ -166,57 +165,19 @@ public final class LocalLogManager implements MetaLogManager {
         }
     }
 
-    /**
-     * The information that is stored inside the leader file.
-     */
-    public static class LeaderInfo {
-        private final int nodeId;
-        private final long epoch;
+    static int leaderSize(MetaLogLeader leader) {
+        return Integer.BYTES + Long.BYTES;
+    }
 
-        public LeaderInfo(int nodeId, long epoch) {
-            this.nodeId = nodeId;
-            this.epoch = epoch;
-        }
+    static void writeLeader(ByteBuffer buf, MetaLogLeader leader) {
+        buf.putInt(leader.nodeId());
+        buf.putLong(leader.epoch());
+    }
 
-        public int nodeId() {
-            return nodeId;
-        }
-
-        public long epoch() {
-            return epoch;
-        }
-
-        static LeaderInfo read(ByteBuffer buf) {
-            int nodeId = buf.getInt();
-            long epoch = buf.getLong();
-            return new LeaderInfo(nodeId, epoch);
-        }
-
-        int size() {
-            return Integer.BYTES + Long.BYTES;
-        }
-
-        void write(ByteBuffer buf) {
-            buf.putInt(nodeId);
-            buf.putLong(epoch);
-        }
-
-        @Override
-        public String toString() {
-            return "LeaderInfo(nodeId=" + nodeId + ", epoch=" + epoch + ")";
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(nodeId, epoch);
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (!(o instanceof LeaderInfo)) return false;
-            LeaderInfo other = (LeaderInfo) o;
-            return other.nodeId == nodeId && other.epoch == epoch;
-        }
+    static MetaLogLeader readLeader(ByteBuffer buf) {
+        int nodeId = buf.getInt();
+        long epoch = buf.getLong();
+        return new MetaLogLeader(nodeId, epoch);
     }
 
     /**
@@ -317,15 +278,15 @@ public final class LocalLogManager implements MetaLogManager {
         private final Condition maxAllowedOffsetCond = lock.newCondition();
         private long maxAllowedOffset = Long.MAX_VALUE;
         private final FileChannel logChannel;
-        private Listener listener = null;
+        private MetaLogListener listener = null;
         private final long logCheckIntervalMs;
-        private final MetadataParser parser = new MetadataParser();
         private boolean shuttingDown = false;
         private boolean shouldLead = false;
         private long nextLogCheckMs = 0;
         private List<ApiMessageAndVersion> incomingWrites = null;
         private ScribeState state = ScribeState.FOLLOWER;
-        private LeaderInfo leaderInfo = new LeaderInfo(-1, -1);
+        private MetaLogLeader prevLeader = new MetaLogLeader(-1, -1);
+        private MetaLogLeader leader = prevLeader;
         private long nextReadOffset = 0;
         private long nextWriteOffset = 0;
         private long fileOffset = 0;
@@ -344,10 +305,9 @@ public final class LocalLogManager implements MetaLogManager {
         public void run() {
             try {
                 log.debug("starting ScribeThread");
-                LeaderInfo claim = null;
+                MetaLogLeader claim = null;
                 List<ApiMessageAndVersion> toWrite = new ArrayList<>();
                 while (true) {
-                    long shouldRenounceEpoch = -1, shouldClaimEpoch = -1;
                     ScribeState curState;
                     lock.lock();
                     long curMaxAllowedOffset = Long.MAX_VALUE;
@@ -366,9 +326,8 @@ public final class LocalLogManager implements MetaLogManager {
                                 if (claim != null) {
                                     state = ScribeState.LEADER;
                                     incomingWrites = null;
-                                    leaderInfo = claim;
+                                    leader = claim;
                                     nextWriteOffset = nextReadOffset;
-                                    shouldClaimEpoch = leaderInfo.epoch;
                                     claimedCond.signalAll();
                                 } else {
                                     state = ScribeState.BECOMING_LEADER;
@@ -377,7 +336,6 @@ public final class LocalLogManager implements MetaLogManager {
                         } else if (state != ScribeState.FOLLOWER) {
                             // If shouldLead is false, and we're not already a follower,
                             // become one immediately.
-                            shouldRenounceEpoch = leaderInfo.epoch;
                             state = ScribeState.FOLLOWER;
                             nextLogCheckMs = 0;
                             renouncedCond.signalAll();
@@ -385,7 +343,7 @@ public final class LocalLogManager implements MetaLogManager {
                         while (nextReadOffset > maxAllowedOffset) {
                             maxAllowedOffsetCond.await();
                         }
-                        if (shouldClaimEpoch == -1 && shouldRenounceEpoch == -1) {
+                        if (leader.equals(prevLeader)) {
                             switch (state) {
                                 case FOLLOWER:
                                     // Followers wait until they get woken up, or until a
@@ -423,15 +381,15 @@ public final class LocalLogManager implements MetaLogManager {
                         lock.unlock();
                     }
                     if (log.isTraceEnabled()) {
-                        log.trace("ScribeThread state = {}, shouldRenounceEpoch = {}, " +
-                                "shouldClaimEpoch = {}", curState, shouldRenounceEpoch,
-                            shouldClaimEpoch);
+                        log.trace("ScribeThread state = {}, prevLeader = {}, " +
+                                "leader = {}", curState, prevLeader, leader);
                     }
-                    if (shouldRenounceEpoch > -1L) {
-                        listener.handleRenounce(shouldRenounceEpoch);
-                    }
-                    if (shouldClaimEpoch > -1L) {
-                        listener.handleClaim(shouldClaimEpoch);
+                    if (!prevLeader.equals(leader)) {
+                        if (prevLeader.nodeId() == nodeId && leader.nodeId() != nodeId) {
+                            listener.handleRenounce(prevLeader.epoch());
+                        }
+                        listener.handleNewLeader(leader);
+                        prevLeader = leader;
                     }
                     switch (curState) {
                         case FOLLOWER:
@@ -463,10 +421,10 @@ public final class LocalLogManager implements MetaLogManager {
                                 listener.handleCommits(nextReadOffset - 1, messages);
                             }
                             if (curState == ScribeState.BECOMING_LEADER && result == 0) {
-                                // If the result is 0, that means did not read a partial
+                                // If the result is 0, that means we did not read a partial
                                 // record at the end.  So we should be ready to write our
                                 // claim to the file.
-                                claim = new LeaderInfo(nodeId, leaderInfo.epoch + 1);
+                                claim = new MetaLogLeader(nodeId, leader.epoch() + 1);
                                 writeClaim(claim);
                                 log.debug("ScribeThread wrote claim {}", claim);
                             }
@@ -523,10 +481,10 @@ public final class LocalLogManager implements MetaLogManager {
             writeBuffer(dataBuffer);
         }
 
-        private void writeClaim(LeaderInfo claim) throws IOException {
-            writeFrame(-claim.size());
-            setupDataBuffer(claim.size());
-            claim.write(dataBuffer);
+        private void writeClaim(MetaLogLeader claim) throws IOException {
+            writeFrame(-leaderSize(claim));
+            setupDataBuffer(leaderSize(claim));
+            writeLeader(dataBuffer, claim);
             dataBuffer.flip();
             writeBuffer(dataBuffer);
         }
@@ -553,7 +511,7 @@ public final class LocalLogManager implements MetaLogManager {
                 return -FRAME_LENGTH + dataLength;
             }
             if (frameInt < 0) {
-                leaderInfo = LeaderInfo.read(dataBuffer);
+                leader = readLeader(dataBuffer);
             } else {
                 ApiMessage message = MetadataParser.read(dataBuffer);
                 messages.add(message);
@@ -658,7 +616,7 @@ public final class LocalLogManager implements MetaLogManager {
                     if (shuttingDown) throw new InterruptedException();
                     claimedCond.await();
                 } while (state != ScribeState.LEADER);
-                return leaderInfo.epoch();
+                return leader.epoch();
             } finally {
                 lock.unlock();
             }
@@ -681,7 +639,7 @@ public final class LocalLogManager implements MetaLogManager {
         long scheduleWrite(long epoch, List<ApiMessageAndVersion> messages) {
             lock.lock();
             try {
-                if (shuttingDown || leaderInfo.epoch != epoch) {
+                if (shuttingDown || leader.nodeId() != nodeId || leader.epoch() != epoch) {
                     return Long.MAX_VALUE;
                 }
                 if (incomingWrites == null) {
@@ -708,7 +666,7 @@ public final class LocalLogManager implements MetaLogManager {
             }
         }
 
-        private void setListener(Listener listener) {
+        private void setListener(MetaLogListener listener) {
             if (this.listener != null) {
                 throw new RuntimeException("The listener was already set.");
             }
@@ -726,10 +684,10 @@ public final class LocalLogManager implements MetaLogManager {
             }
         }
 
-        LeaderInfo leaderInfo() {
+        MetaLogLeader leader() {
             lock.lock();
             try {
-                return new LeaderInfo(leaderInfo.nodeId, leaderInfo.epoch);
+                return leader;
             } finally {
                 lock.unlock();
             }
@@ -822,7 +780,7 @@ public final class LocalLogManager implements MetaLogManager {
         }
     }
 
-    public void initialize(Listener listener) {
+    public void initialize(MetaLogListener listener) {
         this.scribeThread.setListener(listener);
         this.leadershipClaimerThread.start();
         this.scribeThread.start();
@@ -845,15 +803,16 @@ public final class LocalLogManager implements MetaLogManager {
     }
 
     @Override
-    public int activeNode() {
-        return scribeThread.leaderInfo().nodeId;
+    public MetaLogLeader leader() {
+        return scribeThread.leader();
     }
 
-    int nodeId() {
+    @Override
+    public int nodeId() {
         return nodeId;
     }
 
-    MetaLogManager.Listener listener() {
+    MetaLogListener listener() {
         return scribeThread.listener;
     }
 

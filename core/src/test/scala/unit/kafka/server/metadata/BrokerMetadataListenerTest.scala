@@ -25,7 +25,7 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.metadata.{FenceBrokerRecord, RegisterBrokerRecord}
 import org.apache.kafka.common.protocol.{ApiMessage, ApiMessageAndVersion}
 import org.apache.kafka.common.utils.{LogContext, MockTime, Utils}
-import org.apache.kafka.controller.LocalLogManager
+import org.apache.kafka.metalog.LocalLogManager
 import org.apache.kafka.test.{TestCondition, TestUtils => KTestUtils}
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue, fail}
 import org.junit.{After, Test}

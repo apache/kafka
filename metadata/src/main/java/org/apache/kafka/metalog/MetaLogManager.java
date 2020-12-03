@@ -15,9 +15,8 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.controller;
+package org.apache.kafka.metalog;
 
-import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.ApiMessageAndVersion;
 
 import java.util.List;
@@ -27,54 +26,13 @@ import java.util.List;
  */
 public interface MetaLogManager extends AutoCloseable {
     /**
-     * Listeners receive notifications from the MetaLogManager.
-     */
-    interface Listener {
-        /**
-         * Called when the MetaLogManager commits some messages.
-         *
-         * @param lastOffset    The last offset found in all the given messages.
-         * @param messages      The messages.
-         */
-        void handleCommits(long lastOffset, List<ApiMessage> messages);
-
-        /**
-         * Called when the MetaLogManager has claimed the leadership.
-         *
-         * @param epoch         The controller epoch that is starting.
-         */
-        default void handleClaim(long epoch) {}
-
-        /**
-         * Called when the MetaLogManager has renounced the leadership.
-         *
-         * @param epoch         The controller epoch that has ended.
-         */
-        default void handleRenounce(long epoch) {}
-
-        /**
-         * Called when the MetaLogManager has finished shutting down, and wants to tell its
-         * listener that it is safe to shut down as well.
-         */
-        default void beginShutdown() {}
-
-        /**
-         * If this listener is currently active, return the controller epoch it is active
-         * for.  Otherwise, return -1.
-         */
-        default long currentClaimEpoch() {
-            return -1L;
-        }
-    }
-
-    /**
      * Register the listener, and start this meta log manager.
      * The manager must be ready to accept incoming calls after this function returns.
      * It is an error to initialize a MetaLogManager more than once.
      *
      * @param listener      The listener to register.
      */
-    void initialize(Listener listener);
+    void initialize(MetaLogListener listener);
 
     /**
      * Schedule a write to the log.
@@ -107,14 +65,19 @@ public interface MetaLogManager extends AutoCloseable {
     void beginShutdown();
 
     /**
-     * Returns the current active node, or -1 if there is none.  The active node may
-     * change immediately after this function is called, of course.
+     * Returns the current leader.  The active node may change immediately after this
+     * function is called, of course.
      */
-    int activeNode();
+    MetaLogLeader leader();
 
     /**
      * Blocks until we have shut down and freed all resources.  It is not necessary to
      * call beginShutdown before calling this function.
      */
     void close() throws InterruptedException;
+
+    /**
+     * Returns the node id.
+     */
+    int nodeId();
 }

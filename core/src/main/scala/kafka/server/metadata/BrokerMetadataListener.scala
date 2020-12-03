@@ -30,7 +30,7 @@ import kafka.utils.ShutdownableThread
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.protocol.ApiMessage
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.controller.MetaLogManager
+import org.apache.kafka.metalog.MetaLogListener
 
 object BrokerMetadataListener {
   val ThreadNamePrefix = "broker-"
@@ -126,7 +126,7 @@ class BrokerMetadataListener(
   time: Time,
   processors: List[BrokerMetadataProcessor],
   eventQueueTimeoutMs: Long = BrokerMetadataListener.DefaultEventQueueTimeoutMs
-) extends MetaLogManager.Listener with KafkaMetricsGroup with ConfigRepository {
+) extends MetaLogListener with KafkaMetricsGroup with ConfigRepository {
 
   if (processors.isEmpty) {
     throw new IllegalArgumentException(s"Empty processors list!")

@@ -33,7 +33,7 @@ import kafka.metrics.{KafkaMetricsReporter, KafkaYammerMetrics}
 import kafka.network.SocketServer
 import kafka.security.CredentialProvider
 import kafka.server.KafkaBroker.{metricsPrefix, notifyClusterListeners}
-import kafka.server.metadata.{BrokerMetadataListener}
+import kafka.server.metadata.BrokerMetadataListener
 import kafka.utils.{CoreUtils, KafkaScheduler, Mx4jLoader}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
@@ -46,8 +46,8 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time}
-import org.apache.kafka.controller.{LocalLogManager, MetaLogManager}
 import org.apache.kafka.metadata.BrokerState
+import org.apache.kafka.metalog.{LocalLogManager, MetaLogManager}
 import org.apache.kafka.server.authorizer.Authorizer
 
 import scala.collection.mutable.ArrayBuffer

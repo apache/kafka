@@ -34,8 +34,9 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, Endpoint}
-import org.apache.kafka.controller.{Controller, LocalLogManager, QuorumController}
+import org.apache.kafka.controller.{Controller, QuorumController}
 import org.apache.kafka.metadata.VersionRange
+import org.apache.kafka.metalog.LocalLogManager
 import org.apache.kafka.server.authorizer.{Authorizer, AuthorizerServerInfo}
 
 import scala.jdk.CollectionConverters._

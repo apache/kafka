@@ -15,11 +15,10 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.controller;
+package org.apache.kafka.metalog;
 
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.controller.LocalLogManager.LeaderInfo;
 import org.apache.kafka.test.TestUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,7 +62,7 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
         return testEnv;
     }
 
-    LocalLogManagerTestEnv(int numManagers) throws Exception {
+    public LocalLogManagerTestEnv(int numManagers) throws Exception {
         dir = TestUtils.tempDirectory();
         List<LocalLogManager> newLogManagers = new ArrayList<>(numManagers);
         try {
@@ -92,30 +91,29 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
         return dir;
     }
 
-    LeaderInfo waitForLeader() throws InterruptedException {
-        AtomicReference<LeaderInfo> value = new AtomicReference<>(null);
+    MetaLogLeader waitForLeader() throws InterruptedException {
+        AtomicReference<MetaLogLeader> value = new AtomicReference<>(null);
         TestUtils.retryOnExceptionWithTimeout(3, 20000, () -> {
-            LeaderInfo leaderInfo = null;
+            MetaLogLeader result = null;
             for (LocalLogManager logManager : logManagers) {
-                long curEpoch = logManager.listener().currentClaimEpoch();
-                if (curEpoch != -1) {
-                    if (leaderInfo != null) {
-                        throw new RuntimeException("node " + leaderInfo.nodeId() +
-                            " thinks it's the leader, but so does " + logManager.nodeId());
+                MetaLogLeader leader = logManager.leader();
+                if (leader.nodeId() == logManager.nodeId()) {
+                    if (result != null) {
+                        throw new RuntimeException("node " + leader.nodeId() +
+                            " thinks it's the leader, but so does " + result.nodeId());
                     }
-                    leaderInfo = new LeaderInfo(logManager.nodeId(), curEpoch);
+                    result = leader;
                 }
             }
-            if (leaderInfo == null) {
+            if (result == null) {
                 throw new RuntimeException("No leader found.");
             }
-            value.set(leaderInfo);
+            value.set(result);
         });
-        LeaderInfo result = value.get();
-        return result;
+        return value.get();
     }
 
-    List<LocalLogManager> logManagers() {
+    public List<LocalLogManager> logManagers() {
         return logManagers;
     }
 

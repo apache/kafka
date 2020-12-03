@@ -19,6 +19,7 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.slf4j.Logger;

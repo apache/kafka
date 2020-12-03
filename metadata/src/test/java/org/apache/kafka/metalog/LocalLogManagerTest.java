@@ -15,12 +15,11 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.controller;
+package org.apache.kafka.metalog;
 
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.protocol.ApiMessageAndVersion;
-import org.apache.kafka.controller.LocalLogManager.LeaderInfo;
-import org.apache.kafka.controller.LocalLogManager.LockRegistry;
+import org.apache.kafka.metalog.LocalLogManager.LockRegistry;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -36,9 +35,9 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.apache.kafka.controller.MockMetaLogManagerListener.COMMIT;
-import static org.apache.kafka.controller.MockMetaLogManagerListener.LAST_COMMITTED_OFFSET;
-import static org.apache.kafka.controller.MockMetaLogManagerListener.SHUTDOWN;
+import static org.apache.kafka.metalog.MockMetaLogManagerListener.COMMIT;
+import static org.apache.kafka.metalog.MockMetaLogManagerListener.LAST_COMMITTED_OFFSET;
+import static org.apache.kafka.metalog.MockMetaLogManagerListener.SHUTDOWN;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(value = 40)
@@ -97,13 +96,13 @@ public class LocalLogManagerTest {
 
     @Test
     public void testRoundTripLeaderInfo() {
-        LeaderInfo info = new LeaderInfo(123, 123456789L);
-        ByteBuffer buffer = ByteBuffer.allocate(info.size());
+        MetaLogLeader leader = new MetaLogLeader(123, 123456789L);
+        ByteBuffer buffer = ByteBuffer.allocate(LocalLogManager.leaderSize(leader));
         buffer.clear();
-        info.write(buffer);
+        LocalLogManager.writeLeader(buffer, leader);
         buffer.flip();
-        LeaderInfo info2 = LeaderInfo.read(buffer);
-        assertEquals(info, info2);
+        MetaLogLeader leader2 = LocalLogManager.readLeader(buffer);
+        assertEquals(leader, leader2);
     }
 
     /**
@@ -125,7 +124,7 @@ public class LocalLogManagerTest {
     public void testClaimsLeadership() throws Exception {
         try (LocalLogManagerTestEnv env =
                  LocalLogManagerTestEnv.createWithMockListeners(1)) {
-            assertEquals(new LeaderInfo(0, 0), env.waitForLeader());
+            assertEquals(new MetaLogLeader(0, 0), env.waitForLeader());
             env.close();
             assertEquals(null, env.firstError.get());
         }
@@ -138,11 +137,11 @@ public class LocalLogManagerTest {
     public void testPassLeadership() throws Exception {
         try (LocalLogManagerTestEnv env =
                  LocalLogManagerTestEnv.createWithMockListeners(3)) {
-            LeaderInfo first = env.waitForLeader();
-            LeaderInfo cur = first;
+            MetaLogLeader first = env.waitForLeader();
+            MetaLogLeader cur = first;
             do {
                 env.logManagers().get(cur.nodeId()).renounce(cur.epoch());
-                LeaderInfo next = env.waitForLeader();
+                MetaLogLeader next = env.waitForLeader();
                 while (next.epoch() == cur.epoch()) {
                     Thread.sleep(1);
                     next = env.waitForLeader();
@@ -188,9 +187,9 @@ public class LocalLogManagerTest {
     public void testCommits() throws Exception {
         try (LocalLogManagerTestEnv env =
                  LocalLogManagerTestEnv.createWithMockListeners(3)) {
-            LeaderInfo leaderInfo = env.waitForLeader();
+            MetaLogLeader leaderInfo = env.waitForLeader();
             LocalLogManager activeLogManager = env.logManagers().get(leaderInfo.nodeId());
-            long epoch = activeLogManager.listener().currentClaimEpoch();
+            long epoch = activeLogManager.leader().epoch();
             List<ApiMessageAndVersion> messages = Arrays.asList(
                 new ApiMessageAndVersion(new RegisterBrokerRecord().setBrokerId(0), (short) 0),
                 new ApiMessageAndVersion(new RegisterBrokerRecord().setBrokerId(1), (short) 0),

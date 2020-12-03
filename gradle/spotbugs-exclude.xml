@@ -282,7 +282,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
 
              Also suppress a warning about calling wait() unconditionally.  This was done
              intentionally as well. -->
-        <Package name="org.apache.kafka.controller"/>
+        <Package name="org.apache.kafka.metalog"/>
         <Source name="LocalLogManager.java"/>
         <Bug pattern="RV_RETURN_VALUE_IGNORED,RV_RETURN_VALUE_IGNORED_BAD_PRACTICE,UW_UNCOND_WAIT"/>
     </Match>

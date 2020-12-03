@@ -46,6 +46,9 @@ import org.apache.kafka.controller.ClusterControlManager.HeartbeatReply;
 import org.apache.kafka.controller.ClusterControlManager.RegistrationReply;
 import org.apache.kafka.metadata.FeatureManager;
 import org.apache.kafka.metadata.VersionRange;
+import org.apache.kafka.metalog.MetaLogLeader;
+import org.apache.kafka.metalog.MetaLogListener;
+import org.apache.kafka.metalog.MetaLogManager;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
 
@@ -135,7 +138,7 @@ public final class QuorumController implements Controller {
         "The active controller appears to be node ";
 
     private NotControllerException newNotControllerException() {
-        int latestController = logManager.activeNode();
+        int latestController = logManager.leader().nodeId();
         if (latestController < 0) {
             return new NotControllerException("No controller appears to be active.");
         } else {
@@ -370,7 +373,7 @@ public final class QuorumController implements Controller {
         return event.future();
     }
 
-    class MetaLogListener implements MetaLogManager.Listener {
+    class QuorumMetaLogListener implements MetaLogListener {
         @Override
         public void handleCommits(long offset, List<ApiMessage> messages) {
             appendControlEvent("handleCommits[" + offset + "]", () -> {
@@ -403,18 +406,21 @@ public final class QuorumController implements Controller {
         }
 
         @Override
-        public void handleClaim(long newEpoch) {
-            appendControlEvent("handleClaim[" + newEpoch + "]", () -> {
-                long curEpoch = curClaimEpoch;
-                if (curEpoch != -1) {
-                    throw new RuntimeException("Tried to claim controller epoch " +
-                        newEpoch + ", but we never renounced controller epoch " +
-                        curEpoch);
-                }
-                log.info("Becoming active at controller epoch {}.", newEpoch);
-                curClaimEpoch = newEpoch;
-                writeOffset = lastCommittedOffset;
-            });
+        public void handleNewLeader(MetaLogLeader newLeader) {
+            if (newLeader.nodeId() == nodeId) {
+                final long newEpoch = newLeader.epoch();
+                appendControlEvent("handleClaim[" + newEpoch + "]", () -> {
+                    long curEpoch = curClaimEpoch;
+                    if (curEpoch != -1) {
+                        throw new RuntimeException("Tried to claim controller epoch " +
+                            newEpoch + ", but we never renounced controller epoch " +
+                            curEpoch);
+                    }
+                    log.info("Becoming active at controller epoch {}.", newEpoch);
+                    curClaimEpoch = newEpoch;
+                    writeOffset = lastCommittedOffset;
+                });
+            }
         }
 
         @Override
@@ -432,11 +438,6 @@ public final class QuorumController implements Controller {
         @Override
         public void beginShutdown() {
             queue.beginShutdown("MetaLogManager.Listener");
-        }
-
-        @Override
-        public long currentClaimEpoch() {
-            return curClaimEpoch;
         }
     }
 
@@ -534,7 +535,7 @@ public final class QuorumController implements Controller {
      * The interface that receives callbacks from the Raft log.  These callbacks are
      * invoked from the Raft thread(s), not from the controller thread.
      */
-    private final MetaLogListener metaLogListener;
+    private final QuorumMetaLogListener metaLogListener;
 
     /**
      * If this controller is active, this is the non-negative controller epoch.
@@ -576,7 +577,7 @@ public final class QuorumController implements Controller {
         this.replicationControl = new ReplicationControlManager(snapshotRegistry,
             new Random(), configurationControl, clusterControl);
         this.logManager = logManager;
-        this.metaLogListener = new MetaLogListener();
+        this.metaLogListener = new QuorumMetaLogListener();
         this.curClaimEpoch = -1L;
         this.lastCommittedOffset = -1L;
         this.writeOffset = -1L;
