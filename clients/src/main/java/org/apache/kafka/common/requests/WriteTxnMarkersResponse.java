@@ -88,7 +88,7 @@ public class WriteTxnMarkersResponse extends AbstractResponse {
         return data;
     }
 
-    public Map<Long, Map<TopicPartition, Errors>> errors() {
+    public Map<Long, Map<TopicPartition, Errors>> errorsByProducerId() {
         Map<Long, Map<TopicPartition, Errors>> errors = new HashMap<>();
         for (WritableTxnMarkerResult marker : data.markers()) {
             Map<TopicPartition, Errors> topicPartitionErrorsMap = new HashMap<>();

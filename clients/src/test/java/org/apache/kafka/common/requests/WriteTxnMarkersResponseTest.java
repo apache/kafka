@@ -54,7 +54,7 @@ public class WriteTxnMarkersResponseTest {
         expectedErrorCounts.put(Errors.INVALID_PRODUCER_EPOCH, 1);
         WriteTxnMarkersResponse response = new WriteTxnMarkersResponse(errorMap);
         assertEquals(expectedErrorCounts, response.errorCounts());
-        assertEquals(Collections.singletonMap(tp1, pidOneError), response.errors().get(producerIdOne));
-        assertEquals(Collections.singletonMap(tp2, pidTwoError), response.errors().get(producerIdTwo));
+        assertEquals(Collections.singletonMap(tp1, pidOneError), response.errorsByProducerId().get(producerIdOne));
+        assertEquals(Collections.singletonMap(tp2, pidTwoError), response.errorsByProducerId().get(producerIdTwo));
     }
 }
