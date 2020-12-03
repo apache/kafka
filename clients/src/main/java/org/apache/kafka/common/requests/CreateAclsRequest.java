@@ -28,7 +28,6 @@ import org.apache.kafka.common.message.CreateAclsResponseData;
 import org.apache.kafka.common.message.CreateAclsResponseData.AclCreationResult;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
-import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
@@ -71,7 +70,7 @@ public class CreateAclsRequest extends AbstractRequest {
     }
 
     @Override
-    protected Message data() {
+    protected CreateAclsRequestData data() {
         return data;
     }
 

@@ -22,7 +22,6 @@ import org.apache.kafka.common.message.AlterConfigsRequestData;
 import org.apache.kafka.common.message.AlterConfigsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
-import org.apache.kafka.common.protocol.Message;
 
 import java.nio.ByteBuffer;
 import java.util.Collection;
@@ -113,7 +112,7 @@ public class AlterConfigsRequest extends AbstractRequest {
     }
 
     @Override
-    protected Message data() {
+    protected AlterConfigsRequestData data() {
         return data;
     }
 

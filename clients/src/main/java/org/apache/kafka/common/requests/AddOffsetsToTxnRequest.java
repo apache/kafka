@@ -21,7 +21,6 @@ import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Message;
 
 import java.nio.ByteBuffer;
 
@@ -54,7 +53,7 @@ public class AddOffsetsToTxnRequest extends AbstractRequest {
     }
 
     @Override
-    protected Message data() {
+    protected AddOffsetsToTxnRequestData data() {
         return data;
     }
 

@@ -92,7 +92,7 @@ public class BeginQuorumEpochResponse extends AbstractResponse {
 
     @Override
     public int throttleTimeMs() {
-        return 0;
+        return DEFAULT_THROTTLE_TIME;
     }
 
     public static BeginQuorumEpochResponse parse(ByteBuffer buffer, short version) {

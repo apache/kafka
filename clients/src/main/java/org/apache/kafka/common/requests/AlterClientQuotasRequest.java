@@ -22,7 +22,6 @@ import org.apache.kafka.common.message.AlterClientQuotasRequestData.EntryData;
 import org.apache.kafka.common.message.AlterClientQuotasRequestData.OpData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
-import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 
@@ -111,7 +110,7 @@ public class AlterClientQuotasRequest extends AbstractRequest {
     }
 
     @Override
-    protected Message data() {
+    protected AlterClientQuotasRequestData data() {
         return data;
     }
 

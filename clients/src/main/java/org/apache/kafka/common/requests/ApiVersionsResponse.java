@@ -43,14 +43,8 @@ public class ApiVersionsResponse extends AbstractResponse {
 
     public static final long UNKNOWN_FINALIZED_FEATURES_EPOCH = -1L;
 
-    public static final ApiVersionsResponse DEFAULT_API_VERSIONS_RESPONSE =
-        createApiVersionsResponse(
-            DEFAULT_THROTTLE_TIME,
-            RecordBatch.CURRENT_MAGIC_VALUE,
-            Features.emptySupportedFeatures(),
-            Features.emptyFinalizedFeatures(),
-            UNKNOWN_FINALIZED_FEATURES_EPOCH
-        );
+    public static final ApiVersionsResponse DEFAULT_API_VERSIONS_RESPONSE = createApiVersionsResponse(
+            DEFAULT_THROTTLE_TIME, RecordBatch.CURRENT_MAGIC_VALUE);
 
     public final ApiVersionsResponseData data;
 
@@ -91,49 +85,19 @@ public class ApiVersionsResponse extends AbstractResponse {
         // method is not necessarily the real one. It may be version 0 as well.
         int prev = buffer.position();
         try {
-            return new ApiVersionsResponse(
-                new ApiVersionsResponseData(new ByteBufferAccessor(buffer), version));
+            return new ApiVersionsResponse(new ApiVersionsResponseData(new ByteBufferAccessor(buffer), version));
         } catch (RuntimeException e) {
             buffer.position(prev);
             if (version != 0)
-                return new ApiVersionsResponse(
-                    new ApiVersionsResponseData(new ByteBufferAccessor(buffer), (short) 0));
+                return new ApiVersionsResponse(new ApiVersionsResponseData(new ByteBufferAccessor(buffer), (short) 0));
             else
                 throw e;
         }
     }
 
-    public static ApiVersionsResponse apiVersionsResponse(
-        int throttleTimeMs,
-        byte maxMagic,
-        Features<SupportedVersionRange> latestSupportedFeatures) {
-        return apiVersionsResponse(
-            throttleTimeMs, maxMagic, latestSupportedFeatures, Features.emptyFinalizedFeatures(), UNKNOWN_FINALIZED_FEATURES_EPOCH);
-    }
-
-    public static ApiVersionsResponse apiVersionsResponse(
-        int throttleTimeMs,
-        byte maxMagic,
-        Features<SupportedVersionRange> latestSupportedFeatures,
-        Features<FinalizedVersionRange> finalizedFeatures,
-        long finalizedFeaturesEpoch) {
-        if (maxMagic == RecordBatch.CURRENT_MAGIC_VALUE && throttleTimeMs == DEFAULT_THROTTLE_TIME) {
-            return DEFAULT_API_VERSIONS_RESPONSE;
-        }
-        return createApiVersionsResponse(
-            throttleTimeMs, maxMagic, latestSupportedFeatures, finalizedFeatures, finalizedFeaturesEpoch);
-    }
-
-    public static ApiVersionsResponse createApiVersionsResponse(
-        final int throttleTimeMs,
-        final byte minMagic) {
-        return createApiVersionsResponse(
-            throttleTimeMs,
-            minMagic,
-            Features.emptySupportedFeatures(),
-            Features.emptyFinalizedFeatures(),
-            UNKNOWN_FINALIZED_FEATURES_EPOCH
-        );
+    public static ApiVersionsResponse createApiVersionsResponse(final int throttleTimeMs, final byte minMagic) {
+        return createApiVersionsResponse(throttleTimeMs, minMagic, Features.emptySupportedFeatures(),
+            Features.emptyFinalizedFeatures(), UNKNOWN_FINALIZED_FEATURES_EPOCH);
     }
 
     private static ApiVersionsResponse createApiVersionsResponse(

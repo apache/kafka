@@ -101,7 +101,7 @@ public class DeleteAclsRequest extends AbstractRequest {
     }
 
     @Override
-    protected Message data() {
+    protected DeleteAclsRequestData data() {
         return data;
     }
 
