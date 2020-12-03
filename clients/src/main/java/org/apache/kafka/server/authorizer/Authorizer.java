@@ -176,11 +176,13 @@ public interface Authorizer extends Configurable, Closeable {
         AclBindingFilter aclFilter = new AclBindingFilter(
             resourceTypeFilter, AccessControlEntryFilter.ANY);
 
-        EnumMap<PatternType, Set<String>> deny = new EnumMap<PatternType, Set<String>>(PatternType.class){{
+        EnumMap<PatternType, Set<String>> denyPatterns =
+                new EnumMap<PatternType, Set<String>>(PatternType.class){{
             put(PatternType.LITERAL, new HashSet<>());
             put(PatternType.PREFIXED, new HashSet<>());
         }};
-        EnumMap<PatternType, Set<String>> allow = new EnumMap<PatternType, Set<String>>(PatternType.class){{
+        EnumMap<PatternType, Set<String>> allowPatterns =
+                new EnumMap<PatternType, Set<String>>(PatternType.class){{
             put(PatternType.LITERAL, new HashSet<>());
             put(PatternType.PREFIXED, new HashSet<>());
         }};
@@ -209,10 +211,10 @@ public interface Authorizer extends Configurable, Closeable {
                     case LITERAL:
                         if (binding.pattern().name().equals(ResourcePattern.WILDCARD_RESOURCE))
                             return AuthorizationResult.DENIED;
-                        deny.get(PatternType.LITERAL).add(binding.pattern().name());
+                        denyPatterns.get(PatternType.LITERAL).add(binding.pattern().name());
                         break;
                     case PREFIXED:
-                        deny.get(PatternType.PREFIXED).add(binding.pattern().name());
+                        denyPatterns.get(PatternType.PREFIXED).add(binding.pattern().name());
                         break;
                     default:
                 }
@@ -228,10 +230,10 @@ public interface Authorizer extends Configurable, Closeable {
                         hasWildCardAllow = true;
                         continue;
                     }
-                    allow.get(PatternType.LITERAL).add(binding.pattern().name());
+                    allowPatterns.get(PatternType.LITERAL).add(binding.pattern().name());
                     break;
                 case PREFIXED:
-                    allow.get(PatternType.PREFIXED).add(binding.pattern().name());
+                    allowPatterns.get(PatternType.PREFIXED).add(binding.pattern().name());
                     break;
                 default:
             }
@@ -241,16 +243,16 @@ public interface Authorizer extends Configurable, Closeable {
             return AuthorizationResult.ALLOWED;
         }
 
-        for (Map.Entry<PatternType, Set<String>> entry : allow.entrySet()) {
+        for (Map.Entry<PatternType, Set<String>> entry : allowPatterns.entrySet()) {
             for (String allowStr : entry.getValue()) {
                 if (entry.getKey() == PatternType.LITERAL
-                        && deny.get(PatternType.LITERAL).contains(allowStr))
+                        && denyPatterns.get(PatternType.LITERAL).contains(allowStr))
                     continue;
                 StringBuilder sb = new StringBuilder();
                 boolean hasDominatedDeny = false;
                 for (char ch : allowStr.toCharArray()) {
                     sb.append(ch);
-                    if (deny.get(PatternType.PREFIXED).contains(sb.toString())) {
+                    if (denyPatterns.get(PatternType.PREFIXED).contains(sb.toString())) {
                         hasDominatedDeny = true;
                         break;
                     }
