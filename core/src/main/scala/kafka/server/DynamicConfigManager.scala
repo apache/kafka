@@ -38,7 +38,7 @@ object ConfigType {
   val Client = "clients"
   val User = "users"
   val Broker = "brokers"
-  val Ip = "IPs"
+  val Ip = "ips"
   val all = Seq(Topic, Client, User, Broker, Ip)
 }
 

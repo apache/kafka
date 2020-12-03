@@ -135,12 +135,12 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
   @Test
   def shouldParseArgumentsForIpEntityType(): Unit = {
-    testArgumentParse("IPs", zkConfig = false)
+    testArgumentParse("ips", zkConfig = false)
   }
 
   @Test
   def shouldParseArgumentsForIpEntityTypeUsingZookeeper(): Unit = {
-    testArgumentParse("IPs", zkConfig = true)
+    testArgumentParse("ips", zkConfig = true)
   }
 
   def testArgumentParse(entityType: String, zkConfig: Boolean): Unit = {
@@ -306,7 +306,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
     testExpectedEntityTypeNames(List(ConfigType.Topic), List("A"), "--entity-type", "topics", "--entity-name", "A")
     testExpectedEntityTypeNames(List(ConfigType.Broker), List("0"), "--entity-name", "0", "--entity-type", "brokers")
-    testExpectedEntityTypeNames(List(ConfigType.Ip), List("1.2.3.4"), "--entity-name", "1.2.3.4", "--entity-type", "IPs")
+    testExpectedEntityTypeNames(List(ConfigType.Ip), List("1.2.3.4"), "--entity-name", "1.2.3.4", "--entity-type", "ips")
     testExpectedEntityTypeNames(List(ConfigType.User, ConfigType.Client), List("A", ""),
       "--entity-type", "users", "--entity-type", "clients", "--entity-name", "A", "--entity-default")
     testExpectedEntityTypeNames(List(ConfigType.User, ConfigType.Client), List("", "B"),
@@ -314,7 +314,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
     testExpectedEntityTypeNames(List(ConfigType.Topic), List("A"), "--topic", "A")
     testExpectedEntityTypeNames(List(ConfigType.Broker), List("0"), "--broker", "0")
-    testExpectedEntityTypeNames(List(ConfigType.Ip), List("1.2.3.4"), "--IP", "1.2.3.4")
+    testExpectedEntityTypeNames(List(ConfigType.Ip), List("1.2.3.4"), "--ip", "1.2.3.4")
     testExpectedEntityTypeNames(List(ConfigType.Client, ConfigType.User), List("B", "A"), "--client", "B", "--user", "A")
     testExpectedEntityTypeNames(List(ConfigType.Client, ConfigType.User), List("B", ""), "--client", "B", "--user-defaults")
     testExpectedEntityTypeNames(List(ConfigType.Client, ConfigType.User), List("A"),
@@ -323,7 +323,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     testExpectedEntityTypeNames(List(ConfigType.Topic), List.empty, "--entity-type", "topics")
     testExpectedEntityTypeNames(List(ConfigType.User), List.empty, "--entity-type", "users")
     testExpectedEntityTypeNames(List(ConfigType.Broker), List.empty, "--entity-type", "brokers")
-    testExpectedEntityTypeNames(List(ConfigType.Ip), List.empty, "--entity-type", "IPs")
+    testExpectedEntityTypeNames(List(ConfigType.Ip), List.empty, "--entity-type", "ips")
   }
 
   @Test
@@ -395,7 +395,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   @Test(expected = classOf[IllegalArgumentException])
   def shouldFailIfInvalidHost(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
-      "--entity-name", "A,B", "--entity-type", "IPs", "--describe"))
+      "--entity-name", "A,B", "--entity-type", "ips", "--describe"))
     createOpts.checkArgs()
   }
 
@@ -422,7 +422,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   def shouldAddIpConfigsUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "1.2.3.4",
-      "--entity-type", "IPs",
+      "--entity-type", "ips",
       "--alter",
       "--add-config", "a=b,c=d"))
 
@@ -515,7 +515,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   @Test
   def shouldNotAlterNonQuotaIpConfigsUsingBootstrapServer(): Unit = {
     // when using --bootstrap-server, it should be illegal to alter anything that is not a connection quota
-    // for IP entities
+    // for ip entities
     val node = new Node(1, "localhost", 9092)
     val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node)
 
@@ -529,10 +529,10 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       assertTrue(s"Unexpected exception: $e", e.getMessage.contains("some_config"))
     }
 
-    verifyCommand("IPs", "--add-config", "connection_creation_rate=10000,some_config=10")
-    verifyCommand("IPs", "--add-config", "some_config=10")
-    verifyCommand("IPs", "--delete-config", "connection_creation_rate=10000,some_config=10")
-    verifyCommand("IPs", "--delete-config", "some_config=10")
+    verifyCommand("ips", "--add-config", "connection_creation_rate=10000,some_config=10")
+    verifyCommand("ips", "--add-config", "some_config=10")
+    verifyCommand("ips", "--delete-config", "connection_creation_rate=10000,some_config=10")
+    verifyCommand("ips", "--delete-config", "some_config=10")
   }
 
   @Test
@@ -546,7 +546,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       }
 
       val describeOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
-        "--describe", "--entity-type", "IPs") ++ ipArgs)
+        "--describe", "--entity-type", "ips") ++ ipArgs)
 
       val expectedFilter = ClientQuotaFilter.containsOnly(List(filterComponent).asJava)
 
@@ -579,7 +579,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   @Test
   def testAlterIpConfig(): Unit = {
     def testShouldAlterIpConfig(ip: Option[String], remove: Boolean): Unit = {
-      val (ipArgs, ipEntity, ipComponent) = toValues(ip, ClientQuotaEntity.IP, "IPs")
+      val (ipArgs, ipEntity, ipComponent) = toValues(ip, ClientQuotaEntity.IP, "ips")
       val alterOpts = if (remove)
         Array("--delete-config", "connection_creation_rate")
       else

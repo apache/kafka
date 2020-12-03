@@ -46,7 +46,7 @@ import scala.jdk.CollectionConverters._
 import scala.collection._
 
 /**
- * This script can be used to change configs for topics/clients/users/brokers/IPs dynamically
+ * This script can be used to change configs for topics/clients/users/brokers/ips dynamically
  * An entity described or altered by the command may be one of:
  * <ul>
  *     <li> topic: --topic <topic> OR --entity-type topics --entity-name <topic>
@@ -56,12 +56,12 @@ import scala.collection._
  *                          --entity-type users --entity-name <user-principal> --entity-type clients --entity-name <client-id>
  *     <li> broker: --broker <broker-id> OR --entity-type brokers --entity-name <broker-id>
  *     <li> broker-logger: --broker-logger <broker-id> OR --entity-type broker-loggers --entity-name <broker-id>
- *     <li> ip: --IP <ip> OR --entity-type IPs --entity-name <ip>
+ *     <li> ip: --ip <ip> OR --entity-type ips --entity-name <ip>
  * </ul>
- * --entity-type <users|clients|brokers|IPs> --entity-default may be specified in place of --entity-type <users|clients|brokers|IPs> --entity-name <entityName>
- * when describing or altering default configuration for users, clients, brokers, or IPs, respectively.
- * Alternatively, --user-defaults, --client-defaults, --broker-defaults, or --IP-defaults may be specified in place of
- * --entity-type <users|clients|brokers|IPs> --entity-default, respectively.
+ * --entity-type <users|clients|brokers|ips> --entity-default may be specified in place of --entity-type <users|clients|brokers|ips> --entity-name <entityName>
+ * when describing or altering default configuration for users, clients, brokers, or ips, respectively.
+ * Alternatively, --user-defaults, --client-defaults, --broker-defaults, or --ip-defaults may be specified in place of
+ * --entity-type <users|clients|brokers|ips> --entity-default, respectively.
  */
 object ConfigCommand extends Config {
 
@@ -85,7 +85,7 @@ object ConfigCommand extends Config {
     try {
       val opts = new ConfigCommandOptions(args)
 
-      CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to manipulate and describe entity config for a topic, client, user, broker or IP")
+      CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to manipulate and describe entity config for a topic, client, user, broker or ip")
 
       opts.checkArgs()
 
@@ -567,7 +567,7 @@ object ConfigCommand extends Config {
           val typeStr = entityType match {
             case ClientQuotaEntity.USER => "user-principal"
             case ClientQuotaEntity.CLIENT_ID => "client-id"
-            case ClientQuotaEntity.IP => "IP"
+            case ClientQuotaEntity.IP => "ip"
           }
           if (name != null) s"$typeStr '$name'"
           else s"the default $typeStr"
@@ -749,10 +749,10 @@ object ConfigCommand extends Config {
     val describeOpt = parser.accepts("describe", "List configs for the given entity.")
     val allOpt = parser.accepts("all", "List all configs for the given topic, broker, or broker-logger entity (includes static configuration when the entity type is brokers)")
 
-    val entityType = parser.accepts("entity-type", "Type of entity (topics/clients/users/brokers/broker-loggers/IPs)")
+    val entityType = parser.accepts("entity-type", "Type of entity (topics/clients/users/brokers/broker-loggers/ips)")
             .withRequiredArg
             .ofType(classOf[String])
-    val entityName = parser.accepts("entity-name", "Name of entity (topic name/client id/user principal name/broker id/IP)")
+    val entityName = parser.accepts("entity-name", "Name of entity (topic name/client id/user principal name/broker id/ip)")
             .withRequiredArg
             .ofType(classOf[String])
     val entityDefault = parser.accepts("entity-default", "Default entity name for clients/users/brokers (applies to corresponding entity type in command line)")
@@ -793,8 +793,8 @@ object ConfigCommand extends Config {
     val brokerLogger = parser.accepts("broker-logger", "The broker's ID for its logger config.")
       .withRequiredArg
       .ofType(classOf[String])
-    val ipDefaults = parser.accepts("IP-defaults", "The config defaults for all IPs.")
-    val ip = parser.accepts("IP", "The IP address.")
+    val ipDefaults = parser.accepts("ip-defaults", "The config defaults for all IPs.")
+    val ip = parser.accepts("ip", "The IP address.")
       .withRequiredArg
       .ofType(classOf[String])
     val zkTlsConfigFile = parser.accepts("zk-tls-config-file",
