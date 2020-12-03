@@ -317,10 +317,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     }
 
     public static FetchResponse<MemoryRecords> parse(ByteBuffer buffer, short version) {
-        FetchResponseData fetchResponseData = new FetchResponseData();
-        ByteBufferAccessor reader = new ByteBufferAccessor(buffer);
-        fetchResponseData.read(reader, version);
-        return new FetchResponse<>(fetchResponseData);
+        return new FetchResponse<>(new FetchResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @SuppressWarnings("unchecked")
