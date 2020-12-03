@@ -49,7 +49,7 @@ public class SaslAuthenticateRequest extends AbstractRequest {
 
         @Override
         public String toString() {
-            return data.toString();
+            return "(type=SaslAuthenticateRequest)";
         }
     }
 
