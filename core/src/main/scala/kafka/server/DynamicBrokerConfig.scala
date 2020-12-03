@@ -467,7 +467,9 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
             case _: Exception => true
           }
         }
-        invalidProps.foreach(props.remove)
+        invalidProps.foreach {
+          case (k,v) => props.remove(k)
+        }
         val configSource = if (perBrokerConfig) "broker" else "default cluster"
         error(s"Dynamic $configSource config contains invalid values: $invalidProps, these configs will be ignored", e)
     }
