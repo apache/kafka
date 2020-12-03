@@ -44,7 +44,6 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.V
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.ThreadCache;
-import org.slf4j.Logger;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -72,8 +71,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     static final byte LATEST_MAGIC_BYTE = 1;
 
     private final Time time;
-    private final Logger log;
-    private final String logPrefix;
     private final Consumer<byte[], byte[]> mainConsumer;
 
     // we want to abstract eos logic out of StreamTask, however
@@ -119,16 +116,20 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                       final ProcessorStateManager stateMgr,
                       final RecordCollector recordCollector,
                       final InternalProcessorContext processorContext) {
-        super(id, topology, stateDirectory, stateMgr, partitions, config.getLong(StreamsConfig.TASK_TIMEOUT_MS_CONFIG));
+        super(
+            id,
+            topology,
+            stateDirectory,
+            stateMgr,
+            partitions,
+            config.getLong(StreamsConfig.TASK_TIMEOUT_MS_CONFIG),
+            "task",
+            StreamTask.class
+        );
         this.mainConsumer = mainConsumer;
 
         this.processorContext = processorContext;
         processorContext.transitionToActive(this, recordCollector, cache);
-
-        final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
-        logPrefix = threadIdPrefix + String.format("%s [%s] ", "task", id);
-        final LogContext logContext = new LogContext(logPrefix);
-        log = logContext.logger(getClass());
 
         this.time = time;
         this.recordCollector = recordCollector;
@@ -501,8 +502,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     @Override
-    public void update(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> nodeToSourceTopics) {
-        super.update(topicPartitions, nodeToSourceTopics);
+    public void update(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> allTopologyNodesToSourceTopics) {
+        super.update(topicPartitions, allTopologyNodesToSourceTopics);
         partitionGroup.updatePartitions(topicPartitions, recordQueueCreator::createQueue);
     }
 
@@ -816,13 +817,15 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     .filter(e -> e.getValue() != null)
                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
             initializeTaskTime(offsetsAndMetadata);
-        } catch (final TimeoutException e) {
-            log.warn("Encountered {} while trying to fetch committed offsets, will retry initializing the metadata in the next loop." +
-                            "\nConsider overwriting consumer config {} to a larger value to avoid timeout errors",
-                    e.toString(),
-                    ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
+        } catch (final TimeoutException timeoutException) {
+            log.warn(
+                "Encountered {} while trying to fetch committed offsets, will retry initializing the metadata in the next loop." +
+                    "\nConsider overwriting consumer config {} to a larger value to avoid timeout errors",
+                time.toString(),
+                ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
 
-            throw e;
+            // re-throw to trigger `task.timeout.ms`
+            throw timeoutException;
         } catch (final KafkaException e) {
             throw new StreamsException(String.format("task [%s] Failed to initialize offsets for %s", id, inputPartitions()), e);
         }
@@ -1014,17 +1017,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return commitRequested;
     }
 
-    @Override
-    public void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
-                                            final TimeoutException timeoutException) throws StreamsException {
-        maybeInitTaskTimeoutOrThrow(currentWallClockMs, timeoutException, log);
-    }
-
-    @Override
-    public void clearTaskTimeout() {
-        clearTaskTimeout(log);
-    }
-
     static String encodeTimestamp(final long partitionTime) {
         final ByteBuffer buffer = ByteBuffer.allocate(9);
         buffer.put(LATEST_MAGIC_BYTE);
@@ -1145,7 +1137,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             final SourceNode<?, ?, ?, ?> source = topology.source(partition.topic());
             if (source == null) {
                 throw new TopologyException(
-                        "Topic is unkown to the topology. " +
+                        "Topic is unknown to the topology. " +
                                 "This may happen if different KafkaStreams instances of the same application execute different Topologies. " +
                                 "Note that Topologies are only identical if all operators are added in the same order."
                 );

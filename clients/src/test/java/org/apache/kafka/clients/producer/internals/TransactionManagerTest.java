@@ -97,6 +97,9 @@ import java.util.function.Supplier;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
+import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -1682,13 +1685,13 @@ public class TransactionManagerTest {
         sender.runOnce();
 
         runUntil(responseFuture::isDone);
-        assertFalse(transactionManager.hasError());
+        assertTrue(transactionManager.hasError());
 
-        transactionManager.beginCommit();
+        transactionManager.beginAbort();
 
         TransactionManager.TxnRequestHandler handler = transactionManager.nextRequest(false);
 
-        // First we will get an EndTxn for commit.
+        // First we will get an EndTxn for abort.
         assertNotNull(handler);
         assertTrue(handler.requestBuilder() instanceof EndTxnRequest.Builder);
 
@@ -2057,6 +2060,53 @@ public class TransactionManagerTest {
         prepareTxnOffsetCommitResponse(consumerGroupId, producerId, epoch, txnOffsetCommitResponse);
         runUntil(addOffsetsResult::isCompleted);
         assertTrue(addOffsetsResult.isSuccessful());
+    }
+
+    @Test
+    public void testHandlingOfProducerFencedErrorOnTxnOffsetCommit() {
+        testFatalErrorInTxnOffsetCommit(Errors.PRODUCER_FENCED);
+    }
+
+    @Test
+    public void testHandlingOfTransactionalIdAuthorizationFailedErrorOnTxnOffsetCommit() {
+        testFatalErrorInTxnOffsetCommit(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED);
+    }
+
+    @Test
+    public void testHandlingOfInvalidProducerEpochErrorOnTxnOffsetCommit() {
+        testFatalErrorInTxnOffsetCommit(Errors.INVALID_PRODUCER_EPOCH);
+    }
+
+    @Test
+    public void testHandlingOfUnsupportedForMessageFormatErrorOnTxnOffsetCommit() {
+        testFatalErrorInTxnOffsetCommit(Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT);
+    }
+
+    private void testFatalErrorInTxnOffsetCommit(final Errors error) {
+        doInitTransactions();
+
+        transactionManager.beginTransaction();
+
+        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(tp0, new OffsetAndMetadata(1));
+        offsets.put(tp1, new OffsetAndMetadata(1));
+
+        TransactionalRequestResult addOffsetsResult = transactionManager.sendOffsetsToTransaction(
+            offsets, new ConsumerGroupMetadata(consumerGroupId));
+        prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, producerId, epoch);
+        runUntil(() -> !client.hasPendingResponses());
+        assertThat(addOffsetsResult.isCompleted(), is(false));  // The request should complete only after the TxnOffsetCommit completes.
+
+        Map<TopicPartition, Errors> txnOffsetCommitResponse = new HashMap<>();
+        txnOffsetCommitResponse.put(tp0, Errors.NONE);
+        txnOffsetCommitResponse.put(tp1, error);
+
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
+        prepareTxnOffsetCommitResponse(consumerGroupId, producerId, epoch, txnOffsetCommitResponse);
+
+        runUntil(addOffsetsResult::isCompleted);
+        assertThat(addOffsetsResult.isSuccessful(), is(false));
+        assertThat(addOffsetsResult.error(), instanceOf(error.exception().getClass()));
     }
 
     @Test
@@ -3306,7 +3356,16 @@ public class TransactionManagerTest {
     private MockClient.RequestMatcher produceRequestMatcher(final long producerId, final short epoch, TopicPartition tp) {
         return body -> {
             ProduceRequest produceRequest = (ProduceRequest) body;
-            MemoryRecords records = produceRequest.partitionRecordsOrFail().get(tp);
+            MemoryRecords records = produceRequest.dataOrException().topicData()
+                    .stream()
+                    .filter(t -> t.name().equals(tp.topic()))
+                    .findAny()
+                    .get()
+                    .partitionData()
+                    .stream()
+                    .filter(p -> p.index() == tp.partition())
+                    .map(p -> (MemoryRecords) p.records())
+                    .findAny().get();
             assertNotNull(records);
             Iterator<MutableRecordBatch> batchIterator = records.batches().iterator();
             assertTrue(batchIterator.hasNext());
@@ -3431,6 +3490,7 @@ public class TransactionManagerTest {
         return produceResponse(tp, offset, error, throttleTimeMs, 10);
     }
 
+    @SuppressWarnings("deprecation")
     private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs, int logStartOffset) {
         ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(error, offset, RecordBatch.NO_TIMESTAMP, logStartOffset);
         Map<TopicPartition, ProduceResponse.PartitionResponse> partResp = singletonMap(tp, resp);

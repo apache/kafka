@@ -30,24 +30,26 @@
   // Starting in version 7, records can be produced using ZStandard compression.  See KIP-110.
   //
   // Starting in Version 8, response has RecordErrors and ErrorMEssage. See KIP-467.
-  "validVersions": "0-8",
-  "flexibleVersions": "none",
+  //
+  // Version 9 enables flexible versions.
+  "validVersions": "0-9",
+  "flexibleVersions": "9+",
   "fields": [
-    { "name": "TransactionalId", "type": "string", "versions": "3+", "nullableVersions": "0+", "entityType": "transactionalId",
+    { "name": "TransactionalId", "type": "string", "versions": "3+", "nullableVersions": "3+", "default": "null", "entityType": "transactionalId",
       "about": "The transactional ID, or null if the producer is not transactional." },
     { "name": "Acks", "type": "int16", "versions": "0+",
       "about": "The number of acknowledgments the producer requires the leader to have received before considering a request complete. Allowed values: 0 for no acknowledgments, 1 for only the leader and -1 for the full ISR." },
     { "name": "TimeoutMs", "type": "int32", "versions": "0+",
       "about": "The timeout to await a response in miliseconds." },
-    { "name": "Topics", "type": "[]TopicProduceData", "versions": "0+", 
+    { "name": "TopicData", "type": "[]TopicProduceData", "versions": "0+",
       "about": "Each topic to produce to.", "fields": [
-      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
+      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName", "mapKey": true,
         "about": "The topic name." },
-      { "name": "Partitions", "type": "[]PartitionProduceData", "versions": "0+",
+      { "name": "PartitionData", "type": "[]PartitionProduceData", "versions": "0+",
         "about": "Each partition to produce to.", "fields": [
-        { "name": "PartitionIndex", "type": "int32", "versions": "0+",
+        { "name": "Index", "type": "int32", "versions": "0+",
           "about": "The partition index." },
-        { "name": "Records", "type": "bytes", "versions": "0+", "nullableVersions": "0+",
+        { "name": "Records", "type": "records", "versions": "0+", "nullableVersions": "0+",
           "about": "The record data to be produced." }
       ]}
     ]}

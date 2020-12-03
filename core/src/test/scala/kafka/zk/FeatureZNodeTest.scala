@@ -75,7 +75,7 @@ class FeatureZNodeTest {
       classOf[IllegalArgumentException],
       () => FeatureZNode.decode(
         featureZNodeStrTemplate.format(FeatureZNode.V1 - 1, 1).getBytes(StandardCharsets.UTF_8)))
-    val invalidStatus = FeatureZNodeStatus.values.map(_.id).toList.max + 1
+    val invalidStatus = FeatureZNodeStatus.Enabled.id + 1
     assertThrows(
       classOf[IllegalArgumentException],
       () => FeatureZNode.decode(

@@ -28,7 +28,7 @@ import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.kstream.TimeWindowedKStream;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
+import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
@@ -51,8 +51,8 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
                                final Serde<K> keySerde,
                                final Serde<V> valueSerde,
                                final GroupedStreamAggregateBuilder<K, V> aggregateBuilder,
-                               final StreamsGraphNode streamsGraphNode) {
-        super(name, keySerde, valueSerde, subTopologySourceNodes, streamsGraphNode, builder);
+                               final GraphNode graphNode) {
+        super(name, keySerde, valueSerde, subTopologySourceNodes, graphNode, builder);
         this.windows = Objects.requireNonNull(windows, "windows can't be null");
         this.aggregateBuilder = aggregateBuilder;
     }

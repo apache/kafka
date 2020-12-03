@@ -17,12 +17,14 @@
 
 package kafka.server
 
+import java.net.{InetAddress, UnknownHostException}
 import java.util.Properties
 
 import DynamicConfig.Broker._
 import kafka.api.ApiVersion
 import kafka.controller.KafkaController
 import kafka.log.{LogConfig, LogManager}
+import kafka.network.ConnectionQuotas
 import kafka.security.CredentialProvider
 import kafka.server.Constants._
 import kafka.server.QuotaFactory.QuotaManagers
@@ -182,6 +184,24 @@ class UserConfigHandler(private val quotaManagers: QuotaManagers, val credential
     updateQuotaConfig(Some(sanitizedUser), sanitizedClientId, config)
     if (!sanitizedClientId.isDefined && sanitizedUser != ConfigEntityName.Default)
       credentialProvider.updateCredentials(Sanitizer.desanitize(sanitizedUser), config)
+  }
+}
+
+class IpConfigHandler(private val connectionQuotas: ConnectionQuotas) extends ConfigHandler with Logging {
+
+  def processConfigChanges(ip: String, config: Properties): Unit = {
+    val ipConnectionRateQuota = Option(config.getProperty(DynamicConfig.Ip.IpConnectionRateOverrideProp)).map(_.toInt)
+    val updatedIp = {
+      if (ip != ConfigEntityName.Default) {
+        try {
+          Some(InetAddress.getByName(ip))
+        } catch {
+          case _: UnknownHostException => throw new IllegalArgumentException(s"Unable to resolve address $ip")
+        }
+      } else
+        None
+    }
+    connectionQuotas.updateIpConnectionRateQuota(updatedIp, ipConnectionRateQuota)
   }
 }
 

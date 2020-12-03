@@ -27,7 +27,7 @@ import org.apache.kafka.streams.kstream.TimeWindowedCogroupedKStream;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
-import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
+import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
@@ -52,9 +52,9 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends Ab
                                      final Set<String> subTopologySourceNodes,
                                      final String name,
                                      final CogroupedStreamAggregateBuilder<K, V> aggregateBuilder,
-                                     final StreamsGraphNode streamsGraphNode,
+                                     final GraphNode graphNode,
                                      final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, V>> groupPatterns) {
-        super(name, null, null, subTopologySourceNodes, streamsGraphNode, builder);
+        super(name, null, null, subTopologySourceNodes, graphNode, builder);
         //keySerde and valueSerde are null because there are many different groupStreams that they could be from
         this.windows = windows;
         this.aggregateBuilder = aggregateBuilder;

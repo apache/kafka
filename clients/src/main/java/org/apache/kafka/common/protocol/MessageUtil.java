@@ -19,6 +19,7 @@ package org.apache.kafka.common.protocol;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.kafka.common.protocol.types.RawTaggedField;
+import org.apache.kafka.common.utils.Utils;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -179,5 +180,26 @@ public final class MessageUtil {
         } else {
             return first.equals(second);
         }
+    }
+
+    public static ByteBuffer toByteBuffer(final short version, final Message message) {
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+        int size = message.size(cache, version);
+        ByteBuffer bytes = ByteBuffer.allocate(2 + size);
+        ByteBufferAccessor accessor = new ByteBufferAccessor(bytes);
+        accessor.writeShort(version);
+        message.write(accessor, cache, version);
+        bytes.flip();
+        return bytes;
+    }
+
+    public static byte[] toBytes(final short version, final Message message) {
+        ByteBuffer buffer = toByteBuffer(version, message);
+        // take the inner array directly if it is full with data
+        if (buffer.hasArray() &&
+                buffer.arrayOffset() == 0 &&
+                buffer.position() == 0 &&
+                buffer.limit() == buffer.array().length) return buffer.array();
+        else return Utils.toArray(buffer);
     }
 }

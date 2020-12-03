@@ -94,7 +94,7 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
         private static Map<String, UpdateMetadataTopicState> groupByTopic(List<UpdateMetadataPartitionState> partitionStates) {
             Map<String, UpdateMetadataTopicState> topicStates = new HashMap<>();
             for (UpdateMetadataPartitionState partition : partitionStates) {
-                // We don't null out the topic name in UpdateMetadataTopicState since it's ignored by the generated
+                // We don't null out the topic name in UpdateMetadataPartitionState since it's ignored by the generated
                 // code if version >= 5
                 UpdateMetadataTopicState topicState = topicStates.computeIfAbsent(partition.topicName(),
                     t -> new UpdateMetadataTopicState().setTopicName(partition.topicName()));

@@ -335,7 +335,7 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     private void doCommitSync(Map<TopicPartition, OffsetAndMetadata> offsets, int seqno) {
-        log.info("{} Committing offsets synchronously using sequence number {}: {}", this, seqno, offsets);
+        log.debug("{} Committing offsets synchronously using sequence number {}: {}", this, seqno, offsets);
         try {
             consumer.commitSync(offsets);
             onCommitCompleted(null, seqno, offsets);
@@ -349,7 +349,7 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     private void doCommitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, final int seqno) {
-        log.info("{} Committing offsets asynchronously using sequence number {}: {}", this, seqno, offsets);
+        log.debug("{} Committing offsets asynchronously using sequence number {}: {}", this, seqno, offsets);
         OffsetCommitCallback cb = new OffsetCommitCallback() {
             @Override
             public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception error) {

@@ -126,7 +126,6 @@
         new value <code>"exactly_once_beta"</code>.
         Note that you need brokers with version 2.5 or newer to use this feature.
     </p>
-
     <p>
         For more highly available stateful applications, we've modified the task assignment algorithm to delay the movement of stateful active tasks to instances
         that aren't yet caught up with that task's state. Instead, to migrate a task from one instance to another (eg when scaling out),
@@ -135,12 +134,10 @@
         tasks to their new owners in the background. Check out <a href="https://cwiki.apache.org/confluence/x/0i4lBg">KIP-441</a>
         for full details, including several new configs for control over this new feature.
     </p>
-
     <p>
         New end-to-end latency metrics have been added. These task-level metrics will be logged at the INFO level and report the min and max end-to-end latency of a record at the beginning/source node(s)
         and end/terminal node(s) of a task. See <a href="https://cwiki.apache.org/confluence/x/gBkRCQ">KIP-613</a> for more information.
     </p>
-
     <p>
         As of 2.6.0 Kafka Streams deprecates <code>KStream.through()</code> in favor of the new <code>KStream.repartition()</code> operator
         (as per <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-221%3A+Enhance+DSL+with+Connecting+Topic+Creation+and+Repartition+Hint">KIP-221</a>).
@@ -160,7 +157,7 @@
         as per <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-571%3A+Add+option+to+force+remove+members+in+StreamsResetter">KIP-571</a>.
     </p>
 
-    <h3><a id="streams_api_changes_250" href="#streams_api_changes_250">Streams API changes in 2.5.0</a></h3>
+    <h3 class="anchor-heading"><a id="streams_api_changes_250" class="anchor-link"></a><a href="#streams_api_changes_250">Streams API changes in 2.5.0</a></h3>
     <p>
         We add a new <code>cogroup()</code> operator (via <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-150+-+Kafka-Streams+Cogroup">KIP-150</a>)
         that allows to aggregate multiple streams in a single operation.
@@ -186,7 +183,7 @@
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-535%3A+Allow+state+stores+to+serve+stale+reads+during+rebalance">KIP-535</a> respectively.
     </p>
 
-    <h3><a id="streams_api_changes_240" href="#streams_api_changes_240">Streams API changes in 2.4.0</a></h3>
+    <h3 class="anchor-heading"><a id="streams_api_changes_240" class="anchor-link"></a><a href="#streams_api_changes_240">Streams API changes in 2.4.0</a></h3>
     <p>     
          As of 2.4.0 Kafka Streams offers a KTable-KTable foreign-key join (as per <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-213+Support+non-key+joining+in+KTable">KIP-213</a>). 
          This joiner allows for records to be joined between two KTables with different keys. 
@@ -277,7 +274,7 @@
         Hence, you will need to reset your application to upgrade it.
     
 
-    <h3><a id="streams_api_changes_230" href="#streams_api_changes_230">Streams API changes in 2.3.0</a></h3>
+    <h3 class="anchor-heading"><a id="streams_api_changes_230" class="anchor-link"></a><a href="#streams_api_changes_230">Streams API changes in 2.3.0</a></h3>
 
     <p>Version 2.3.0 adds the Suppress operator to the <code>kafka-streams-scala</code> Ktable API.</p>
 
@@ -346,13 +343,13 @@
         For more details please read <a href="https://issues.apache.org/jira/browse/KAFKA-8215">KAFKA-8215</a>.
     </p>
 
-    <h3><a id="streams_notable_changes_221" href="#streams_api_changes_221">Notable changes in Kafka Streams 2.2.1</a></h3>
+    <h3 class="anchor-heading"><a id="streams_notable_changes_221" class="anchor-link"></a><a href="#streams_notable_changes_221">Notable changes in Kafka Streams 2.2.1</a></h3>
     <p>
         As of Kafka Streams 2.2.1 a message format 0.11 or higher is required;
         this implies that brokers must be on version 0.11.0 or higher.
     </p>
 
-    <h3><a id="streams_api_changes_220" href="#streams_api_changes_220">Streams API changes in 2.2.0</a></h3>
+    <h3 class="anchor-heading"><a id="streams_api_changes_220" class="anchor-link"></a><a href="#streams_api_changes_220">Streams API changes in 2.2.0</a></h3>
     <p>
         We've simplified the <code>KafkaStreams#state</code> transition diagram during the starting up phase a bit in 2.2.0: in older versions the state will transit from <code>CREATED</code> to <code>RUNNING</code>, and then to <code>REBALANCING</code> to get the first
         stream task assignment, and then back to <code>RUNNING</code>; starting in 2.2.0 it will transit from <code>CREATED</code> directly to <code>REBALANCING</code> and then to <code>RUNNING</code>.
@@ -369,7 +366,7 @@
         used in a try-with-resource statement. For a full list of public interfaces that get impacted please read <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-376%3A+Implement+AutoClosable+on+appropriate+classes+that+want+to+be+used+in+a+try-with-resource+statement">KIP-376</a>.
     </p>
 
-    <h3><a id="streams_api_changes_210" href="#streams_api_changes_210">Streams API changes in 2.1.0</a></h3>
+    <h3 class="anchor-heading"><a id="streams_api_changes_210" class="anchor-link"></a><a href="#streams_api_changes_210">Streams API changes in 2.1.0</a></h3>
     <p>
         We updated <code>TopologyDescription</code> API to allow for better runtime checking.
         Users are encouraged to use <code>#topicSet()</code> and <code>#topicPattern()</code> accordingly on <code>TopologyDescription.Source</code> nodes,
@@ -469,7 +466,7 @@
         different stream instances in one application.
     </p>
 
-    <h3><a id="streams_api_changes_200" href="#streams_api_changes_200">Streams API changes in 2.0.0</a></h3>
+    <h3 class="anchor-heading"><a id="streams_api_changes_200" class="anchor-link"></a><a href="#streams_api_changes_200">Streams API changes in 2.0.0</a></h3>
     <p>
         In 2.0.0 we have added a few new APIs on the <code>ReadOnlyWindowStore</code> interface (for details please read <a href="#streams_api_changes_200">Streams API changes</a> below).
         If you have customized window store implementations that extends the <code>ReadOnlyWindowStore</code> interface you need to make code changes.
@@ -605,7 +602,7 @@
         <li><code>StreamsConfig#ZOOKEEPER_CONNECT_CONFIG</code> are removed as we do not need ZooKeeper dependency in Streams any more (it is deprecated since 0.10.2.0). </li>
     </ul>
 
-    <h3><a id="streams_api_changes_110" href="#streams_api_changes_110">Streams API changes in 1.1.0</a></h3>
+    <h3 class="anchor-heading"><a id="streams_api_changes_110" class="anchor-link"></a><a href="#streams_api_changes_110">Streams API changes in 1.1.0</a></h3>
     <p>
         We have added support for methods in <code>ReadOnlyWindowStore</code> which allows for querying <code>WindowStore</code>s without the necessity of providing keys.
         For users who have customized window store implementations on the above interface, they'd need to update their code to implement the newly added method as well.
@@ -663,7 +660,7 @@
         <li> added options to specify input topics offsets to reset according to <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-171+-+Extend+Consumer+Group+Reset+Offset+for+Stream+Application">KIP-171</a></li>
     </ul>
 
-    <h3><a id="streams_api_changes_100" href="#streams_api_changes_100">Streams API changes in 1.0.0</a></h3>
+    <h3 class="anchor-heading"><a id="streams_api_changes_100" class="anchor-link"></a><a href="#streams_api_changes_100">Streams API changes in 1.0.0</a></h3>
 
     <p>
         With 1.0 a major API refactoring was accomplished and the new API is cleaner and easier to use.
@@ -797,7 +794,7 @@
         If you already use <code>StateStoreSupplier</code> or <code>Materialized</code> to provide configs for changelogs, then they will take precedence over those supplied in the config.
     </p>
 
-    <h3><a id="streams_api_changes_0110" href="#streams_api_changes_0110">Streams API changes in 0.11.0.0</a></h3>
+    <h3 class="anchor-heading"><a id="streams_api_changes_0110" class="anchor-link"></a><a href="#streams_api_changes_0110">Streams API changes in 0.11.0.0</a></h3>
 
     <p> Updates in <code>StreamsConfig</code>: </p>
     <ul>
@@ -866,7 +863,7 @@
     </ul>
     <p> <code>[client.Id]</code> is either set via Streams configuration parameter <code>client.id</code> or defaults to <code>[application.id]-[processId]</code> (<code>[processId]</code> is a random UUID). </p>
 
-    <h3><a id="streams_api_changes_01021" href="#streams_api_changes_01021">Notable changes in 0.10.2.1</a></h3>
+    <h3 class="anchor-heading"><a id="streams_api_changes_01021" class="anchor-link"></a><a href="#streams_api_changes_01021">Notable changes in 0.10.2.1</a></h3>
 
     <p>
         Parameter updates in <code>StreamsConfig</code>:
@@ -875,7 +872,7 @@
         <li> The default config values of embedded producer's <code>retries</code> and consumer's <code>max.poll.interval.ms</code> have been changed to improve the resiliency of a Kafka Streams application </li>
     </ul>
 
-    <h3><a id="streams_api_changes_0102" href="#streams_api_changes_0102">Streams API changes in 0.10.2.0</a></h3>
+    <h3 class="anchor-heading"><a id="streams_api_changes_0102" class="anchor-link"></a><a href="#streams_api_changes_0102">Streams API changes in 0.10.2.0</a></h3>
 
     <p>
         New methods in <code>KafkaStreams</code>:
@@ -946,7 +943,7 @@
 
     <p> Relaxed type constraints of many DSL interfaces, classes, and methods (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-100+-+Relax+Type+constraints+in+Kafka+Streams+API">KIP-100</a>). </p>
 
-    <h3><a id="streams_api_changes_0101" href="#streams_api_changes_0101">Streams API changes in 0.10.1.0</a></h3>
+    <h3 class="anchor-heading"><a id="streams_api_changes_0101" class="anchor-link"></a><a href="#streams_api_changes_0101">Streams API changes in 0.10.1.0</a></h3>
 
     <p> Stream grouping and aggregation split into two methods: </p>
     <ul>
@@ -989,10 +986,10 @@
 
 <!--#include virtual="../../includes/_header.htm" -->
 <!--#include virtual="../../includes/_top.htm" -->
-<div class="content documentation documentation--current">
+<div class="content documentation">
     <!--#include virtual="../../includes/_nav.htm" -->
     <div class="right">
-        <!--#include virtual="../../includes/_docs_banner.htm" -->
+        <!--//#include virtual="../../includes/_docs_banner.htm" -->
         <ul class="breadcrumbs">
             <li><a href="/documentation">Documentation</a></li>
             <li><a href="/documentation/streams">Kafka Streams</a></li>

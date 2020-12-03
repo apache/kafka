@@ -259,7 +259,7 @@ public class StreamsBuilder {
      * If this is not the case the returned {@link KTable} will be corrupted.
      * <p>
      * The resulting {@link KTable} will be materialized in a local {@link KeyValueStore} with an internal
-     * store name. Note that store name may not be queriable through Interactive Queries.
+     * store name. Note that store name may not be queryable through Interactive Queries.
      * An internal changelog topic is created by default. Because the source topic can
      * be used for recovery, you can avoid creating the changelog topic by setting
      * the {@code "topology.optimization"} to {@code "all"} in the {@link StreamsConfig}.
@@ -281,7 +281,7 @@ public class StreamsBuilder {
      * If this is not the case the returned {@link KTable} will be corrupted.
      * <p>
      * The resulting {@link KTable} will be materialized in a local {@link KeyValueStore} with an internal
-     * store name. Note that store name may not be queriable through Interactive Queries.
+     * store name. Note that store name may not be queryable through Interactive Queries.
      * An internal changelog topic is created by default. Because the source topic can
      * be used for recovery, you can avoid creating the changelog topic by setting
      * the {@code "topology.optimization"} to {@code "all"} in the {@link StreamsConfig}.
@@ -342,7 +342,7 @@ public class StreamsBuilder {
      * Input {@link KeyValue records} with {@code null} key will be dropped.
      * <p>
      * The resulting {@link GlobalKTable} will be materialized in a local {@link KeyValueStore} with an internal
-     * store name. Note that store name may not be queriable through Interactive Queries.
+     * store name. Note that store name may not be queryable through Interactive Queries.
      * No internal changelog topic is created since the original input topic can be used for recovery (cf.
      * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
      * <p>
@@ -373,7 +373,7 @@ public class StreamsBuilder {
      * Input {@link KeyValue records} with {@code null} key will be dropped.
      * <p>
      * The resulting {@link GlobalKTable} will be materialized in a local {@link KeyValueStore} with an internal
-     * store name. Note that store name may not be queriable through Interactive Queries.
+     * store name. Note that store name may not be queryable through Interactive Queries.
      * No internal changelog topic is created since the original input topic can be used for recovery (cf.
      * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
      * <p>
@@ -530,6 +530,10 @@ public class StreamsBuilder {
      * <p>
      * It is not required to connect a global store to {@link org.apache.kafka.streams.processor.Processor Processors}, {@link Transformer Transformers},
      * or {@link ValueTransformer ValueTransformer}; those have read-only access to all global stores by default.
+     * <p>
+     * The supplier should always generate a new instance each time {@link  ProcessorSupplier#get()} gets called. Creating
+     * a single {@link Processor} object and returning the same object reference in {@link ProcessorSupplier#get()} would be
+     * a violation of the supplier pattern and leads to runtime exceptions.
      *
      * @param storeBuilder          user defined {@link StoreBuilder}; can't be {@code null}
      * @param topic                 the topic to source the data from
@@ -565,6 +569,9 @@ public class StreamsBuilder {
      * <p>
      * The provided {@link ProcessorSupplier}} will be used to create an
      * {@link Processor} that will receive all records forwarded from the {@link SourceNode}.
+     * The supplier should always generate a new instance. Creating a single {@link Processor} object
+     * and returning the same object reference in {@link ProcessorSupplier#get()} is a
+     * violation of the supplier pattern and leads to runtime exceptions.
      * NOTE: you should not use the {@link Processor} to insert transformed records into
      * the global state store. This store uses the source topic as changelog and during restore will insert records directly
      * from the source.

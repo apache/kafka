@@ -52,6 +52,7 @@ import org.apache.kafka.common.requests.SaslHandshakeResponse;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
+import org.apache.kafka.common.security.auth.KafkaPrincipalSerde;
 import org.apache.kafka.common.security.auth.SaslAuthenticationContext;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.kerberos.KerberosError;
@@ -81,6 +82,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 public class SaslServerAuthenticator implements Authenticator {
     // GSSAPI limits requests to 64K, but we allow a bit extra for custom SASL mechanisms
@@ -237,12 +239,15 @@ public class SaslServerAuthenticator implements Authenticator {
         if (saslState != SaslState.REAUTH_PROCESS_HANDSHAKE) {
             if (netOutBuffer != null && !flushNetOutBufferAndUpdateInterestOps())
                 return;
+
             if (saslServer != null && saslServer.isComplete()) {
                 setSaslState(SaslState.COMPLETE);
                 return;
             }
+
             // allocate on heap (as opposed to any socket server memory pool)
             if (netInBuffer == null) netInBuffer = new NetworkReceive(MAX_RECEIVE_SIZE, connectionId);
+
             netInBuffer.readFrom(transportLayer);
             if (!netInBuffer.complete())
                 return;
@@ -294,6 +299,11 @@ public class SaslServerAuthenticator implements Authenticator {
             principal.tokenAuthenticated(true);
         }
         return principal;
+    }
+
+    @Override
+    public Optional<KafkaPrincipalSerde> principalSerde() {
+        return principalBuilder instanceof KafkaPrincipalSerde ? Optional.of((KafkaPrincipalSerde) principalBuilder) : Optional.empty();
     }
 
     @Override
@@ -578,7 +588,7 @@ public class SaslServerAuthenticator implements Authenticator {
      * {@link #sendAuthenticationFailureResponse()} is called.
      */
     private void buildResponseOnAuthenticateFailure(RequestContext context, AbstractResponse response) {
-        authenticationFailureSend = context.buildResponse(response);
+        authenticationFailureSend = context.buildResponseSend(response);
     }
 
     /**
@@ -592,7 +602,7 @@ public class SaslServerAuthenticator implements Authenticator {
     }
 
     private void sendKafkaResponse(RequestContext context, AbstractResponse response) throws IOException {
-        sendKafkaResponse(context.buildResponse(response));
+        sendKafkaResponse(context.buildResponseSend(response));
     }
 
     private void sendKafkaResponse(Send send) throws IOException {
@@ -708,6 +718,6 @@ public class SaslServerAuthenticator implements Authenticator {
 
         private long zeroIfNegative(long value) {
             return Math.max(0L, value);
-        }
+        }        
     }
 }

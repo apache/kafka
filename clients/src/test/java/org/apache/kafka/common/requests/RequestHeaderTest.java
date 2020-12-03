@@ -75,15 +75,17 @@ public class RequestHeaderTest {
     }
 
     @Test
-    public void testRequestHeaderWithInitialPrincipalAndClientId() {
-        final String initialPrincipalName = "initial-principal";
-        final String initialClientId = "initial-client";
-        RequestHeader header = new RequestHeader(ApiKeys.CREATE_DELEGATION_TOKEN, (short) 2, "", 10,
-            initialPrincipalName, initialClientId);
-        assertEquals(2, header.headerVersion());
-        ByteBuffer buffer = toBuffer(header.toStruct());
-        assertEquals(17 + initialPrincipalName.length() + initialClientId.length(), buffer.remaining());
-        RequestHeader deserialized = RequestHeader.parse(buffer);
-        assertEquals(header, deserialized);
+    public void parseHeaderFromBufferWithNonZeroPosition() {
+        ByteBuffer buffer = ByteBuffer.allocate(64);
+        buffer.position(10);
+
+        RequestHeader header = new RequestHeader(ApiKeys.FIND_COORDINATOR, (short) 1, "", 10);
+        header.toStruct().writeTo(buffer);
+        int limit = buffer.position();
+        buffer.position(10);
+        buffer.limit(limit);
+
+        RequestHeader parsed = RequestHeader.parse(buffer);
+        assertEquals(header, parsed);
     }
 }

@@ -306,7 +306,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       val consumerRebalanceListener = new InternalRebalanceListener(this, customRebalanceListener)
       whitelistOpt.foreach { whitelist =>
         try {
-          consumer.subscribe(Pattern.compile(Whitelist(whitelist).regex), consumerRebalanceListener)
+          consumer.subscribe(Pattern.compile(IncludeList(whitelist).regex), consumerRebalanceListener)
         } catch {
           case pse: RuntimeException =>
             error(s"Invalid expression syntax: $whitelist")

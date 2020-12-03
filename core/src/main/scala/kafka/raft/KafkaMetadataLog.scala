@@ -27,9 +27,11 @@ import org.apache.kafka.raft.{LogAppendInfo, LogFetchInfo, LogOffsetMetadata, Is
 
 import scala.compat.java8.OptionConverters._
 
-class KafkaMetadataLog(log: Log,
-                       topicPartition: TopicPartition,
-                       maxFetchSizeInBytes: Int = 1024 * 1024) extends ReplicatedLog {
+class KafkaMetadataLog(
+  log: Log,
+  topicPartition: TopicPartition,
+  maxFetchSizeInBytes: Int = 1024 * 1024
+) extends ReplicatedLog {
 
   override def read(startOffset: Long, readIsolation: Isolation): LogFetchInfo = {
     val isolation = readIsolation match {
@@ -122,6 +124,14 @@ class KafkaMetadataLog(log: Log,
         // FIXME: This API returns the new high watermark, which may be different from the passed offset
         log.updateHighWatermark(offsetMetadata.offset)
     }
+  }
+
+  override def flush(): Unit = {
+    log.flush()
+  }
+
+  override def lastFlushedOffset(): Long = {
+    log.recoveryPoint
   }
 
   /**

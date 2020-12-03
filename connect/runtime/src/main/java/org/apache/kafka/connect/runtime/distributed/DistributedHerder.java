@@ -751,14 +751,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     @Override
     public void connectorConfig(String connName, final Callback<Map<String, String>> callback) {
-        // Subset of connectorInfo, so piggy back on that implementation
         log.trace("Submitting connector config read request {}", connName);
-        connectorInfo(connName, (error, result) -> {
-            if (error != null)
-                callback.onCompletion(error, null);
-            else
-                callback.onCompletion(null, result.config());
-        });
+        super.connectorConfig(connName, callback);
     }
 
     @Override
@@ -1371,9 +1365,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 // from the HTTP request forwarding thread.
                 if (error != null) {
                     if (isPossibleExpiredKeyException(initialRequestTime, error)) {
-                        log.debug("Failed to reconfigure connector's tasks, possibly due to expired session key. Retrying after backoff");
+                        log.debug("Failed to reconfigure connector's tasks ({}), possibly due to expired session key. Retrying after backoff", connName);
                     } else {
-                        log.error("Failed to reconfigure connector's tasks, retrying after backoff:", error);
+                        log.error("Failed to reconfigure connector's tasks ({}), retrying after backoff:", connName, error);
                     }
                     addRequest(RECONFIGURE_CONNECTOR_TASKS_BACKOFF_MS,
                             new Callable<Void>() {
