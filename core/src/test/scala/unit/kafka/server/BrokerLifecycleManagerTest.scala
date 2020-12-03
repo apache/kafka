@@ -442,6 +442,8 @@ class BrokerLifecycleManagerTest {
     val brokerLifecycleManager = new BrokerLifecycleManagerImpl(brokerMetadataListener,config, brokerToControllerChannel, time.scheduler, time, brokerID, rack, () => 1337, brokerEpochProvider)
     brokerLifecycleManager.start(new ListenerCollection(), new FeatureCollection())
 
+    val brokerRegistrationTime = time.nanoseconds
+
     // Start
     val pendingPromises = ListBuffer[Promise[Unit]]()
     pendingStateChanges foreach {
@@ -461,7 +463,7 @@ class BrokerLifecycleManagerTest {
     }
 
     assert(brokerLifecycleManager.brokerState != BrokerState.UNKNOWN)
-    assert(brokerLifecycleManager.lastSuccessfulHeartbeatTime == 0)
+    assert(brokerLifecycleManager.lastSuccessfulHeartbeatTime == brokerRegistrationTime)
 
     // Verify BrokerMetadataListener notification
     assert(capturedMetadataEvent.hasCaptured)

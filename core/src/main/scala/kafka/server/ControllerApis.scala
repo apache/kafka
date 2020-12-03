@@ -20,19 +20,20 @@ package kafka.server
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
-import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.acl.AclOperation.{CLUSTER_ACTION, DESCRIBE}
 import org.apache.kafka.common.errors.ApiException
 import org.apache.kafka.common.internals.FatalExitError
-import org.apache.kafka.common.message.{ApiVersionsResponseData, MetadataResponseData}
 import org.apache.kafka.common.message.ApiVersionsResponseData.{ApiVersionsResponseKey, FinalizedFeatureKey, SupportedFeatureKey}
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseBroker
+import org.apache.kafka.common.message.{ApiVersionsResponseData, BrokerHeartbeatResponseData, BrokerRegistrationResponseData, MetadataResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{AlterIsrRequest, ApiVersionsRequest, ApiVersionsResponse, BrokerHeartbeatRequest, BrokerRegistrationRequest, MetadataRequest, MetadataResponse}
+import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.Resource
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType.CLUSTER
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.{Node, TopicPartition}
+import org.apache.kafka.controller.ClusterControlManager.{HeartbeatReply, RegistrationReply}
 import org.apache.kafka.controller.{Controller, LeaderAndIsr}
 import org.apache.kafka.metadata.{FeatureManager, VersionRange}
 import org.apache.kafka.server.authorizer.Authorizer
@@ -220,12 +221,66 @@ class ControllerApis(val requestChannel: RequestChannel,
   def handleBrokerRegistration(request: RequestChannel.Request): Unit = {
     val registrationRequest = request.body[BrokerRegistrationRequest]
     apisUtils.authorizeClusterOperation(request, CLUSTER_ACTION)
-    controller.registerBroker(registrationRequest.data())
+
+    controller.registerBroker(registrationRequest.data).handle[Unit]((reply, ex) => {
+      val err = if (ex != null) {
+        error(s"Failed to register broker: ${ex.getMessage}")
+        Errors.forException(ex)
+      } else {
+        Errors.NONE
+      }
+
+      def createResponseCallback(requestThrottleMs: Int, reply: RegistrationReply, error: Errors): BrokerRegistrationResponse = {
+        val brokerRegistrationResponseData = new BrokerRegistrationResponseData()
+
+        // TODO: get a better estimate of the current active controller from Raft or somewhere.
+        if (controller.curClaimEpoch() > 0) {
+          brokerRegistrationResponseData.setActiveControllerId(config.controllerId)
+        } else {
+          brokerRegistrationResponseData.setActiveControllerId(MetadataResponse.NO_CONTROLLER_ID)
+        }
+        brokerRegistrationResponseData.setBrokerEpoch(reply.epoch)
+        brokerRegistrationResponseData.setLeaseDurationMs(reply.leaseDurationMs)
+        brokerRegistrationResponseData.setThrottleTimeMs(requestThrottleMs)
+        brokerRegistrationResponseData.setErrorCode(error.code)
+        new BrokerRegistrationResponse(brokerRegistrationResponseData)
+      }
+
+      apisUtils.sendResponseMaybeThrottle(request,
+        requestThrottleMs => createResponseCallback(requestThrottleMs, reply, err))
+    })
   }
 
   def handleBrokerHeartBeatRequest(request: RequestChannel.Request): Unit = {
     val heartbeatRequest = request.body[BrokerHeartbeatRequest]
     apisUtils.authorizeClusterOperation(request, CLUSTER_ACTION)
-    controller.processBrokerHeartbeat(heartbeatRequest.data)
+
+    controller.processBrokerHeartbeat(heartbeatRequest.data).handle[Unit]((reply, ex) => {
+      val err = if (ex != null) {
+        error(s"Failed to acknowledge broker heartbeat: ${ex.getMessage}")
+        Errors.forException(ex)
+      } else {
+        Errors.NONE
+      }
+
+      def createResponseCallback(requestThrottleMs: Int, reply: HeartbeatReply, error: Errors): BrokerHeartbeatResponse = {
+        val brokerHeartbeatResponseData = new BrokerHeartbeatResponseData()
+
+        // TODO: get a better estimate of the current active controller from Raft or somewhere.
+        if (controller.curClaimEpoch() > 0) {
+          brokerHeartbeatResponseData.setActiveControllerId(config.controllerId)
+        } else {
+          brokerHeartbeatResponseData.setActiveControllerId(MetadataResponse.NO_CONTROLLER_ID)
+        }
+        brokerHeartbeatResponseData.setLeaseDurationMs(reply.leaseDurationMs)
+        brokerHeartbeatResponseData.setThrottleTimeMs(requestThrottleMs)
+        brokerHeartbeatResponseData.setErrorCode(error.code)
+        brokerHeartbeatResponseData.setNextState(reply.nextState.value)
+        new BrokerHeartbeatResponse(brokerHeartbeatResponseData)
+      }
+
+      apisUtils.sendResponseMaybeThrottle(request,
+        requestThrottleMs => createResponseCallback(requestThrottleMs, reply, err))
+    })
   }
 }

@@ -54,7 +54,7 @@ public class ClusterControlManager {
         }
     }
 
-    static class RegistrationReply {
+    public static class RegistrationReply {
         private final long epoch;
         private final long leaseDurationMs;
 
@@ -90,7 +90,7 @@ public class ClusterControlManager {
         }
     }
 
-    static class HeartbeatReply {
+    public static class HeartbeatReply {
         private final BrokerState nextState;
         private final long leaseDurationMs;
 

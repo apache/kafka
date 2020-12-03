@@ -173,6 +173,9 @@ class BrokerLifecycleManagerImpl(val brokerMetadataListener: BrokerMetadataListe
     // TODO: Maybe set a lower timeout?
     Await.result(promise.future, Duration(config.registrationLeaseTimeoutMs.longValue(), MILLISECONDS))
 
+    // Set last successful heartbeat as now; successful registration is technically a heartbeat
+    _lastSuccessfulHeartbeatTime = time.nanoseconds
+
     // Broker registration successful; Schedule heartbeats
     info("Scheduling heartbeats")
     schedulerTask = Some(scheduler.schedule(
@@ -241,11 +244,12 @@ class BrokerLifecycleManagerImpl(val brokerMetadataListener: BrokerMetadataListe
    */
   private def processHeartbeatRequests(): Unit = {
     // TODO: Do we want to allow some sort preemption to prioritize critical state changes?
-    // TODO: Ensure RPC timeout < heartbeat interval timeout (or at the very least < registration lease timeout)
 
+    val timeSinceLastHeartbeat = TimeUnit.NANOSECONDS.toMillis(time.nanoseconds - lastSuccessfulHeartbeatTime)
     // Ensure that there are no outstanding state change requests
-    if (pendingHeartbeat.compareAndSet(false, true)) {
-      // No pending heartbeat in-flight. We have a few things to check during this iteration
+    // If last heartbeat has been pending for more than config.registrationHeartbeatIntervalMs milliseconds ago, force another one
+    if (pendingHeartbeat.compareAndSet(false, true) ||
+          timeSinceLastHeartbeat >= config.registrationHeartbeatIntervalMs) {
       // Check when the last heartbeat was successful
       // - If < registration.heartbeat.interval.ms, no-op
       // - Else, check for any pending state changes that have been queued
@@ -256,7 +260,6 @@ class BrokerLifecycleManagerImpl(val brokerMetadataListener: BrokerMetadataListe
       //   - If > registration.heartbeat.interval.ms
       //     - Attempt another heartbeat w/ targetState = currentState
       //
-      val timeSinceLastHeartbeat = TimeUnit.NANOSECONDS.toMillis(time.nanoseconds - lastSuccessfulHeartbeatTime)
       // NOTE: We still have to ensure the last heartbeat was sent at least w/ a gap of registration.heartbeat.interval.ms
       //       even though the task is scheduled at intervals registration.heartbeat.interval.ms because of
       //       scheduler ticks being batched in some cases where another task hogs the scheduler's runtime.

@@ -283,11 +283,12 @@ class BrokerMetadataListenerTest {
     eventsScheduled += 1
 
     // Wait for all events to be queued
+    // FIXME: Jenkins flakiness w/ timeouts
     KTestUtils.waitForCondition(new TestCondition {
       override def conditionMet(): Boolean = {
         listener.pendingEvents == eventsScheduled
       }
-    }, 2000, "Wait for all events to be queued")
+    }, 10000, "Wait for all events to be queued")
 
     // Process all events
     listener.drain()
