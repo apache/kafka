@@ -21,7 +21,7 @@ import java.util.Collections
 import java.util.concurrent.atomic.AtomicInteger
 
 import kafka.api.LeaderAndIsr
-import kafka.server.{AlterIsrItem, AlterIsrManager, AlterIsrManagerImpl, BrokerToControllerChannelManager}
+import kafka.server.{AlterIsrItem, AlterIsrManager, DefaultAlterIsrManager, BrokerToControllerChannelManager}
 import kafka.utils.{MockScheduler, MockTime}
 import org.apache.kafka.clients.{ClientResponse, RequestCompletionHandler}
 import org.apache.kafka.common.TopicPartition
@@ -58,7 +58,7 @@ class AlterIsrManagerTest {
     EasyMock.replay(brokerToController)
 
     val scheduler = new MockScheduler(time)
-    val alterIsrManager = new AlterIsrManagerImpl(brokerToController, scheduler, time, brokerId, () => 2)
+    val alterIsrManager = new DefaultAlterIsrManager(brokerToController, scheduler, time, brokerId, () => 2)
     alterIsrManager.start()
     alterIsrManager.enqueue(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}))
     time.sleep(50)
@@ -74,7 +74,7 @@ class AlterIsrManagerTest {
     EasyMock.replay(brokerToController)
 
     val scheduler = new MockScheduler(time)
-    val alterIsrManager = new AlterIsrManagerImpl(brokerToController, scheduler, time, brokerId, () => 2)
+    val alterIsrManager = new DefaultAlterIsrManager(brokerToController, scheduler, time, brokerId, () => 2)
     alterIsrManager.start()
 
     // Only send one ISR update for a given topic+partition
@@ -98,7 +98,7 @@ class AlterIsrManagerTest {
     EasyMock.replay(brokerToController)
 
     val scheduler = new MockScheduler(time)
-    val alterIsrManager = new AlterIsrManagerImpl(brokerToController, scheduler, time, brokerId, () => 2)
+    val alterIsrManager = new DefaultAlterIsrManager(brokerToController, scheduler, time, brokerId, () => 2)
     alterIsrManager.start()
 
     for (i <- 0 to 9) {
@@ -152,7 +152,7 @@ class AlterIsrManagerTest {
     EasyMock.replay(brokerToController)
 
     val scheduler = new MockScheduler(time)
-    val alterIsrManager = new AlterIsrManagerImpl(brokerToController, scheduler, time, brokerId, () => 2)
+    val alterIsrManager = new DefaultAlterIsrManager(brokerToController, scheduler, time, brokerId, () => 2)
     alterIsrManager.start()
     isrs.foreach(alterIsrManager.enqueue)
 
@@ -185,7 +185,7 @@ class AlterIsrManagerTest {
     EasyMock.replay(brokerToController)
 
     val scheduler = new MockScheduler(time)
-    val alterIsrManager = new AlterIsrManagerImpl(brokerToController, scheduler, time, brokerId, () => 2)
+    val alterIsrManager = new DefaultAlterIsrManager(brokerToController, scheduler, time, brokerId, () => 2)
     alterIsrManager.start()
 
     var capturedError: Option[Errors] = None
@@ -227,7 +227,7 @@ class AlterIsrManagerTest {
     EasyMock.replay(brokerToController)
 
     val scheduler = new MockScheduler(time)
-    val alterIsrManager = new AlterIsrManagerImpl(brokerToController, scheduler, time, brokerId, () => 2)
+    val alterIsrManager = new DefaultAlterIsrManager(brokerToController, scheduler, time, brokerId, () => 2)
     alterIsrManager.start()
     alterIsrManager.enqueue(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}))
 
@@ -266,7 +266,7 @@ class AlterIsrManagerTest {
     EasyMock.replay(brokerToController)
 
     val scheduler = new MockScheduler(time)
-    val alterIsrManager = new AlterIsrManagerImpl(brokerToController, scheduler, time, brokerId, () => 2)
+    val alterIsrManager = new DefaultAlterIsrManager(brokerToController, scheduler, time, brokerId, () => 2)
     alterIsrManager.start()
 
     val count = new AtomicInteger(0)
