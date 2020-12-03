@@ -175,7 +175,7 @@ public class KafkaStreams implements AutoCloseable {
     private StateRestoreListener globalStateRestoreListener;
     private boolean oldHandler;
     private java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler;
-    private final Object newThread = new Object();
+    private final Object changeThreadCount = new Object();
 
     // container states
     /**
@@ -887,21 +887,21 @@ public class KafkaStreams implements AutoCloseable {
 
     private StreamThread createStreamThread(final long cacheSizePerThread, final int threadIdx) {
         final StreamThread streamThread = StreamThread.create(
-                internalTopologyBuilder,
-                config,
-                clientSupplier,
-                adminClient,
-                processId,
-                clientId,
-                streamsMetrics,
-                time,
-                streamsMetadataState,
-                cacheSizePerThread,
-                stateDirectory,
-                delegatingStateRestoreListener,
-                threadIdx,
-                KafkaStreams.this::closeToError,
-                streamsUncaughtExceptionHandler
+            internalTopologyBuilder,
+            config,
+            clientSupplier,
+            adminClient,
+            processId,
+            clientId,
+            streamsMetrics,
+            time,
+            streamsMetadataState,
+            cacheSizePerThread,
+            stateDirectory,
+            delegatingStateRestoreListener,
+            threadIdx,
+            KafkaStreams.this::closeToError,
+            streamsUncaughtExceptionHandler
         );
         streamThread.setStateListener(streamStateListener);
         threads.add(streamThread);
@@ -924,7 +924,7 @@ public class KafkaStreams implements AutoCloseable {
      * @return name of the added stream thread or empty if a new stream thread could not be added
      */
     public Optional<String> addStreamThread() {
-        synchronized (newThread) {
+        synchronized (changeThreadCount) {
             if (isRunningOrRebalancing()) {
                 final int threadIdx = getNextThreadIndex();
                 final long cacheSizePerThread = getCacheSizePerThread(threads.size() + 1);
@@ -952,7 +952,7 @@ public class KafkaStreams implements AutoCloseable {
             names.add(streamThread.getName());
         }
         final String baseName = clientId + "-StreamThread-";
-        for (int i = 0; i < threads.size(); i++) {
+        for (int i = 1; i <= threads.size(); i++) {
             final String name = baseName + i;
             if (!names.contains(name)) {
                 return i;
