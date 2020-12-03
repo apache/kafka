@@ -27,17 +27,17 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.OffsetAndEpoch;
 
 public final class FileRawSnapshotWriter implements RawSnapshotWriter {
-    private final Path path;
+    private final Path tempSnapshotPath;
     private final FileChannel channel;
     private final OffsetAndEpoch snapshotId;
     private boolean frozen = false;
 
     private FileRawSnapshotWriter(
-        Path path,
+        Path tempSnapshotPath,
         FileChannel channel,
         OffsetAndEpoch snapshotId
     ) {
-        this.path = path;
+        this.tempSnapshotPath = tempSnapshotPath;
         this.channel = channel;
         this.snapshotId = snapshotId;
     }
@@ -56,7 +56,7 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
     public void append(ByteBuffer buffer) throws IOException {
         if (frozen) {
             throw new IllegalStateException(
-                String.format("Append not supported. Snapshot is already frozen: id = %s; path = %s", snapshotId, path)
+                String.format("Append not supported. Snapshot is already frozen: id = %s; temp path = %s", snapshotId, tempSnapshotPath)
             );
         }
 
@@ -74,18 +74,19 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
         frozen = true;
 
         // Set readonly and ignore the result
-        if (!path.toFile().setReadOnly()) {
-            throw new IOException(String.format("Unable to set file %s as read-only", path));
+        if (!tempSnapshotPath.toFile().setReadOnly()) {
+            throw new IOException(String.format("Unable to set file (%s) as read-only", tempSnapshotPath));
         }
 
-        Path destination = Snapshots.moveRename(path, snapshotId);
-        Files.move(path, destination, StandardCopyOption.ATOMIC_MOVE);
+        Path destination = Snapshots.moveRename(tempSnapshotPath, snapshotId);
+        Files.move(tempSnapshotPath, destination, StandardCopyOption.ATOMIC_MOVE);
     }
 
     @Override
     public void close() throws IOException {
         channel.close();
-        Files.deleteIfExists(path);
+        // This is a noop if freeze was called before calling close
+        Files.deleteIfExists(tempSnapshotPath);
     }
 
     /**

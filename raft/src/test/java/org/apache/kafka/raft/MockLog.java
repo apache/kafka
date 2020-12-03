@@ -21,12 +21,13 @@ import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
@@ -491,12 +492,12 @@ public class MockLog implements ReplicatedLog {
 
     final class MockRawSnapshotWriter implements RawSnapshotWriter {
         private final OffsetAndEpoch snapshotId;
-        private ByteBuffer data;
+        private ByteBufferOutputStream data;
         private boolean frozen;
 
         public MockRawSnapshotWriter(OffsetAndEpoch snapshotId) {
             this.snapshotId = snapshotId;
-            this.data = ByteBuffer.allocate(0);
+            this.data = new ByteBufferOutputStream(0);
             this.frozen = false;
         }
 
@@ -516,16 +517,7 @@ public class MockLog implements ReplicatedLog {
                 throw new RuntimeException("Snapshot is already frozen " + snapshotId);
             }
 
-            if (!(data.remaining() >= buffer.remaining())) {
-                ByteBuffer old = data;
-                old.flip();
-
-                int newSize = Math.max(data.capacity() * 2, data.capacity() + buffer.remaining());
-                data = ByteBuffer.allocate(newSize);
-
-                data.put(old);
-            }
-            data.put(buffer);
+            data.write(buffer);
         }
 
         @Override
@@ -535,10 +527,15 @@ public class MockLog implements ReplicatedLog {
 
         @Override
         public void freeze() {
-            frozen = true;
-            data.flip();
+            if (frozen) {
+                throw new RuntimeException("Snapshot is already frozen " + snapshotId);
+            }
 
-            snapshots.putIfAbsent(snapshotId, new MockRawSnapshotReader(snapshotId, data));
+            frozen = true;
+            ByteBuffer buffer = data.buffer();
+            buffer.flip();
+
+            snapshots.putIfAbsent(snapshotId, new MockRawSnapshotReader(snapshotId, buffer));
         }
 
         @Override

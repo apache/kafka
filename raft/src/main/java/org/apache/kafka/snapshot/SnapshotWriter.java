@@ -116,11 +116,9 @@ final public class SnapshotWriter<T> implements Closeable {
 
         accumulator.append(snapshot.snapshotId().epoch, records);
 
-        if (!accumulator.needsDrain(time.milliseconds())) {
-            return;
+        if (accumulator.needsDrain(time.milliseconds())) {
+            appendBatches(accumulator.drain());
         }
-
-        appendBatches(accumulator.drain());
     }
 
     /**

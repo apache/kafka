@@ -23,8 +23,7 @@ import java.text.NumberFormat;
 import org.apache.kafka.raft.OffsetAndEpoch;
 
 final class Snapshots {
-    private static final String SNAPSHOT_DIR = "snapshots";
-    private static final String SUFFIX =  ".snapshot";
+    private static final String SUFFIX =  ".checkpoint";
     private static final String PARTIAL_SUFFIX = String.format("%s.part", SUFFIX);
 
     private static final NumberFormat OFFSET_FORMATTER = NumberFormat.getInstance();
@@ -39,7 +38,7 @@ final class Snapshots {
     }
 
     static Path snapshotDir(Path logDir) {
-        return logDir.resolve(SNAPSHOT_DIR);
+        return logDir;
     }
 
     static Path snapshotPath(Path logDir, OffsetAndEpoch snapshotId) {
