@@ -111,22 +111,4 @@ public class AlterClientQuotasResponse extends AbstractResponse {
             .setEntries(entries));
     }
 
-//    public AlterClientQuotasResponse(Collection<ClientQuotaEntity> entities, int throttleTimeMs, Throwable e) {
-//        short errorCode = Errors.forException(e).code();
-//        String errorMessage = e.getMessage();
-//
-//        List<EntryData> entries = new ArrayList<>(entities.size());
-//        for (ClientQuotaEntity entity : entities) {
-//            entries.add(new EntryData()
-//                    .setErrorCode(errorCode)
-//                    .setErrorMessage(errorMessage)
-//                    .setEntity(toEntityData(entity)));
-//        }
-//
-//        this.data = new AlterClientQuotasResponseData()
-//                .setThrottleTimeMs(throttleTimeMs)
-//                .setEntries(entries);
-//    }
-//    }
-
 }

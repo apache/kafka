@@ -20,6 +20,7 @@ import org.apache.kafka.common.message.AlterClientQuotasRequestData;
 import org.apache.kafka.common.message.AlterClientQuotasRequestData.EntityData;
 import org.apache.kafka.common.message.AlterClientQuotasRequestData.EntryData;
 import org.apache.kafka.common.message.AlterClientQuotasRequestData.OpData;
+import org.apache.kafka.common.message.AlterClientQuotasResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
@@ -116,17 +117,20 @@ public class AlterClientQuotasRequest extends AbstractRequest {
 
     @Override
     public AlterClientQuotasResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        ArrayList<ClientQuotaEntity> entities = new ArrayList<>(data.entries().size());
+        List<AlterClientQuotasResponseData.EntryData> responseEntries = new ArrayList<>();
         for (EntryData entryData : data.entries()) {
-            Map<String, String> entity = new HashMap<>(entryData.entity().size());
+            List<AlterClientQuotasResponseData.EntityData> responseEntities = new ArrayList<>();
             for (EntityData entityData : entryData.entity()) {
-                entity.put(entityData.entityType(), entityData.entityName());
+                responseEntities.add(new AlterClientQuotasResponseData.EntityData()
+                    .setEntityType(entityData.entityType())
+                    .setEntityName(entityData.entityName()));
             }
-            entities.add(new ClientQuotaEntity(entity));
+            responseEntries.add(new AlterClientQuotasResponseData.EntryData().setEntity(responseEntities));
         }
-        //FIXME
-        return null;
-//        return new AlterClientQuotasResponse(entities, throttleTimeMs, e);
+        AlterClientQuotasResponseData responseData = new AlterClientQuotasResponseData()
+                .setThrottleTimeMs(throttleTimeMs)
+                .setEntries(responseEntries);
+        return new AlterClientQuotasResponse(responseData);
     }
 
     public static AlterClientQuotasRequest parse(ByteBuffer buffer, short version) {
