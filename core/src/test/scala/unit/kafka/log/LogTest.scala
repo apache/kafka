@@ -969,7 +969,7 @@ class LogTest {
       producerIdExpirationCheckIntervalMs = 30000,
       topicPartition = Log.parseTopicPartitionName(logDir),
       producerStateManager = stateManager,
-      logDirFailureChannel = null,
+      logDirFailureChannel = new LogDirFailureChannel(1),
       hadCleanShutdown = false)
 
     EasyMock.verify(stateManager)
@@ -2824,12 +2824,7 @@ class LogTest {
     log.appendAsLeader(TestUtils.singletonRecords(value = null), leaderEpoch = 0)
     assertEquals(0, readLog(log, 0, 4096).records.records.iterator.next().offset)
     log.logDirFailureChannel.maybeAddOfflineLogDir(logDir.getParent, "Simulating failed log dir", new IOException("Test failure"))
-    try {
-      log.appendAsLeader(TestUtils.singletonRecords(value = null), leaderEpoch = 0)
-      fail()
-    } catch {
-      case _: KafkaStorageException => // good!
-    }
+    assertThrows[KafkaStorageException](log.appendAsLeader(TestUtils.singletonRecords(value = null), leaderEpoch = 0))
     assertEquals(0, readLog(log, 0, 4096).records.records.iterator.next().offset)
   }
 
@@ -4425,13 +4420,13 @@ class LogTest {
     assertEquals(11L, log.logEndOffset)
     assertEquals(0L, log.lastStableOffset)
 
-    // Try the append a second time. The appended offset in the log should still increase.
-    // Note that the second append does not write to the transaction index because the producer
-    // state has already been updated and we do not write index entries for empty transactions.
-    // In the future, we may strengthen the fencing logic so that additional writes to the
-    // log are not possible after an IO error (see KAFKA-10778).
-    appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, coordinatorEpoch = 1)
-    assertEquals(12L, log.logEndOffset)
+    // Try the append a second time. The appended offset in the log should not increase
+    // because the log dir is marked as failed.  Nor will there be a write to the transaction
+    // index.
+    assertThrows[KafkaStorageException] {
+      appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, coordinatorEpoch = 1)
+    }
+    assertEquals(11L, log.logEndOffset)
     assertEquals(0L, log.lastStableOffset)
 
     // Even if the high watermark is updated, the first unstable offset does not move
@@ -4441,7 +4436,7 @@ class LogTest {
     log.close()
 
     val reopenedLog = createLog(logDir, logConfig, lastShutdownClean = false)
-    assertEquals(12L, reopenedLog.logEndOffset)
+    assertEquals(11L, reopenedLog.logEndOffset)
     assertEquals(1, reopenedLog.activeSegment.txnIndex.allAbortedTxns.size)
     reopenedLog.updateHighWatermark(12L)
     assertEquals(None, reopenedLog.firstUnstableOffset)

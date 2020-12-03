@@ -52,7 +52,7 @@ class LogDirFailureChannel(logDirNum: Int) extends Logging {
   /*
    * Return whether the given log dir is offline.
    */
-  def logDirIsFailed(logDir: String): Boolean = {
+  def logDirIsOffline(logDir: String): Boolean = {
     offlineLogDirs.containsKey(logDir)
   }
 

@@ -1219,7 +1219,7 @@ class Log(@volatile private var _dir: File,
               appendInfo.logAppendTime = duplicate.timestamp
               appendInfo.logStartOffset = logStartOffset
             case None =>
-              if (logDirFailureChannel.logDirIsFailed(parentDir)) {
+              if (logDirFailureChannel.logDirIsOffline(parentDir)) {
                 throw new KafkaStorageException(s"The log dir $parentDir has failed.");
               }
               segment.append(largestOffset = appendInfo.lastOffset,
