@@ -249,6 +249,7 @@ class PartitionLockTest extends Logging {
     val brokerId = 0
     val topicPartition = new TopicPartition("test-topic", 0)
     val stateStore: PartitionStateStore = mock(classOf[PartitionStateStore])
+    val isrChangeListener: IsrChangeListener = mock(classOf[IsrChangeListener])
     val delayedOperations: DelayedOperations = mock(classOf[DelayedOperations])
     val metadataCache: MetadataCache = mock(classOf[MetadataCache])
     val offsetCheckpoints: OffsetCheckpoints = mock(classOf[OffsetCheckpoints])
@@ -261,6 +262,7 @@ class PartitionLockTest extends Logging {
       localBrokerId = brokerId,
       mockTime,
       stateStore,
+      isrChangeListener,
       delayedOperations,
       metadataCache,
       logManager,
