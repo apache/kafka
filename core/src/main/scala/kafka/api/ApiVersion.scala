@@ -130,6 +130,8 @@ object ApiVersion {
 
   val latestVersion: ApiVersion = allVersions.last
 
+  def isTruncationOnFetchSupported(version: ApiVersion): Boolean = version >= KAFKA_2_7_IV1
+
   /**
    * Return the minimum `ApiVersion` that supports `RecordVersion`.
    */
@@ -189,6 +191,8 @@ sealed trait ApiVersion extends Ordered[ApiVersion] {
   def shortVersion: String
   def recordVersion: RecordVersion
   def id: Int
+
+  def isAlterIsrSupported: Boolean = this >= KAFKA_2_7_IV2
 
   override def compare(that: ApiVersion): Int =
     ApiVersion.orderingByVersion.compare(this, that)

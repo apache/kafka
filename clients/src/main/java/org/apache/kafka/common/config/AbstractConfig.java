@@ -412,9 +412,22 @@ public class AbstractConfig {
      * @return A configured instance of the class
      */
     public <T> T getConfiguredInstance(String key, Class<T> t) {
+        return getConfiguredInstance(key, t, Collections.emptyMap());
+    }
+
+    /**
+     * Get a configured instance of the give class specified by the given configuration key. If the object implements
+     * Configurable configure it using the configuration.
+     *
+     * @param key The configuration key for the class
+     * @param t The interface the class should implement
+     * @param configOverrides override origin configs
+     * @return A configured instance of the class
+     */
+    public <T> T getConfiguredInstance(String key, Class<T> t, Map<String, Object> configOverrides) {
         Class<?> c = getClass(key);
 
-        return getConfiguredInstance(c, t, originals());
+        return getConfiguredInstance(c, t, originals(configOverrides));
     }
 
     /**
