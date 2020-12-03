@@ -1438,7 +1438,7 @@ class Partition(val topicPartition: TopicPartition,
             case _ =>
               warn(s"Controller failed to update ISR to $proposedIsrState due to unexpected $error. Retrying.")
               sendAlterIsrRequest(proposedIsrState)
-        }
+          }
         case Right(leaderAndIsr: LeaderAndIsr) =>
           // Success from controller, still need to check a few things
           if (leaderAndIsr.leaderEpoch != leaderEpoch) {
