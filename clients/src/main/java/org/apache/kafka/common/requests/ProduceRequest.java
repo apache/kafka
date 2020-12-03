@@ -190,7 +190,7 @@ public class ProduceRequest extends AbstractRequest {
     public ProduceResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         /* In case the producer doesn't actually want any response */
         if (acks == 0) return null;
-        Errors error = Errors.forException(e);
+        ApiError apiError = ApiError.fromThrowable(e);
         ProduceResponseData data = new ProduceResponseData().setThrottleTimeMs(throttleTimeMs);
         partitionSizes().forEach((tp, ignored) -> {
             ProduceResponseData.TopicProduceResponse tpr = data.responses().find(tp.topic());
@@ -204,8 +204,8 @@ public class ProduceRequest extends AbstractRequest {
                     .setBaseOffset(INVALID_OFFSET)
                     .setLogAppendTimeMs(RecordBatch.NO_TIMESTAMP)
                     .setLogStartOffset(INVALID_OFFSET)
-                    .setErrorMessage(e.getMessage())
-                    .setErrorCode(error.code()));
+                    .setErrorMessage(apiError.message())
+                    .setErrorCode(apiError.error().code()));
         });
         return new ProduceResponse(data);
     }
