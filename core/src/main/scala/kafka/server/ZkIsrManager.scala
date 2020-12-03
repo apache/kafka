@@ -5,8 +5,7 @@ import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 
-class ZkIsrManager(zkClient: KafkaZkClient,
-                   replicaManager: ReplicaManager) extends AlterIsrManager {
+class ZkIsrManager(zkClient: KafkaZkClient) extends AlterIsrManager {
   override def start(): Unit = {
     // No-op
   }
@@ -20,11 +19,8 @@ class ZkIsrManager(zkClient: KafkaZkClient,
       alterIsrItem.leaderAndIsr, alterIsrItem.controllerEpoch)
 
     if (updateSucceeded) {
-      replicaManager.recordIsrChange(alterIsrItem.topicPartition)
-      replicaManager.isrShrinkRate.mark()
       alterIsrItem.callback.apply(Right(alterIsrItem.leaderAndIsr.withZkVersion(newVersion)))
     } else {
-      replicaManager.failedIsrUpdatesRate.mark()
       alterIsrItem.callback.apply(Left(Errors.INVALID_UPDATE_VERSION))
     }
     true
