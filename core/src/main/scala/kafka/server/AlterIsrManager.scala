@@ -23,6 +23,7 @@ import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
 import kafka.api.LeaderAndIsr
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.{Logging, Scheduler}
+import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.{AlterIsrRequestData, AlterIsrResponseData}
@@ -44,6 +45,20 @@ trait AlterIsrManager {
   def enqueue(alterIsrItem: AlterIsrItem): Boolean
 
   def clearPending(topicPartition: TopicPartition): Unit
+}
+
+object AlterIsrManager {
+  def apply(controllerChannelManager: BrokerToControllerChannelManager,
+            scheduler: Scheduler,
+            time: Time,
+            brokerId: Int,
+            brokerEpochSupplier: () => Long): AlterIsrManager = {
+    new AlterIsrManagerImpl(controllerChannelManager, scheduler, time, brokerId, brokerEpochSupplier)
+  }
+
+  def apply(zkClient: KafkaZkClient): AlterIsrManager = {
+    new ZkIsrManager(zkClient)
+  }
 }
 
 case class AlterIsrItem(topicPartition: TopicPartition,
