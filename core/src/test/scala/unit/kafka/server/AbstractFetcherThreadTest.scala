@@ -894,7 +894,7 @@ class AbstractFetcherThreadTest {
     def addPartitions(initialFetchStates: Map[TopicPartition, InitialFetchState], forceTruncation: Boolean): Set[TopicPartition] = {
       latestEpochDefault = if (forceTruncation) None else Some(0)
       val partitions = super.addPartitions(initialFetchStates)
-      latestEpochDefault = Some (0)
+      latestEpochDefault = Some(0)
       partitions
     }
 

@@ -17,16 +17,14 @@
 
 package kafka.server
 
-import kafka.utils.Implicits._
-import kafka.utils.Logging
 import kafka.cluster.BrokerEndPoint
 import kafka.metrics.KafkaMetricsGroup
+import kafka.utils.Implicits._
+import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
 
-import scala.collection.mutable
-import scala.collection.{Map, Set}
-import scala.jdk.CollectionConverters._
+import scala.collection.{Map, Set, mutable}
 
 abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: String, clientId: String, numFetchers: Int)
   extends Logging with KafkaMetricsGroup {
@@ -65,7 +63,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   def resizeThreadPool(newSize: Int): Unit = {
     def migratePartitions(newSize: Int): Unit = {
       fetcherThreadMap.forKeyValue { (id, thread) =>
-        val partitionStates = removeFetcherForPartitions(thread.partitions.asScala)
+        val partitionStates = removeFetcherForPartitions(thread.partitions)
         if (id.fetcherId >= newSize)
           thread.shutdown()
         val fetchStates = partitionStates.map { case (topicPartition, currentFetchState) =>

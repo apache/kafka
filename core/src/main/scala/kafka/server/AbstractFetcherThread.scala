@@ -714,9 +714,9 @@ abstract class AbstractFetcherThread(name: String,
     finally partitionMapLock.unlock()
   }
 
-  def partitions: util.Set[TopicPartition] = {
+  def partitions: Set[TopicPartition] = {
     partitionMapLock.lockInterruptibly()
-    try new util.HashSet(partitionStates.partitionSet)
+    try partitionStates.partitionSet.asScala.toSet
     finally partitionMapLock.unlock()
   }
 
