@@ -294,9 +294,11 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   def recordIsrChange(topicPartition: TopicPartition): Unit = {
-    isrChangeSet synchronized {
-      isrChangeSet += topicPartition
-      lastIsrChangeMs.set(time.milliseconds())
+    if (!config.interBrokerProtocolVersion.isAlterIsrSupported) {
+      isrChangeSet synchronized {
+        isrChangeSet += topicPartition
+        lastIsrChangeMs.set(time.milliseconds())
+      }
     }
   }
   /**
@@ -341,7 +343,7 @@ class ReplicaManager(val config: KafkaConfig,
     // A follower can lag behind leader for up to config.replicaLagTimeMaxMs x 1.5 before it is removed from ISR
     scheduler.schedule("isr-expiration", maybeShrinkIsr _, period = config.replicaLagTimeMaxMs / 2, unit = TimeUnit.MILLISECONDS)
     // If using AlterIsr, we don't need the znode ISR propagation
-    if (config.interBrokerProtocolVersion < KAFKA_2_7_IV2) {
+    if (!config.interBrokerProtocolVersion.isAlterIsrSupported) {
       scheduler.schedule("isr-change-propagation", maybePropagateIsrChanges _,
         period = isrChangeNotificationConfig.checkIntervalMs, unit = TimeUnit.MILLISECONDS)
     } else {
