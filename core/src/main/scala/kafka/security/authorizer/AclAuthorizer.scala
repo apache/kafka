@@ -320,17 +320,13 @@ class AclAuthorizer extends Authorizer with Logging {
       requestContext.principal().getPrincipalType,
       requestContext.principal().getName).toString
 
-    val denyPatterns = matchingPatterns(
-      principal,
-      requestContext.clientAddress().getHostAddress,
-      op,
-      resourceType,
-      AclPermissionType.DENY
-    )
-
+    val allowPatterns = mutable.Set[ResourcePattern]()
+    val denyLiterals = mutable.HashSet[String]()
+    val denyPrefixes = mutable.HashSet[String]()
     val action = new Action(op, new ResourcePattern(resourceType, "NONE", PatternType.UNKNOWN), 0, true, true)
 
-    if (denyAll(denyPatterns)) {
+    if (processPatternsAndCanDenyAll(principal, requestContext.clientAddress().getHostAddress, op, resourceType,
+        allowPatterns, denyLiterals, denyPrefixes)) {
       logAuditMessage(requestContext, action, false)
       return AuthorizationResult.DENIED
     }
@@ -340,15 +336,7 @@ class AclAuthorizer extends Authorizer with Logging {
       return AuthorizationResult.ALLOWED
     }
 
-    val allowPatterns = matchingPatterns(
-      principal,
-      requestContext.clientAddress().getHostAddress,
-      op,
-      resourceType,
-      AclPermissionType.ALLOW
-    )
-
-    if (allowAny(allowPatterns, denyPatterns)) {
+    if (allowAny(allowPatterns, denyLiterals, denyPrefixes)) {
       logAuditMessage(requestContext, action, true)
       return AuthorizationResult.ALLOWED
     }
@@ -357,63 +345,59 @@ class AclAuthorizer extends Authorizer with Logging {
     AuthorizationResult.DENIED
   }
 
-  def matchingPatterns(principal: String, host: String, op: AclOperation,
-                       resourceType: ResourceType,
-                       permission: AclPermissionType): Set[ResourcePattern] = {
-    var resources = Set[ResourcePattern]()
+  def processPatternsAndCanDenyAll(principal: String, host: String, op: AclOperation, resourceType: ResourceType,
+                      allowPatterns: mutable.Set[ResourcePattern], denyLiterals: mutable.Set[String],
+                      denyPrefixes: mutable.Set[String]): Boolean = {
     for (p <- Set(principal, AclEntry.WildcardPrincipal.toString)) {
       for (h <- Set(host, AclEntry.WildcardHost)) {
         for (o <- Set(op, AclOperation.ALL)) {
-          val ace = new AccessControlEntry(p, h, o, permission)
-          resourceCache.get(ace) match {
-            case Some(r) => resources ++= r.filter(r => r.resourceType() == resourceType)
+          val allowAce = new AccessControlEntry(p, h, o, AclPermissionType.ALLOW)
+          resourceCache.get(allowAce) match {
+            case Some(patterns) => allowPatterns.addAll(patterns.filter(p => p.resourceType() == resourceType))
+            case None =>
+          }
+          val denyAce = new AccessControlEntry(p, h, o, AclPermissionType.DENY)
+          resourceCache.get(denyAce) match {
+            case Some(patterns) => patterns.filter(p => p.resourceType() == resourceType).foreach(p => {
+              if (SecurityUtils.canDenyAll(p)) {
+                return true
+              }
+              p.patternType() match {
+                case PatternType.LITERAL => denyLiterals.add(p.name())
+                case PatternType.PREFIXED => denyPrefixes.add(p.name())
+                case _ =>
+              }
+            })
             case None =>
           }
         }
       }
     }
-    resources
+    false
   }
 
-  private def denyAll(denyResources: Set[ResourcePattern]): Boolean =
-    denyResources.exists(rp => denyAll(rp))
+  private def allowAny(allowPatterns: mutable.Set[ResourcePattern],
+                       denyLiterals: mutable.Set[String], denyPrefixes: mutable.Set[String]): Boolean =
+    allowPatterns.exists(pattern => allow(pattern, denyLiterals, denyPrefixes))
 
-  private def denyAll(rp: ResourcePattern): Boolean =
-    rp.patternType() == PatternType.LITERAL && rp.name() == ResourcePattern.WILDCARD_RESOURCE
-
-  private def allowAny(allowPatterns: Set[ResourcePattern], denyPatterns: Set[ResourcePattern]): Boolean =
-    allowPatterns.exists(pattern => allow(pattern, denyPatterns))
-
-  private def allow(pattern: ResourcePattern, denyPatterns: Set[ResourcePattern]): Boolean = {
-    pattern.patternType() match {
-      case PatternType.LITERAL =>
-        // We've checked the potential dominated wildcard deny by canDenyAnyAllow
-        if (pattern.name() == ResourcePattern.WILDCARD_RESOURCE)
-          return true
-        for (denyPattern <- denyPatterns) {
-          denyPattern.patternType() match {
-            case PatternType.LITERAL =>
-              if (pattern.name().equals(denyPattern.name()))
-                return false
-            case PatternType.PREFIXED =>
-              if (pattern.name().startsWith(denyPattern.name()))
-                return false
-            case _ =>
-          }
+  private def allow(allowPattern: ResourcePattern,
+                    denyLiterals: mutable.Set[String], denyPrefixes: mutable.Set[String]): Boolean = {
+    (allowPattern.patternType(), allowPattern.name()) match {
+      case (PatternType.LITERAL, ResourcePattern.WILDCARD_RESOURCE) => return true
+      case (PatternType.LITERAL, _) =>
+        if (denyLiterals.exists(denyLiteral => denyLiteral.equals(allowPattern.name()))) {
+          return false
         }
-        true
-      case PatternType.PREFIXED =>
-        for (denyPattern <- denyPatterns) {
-          denyPattern.patternType() match {
-            case PatternType.PREFIXED =>
-              if (pattern.name().startsWith(denyPattern.name()))
-                return false
-            case _ =>
-          }
-        }
-        true
-      case _ => false
+      case (_, _) =>
     }
+    val sb = new StringBuilder
+    for (ch <- allowPattern.name().toCharArray) {
+      sb.append(ch)
+      if (denyPrefixes.contains(sb.toString())) {
+        return false
+      }
+    }
+    true
   }
 
   private def authorizeAction(requestContext: AuthorizableRequestContext, action: Action): AuthorizationResult = {

@@ -29,6 +29,7 @@ import org.apache.kafka.common.errors.{ApiException, InvalidRequestException}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.ApiError
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType}
+import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.SecurityUtils
 import org.apache.kafka.common.utils.SecurityUtils.parseKafkaPrincipal
 import org.apache.kafka.server.authorizer.AclDeleteResult.AclBindingDeleteResult
@@ -186,7 +187,9 @@ class AuthorizerWrapper(private[kafka] val baseAuthorizer: kafka.security.auth.A
                                        resourceType: ResourceType): AuthorizationResult = {
     SecurityUtils.authorizeByResourceTypeCheckArgs(op, resourceType)
 
-    if (shouldAllowEveryoneIfNoAclIsFound && !denyAllResource(requestContext, op, resourceType)) {
+    if (denyAllResource(requestContext, op, resourceType)) {
+      AuthorizationResult.DENIED
+    } else if (shouldAllowEveryoneIfNoAclIsFound) {
       AuthorizationResult.ALLOWED
     } else {
       super.authorizeByResourceType(requestContext, op, resourceType)
@@ -198,45 +201,12 @@ class AuthorizerWrapper(private[kafka] val baseAuthorizer: kafka.security.auth.A
                       resourceType: ResourceType): Boolean = {
     val resourceTypeFilter = new ResourcePatternFilter(
       resourceType, null, PatternType.ANY)
+    val principal = new KafkaPrincipal(requestContext.principal.getPrincipalType, requestContext.principal.getName)
     val accessControlEntry = new AccessControlEntryFilter(
-      null, null, null, AclPermissionType.DENY)
+      principal.toString, requestContext.clientAddress().getHostAddress, op, AclPermissionType.DENY)
     val aclFilter = new AclBindingFilter(resourceTypeFilter, accessControlEntry)
 
-    for (binding <- acls(aclFilter).asScala) {
-      if (aceMatched(requestContext, op, binding) && canDenyAll(binding.pattern()))
-        return true
-    }
-    false
+    acls(aclFilter).asScala.exists(binding => SecurityUtils.canDenyAll(binding.pattern()))
   }
-
-  @inline
-  private def aceMatched(requestContext: AuthorizableRequestContext,
-                 op: AclOperation,
-                 binding: AclBinding): Boolean = {
-    (hostMatched(requestContext, binding) && principalMatched(requestContext, binding)
-      && operationMatched(op, binding))
-  }
-
-  @inline
-  private def hostMatched(requestContext: AuthorizableRequestContext,
-                  binding: AclBinding): Boolean =
-    (binding.entry().host().equals(requestContext.clientAddress().getHostAddress)
-      || binding.entry().host().equals(AclEntry.WildcardHost))
-
-  @inline
-  private def principalMatched(requestContext: AuthorizableRequestContext,
-                  binding: AclBinding): Boolean =
-    (binding.entry().principal().equals(requestContext.principal().toString)
-      || binding.entry().principal().equals(AclEntry.WildcardPrincipal.toString))
-
-  @inline
-  private def operationMatched(op: AclOperation,
-                       binding: AclBinding): Boolean =
-    (binding.entry().operation() == op
-      || binding.entry().operation() == AclOperation.ALL)
-
-  @inline
-  private def canDenyAll(pattern: ResourcePattern): Boolean =
-    pattern.patternType() == PatternType.LITERAL && pattern.name().equals(ResourcePattern.WILDCARD_RESOURCE)
 
 }

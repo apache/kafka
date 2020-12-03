@@ -1663,7 +1663,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       fail("Should have raised ClusterAuthorizationException")
     } catch {
       case e: ExecutionException =>
-        assertTrue(e.getCause.isInstanceOf[ClusterAuthorizationException])
+        assertTrue(e.getCause.isInstanceOf[TopicAuthorizationException])
     }
     try {
       // the second time, the call to send itself should fail (the producer becomes unusable
@@ -1672,7 +1672,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       fail("Should have raised ClusterAuthorizationException")
     } catch {
       case e: ExecutionException =>
-        assertTrue(e.getCause.isInstanceOf[ClusterAuthorizationException])
+        assertTrue(e.getCause.isInstanceOf[TopicAuthorizationException])
     }
   }
 
