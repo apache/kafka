@@ -246,13 +246,6 @@ public class TestUtils {
         return buffer;
     }
 
-    public static ByteBuffer serializeMessage(Message message, short version) {
-        ObjectSerializationCache serializationCache = new ObjectSerializationCache();
-        ByteBuffer buffer = ByteBuffer.allocate(message.size(serializationCache, version));
-        message.write(new ByteBufferAccessor(buffer), serializationCache, version);
-        return buffer;
-    }
-
     @FunctionalInterface
     public interface PartitionMetadataSupplier {
         MetadataResponse.PartitionMetadata supply(Errors error,

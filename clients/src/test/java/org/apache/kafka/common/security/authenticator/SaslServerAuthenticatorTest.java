@@ -113,7 +113,7 @@ public class SaslServerAuthenticatorTest {
             "apache-kafka-java", AppInfoParser.getVersion());
     }
 
-    public void testApiVersionsRequest(short version, String expectedSoftwareName,
+    private void testApiVersionsRequest(short version, String expectedSoftwareName,
                                        String expectedSoftwareVersion) throws IOException {
         TransportLayer transportLayer = mock(TransportLayer.class, Answers.RETURNS_DEEP_STUBS);
         Map<String, ?> configs = Collections.singletonMap(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
@@ -126,7 +126,7 @@ public class SaslServerAuthenticatorTest {
         ByteBuffer headerBuffer = TestUtils.serializeRequestHeader(header);
 
         ApiVersionsRequest request = new ApiVersionsRequest.Builder().build(version);
-        ByteBuffer requestBuffer = TestUtils.serializeMessage(request.data(), version);
+        ByteBuffer requestBuffer = request.serializeBody();
 
         when(transportLayer.socketChannel().socket().getInetAddress()).thenReturn(InetAddress.getLoopbackAddress());
 
