@@ -190,7 +190,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -530,12 +529,15 @@ public class RequestResponseTest {
         }
     }
 
-    private void verifyDescribeConfigsResponse(DescribeConfigsResponse expected, DescribeConfigsResponse actual, int version) throws Exception {
+    private void verifyDescribeConfigsResponse(DescribeConfigsResponse expected, DescribeConfigsResponse actual,
+                                               int version) {
         for (Map.Entry<ConfigResource, DescribeConfigsResult> resource : expected.resultMap().entrySet()) {
             List<DescribeConfigsResourceResult> actualEntries = actual.resultMap().get(resource.getKey()).configs();
-            Iterator<DescribeConfigsResourceResult> expectedEntries = expected.resultMap().get(resource.getKey()).configs().iterator();
-            for (DescribeConfigsResourceResult actualEntry : actualEntries) {
-                DescribeConfigsResourceResult expectedEntry = expectedEntries.next();
+            List<DescribeConfigsResourceResult> expectedEntries = expected.resultMap().get(resource.getKey()).configs();
+            assertEquals(expectedEntries.size(), actualEntries.size());
+            for (int i = 0; i < actualEntries.size(); ++i) {
+                DescribeConfigsResourceResult actualEntry = actualEntries.get(i);
+                DescribeConfigsResourceResult expectedEntry = expectedEntries.get(i);
                 assertEquals(expectedEntry.name(), actualEntry.name());
                 assertEquals("Non-matching values for " + actualEntry.name() + " in version " + version,
                         expectedEntry.value(), actualEntry.value());
@@ -550,13 +552,13 @@ public class RequestResponseTest {
                     assertEquals("Non-matching configType for " + actualEntry.name() + " in version " + version,
                             expectedEntry.configType(), actualEntry.configType());
                 }
-                if (version == 1 || version == 3 || (expectedEntry.configSource() != DescribeConfigsResponse.ConfigSource.DYNAMIC_BROKER_CONFIG.id() &&
-                        expectedEntry.configSource() != DescribeConfigsResponse.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG.id()))
-                    assertEquals("Non-matching configSource for " + actualEntry.name() + " in version " + version,
-                            expectedEntry.configSource(), actualEntry.configSource());
-                else
+                if (version == 0) {
                     assertEquals("Non matching configSource for " + actualEntry.name() + " in version " + version,
                             DescribeConfigsResponse.ConfigSource.STATIC_BROKER_CONFIG.id(), actualEntry.configSource());
+                } else {
+                    assertEquals("Non-matching configSource for " + actualEntry.name() + " in version " + version,
+                            expectedEntry.configSource(), actualEntry.configSource());
+                }
             }
         }
     }

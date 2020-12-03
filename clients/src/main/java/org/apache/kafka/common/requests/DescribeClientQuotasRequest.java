@@ -113,10 +113,11 @@ public class DescribeClientQuotasRequest extends AbstractRequest {
 
     @Override
     public DescribeClientQuotasResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+        ApiError error = ApiError.fromThrowable(e);
         return new DescribeClientQuotasResponse(new DescribeClientQuotasResponseData()
             .setThrottleTimeMs(throttleTimeMs)
-            .setErrorCode(Errors.forException(e).code())
-            .setErrorMessage(e.getMessage())
+            .setErrorCode(error.error().code())
+            .setErrorMessage(error.message())
             .setEntries(null));
     }
 
