@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.DeleteAclsResponseData;
 import org.apache.kafka.common.message.DeleteAclsResponseData.DeleteAclsFilterResult;
 import org.apache.kafka.common.message.DeleteAclsResponseData.DeleteAclsMatchingAcl;
@@ -82,22 +83,22 @@ public class DeleteAclsResponseTest {
     private static final DeleteAclsFilterResult UNKNOWN_RESPONSE = new DeleteAclsFilterResult().setMatchingAcls(asList(
             UNKNOWN_ACL));
 
+    @Test
     public void shouldThrowOnV0IfNotLiteral() {
-        DeleteAclsResponse response = new DeleteAclsResponse(
-                new DeleteAclsResponseData()
-                        .setThrottleTimeMs(10)
-                        .setFilterResults(singletonList(PREFIXED_RESPONSE)),
-                V0);
-        assertThrows(IllegalArgumentException.class, () -> response.serializeBody(V0));
+        assertThrows(UnsupportedVersionException.class, () -> new DeleteAclsResponse(
+            new DeleteAclsResponseData()
+                .setThrottleTimeMs(10)
+                .setFilterResults(singletonList(PREFIXED_RESPONSE)),
+            V0));
     }
 
+    @Test
     public void shouldThrowOnIfUnknown() {
-        DeleteAclsResponse response = new DeleteAclsResponse(
-                new DeleteAclsResponseData()
-                    .setThrottleTimeMs(10)
-                    .setFilterResults(singletonList(UNKNOWN_RESPONSE)),
-                V1);
-        assertThrows(IllegalArgumentException.class, () -> response.serializeBody(V1));
+        assertThrows(IllegalArgumentException.class, () -> new DeleteAclsResponse(
+            new DeleteAclsResponseData()
+                .setThrottleTimeMs(10)
+                .setFilterResults(singletonList(UNKNOWN_RESPONSE)),
+            V1));
     }
 
     @Test
