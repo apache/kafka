@@ -996,6 +996,8 @@ class AdminManager(val config: KafkaConfig,
         case (Some(user), None, None) => (user, ConfigType.User, DynamicConfig.User.configKeys)
         case (None, Some(clientId), None) => (clientId, ConfigType.Client, DynamicConfig.Client.configKeys)
         case (None, None, Some(ip)) => (ip, ConfigType.Ip, DynamicConfig.Ip.configKeys)
+        case (_, _, Some(_)) => throw new InvalidRequestException(s"Invalid quota entity combination, " +
+          s"IP entity should not be used with user/client ID entity.")
         case _ => throw new InvalidRequestException("Invalid client quota entity")
       }
 
