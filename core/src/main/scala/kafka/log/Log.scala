@@ -1106,6 +1106,13 @@ class Log(@volatile private var _dir: File,
         // they are valid, insert them in the log
         lock synchronized {
           checkIfMemoryMappedBufferClosed()
+
+          // check for offline log dir in case a retry following an IOException happens before the log dir
+          // is taken offline, which would result in inconsistent producer state
+          if (logDirFailureChannel.logDirIsOffline(parentDir)) {
+            throw new KafkaStorageException(s"The log dir $parentDir has failed.");
+          }
+
           if (assignOffsets) {
             // assign offsets to the message set
             val offset = new LongRef(nextOffsetMetadata.messageOffset)
@@ -1219,9 +1226,6 @@ class Log(@volatile private var _dir: File,
               appendInfo.logAppendTime = duplicate.timestamp
               appendInfo.logStartOffset = logStartOffset
             case None =>
-              if (logDirFailureChannel.logDirIsOffline(parentDir)) {
-                throw new KafkaStorageException(s"The log dir $parentDir has failed.");
-              }
               segment.append(largestOffset = appendInfo.lastOffset,
                 largestTimestamp = appendInfo.maxTimestamp,
                 shallowOffsetOfMaxTimestamp = appendInfo.offsetOfMaxTimestamp,
