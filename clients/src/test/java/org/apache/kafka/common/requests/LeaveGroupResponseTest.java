@@ -105,21 +105,19 @@ public class LeaveGroupResponseTest {
     }
 
     @Test
-    public void testEqualityWithStruct() {
+    public void testEqualityWithSerialization() {
         LeaveGroupResponseData responseData = new LeaveGroupResponseData()
-            .setErrorCode(Errors.NONE.code())
-            .setThrottleTimeMs(throttleTimeMs);
+                .setErrorCode(Errors.NONE.code())
+                .setThrottleTimeMs(throttleTimeMs);
         for (short version = 0; version <= ApiKeys.LEAVE_GROUP.latestVersion(); version++) {
-            LeaveGroupResponse primaryResponse = new LeaveGroupResponse(
-                new LeaveGroupResponseData(responseData.toStruct(version), version));
-
-            LeaveGroupResponse secondaryResponse = new LeaveGroupResponse(
-                new LeaveGroupResponseData(responseData.toStruct(version), version));
+            LeaveGroupResponse primaryResponse = LeaveGroupResponse.parse(
+                MessageTestUtil.messageToByteBuffer(responseData, version), version);
+            LeaveGroupResponse secondaryResponse = LeaveGroupResponse.parse(
+                MessageTestUtil.messageToByteBuffer(responseData, version), version);
 
             assertEquals(primaryResponse, primaryResponse);
             assertEquals(primaryResponse, secondaryResponse);
             assertEquals(primaryResponse.hashCode(), secondaryResponse.hashCode());
-
         }
     }
 
