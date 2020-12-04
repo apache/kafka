@@ -974,13 +974,13 @@ public class KafkaStreams implements AutoCloseable {
 
     /**
      * Removes one stream thread out of the running stream threads from this Kafka Streams client.
-     *
+     * <p>
      * The removed stream thread is gracefully shut down. This method does not specify which stream
      * thread is shut down.
-     *
+     * <p>
      * Since the number of stream threads decreases, the sizes of the caches in the remaining stream
      * threads are adapted so that the sum of the cache sizes over all stream threads equals the total
-     * cache size specified in configuration {@code cache.max.bytes.buffering}.
+     * cache size specified in configuration {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG}.
      *
      * @return name of the removed stream thread or empty if a stream thread could not be removed because
      *         no stream threads are alive
