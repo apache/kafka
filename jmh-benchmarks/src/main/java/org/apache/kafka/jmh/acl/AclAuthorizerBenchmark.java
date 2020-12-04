@@ -24,6 +24,7 @@ import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.acl.ResourceIndex;
 import org.apache.kafka.common.network.ClientInformation;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -70,7 +71,7 @@ import java.util.concurrent.TimeUnit;
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 public class AclAuthorizerBenchmark {
-    @Param({"10000", "40000", "80000"})
+    @Param({"10000", "50000", "200000"})
     private int resourceCount;
     //no. of. rules per resource
     @Param({"20", "100"})
@@ -86,7 +87,7 @@ public class AclAuthorizerBenchmark {
     private RequestContext context;
 
     private TreeMap<ResourcePattern, VersionedAcls> aclCache = new TreeMap<>(new AclAuthorizer.ResourceOrdering());
-    private scala.collection.mutable.HashMap<AccessControlEntry, scala.collection.mutable.HashSet<ResourcePattern>> resourceCache =
+    private scala.collection.mutable.HashMap<ResourceIndex, scala.collection.mutable.HashSet<String>> resourceCache =
         new scala.collection.mutable.HashMap<>();
 
     @Setup(Level.Trial)
@@ -167,9 +168,11 @@ public class AclAuthorizerBenchmark {
                 new VersionedAcls(JavaConverters.asScalaSetConverter(entryMap.getValue()).asScala().toSet(), 1));
             for (AclEntry entry : entryMap.getValue()) {
                 ResourcePattern resource = entryMap.getKey();
-                scala.collection.mutable.HashSet<ResourcePattern> patterns = resourceCache.getOrElseUpdate(
-                    entry.ace(), scala.collection.mutable.HashSet::new);
-                patterns.add(resource);
+                ResourceIndex resourceIndex = new ResourceIndex(
+                    entry.ace(), resource.resourceType(), resource.patternType());
+                scala.collection.mutable.HashSet<String> resources = resourceCache.getOrElseUpdate(
+                    resourceIndex, scala.collection.mutable.HashSet::new);
+                resources.add(resource.name());
             }
         }
     }
