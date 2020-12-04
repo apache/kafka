@@ -228,7 +228,7 @@ class PartitionTest extends AbstractPartitionTest {
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       localBrokerId = brokerId,
       time,
-      stateStore,
+      topicConfigProvider,
       isrChangeListener,
       delayedOperations,
       metadataCache,
@@ -1650,7 +1650,7 @@ class PartitionTest extends AbstractPartitionTest {
     val topicPartition = new TopicPartition("test", 1)
     val partition = new Partition(
       topicPartition, 1000, ApiVersion.latestVersion, 0,
-      new SystemTime(), mock(classOf[PartitionStateStore]), mock(classOf[IsrChangeListener]), mock(classOf[DelayedOperations]),
+      new SystemTime(), topicConfigProvider, mock(classOf[IsrChangeListener]), mock(classOf[DelayedOperations]),
       mock(classOf[MetadataCache]), mock(classOf[LogManager]), mock(classOf[AlterIsrManager]))
 
     val replicas = Seq(0, 1, 2, 3)
@@ -1687,12 +1687,13 @@ class PartitionTest extends AbstractPartitionTest {
   @Test
   def testLogConfigNotDirty(): Unit = {
     val spyLogManager = spy(logManager)
+    val spyConfigProvider = spy(topicConfigProvider)
     val partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       localBrokerId = brokerId,
       time,
-      stateStore,
+      spyConfigProvider,
       isrChangeListener,
       delayedOperations,
       metadataCache,
@@ -1708,7 +1709,7 @@ class PartitionTest extends AbstractPartitionTest {
       ArgumentMatchers.any()) // This doesn't get evaluated, but needed to satisfy compilation
 
     // We should get config from ZK only once
-    verify(stateStore).fetchTopicConfig()
+    verify(spyConfigProvider, times(1)).apply()
   }
 
   /**
@@ -1717,6 +1718,7 @@ class PartitionTest extends AbstractPartitionTest {
    */
   @Test
   def testLogConfigDirtyAsTopicUpdated(): Unit = {
+    val spyConfigProvider = spy(topicConfigProvider)
     val spyLogManager = spy(logManager)
     doAnswer((invocation: InvocationOnMock) => {
       logManager.initializingLog(topicPartition)
@@ -1728,7 +1730,7 @@ class PartitionTest extends AbstractPartitionTest {
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       localBrokerId = brokerId,
       time,
-      stateStore,
+      spyConfigProvider,
       isrChangeListener,
       delayedOperations,
       metadataCache,
@@ -1745,7 +1747,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     // We should get config from ZK twice, once before log is created, and second time once
     // we find log config is dirty and refresh it.
-    verify(stateStore, times(2)).fetchTopicConfig()
+    verify(spyConfigProvider, times(2)).apply()
   }
 
   /**
@@ -1754,6 +1756,7 @@ class PartitionTest extends AbstractPartitionTest {
    */
   @Test
   def testLogConfigDirtyAsBrokerUpdated(): Unit = {
+    val spyConfigProvider = spy(topicConfigProvider)
     val spyLogManager = spy(logManager)
     doAnswer((invocation: InvocationOnMock) => {
       logManager.initializingLog(topicPartition)
@@ -1765,7 +1768,7 @@ class PartitionTest extends AbstractPartitionTest {
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       localBrokerId = brokerId,
       time,
-      stateStore,
+      spyConfigProvider,
       isrChangeListener,
       delayedOperations,
       metadataCache,
@@ -1782,7 +1785,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     // We should get config from ZK twice, once before log is created, and second time once
     // we find log config is dirty and refresh it.
-    verify(stateStore, times(2)).fetchTopicConfig()
+    verify(spyConfigProvider, times(2)).apply()
   }
 
   private def seedLogData(log: Log, numRecords: Int, leaderEpoch: Int): Unit = {

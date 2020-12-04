@@ -28,7 +28,7 @@ import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
-import kafka.zk.{AdminZkClient, KafkaZkClient}
+import kafka.zk.{AdminZkClient}
 import kafka.zookeeper.ZooKeeperClientException
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.message.FetchResponseData
@@ -49,42 +49,6 @@ trait IsrChangeListener {
   def markExpand(): Unit
   def markShrink(): Unit
   def markFailed(): Unit
-}
-
-trait PartitionStateStore {
-  def fetchTopicConfig(): Properties
-  def shrinkIsr(controllerEpoch: Int, leaderAndIsr: LeaderAndIsr): Option[Int]
-  def expandIsr(controllerEpoch: Int, leaderAndIsr: LeaderAndIsr): Option[Int]
-}
-
-class ZkPartitionStateStore(topicPartition: TopicPartition,
-                            zkClient: KafkaZkClient) extends PartitionStateStore {
-
-  override def fetchTopicConfig(): Properties = {
-    val adminZkClient = new AdminZkClient(zkClient)
-    adminZkClient.fetchEntityConfig(ConfigType.Topic, topicPartition.topic)
-  }
-
-  override def shrinkIsr(controllerEpoch: Int, leaderAndIsr: LeaderAndIsr): Option[Int] = {
-    val newVersionOpt = updateIsr(controllerEpoch, leaderAndIsr)
-    newVersionOpt
-  }
-
-  override def expandIsr(controllerEpoch: Int, leaderAndIsr: LeaderAndIsr): Option[Int] = {
-    val newVersionOpt = updateIsr(controllerEpoch, leaderAndIsr)
-    newVersionOpt
-  }
-
-  private def updateIsr(controllerEpoch: Int, leaderAndIsr: LeaderAndIsr): Option[Int] = {
-    val (updateSucceeded, newVersion) = ReplicationUtils.updateLeaderAndIsr(zkClient, topicPartition,
-      leaderAndIsr, controllerEpoch)
-
-    if (updateSucceeded) {
-      Some(newVersion)
-    } else {
-      None
-    }
-  }
 }
 
 class DelayedOperations(topicPartition: TopicPartition,
@@ -121,9 +85,10 @@ object Partition extends KafkaMetricsGroup {
       override def markFailed(): Unit = replicaManager.failedIsrUpdatesRate.mark()
     }
 
-    val zkIsrBackingStore = new ZkPartitionStateStore(
-      topicPartition,
-      replicaManager.zkClient)
+    val configProvider = () => {
+      val adminZkClient = new AdminZkClient(replicaManager.zkClient)
+      adminZkClient.fetchEntityConfig(ConfigType.Topic, topicPartition.topic)
+    }
 
     val delayedOperations = new DelayedOperations(
       topicPartition,
@@ -136,7 +101,7 @@ object Partition extends KafkaMetricsGroup {
       interBrokerProtocolVersion = replicaManager.config.interBrokerProtocolVersion,
       localBrokerId = replicaManager.config.brokerId,
       time = time,
-      stateStore = zkIsrBackingStore,
+      topicConfigProvider = configProvider,
       isrChangeListener = isrChangeListener,
       delayedOperations = delayedOperations,
       metadataCache = replicaManager.metadataCache,
@@ -259,7 +224,7 @@ class Partition(val topicPartition: TopicPartition,
                 interBrokerProtocolVersion: ApiVersion,
                 localBrokerId: Int,
                 time: Time,
-                stateStore: PartitionStateStore,
+                topicConfigProvider: () => Properties,
                 isrChangeListener: IsrChangeListener,
                 delayedOperations: DelayedOperations,
                 metadataCache: MetadataCache,
@@ -373,7 +338,7 @@ class Partition(val topicPartition: TopicPartition,
   // Visible for testing
   private[cluster] def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints): Log = {
     def fetchLogConfig: LogConfig = {
-      val props = stateStore.fetchTopicConfig()
+      val props = topicConfigProvider.apply()
       LogConfig.fromProps(logManager.currentDefaultConfig.originals, props)
     }
 
