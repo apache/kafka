@@ -502,6 +502,7 @@ public class StreamsResetter {
         for (final TopicPartition topicPartition : inputTopicPartitions) {
             client.seek(topicPartition, topicPartitionsAndOffset.get(topicPartition).offset());
         }
+        resetToDatetime(client, inputTopicPartitions, timestamp);
     }
 
     private void resetToDatetime(final Consumer<byte[], byte[]> client,
