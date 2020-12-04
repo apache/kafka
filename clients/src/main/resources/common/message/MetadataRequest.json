@@ -36,7 +36,7 @@
       { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The topic name." }
     ]},
-    { "name": "AllowAutoTopicCreation", "type": "bool", "versions": "4+", "default": "true", "ignorable": true,
+    { "name": "AllowAutoTopicCreation", "type": "bool", "versions": "4+", "default": "true", "ignorable": false,
       "about": "If this is true, the broker may auto-create topics that we requested which do not already exist, if it is configured to do so." },
     { "name": "IncludeClusterAuthorizedOperations", "type": "bool", "versions": "8+",
       "about": "Whether to include cluster authorized operations." },
