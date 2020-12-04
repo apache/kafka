@@ -947,27 +947,68 @@ public class KafkaStreams implements AutoCloseable {
      * @return name of the added stream thread or empty if a new stream thread could not be added
      */
     public Optional<String> addStreamThread() {
-        synchronized (changeThreadCount) {
-            if (isRunningOrRebalancing()) {
-                final int threadIdx = getNextThreadIndex();
-                final long cacheSizePerThread = getCacheSizePerThread(threads.size() + 1);
+        if (isRunningOrRebalancing()) {
+            final int threadIdx;
+            final long cacheSizePerThread;
+            synchronized (changeThreadCount) {
+                threadIdx = getNextThreadIndex();
+                cacheSizePerThread = getCacheSizePerThread(threads.size() + 1);
                 resizeThreadCache(cacheSizePerThread);
-                final StreamThread streamThread = createStreamThread(cacheSizePerThread, threadIdx);
-                synchronized (stateLock) {
-                    if (isRunningOrRebalancing()) {
-                        streamThread.start();
-                        return Optional.of(streamThread.getName());
-                    } else {
-                        streamThread.shutdown();
-                        threads.remove(streamThread);
-                        resizeThreadCache(getCacheSizePerThread(threads.size()));
-                        return Optional.empty();
-                    }
+            }
+            final StreamThread streamThread = createStreamThread(cacheSizePerThread, threadIdx);
+
+            synchronized (stateLock) {
+                if (isRunningOrRebalancing()) {
+                    streamThread.start();
+                    return Optional.of(streamThread.getName());
+                } else {
+                    streamThread.shutdown();
+                    threads.remove(streamThread);
+                    resizeThreadCache(getCacheSizePerThread(threads.size()));
+                    return Optional.empty();
                 }
             }
         }
         return Optional.empty();
     }
+
+    /**
+     * Removes one stream thread out of the running stream threads from this Kafka Streams client.
+     *
+     * The removed stream thread is gracefully shut down. This method does not specify which stream
+     * thread is shut down.
+     *
+     * Since the number of stream threads decreases, the sizes of the caches in the remaining stream
+     * threads are adapted so that the sum of the cache sizes over all stream threads equals the total
+     * cache size specified in configuration {@code cache.max.bytes.buffering}.
+     *
+     * @return name of the removed stream thread or empty if a stream thread could not be removed because
+     *         no stream threads are alive
+     */
+    public Optional<String> removeStreamThread() {
+        if (isRunningOrRebalancing()) {
+            for (final StreamThread streamThread : threads) {
+                if (streamThread.isAlive()) {
+                    streamThread.shutdown();
+                    while (streamThread.state() != StreamThread.State.DEAD && streamThread.getName().equals(Thread.currentThread().getName())) {
+                        try {
+                            Thread.sleep(100);
+                        } catch (final InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                    synchronized (changeThreadCount) {
+                        final long cacheSizePerThread = threads.size() == 1 ? 0 : getCacheSizePerThread(threads.size() - 1);
+                        resizeThreadCache(cacheSizePerThread);
+                        threads.remove(streamThread);
+                    }
+                    return Optional.of(streamThread.getName());
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
 
     private int getNextThreadIndex() {
         final HashSet<String> names = new HashSet<>();

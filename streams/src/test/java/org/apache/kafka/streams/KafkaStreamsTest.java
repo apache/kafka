@@ -313,6 +313,8 @@ public class KafkaStreamsTest {
                 StreamThread.State.PARTITIONS_ASSIGNED);
             return null;
         }).anyTimes();
+        EasyMock.expect(thread.isAlive()).andReturn(true).times(0, 1);
+
         thread.resizeCache(EasyMock.anyLong());
         EasyMock.expectLastCall().anyTimes();
         EasyMock.expect(thread.getName()).andStubReturn("newThread");
@@ -629,6 +631,24 @@ public class KafkaStreamsTest {
         streamThreadTwo.shutdown();
         assertThat(streams.addStreamThread(), equalTo(Optional.empty()));
         assertThat(streams.threads.size(), equalTo(oldSize));
+    }
+
+    @Test
+    public void shoulRemoveThread() throws InterruptedException {
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
+        streams.start();
+        final int oldSize = streams.threads.size();
+        TestUtils.waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, 15L, "wait until running");
+        assertThat(streams.removeStreamThread(), equalTo(Optional.of("newThread")));
+        assertThat(streams.threads.size(), equalTo(oldSize - 1));
+    }
+
+    @Test
+    public void shouldNotRemoveThreadWhenNotRunning() {
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
+        assertThat(streams.removeStreamThread(), equalTo(Optional.empty()));
     }
 
 
