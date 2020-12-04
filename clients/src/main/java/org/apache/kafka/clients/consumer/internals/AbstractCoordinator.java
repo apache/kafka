@@ -466,6 +466,8 @@ public abstract class AbstractCoordinator implements Closeable {
             } else {
                 final RuntimeException exception = future.exception();
 
+                // we do not need to log error for memberId required,
+                // since it is not really an error and is transient
                 if (!(exception instanceof MemberIdRequiredException)) {
                     log.info("Rebalance failed.", exception);
                 }
