@@ -202,6 +202,8 @@ public class StreamsMetricsImplTest {
         replay(metrics);
         streamsMetrics.addClientLevelImmutableMetric(METRIC_NAME1, DESCRIPTION1, INFO_RECORDING_LEVEL, "value");
         streamsMetrics.addClientLevelImmutableMetric(METRIC_NAME2, DESCRIPTION2, INFO_RECORDING_LEVEL, "value");
+        streamsMetrics.clientLevelSensor(SENSOR_NAME_1, INFO_RECORDING_LEVEL);
+        streamsMetrics.clientLevelSensor(SENSOR_NAME_2, INFO_RECORDING_LEVEL);
         streamsMetrics.threadLevelSensor(THREAD_ID1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
         streamsMetrics.threadLevelSensor(THREAD_ID1, SENSOR_NAME_2, INFO_RECORDING_LEVEL);
         streamsMetrics.taskLevelSensor(THREAD_ID1, TASK_ID1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
@@ -487,8 +489,8 @@ public class StreamsMetricsImplTest {
             .andReturn(metricName2);
         final Capture<String> sensorKeys = addSensorsOnAllLevels(metrics, streamsMetrics);
         resetToDefault(metrics);
-        metrics.removeSensor(sensorKeys.getValues().get(4));
-        metrics.removeSensor(sensorKeys.getValues().get(5));
+        metrics.removeSensor(sensorKeys.getValues().get(6));
+        metrics.removeSensor(sensorKeys.getValues().get(7));
         expect(metrics.removeMetric(metricName1)).andReturn(mock(KafkaMetric.class));
         expect(metrics.removeMetric(metricName2)).andReturn(mock(KafkaMetric.class));
         replay(metrics);
@@ -578,6 +580,32 @@ public class StreamsMetricsImplTest {
     }
 
     @Test
+    public void shouldGetNewClientLevelSensor() {
+        final Metrics metrics = mock(Metrics.class);
+        final RecordingLevel recordingLevel = RecordingLevel.INFO;
+        setupGetNewSensorTest(metrics, recordingLevel);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
+
+        final Sensor actualSensor = streamsMetrics.clientLevelSensor(SENSOR_NAME_1, recordingLevel);
+
+        verify(metrics);
+        assertThat(actualSensor, is(equalToObject(sensor)));
+    }
+
+    @Test
+    public void shouldGetExistingClientLevelSensor() {
+        final Metrics metrics = mock(Metrics.class);
+        final RecordingLevel recordingLevel = RecordingLevel.INFO;
+        setupGetExistingSensorTest(metrics);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
+
+        final Sensor actualSensor = streamsMetrics.clientLevelSensor(SENSOR_NAME_1, recordingLevel);
+
+        verify(metrics);
+        assertThat(actualSensor, is(equalToObject(sensor)));
+    }
+
+    @Test
     public void shouldAddClientLevelImmutableMetric() {
         final Metrics metrics = mock(Metrics.class);
         final RecordingLevel recordingLevel = RecordingLevel.INFO;
@@ -619,8 +647,7 @@ public class StreamsMetricsImplTest {
     }
 
     private void setupRemoveSensorsTest(final Metrics metrics,
-                                        final String level,
-                                        final RecordingLevel recordingLevel) {
+                                        final String level) {
         final String fullSensorNamePrefix = INTERNAL_PREFIX + SENSOR_PREFIX_DELIMITER + level + SENSOR_NAME_DELIMITER;
         resetToDefault(metrics);
         metrics.removeSensor(fullSensorNamePrefix + SENSOR_NAME_1);
@@ -629,16 +656,18 @@ public class StreamsMetricsImplTest {
     }
 
     @Test
-    public void shouldRemoveClientLevelMetrics() {
+    public void shouldRemoveClientLevelMetricsAndSensors() {
         final Metrics metrics = niceMock(Metrics.class);
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
-        addSensorsOnAllLevels(metrics, streamsMetrics);
+        final Capture<String> sensorKeys = addSensorsOnAllLevels(metrics, streamsMetrics);
         resetToDefault(metrics);
+
+        metrics.removeSensor(sensorKeys.getValues().get(0));
+        metrics.removeSensor(sensorKeys.getValues().get(1));
         expect(metrics.removeMetric(metricName1)).andStubReturn(null);
         expect(metrics.removeMetric(metricName2)).andStubReturn(null);
         replay(metrics);
-
-        streamsMetrics.removeAllClientLevelMetrics();
+        streamsMetrics.removeAllClientLevelSensorsAndMetrics();
 
         verify(metrics);
     }
@@ -648,7 +677,7 @@ public class StreamsMetricsImplTest {
         final Metrics metrics = niceMock(Metrics.class);
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
         addSensorsOnAllLevels(metrics, streamsMetrics);
-        setupRemoveSensorsTest(metrics, THREAD_ID1, RecordingLevel.INFO);
+        setupRemoveSensorsTest(metrics, THREAD_ID1);
 
         streamsMetrics.removeAllThreadLevelSensors(THREAD_ID1);
 
