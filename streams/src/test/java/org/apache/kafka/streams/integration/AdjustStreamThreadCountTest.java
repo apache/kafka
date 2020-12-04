@@ -144,7 +144,6 @@ public class AdjustStreamThreadCountTest {
             assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount - 1));
             assertThat(kafkaStreams.localThreadsMetadata().stream().map(t -> t.threadName().split("-StreamThread-")[1]).sorted().toArray(), equalTo(new String[] {"2", "3"}));
 
-
             final Optional<String> name2 = kafkaStreams.addStreamThread();
 
             assertThat(name, CoreMatchers.not(Optional.empty()));
@@ -156,7 +155,6 @@ public class AdjustStreamThreadCountTest {
             assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount));
             assertThat(kafkaStreams.localThreadsMetadata().stream().map(t -> t.threadName().split("-StreamThread-")[1]).sorted().toArray(), equalTo(new String[] {"1", "2", "3"}));
             TestUtils.waitForCondition(() -> kafkaStreams.state() == KafkaStreams.State.RUNNING, "wait for running");
-
         }
     }
 }

@@ -1011,7 +1011,6 @@ public class KafkaStreams implements AutoCloseable {
         return Optional.empty();
     }
 
-
     private int getNextThreadIndex() {
         final HashSet<String> names = new HashSet<>();
         for (final StreamThread streamThread: threads) {

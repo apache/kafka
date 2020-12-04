@@ -314,7 +314,6 @@ public class KafkaStreamsTest {
             return null;
         }).anyTimes();
         EasyMock.expect(thread.isAlive()).andReturn(true).times(0, 1);
-
         thread.resizeCache(EasyMock.anyLong());
         EasyMock.expectLastCall().anyTimes();
         EasyMock.expect(thread.getName()).andStubReturn("newThread");
@@ -650,7 +649,6 @@ public class KafkaStreamsTest {
         final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         assertThat(streams.removeStreamThread(), equalTo(Optional.empty()));
     }
-
 
     @Test
     public void testCannotStartOnceClosed() {
