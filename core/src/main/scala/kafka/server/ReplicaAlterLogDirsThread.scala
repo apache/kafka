@@ -32,6 +32,7 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEnd
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.requests.FetchResponse.PartitionData
+import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH
 
@@ -172,7 +173,7 @@ class ReplicaAlterLogDirsThread(name: String,
         } else {
           val partition = replicaMgr.getPartitionOrException(tp)
           partition.lastOffsetForLeaderEpoch(
-            currentLeaderEpoch = epochData.currentLeaderEpoch,
+            currentLeaderEpoch = OffsetsForLeaderEpochRequest.currentLeaderEpochOpt(epochData),
             leaderEpoch = epochData.leaderEpoch,
             fetchOnlyFromLeader = false)
         }
