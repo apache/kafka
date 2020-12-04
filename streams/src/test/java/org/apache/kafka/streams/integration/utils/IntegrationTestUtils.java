@@ -1156,7 +1156,7 @@ public class IntegrationTestUtils {
     }
 
     private static boolean continueConsuming(final int messagesConsumed, final int maxMessages) {
-        return maxMessages <= 0 || messagesConsumed < maxMessages;
+        return maxMessages > 0 && messagesConsumed < maxMessages;
     }
 
     /**
