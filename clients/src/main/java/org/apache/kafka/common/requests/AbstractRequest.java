@@ -155,7 +155,7 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
      * Factory method for getting a request object based on ApiKey ID and a version
      */
     public static RequestAndSize parseRequest(ApiKeys apiKey, short apiVersion, ByteBuffer buffer) {
-        int bufferSize = buffer.position() - buffer.limit();
+        int bufferSize = buffer.remaining();
         return new RequestAndSize(doParseRequest(apiKey, apiVersion, buffer), bufferSize);
     }
 
