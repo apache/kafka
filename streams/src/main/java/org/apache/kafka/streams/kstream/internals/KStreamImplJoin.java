@@ -35,6 +35,7 @@ import org.apache.kafka.streams.state.WindowStore;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 class KStreamImplJoin {
@@ -91,7 +92,7 @@ class KStreamImplJoin {
 
         if (thisStoreSupplier == null) {
             final String thisJoinStoreName = userProvidedBaseStoreName == null ? joinThisGeneratedName : userProvidedBaseStoreName + joinThisSuffix;
-            thisWindowStore = joinWindowStoreBuilder(thisJoinStoreName, windows, streamJoinedInternal.keySerde(), streamJoinedInternal.valueSerde(), streamJoinedInternal.loggingEnabled(), streamJoinedInternal.cachingEnabled());
+            thisWindowStore = joinWindowStoreBuilder(thisJoinStoreName, windows, streamJoinedInternal.keySerde(), streamJoinedInternal.valueSerde(), streamJoinedInternal.loggingEnabled(), streamJoinedInternal.logConfig());
         } else {
             assertWindowSettings(thisStoreSupplier, windows);
             thisWindowStore = joinWindowStoreBuilderFromSupplier(thisStoreSupplier, streamJoinedInternal.keySerde(), streamJoinedInternal.valueSerde());
@@ -99,7 +100,7 @@ class KStreamImplJoin {
 
         if (otherStoreSupplier == null) {
             final String otherJoinStoreName = userProvidedBaseStoreName == null ? joinOtherGeneratedName : userProvidedBaseStoreName + joinOtherSuffix;
-            otherWindowStore = joinWindowStoreBuilder(otherJoinStoreName, windows, streamJoinedInternal.keySerde(), streamJoinedInternal.otherValueSerde());
+            otherWindowStore = joinWindowStoreBuilder(otherJoinStoreName, windows, streamJoinedInternal.keySerde(), streamJoinedInternal.otherValueSerde(), streamJoinedInternal.loggingEnabled(), streamJoinedInternal.logConfig());
         } else {
             assertWindowSettings(otherStoreSupplier, windows);
             otherWindowStore = joinWindowStoreBuilderFromSupplier(otherStoreSupplier, streamJoinedInternal.keySerde(), streamJoinedInternal.otherValueSerde());
@@ -190,7 +191,7 @@ class KStreamImplJoin {
                                                                                  final Serde<K> keySerde,
                                                                                  final Serde<V> valueSerde,
                                                                                  final boolean loggingEnabled,
-                                                                                 final boolean cachingEnabled) {
+                                                                                 final Map<String, String> logConfig) {
         final StoreBuilder<WindowStore<K, V>> builder = Stores.windowStoreBuilder(
             Stores.persistentWindowStore(
                 storeName + "-store",
@@ -201,13 +202,12 @@ class KStreamImplJoin {
             keySerde,
             valueSerde
         );
-        if (!loggingEnabled) {
+        if (loggingEnabled) {
+            builder.withLoggingEnabled(logConfig);
+        } else {
             builder.withLoggingDisabled();
         }
 
-        if (!cachingEnabled) {
-            builder.withCachingDisabled();
-        }
         return builder;
     }
 

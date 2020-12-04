@@ -20,6 +20,9 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * Class used to configure the name of the join processor, the repartition topic name,
  * state stores or state store names in  Stream-Stream join.
@@ -36,8 +39,8 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
     protected final WindowBytesStoreSupplier otherStoreSupplier;
     protected final String name;
     protected final String storeName;
-    protected boolean loggingEnabled = true;
-    protected boolean cachingEnabled = true;
+    protected boolean loggingEnabled;
+    protected Map<String, String> topicConfig;
 
     protected StreamJoined(final StreamJoined<K, V1, V2> streamJoined) {
         this(streamJoined.keySerde,
@@ -48,7 +51,7 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             streamJoined.name,
             streamJoined.storeName,
             streamJoined.loggingEnabled,
-            streamJoined.cachingEnabled);
+            streamJoined.topicConfig);
     }
 
     private StreamJoined(final Serde<K> keySerde,
@@ -59,7 +62,7 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
                          final String name,
                          final String storeName,
                          final boolean loggingEnabled,
-                         final boolean cachingEnabled) {
+                         final Map<String, String> topicConfig) {
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.otherValueSerde = otherValueSerde;
@@ -68,7 +71,7 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
         this.name = name;
         this.storeName = storeName;
         this.loggingEnabled = loggingEnabled;
-        this.cachingEnabled = cachingEnabled;
+        this.topicConfig = topicConfig;
     }
 
     /**
@@ -94,7 +97,7 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             null,
             null,
             true,
-            true
+            new HashMap<>()
         );
     }
 
@@ -121,7 +124,7 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             null,
             storeName,
             true,
-            true
+            new HashMap<>()
         );
     }
 
@@ -150,7 +153,7 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             null,
             null,
             true,
-            true
+            new HashMap<>()
         );
     }
 
@@ -170,7 +173,7 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             name,
             storeName,
             loggingEnabled,
-            cachingEnabled
+            topicConfig
         );
     }
 
@@ -194,7 +197,7 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             name,
             storeName,
             loggingEnabled,
-            cachingEnabled
+            topicConfig
         );
     }
 
@@ -213,7 +216,7 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             name,
             storeName,
             loggingEnabled,
-            cachingEnabled
+            topicConfig
         );
     }
 
@@ -232,7 +235,7 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             name,
             storeName,
             loggingEnabled,
-            cachingEnabled
+            topicConfig
         );
     }
 
@@ -251,7 +254,7 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             name,
             storeName,
             loggingEnabled,
-            cachingEnabled
+            topicConfig
         );
     }
 
@@ -273,7 +276,7 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             name,
             storeName,
             loggingEnabled,
-            cachingEnabled
+            topicConfig
         );
     }
 
@@ -295,11 +298,19 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             name,
             storeName,
             loggingEnabled,
-            cachingEnabled
+            topicConfig
         );
     }
 
-    public StreamJoined<K, V1, V2> withLoggingEnabled() {
+    /**
+     * Configures logging for both state stores. The changelog will be created with the provided configs.
+     * <p>
+     * Note: Any unrecognized configs will be ignored
+     * @param config  configs applied to the changelog topic
+     * @return            a new {@link StreamJoined} configured with logging enabled
+     */
+    public StreamJoined<K, V1, V2> withLoggingEnabled(final Map<String, String> config) {
+
         return new StreamJoined<>(
             keySerde,
             valueSerde,
@@ -309,10 +320,14 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             name,
             storeName,
             true,
-            cachingEnabled
+            config
         );
     }
 
+    /**
+     * Disable change logging for both state stores.
+     * @return            a new {@link StreamJoined} configured with logging disabled
+     */
     public StreamJoined<K, V1, V2> withLoggingDisabled() {
         return new StreamJoined<>(
             keySerde,
@@ -323,35 +338,7 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             name,
             storeName,
             false,
-            cachingEnabled
-        );
-    }
-
-    public StreamJoined<K, V1, V2> withCachingEnabled(final WindowBytesStoreSupplier otherStoreSupplier) {
-        return new StreamJoined<>(
-            keySerde,
-            valueSerde,
-            otherValueSerde,
-            thisStoreSupplier,
-            otherStoreSupplier,
-            name,
-            storeName,
-            loggingEnabled,
-            true
-        );
-    }
-
-    public StreamJoined<K, V1, V2> withCachingDisabled(final WindowBytesStoreSupplier otherStoreSupplier) {
-        return new StreamJoined<>(
-            keySerde,
-            valueSerde,
-            otherValueSerde,
-            thisStoreSupplier,
-            otherStoreSupplier,
-            name,
-            storeName,
-            loggingEnabled,
-            false
+            null
         );
     }
 
@@ -366,7 +353,7 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             ", name='" + name + '\'' +
             ", storeName='" + storeName + '\'' +
             ", loggingEnabled=" + loggingEnabled +
-            ", cachingEnabled=" + cachingEnabled +
+            ", topicConfig=" + topicConfig +
             '}';
     }
 }
