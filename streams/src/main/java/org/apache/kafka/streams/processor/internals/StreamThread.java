@@ -36,6 +36,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TaskMetadata;
@@ -267,6 +268,7 @@ public class StreamThread extends Thread {
     private final Sensor processRatioSensor;
     private final Sensor punctuateRatioSensor;
     private final Sensor commitRatioSensor;
+    private final Sensor failedStreamThreadSensor;
 
     private long now;
     private long lastPollMs;
@@ -469,6 +471,7 @@ public class StreamThread extends Thread {
         this.punctuateSensor = ThreadMetrics.punctuateSensor(threadId, streamsMetrics);
         this.punctuateRatioSensor = ThreadMetrics.punctuateRatioSensor(threadId, streamsMetrics);
         this.commitRatioSensor = ThreadMetrics.commitRatioSensor(threadId, streamsMetrics);
+        this.failedStreamThreadSensor = ClientMetrics.failedStreamThreadSensor(streamsMetrics);
         this.assignmentErrorCode = assignmentErrorCode;
         this.shutdownErrorHook = shutdownErrorHook;
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
@@ -576,8 +579,10 @@ public class StreamThread extends Thread {
                             StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
                             EXACTLY_ONCE_BETA);
                 }
+                failedStreamThreadSensor.record();
                 this.streamsUncaughtExceptionHandler.accept(e);
             } catch (final Throwable e) {
+                failedStreamThreadSensor.record();
                 this.streamsUncaughtExceptionHandler.accept(e);
             }
         }

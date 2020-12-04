@@ -63,6 +63,9 @@ import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionR
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse
 import org.apache.kafka.common.message.ListOffsetRequestData.ListOffsetPartition
 import org.apache.kafka.common.message.ListOffsetResponseData.{ListOffsetPartitionResponse, ListOffsetTopicResponse}
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetForLeaderTopic}
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{OffsetForLeaderTopicResult, OffsetForLeaderTopicResultCollection, EpochEndOffset}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ListenerName, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -2592,25 +2595,37 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleOffsetForLeaderEpochRequest(request: RequestChannel.Request): Unit = {
     val offsetForLeaderEpoch = request.body[OffsetsForLeaderEpochRequest]
-    val requestInfo = offsetForLeaderEpoch.epochsByTopicPartition.asScala
+    val topics = offsetForLeaderEpoch.data.topics.asScala.toSeq
 
     // The OffsetsForLeaderEpoch API was initially only used for inter-broker communication and required
     // cluster permission. With KIP-320, the consumer now also uses this API to check for log truncation
     // following a leader change, so we also allow topic describe permission.
-    val (authorizedPartitions, unauthorizedPartitions) =
+    val (authorizedTopics, unauthorizedTopics) =
       if (authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME, logIfDenied = false))
-        (requestInfo, Map.empty[TopicPartition, OffsetsForLeaderEpochRequest.PartitionData])
-      else partitionMapByAuthorized(request.context, DESCRIBE, TOPIC, requestInfo)(_.topic)
+        (topics, Seq.empty[OffsetForLeaderTopic])
+      else partitionSeqByAuthorized(request.context, DESCRIBE, TOPIC, topics)(_.topic)
 
-    val endOffsetsForAuthorizedPartitions = replicaManager.lastOffsetForLeaderEpoch(authorizedPartitions)
-    val endOffsetsForUnauthorizedPartitions = unauthorizedPartitions.map { case (k, _) =>
-      k -> new EpochEndOffset(Errors.TOPIC_AUTHORIZATION_FAILED, EpochEndOffset.UNDEFINED_EPOCH,
-        EpochEndOffset.UNDEFINED_EPOCH_OFFSET)
+    val endOffsetsForAuthorizedPartitions = replicaManager.lastOffsetForLeaderEpoch(authorizedTopics)
+    val endOffsetsForUnauthorizedPartitions = unauthorizedTopics.map { offsetForLeaderTopic =>
+      val partitions = offsetForLeaderTopic.partitions.asScala.map { offsetForLeaderPartition =>
+        new EpochEndOffset()
+          .setPartition(offsetForLeaderPartition.partition)
+          .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+      }
+
+      new OffsetForLeaderTopicResult()
+        .setTopic(offsetForLeaderTopic.topic)
+        .setPartitions(partitions.toList.asJava)
     }
 
-    val endOffsetsForAllPartitions = endOffsetsForAuthorizedPartitions ++ endOffsetsForUnauthorizedPartitions
+    val endOffsetsForAllTopics = new OffsetForLeaderTopicResultCollection(
+      (endOffsetsForAuthorizedPartitions ++ endOffsetsForUnauthorizedPartitions).asJava.iterator
+    )
+
     sendResponseMaybeThrottle(request, requestThrottleMs =>
-      new OffsetsForLeaderEpochResponse(requestThrottleMs, endOffsetsForAllPartitions.asJava))
+      new OffsetsForLeaderEpochResponse(new OffsetForLeaderEpochResponseData()
+        .setThrottleTimeMs(requestThrottleMs)
+        .setTopics(endOffsetsForAllTopics)))
   }
 
   def handleAlterConfigsRequest(request: RequestChannel.Request): Unit = {

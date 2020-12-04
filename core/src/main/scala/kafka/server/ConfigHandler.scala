@@ -238,7 +238,7 @@ object ThrottledReplicaListValidator extends Validator {
   override def ensureValid(name: String, value: Any): Unit = {
     def check(proposed: Seq[Any]): Unit = {
       if (!(proposed.forall(_.toString.trim.matches("([0-9]+:[0-9]+)?"))
-        || proposed.headOption.exists(_.toString.trim.equals("*"))))
+        || proposed.mkString.trim.equals("*")))
         throw new ConfigException(name, value,
           s"$name must be the literal '*' or a list of replicas in the following format: [partitionId]:[brokerId],[partitionId]:[brokerId],...")
     }

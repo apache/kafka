@@ -14,7 +14,6 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 -->
-<script id="ops-template" type="text/x-handlebars-template">
 
   Here is some information on actually running Kafka as a production system based on usage and experience at LinkedIn. Please send us any additional tips you know of.
 
@@ -1039,6 +1038,26 @@
         <td>Incoming byte rate of reassignment traffic</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=ReassignmentBytesInPerSec</td>
         <td></td>
+      </tr>
+      <tr>
+        <td>Size of a partition on disk (in bytes)</td>
+        <td>kafka.log:type=Log,name=Size,topic=([-.\w]+),partition=([0-9]+)</td>
+        <td>The size of a partition on disk, measured in bytes.</td>
+      </tr>
+      <tr>
+        <td>Number of log segments in a partition</td>
+        <td>kafka.log:type=Log,name=NumLogSegments,topic=([-.\w]+),partition=([0-9]+)</td>
+        <td>The number of log segments in a partition.</td>
+      </tr>
+      <tr>
+        <td>First offset in a partition</td>
+        <td>kafka.log:type=Log,name=LogStartOffset,topic=([-.\w]+),partition=([0-9]+)</td>
+        <td>The first offset in a partition.</td>
+      </tr>
+      <tr>
+        <td>Last offset in a partition</td>
+        <td>kafka.log:type=Log,name=LogEndOffset,topic=([-.\w]+),partition=([0-9]+)</td>
+        <td>The last offset in a partition.</td>
       </tr>
   </tbody></table>
 

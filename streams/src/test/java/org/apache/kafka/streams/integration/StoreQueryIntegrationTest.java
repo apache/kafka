@@ -136,13 +136,13 @@ public class StoreQueryIntegrationTest {
 
             final boolean kafkaStreams1IsActive = (keyQueryMetadata.activeHost().port() % 2) == 1;
 
-            // Assert that only active is able to query for a key by default
-            assertThat(kafkaStreams1IsActive ? store1.get(key) : store2.get(key), is(notNullValue()));
             try {
                 if (kafkaStreams1IsActive) {
+                    assertThat(store1.get(key), is(notNullValue()));
                     assertThat(store2.get(key), is(nullValue()));
                 } else {
                     assertThat(store1.get(key), is(nullValue()));
+                    assertThat(store2.get(key), is(notNullValue()));
                 }
                 return true;
             } catch (final InvalidStateStoreException exception) {

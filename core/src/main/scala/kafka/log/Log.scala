@@ -40,8 +40,9 @@ import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
+import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET
 import org.apache.kafka.common.requests.ProduceResponse.RecordError
-import org.apache.kafka.common.requests.{EpochEndOffset, ListOffsetRequest}
+import org.apache.kafka.common.requests.ListOffsetRequest
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition}
 
@@ -50,11 +51,11 @@ import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.collection.{Seq, Set, mutable}
 
 object LogAppendInfo {
-  val UnknownLogAppendInfo = LogAppendInfo(None, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, -1L,
+  val UnknownLogAppendInfo = LogAppendInfo(None, -1, None, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, -1L,
     RecordConversionStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false, -1L)
 
   def unknownLogAppendInfoWithLogStartOffset(logStartOffset: Long): LogAppendInfo =
-    LogAppendInfo(None, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, logStartOffset,
+    LogAppendInfo(None, -1, None, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, logStartOffset,
       RecordConversionStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1,
       offsetsMonotonic = false, -1L)
 
@@ -64,7 +65,7 @@ object LogAppendInfo {
    * in unknownLogAppendInfoWithLogStartOffset, but with additiona fields recordErrors and errorMessage
    */
   def unknownLogAppendInfoWithAdditionalInfo(logStartOffset: Long, recordErrors: Seq[RecordError], errorMessage: String): LogAppendInfo =
-    LogAppendInfo(None, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, logStartOffset,
+    LogAppendInfo(None, -1, None, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, logStartOffset,
       RecordConversionStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1,
       offsetsMonotonic = false, -1L, recordErrors, errorMessage)
 }
@@ -82,6 +83,7 @@ object LeaderHwChange {
  * @param firstOffset The first offset in the message set unless the message format is less than V2 and we are appending
  *                    to the follower.
  * @param lastOffset The last offset in the message set
+ * @param lastLeaderEpoch The partition leader epoch corresponding to the last offset, if available.
  * @param maxTimestamp The maximum timestamp of the message set.
  * @param offsetOfMaxTimestamp The offset of the message with the maximum timestamp.
  * @param logAppendTime The log append time (if used) of the message set, otherwise Message.NoTimestamp
@@ -99,6 +101,7 @@ object LeaderHwChange {
  */
 case class LogAppendInfo(var firstOffset: Option[Long],
                          var lastOffset: Long,
+                         var lastLeaderEpoch: Option[Int],
                          var maxTimestamp: Long,
                          var offsetOfMaxTimestamp: Long,
                          var logAppendTime: Long,
@@ -1274,7 +1277,7 @@ class Log(@volatile private var _dir: File,
   def endOffsetForEpoch(leaderEpoch: Int): Option[OffsetAndEpoch] = {
     leaderEpochCache.flatMap { cache =>
       val (foundEpoch, foundOffset) = cache.endOffsetFor(leaderEpoch)
-      if (foundOffset == EpochEndOffset.UNDEFINED_EPOCH_OFFSET)
+      if (foundOffset == UNDEFINED_EPOCH_OFFSET)
         None
       else
         Some(OffsetAndEpoch(foundOffset, foundEpoch))
@@ -1383,6 +1386,7 @@ class Log(@volatile private var _dir: File,
     var validBytesCount = 0
     var firstOffset: Option[Long] = None
     var lastOffset = -1L
+    var lastLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH
     var sourceCodec: CompressionCodec = NoCompressionCodec
     var monotonic = true
     var maxTimestamp = RecordBatch.NO_TIMESTAMP
@@ -1415,6 +1419,7 @@ class Log(@volatile private var _dir: File,
 
       // update the last offset seen
       lastOffset = batch.lastOffset
+      lastLeaderEpoch = batch.partitionLeaderEpoch
 
       // Check if the message sizes are valid.
       val batchSize = batch.sizeInBytes
@@ -1446,7 +1451,11 @@ class Log(@volatile private var _dir: File,
 
     // Apply broker-side compression if any
     val targetCodec = BrokerCompressionCodec.getTargetCompressionCodec(config.compressionType, sourceCodec)
-    LogAppendInfo(firstOffset, lastOffset, maxTimestamp, offsetOfMaxTimestamp, RecordBatch.NO_TIMESTAMP, logStartOffset,
+    val lastLeaderEpochOpt: Option[Int] = if (lastLeaderEpoch != RecordBatch.NO_PARTITION_LEADER_EPOCH)
+      Some(lastLeaderEpoch)
+    else
+      None
+    LogAppendInfo(firstOffset, lastOffset, lastLeaderEpochOpt, maxTimestamp, offsetOfMaxTimestamp, RecordBatch.NO_TIMESTAMP, logStartOffset,
       RecordConversionStats.EMPTY, sourceCodec, targetCodec, shallowMessageCount, validBytesCount, monotonic, lastOffsetOfFirstBatch)
   }
 
