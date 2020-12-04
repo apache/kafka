@@ -250,7 +250,8 @@ class ReplicaManager(val config: KafkaConfig,
   private val stateChangeLogger = new StateChangeLogger(localBrokerId, inControllerContext = false, None)
 
   private val isrChangeNotificationConfig = ReplicaManager.DefaultIsrPropagationConfig
-  private val isrChangeSet: mutable.Set[TopicPartition] = new mutable.HashSet[TopicPartition]()
+  // Visible for testing
+  private[server] val isrChangeSet: mutable.Set[TopicPartition] = new mutable.HashSet[TopicPartition]()
   private val lastIsrChangeMs = new AtomicLong(time.milliseconds())
   private val lastIsrPropagationMs = new AtomicLong(time.milliseconds())
 

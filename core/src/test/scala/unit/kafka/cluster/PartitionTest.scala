@@ -606,15 +606,14 @@ class PartitionTest extends AbstractPartitionTest {
       }
     }
 
-    when(stateStore.expandIsr(controllerEpoch, new LeaderAndIsr(leader, leaderEpoch,
-      List(leader, follower2, follower1), 1)))
-      .thenReturn(Some(2))
-
     updateFollowerFetchState(follower1, LogOffsetMetadata(0))
     updateFollowerFetchState(follower1, LogOffsetMetadata(2))
 
     updateFollowerFetchState(follower2, LogOffsetMetadata(0))
     updateFollowerFetchState(follower2, LogOffsetMetadata(2))
+
+    // Simulate successful ISR update
+    alterIsrManager.completeIsrUpdate(2)
 
     // At this point, the leader has gotten 5 writes, but followers have only fetched two
     assertEquals(2, partition.localLogOrException.highWatermark)
@@ -699,13 +698,12 @@ class PartitionTest extends AbstractPartitionTest {
       case Left(e: ApiException) => fail(s"Should have seen OffsetNotAvailableException, saw $e")
     }
 
-    when(stateStore.expandIsr(controllerEpoch, new LeaderAndIsr(leader, leaderEpoch + 2,
-      List(leader, follower2, follower1), 5)))
-      .thenReturn(Some(2))
-
     // Next fetch from replicas, HW is moved up to 5 (ahead of the LEO)
     updateFollowerFetchState(follower1, LogOffsetMetadata(5))
     updateFollowerFetchState(follower2, LogOffsetMetadata(5))
+
+    // Simulate successful ISR update
+    alterIsrManager.completeIsrUpdate(6)
 
     // Error goes away
     fetchOffsetsForTimestamp(ListOffsetRequest.LATEST_TIMESTAMP, Some(IsolationLevel.READ_UNCOMMITTED)) match {

@@ -23,10 +23,9 @@ import java.nio.charset.{Charset, StandardCharsets}
 import java.nio.file.{Files, StandardOpenOption}
 import java.security.cert.X509Certificate
 import java.time.Duration
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.{Arrays, Collections, Properties}
 import java.util.concurrent.{Callable, ExecutionException, Executors, TimeUnit}
-
 import javax.net.ssl.X509TrustManager
 import kafka.api._
 import kafka.cluster.{Broker, EndPoint, IsrChangeListener}
@@ -50,6 +49,7 @@ import org.apache.kafka.common.errors.{KafkaStorageException, UnknownTopicOrPart
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.{ListenerName, Mode}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -1066,17 +1066,40 @@ object TestUtils extends Logging {
 
   class MockAlterIsrManager extends AlterIsrManager {
     val isrUpdates: mutable.Queue[AlterIsrItem] = new mutable.Queue[AlterIsrItem]()
+    val inFlight: AtomicBoolean = new AtomicBoolean(false)
 
     override def enqueue(alterIsrItem: AlterIsrItem): Boolean = {
-      isrUpdates += alterIsrItem
-      true
+      if (inFlight.compareAndSet(false, true)) {
+        isrUpdates += alterIsrItem
+        true
+      } else {
+        false
+      }
     }
 
     override def clearPending(topicPartition: TopicPartition): Unit = {
-      isrUpdates.clear()
+      inFlight.set(false);
     }
 
     override def start(): Unit = { }
+
+    def completeIsrUpdate(newZkVersion: Int): Unit = {
+      if (inFlight.compareAndSet(true, false)) {
+        val item = isrUpdates.head
+        item.callback.apply(Right(item.leaderAndIsr.withZkVersion(newZkVersion)))
+      } else {
+        fail("Expected an in-flight ISR update, but there was none")
+      }
+    }
+
+    def failIsrUpdate(error: Errors): Unit = {
+      if (inFlight.compareAndSet(true, false)) {
+        val item = isrUpdates.dequeue()
+        item.callback.apply(Left(error))
+      } else {
+        fail("Expected an in-flight ISR update, but there was none")
+      }
+    }
   }
 
   def createAlterIsrManager(): MockAlterIsrManager = {

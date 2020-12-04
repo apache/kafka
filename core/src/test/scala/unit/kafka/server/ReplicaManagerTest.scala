@@ -22,7 +22,6 @@ import java.net.InetAddress
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.{Optional, Properties}
-
 import kafka.api._
 import kafka.log.{AppendOrigin, Log, LogConfig, LogManager, ProducerStateManager}
 import kafka.cluster.{BrokerEndPoint, Partition}
@@ -63,6 +62,7 @@ class ReplicaManagerTest {
 
   val topic = "test-topic"
   val time = new MockTime
+  val scheduler = new MockScheduler(time)
   val metrics = new Metrics
   var kafkaZkClient: KafkaZkClient = _
   var alterIsrManager: AlterIsrManager = _
@@ -1659,9 +1659,11 @@ class ReplicaManagerTest {
     result
   }
 
-  private def setupReplicaManagerWithMockedPurgatories(timer: MockTimer, aliveBrokerIds: Seq[Int] = Seq(0, 1)): ReplicaManager = {
+  private def setupReplicaManagerWithMockedPurgatories(timer: MockTimer, aliveBrokerIds: Seq[Int] = Seq(0, 1),
+                                                       propsModifier: Properties => Unit = _ => {}): ReplicaManager = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
     props.put("log.dirs", TestUtils.tempRelativeDir("data").getAbsolutePath + "," + TestUtils.tempRelativeDir("data2").getAbsolutePath)
+    propsModifier.apply(props)
     val config = KafkaConfig.fromProps(props)
     val logProps = new Properties()
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)), LogConfig(logProps))
@@ -1684,7 +1686,7 @@ class ReplicaManagerTest {
     val mockDelayedElectLeaderPurgatory = new DelayedOperationPurgatory[DelayedElectLeader](
       purgatoryName = "DelayedElectLeader", timer, reaperEnabled = false)
 
-    new ReplicaManager(config, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr,
+    new ReplicaManager(config, metrics, time, kafkaZkClient, scheduler, mockLogMgr,
       new AtomicBoolean(false), quotaManager, new BrokerTopicStats,
       metadataCache, new LogDirFailureChannel(config.logDirs.size), mockProducePurgatory, mockFetchPurgatory,
       mockDeleteRecordsPurgatory, mockDelayedElectLeaderPurgatory, Option(this.getClass.getName), alterIsrManager)
@@ -2153,5 +2155,48 @@ class ReplicaManagerTest {
     } finally {
       replicaManager.shutdown(false)
     }
+  }
+
+  @Test
+  def testZkIsr(): Unit = {
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), propsModifier = props => {
+      props.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, "2.7-IV1")
+    })
+    replicaManager.startup()
+
+    // We expect to send the ISR notification via ZK
+    EasyMock.reset(kafkaZkClient)
+    kafkaZkClient.propagateIsrChanges(EasyMock.anyObject(classOf[Set[TopicPartition]]))
+    EasyMock.expectLastCall().times(1)
+    EasyMock.replay(kafkaZkClient)
+
+    // Validate the ZK-specific ISR code paths in ReplicaManager
+    val tp0 = new TopicPartition("test", 0)
+    replicaManager.recordIsrChange(tp0)
+    assertEquals(1, replicaManager.isrChangeSet.size)
+    time.sleep(ReplicaManager.DefaultIsrPropagationConfig.lingerMs * 2)
+    scheduler.tick()
+    assertEquals(0, replicaManager.isrChangeSet.size)
+  }
+
+  @Test
+  def testAlterIsr(): Unit = {
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), propsModifier = props => {
+      props.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, "2.7-IV2")
+    })
+    replicaManager.startup()
+
+    val spy = Mockito.spy(replicaManager)
+
+    // We should bypass isrChangeSet if running in AlterIsr mode
+    val tp0 = new TopicPartition("test", 0)
+    replicaManager.recordIsrChange(tp0)
+    assertEquals(0, replicaManager.isrChangeSet.size)
+    time.sleep(ReplicaManager.DefaultIsrPropagationConfig.lingerMs * 2)
+    scheduler.tick()
+    assertEquals(0, replicaManager.isrChangeSet.size)
+
+    // The ISR propagation thread should not get scheduled
+    Mockito.verify(spy, Mockito.never()).maybePropagateIsrChanges()
   }
 }
