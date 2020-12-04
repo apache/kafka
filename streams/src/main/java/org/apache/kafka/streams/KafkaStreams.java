@@ -444,6 +444,18 @@ public class KafkaStreams implements AutoCloseable {
                     "The old handler will be ignored as long as a new handler is set.");
         }
         switch (action) {
+            case REPLACE_THREAD:
+                StreamThread deadThread = (StreamThread) threads.stream().filter(n -> n.getName().equals(Thread.currentThread().getName())).toArray()[0];
+                threads.remove(deadThread);
+                addStreamThread();
+                deadThread.shutdown();
+                if (throwable instanceof RuntimeException) {
+                    throw (RuntimeException) throwable;
+                } else if (throwable instanceof Error) {
+                    throw (Error) throwable;
+                } else {
+                    throw new RuntimeException("Unexpected checked exception caught in the uncaught exception handler", throwable);
+                }
             case SHUTDOWN_CLIENT:
                 log.error("Encountered the following exception during processing " +
                         "and the registered exception handler opted to " + action + "." +

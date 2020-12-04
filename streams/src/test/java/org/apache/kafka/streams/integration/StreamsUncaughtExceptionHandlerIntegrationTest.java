@@ -53,13 +53,16 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
+import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.REPLACE_THREAD;
 import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_APPLICATION;
 import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.DEFAULT_TIMEOUT;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.purgeLocalStreamsState;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.greaterThan;
 import static org.junit.Assert.fail;
 
 @Category(IntegrationTest.class)
@@ -144,6 +147,26 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
             assertThat(processorValueCollector.size(), equalTo(1));
         }
     }
+
+    @Test
+    public void shouldReplaceThread() throws InterruptedException {
+        try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
+            kafkaStreams.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
+            AtomicInteger count = new AtomicInteger();
+            kafkaStreams.setUncaughtExceptionHandler(exception -> {
+                count.getAndIncrement();
+                return REPLACE_THREAD;
+            });
+
+            StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
+
+            produceMessages(0L, inputTopic, "A");
+            TestUtils.waitForCondition(() -> count.get() > 2, DEFAULT_TIMEOUT, "At least 3 threads have died");
+
+            assertThat(processorValueCollector.size(), greaterThan(2));
+        }
+    }
+
 
     @Test
     public void shouldShutdownMultipleThreadApplication() throws InterruptedException {
