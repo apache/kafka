@@ -106,10 +106,7 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
         short apiVersion = requestHeader.apiVersion();
 
         ResponseHeader responseHeader = ResponseHeader.parse(buffer, apiKey.responseHeaderVersion(apiVersion));
-        AbstractResponse response = AbstractResponse.parseResponse(apiKey, buffer, apiVersion);
 
-        // We correlate after parsing the response to avoid spurious correlation errors when receiving malformed
-        // responses
         if (requestHeader.correlationId() != responseHeader.correlationId()) {
             throw new CorrelationIdMismatchException("Correlation id for response ("
                 + responseHeader.correlationId() + ") does not match request ("
@@ -117,7 +114,7 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 requestHeader.correlationId(), responseHeader.correlationId());
         }
 
-        return response;
+        return AbstractResponse.parseResponse(apiKey, buffer, apiVersion);
     }
 
     public static AbstractResponse parseResponse(ApiKeys apiKey, ByteBuffer responseBuffer, short version) {
