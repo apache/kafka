@@ -2518,7 +2518,8 @@ public class StreamThreadTest {
             new AtomicInteger(),
             new AtomicLong(Long.MAX_VALUE),
             null,
-            e -> { }
+            e -> { },
+            l -> { }
         ) {
             @Override
             void runOnce() {
