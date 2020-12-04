@@ -102,7 +102,9 @@ class WorkerSourceTask extends WorkerTask {
     private CountDownLatch stopRequestedLatch;
 
     private Map<String, String> taskConfig;
-    private boolean started = false;
+    private boolean finishedStart = false;
+    private boolean startedShutdownBeforeStartCompleted = false;
+    private boolean stopped = false;
 
     public WorkerSourceTask(ConnectorTaskId id,
                             SourceTask task,
@@ -164,12 +166,8 @@ class WorkerSourceTask extends WorkerTask {
 
     @Override
     protected void close() {
-        if (started) {
-            try {
-                task.stop();
-            } catch (Throwable t) {
-                log.warn("Could not stop task", t);
-            }
+        if (!shouldPause()) {
+            tryStop();
         }
         if (producer != null) {
             try {
@@ -208,21 +206,39 @@ class WorkerSourceTask extends WorkerTask {
     public void stop() {
         super.stop();
         stopRequestedLatch.countDown();
+        synchronized (this) {
+            if (finishedStart)
+                tryStop();
+            else
+                startedShutdownBeforeStartCompleted = true;
+        }
+    }
+
+    private synchronized void tryStop() {
+        if (!stopped) {
+            try {
+                task.stop();
+                stopped = true;
+            } catch (Throwable t) {
+                log.warn("Could not stop task", t);
+            }
+        }
     }
 
     @Override
     public void execute() {
         try {
-            // If we try to start the task at all by invoking initialize, then count this as
-            // "started" and expect a subsequent call to the task's stop() method
-            // to properly clean up any resources allocated by its initialize() or 
-            // start() methods. If the task throws an exception during stop(),
-            // the worst thing that happens is another exception gets logged for an already-
-            // failed task
-            started = true;
             task.initialize(new WorkerSourceTaskContext(offsetReader, this, configState));
             task.start(taskConfig);
             log.info("{} Source task finished initialization and start", this);
+            synchronized (this) {
+                if (startedShutdownBeforeStartCompleted) {
+                    tryStop();
+                    return;
+                }
+                finishedStart = true;
+            }
+
             while (!isStopping()) {
                 if (shouldPause()) {
                     onPause();

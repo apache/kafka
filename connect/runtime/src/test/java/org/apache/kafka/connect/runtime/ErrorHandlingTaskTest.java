@@ -236,6 +236,9 @@ public class ErrorHandlingTaskTest {
 
         createSourceTask(initialState, retryWithToleranceOperator);
 
+        sourceTask.stop();
+        PowerMock.expectLastCall();
+
         expectClose();
 
         reporter.close();
@@ -259,6 +262,9 @@ public class ErrorHandlingTaskTest {
         retryWithToleranceOperator.reporters(Arrays.asList(reporterA, reporterB));
 
         createSourceTask(initialState, retryWithToleranceOperator);
+
+        sourceTask.stop();
+        PowerMock.expectLastCall();
 
         expectClose();
 
