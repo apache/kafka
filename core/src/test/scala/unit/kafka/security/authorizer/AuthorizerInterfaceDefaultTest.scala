@@ -37,7 +37,7 @@ import scala.jdk.CollectionConverters._
 
 class AuthorizerInterfaceDefaultTest extends ZooKeeperTestHarness {
 
-  private val interfaceDefaultAuthorizer = new MockAuthorizer
+  private val interfaceDefaultAuthorizer = new DelegateAuthorizer
   private val superUsers = "User:superuser1; User:superuser2"
   private val username = "alice"
   private val principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)

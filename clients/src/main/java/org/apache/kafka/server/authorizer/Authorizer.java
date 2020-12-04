@@ -161,6 +161,19 @@ public interface Authorizer extends Configurable, Closeable {
      * Check if the caller is authorized to perform the given ACL operation on at least one
      * resource of the given type.
      *
+     * 1. Filter out all the resource pattern corresponding to the requestContext, AclOperation,
+     *    and ResourceType
+     * 2. If wildcard deny exists, return deny directly
+     * 3. For any literal allowed resource, if there's no dominant literal denied resource, and
+     *    no dominant prefixed denied resource, return allow
+     * 4. For any prefixed allowed resource, if there's no dominant denied resource, return allow
+     * 5. For any other cases, return deny
+     *
+     * It is important to override this interface default in implementations because
+     * 1. The interface default iterates all AclBindings multiple times, without any indexing,
+     *    which is a CPU intense work.
+     * 2. The interface default rebuild several sets of strings, which is a memory intense work.
+     *
      * @param requestContext Request context including request resourceType, security protocol, and listener name
      * @param op             The ACL operation to check
      * @param resourceType   The resource type to check

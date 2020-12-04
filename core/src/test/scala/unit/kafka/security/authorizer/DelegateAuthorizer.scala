@@ -24,9 +24,9 @@ import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
 import org.apache.kafka.server.authorizer.{AclCreateResult, AclDeleteResult, Action, AuthorizableRequestContext, AuthorizationResult, Authorizer, AuthorizerServerInfo}
 
 /**
- * A mock authorizer for testing the interface default
+ * For testing the interface default
  */
-class MockAuthorizer extends Authorizer {
+class DelegateAuthorizer extends Authorizer {
     val authorizer = new AclAuthorizer
 
     override def start(serverInfo: AuthorizerServerInfo): util.Map[Endpoint, _ <: CompletionStage[Void]] = {
