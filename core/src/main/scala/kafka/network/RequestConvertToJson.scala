@@ -76,7 +76,7 @@ object RequestConvertToJson {
       case req: OffsetDeleteRequest => OffsetDeleteRequestDataJsonConverter.write(req.data, request.version)
       case req: OffsetFetchRequest => OffsetFetchRequestDataJsonConverter.write(req.data, request.version)
       case req: OffsetsForLeaderEpochRequest => OffsetForLeaderEpochRequestDataJsonConverter.write(req.data, request.version)
-      case req: ProduceRequest => if (req.data == null) produceRequestJson(req, request.version, false) else ProduceRequestDataJsonConverter.write(req.data, request.version)
+      case req: ProduceRequest => produceRequestJson(req, request.version, false)
       case req: RenewDelegationTokenRequest => RenewDelegationTokenRequestDataJsonConverter.write(req.data, request.version)
       case req: SaslAuthenticateRequest => SaslAuthenticateRequestDataJsonConverter.write(req.data, request.version)
       case req: SaslHandshakeRequest => SaslHandshakeRequestDataJsonConverter.write(req.data, request.version)
@@ -213,7 +213,7 @@ object RequestConvertToJson {
   }
 
   /**
-   * This specific handling of ProduceRequest is for when it goes into purgatory and its data becomes null.
+   * ProduceRequest has a specific handling because it can go into purgatory where its data becomes null.
    */
   def produceRequestJson(req: ProduceRequest, version: Short, serializeRecords: Boolean): JsonNode = {
     val node = new ObjectNode(JsonNodeFactory.instance)
