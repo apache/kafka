@@ -21,7 +21,7 @@ import java.util.Optional
 import java.util.concurrent.{CountDownLatch, Semaphore}
 
 import com.yammer.metrics.core.Metric
-import kafka.api.{ApiVersion, LeaderAndIsr}
+import kafka.api.ApiVersion
 import kafka.common.UnexpectedAppendOffsetException
 import kafka.log.{Defaults => _, _}
 import kafka.metrics.KafkaYammerMetrics
@@ -1005,7 +1005,7 @@ class PartitionTest extends AbstractPartitionTest {
     // Expansion does not affect the ISR
     assertEquals("ISR", Set[Integer](leader, follower2), partition.isrState.isr)
     assertEquals("ISR", Set[Integer](leader, follower1, follower2), partition.isrState.maximalIsr)
-    assertEquals("AlterIsr", alterIsrManager.isrUpdates.dequeue().leaderAndIsr.isr.toSet,
+    assertEquals("AlterIsr", alterIsrManager.isrUpdates.head.leaderAndIsr.isr.toSet,
       Set(leader, follower1, follower2))
   }
 
@@ -1164,7 +1164,7 @@ class PartitionTest extends AbstractPartitionTest {
       leaderEndOffset = 6L)
 
     assertEquals(alterIsrManager.isrUpdates.size, 1)
-    val isrItem = alterIsrManager.isrUpdates.dequeue()
+    val isrItem = alterIsrManager.isrUpdates.head
     assertEquals(isrItem.leaderAndIsr.isr, List(brokerId, remoteBrokerId))
     assertEquals(Set(brokerId), partition.isrState.isr)
     assertEquals(Set(brokerId, remoteBrokerId), partition.isrState.maximalIsr)
@@ -1172,7 +1172,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(0L, remoteReplica.logStartOffset)
 
     // Complete the ISR expansion
-    isrItem.callback.apply(Right(new LeaderAndIsr(brokerId, leaderEpoch, List(brokerId, remoteBrokerId), 2)))
+    alterIsrManager.completeIsrUpdate(2)
     assertEquals(Set(brokerId, remoteBrokerId), partition.isrState.isr)
 
     assertEquals(isrChangeListener.expands.get, 1)
@@ -1223,8 +1223,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(0L, remoteReplica.logStartOffset)
 
     // Simulate failure callback
-    val alterIsrItem = alterIsrManager.isrUpdates.dequeue()
-    alterIsrItem.callback.apply(Left(Errors.INVALID_UPDATE_VERSION))
+    alterIsrManager.failIsrUpdate(Errors.INVALID_UPDATE_VERSION)
 
     // Still no ISR change
     assertEquals(Set(brokerId), partition.inSyncReplicaIds)
@@ -1280,7 +1279,7 @@ class PartitionTest extends AbstractPartitionTest {
     // Shrink the ISR
     partition.maybeShrinkIsr()
     assertEquals(alterIsrManager.isrUpdates.size, 1)
-    assertEquals(alterIsrManager.isrUpdates.dequeue().leaderAndIsr.isr, List(brokerId))
+    assertEquals(alterIsrManager.isrUpdates.head.leaderAndIsr.isr, List(brokerId))
     assertEquals(Set(brokerId, remoteBrokerId), partition.isrState.isr)
     assertEquals(Set(brokerId, remoteBrokerId), partition.isrState.maximalIsr)
     assertEquals(0L, partition.localLogOrException.highWatermark)
@@ -1449,8 +1448,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(0L, partition.localLogOrException.highWatermark)
 
     // Simulate failure callback
-    val alterIsrItem = alterIsrManager.isrUpdates.dequeue()
-    alterIsrItem.callback.apply(Left(Errors.INVALID_UPDATE_VERSION))
+    alterIsrManager.failIsrUpdate(Errors.INVALID_UPDATE_VERSION)
 
     // Ensure ISR hasn't changed
     assertEquals(partition.isrState.getClass, classOf[PendingShrinkIsr])
@@ -1533,7 +1531,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(0L, remoteReplica.logStartOffset)
 
     // Failure
-    alterIsrManager.isrUpdates.dequeue().callback(Left(error))
+    alterIsrManager.failIsrUpdate(error)
     callback(brokerId, remoteBrokerId, partition)
   }
 
