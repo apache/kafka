@@ -17,10 +17,15 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.ProduceRequestData;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.Message;
+import org.apache.kafka.common.protocol.MessageSizeAccumulator;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 
+import java.nio.ByteBuffer;
 import java.util.AbstractMap;
 import java.util.Iterator;
 import java.util.Optional;
@@ -52,7 +57,7 @@ public final class RequestUtils {
     public static AbstractMap.SimpleEntry<Boolean, Boolean> flags(ProduceRequest request) {
         boolean hasIdempotentRecords = false;
         boolean hasTransactionalRecords = false;
-        for (ProduceRequestData.TopicProduceData tpd : request.dataOrException().topicData()) {
+        for (ProduceRequestData.TopicProduceData tpd : request.data().topicData()) {
             for (ProduceRequestData.PartitionProduceData ppd : tpd.partitionData()) {
                 BaseRecords records = ppd.records();
                 if (records instanceof Records) {
@@ -69,5 +74,38 @@ public final class RequestUtils {
             }
         }
         return new AbstractMap.SimpleEntry<>(hasIdempotentRecords, hasTransactionalRecords);
+    }
+
+    public static MessageSizeAccumulator size(
+        ObjectSerializationCache serializationCache,
+        Message header,
+        short headerVersion,
+        Message apiMessage,
+        short apiVersion
+    ) {
+        MessageSizeAccumulator messageSize = new MessageSizeAccumulator();
+        if (header != null)
+            header.addSize(messageSize, serializationCache, headerVersion);
+        apiMessage.addSize(messageSize, serializationCache, apiVersion);
+        return messageSize;
+    }
+
+    public static ByteBuffer serialize(
+        Message header,
+        short headerVersion,
+        Message apiMessage,
+        short apiVersion
+    ) {
+        ObjectSerializationCache serializationCache = new ObjectSerializationCache();
+        MessageSizeAccumulator messageSize = RequestUtils.size(serializationCache, header, headerVersion, apiMessage, apiVersion);
+
+        ByteBuffer buffer = ByteBuffer.allocate(messageSize.totalSize());
+        ByteBufferAccessor bufferWritable = new ByteBufferAccessor(buffer);
+        if (header != null)
+            header.write(bufferWritable, serializationCache, headerVersion);
+        apiMessage.write(bufferWritable, serializationCache, apiVersion);
+
+        buffer.rewind();
+        return buffer;
     }
 }

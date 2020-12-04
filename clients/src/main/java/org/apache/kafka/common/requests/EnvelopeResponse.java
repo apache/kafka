@@ -17,10 +17,8 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.EnvelopeResponseData;
-import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
-import org.apache.kafka.common.protocol.SendBuilder;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
@@ -66,11 +64,6 @@ public class EnvelopeResponse extends AbstractResponse {
     @Override
     public int throttleTimeMs() {
         return DEFAULT_THROTTLE_TIME;
-    }
-
-    @Override
-    protected Send toSend(String destination, ResponseHeader header, short apiVersion) {
-        return SendBuilder.buildResponseSend(destination, header, this.data, apiVersion);
     }
 
     public static EnvelopeResponse parse(ByteBuffer buffer, short version) {

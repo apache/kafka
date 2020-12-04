@@ -18,12 +18,10 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.FetchResponseData;
-import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
-import org.apache.kafka.common.protocol.SendBuilder;
 import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 
@@ -282,11 +280,6 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         super(ApiKeys.FETCH);
         this.data = fetchResponseData;
         this.responseDataMap = toResponseDataMap(fetchResponseData);
-    }
-
-    @Override
-    public Send toSend(String dest, ResponseHeader responseHeader, short apiVersion) {
-        return SendBuilder.buildResponseSend(dest, responseHeader, this.data, apiVersion);
     }
 
     public Errors error() {

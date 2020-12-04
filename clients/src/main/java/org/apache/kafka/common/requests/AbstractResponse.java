@@ -16,13 +16,11 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
-import org.apache.kafka.common.protocol.ObjectSerializationCache;
+import org.apache.kafka.common.protocol.SendBuilder;
 
 import java.nio.ByteBuffer;
 import java.util.Collection;
@@ -42,36 +40,25 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
         this.apiKey = apiKey;
     }
 
-    protected Send toSend(String destination, ResponseHeader header, short version) {
-        return new NetworkSend(destination, serializeWithHeader(header, version));
+    public final Send toSend(String destination, ResponseHeader header, short version) {
+        return SendBuilder.buildResponseSend(destination, header, data(), version);
     }
 
     /**
      * Visible for testing, typically {@link #toSend(String, ResponseHeader, short)} should be used instead.
      */
-    public ByteBuffer serializeWithHeader(short version, int correlationId) {
+    public final ByteBuffer serializeWithHeader(short version, int correlationId) {
         return serializeWithHeader(new ResponseHeader(correlationId, apiKey.responseHeaderVersion(version)), version);
     }
 
-    ByteBuffer serializeWithHeader(ResponseHeader header, short version) {
+    final ByteBuffer serializeWithHeader(ResponseHeader header, short version) {
         Objects.requireNonNull(header, "header should not be null");
-        return serialize(header, data(), version);
+        return RequestUtils.serialize(header.data(), header.headerVersion(), data(), version);
     }
 
     // Visible for testing
-    ByteBuffer serializeBody(short version) {
-        return serialize(null, data(), version);
-    }
-
-    private static ByteBuffer serialize(ResponseHeader header, Message data, short version) {
-        ObjectSerializationCache serializationCache = new ObjectSerializationCache();
-        int headerSize = header == null ? 0 : header.size(serializationCache);
-        ByteBuffer buffer = ByteBuffer.allocate(headerSize + data.size(serializationCache, version));
-        if (header != null)
-            header.write(buffer, serializationCache);
-        data.write(new ByteBufferAccessor(buffer), serializationCache, version);
-        buffer.rewind();
-        return buffer;
+    final ByteBuffer serializeBody(short version) {
+        return RequestUtils.serialize(null, (short) 0, data(), version);
     }
 
     /**

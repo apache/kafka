@@ -18,11 +18,9 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.ProduceResponseData;
-import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.SendBuilder;
 import org.apache.kafka.common.record.RecordBatch;
 
 import java.nio.ByteBuffer;
@@ -81,11 +79,6 @@ public class ProduceResponse extends AbstractResponse {
     @Deprecated
     public ProduceResponse(Map<TopicPartition, PartitionResponse> responses, int throttleTimeMs) {
         this(toData(responses, throttleTimeMs));
-    }
-
-    @Override
-    protected Send toSend(String destination, ResponseHeader header, short apiVersion) {
-        return SendBuilder.buildResponseSend(destination, header, this.data, apiVersion);
     }
 
     private static ProduceResponseData toData(Map<TopicPartition, PartitionResponse> responses, int throttleTimeMs) {

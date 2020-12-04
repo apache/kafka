@@ -655,7 +655,7 @@ public class RequestResponseTest {
     @Test
     public void produceRequestToStringTest() {
         ProduceRequest request = createProduceRequest(ApiKeys.PRODUCE.latestVersion());
-        assertEquals(1, request.dataOrException().topicData().size());
+        assertEquals(1, request.data().topicData().size());
         assertFalse(request.toString(false).contains("partitionSizes"));
         assertTrue(request.toString(false).contains("numPartitions=1"));
         assertTrue(request.toString(true).contains("partitionSizes"));
@@ -663,7 +663,7 @@ public class RequestResponseTest {
 
         request.clearPartitionRecords();
         try {
-            request.dataOrException();
+            request.data();
             fail("dataOrException should fail after clearPartitionRecords()");
         } catch (IllegalStateException e) {
             // OK

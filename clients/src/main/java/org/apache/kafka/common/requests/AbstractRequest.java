@@ -17,13 +17,12 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
+import org.apache.kafka.common.protocol.SendBuilder;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
@@ -98,35 +97,24 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
         return apiKey;
     }
 
-    public Send toSend(String destination, RequestHeader header) {
-        return new NetworkSend(destination, serializeWithHeader(header));
+    public final Send toSend(String destination, RequestHeader header) {
+        return SendBuilder.buildRequestSend(destination, header, data());
     }
 
     // Visible for testing
-    public ByteBuffer serializeWithHeader(RequestHeader header) {
-        return serialize(header, data(), version);
+    public final ByteBuffer serializeWithHeader(RequestHeader header) {
+        return RequestUtils.serialize(header.data(), header.headerVersion(), data(), version);
     }
 
     protected abstract Message data();
 
     // Visible for testing
-    public ByteBuffer serializeBody() {
-        return serialize(null, data(), version);
-    }
-
-    private static ByteBuffer serialize(RequestHeader header, Message data, short version) {
-        ObjectSerializationCache serializationCache = new ObjectSerializationCache();
-        int headerSize = header == null ? 0 : header.size(serializationCache);
-        ByteBuffer buffer = ByteBuffer.allocate(headerSize + data.size(serializationCache, version));
-        if (header != null)
-            header.write(buffer, serializationCache);
-        data.write(new ByteBufferAccessor(buffer), serializationCache, version);
-        buffer.rewind();
-        return buffer;
+    public final ByteBuffer serializeBody() {
+        return RequestUtils.serialize(null, (short) 0, data(), version);
     }
 
     // Visible for testing
-    int sizeInBytes() {
+    final int sizeInBytes() {
         return data().size(new ObjectSerializationCache(), version);
     }
 
