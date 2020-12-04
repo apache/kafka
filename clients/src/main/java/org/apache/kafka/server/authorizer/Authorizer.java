@@ -33,17 +33,12 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.SecurityUtils;
 
 import java.io.Closeable;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.EnumMap;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
-
-import static javax.swing.UIManager.put;
 
 /**
  *
@@ -190,15 +185,15 @@ public interface Authorizer extends Configurable, Closeable {
             resourceTypeFilter, AccessControlEntryFilter.ANY);
 
         EnumMap<PatternType, Set<String>> denyPatterns =
-                new EnumMap<PatternType, Set<String>>(PatternType.class){{
-            put(PatternType.LITERAL, new HashSet<>());
-            put(PatternType.PREFIXED, new HashSet<>());
-        }};
+            new EnumMap<PatternType, Set<String>>(PatternType.class) {{
+                put(PatternType.LITERAL, new HashSet<>());
+                put(PatternType.PREFIXED, new HashSet<>());
+            }};
         EnumMap<PatternType, Set<String>> allowPatterns =
-                new EnumMap<PatternType, Set<String>>(PatternType.class){{
-            put(PatternType.LITERAL, new HashSet<>());
-            put(PatternType.PREFIXED, new HashSet<>());
-        }};
+            new EnumMap<PatternType, Set<String>>(PatternType.class) {{
+                put(PatternType.LITERAL, new HashSet<>());
+                put(PatternType.PREFIXED, new HashSet<>());
+            }};
 
         boolean hasWildCardAllow = false;
 
