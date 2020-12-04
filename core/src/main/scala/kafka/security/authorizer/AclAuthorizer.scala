@@ -650,7 +650,8 @@ class AclAuthorizer extends Authorizer with Logging {
     zkClient.getVersionedAclsForResource(resource)
   }
 
-  private def updateCache(resource: ResourcePattern, versionedAcls: VersionedAcls): Unit = {
+  // Visible for benchmark
+  def updateCache(resource: ResourcePattern, versionedAcls: VersionedAcls): Unit = {
     val currentAces: Set[AccessControlEntry] = aclCache.get(resource) match {
       case Some(versionedAcls) => versionedAcls.acls.map(aclEntry => aclEntry.ace)
       case None => Set.empty
