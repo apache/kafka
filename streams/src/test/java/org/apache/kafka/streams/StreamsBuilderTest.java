@@ -492,7 +492,7 @@ public class StreamsBuilderTest {
     }
 
     @Test
-    public void shouldNotReuseRepartitionTopicAsChangelogsByDefault() {
+    public void shouldNotReuseSourceTopicAsChangelogsByDefault() {
         final String topic = "topic";
         builder.table(topic, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("store"));
 
