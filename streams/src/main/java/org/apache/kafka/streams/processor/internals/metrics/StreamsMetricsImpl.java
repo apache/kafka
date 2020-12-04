@@ -44,7 +44,6 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
@@ -220,11 +219,12 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                           final Sensor... parents) {
         synchronized (clientLevelSensors) {
             final String fullSensorName = CLIENT_LEVEL_GROUP + SENSOR_NAME_DELIMITER + sensorName;
-            return Optional.ofNullable(metrics.getSensor(fullSensorName))
-                .orElseGet(() -> {
-                    clientLevelSensors.push(fullSensorName);
-                    return metrics.sensor(fullSensorName, recordingLevel, parents);
-                });
+            final Sensor sensor = metrics.getSensor(fullSensorName);
+            if (sensor == null) {
+                clientLevelSensors.push(fullSensorName);
+                return metrics.sensor(fullSensorName, recordingLevel, parents);
+            }
+            return sensor;
         }
     }
 
@@ -235,11 +235,12 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         final String key = threadSensorPrefix(threadId);
         synchronized (threadLevelSensors) {
             final String fullSensorName = key + SENSOR_NAME_DELIMITER + sensorName;
-            return Optional.ofNullable(metrics.getSensor(fullSensorName))
-                .orElseGet(() -> {
-                    threadLevelSensors.computeIfAbsent(key, ignored -> new LinkedList<>()).push(fullSensorName);
-                    return metrics.sensor(fullSensorName, recordingLevel, parents);
-                });
+            final Sensor sensor = metrics.getSensor(fullSensorName);
+            if (sensor == null) {
+                threadLevelSensors.computeIfAbsent(key, ignored -> new LinkedList<>()).push(fullSensorName);
+                return metrics.sensor(fullSensorName, recordingLevel, parents);
+            }
+            return sensor;
         }
     }
 
@@ -328,11 +329,12 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         final String key = taskSensorPrefix(threadId, taskId);
         synchronized (taskLevelSensors) {
             final String fullSensorName = key + SENSOR_NAME_DELIMITER + sensorName;
-            return Optional.ofNullable(metrics.getSensor(fullSensorName))
-                .orElseGet(() -> {
-                    taskLevelSensors.computeIfAbsent(key, ignored -> new LinkedList<>()).push(fullSensorName);
-                    return metrics.sensor(fullSensorName, recordingLevel, parents);
-                });
+            final Sensor sensor = metrics.getSensor(fullSensorName);
+            if (sensor == null) {
+                taskLevelSensors.computeIfAbsent(key, ignored -> new LinkedList<>()).push(fullSensorName);
+                return metrics.sensor(fullSensorName, recordingLevel, parents);
+            }
+            return sensor;
         }
     }
 
@@ -360,11 +362,12 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         final String key = nodeSensorPrefix(threadId, taskId, processorNodeName);
         synchronized (nodeLevelSensors) {
             final String fullSensorName = key + SENSOR_NAME_DELIMITER + sensorName;
-            return Optional.ofNullable(metrics.getSensor(fullSensorName))
-                .orElseGet(() -> {
-                    nodeLevelSensors.computeIfAbsent(key, ignored -> new LinkedList<>()).push(fullSensorName);
-                    return metrics.sensor(fullSensorName, recordingLevel, parents);
-                });
+            final Sensor sensor = metrics.getSensor(fullSensorName);
+            if (sensor == null) {
+                nodeLevelSensors.computeIfAbsent(key, ignored -> new LinkedList<>()).push(fullSensorName);
+                return metrics.sensor(fullSensorName, recordingLevel, parents);
+            }
+            return sensor;
         }
     }
 
@@ -394,11 +397,12 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         final String key = cacheSensorPrefix(threadId, taskName, storeName);
         synchronized (cacheLevelSensors) {
             final String fullSensorName = key + SENSOR_NAME_DELIMITER + sensorName;
-            return Optional.ofNullable(metrics.getSensor(fullSensorName))
-                .orElseGet(() -> {
-                    cacheLevelSensors.computeIfAbsent(key, ignored -> new LinkedList<>()).push(fullSensorName);
-                    return metrics.sensor(fullSensorName, recordingLevel, parents);
-                });
+            final Sensor sensor = metrics.getSensor(fullSensorName);
+            if (sensor == null) {
+                cacheLevelSensors.computeIfAbsent(key, ignored -> new LinkedList<>()).push(fullSensorName);
+                return metrics.sensor(fullSensorName, recordingLevel, parents);
+            }
+            return sensor;
         }
     }
 
