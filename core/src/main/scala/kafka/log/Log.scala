@@ -1110,7 +1110,7 @@ class Log(@volatile private var _dir: File,
           // check for offline log dir in case a retry following an IOException happens before the log dir
           // is taken offline, which would result in inconsistent producer state
           if (logDirFailureChannel.logDirIsOffline(parentDir)) {
-            throw new KafkaStorageException(s"The log dir $parentDir has failed.");
+            throw new KafkaStorageException(s"The log dir $parentDir is offline due to a previous IO exception.");
           }
 
           if (assignOffsets) {
