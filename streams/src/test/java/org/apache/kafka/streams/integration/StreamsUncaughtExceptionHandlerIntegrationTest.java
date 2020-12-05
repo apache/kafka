@@ -154,7 +154,6 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
     @Test
     public void shouldReplaceSingleThread() throws InterruptedException {
         testReplaceThreads(1);
-
     }
 
     @Test
