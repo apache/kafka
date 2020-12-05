@@ -135,8 +135,8 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
             kafkaStreams.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
 
-            final AtomicInteger count = new AtomicInteger();
             kafkaStreams.setUncaughtExceptionHandler(exception -> SHUTDOWN_CLIENT);
+
             StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
 
             produceMessages(0L, inputTopic, "A");
