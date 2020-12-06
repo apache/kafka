@@ -22,25 +22,30 @@ jdk:
   - openjdk8
 
 env:
-  - _DUCKTAPE_OPTIONS="--subset 0  --subsets 15"
-  - _DUCKTAPE_OPTIONS="--subset 1  --subsets 15"
-  - _DUCKTAPE_OPTIONS="--subset 2  --subsets 15"
-  - _DUCKTAPE_OPTIONS="--subset 3  --subsets 15"
-  - _DUCKTAPE_OPTIONS="--subset 4  --subsets 15"
-  - _DUCKTAPE_OPTIONS="--subset 5  --subsets 15"
-  - _DUCKTAPE_OPTIONS="--subset 6  --subsets 15"
-  - _DUCKTAPE_OPTIONS="--subset 7  --subsets 15"
-  - _DUCKTAPE_OPTIONS="--subset 8  --subsets 15"
-  - _DUCKTAPE_OPTIONS="--subset 9  --subsets 15"
-  - _DUCKTAPE_OPTIONS="--subset 10 --subsets 15"
-  - _DUCKTAPE_OPTIONS="--subset 11 --subsets 15"
-  - _DUCKTAPE_OPTIONS="--subset 12 --subsets 15"
-  - _DUCKTAPE_OPTIONS="--subset 13 --subsets 15"
-  - _DUCKTAPE_OPTIONS="--subset 14 --subsets 15"
+  - _DUCKTAPE_OPTIONS="--subset 0  --subsets 20"
+  - _DUCKTAPE_OPTIONS="--subset 1  --subsets 20"
+  - _DUCKTAPE_OPTIONS="--subset 2  --subsets 20"
+  - _DUCKTAPE_OPTIONS="--subset 3  --subsets 20"
+  - _DUCKTAPE_OPTIONS="--subset 4  --subsets 20"
+  - _DUCKTAPE_OPTIONS="--subset 5  --subsets 20"
+  - _DUCKTAPE_OPTIONS="--subset 6  --subsets 20"
+  - _DUCKTAPE_OPTIONS="--subset 7  --subsets 20"
+  - _DUCKTAPE_OPTIONS="--subset 8  --subsets 20"
+  - _DUCKTAPE_OPTIONS="--subset 9  --subsets 20"
+  - _DUCKTAPE_OPTIONS="--subset 10 --subsets 20"
+  - _DUCKTAPE_OPTIONS="--subset 11 --subsets 20"
+  - _DUCKTAPE_OPTIONS="--subset 12 --subsets 20"
+  - _DUCKTAPE_OPTIONS="--subset 13 --subsets 20"
+  - _DUCKTAPE_OPTIONS="--subset 14 --subsets 20"
+  - _DUCKTAPE_OPTIONS="--subset 15 --subsets 20"
+  - _DUCKTAPE_OPTIONS="--subset 16 --subsets 20"
+  - _DUCKTAPE_OPTIONS="--subset 17 --subsets 20"
+  - _DUCKTAPE_OPTIONS="--subset 18 --subsets 20"
+  - _DUCKTAPE_OPTIONS="--subset 19 --subsets 20"
 
 script:
   - ./gradlew rat
-  - ./gradlew systemTestLibs && /bin/bash ./tests/docker/run_tests.sh
+  - ./gradlew systemTestLibs && TC_PATHS="tests/kafkatest/tests tests/kafkatest/sanity_checks" ./tests/docker/run_tests.sh
 
 before_cache:
   - rm -f  $HOME/.gradle/caches/modules-2/modules-2.lock
