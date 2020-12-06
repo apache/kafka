@@ -52,7 +52,7 @@ public class VerifiableSinkConnector extends SourceConnector {
         ArrayList<Map<String, String>> configs = new ArrayList<>();
         for (int i = 0; i < maxTasks; i++) {
             Map<String, String> props = new HashMap<>(config);
-            props.put(VerifiableSinkTask.ID_CONFIG, String.valueof(i);
+            props.put(VerifiableSinkTask.ID_CONFIG, String.valueof(i));
             configs.add(props);
         }
         return configs;
