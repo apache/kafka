@@ -20,8 +20,8 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -60,11 +60,6 @@ public class SyncGroupRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public SyncGroupRequest(Struct struct, short version) {
-        super(ApiKeys.SYNC_GROUP, version);
-        this.data = new SyncGroupRequestData(struct, version);
-    }
-
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         return new SyncGroupResponse(new SyncGroupResponseData()
@@ -93,11 +88,11 @@ public class SyncGroupRequest extends AbstractRequest {
     }
 
     public static SyncGroupRequest parse(ByteBuffer buffer, short version) {
-        return new SyncGroupRequest(ApiKeys.SYNC_GROUP.parseRequest(version, buffer), version);
+        return new SyncGroupRequest(new SyncGroupRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
+    protected SyncGroupRequestData data() {
+        return data;
     }
 }

@@ -21,15 +21,15 @@ import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.CreateAclsRequestData;
 import org.apache.kafka.common.message.CreateAclsRequestData.AclCreation;
 import org.apache.kafka.common.message.CreateAclsResponseData;
 import org.apache.kafka.common.message.CreateAclsResponseData.AclCreationResult;
-import org.apache.kafka.common.resource.ResourcePattern;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.resource.PatternType;
+import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
 
 import java.nio.ByteBuffer;
@@ -48,7 +48,7 @@ public class CreateAclsRequest extends AbstractRequest {
 
         @Override
         public CreateAclsRequest build(short version) {
-            return new CreateAclsRequest(version, data);
+            return new CreateAclsRequest(data, version);
         }
 
         @Override
@@ -59,14 +59,10 @@ public class CreateAclsRequest extends AbstractRequest {
 
     private final CreateAclsRequestData data;
 
-    CreateAclsRequest(short version, CreateAclsRequestData data) {
+    CreateAclsRequest(CreateAclsRequestData data, short version) {
         super(ApiKeys.CREATE_ACLS, version);
         validate(data);
         this.data = data;
-    }
-
-    public CreateAclsRequest(Struct struct, short version) {
-        this(version, new CreateAclsRequestData(struct, version));
     }
 
     public List<AclCreation> aclCreations() {
@@ -74,8 +70,8 @@ public class CreateAclsRequest extends AbstractRequest {
     }
 
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
+    protected CreateAclsRequestData data() {
+        return data;
     }
 
     @Override
@@ -88,7 +84,7 @@ public class CreateAclsRequest extends AbstractRequest {
     }
 
     public static CreateAclsRequest parse(ByteBuffer buffer, short version) {
-        return new CreateAclsRequest(ApiKeys.CREATE_ACLS.parseRequest(version, buffer), version);
+        return new CreateAclsRequest(new CreateAclsRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
     private void validate(CreateAclsRequestData data) {

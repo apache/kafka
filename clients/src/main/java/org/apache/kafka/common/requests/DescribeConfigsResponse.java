@@ -19,10 +19,9 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.message.DescribeConfigsResponseData;
-import org.apache.kafka.common.message.DescribeConfigsResponseData.DescribeConfigsResult;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Collection;
@@ -219,13 +218,16 @@ public class DescribeConfigsResponse extends AbstractResponse {
     private final DescribeConfigsResponseData data;
 
     public DescribeConfigsResponse(DescribeConfigsResponseData data) {
+        super(ApiKeys.DESCRIBE_CONFIGS);
         this.data = data;
     }
 
-    public DescribeConfigsResponse(Struct struct, short version) {
-        this.data = new DescribeConfigsResponseData(struct, version);
+    // This constructor should only be used after deserialization, it has special handling for version 0
+    private DescribeConfigsResponse(DescribeConfigsResponseData data, short version) {
+        super(ApiKeys.DESCRIBE_CONFIGS);
+        this.data = data;
         if (version == 0) {
-            for (DescribeConfigsResult result : data.results()) {
+            for (DescribeConfigsResponseData.DescribeConfigsResult result : data.results()) {
                 for (DescribeConfigsResponseData.DescribeConfigsResourceResult config : result.configs()) {
                     if (config.isDefault()) {
                         config.setConfigSource(ConfigSource.DEFAULT_CONFIG.id);
@@ -243,6 +245,7 @@ public class DescribeConfigsResponse extends AbstractResponse {
         }
     }
 
+    @Override
     public DescribeConfigsResponseData data() {
         return data;
     }
@@ -261,13 +264,8 @@ public class DescribeConfigsResponse extends AbstractResponse {
         return errorCounts;
     }
 
-    @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
-    }
-
     public static DescribeConfigsResponse parse(ByteBuffer buffer, short version) {
-        return new DescribeConfigsResponse(ApiKeys.DESCRIBE_CONFIGS.parseResponse(version, buffer), version);
+        return new DescribeConfigsResponse(new DescribeConfigsResponseData(new ByteBufferAccessor(buffer), version), version);
     }
 
     @Override

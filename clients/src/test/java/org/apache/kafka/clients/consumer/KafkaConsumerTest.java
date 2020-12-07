@@ -2408,7 +2408,7 @@ public class KafkaConsumerTest {
         List<MetadataResponse.TopicMetadata> topicMetadata = new ArrayList<>();
         topicMetadata.add(new MetadataResponse.TopicMetadata(Errors.INVALID_TOPIC_EXCEPTION,
                 invalidTopicName, false, Collections.emptyList()));
-        MetadataResponse updateResponse = MetadataResponse.prepareResponse(cluster.nodes(),
+        MetadataResponse updateResponse = TestUtils.metadataResponse(cluster.nodes(),
                 cluster.clusterResource().clusterId(),
                 cluster.controller().id(),
                 topicMetadata);
