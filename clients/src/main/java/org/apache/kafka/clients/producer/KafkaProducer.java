@@ -1083,6 +1083,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     " configuration.");
     }
 
+    private boolean isInvokedFromCallback() {
+        return Thread.currentThread() == this.ioThread;
+    }
+
     /**
      * Invoking this method makes all buffered records immediately available to send (even if <code>linger.ms</code> is
      * greater than 0) and blocks on the completion of the requests associated with these records. The post-condition
@@ -1116,9 +1120,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * </p>
      *
      * @throws InterruptException If the thread is interrupted while blocked
+     * @throws IllegalStateException If the thread is callback thread. Calling flush() from callback is not allowed since it makes deadlock.
      */
     @Override
     public void flush() {
+        if (isInvokedFromCallback())
+            throw new IllegalStateException("Calling flush() from callback is not allowed since it makes deadlock.");
+
         log.trace("Flushing accumulated records in producer.");
         this.accumulator.beginFlush();
         this.sender.wakeup();
@@ -1205,9 +1213,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
         // this will keep track of the first encountered exception
         AtomicReference<Throwable> firstException = new AtomicReference<>();
-        boolean invokedFromCallback = Thread.currentThread() == this.ioThread;
         if (timeoutMs > 0) {
-            if (invokedFromCallback) {
+            if (isInvokedFromCallback()) {
                 log.warn("Overriding close timeout {} ms to 0 ms in order to prevent useless blocking due to self-join. " +
                         "This means you have incorrectly invoked close with a non-zero timeout from the producer call-back.",
                         timeoutMs);
@@ -1231,7 +1238,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     "within timeout {} ms.", timeoutMs);
             this.sender.forceClose();
             // Only join the sender thread when not calling from callback.
-            if (!invokedFromCallback) {
+            if (!isInvokedFromCallback()) {
                 try {
                     this.ioThread.join();
                 } catch (InterruptedException e) {
