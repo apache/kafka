@@ -16,15 +16,15 @@
  */
 package org.apache.kafka.snapshot;
 
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.raft.OffsetAndEpoch;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.raft.OffsetAndEpoch;
 
 public final class FileRawSnapshotWriter implements RawSnapshotWriter {
     private final Path tempSnapshotPath;
@@ -85,7 +85,7 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
         }
 
         Path destination = Snapshots.moveRename(tempSnapshotPath, snapshotId);
-        Files.move(tempSnapshotPath, destination, StandardCopyOption.ATOMIC_MOVE);
+        Utils.atomicMoveWithFallback(tempSnapshotPath, destination);
     }
 
     @Override
