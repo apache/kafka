@@ -1321,4 +1321,9 @@ public final class Utils {
             return date.getTime();
         }
     }
+
+    @SuppressWarnings("unchecked")
+    public static <S> Iterator<S> covariantCast(Iterator<? extends S> iterator) {
+        return (Iterator<S>) iterator;
+    }
 }
