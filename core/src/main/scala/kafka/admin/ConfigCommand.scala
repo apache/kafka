@@ -755,7 +755,7 @@ object ConfigCommand extends Config {
     val entityName = parser.accepts("entity-name", "Name of entity (topic name/client id/user principal name/broker id/ip)")
             .withRequiredArg
             .ofType(classOf[String])
-    val entityDefault = parser.accepts("entity-default", "Default entity name for clients/users/brokers (applies to corresponding entity type in command line)")
+    val entityDefault = parser.accepts("entity-default", "Default entity name for clients/users/brokers/ips (applies to corresponding entity type in command line)")
 
     val nl = System.getProperty("line.separator")
     val addConfig = parser.accepts("add-config", "Key Value pairs of configs to add. Square brackets can be used to group values which contain commas: 'k1=v1,k2=[v1,v2,v2],k3=v3'. The following is a list of valid configurations: " +
@@ -901,7 +901,7 @@ object ConfigCommand extends Config {
             entityTypeVals.contains(ConfigType.Broker) ||
             entityTypeVals.contains(ConfigType.Ip)) {
           if (!hasEntityName && !hasEntityDefault)
-            throw new IllegalArgumentException("an entity-name or default entity must be specified with --alter of users, clients or brokers")
+            throw new IllegalArgumentException("an entity-name or default entity must be specified with --alter of users, clients, brokers or ips")
         } else if (!hasEntityName)
           throw new IllegalArgumentException(s"an entity name must be specified with --alter of ${entityTypeVals.mkString(",")}")
 

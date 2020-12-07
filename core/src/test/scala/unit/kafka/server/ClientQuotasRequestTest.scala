@@ -326,9 +326,6 @@ class ClientQuotasRequestTest extends BaseRequestTest {
     }.toMap
     val result = alterClientQuotas(userClientQuotas ++ ipQuotas, validateOnly = false)
     (matchUserClientEntities ++ matchIpEntities).foreach(e => result(e._1).get(10, TimeUnit.SECONDS))
-
-    // Allow time for watch callbacks to be triggered.
-    Thread.sleep(500)
   }
 
   @Test

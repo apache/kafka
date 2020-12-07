@@ -266,15 +266,18 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   private def updateIpConnectionRate(ip: Option[String], updatedRate: Int): Unit = {
     val initialConnectionCount = connectionCount
     val adminClient = createAdminClient()
-    val entity = new ClientQuotaEntity(Map(ClientQuotaEntity.IP -> ip.orNull).asJava)
-    val request = Map(entity -> Map(DynamicConfig.Ip.IpConnectionRateOverrideProp -> Some(updatedRate.toDouble)))
-    TestUtils.alterClientQuotas(adminClient, request).all.get()
-    // use a random throwaway address if ip isn't specified to get the default value
-    TestUtils.waitUntilTrue(() => servers.head.socketServer.connectionQuotas.
-      connectionRateForIp(InetAddress.getByName(ip.getOrElse(unknownHost))) == updatedRate,
-      s"Timed out waiting for connection rate update to propagate"
-    )
-    adminClient.close()
+    try {
+      val entity = new ClientQuotaEntity(Map(ClientQuotaEntity.IP -> ip.orNull).asJava)
+      val request = Map(entity -> Map(DynamicConfig.Ip.IpConnectionRateOverrideProp -> Some(updatedRate.toDouble)))
+      TestUtils.alterClientQuotas(adminClient, request).all.get()
+      // use a random throwaway address if ip isn't specified to get the default value
+      TestUtils.waitUntilTrue(() => servers.head.socketServer.connectionQuotas.
+        connectionRateForIp(InetAddress.getByName(ip.getOrElse(unknownHost))) == updatedRate,
+        s"Timed out waiting for connection rate update to propagate"
+      )
+    } finally {
+      adminClient.close()
+    }
     TestUtils.waitUntilTrue(() => initialConnectionCount == connectionCount,
       s"Admin client connection not closed (initial = $initialConnectionCount, current = $connectionCount)")
   }
