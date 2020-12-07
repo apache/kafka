@@ -2105,7 +2105,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         return
       }
     } else if (!authorize(request.context, IDEMPOTENT_WRITE, CLUSTER, CLUSTER_NAME, true, false)
-        || !authorizeByResourceType(request.context, AclOperation.WRITE, ResourceType.TOPIC)) {
+        && !authorizeByResourceType(request.context, AclOperation.WRITE, ResourceType.TOPIC)) {
       sendErrorResponseMaybeThrottle(request, Errors.CLUSTER_AUTHORIZATION_FAILED.exception)
       return
     }
