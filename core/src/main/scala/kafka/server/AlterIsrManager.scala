@@ -71,8 +71,8 @@ object AlterIsrManager {
   /**
    * Factory for ZK based implementation, used when IBP < 2.7-IV2
    */
-  def apply(zkClient: KafkaZkClient): AlterIsrManager = {
-    new ZkIsrManager(zkClient)
+  def apply(scheduler: Scheduler, time: Time, zkClient: KafkaZkClient): AlterIsrManager = {
+    new ZkIsrManager(scheduler, time, zkClient)
   }
 }
 

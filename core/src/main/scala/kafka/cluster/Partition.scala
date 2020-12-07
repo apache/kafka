@@ -28,7 +28,7 @@ import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
-import kafka.zk.{AdminZkClient}
+import kafka.zk.AdminZkClient
 import kafka.zookeeper.ZooKeeperClientException
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.message.FetchResponseData
@@ -73,12 +73,10 @@ object Partition extends KafkaMetricsGroup {
 
     val isrChangeListener = new IsrChangeListener {
       override def markExpand(): Unit = {
-        replicaManager.recordIsrChange(topicPartition)
         replicaManager.isrExpandRate.mark()
       }
 
       override def markShrink(): Unit = {
-        replicaManager.recordIsrChange(topicPartition)
         replicaManager.isrShrinkRate.mark()
       }
 

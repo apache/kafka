@@ -448,7 +448,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
       AlterIsrManager(alterIsrChannelManager, kafkaScheduler,
         time, config.brokerId, () => kafkaController.brokerEpoch)
     } else {
-      AlterIsrManager(zkClient)
+      AlterIsrManager(kafkaScheduler, time, zkClient)
     }
     new ReplicaManager(config, metrics, time, zkClient, kafkaScheduler, logManager, isShuttingDown, quotaManagers,
       brokerTopicStats, metadataCache, logDirFailureChannel, alterIsrManager)
