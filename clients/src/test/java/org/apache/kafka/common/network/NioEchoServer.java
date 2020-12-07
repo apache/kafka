@@ -91,7 +91,7 @@ public class NioEchoServer extends Thread {
     public NioEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol, AbstractConfig config,
                          String serverHost, ChannelBuilder channelBuilder, CredentialCache credentialCache,
                          int failedAuthenticationDelayMs, Time time) throws Exception {
-        this(listenerName, securityProtocol, config, serverHost, channelBuilder, credentialCache, 100, time,
+        this(listenerName, securityProtocol, config, serverHost, channelBuilder, credentialCache, failedAuthenticationDelayMs, time,
                 new DelegationTokenCache(ScramMechanism.mechanismNames()));
     }
 
