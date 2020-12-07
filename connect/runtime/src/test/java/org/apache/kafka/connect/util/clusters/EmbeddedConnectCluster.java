@@ -153,8 +153,10 @@ public class EmbeddedConnectCluster {
             log.error("Could not stop kafka", e);
             throw new RuntimeException("Could not stop brokers", e);
         } finally {
-            Exit.resetExitProcedure();
-            Exit.resetHaltProcedure();
+            if (maskExitProcedures) {
+                Exit.resetExitProcedure();
+                Exit.resetHaltProcedure();
+            }
         }
     }
 
