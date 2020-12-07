@@ -19,7 +19,6 @@ package org.apache.kafka.common.requests;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -126,7 +125,7 @@ public class DescribeAclsResponse extends AbstractResponse {
         return resources.stream().flatMap(DescribeAclsResponse::aclBindings).collect(Collectors.toList());
     }
 
-    public static List<DescribeAclsResource> aclsResources(Collection<AclBinding> acls) {
+    public static List<DescribeAclsResource> aclsResources(Iterable<AclBinding> acls) {
         Map<ResourcePattern, List<AccessControlEntry>> patternToEntries = new HashMap<>();
         for (AclBinding acl : acls) {
             patternToEntries.computeIfAbsent(acl.pattern(), v -> new ArrayList<>()).add(acl.entry());
