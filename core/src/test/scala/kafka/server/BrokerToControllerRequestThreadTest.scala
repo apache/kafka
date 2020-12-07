@@ -217,7 +217,7 @@ class BrokerToControllerRequestThreadTest {
     val requestTimeout = config.requestTimeoutMs.longValue()
     val queueItem = BrokerToControllerQueueItem(
       new MetadataRequest.Builder(new MetadataRequestData()
-        .setAllowAutoTopicCreation(true)), new BrokerToControllerRequestCompletionHandler {
+        .setAllowAutoTopicCreation(true)), new ControllerRequestCompletionHandler {
         override def onComplete(response: ClientResponse): Unit = {}
 
         override def onTimeout(): Unit = {
@@ -247,7 +247,7 @@ class BrokerToControllerRequestThreadTest {
   }
 
   class TestRequestCompletionHandler(expectedResponse: MetadataResponse,
-                                     responseLatch: CountDownLatch) extends BrokerToControllerRequestCompletionHandler {
+                                     responseLatch: CountDownLatch) extends ControllerRequestCompletionHandler {
     override def onComplete(response: ClientResponse): Unit = {
       assertEquals(expectedResponse, response.responseBody())
       responseLatch.countDown()

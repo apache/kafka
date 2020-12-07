@@ -34,8 +34,11 @@ import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
 trait BrokerToControllerChannelManager {
+
+  // The retry deadline will only be checked after receiving a response. This means that in the worst case,
+  // the total timeout would be twice of the configured timeout.
   def sendRequest(request: AbstractRequest.Builder[_ <: AbstractRequest],
-                  callback: BrokerToControllerRequestCompletionHandler,
+                  callback: ControllerRequestCompletionHandler,
                   retryDeadlineMs: Long): Unit
 
   def start(): Unit
@@ -126,23 +129,24 @@ class BrokerToControllerChannelManagerImpl(metadataCache: kafka.server.MetadataC
   }
 
   override def sendRequest(request: AbstractRequest.Builder[_ <: AbstractRequest],
-                           callback: BrokerToControllerRequestCompletionHandler,
+                           callback: ControllerRequestCompletionHandler,
                            retryDeadlineMs: Long): Unit = {
     requestQueue.put(BrokerToControllerQueueItem(request, callback, retryDeadlineMs))
     requestThread.wakeup()
   }
 }
 
-abstract class BrokerToControllerRequestCompletionHandler extends RequestCompletionHandler {
+abstract class ControllerRequestCompletionHandler extends RequestCompletionHandler {
 
   /**
-   * Fire when the request transmission hits timeout.
+   * Fire when the request transmission time passes the caller defined deadline on the channel queue.
+   * This is different from the original request's timeout.
    */
   def onTimeout(): Unit
 }
 
 case class BrokerToControllerQueueItem(request: AbstractRequest.Builder[_ <: AbstractRequest],
-                                       callback: BrokerToControllerRequestCompletionHandler,
+                                       callback: ControllerRequestCompletionHandler,
                                        deadlineMs: Long)
 
 class BrokerToControllerRequestThread(networkClient: KafkaClient,
@@ -190,8 +194,6 @@ class BrokerToControllerRequestThread(networkClient: KafkaClient,
     }
   }
 
-  // The timeout will only be checked after receiving a response. This means that in the worst case,
-  // the total timeout would be twice of the configured timeout.
   private def hasTimedOut(request: BrokerToControllerQueueItem, response: ClientResponse): Boolean = {
     response.receivedTimeMs() > request.deadlineMs
   }

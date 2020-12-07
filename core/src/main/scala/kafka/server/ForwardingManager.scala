@@ -48,7 +48,7 @@ class ForwardingManager(channelManager: BrokerToControllerChannelManager,
       request.context.clientAddress.getAddress
     )
 
-    class ForwardingResponseHandler extends BrokerToControllerRequestCompletionHandler {
+    class ForwardingResponseHandler extends ControllerRequestCompletionHandler {
       override def onComplete(clientResponse: ClientResponse): Unit = {
         val envelopeResponse = clientResponse.responseBody.asInstanceOf[EnvelopeResponse]
         val envelopeError = envelopeResponse.error()

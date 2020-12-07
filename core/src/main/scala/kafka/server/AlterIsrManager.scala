@@ -96,11 +96,11 @@ class AlterIsrManagerImpl(val controllerChannelManager: BrokerToControllerChanne
       }
     }
 
-    class AlterIsrResponseHandler extends BrokerToControllerRequestCompletionHandler {
+    class AlterIsrResponseHandler extends ControllerRequestCompletionHandler {
       override def onComplete(response: ClientResponse): Unit = {
         try {
           val body = response.responseBody().asInstanceOf[AlterIsrResponse]
-          handleAlterIsrResponse(body, message.brokerEpoch(), inflightAlterIsrItems)
+          handleAlterIsrResponse(body, message.brokerEpoch, inflightAlterIsrItems)
         } finally {
           clearInflightRequests()
         }
@@ -112,7 +112,8 @@ class AlterIsrManagerImpl(val controllerChannelManager: BrokerToControllerChanne
     }
 
     debug(s"Sending AlterIsr to controller $message")
-    // We will not timeout AlterISR request, instead letting it retry indefinitely.
+    // We will not timeout AlterISR request, instead letting it retry indefinitely
+    // until a response is received or the request is cancelled after receiving new LeaderAndIsr state.
     controllerChannelManager.sendRequest(new AlterIsrRequest.Builder(message),
       new AlterIsrResponseHandler, Long.MaxValue)
   }

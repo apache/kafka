@@ -65,7 +65,7 @@ class ForwardingManagerTest {
 
     Mockito.when(brokerToController.sendRequest(
       any(classOf[EnvelopeRequest.Builder]),
-      any(classOf[BrokerToControllerRequestCompletionHandler]),
+      any(classOf[ControllerRequestCompletionHandler]),
       ArgumentMatchers.eq(Long.MaxValue)
     )).thenAnswer(invocation => {
       val completionHandler = invocation.getArgument[RequestCompletionHandler](1)
