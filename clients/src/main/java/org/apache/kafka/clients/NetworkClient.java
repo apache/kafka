@@ -870,9 +870,8 @@ public class NetworkClient implements KafkaClient {
             InFlightRequest req = inFlightRequests.completeNext(source);
 
             AbstractResponse response = parseResponse(receive.payload(), req.header);
-            if (throttleTimeSensor != null) {
-                throttleTimeSensor.record(response.throttleTimeMs());
-            }
+            if (throttleTimeSensor != null)
+                throttleTimeSensor.record(response.throttleTimeMs(), now);
 
             if (log.isDebugEnabled()) {
                 log.debug("Received {} response from node {} for request with header {}: {}",

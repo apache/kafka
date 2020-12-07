@@ -25,8 +25,8 @@ import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataT
 import org.apache.kafka.common.message.UpdateMetadataResponseData;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.FlattenedIterator;
 import org.apache.kafka.common.utils.Utils;
@@ -166,10 +166,6 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
         return ListenerName.forSecurityProtocol(securityProtocol).value();
     }
 
-    public UpdateMetadataRequest(Struct struct, short version) {
-        this(new UpdateMetadataRequestData(struct, version), version);
-    }
-
     @Override
     public int controllerId() {
         return data.controllerId();
@@ -205,15 +201,11 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
     }
 
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
-    }
-
-    public UpdateMetadataRequestData data() {
+    protected UpdateMetadataRequestData data() {
         return data;
     }
 
     public static UpdateMetadataRequest parse(ByteBuffer buffer, short version) {
-        return new UpdateMetadataRequest(ApiKeys.UPDATE_METADATA.parseRequest(version, buffer), version);
+        return new UpdateMetadataRequest(new UpdateMetadataRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 }

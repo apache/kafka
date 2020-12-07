@@ -20,9 +20,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.DescribeQuorumRequestData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -55,13 +56,8 @@ public class DescribeQuorumRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public DescribeQuorumRequest(Struct struct, short version) {
-        super(ApiKeys.DESCRIBE_QUORUM, version);
-        this.data = new DescribeQuorumRequestData(struct, version);
-    }
-
-    public DescribeQuorumRequest(DescribeQuorumRequestData data) {
-        this(data, (short) (DescribeQuorumRequestData.SCHEMAS.length - 1));
+    public static DescribeQuorumRequest parse(ByteBuffer buffer, short version) {
+        return new DescribeQuorumRequest(new DescribeQuorumRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
     public static DescribeQuorumRequestData singletonRequest(TopicPartition topicPartition) {
@@ -76,8 +72,8 @@ public class DescribeQuorumRequest extends AbstractRequest {
     }
 
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
+    protected DescribeQuorumRequestData data() {
+        return data;
     }
 
     @Override

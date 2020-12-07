@@ -196,7 +196,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.ALTER_CONFIGS -> ((resp: AlterConfigsResponse) =>
       resp.errors.get(new ConfigResource(ConfigResource.Type.TOPIC, tp.topic)).error),
     ApiKeys.INIT_PRODUCER_ID -> ((resp: InitProducerIdResponse) => resp.error),
-    ApiKeys.WRITE_TXN_MARKERS -> ((resp: WriteTxnMarkersResponse) => resp.errors(producerId).get(tp)),
+    ApiKeys.WRITE_TXN_MARKERS -> ((resp: WriteTxnMarkersResponse) => resp.errorsByProducerId.get(producerId).get(tp)),
     ApiKeys.ADD_PARTITIONS_TO_TXN -> ((resp: AddPartitionsToTxnResponse) => resp.errors.get(tp)),
     ApiKeys.ADD_OFFSETS_TO_TXN -> ((resp: AddOffsetsToTxnResponse) => Errors.forCode(resp.data.errorCode)),
     ApiKeys.END_TXN -> ((resp: EndTxnResponse) => resp.error),
@@ -1808,7 +1808,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
                                                 resources: Set[ResourceType],
                                                 isAuthorized: Boolean,
                                                 topicExists: Boolean = true): AbstractResponse = {
-    val apiKey = request.api
+    val apiKey = request.apiKey
     val response = connectAndReceive[AbstractResponse](request)
     val error = requestKeyToError(apiKey).asInstanceOf[AbstractResponse => Errors](response)
 

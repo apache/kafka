@@ -20,7 +20,6 @@ package org.apache.kafka.jmh.common;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.ByteBufferChannel;
 import org.apache.kafka.common.requests.FetchRequest;
@@ -39,6 +38,7 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -67,7 +67,7 @@ public class FetchRequestBenchmark {
 
     FetchRequest replicaRequest;
 
-    Struct requestStruct;
+    ByteBuffer requestBuffer;
 
     @Setup(Level.Trial)
     public void setup() {
@@ -86,14 +86,13 @@ public class FetchRequestBenchmark {
             .build(ApiKeys.FETCH.latestVersion());
         this.replicaRequest = FetchRequest.Builder.forReplica(ApiKeys.FETCH.latestVersion(), 1, 0, 0, fetchData)
             .build(ApiKeys.FETCH.latestVersion());
-        this.requestStruct = this.consumerRequest.data().toStruct(ApiKeys.FETCH.latestVersion());
+        this.requestBuffer = this.consumerRequest.serializeBody();
 
     }
 
     @Benchmark
-    public short testFetchRequestFromStruct() {
-        AbstractRequest request = AbstractRequest.parseRequest(ApiKeys.FETCH, ApiKeys.FETCH.latestVersion(), requestStruct);
-        return request.version();
+    public short testFetchRequestFromBuffer() {
+        return AbstractRequest.parseRequest(ApiKeys.FETCH, ApiKeys.FETCH.latestVersion(), requestBuffer).request.version();
     }
 
     @Benchmark

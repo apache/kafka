@@ -24,7 +24,6 @@ import kafka.network.SocketServer
 import kafka.utils.TestUtils
 import org.apache.kafka.common.message.CreateTopicsRequestData
 import org.apache.kafka.common.message.CreateTopicsRequestData._
-import org.apache.kafka.common.protocol.types.Struct
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
 import org.junit.Assert.{assertEquals, assertFalse, assertNotNull, assertTrue}
@@ -150,15 +149,6 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
 
   protected def error(error: Errors, errorMessage: Option[String] = None): ApiError =
     new ApiError(error, errorMessage.orNull)
-
-  protected def addPartitionsAndReplicationFactorToFirstTopic(request: CreateTopicsRequest) = {
-    val struct = request.toStruct
-    val topics = struct.getArray("create_topic_requests")
-    val firstTopic = topics(0).asInstanceOf[Struct]
-    firstTopic.set("num_partitions", 1)
-    firstTopic.set("replication_factor", 1.toShort)
-    new CreateTopicsRequest(struct, request.version)
-  }
 
   protected def validateErrorCreateTopicsRequests(request: CreateTopicsRequest,
                                                   expectedResponse: Map[String, ApiError],

@@ -25,8 +25,8 @@ import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.RecordBatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -129,11 +129,6 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public TxnOffsetCommitRequest(Struct struct, short version) {
-        super(ApiKeys.TXN_OFFSET_COMMIT, version);
-        this.data = new TxnOffsetCommitRequestData(struct, version);
-    }
-
     public Map<TopicPartition, CommittedOffset> offsets() {
         List<TxnOffsetCommitRequestTopic> topics = data.topics();
         Map<TopicPartition, CommittedOffset> offsetMap = new HashMap<>();
@@ -173,8 +168,8 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
     }
 
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
+    protected TxnOffsetCommitRequestData data() {
+        return data;
     }
 
     static List<TxnOffsetCommitResponseTopic> getErrorResponseTopics(List<TxnOffsetCommitRequestTopic> requestTopics,
@@ -206,7 +201,8 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
     }
 
     public static TxnOffsetCommitRequest parse(ByteBuffer buffer, short version) {
-        return new TxnOffsetCommitRequest(ApiKeys.TXN_OFFSET_COMMIT.parseRequest(version, buffer), version);
+        return new TxnOffsetCommitRequest(new TxnOffsetCommitRequestData(
+            new ByteBufferAccessor(buffer), version), version);
     }
 
     public static class CommittedOffset {

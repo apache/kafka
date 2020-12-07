@@ -132,6 +132,7 @@ import static org.apache.kafka.common.protocol.ApiKeys.LIST_OFFSETS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -1602,7 +1603,7 @@ public class SaslAuthenticatorTest {
                                 .setOffset(0)
                                 .setTimestamp(0)))));
         ListOffsetResponse response = new ListOffsetResponse(data);
-        ByteBuffer buffer = response.serialize(ApiKeys.LIST_OFFSETS, LIST_OFFSETS.latestVersion(), 0);
+        ByteBuffer buffer = response.serializeWithHeader(LIST_OFFSETS.latestVersion(), 0);
         final RequestHeader header0 = new RequestHeader(LIST_OFFSETS, LIST_OFFSETS.latestVersion(), "id", SaslClientAuthenticator.MIN_RESERVED_CORRELATION_ID);
         Assert.assertThrows(SchemaException.class, () -> NetworkClient.parseResponse(buffer.duplicate(), header0));
         final RequestHeader header1 = new RequestHeader(LIST_OFFSETS, LIST_OFFSETS.latestVersion(), "id", 1);
@@ -1681,19 +1682,18 @@ public class SaslAuthenticatorTest {
              * instead
              */
             time.sleep((long) (CONNECTIONS_MAX_REAUTH_MS_VALUE * 1.1));
-            NetworkTestUtils.checkClientConnection(selector, node, 1, 1);
-            fail("Expected a failure when trying to re-authenticate to quickly, but that did not occur");
-        } catch (AssertionError e) {
+            AssertionError exception = assertThrows(AssertionError.class,
+                () -> NetworkTestUtils.checkClientConnection(selector, node, 1, 1));
             String expectedResponseTextRegex = "\\w-" + node;
             String receivedResponseTextRegex = ".*" + OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
             assertTrue(
                     "Should have received the SaslHandshakeRequest bytes back since we re-authenticated too quickly, " +
                     "but instead we got our generated message echoed back, implying re-auth succeeded when it " +
-                    "should not have: " + e,
-                    e.getMessage().matches(
+                    "should not have: " + exception,
+                    exception.getMessage().matches(
                             ".*<\\[" + expectedResponseTextRegex + "]>.*<\\[" + receivedResponseTextRegex + ".*?]>"));
             server.verifyReauthenticationMetrics(1, 0); // unchanged
-        } finally { 
+        } finally {
             selector.close();
             selector = null;
         }

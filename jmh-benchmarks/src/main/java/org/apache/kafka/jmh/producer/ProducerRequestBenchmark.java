@@ -19,7 +19,6 @@ package org.apache.kafka.jmh.producer;
 
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.RecordBatch;
@@ -85,9 +84,4 @@ public class ProducerRequestBenchmark {
         return REQUEST.getErrorResponse(0, Errors.INVALID_REQUEST.exception());
     }
 
-    @Benchmark
-    @OutputTimeUnit(TimeUnit.NANOSECONDS)
-    public Struct constructorStruct() {
-        return REQUEST.toStruct();
-    }
 }

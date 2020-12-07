@@ -17,10 +17,9 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.EnvelopeResponseData;
-import org.apache.kafka.common.network.Send;
-import org.apache.kafka.common.protocol.SendBuilder;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
@@ -29,8 +28,8 @@ public class EnvelopeResponse extends AbstractResponse {
 
     private final EnvelopeResponseData data;
 
-    public EnvelopeResponse(ByteBuffer responseData,
-                            Errors error) {
+    public EnvelopeResponse(ByteBuffer responseData, Errors error) {
+        super(ApiKeys.ENVELOPE);
         this.data = new EnvelopeResponseData()
                         .setResponseData(responseData)
                         .setErrorCode(error.code());
@@ -41,6 +40,7 @@ public class EnvelopeResponse extends AbstractResponse {
     }
 
     public EnvelopeResponse(EnvelopeResponseData data) {
+        super(ApiKeys.ENVELOPE);
         this.data = data;
     }
 
@@ -53,11 +53,6 @@ public class EnvelopeResponse extends AbstractResponse {
         return errorCounts(error());
     }
 
-    @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
-    }
-
     public Errors error() {
         return Errors.forCode(data.errorCode());
     }
@@ -67,8 +62,12 @@ public class EnvelopeResponse extends AbstractResponse {
     }
 
     @Override
-    protected Send toSend(String destination, ResponseHeader header, short apiVersion) {
-        return SendBuilder.buildResponseSend(destination, header, this.data, apiVersion);
+    public int throttleTimeMs() {
+        return DEFAULT_THROTTLE_TIME;
+    }
+
+    public static EnvelopeResponse parse(ByteBuffer buffer, short version) {
+        return new EnvelopeResponse(new EnvelopeResponseData(new ByteBufferAccessor(buffer), version));
     }
 
 }

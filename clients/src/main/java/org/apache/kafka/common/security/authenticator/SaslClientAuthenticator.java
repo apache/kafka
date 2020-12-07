@@ -58,6 +58,7 @@ import javax.security.sasl.Sasl;
 import javax.security.sasl.SaslClient;
 import javax.security.sasl.SaslException;
 import java.io.IOException;
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.security.Principal;
@@ -432,13 +433,16 @@ public class SaslClientAuthenticator implements Authenticator {
             byte[] saslToken = createSaslToken(serverToken, isInitial);
             if (saslToken != null) {
                 ByteBuffer tokenBuf = ByteBuffer.wrap(saslToken);
-                if (saslAuthenticateVersion != DISABLE_KAFKA_SASL_AUTHENTICATE_HEADER) {
+                Send send;
+                if (saslAuthenticateVersion == DISABLE_KAFKA_SASL_AUTHENTICATE_HEADER) {
+                    send = new NetworkSend(node, tokenBuf);
+                } else {
                     SaslAuthenticateRequestData data = new SaslAuthenticateRequestData()
                             .setAuthBytes(tokenBuf.array());
                     SaslAuthenticateRequest request = new SaslAuthenticateRequest.Builder(data).build(saslAuthenticateVersion);
-                    tokenBuf = request.serialize(nextRequestHeader(ApiKeys.SASL_AUTHENTICATE, saslAuthenticateVersion));
+                    send = request.toSend(node, nextRequestHeader(ApiKeys.SASL_AUTHENTICATE, saslAuthenticateVersion));
                 }
-                send(new NetworkSend(node, tokenBuf));
+                send(send);
                 return true;
             }
         }
@@ -573,7 +577,7 @@ public class SaslClientAuthenticator implements Authenticator {
                 currentRequestHeader = null;
                 return response;
             }
-        } catch (SchemaException | IllegalArgumentException e) {
+        } catch (BufferUnderflowException | SchemaException | IllegalArgumentException e) {
             /*
              * Account for the fact that during re-authentication there may be responses
              * arriving for requests that were sent in the past.

@@ -35,6 +35,7 @@ import org.apache.kafka.common.message.ListOffsetResponseData.ListOffsetPartitio
 import org.apache.kafka.common.message.ListOffsetResponseData.ListOffsetTopicResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.MessageTestUtil;
 import org.junit.Test;
 
 public class ListOffsetRequestTest {
@@ -52,7 +53,7 @@ public class ListOffsetRequestTest {
         ListOffsetRequestData data = new ListOffsetRequestData()
                 .setTopics(topics)
                 .setReplicaId(-1);
-        ListOffsetRequest request = new ListOffsetRequest(data.toStruct((short) 0), (short) 0);
+        ListOffsetRequest request = ListOffsetRequest.parse(MessageTestUtil.messageToByteBuffer(data, (short) 0), (short) 0);
         assertEquals(Collections.singleton(new TopicPartition("topic", 0)), request.duplicatePartitions());
     }
 

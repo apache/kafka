@@ -17,6 +17,15 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.acl.AccessControlEntry;
+import org.apache.kafka.common.acl.AclBinding;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.resource.PatternType;
+import org.apache.kafka.common.resource.ResourcePattern;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.protocol.Errors;
+
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -24,40 +33,37 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.apache.kafka.common.acl.AccessControlEntry;
-import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.DescribeAclsResponseData;
 import org.apache.kafka.common.message.DescribeAclsResponseData.AclDescription;
 import org.apache.kafka.common.message.DescribeAclsResponseData.DescribeAclsResource;
-import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.resource.PatternType;
-import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
 
 public class DescribeAclsResponse extends AbstractResponse {
 
     private final DescribeAclsResponseData data;
 
-    public DescribeAclsResponse(DescribeAclsResponseData data) {
+    public DescribeAclsResponse(DescribeAclsResponseData data, short version) {
+        super(ApiKeys.DESCRIBE_ACLS);
         this.data = data;
+        validate(Optional.of(version));
     }
 
-    public DescribeAclsResponse(Struct struct, short version) {
-        this.data = new DescribeAclsResponseData(struct, version);
+    // Skips version validation, visible for testing
+    DescribeAclsResponse(DescribeAclsResponseData data) {
+        super(ApiKeys.DESCRIBE_ACLS);
+        this.data = data;
+        validate(Optional.empty());
     }
 
     @Override
-    protected Struct toStruct(short version) {
-        validate(version);
-        return data.toStruct(version);
+    protected DescribeAclsResponseData data() {
+        return data;
     }
 
     @Override
@@ -79,7 +85,7 @@ public class DescribeAclsResponse extends AbstractResponse {
     }
 
     public static DescribeAclsResponse parse(ByteBuffer buffer, short version) {
-        return new DescribeAclsResponse(ApiKeys.DESCRIBE_ACLS.responseSchema(version).read(buffer), version);
+        return new DescribeAclsResponse(new DescribeAclsResponseData(new ByteBufferAccessor(buffer), version), version);
     }
 
     @Override
@@ -87,8 +93,8 @@ public class DescribeAclsResponse extends AbstractResponse {
         return version >= 1;
     }
 
-    private void validate(short version) {
-        if (version == 0) {
+    private void validate(Optional<Short> version) {
+        if (version.isPresent() && version.get() == 0) {
             final boolean unsupported = acls().stream()
                 .anyMatch(acl -> acl.patternType() != PatternType.LITERAL.code());
             if (unsupported) {

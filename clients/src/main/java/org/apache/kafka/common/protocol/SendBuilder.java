@@ -22,6 +22,7 @@ import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MultiRecordsSend;
 import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.requests.RequestUtils;
 import org.apache.kafka.common.requests.ResponseHeader;
 import org.apache.kafka.common.utils.ByteUtils;
 
@@ -181,7 +182,7 @@ public class SendBuilder implements Writable {
     public static Send buildRequestSend(
         String destination,
         RequestHeader header,
-        ApiMessage apiRequest
+        Message apiRequest
     ) {
         return buildSend(
             destination,
@@ -195,7 +196,7 @@ public class SendBuilder implements Writable {
     public static Send buildResponseSend(
         String destination,
         ResponseHeader header,
-        ApiMessage apiResponse,
+        Message apiResponse,
         short apiVersion
     ) {
         return buildSend(
@@ -209,16 +210,13 @@ public class SendBuilder implements Writable {
 
     private static Send buildSend(
         String destination,
-        ApiMessage header,
+        Message header,
         short headerVersion,
-        ApiMessage apiMessage,
+        Message apiMessage,
         short apiVersion
     ) {
         ObjectSerializationCache serializationCache = new ObjectSerializationCache();
-        MessageSizeAccumulator messageSize = new MessageSizeAccumulator();
-
-        header.addSize(messageSize, serializationCache, headerVersion);
-        apiMessage.addSize(messageSize, serializationCache, apiVersion);
+        MessageSizeAccumulator messageSize = RequestUtils.size(serializationCache, header, headerVersion, apiMessage, apiVersion);
 
         int totalSize = messageSize.totalSize();
         int sizeExcludingZeroCopyFields = totalSize - messageSize.zeroCopySize();

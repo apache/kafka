@@ -63,7 +63,7 @@ class BaseClientQuotaManagerTest {
                                                  listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)): (T, RequestChannel.Request) = {
 
     val request = builder.build()
-    val buffer = request.serialize(new RequestHeader(builder.apiKey, request.version, "", 0))
+    val buffer = request.serializeWithHeader(new RequestHeader(builder.apiKey, request.version, "", 0))
     val requestChannelMetrics: RequestChannel.Metrics = EasyMock.createNiceMock(classOf[RequestChannel.Metrics])
 
     // read the header from the buffer first so that the body can be read next from the Request constructor

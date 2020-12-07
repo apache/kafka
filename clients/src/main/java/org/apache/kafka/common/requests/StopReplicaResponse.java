@@ -19,8 +19,8 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.StopReplicaResponseData;
 import org.apache.kafka.common.message.StopReplicaResponseData.StopReplicaPartitionError;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
@@ -39,11 +39,8 @@ public class StopReplicaResponse extends AbstractResponse {
     private final StopReplicaResponseData data;
 
     public StopReplicaResponse(StopReplicaResponseData data) {
+        super(ApiKeys.STOP_REPLICA);
         this.data = data;
-    }
-
-    public StopReplicaResponse(Struct struct, short version) {
-        data = new StopReplicaResponseData(struct, version);
     }
 
     public List<StopReplicaPartitionError> partitionErrors() {
@@ -65,12 +62,17 @@ public class StopReplicaResponse extends AbstractResponse {
     }
 
     public static StopReplicaResponse parse(ByteBuffer buffer, short version) {
-        return new StopReplicaResponse(ApiKeys.STOP_REPLICA.parseResponse(version, buffer), version);
+        return new StopReplicaResponse(new StopReplicaResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
+    public int throttleTimeMs() {
+        return DEFAULT_THROTTLE_TIME;
+    }
+
+    @Override
+    protected StopReplicaResponseData data() {
+        return data;
     }
 
     @Override

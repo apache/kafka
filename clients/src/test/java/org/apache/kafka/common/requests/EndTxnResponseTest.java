@@ -29,21 +29,24 @@ import static org.junit.Assert.assertEquals;
 public class EndTxnResponseTest {
 
     @Test
-    public void testConstructorWithStruct() {
+    public void testConstructor() {
         int throttleTimeMs = 10;
 
         EndTxnResponseData data = new EndTxnResponseData()
-                                      .setErrorCode(Errors.NOT_COORDINATOR.code())
-                                      .setThrottleTimeMs(throttleTimeMs);
+            .setErrorCode(Errors.NOT_COORDINATOR.code())
+            .setThrottleTimeMs(throttleTimeMs);
 
         Map<Errors, Integer> expectedErrorCounts = Collections.singletonMap(Errors.NOT_COORDINATOR, 1);
 
         for (short version = 0; version <= ApiKeys.END_TXN.latestVersion(); version++) {
-            EndTxnResponse response = new EndTxnResponse(data.toStruct(version), version);
+            EndTxnResponse response = new EndTxnResponse(data);
             assertEquals(expectedErrorCounts, response.errorCounts());
-
             assertEquals(throttleTimeMs, response.throttleTimeMs());
+            assertEquals(version >= 1, response.shouldClientThrottle(version));
 
+            response = EndTxnResponse.parse(response.serializeBody(version), version);
+            assertEquals(expectedErrorCounts, response.errorCounts());
+            assertEquals(throttleTimeMs, response.throttleTimeMs());
             assertEquals(version >= 1, response.shouldClientThrottle(version));
         }
     }

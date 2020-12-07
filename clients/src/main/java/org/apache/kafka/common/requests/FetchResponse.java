@@ -18,12 +18,10 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.FetchResponseData;
-import org.apache.kafka.common.network.Send;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
-import org.apache.kafka.common.protocol.SendBuilder;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 
@@ -273,23 +271,15 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                          LinkedHashMap<TopicPartition, PartitionData<T>> responseData,
                          int throttleTimeMs,
                          int sessionId) {
+        super(ApiKeys.FETCH);
         this.data = toMessage(throttleTimeMs, error, responseData.entrySet().iterator(), sessionId);
         this.responseDataMap = responseData;
     }
 
     public FetchResponse(FetchResponseData fetchResponseData) {
+        super(ApiKeys.FETCH);
         this.data = fetchResponseData;
         this.responseDataMap = toResponseDataMap(fetchResponseData);
-    }
-
-    @Override
-    public Struct toStruct(short version) {
-        return data.toStruct(version);
-    }
-
-    @Override
-    public Send toSend(String dest, ResponseHeader responseHeader, short apiVersion) {
-        return SendBuilder.buildResponseSend(dest, responseHeader, this.data, apiVersion);
     }
 
     public Errors error() {
@@ -320,10 +310,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     }
 
     public static FetchResponse<MemoryRecords> parse(ByteBuffer buffer, short version) {
-        FetchResponseData fetchResponseData = new FetchResponseData();
-        ByteBufferAccessor reader = new ByteBufferAccessor(buffer);
-        fetchResponseData.read(reader, version);
-        return new FetchResponse<>(fetchResponseData);
+        return new FetchResponse<>(new FetchResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @SuppressWarnings("unchecked")

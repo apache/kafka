@@ -38,6 +38,7 @@ import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.DescribeConfigsResponseData;
 import org.apache.kafka.common.message.MetadataResponseData;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
@@ -553,7 +554,7 @@ public class TopicAdminTest {
                     .setName(topic.name())
                     .setErrorCode(error.error().code()));
         }
-        return new MetadataResponse(response);
+        return new MetadataResponse(response, ApiKeys.METADATA.latestVersion());
     }
 
     private DescribeConfigsResponse describeConfigsResponseWithUnsupportedVersion(NewTopic... topics) {

@@ -25,8 +25,8 @@ import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaTopicSt
 import org.apache.kafka.common.message.StopReplicaResponseData;
 import org.apache.kafka.common.message.StopReplicaResponseData.StopReplicaPartitionError;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.MappedIterator;
 import org.apache.kafka.common.utils.Utils;
 
@@ -101,10 +101,6 @@ public class StopReplicaRequest extends AbstractControlRequest {
     private StopReplicaRequest(StopReplicaRequestData data, short version) {
         super(ApiKeys.STOP_REPLICA, version);
         this.data = data;
-    }
-
-    public StopReplicaRequest(Struct struct, short version) {
-        this(new StopReplicaRequestData(struct, version), version);
     }
 
     @Override
@@ -211,15 +207,11 @@ public class StopReplicaRequest extends AbstractControlRequest {
     }
 
     public static StopReplicaRequest parse(ByteBuffer buffer, short version) {
-        return new StopReplicaRequest(ApiKeys.STOP_REPLICA.parseRequest(version, buffer), version);
-    }
-
-    public StopReplicaRequestData data() {
-        return data;
+        return new StopReplicaRequest(new StopReplicaRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
+    protected StopReplicaRequestData data() {
+        return data;
     }
 }

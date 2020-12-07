@@ -20,8 +20,8 @@ import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroupMember;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
@@ -47,11 +47,8 @@ public class DescribeGroupsResponse extends AbstractResponse {
     private DescribeGroupsResponseData data;
 
     public DescribeGroupsResponse(DescribeGroupsResponseData data) {
+        super(ApiKeys.DESCRIBE_GROUPS);
         this.data = data;
-    }
-
-    public DescribeGroupsResponse(Struct struct, short version) {
-        this.data = new DescribeGroupsResponseData(struct, version);
     }
 
     public static DescribedGroupMember groupMember(
@@ -113,11 +110,6 @@ public class DescribeGroupsResponse extends AbstractResponse {
     }
 
     @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
-    }
-
-    @Override
     public int throttleTimeMs() {
         return data.throttleTimeMs();
     }
@@ -129,9 +121,8 @@ public class DescribeGroupsResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
-        data.groups().forEach(describedGroup -> {
-            updateErrorCounts(errorCounts, Errors.forCode(describedGroup.errorCode()));
-        });
+        data.groups().forEach(describedGroup ->
+            updateErrorCounts(errorCounts, Errors.forCode(describedGroup.errorCode())));
         return errorCounts;
     }
 
@@ -149,8 +140,7 @@ public class DescribeGroupsResponse extends AbstractResponse {
     }
 
     public static DescribeGroupsResponse parse(ByteBuffer buffer, short version) {
-        return new DescribeGroupsResponse(
-                ApiKeys.DESCRIBE_GROUPS.responseSchema(version).read(buffer), version);
+        return new DescribeGroupsResponse(new DescribeGroupsResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

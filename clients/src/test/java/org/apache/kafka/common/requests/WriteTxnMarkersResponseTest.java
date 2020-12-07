@@ -46,15 +46,15 @@ public class WriteTxnMarkersResponseTest {
         errorMap.put(producerIdOne, Collections.singletonMap(tp1, pidOneError));
         errorMap.put(producerIdTwo, Collections.singletonMap(tp2, pidTwoError));
     }
-    @Test
-    public void testConstructorWithStruct() {
 
+    @Test
+    public void testConstructor() {
         Map<Errors, Integer> expectedErrorCounts = new HashMap<>();
         expectedErrorCounts.put(Errors.UNKNOWN_PRODUCER_ID, 1);
         expectedErrorCounts.put(Errors.INVALID_PRODUCER_EPOCH, 1);
         WriteTxnMarkersResponse response = new WriteTxnMarkersResponse(errorMap);
         assertEquals(expectedErrorCounts, response.errorCounts());
-        assertEquals(Collections.singletonMap(tp1, pidOneError), response.errors(producerIdOne));
-        assertEquals(Collections.singletonMap(tp2, pidTwoError), response.errors(producerIdTwo));
+        assertEquals(Collections.singletonMap(tp1, pidOneError), response.errorsByProducerId().get(producerIdOne));
+        assertEquals(Collections.singletonMap(tp2, pidTwoError), response.errorsByProducerId().get(producerIdTwo));
     }
 }

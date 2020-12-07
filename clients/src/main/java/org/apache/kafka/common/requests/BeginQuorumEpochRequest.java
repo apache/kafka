@@ -20,9 +20,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
+import java.nio.ByteBuffer;
 import java.util.Collections;
 
 public class BeginQuorumEpochRequest extends AbstractRequest {
@@ -52,20 +53,19 @@ public class BeginQuorumEpochRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public BeginQuorumEpochRequest(Struct struct, short version) {
-        super(ApiKeys.BEGIN_QUORUM_EPOCH, version);
-        this.data = new BeginQuorumEpochRequestData(struct, version);
-    }
-
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
+    protected BeginQuorumEpochRequestData data() {
+        return data;
     }
 
     @Override
     public BeginQuorumEpochResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         return new BeginQuorumEpochResponse(new BeginQuorumEpochResponseData()
             .setErrorCode(Errors.forException(e).code()));
+    }
+
+    public static BeginQuorumEpochRequest parse(ByteBuffer buffer, short version) {
+        return new BeginQuorumEpochRequest(new BeginQuorumEpochRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
     public static BeginQuorumEpochRequestData singletonRequest(TopicPartition topicPartition,

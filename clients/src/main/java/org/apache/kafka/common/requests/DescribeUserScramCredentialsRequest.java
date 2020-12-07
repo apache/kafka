@@ -19,7 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 
 import java.nio.ByteBuffer;
 
@@ -53,28 +53,13 @@ public class DescribeUserScramCredentialsRequest extends AbstractRequest {
         this.version = version;
     }
 
-    DescribeUserScramCredentialsRequest(Struct struct, short version) {
-        super(ApiKeys.DESCRIBE_USER_SCRAM_CREDENTIALS, version);
-        this.data = new DescribeUserScramCredentialsRequestData(struct, version);
-        this.version = version;
-    }
-
     public static DescribeUserScramCredentialsRequest parse(ByteBuffer buffer, short version) {
-        return new DescribeUserScramCredentialsRequest(
-                ApiKeys.DESCRIBE_USER_SCRAM_CREDENTIALS.parseRequest(version, buffer), version
-        );
+        return new DescribeUserScramCredentialsRequest(new DescribeUserScramCredentialsRequestData(
+                new ByteBufferAccessor(buffer), version), version);
     }
 
     public DescribeUserScramCredentialsRequestData data() {
         return data;
-    }
-
-    /**
-     * Visible for testing.
-     */
-    @Override
-    public Struct toStruct() {
-        return data.toStruct(version);
     }
 
     @Override

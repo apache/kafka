@@ -19,7 +19,6 @@ package org.apache.kafka.jmh.producer;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -37,8 +36,6 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-
-import static org.apache.kafka.common.protocol.ApiKeys.PRODUCE;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
@@ -78,11 +75,5 @@ public class ProducerResponseBenchmark {
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
     public AbstractResponse constructorProduceResponse() {
         return response();
-    }
-
-    @Benchmark
-    @OutputTimeUnit(TimeUnit.NANOSECONDS)
-    public Struct constructorStruct() {
-        return RESPONSE.toStruct(PRODUCE.latestVersion());
     }
 }

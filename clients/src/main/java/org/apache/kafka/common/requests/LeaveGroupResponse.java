@@ -19,8 +19,8 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -51,6 +51,7 @@ public class LeaveGroupResponse extends AbstractResponse {
     public final LeaveGroupResponseData data;
 
     public LeaveGroupResponse(LeaveGroupResponseData data) {
+        super(ApiKeys.LEAVE_GROUP);
         this.data = data;
     }
 
@@ -58,6 +59,7 @@ public class LeaveGroupResponse extends AbstractResponse {
                               Errors topLevelError,
                               final int throttleTimeMs,
                               final short version) {
+        super(ApiKeys.LEAVE_GROUP);
         if (version <= 2) {
             // Populate member level error.
             final short errorCode = getError(topLevelError, memberResponses).code();
@@ -73,15 +75,6 @@ public class LeaveGroupResponse extends AbstractResponse {
         if (version >= 1) {
             this.data.setThrottleTimeMs(throttleTimeMs);
         }
-    }
-
-    public LeaveGroupResponse(Struct struct) {
-        short latestVersion = (short) (LeaveGroupResponseData.SCHEMAS.length - 1);
-        this.data = new LeaveGroupResponseData(struct, latestVersion);
-    }
-
-    public LeaveGroupResponse(Struct struct, short version) {
-        this.data = new LeaveGroupResponseData(struct, version);
     }
 
     @Override
@@ -129,17 +122,12 @@ public class LeaveGroupResponse extends AbstractResponse {
     }
 
     @Override
-    public String toString() {
-        return data.toString();
+    protected LeaveGroupResponseData data() {
+        return data;
     }
 
-    @Override
-    public Struct toStruct(short version) {
-        return data.toStruct(version);
-    }
-
-    public static LeaveGroupResponse parse(ByteBuffer buffer, short versionId) {
-        return new LeaveGroupResponse(ApiKeys.LEAVE_GROUP.parseResponse(versionId, buffer), versionId);
+    public static LeaveGroupResponse parse(ByteBuffer buffer, short version) {
+        return new LeaveGroupResponse(new LeaveGroupResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override
@@ -156,5 +144,10 @@ public class LeaveGroupResponse extends AbstractResponse {
     @Override
     public int hashCode() {
         return Objects.hashCode(data);
+    }
+
+    @Override
+    public String toString() {
+        return data.toString();
     }
 }

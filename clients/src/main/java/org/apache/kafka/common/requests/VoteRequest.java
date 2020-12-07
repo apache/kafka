@@ -20,12 +20,14 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
+import java.nio.ByteBuffer;
 import java.util.Collections;
 
 public class VoteRequest extends AbstractRequest {
+
     public static class Builder extends AbstractRequest.Builder<VoteRequest> {
         private final VoteRequestData data;
 
@@ -52,20 +54,19 @@ public class VoteRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public VoteRequest(Struct struct, short version) {
-        super(ApiKeys.VOTE, version);
-        this.data = new VoteRequestData(struct, version);
-    }
-
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
+    protected VoteRequestData data() {
+        return data;
     }
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         return new VoteResponse(new VoteResponseData()
             .setErrorCode(Errors.forException(e).code()));
+    }
+
+    public static VoteRequest parse(ByteBuffer buffer, short version) {
+        return new VoteRequest(new VoteRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
     public static VoteRequestData singletonRequest(TopicPartition topicPartition,

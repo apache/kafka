@@ -18,8 +18,8 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -46,13 +46,11 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
     private final OffsetForLeaderEpochResponseData data;
 
     public OffsetsForLeaderEpochResponse(OffsetForLeaderEpochResponseData data) {
+        super(ApiKeys.OFFSET_FOR_LEADER_EPOCH);
         this.data = data;
     }
 
-    public OffsetsForLeaderEpochResponse(Struct struct, short version) {
-        data = new OffsetForLeaderEpochResponseData(struct, version);
-    }
-
+    @Override
     public OffsetForLeaderEpochResponseData data() {
         return data;
     }
@@ -71,12 +69,7 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
     }
 
     public static OffsetsForLeaderEpochResponse parse(ByteBuffer buffer, short version) {
-        return new OffsetsForLeaderEpochResponse(ApiKeys.OFFSET_FOR_LEADER_EPOCH.responseSchema(version).read(buffer), version);
-    }
-
-    @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
+        return new OffsetsForLeaderEpochResponse(new OffsetForLeaderEpochResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

@@ -200,7 +200,7 @@ public class MetadataRequestBenchmark {
 
     private RequestChannel.Request buildAllTopicMetadataRequest() {
         MetadataRequest metadataRequest = MetadataRequest.Builder.allTopics().build();
-        ByteBuffer buffer = metadataRequest.serialize(new RequestHeader(metadataRequest.api,
+        ByteBuffer buffer = metadataRequest.serializeWithHeader(new RequestHeader(metadataRequest.apiKey(),
             metadataRequest.version(), "", 0));
         RequestHeader header = RequestHeader.parse(buffer);
 

@@ -75,7 +75,7 @@ public class ConsumerMetadataTest {
         topics.add(topicMetadata("__matching_topic", false));
         topics.add(topicMetadata("non_matching_topic", false));
 
-        MetadataResponse response = MetadataResponse.prepareResponse(singletonList(node),
+        MetadataResponse response = TestUtils.metadataResponse(singletonList(node),
             "clusterId", node.id(), topics);
         metadata.updateWithCurrentRequestVersion(response, false, time.milliseconds());
 
@@ -151,7 +151,7 @@ public class ConsumerMetadataTest {
         for (String expectedInternalTopic : expectedInternalTopics)
             topics.add(topicMetadata(expectedInternalTopic, true));
 
-        MetadataResponse response = MetadataResponse.prepareResponse(singletonList(node),
+        MetadataResponse response = TestUtils.metadataResponse(singletonList(node),
             "clusterId", node.id(), topics);
         metadata.updateWithCurrentRequestVersion(response, false, time.milliseconds());
 

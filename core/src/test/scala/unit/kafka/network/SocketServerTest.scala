@@ -112,7 +112,7 @@ class SocketServerTest {
   }
 
   def sendApiRequest(socket: Socket, request: AbstractRequest, header: RequestHeader) = {
-    val byteBuffer = request.serialize(header)
+    val byteBuffer = request.serializeWithHeader(header)
     byteBuffer.rewind()
     val serializedBytes = new Array[Byte](byteBuffer.remaining)
     byteBuffer.get(serializedBytes)
@@ -141,7 +141,7 @@ class SocketServerTest {
   }
 
   def processRequest(channel: RequestChannel, request: RequestChannel.Request): Unit = {
-    val byteBuffer = request.body[AbstractRequest].serialize(request.header)
+    val byteBuffer = request.body[AbstractRequest].serializeWithHeader(request.header)
     byteBuffer.rewind()
 
     val send = new NetworkSend(request.context.connectionId, byteBuffer)
@@ -214,7 +214,7 @@ class SocketServerTest {
       .setTransactionalId(null))
       .build()
     val emptyHeader = new RequestHeader(ApiKeys.PRODUCE, emptyRequest.version, clientId, correlationId)
-    val byteBuffer = emptyRequest.serialize(emptyHeader)
+    val byteBuffer = emptyRequest.serializeWithHeader(emptyHeader)
     byteBuffer.rewind()
 
     val serializedBytes = new Array[Byte](byteBuffer.remaining)
@@ -225,7 +225,7 @@ class SocketServerTest {
   private def apiVersionRequestBytes(clientId: String, version: Short): Array[Byte] = {
     val request = new ApiVersionsRequest.Builder().build(version)
     val header = new RequestHeader(ApiKeys.API_VERSIONS, request.version(), clientId, -1)
-    val buffer = request.serialize(header)
+    val buffer = request.serializeWithHeader(header)
     buffer.rewind()
     val bytes = new Array[Byte](buffer.remaining())
     buffer.get(bytes)
@@ -378,7 +378,7 @@ class SocketServerTest {
     val correlationId = 57
     val header = new RequestHeader(ApiKeys.VOTE, 0, "", correlationId)
     val request = new VoteRequest.Builder(new VoteRequestData()).build()
-    val byteBuffer = request.serialize(header)
+    val byteBuffer = request.serializeWithHeader(header)
     byteBuffer.rewind()
 
     val socket = connect()
@@ -687,7 +687,7 @@ class SocketServerTest {
     // Mimic a primitive request handler that fetches the request from RequestChannel and place a response with a
     // throttled channel.
     val request = receiveRequest(server.dataPlaneRequestChannel)
-    val byteBuffer = request.body[AbstractRequest].serialize(request.header)
+    val byteBuffer = request.body[AbstractRequest].serializeWithHeader(request.header)
     val send = new NetworkSend(request.context.connectionId, byteBuffer)
     def channelThrottlingCallback(response: RequestChannel.Response): Unit = {
       server.dataPlaneRequestChannel.sendResponse(response)
@@ -967,7 +967,7 @@ class SocketServerTest {
         .build()
       val emptyHeader = new RequestHeader(ApiKeys.PRODUCE, emptyRequest.version, clientId, correlationId)
 
-      val byteBuffer = emptyRequest.serialize(emptyHeader)
+      val byteBuffer = emptyRequest.serializeWithHeader(emptyHeader)
       byteBuffer.rewind()
       val serializedBytes = new Array[Byte](byteBuffer.remaining)
       byteBuffer.get(serializedBytes)

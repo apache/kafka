@@ -20,8 +20,8 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
@@ -45,16 +45,8 @@ public class BeginQuorumEpochResponse extends AbstractResponse {
     public final BeginQuorumEpochResponseData data;
 
     public BeginQuorumEpochResponse(BeginQuorumEpochResponseData data) {
+        super(ApiKeys.BEGIN_QUORUM_EPOCH);
         this.data = data;
-    }
-
-    public BeginQuorumEpochResponse(Struct struct, short version) {
-        this.data = new BeginQuorumEpochResponseData(struct, version);
-    }
-
-    public BeginQuorumEpochResponse(Struct struct) {
-        short latestVersion = (short) (BeginQuorumEpochResponseData.SCHEMAS.length - 1);
-        this.data = new BeginQuorumEpochResponseData(struct, latestVersion);
     }
 
     public static BeginQuorumEpochResponseData singletonResponse(
@@ -79,11 +71,6 @@ public class BeginQuorumEpochResponse extends AbstractResponse {
     }
 
     @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
-    }
-
-    @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errors = new HashMap<>();
 
@@ -98,8 +85,18 @@ public class BeginQuorumEpochResponse extends AbstractResponse {
         return errors;
     }
 
+    @Override
+    protected BeginQuorumEpochResponseData data() {
+        return data;
+    }
+
+    @Override
+    public int throttleTimeMs() {
+        return DEFAULT_THROTTLE_TIME;
+    }
+
     public static BeginQuorumEpochResponse parse(ByteBuffer buffer, short version) {
-        return new BeginQuorumEpochResponse(ApiKeys.BEGIN_QUORUM_EPOCH.responseSchema(version).read(buffer), version);
+        return new BeginQuorumEpochResponse(new BeginQuorumEpochResponseData(new ByteBufferAccessor(buffer), version));
     }
 
 }
