@@ -445,10 +445,8 @@ public class KafkaStreams implements AutoCloseable {
         }
         switch (action) {
             case REPLACE_THREAD:
-                log.warn("The global thread can not be replaced. Reverting to shutting down the client.");
-
                 if (globalStreamThread != null && Thread.currentThread().getName().equals(globalStreamThread.getName())) {
-                    log.warn("The global thread can not be replaced. Reverting to shutting down the client.");
+                    log.warn("The global thread cannot be replaced. Reverting to shutting down the client.");
                     log.error("Encountered the following exception during processing " +
                             "and the registered exception handler opted to " + action + "." +
                             " The streams client is going to shut down now. ", throwable);
