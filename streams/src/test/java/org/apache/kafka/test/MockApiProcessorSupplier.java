@@ -47,7 +47,12 @@ public class MockApiProcessorSupplier<KIn, VIn, KOut, VOut> implements Processor
     @Override
     public Processor<KIn, VIn, KOut, VOut> get() {
         final MockApiProcessor<KIn, VIn, KOut, VOut> processor = new MockApiProcessor<>(punctuationType, scheduleInterval);
-        processors.add(processor);
+
+        // to keep tests simple, ignore calls from ApiUtils.checkSupplier
+        if (!StreamsTestUtils.isCheckSupplierCall()) {
+            processors.add(processor);
+        }
+
         return processor;
     }
 

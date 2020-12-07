@@ -24,7 +24,7 @@ import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import java.util.Arrays;
 import java.util.Objects;
 
-public class TableProcessorNode<K, V> extends StreamsGraphNode {
+public class TableProcessorNode<K, V> extends GraphNode {
 
     private final ProcessorParameters<K, V, ?, ?> processorParameters;
     private final StoreBuilder<TimestampedKeyValueStore<K, V>> storeBuilder;

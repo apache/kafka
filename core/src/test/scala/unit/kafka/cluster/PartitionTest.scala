@@ -34,7 +34,8 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrParti
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.requests.{EpochEndOffset, ListOffsetRequest}
+import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
+import org.apache.kafka.common.requests.ListOffsetRequest
 import org.apache.kafka.common.utils.SystemTime
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.junit.Assert._
@@ -178,8 +179,8 @@ class PartitionTest extends AbstractPartitionTest {
 
     val epochEndOffset = partition.lastOffsetForLeaderEpoch(currentLeaderEpoch = Optional.of(leaderEpoch),
       leaderEpoch = leaderEpoch, fetchOnlyFromLeader = true)
-    assertEquals(EpochEndOffset.UNDEFINED_EPOCH_OFFSET, epochEndOffset.endOffset)
-    assertEquals(EpochEndOffset.UNDEFINED_EPOCH, epochEndOffset.leaderEpoch)
+    assertEquals(UNDEFINED_EPOCH_OFFSET, epochEndOffset.endOffset)
+    assertEquals(UNDEFINED_EPOCH, epochEndOffset.leaderEpoch)
   }
 
   @Test
@@ -228,6 +229,7 @@ class PartitionTest extends AbstractPartitionTest {
       localBrokerId = brokerId,
       time,
       stateStore,
+      isrChangeListener,
       delayedOperations,
       metadataCache,
       logManager,
@@ -365,7 +367,7 @@ class PartitionTest extends AbstractPartitionTest {
     def assertLastOffsetForLeaderError(error: Errors, currentLeaderEpochOpt: Optional[Integer]): Unit = {
       val endOffset = partition.lastOffsetForLeaderEpoch(currentLeaderEpochOpt, 0,
         fetchOnlyFromLeader = true)
-      assertEquals(error, endOffset.error)
+      assertEquals(error.code, endOffset.errorCode)
     }
 
     assertLastOffsetForLeaderError(Errors.NONE, Optional.empty())
@@ -384,7 +386,7 @@ class PartitionTest extends AbstractPartitionTest {
                                        fetchOnlyLeader: Boolean): Unit = {
       val endOffset = partition.lastOffsetForLeaderEpoch(currentLeaderEpochOpt, 0,
         fetchOnlyFromLeader = fetchOnlyLeader)
-      assertEquals(error, endOffset.error)
+      assertEquals(error.code, endOffset.errorCode)
     }
 
     assertLastOffsetForLeaderError(Errors.NONE, Optional.empty(), fetchOnlyLeader = false)
@@ -1164,11 +1166,20 @@ class PartitionTest extends AbstractPartitionTest {
       leaderEndOffset = 6L)
 
     assertEquals(alterIsrManager.isrUpdates.size, 1)
-    assertEquals(alterIsrManager.isrUpdates.dequeue().leaderAndIsr.isr, List(brokerId, remoteBrokerId))
+    val isrItem = alterIsrManager.isrUpdates.dequeue()
+    assertEquals(isrItem.leaderAndIsr.isr, List(brokerId, remoteBrokerId))
     assertEquals(Set(brokerId), partition.isrState.isr)
     assertEquals(Set(brokerId, remoteBrokerId), partition.isrState.maximalIsr)
     assertEquals(10L, remoteReplica.logEndOffset)
     assertEquals(0L, remoteReplica.logStartOffset)
+
+    // Complete the ISR expansion
+    isrItem.callback.apply(Right(new LeaderAndIsr(brokerId, leaderEpoch, List(brokerId, remoteBrokerId), 2)))
+    assertEquals(Set(brokerId, remoteBrokerId), partition.isrState.isr)
+
+    assertEquals(isrChangeListener.expands.get, 1)
+    assertEquals(isrChangeListener.shrinks.get, 0)
+    assertEquals(isrChangeListener.failures.get, 0)
   }
 
   @Test
@@ -1221,6 +1232,10 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(Set(brokerId), partition.inSyncReplicaIds)
     assertEquals(Set(brokerId, remoteBrokerId), partition.isrState.maximalIsr)
     assertEquals(alterIsrManager.isrUpdates.size, 0)
+
+    assertEquals(isrChangeListener.expands.get, 0)
+    assertEquals(isrChangeListener.shrinks.get, 0)
+    assertEquals(isrChangeListener.failures.get, 1)
   }
 
   @Test
@@ -1639,7 +1654,7 @@ class PartitionTest extends AbstractPartitionTest {
     val topicPartition = new TopicPartition("test", 1)
     val partition = new Partition(
       topicPartition, 1000, ApiVersion.latestVersion, 0,
-      new SystemTime(), mock(classOf[PartitionStateStore]), mock(classOf[DelayedOperations]),
+      new SystemTime(), mock(classOf[PartitionStateStore]), mock(classOf[IsrChangeListener]), mock(classOf[DelayedOperations]),
       mock(classOf[MetadataCache]), mock(classOf[LogManager]), mock(classOf[AlterIsrManager]))
 
     val replicas = Seq(0, 1, 2, 3)
@@ -1682,6 +1697,7 @@ class PartitionTest extends AbstractPartitionTest {
       localBrokerId = brokerId,
       time,
       stateStore,
+      isrChangeListener,
       delayedOperations,
       metadataCache,
       spyLogManager,
@@ -1717,6 +1733,7 @@ class PartitionTest extends AbstractPartitionTest {
       localBrokerId = brokerId,
       time,
       stateStore,
+      isrChangeListener,
       delayedOperations,
       metadataCache,
       spyLogManager,
@@ -1753,6 +1770,7 @@ class PartitionTest extends AbstractPartitionTest {
       localBrokerId = brokerId,
       time,
       stateStore,
+      isrChangeListener,
       delayedOperations,
       metadataCache,
       spyLogManager,

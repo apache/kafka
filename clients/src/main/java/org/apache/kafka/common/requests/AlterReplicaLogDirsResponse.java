@@ -38,10 +38,6 @@ public class AlterReplicaLogDirsResponse extends AbstractResponse {
 
     private final AlterReplicaLogDirsResponseData data;
 
-    public AlterReplicaLogDirsResponse(Struct struct) {
-        this(struct, ApiKeys.ALTER_REPLICA_LOG_DIRS.latestVersion());
-    }
-
     public AlterReplicaLogDirsResponse(Struct struct, short version) {
         this.data = new AlterReplicaLogDirsResponseData(struct, version);
     }
@@ -74,7 +70,7 @@ public class AlterReplicaLogDirsResponse extends AbstractResponse {
     }
 
     public static AlterReplicaLogDirsResponse parse(ByteBuffer buffer, short version) {
-        return new AlterReplicaLogDirsResponse(ApiKeys.ALTER_REPLICA_LOG_DIRS.responseSchema(version).read(buffer));
+        return new AlterReplicaLogDirsResponse(ApiKeys.ALTER_REPLICA_LOG_DIRS.responseSchema(version).read(buffer), version);
     }
 
     @Override

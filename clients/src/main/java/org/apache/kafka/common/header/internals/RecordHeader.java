@@ -70,7 +70,7 @@ public class RecordHeader implements Header {
 
     @Override
     public int hashCode() {
-        int result = key() != null ? key().hashCode() : 0;
+        int result = key().hashCode();
         result = 31 * result + Arrays.hashCode(value());
         return result;
     }

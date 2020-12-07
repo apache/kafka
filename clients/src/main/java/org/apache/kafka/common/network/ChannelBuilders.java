@@ -158,16 +158,17 @@ public class ChannelBuilders {
         return channelBuilder;
     }
 
-    // Visibility for testing
-    protected static Map<String, Object> channelBuilderConfigs(final AbstractConfig config, final ListenerName listenerName) {
-        Map<String, ?> parsedConfigs;
+    /**
+     * @return a mutable RecordingMap. The elements got from RecordingMap are marked as "used".
+     */
+    @SuppressWarnings("unchecked")
+    static Map<String, Object> channelBuilderConfigs(final AbstractConfig config, final ListenerName listenerName) {
+        Map<String, Object> parsedConfigs;
         if (listenerName == null)
-            parsedConfigs = config.values();
+            parsedConfigs = (Map<String, Object>) config.values();
         else
             parsedConfigs = config.valuesWithPrefixOverride(listenerName.configPrefix());
 
-        // include any custom configs from original configs
-        Map<String, Object> configs = new HashMap<>(parsedConfigs);
         config.originals().entrySet().stream()
             .filter(e -> !parsedConfigs.containsKey(e.getKey())) // exclude already parsed configs
             // exclude already parsed listener prefix configs
@@ -175,8 +176,8 @@ public class ChannelBuilders {
                 parsedConfigs.containsKey(e.getKey().substring(listenerName.configPrefix().length()))))
             // exclude keys like `{mechanism}.some.prop` if "listener.name." prefix is present and key `some.prop` exists in parsed configs.
             .filter(e -> !(listenerName != null && parsedConfigs.containsKey(e.getKey().substring(e.getKey().indexOf('.') + 1))))
-            .forEach(e -> configs.put(e.getKey(), e.getValue()));
-        return configs;
+            .forEach(e -> parsedConfigs.put(e.getKey(), e.getValue()));
+        return parsedConfigs;
     }
 
     private static void requireNonNullMode(Mode mode, SecurityProtocol securityProtocol) {

@@ -99,7 +99,9 @@ class Kip500Broker(val config: KafkaConfig,
 
   var transactionCoordinator: TransactionCoordinator = null
 
-  var brokerToControllerChannelManager: Kip500BrokerToControllerChannelManager = null
+  var forwardingChannelManager: Kip500BrokerToControllerChannelManager = null
+
+  var alterIsrChannelManager: Kip500BrokerToControllerChannelManager = null
 
   var kafkaScheduler: KafkaScheduler = null
 
@@ -208,9 +210,12 @@ class Kip500Broker(val config: KafkaConfig,
       replicaManager = createReplicaManager(isShuttingDown)
       replicaManager.startup()
 
-      /* start broker-to-controller channel manager */
-      brokerToControllerChannelManager = new Kip500BrokerToControllerChannelManager(time, metrics, config, threadNamePrefix)
-      brokerToControllerChannelManager.start()
+      /* start broker-to-controller channel managers */
+      alterIsrChannelManager = new Kip500BrokerToControllerChannelManager(time, metrics, config, "alterIsrChannel", threadNamePrefix)
+      alterIsrChannelManager.start()
+      forwardingChannelManager = new Kip500BrokerToControllerChannelManager(time, metrics, config, "forwardingChannel", threadNamePrefix)
+      forwardingChannelManager.start()
+      val forwardingManager = new ForwardingManager(forwardingChannelManager)
 
       /* start token manager */
       if (config.tokenAuthEnabled) {
@@ -244,7 +249,7 @@ class Kip500Broker(val config: KafkaConfig,
 
       /* check local clusterId matches the controller quorum clusterId */
       // TODO: decide if maybe this would be better to communicate in a registration request?
-      val controllerQuorumClusterId = brokerToControllerChannelManager.clusterId().get()
+      val controllerQuorumClusterId = alterIsrChannelManager.clusterId().get()
       if (_clusterId != controllerQuorumClusterId) {
         throw new IllegalStateException(s"Local clusterId ${_clusterId} does not match controller quorum clusterId $controllerQuorumClusterId")
       }
@@ -256,7 +261,7 @@ class Kip500Broker(val config: KafkaConfig,
       metaLogManager.initialize(brokerMetadataListener)
 
       brokerLifecycleManager = new BrokerLifecycleManagerImpl(brokerMetadataListener, config,
-        brokerToControllerChannelManager, kafkaScheduler, time, config.brokerId, config.rack.getOrElse(""),
+        alterIsrChannelManager, kafkaScheduler, time, config.brokerId, config.rack.getOrElse(""),
         brokerMetadataListener.currentMetadataOffset, brokerMetadataListener.brokerEpochNow)
 
       val listeners = new ListenerCollection()
@@ -303,7 +308,7 @@ class Kip500Broker(val config: KafkaConfig,
       val kafkaController: KafkaController = null
       dataPlaneRequestProcessor = new KafkaApis(socketServer.dataPlaneRequestChannel,
         replicaManager, adminManager, groupCoordinator, transactionCoordinator,
-        kafkaController, zkClient, config.brokerId, config, metadataCache, metrics, authorizer, quotaManagers,
+        kafkaController, forwardingManager, zkClient, config.brokerId, config, metadataCache, metrics, authorizer, quotaManagers,
         fetchManager, brokerTopicStats, _clusterId, time, tokenManager, brokerFeatures, featureCache, brokerMetadataListener)
 
       dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.dataPlaneRequestChannel, dataPlaneRequestProcessor, time,
@@ -312,7 +317,7 @@ class Kip500Broker(val config: KafkaConfig,
       socketServer.controlPlaneRequestChannelOpt.foreach { controlPlaneRequestChannel =>
         controlPlaneRequestProcessor = new KafkaApis(controlPlaneRequestChannel,
           replicaManager, adminManager, groupCoordinator, transactionCoordinator,
-          kafkaController, zkClient, config.brokerId, config, metadataCache, metrics, authorizer, quotaManagers,
+          kafkaController, forwardingManager, zkClient, config.brokerId, config, metadataCache, metrics, authorizer, quotaManagers,
           fetchManager, brokerTopicStats, _clusterId, time, tokenManager, brokerFeatures, featureCache, brokerMetadataListener)
 
         controlPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.controlPlaneRequestChannelOpt.get, controlPlaneRequestProcessor, time,
@@ -353,7 +358,7 @@ class Kip500Broker(val config: KafkaConfig,
   }
 
   protected def createReplicaManager(isShuttingDown: AtomicBoolean): ReplicaManager = {
-    val alterIsrManager = new AlterIsrManagerImpl(brokerToControllerChannelManager, kafkaScheduler,
+    val alterIsrManager = new AlterIsrManagerImpl(alterIsrChannelManager, kafkaScheduler,
       time, config.brokerId, () => _brokerMetadataListenerFuture.get.brokerEpochFuture().get())
     // explicitly declare to eliminate spotbugs error in Scala 2.12
     val zkClient: Option[KafkaZkClient] = None
@@ -447,8 +452,11 @@ class Kip500Broker(val config: KafkaConfig,
       if (replicaManager != null)
         CoreUtils.swallow(replicaManager.shutdown(), this)
 
-      if (brokerToControllerChannelManager != null)
-        CoreUtils.swallow(brokerToControllerChannelManager.shutdown(), this)
+      if (alterIsrChannelManager != null)
+        CoreUtils.swallow(alterIsrChannelManager.shutdown(), this)
+
+      if (forwardingChannelManager != null)
+        CoreUtils.swallow(forwardingChannelManager.shutdown(), this)
 
       if (logManager != null)
         CoreUtils.swallow(logManager.shutdown(), this)

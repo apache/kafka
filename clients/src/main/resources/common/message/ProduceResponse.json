@@ -30,16 +30,18 @@
   //
   // Version 8 added RecordErrors and ErrorMessage to include information about
   // records that cause the whole batch to be dropped.  See KIP-467 for details.
-  "validVersions": "0-8",
-  "flexibleVersions": "none",
+  //
+  // Version 9 enables flexible versions.
+  "validVersions": "0-9",
+  "flexibleVersions": "9+",
   "fields": [
     { "name": "Responses", "type": "[]TopicProduceResponse", "versions": "0+",
       "about": "Each produce response", "fields": [
-      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
+      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName", "mapKey": true,
         "about": "The topic name" },
-      { "name": "Partitions", "type": "[]PartitionProduceResponse", "versions": "0+",
+      { "name": "PartitionResponses", "type": "[]PartitionProduceResponse", "versions": "0+",
         "about": "Each partition that we produced to within the topic.", "fields": [
-        { "name": "PartitionIndex", "type": "int32", "versions": "0+",
+        { "name": "Index", "type": "int32", "versions": "0+",
           "about": "The partition index." },
         { "name": "ErrorCode", "type": "int16", "versions": "0+",
           "about": "The error code, or 0 if there was no error." },
@@ -60,7 +62,7 @@
           "about":  "The global error message summarizing the common root cause of the records that caused the batch to be dropped"}
       ]}
     ]},
-    { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,
+    { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true, "default": "0",
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." }
   ]
 }

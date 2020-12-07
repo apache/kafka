@@ -39,8 +39,7 @@ class TestVerifiableProducer(Test):
         self.num_messages = 1000
         # This will produce to source kafka cluster
         self.producer = VerifiableProducer(test_context, num_nodes=1, kafka=self.kafka, topic=self.topic,
-                                           max_messages=self.num_messages, throughput=self.num_messages // 5)
-
+                                           max_messages=self.num_messages, throughput=self.num_messages // 10)
     def setUp(self):
         self.zk.start()
         self.kafka.start()
@@ -59,7 +58,7 @@ class TestVerifiableProducer(Test):
         node = self.producer.nodes[0]
         node.version = KafkaVersion(producer_version)
         self.producer.start()
-        wait_until(lambda: self.producer.num_acked > 5, timeout_sec=5,
+        wait_until(lambda: self.producer.num_acked > 5, timeout_sec=15,
              err_msg="Producer failed to start in a reasonable amount of time.")
 
         # using version.vstring (distutils.version.LooseVersion) is a tricky way of ensuring

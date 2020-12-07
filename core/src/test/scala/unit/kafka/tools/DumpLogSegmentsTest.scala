@@ -26,7 +26,7 @@ import kafka.log.{Log, LogConfig, LogManager, LogTest}
 import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.tools.DumpLogSegments.TimeIndexDumpErrors
 import kafka.utils.{MockTime, TestUtils}
-import org.apache.kafka.common.UUID
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metadata.{RegisterBrokerRecord, IsrChangeRecord, TopicRecord}
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, ObjectSerializationCache}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
@@ -188,8 +188,8 @@ class DumpLogSegmentsTest {
     val metadataRecords = Seq(
       new RegisterBrokerRecord().setBrokerId(0).setBrokerEpoch(10),
       new RegisterBrokerRecord().setBrokerId(1).setBrokerEpoch(20),
-      new TopicRecord().setName("test-topic").setDeleting(false).setTopicId(UUID.randomUUID()),
-      new IsrChangeRecord().setTopicId(UUID.randomUUID()).setLeader(1).setPartitionId(0).setLeaderEpoch(100).setIsr(util.Arrays.asList(0, 1, 2))
+      new TopicRecord().setName("test-topic").setDeleting(false).setTopicId(Uuid.randomUuid()),
+      new IsrChangeRecord().setTopicId(Uuid.randomUuid()).setLeader(1).setPartitionId(0).setLeaderEpoch(100).setIsr(util.Arrays.asList(0, 1, 2))
     )
 
     // TODO eventually replace this with whatever production code writes the metadata records to the log

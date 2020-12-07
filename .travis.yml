@@ -10,9 +10,16 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-sudo: required
-dist: trusty
+arch: amd64
+os: linux
+dist: bionic
 language: java
+
+services:
+  - docker
+
+jdk:
+  - openjdk8
 
 env:
   - _DUCKTAPE_OPTIONS="--subset 0  --subsets 15"
@@ -31,22 +38,14 @@ env:
   - _DUCKTAPE_OPTIONS="--subset 13 --subsets 15"
   - _DUCKTAPE_OPTIONS="--subset 14 --subsets 15"
 
-jdk:
-  - oraclejdk8
-
-before_install:
-  - gradle wrapper
-
 script:
   - ./gradlew rat
   - ./gradlew systemTestLibs && /bin/bash ./tests/docker/run_tests.sh
 
-services:
-  - docker
-
 before_cache:
   - rm -f  $HOME/.gradle/caches/modules-2/modules-2.lock
   - rm -fr $HOME/.gradle/caches/*/plugin-resolution/
+
 cache:
   directories:
     - "$HOME/.m2/repository"

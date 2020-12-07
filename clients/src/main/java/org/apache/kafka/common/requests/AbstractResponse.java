@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.message.EnvelopeResponseData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.AlterIsrResponseData;
+import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -42,19 +44,17 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
     /**
      * Visible for testing, typically {@link #toSend(String, ResponseHeader, short)} should be used instead.
      */
-    public ByteBuffer serialize(short version, ResponseHeader responseHeader) {
-        return RequestUtils.serialize(responseHeader.toStruct(), toStruct(version));
-    }
-
-    /**
-     * Visible for testing, typically {@link #toSend(String, ResponseHeader, short)} should be used instead.
-     */
     public ByteBuffer serialize(ApiKeys apiKey, short version, int correlationId) {
         ResponseHeader header =
             new ResponseHeader(correlationId, apiKey.responseHeaderVersion(version));
         return RequestUtils.serialize(header.toStruct(), toStruct(version));
     }
 
+    /**
+     * The number of each type of error in the response, including {@link Errors#NONE} and top-level errors as well as
+     * more specifically scoped errors (such as topic or partition-level errors).
+     * @return A count of errors.
+     */
     public abstract Map<Errors, Integer> errorCounts();
 
     protected Map<Errors, Integer> errorCounts(Errors error) {
@@ -86,10 +86,30 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
 
     protected abstract Struct toStruct(short version);
 
+    /**
+     * Parse a response from the provided buffer. The buffer is expected to hold both
+     * the {@link ResponseHeader} as well as the response payload.
+     */
+    public static AbstractResponse parseResponse(ByteBuffer byteBuffer, RequestHeader requestHeader) {
+        ApiKeys apiKey = requestHeader.apiKey();
+        short apiVersion = requestHeader.apiVersion();
+
+        ResponseHeader responseHeader = ResponseHeader.parse(byteBuffer, apiKey.responseHeaderVersion(apiVersion));
+        if (requestHeader.correlationId() != responseHeader.correlationId()) {
+            throw new CorrelationIdMismatchException("Correlation id for response ("
+                + responseHeader.correlationId() + ") does not match request ("
+                + requestHeader.correlationId() + "), request header: " + requestHeader,
+                requestHeader.correlationId(), responseHeader.correlationId());
+        }
+
+        Struct struct = apiKey.parseResponse(apiVersion, byteBuffer);
+        return AbstractResponse.parseResponse(apiKey, struct, apiVersion);
+    }
+
     public static AbstractResponse parseResponse(ApiKeys apiKey, Struct struct, short version) {
         switch (apiKey) {
             case PRODUCE:
-                return new ProduceResponse(struct);
+                return new ProduceResponse(new ProduceResponseData(struct, version));
             case FETCH:
                 return new FetchResponse<>(new FetchResponseData(struct, version));
             case LIST_OFFSETS:
@@ -135,7 +155,7 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
             case INIT_PRODUCER_ID:
                 return new InitProducerIdResponse(struct, version);
             case OFFSET_FOR_LEADER_EPOCH:
-                return new OffsetsForLeaderEpochResponse(struct);
+                return new OffsetsForLeaderEpochResponse(struct, version);
             case ADD_PARTITIONS_TO_TXN:
                 return new AddPartitionsToTxnResponse(struct, version);
             case ADD_OFFSETS_TO_TXN:
@@ -157,7 +177,7 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
             case ALTER_CONFIGS:
                 return new AlterConfigsResponse(struct, version);
             case ALTER_REPLICA_LOG_DIRS:
-                return new AlterReplicaLogDirsResponse(struct);
+                return new AlterReplicaLogDirsResponse(struct, version);
             case DESCRIBE_LOG_DIRS:
                 return new DescribeLogDirsResponse(struct, version);
             case SASL_AUTHENTICATE:
@@ -204,6 +224,8 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return new AlterIsrResponse(new AlterIsrResponseData(struct, version));
             case UPDATE_FEATURES:
                 return new UpdateFeaturesResponse(struct, version);
+            case ENVELOPE:
+                return new EnvelopeResponse(new EnvelopeResponseData(struct, version));
             case BROKER_REGISTRATION:
                 return new BrokerRegistrationResponse(struct, version);
             case BROKER_HEARTBEAT:

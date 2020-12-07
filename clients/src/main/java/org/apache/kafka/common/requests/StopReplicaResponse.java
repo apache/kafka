@@ -58,8 +58,10 @@ public class StopReplicaResponse extends AbstractResponse {
     public Map<Errors, Integer> errorCounts() {
         if (data.errorCode() != Errors.NONE.code())
             // Minor optimization since the top-level error applies to all partitions
-            return Collections.singletonMap(error(), data.partitionErrors().size());
-        return errorCounts(data.partitionErrors().stream().map(p -> Errors.forCode(p.errorCode())));
+            return Collections.singletonMap(error(), data.partitionErrors().size() + 1);
+        Map<Errors, Integer> errors = errorCounts(data.partitionErrors().stream().map(p -> Errors.forCode(p.errorCode())));
+        updateErrorCounts(errors, Errors.forCode(data.errorCode())); // top level error
+        return errors;
     }
 
     public static StopReplicaResponse parse(ByteBuffer buffer, short version) {

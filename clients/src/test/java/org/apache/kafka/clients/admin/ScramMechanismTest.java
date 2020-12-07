@@ -14,20 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.internals;
 
-import org.apache.kafka.common.errors.RetriableException;
+package org.apache.kafka.clients.admin;
 
-/**
- * This exception indicates that the produce request sent to the partition leader
- * contains a non-matching producer epoch. When encountering this exception, the ongoing transaction
- * will be aborted and can be retried.
- */
-public class InvalidProducerEpochException extends RetriableException {
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-    private static final long serialVersionUID = 1L;
+import org.junit.jupiter.api.Test;
 
-    public InvalidProducerEpochException(String message) {
-        super(message);
+class ScramMechanismTest {
+
+    @Test
+    public void testFromMechanismName() {
+        assertEquals(ScramMechanism.UNKNOWN, ScramMechanism.fromMechanismName("UNKNOWN"));
+        assertEquals(ScramMechanism.SCRAM_SHA_256, ScramMechanism.fromMechanismName("SCRAM-SHA-256"));
+        assertEquals(ScramMechanism.SCRAM_SHA_512, ScramMechanism.fromMechanismName("SCRAM-SHA-512"));
+        assertEquals(ScramMechanism.UNKNOWN, ScramMechanism.fromMechanismName("some string"));
+        assertEquals(ScramMechanism.UNKNOWN, ScramMechanism.fromMechanismName("scram-sha-256"));
     }
+
 }

@@ -30,7 +30,7 @@ import org.apache.kafka.common.metadata.{RegisterBrokerRecord, ConfigRecord, Top
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiMessage
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.{TopicPartition, UUID}
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.server.quota.ClientQuotaCallback
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.Test
@@ -71,7 +71,7 @@ class PartitionMetadataProcessorTest {
     val processor = new PartitionMetadataProcessor(
       kafkaConfig, clusterId, metadataCache, groupCoordinator, quotaManagers, replicaManager, txnCoordinator, Map.empty)
 
-    val uuid0 = UUID.randomUUID()
+    val uuid0 = Uuid.randomUuid()
     val name0 = "topic0"
     val topicRecord0 = new TopicRecord().setDeleting(false).setName(name0).setTopicId(uuid0)
 
@@ -158,7 +158,7 @@ class PartitionMetadataProcessorTest {
     assertEquals(1, metadataCache.readState().partitionStates.size)
 
     // now add a different topic and delete the first topic as part of a batch
-    val uuid1 = UUID.randomUUID()
+    val uuid1 = Uuid.randomUuid()
     val name1 = "topic1"
     val topicRecord1 = new TopicRecord().setDeleting(false).setName(name1).setTopicId(uuid1)
     val topicRecord0Deleting = new TopicRecord().setDeleting(true).setName(name0).setTopicId(uuid0)

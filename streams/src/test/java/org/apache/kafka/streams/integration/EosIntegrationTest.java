@@ -647,6 +647,7 @@ public class EosIntegrationTest {
         return data;
     }
 
+    @SuppressWarnings("deprecation") //the threads should no longer fail one thread one at a time
     private KafkaStreams getKafkaStreams(final String dummyHostName,
                                          final boolean withState,
                                          final String appDir,

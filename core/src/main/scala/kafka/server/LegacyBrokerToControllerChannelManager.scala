@@ -34,8 +34,9 @@ class LegacyBrokerToControllerChannelManager(metadataCache: kafka.server.Metadat
                                              metrics: Metrics,
                                              config: KafkaConfig,
                                              clusterId: String,
+                                             channelName: String,
                                              threadNamePrefix: Option[String] = None) extends
-  AbstractBrokerToControllerChannelManager(time, metrics, config, threadNamePrefix) {
+  AbstractBrokerToControllerChannelManager(time, metrics, config, channelName, threadNamePrefix) {
   val _brokerToControllerListenerName = config.controlPlaneListenerName.getOrElse(config.interBrokerListenerName)
   val _brokerToControllerSecurityProtocol = config.controlPlaneSecurityProtocol.getOrElse(config.interBrokerSecurityProtocol)
   val _brokerToControllerSaslMechanism = config.saslMechanismInterBrokerProtocol

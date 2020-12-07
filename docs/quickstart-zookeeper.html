@@ -28,12 +28,12 @@
       </h4>
 
       <p>
-          <a href="https://www.apache.org/dyn/closer.cgi?path=/kafka/2.6.0/kafka_2.13-2.6.0.tgz">Download</a>
+          <a href="https://www.apache.org/dyn/closer.cgi?path=/kafka/2.8.0/kafka_2.13-2.8.0.tgz">Download</a>
           the latest Kafka release and extract it:
       </p>
 
-<pre class="line-numbers"><code class="language-bash">$ tar -xzf kafka_2.13-2.6.0.tgz
-$ cd kafka_2.13-2.6.0</code></pre>
+<pre class="line-numbers"><code class="language-bash">$ tar -xzf kafka_2.13-2.8.0.tgz
+$ cd kafka_2.13-2.8.0</code></pre>
   </div>
 
   <div class="quickstart-step">
@@ -196,7 +196,7 @@ KTable&lt;String, Long&gt; wordCounts = textLines
             .groupBy((keyIgnored, word) -&gt; word)
             .count();
 
-wordCounts.toStream().to("output-topic"), Produced.with(Serdes.String(), Serdes.Long()));</code></pre>
+wordCounts.toStream().to("output-topic", Produced.with(Serdes.String(), Serdes.Long()));</code></pre>
 
   <p>
       The <a href="/25/documentation/streams/quickstart">Kafka Streams demo</a>

@@ -38,7 +38,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.LeaderAndIsrRequest
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.{Node, TopicPartition, UUID}
+import org.apache.kafka.common.{Node, TopicPartition, Uuid}
 
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, mutable}
@@ -234,24 +234,24 @@ class PartitionMetadataProcessor(kafkaConfig: KafkaConfig,
       }
     }
 
-    private var copiedTopicIdMap: Option[util.Map[UUID, String]] = None
+    private var copiedTopicIdMap: Option[util.Map[Uuid, String]] = None
     def hasTopicIdMapChanges(): Boolean = copiedTopicIdMap.isDefined
 
     // get the topicId-to-name map, copying first if necessary
-    def getCopiedTopicIdMap(): util.Map[UUID, String] = {
+    def getCopiedTopicIdMap(): util.Map[Uuid, String] = {
       copiedTopicIdMap match {
         case Some(map) => map
         case None =>
           val metadataSnapshot = getMetadataSnapshot()
           val maxPossibleCapacity = metadataSnapshot.topicIdMap.size() + numTopicsAdding
-          val copy = new util.HashMap[UUID, String](maxPossibleCapacity)
+          val copy = new util.HashMap[Uuid, String](maxPossibleCapacity)
           copy.putAll(metadataSnapshot.topicIdMap)
           copiedTopicIdMap = Some(copy) // so we don't copy it again
           copy
       }
     }
     // get the current topicId-to-name map, either the copy if we have already copied or the original if not
-    def getCurrentTopicIdMap(): util.Map[UUID, String] = {
+    def getCurrentTopicIdMap(): util.Map[Uuid, String] = {
       copiedTopicIdMap match {
         case Some(map) => map
         case None => getMetadataSnapshot().topicIdMap
@@ -384,6 +384,7 @@ class PartitionMetadataProcessor(kafkaConfig: KafkaConfig,
           case partitionRecord: PartitionRecord => process(partitionRecord, mgr)
           case isrChangeRecord: IsrChangeRecord => process(isrChangeRecord, mgr)
           case configRecord: ConfigRecord => process(configRecord, mgr)
+          case _ => // we don't process messages of this type -- whatever it is -- so ignore it
         }
       } catch {
         case e: Exception => error(s"Uncaught error processing metadata message: $msg", e)

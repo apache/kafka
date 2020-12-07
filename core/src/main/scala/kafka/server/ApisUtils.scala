@@ -103,16 +103,19 @@ class ApisUtils(val requestChannel: RequestChannel,
   // Throttle the channel if the request quota is enabled but has been violated. Regardless of throttling, send the
   // response immediately.
   def sendResponseMaybeThrottle(request: RequestChannel.Request,
-                                createResponse: Int => AbstractResponse,
-                                onComplete: Option[Send => Unit] = None): Unit = {
+                                createResponse: Int => AbstractResponse): Unit = {
     val throttleTimeMs = maybeRecordAndGetThrottleTimeMs(request)
-    quotas.request.throttle(request, throttleTimeMs, requestChannel.sendResponse)
-    requestChannel.sendResponse(request, Some(createResponse(throttleTimeMs)), onComplete)
+    // Only throttle non-forwarded requests
+    if (!request.isForwarded)
+      quotas.request.throttle(request, throttleTimeMs, requestChannel.sendResponse)
+    requestChannel.sendResponse(request, Some(createResponse(throttleTimeMs)), None)
   }
 
   def sendErrorResponseMaybeThrottle(request: RequestChannel.Request, error: Throwable): Unit = {
     val throttleTimeMs = maybeRecordAndGetThrottleTimeMs(request)
-    quotas.request.throttle(request, throttleTimeMs, requestChannel.sendResponse)
+    // Only throttle non-forwarded requests or cluster authorization failures
+    if (error.isInstanceOf[ClusterAuthorizationException] || !request.isForwarded)
+      quotas.request.throttle(request, throttleTimeMs, requestChannel.sendResponse)
     sendErrorOrCloseConnection(request, error, throttleTimeMs)
   }
 
@@ -120,30 +123,6 @@ class ApisUtils(val requestChannel: RequestChannel,
     val throttleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request, time.milliseconds())
     request.apiThrottleTimeMs = throttleTimeMs
     throttleTimeMs
-  }
-
-  /**
-   * Throttle the channel if the controller mutations quota or the request quota have been violated.
-   * Regardless of throttling, send the response immediately.
-   */
-  def sendResponseMaybeThrottle(controllerMutationQuota: ControllerMutationQuota,
-                                request: RequestChannel.Request,
-                                createResponse: Int => AbstractResponse,
-                                onComplete: Option[Send => Unit]): Unit = {
-    val timeMs = time.milliseconds
-    val controllerThrottleTimeMs = controllerMutationQuota.throttleTime
-    val requestThrottleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request, timeMs)
-    val maxThrottleTimeMs = Math.max(controllerThrottleTimeMs, requestThrottleTimeMs)
-    if (maxThrottleTimeMs > 0) {
-      request.apiThrottleTimeMs = maxThrottleTimeMs
-      if (controllerThrottleTimeMs > requestThrottleTimeMs) {
-        quotas.controllerMutation.throttle(request, controllerThrottleTimeMs, requestChannel.sendResponse)
-      } else {
-        quotas.request.throttle(request, requestThrottleTimeMs, requestChannel.sendResponse)
-      }
-    }
-
-    requestChannel.sendResponse(request, Some(createResponse(maxThrottleTimeMs)), onComplete)
   }
 
   def sendResponseExemptThrottle(request: RequestChannel.Request,

@@ -25,9 +25,10 @@ import kafka.log.LogConfig
 import kafka.server.{ConfigEntityName, ConfigType, DynamicConfig}
 import kafka.utils._
 import kafka.utils.Implicits._
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.utils.Utils
 import org.apache.zookeeper.KeeperException.NodeExistsException
 
 import scala.collection.{Map, Seq}
@@ -158,9 +159,11 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
       val assignment = replicaAssignment.map { case (partitionId, replicas) => (new TopicPartition(topic,partitionId), replicas) }.toMap
 
       if (!isUpdate) {
-        zkClient.createTopicAssignment(topic, assignment.map { case (k, v) => k -> v.replicas })
+        val topicId = Uuid.randomUuid()
+        zkClient.createTopicAssignment(topic, topicId, assignment.map { case (k, v) => k -> v.replicas })
       } else {
-        zkClient.setTopicAssignment(topic, assignment)
+        val topicIds = zkClient.getTopicIdsForTopics(Set(topic))
+        zkClient.setTopicAssignment(topic, topicIds(topic), assignment)
       }
       debug("Updated path %s with %s for replica assignment".format(TopicZNode.path(topic), assignment))
     } catch {
@@ -347,6 +350,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
       case ConfigType.Client => changeClientIdConfig(entityName, configs)
       case ConfigType.User => changeUserOrUserClientIdConfig(entityName, configs)
       case ConfigType.Broker => changeBrokerConfig(parseBroker(entityName), configs)
+      case ConfigType.Ip => changeIpConfig(entityName, configs)
       case _ => throw new IllegalArgumentException(s"$entityType is not a known entityType. Should be one of ${ConfigType.Topic}, ${ConfigType.Client}, ${ConfigType.Broker}")
     }
   }
@@ -382,6 +386,28 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
     else
       DynamicConfig.User.validate(configs)
     changeEntityConfig(ConfigType.User, sanitizedEntityName, configs)
+  }
+
+  /**
+   * Validates the IP configs.
+   * @param ip ip for which configs are being validated
+   * @param configs properties to validate for the IP
+   */
+  def validateIpConfig(ip: String, configs: Properties): Unit = {
+    if (ip != ConfigEntityName.Default && !Utils.validHostPattern(ip))
+      throw new AdminOperationException(s"IP $ip is not a valid address.")
+    DynamicConfig.Ip.validate(configs)
+  }
+
+  /**
+   * Update the config for an IP. These overrides will be persisted between sessions, and will override any default
+   * IP properties.
+   * @param ip ip for which configs are being updated
+   * @param configs properties to update for the IP
+   */
+  def changeIpConfig(ip: String, configs: Properties): Unit = {
+    validateIpConfig(ip, configs)
+    changeEntityConfig(ConfigType.Ip, ip, configs)
   }
 
   /**

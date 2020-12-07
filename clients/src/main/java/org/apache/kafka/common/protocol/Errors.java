@@ -86,6 +86,7 @@ import org.apache.kafka.common.errors.OperationNotAttemptedException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.PreferredLeaderNotAvailableException;
+import org.apache.kafka.common.errors.PrincipalDeserializationException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.ReassignmentInProgressException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
@@ -116,7 +117,7 @@ import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.internals.InvalidProducerEpochException;
+import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -341,8 +342,10 @@ public enum Errors {
             "voter-only request is not one of the expected voters", InconsistentVoterSetException::new),
     INVALID_UPDATE_VERSION(95, "The given update version was invalid.", InvalidUpdateVersionException::new),
     FEATURE_UPDATE_FAILED(96, "Unable to update finalized features due to an unexpected server error.", FeatureUpdateFailedException::new),
-    DUPLICATE_BROKER_REGISTRATION(97, "Duplicate broker registration", DuplicateBrokerRegistrationException::new),
-    INVALID_CLUSTER_ID(98, "Invalid cluster ID.", InvalidClusterIdException::new);
+    PRINCIPAL_DESERIALIZATION_FAILURE(97, "Request principal deserialization failed during forwarding. " +
+         "This indicates an internal error on the broker cluster security setup.", PrincipalDeserializationException::new),
+    DUPLICATE_BROKER_REGISTRATION(98, "Duplicate broker registration", DuplicateBrokerRegistrationException::new),
+    INVALID_CLUSTER_ID(99, "Invalid cluster ID.", InvalidClusterIdException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

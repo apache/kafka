@@ -73,4 +73,19 @@ public class RequestHeaderTest {
         RequestHeader deserialized = RequestHeader.parse(buffer);
         assertEquals(header, deserialized);
     }
+
+    @Test
+    public void parseHeaderFromBufferWithNonZeroPosition() {
+        ByteBuffer buffer = ByteBuffer.allocate(64);
+        buffer.position(10);
+
+        RequestHeader header = new RequestHeader(ApiKeys.FIND_COORDINATOR, (short) 1, "", 10);
+        header.toStruct().writeTo(buffer);
+        int limit = buffer.position();
+        buffer.position(10);
+        buffer.limit(limit);
+
+        RequestHeader parsed = RequestHeader.parse(buffer);
+        assertEquals(header, parsed);
+    }
 }

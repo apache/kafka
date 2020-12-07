@@ -31,7 +31,7 @@ import kafka.utils.Logging
 import kafka.utils.Implicits._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
-import org.apache.kafka.common.{Cluster, Node, PartitionInfo, TopicPartition, UUID}
+import org.apache.kafka.common.{Cluster, Node, PartitionInfo, TopicPartition, Uuid}
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponsePartition
 import org.apache.kafka.common.network.ListenerName
@@ -71,7 +71,7 @@ class MetadataCache(brokerId: Int) extends Logging {
   //multiple reads of this value risk getting different snapshots.
   @volatile private var metadataSnapshot: MetadataSnapshot = MetadataSnapshot(partitionStates = mutable.AnyRefMap.empty,
     controllerId = None, aliveBrokers = mutable.LongMap.empty, aliveNodes = mutable.LongMap.empty,
-    topicIdMap = new util.HashMap[UUID, String](),
+    topicIdMap = new util.HashMap[Uuid, String](),
     fencedBrokers = mutable.LongMap.empty, brokerEpochs = mutable.LongMap.empty)
 
   this.logIdent = s"[MetadataCache brokerId=$brokerId] "
@@ -400,7 +400,7 @@ case class MetadataSnapshot(partitionStates: mutable.AnyRefMap[String, mutable.L
                             controllerId: Option[Int],
                             aliveBrokers: mutable.LongMap[Broker],
                             aliveNodes: mutable.LongMap[collection.Map[ListenerName, Node]],
-                            topicIdMap: util.Map[UUID, String],
+                            topicIdMap: util.Map[Uuid, String],
                             fencedBrokers: mutable.LongMap[Broker],
                             brokerEpochs: mutable.LongMap[Long]) {
   def copyPartitionStates(): mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataPartitionState]] = {

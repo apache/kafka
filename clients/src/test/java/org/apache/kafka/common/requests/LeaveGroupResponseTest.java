@@ -84,6 +84,7 @@ public class LeaveGroupResponseTest {
     @Test
     public void testConstructorWithMemberResponses() {
         Map<Errors, Integer> expectedErrorCounts = new HashMap<>();
+        expectedErrorCounts.put(Errors.NONE, 1); // top level
         expectedErrorCounts.put(Errors.UNKNOWN_MEMBER_ID, 1);
         expectedErrorCounts.put(Errors.FENCED_INSTANCE_ID, 1);
 

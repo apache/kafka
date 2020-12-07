@@ -189,7 +189,12 @@ public class OffsetFetchResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return errorCounts(error);
+        Map<Errors, Integer> counts = new HashMap<>();
+        updateErrorCounts(counts, error);
+        data.topics().forEach(topic ->
+                topic.partitions().forEach(partition ->
+                        updateErrorCounts(counts, Errors.forCode(partition.errorCode()))));
+        return counts;
     }
 
     public Map<TopicPartition, PartitionData> responseData() {

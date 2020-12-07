@@ -37,6 +37,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
@@ -133,6 +134,8 @@ import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
@@ -2575,21 +2578,37 @@ public class KafkaConsumerTest {
     }
 
     @Test
-    public void deserializerShouldSeeGeneratedClientId() {
+    public void configurableObjectsShouldSeeGeneratedClientId() {
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, DeserializerForClientId.class.getName());
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, DeserializerForClientId.class.getName());
+        props.put(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, ConsumerInterceptorForClientId.class.getName());
 
         KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props);
-        assertEquals(2, DeserializerForClientId.CLIENT_IDS.size());
-        assertEquals(DeserializerForClientId.CLIENT_IDS.get(0), consumer.getClientId());
-        assertEquals(DeserializerForClientId.CLIENT_IDS.get(1), consumer.getClientId());
+        assertNotNull(consumer.getClientId());
+        assertNotEquals(0, consumer.getClientId().length());
+        assertEquals(3, CLIENT_IDS.size());
+        CLIENT_IDS.forEach(id -> assertEquals(id, consumer.getClientId()));
         consumer.close();
     }
 
+    @Test
+    public void testUnusedConfigs() {
+        Map<String, Object> props = new HashMap<>();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLS");
+        ConsumerConfig config = new ConsumerConfig(ConsumerConfig.appendDeserializerToConfig(props, new StringDeserializer(), new StringDeserializer()));
+
+        assertTrue(config.unused().contains(SslConfigs.SSL_PROTOCOL_CONFIG));
+
+        try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(config, null, null)) {
+            assertTrue(config.unused().contains(SslConfigs.SSL_PROTOCOL_CONFIG));
+        }
+    }
+
+    private static final List<String> CLIENT_IDS = new ArrayList<>();
     public static class DeserializerForClientId implements Deserializer<byte[]> {
-        static final List<String> CLIENT_IDS = new ArrayList<>();
         @Override
         public void configure(Map<String, ?> configs, boolean isKey) {
             CLIENT_IDS.add(configs.get(ConsumerConfig.CLIENT_ID_CONFIG).toString());
@@ -2598,6 +2617,29 @@ public class KafkaConsumerTest {
         @Override
         public byte[] deserialize(String topic, byte[] data) {
             return data;
+        }
+    }
+
+    public static class ConsumerInterceptorForClientId implements ConsumerInterceptor<byte[], byte[]> {
+
+        @Override
+        public ConsumerRecords<byte[], byte[]> onConsume(ConsumerRecords<byte[], byte[]> records) {
+            return records;
+        }
+
+        @Override
+        public void onCommit(Map<TopicPartition, OffsetAndMetadata> offsets) {
+
+        }
+
+        @Override
+        public void close() {
+
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            CLIENT_IDS.add(configs.get(ConsumerConfig.CLIENT_ID_CONFIG).toString());
         }
     }
 }

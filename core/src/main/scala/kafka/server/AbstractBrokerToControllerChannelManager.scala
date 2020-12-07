@@ -22,18 +22,17 @@ import java.util.concurrent.{Future, LinkedBlockingDeque, TimeUnit}
 import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
 import kafka.utils.Logging
 import org.apache.kafka.clients._
-import org.apache.kafka.common.requests.AbstractRequest
-import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.utils.{LogContext, Time}
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
-
 
 trait BrokerToControllerChannelManager {
   def sendRequest(request: AbstractRequest.Builder[_ <: AbstractRequest],
@@ -46,7 +45,6 @@ trait BrokerToControllerChannelManager {
   def shutdown(): Unit
 }
 
-
 /**
  * This abstract class manages the connection between a broker and the controller. It runs a single
  * {@link BrokerToControllerRequestThread} which finds and connects to the controller. The channel is async and runs
@@ -56,6 +54,7 @@ trait BrokerToControllerChannelManager {
 abstract class AbstractBrokerToControllerChannelManager(time: Time,
                                                         metrics: Metrics,
                                                         config: KafkaConfig,
+                                                        channelName: String,
                                                         threadNamePrefix: Option[String] = None) extends BrokerToControllerChannelManager with Logging {
   protected val requestQueue = new LinkedBlockingDeque[BrokerToControllerQueueItem]
   protected val logContext = new LogContext(s"[broker-${config.brokerId}-to-controller] ")
@@ -77,6 +76,7 @@ abstract class AbstractBrokerToControllerChannelManager(time: Time,
   override def shutdown(): Unit = {
     requestThread.shutdown()
     requestThread.awaitShutdown()
+    info(s"Broker to controller channel manager for $channelName shutdown")
   }
 
   private[server] def newRequestThread = {
@@ -96,7 +96,7 @@ abstract class AbstractBrokerToControllerChannelManager(time: Time,
         Selector.NO_IDLE_TIMEOUT_MS,
         metrics,
         time,
-        "BrokerToControllerChannel",
+        channelName,
         Map("BrokerId" -> config.brokerId.toString).asJava,
         false,
         channelBuilder,
@@ -134,6 +134,7 @@ abstract class AbstractBrokerToControllerChannelManager(time: Time,
     requestQueue.put(BrokerToControllerQueueItem(request, callback))
     requestThread.wakeup()
   }
+
 }
 
 case class BrokerToControllerQueueItem(request: AbstractRequest.Builder[_ <: AbstractRequest],
@@ -157,8 +158,9 @@ abstract class BrokerToControllerRequestThread(networkClient: KafkaClient,
       val request = RequestAndCompletionHandler(
         activeController.get,
         topRequest.request,
-        handleResponse(topRequest),
-        )
+        handleResponse(topRequest)
+      )
+
       requestsToSend.enqueue(request)
     }
     requestsToSend

@@ -18,7 +18,7 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
-import org.apache.kafka.common.UUID;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
@@ -213,7 +213,7 @@ public class ReplicationControlManager {
                     toArray(replicas), null, null, replicas.get(0), 0));
             }
         }
-        UUID topicId = UUID.randomUUID();
+        Uuid topicId = Uuid.randomUuid();
         records.add(new ApiMessageAndVersion(new TopicRecord().
             setName(topic.name()).
             setDeleting(false).

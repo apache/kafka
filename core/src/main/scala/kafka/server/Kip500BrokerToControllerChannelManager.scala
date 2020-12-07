@@ -37,8 +37,9 @@ import scala.util.Random
 class Kip500BrokerToControllerChannelManager(time: Time,
                                              metrics: Metrics,
                                              config: KafkaConfig,
+                                             channelName: String,
                                              threadNamePrefix: Option[String] = None) extends
-  AbstractBrokerToControllerChannelManager(time, metrics, config, threadNamePrefix) {
+  AbstractBrokerToControllerChannelManager(time, metrics, config, channelName, threadNamePrefix) {
 
   val clusterIdFuture = new CompletableFuture[String]()
   override def clusterId(): Future[String] = clusterIdFuture
