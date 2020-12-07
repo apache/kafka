@@ -248,7 +248,7 @@ class PartitionLockTest extends Logging {
     val leaderEpoch = 1
     val brokerId = 0
     val topicPartition = new TopicPartition("test-topic", 0)
-    val topicConfigProvider = () => createLogProperties(Map.empty)
+    val topicConfigProvider = TestUtils.createTopicConfigProvider(createLogProperties(Map.empty))
     val isrChangeListener: IsrChangeListener = mock(classOf[IsrChangeListener])
     val delayedOperations: DelayedOperations = mock(classOf[DelayedOperations])
     val metadataCache: MetadataCache = mock(classOf[MetadataCache])

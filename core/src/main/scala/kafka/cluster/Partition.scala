@@ -51,6 +51,10 @@ trait IsrChangeListener {
   def markFailed(): Unit
 }
 
+trait TopicConfigProvider {
+  def get(): Properties
+}
+
 class DelayedOperations(topicPartition: TopicPartition,
                         produce: DelayedOperationPurgatory[DelayedProduce],
                         fetch: DelayedOperationPurgatory[DelayedFetch],
@@ -83,9 +87,11 @@ object Partition extends KafkaMetricsGroup {
       override def markFailed(): Unit = replicaManager.failedIsrUpdatesRate.mark()
     }
 
-    val configProvider = () => {
-      val adminZkClient = new AdminZkClient(replicaManager.zkClient)
-      adminZkClient.fetchEntityConfig(ConfigType.Topic, topicPartition.topic)
+    val configProvider = new TopicConfigProvider {
+      override def get(): Properties = {
+        val adminZkClient = new AdminZkClient(replicaManager.zkClient)
+        adminZkClient.fetchEntityConfig(ConfigType.Topic, topicPartition.topic)
+      }
     }
 
     val delayedOperations = new DelayedOperations(
@@ -222,7 +228,7 @@ class Partition(val topicPartition: TopicPartition,
                 interBrokerProtocolVersion: ApiVersion,
                 localBrokerId: Int,
                 time: Time,
-                topicConfigProvider: () => Properties,
+                topicConfigProvider: TopicConfigProvider,
                 isrChangeListener: IsrChangeListener,
                 delayedOperations: DelayedOperations,
                 metadataCache: MetadataCache,
@@ -336,7 +342,7 @@ class Partition(val topicPartition: TopicPartition,
   // Visible for testing
   private[cluster] def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints): Log = {
     def fetchLogConfig: LogConfig = {
-      val props = topicConfigProvider.apply()
+      val props = topicConfigProvider.get()
       LogConfig.fromProps(logManager.currentDefaultConfig.originals, props)
     }
 
