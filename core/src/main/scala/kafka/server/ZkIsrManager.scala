@@ -46,21 +46,31 @@ class ZkIsrManager(scheduler: Scheduler, time: Time, zkClient: KafkaZkClient) ex
   }
 
   override def enqueue(alterIsrItem: AlterIsrItem): Boolean = {
-    debug(s"Writing new ISR to ZooKeeper")
+    debug(s"Writing new ISR " + alterIsrItem.leaderAndIsr.isr + " to ZooKeeper with version " +
+      alterIsrItem.leaderAndIsr.zkVersion + " for partition " + alterIsrItem.topicPartition)
 
     val (updateSucceeded, newVersion) = ReplicationUtils.updateLeaderAndIsr(zkClient, alterIsrItem.topicPartition,
       alterIsrItem.leaderAndIsr, alterIsrItem.controllerEpoch)
 
     if (updateSucceeded) {
-      // Track which partitions need to be propagated
+      // Track which partitions need to be propagated to the controller
       isrChangeSet synchronized {
         isrChangeSet += alterIsrItem.topicPartition
         lastIsrChangeMs.set(time.milliseconds())
       }
-      // Return the given LeaderAndIsr with the new Zk version
-      alterIsrItem.callback.apply(Right(alterIsrItem.leaderAndIsr.withZkVersion(newVersion)))
+
+      // We actually need to apply the callback in another thread since Partition#sendAlterIsrRequest will write
+      // isrState after enqueuing the AlterIsrItem. This is only safe because the callback
+      // (Partition#handleAlterIsrResponse) takes the ISR write lock.
+      //
+      // For the callback value, return the given LeaderAndIsr but updated with the new ZK version
+      scheduler.schedule(
+        "zk-async-callback",
+        () => alterIsrItem.callback.apply(Right(alterIsrItem.leaderAndIsr.withZkVersion(newVersion))))
     } else {
-      alterIsrItem.callback.apply(Left(Errors.INVALID_UPDATE_VERSION))
+      scheduler.schedule(
+        "zk-async-callback",
+        () => alterIsrItem.callback.apply(Left(Errors.INVALID_UPDATE_VERSION)))
     }
 
     // Return true since we unconditionally accept the AlterIsrItem. The result of the operation is indicated by the
