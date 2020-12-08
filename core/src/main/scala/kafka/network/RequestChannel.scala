@@ -438,11 +438,12 @@ class RequestChannel(val queueSize: Int,
 
     val response = responseOpt match {
       case Some(response) =>
-        val responseSend = request.context.buildResponse(response)
-        val responseString =
-          if (RequestChannel.isRequestLoggingEnabled) Some(response.toString(request.context.apiVersion))
-          else None
-        new RequestChannel.SendResponse(request, responseSend, responseString, onComplete)
+        new RequestChannel.SendResponse(
+          request,
+          request.buildResponseSend(response),
+          request.responseString(response),
+          onComplete
+        )
       case None =>
         new RequestChannel.NoOpResponse(request)
     }

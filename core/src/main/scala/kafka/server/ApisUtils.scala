@@ -94,19 +94,34 @@ class ApisUtils(val requestChannel: RequestChannel,
       sendErrorResponseExemptThrottle(request, e)
   }
 
+  def sendForwardedResponse(
+    request: RequestChannel.Request,
+    response: AbstractResponse
+  ): Unit = {
+    // For forwarded requests, we take the throttle time from the broker that
+    // the request was forwarded to
+    val throttleTimeMs = response.throttleTimeMs()
+    quotas.request.throttle(request, throttleTimeMs, requestChannel.sendResponse)
+    requestChannel.sendResponse(request, Some(response), None)
+  }
+
   // Throttle the channel if the request quota is enabled but has been violated. Regardless of throttling, send the
   // response immediately.
   def sendResponseMaybeThrottle(request: RequestChannel.Request,
                                 createResponse: Int => AbstractResponse,
                                 onComplete: Option[Send => Unit] = None): Unit = {
     val throttleTimeMs = maybeRecordAndGetThrottleTimeMs(request)
-    quotas.request.throttle(request, throttleTimeMs, requestChannel.sendResponse)
-    requestChannel.sendResponse(request, Some(createResponse(throttleTimeMs)), onComplete)
+    // Only throttle non-forwarded requests
+    if (!request.isForwarded)
+      quotas.request.throttle(request, throttleTimeMs, requestChannel.sendResponse)
+    requestChannel.sendResponse(request, Some(createResponse(throttleTimeMs)), None)
   }
 
   def sendErrorResponseMaybeThrottle(request: RequestChannel.Request, error: Throwable): Unit = {
     val throttleTimeMs = maybeRecordAndGetThrottleTimeMs(request)
-    quotas.request.throttle(request, throttleTimeMs, requestChannel.sendResponse)
+    // Only throttle non-forwarded requests or cluster authorization failures
+    if (error.isInstanceOf[ClusterAuthorizationException] || !request.isForwarded)
+      quotas.request.throttle(request, throttleTimeMs, requestChannel.sendResponse)
     sendErrorOrCloseConnection(request, error, throttleTimeMs)
   }
 
@@ -120,15 +135,16 @@ class ApisUtils(val requestChannel: RequestChannel,
    * Throttle the channel if the controller mutations quota or the request quota have been violated.
    * Regardless of throttling, send the response immediately.
    */
-  def sendResponseMaybeThrottle(controllerMutationQuota: ControllerMutationQuota,
-                                request: RequestChannel.Request,
-                                createResponse: Int => AbstractResponse,
-                                onComplete: Option[Send => Unit]): Unit = {
+  def sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota: ControllerMutationQuota,
+                                                   request: RequestChannel.Request,
+                                                   createResponse: Int => AbstractResponse,
+                                                   onComplete: Option[Send => Unit]): Unit = {
     val timeMs = time.milliseconds
     val controllerThrottleTimeMs = controllerMutationQuota.throttleTime
     val requestThrottleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request, timeMs)
     val maxThrottleTimeMs = Math.max(controllerThrottleTimeMs, requestThrottleTimeMs)
-    if (maxThrottleTimeMs > 0) {
+    // Only throttle non-forwarded requests
+    if (maxThrottleTimeMs > 0 && !request.isForwarded) {
       request.apiThrottleTimeMs = maxThrottleTimeMs
       if (controllerThrottleTimeMs > requestThrottleTimeMs) {
         quotas.controllerMutation.throttle(request, controllerThrottleTimeMs, requestChannel.sendResponse)
@@ -137,7 +153,7 @@ class ApisUtils(val requestChannel: RequestChannel,
       }
     }
 
-    requestChannel.sendResponse(request, Some(createResponse(maxThrottleTimeMs)), onComplete)
+    requestChannel.sendResponse(request, Some(createResponse(maxThrottleTimeMs)), None)
   }
 
   def sendResponseExemptThrottle(request: RequestChannel.Request,
@@ -164,17 +180,5 @@ class ApisUtils(val requestChannel: RequestChannel,
   def sendNoOpResponseExemptThrottle(request: RequestChannel.Request): Unit = {
     quotas.request.maybeRecordExempt(request)
     requestChannel.sendResponse(request, None, None)
-  }
-
-  def sendForwardedResponse(
-    request: RequestChannel.Request,
-    response: AbstractResponse
-  ): Unit = {
-    // For forwarded requests, we take the throttle time from the broker that
-    // the request was forwarded to
-    val throttleTimeMs = response.throttleTimeMs()
-    quotas.request.throttle(request, throttleTimeMs, requestChannel.sendResponse)
-
-    requestChannel.sendResponse(request, Some(response), None)
   }
 }
