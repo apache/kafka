@@ -385,7 +385,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       new WriteTxnMarkersResponse(pidErrorMap)
     }
     synchronized {
-      txnMarkerChannelManager.generateRequests().foreach { requestAndHandler =>
+      txnMarkerChannelManager.generateRequests()._1.foreach { requestAndHandler =>
         val request = requestAndHandler.request.asInstanceOf[WriteTxnMarkersRequest.Builder].build()
         val response = createResponse(request)
         requestAndHandler.handler.onComplete(new ClientResponse(new RequestHeader(ApiKeys.PRODUCE, 0, "client", 1),

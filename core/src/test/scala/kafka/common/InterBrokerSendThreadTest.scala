@@ -39,7 +39,7 @@ class InterBrokerSendThreadTest {
   def shouldNotSendAnythingWhenNoRequests(): Unit = {
     val sendThread = new InterBrokerSendThread("name", networkClient, time) {
       override val requestTimeoutMs: Int = InterBrokerSendThreadTest.this.requestTimeoutMs
-      override def generateRequests() = mutable.Iterable.empty
+      override def generateRequests() = (mutable.Iterable.empty, Long.MaxValue)
     }
 
     // poll is always called but there should be no further invocations on NetworkClient
@@ -61,7 +61,7 @@ class InterBrokerSendThreadTest {
     val handler = RequestAndCompletionHandler(node, request, completionHandler)
     val sendThread = new InterBrokerSendThread("name", networkClient, time) {
       override val requestTimeoutMs: Int = InterBrokerSendThreadTest.this.requestTimeoutMs
-      override def generateRequests() = List[RequestAndCompletionHandler](handler)
+      override def generateRequests() = (List[RequestAndCompletionHandler](handler), Long.MaxValue)
     }
 
     val clientRequest = new ClientRequest("dest", request, 0, "1", 0, true, requestTimeoutMs, handler.handler)
@@ -98,7 +98,7 @@ class InterBrokerSendThreadTest {
     val requestAndCompletionHandler = RequestAndCompletionHandler(node, request, completionHandler)
     val sendThread = new InterBrokerSendThread("name", networkClient, time) {
       override val requestTimeoutMs: Int = InterBrokerSendThreadTest.this.requestTimeoutMs
-      override def generateRequests() = List[RequestAndCompletionHandler](requestAndCompletionHandler)
+      override def generateRequests() = (List[RequestAndCompletionHandler](requestAndCompletionHandler), Long.MaxValue)
     }
 
     val clientRequest = new ClientRequest("dest", request, 0, "1", 0, true, requestTimeoutMs, requestAndCompletionHandler.handler)
@@ -142,7 +142,7 @@ class InterBrokerSendThreadTest {
     val handler = RequestAndCompletionHandler(node, request, completionHandler)
     val sendThread = new InterBrokerSendThread("name", networkClient, time) {
       override val requestTimeoutMs: Int = InterBrokerSendThreadTest.this.requestTimeoutMs
-      override def generateRequests() = List[RequestAndCompletionHandler](handler)
+      override def generateRequests() = (List[RequestAndCompletionHandler](handler), Long.MaxValue)
     }
 
     val clientRequest = new ClientRequest("dest",

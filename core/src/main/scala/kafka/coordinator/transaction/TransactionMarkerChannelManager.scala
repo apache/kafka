@@ -154,7 +154,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
   newGauge("UnknownDestinationQueueSize", () => markersQueueForUnknownBroker.totalNumMarkers)
   newGauge("LogAppendRetryQueueSize", () => txnLogAppendRetryQueue.size)
 
-  override def generateRequests() = drainQueuedTransactionMarkers()
+  override def generateRequests() = (drainQueuedTransactionMarkers(), Long.MaxValue)
 
   override def shutdown(): Unit = {
     super.shutdown()

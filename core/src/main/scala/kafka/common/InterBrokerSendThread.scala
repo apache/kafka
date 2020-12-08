@@ -38,7 +38,7 @@ abstract class InterBrokerSendThread(name: String,
                                      isInterruptible: Boolean = true)
   extends ShutdownableThread(name, isInterruptible) {
 
-  def generateRequests(): Iterable[RequestAndCompletionHandler]
+  def generateRequests(): (Iterable[RequestAndCompletionHandler], Long)
   def requestTimeoutMs: Int
   private val unsentRequests = new UnsentRequests
 
@@ -54,7 +54,8 @@ abstract class InterBrokerSendThread(name: String,
   override def doWork(): Unit = {
     var now = time.milliseconds()
 
-    generateRequests().foreach { request =>
+    val (requests, maxPollTimeoutMs) = generateRequests()
+    requests.foreach { request =>
       val completionHandler = request.handler
       unsentRequests.put(request.destination,
         networkClient.newClientRequest(
@@ -67,7 +68,7 @@ abstract class InterBrokerSendThread(name: String,
     }
 
     try {
-      val timeout = sendRequests(now)
+      val timeout = sendRequests(now, maxPollTimeoutMs)
       networkClient.poll(timeout, now)
       now = time.milliseconds()
       checkDisconnects(now)
@@ -85,8 +86,8 @@ abstract class InterBrokerSendThread(name: String,
     }
   }
 
-  private def sendRequests(now: Long): Long = {
-    var pollTimeout = Long.MaxValue
+  private def sendRequests(now: Long, maxPollTimeoutMs: Long): Long = {
+    var pollTimeout = maxPollTimeoutMs
     for (node <- unsentRequests.nodes.asScala) {
       val requestIterator = unsentRequests.requestIterator(node)
       while (requestIterator.hasNext) {
