@@ -2178,18 +2178,4 @@ class ReplicaManagerTest {
       replicaManager.shutdown(false)
     }
   }
-
-  def testAlterIsr(): Unit = {
-    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), propsModifier = props => {
-      props.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, "2.7-IV2")
-    })
-    replicaManager.startup()
-
-
-    // We should bypass isrChangeSet if running in AlterIsr mode
-    alterIsrManager match {
-      case zkIsr: ZkIsrManager => fail("Expected instance of DefaultAlterIsrManager")
-      case _ =>
-    }
-  }
 }
