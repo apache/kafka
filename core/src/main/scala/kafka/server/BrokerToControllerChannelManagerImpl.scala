@@ -35,8 +35,15 @@ import scala.jdk.CollectionConverters._
 
 trait BrokerToControllerChannelManager {
 
-  // The retry deadline will only be checked after receiving a response. This means that in the worst case,
-  // the total timeout would be twice of the configured timeout.
+  /**
+   * Send request to the controller.
+   *
+   * @param request         The request to be sent.
+   * @param callback        Request completion callback.
+   * @param retryDeadlineMs The retry deadline which will only be checked after receiving a response.
+   *                        This means that in the worst case, the total timeout would be twice of
+   *                        the configured timeout.
+   */
   def sendRequest(request: AbstractRequest.Builder[_ <: AbstractRequest],
                   callback: ControllerRequestCompletionHandler,
                   retryDeadlineMs: Long): Unit
@@ -140,7 +147,7 @@ abstract class ControllerRequestCompletionHandler extends RequestCompletionHandl
 
   /**
    * Fire when the request transmission time passes the caller defined deadline on the channel queue.
-   * This is different from the original request's timeout.
+   * It covers the total waiting time including retries which might be the result of individual request timeout.
    */
   def onTimeout(): Unit
 }
