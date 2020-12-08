@@ -19,7 +19,6 @@ package kafka.server
 import kafka.utils.CoreUtils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.config._
-import org.apache.kafka.common.errors.InvalidRequestException
 import org.junit.Test
 
 class DynamicConfigTest extends ZooKeeperTestHarness {
@@ -53,12 +52,12 @@ class DynamicConfigTest extends ZooKeeperTestHarness {
     adminZkClient.changeIpConfig("1.2.3.4", propsWith(DynamicConfig.Ip.IpConnectionRateOverrideProp, "-1"))
   }
 
-  @Test(expected = classOf[InvalidRequestException])
+  @Test(expected = classOf[IllegalArgumentException])
   def shouldFailIpConfigsWithInvalidIpv4Entity(): Unit = {
     adminZkClient.changeIpConfig("1,1.1.1", propsWith(DynamicConfig.Ip.IpConnectionRateOverrideProp, "2"));
   }
 
-  @Test(expected = classOf[InvalidRequestException])
+  @Test(expected = classOf[IllegalArgumentException])
   def shouldFailIpConfigsWithBadHost(): Unit = {
     adminZkClient.changeIpConfig("ip", propsWith(DynamicConfig.Ip.IpConnectionRateOverrideProp, "2"));
   }
