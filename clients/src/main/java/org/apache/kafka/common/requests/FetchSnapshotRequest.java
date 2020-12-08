@@ -24,7 +24,7 @@ import org.apache.kafka.common.message.FetchSnapshotRequestData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.protocol.Message;
 
 final public class FetchSnapshotRequest extends AbstractRequest {
     public final FetchSnapshotRequestData data;
@@ -35,14 +35,14 @@ final public class FetchSnapshotRequest extends AbstractRequest {
     }
 
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
-    }
-
-    @Override
     public FetchSnapshotResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         // TODO: we need to handle throttleTimeMs
         return new FetchSnapshotResponse(new FetchSnapshotResponseData().setErrorCode(Errors.forException(e).code()));
+    }
+
+    @Override
+    protected Message data() {
+        return data;
     }
 
     public static FetchSnapshotRequestData singleton(

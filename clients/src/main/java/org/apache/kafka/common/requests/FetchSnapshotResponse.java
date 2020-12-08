@@ -23,19 +23,17 @@ import java.util.Optional;
 import java.util.function.UnaryOperator;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.protocol.Message;
 
 final public class FetchSnapshotResponse extends AbstractResponse {
     public final FetchSnapshotResponseData data;
 
     public FetchSnapshotResponse(FetchSnapshotResponseData data) {
-        this.data = data;
-    }
+        super(ApiKeys.FETCH_SNAPSHOT);
 
-    @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
+        this.data = data;
     }
 
     @Override
@@ -55,6 +53,16 @@ final public class FetchSnapshotResponse extends AbstractResponse {
         }
 
         return errors;
+    }
+
+    @Override
+    public int throttleTimeMs() {
+        return data.throttleTimeMs();
+    }
+
+    @Override
+    protected Message data() {
+        return data;
     }
 
     public static FetchSnapshotResponseData withTopError(Errors error) {
