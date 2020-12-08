@@ -26,9 +26,25 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import scala.collection.mutable
 
+/**
+ * @param checkIntervalMs How often to check for ISR
+ * @param maxDelayMs  Maximum time that an ISR change may be delayed before sending the notification
+ * @param lingerMs  Maximum time to await additional changes before sending the notification
+ */
+case class IsrChangePropagationConfig(checkIntervalMs: Long, maxDelayMs: Long, lingerMs: Long)
+
+object ZkIsrManager {
+  // This field is mutable to allow overriding change notification behavior in test cases
+  @volatile var DefaultIsrPropagationConfig: IsrChangePropagationConfig = IsrChangePropagationConfig(
+    checkIntervalMs = 2500,
+    lingerMs = 5000,
+    maxDelayMs = 60000,
+  )
+}
+
 class ZkIsrManager(scheduler: Scheduler, time: Time, zkClient: KafkaZkClient) extends AlterIsrManager with Logging {
 
-  private val isrChangeNotificationConfig = ReplicaManager.DefaultIsrPropagationConfig
+  private val isrChangeNotificationConfig = ZkIsrManager.DefaultIsrPropagationConfig
   // Visible for testing
   private[server] val isrChangeSet: mutable.Set[TopicPartition] = new mutable.HashSet[TopicPartition]()
   private val lastIsrChangeMs = new AtomicLong(time.milliseconds())

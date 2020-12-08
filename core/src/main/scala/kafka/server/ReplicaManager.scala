@@ -165,26 +165,8 @@ object HostedPartition {
   final object Offline extends HostedPartition
 }
 
-case class IsrChangePropagationConfig(
-  // How often to check for ISR
-  checkIntervalMs: Long,
-
-  // Maximum time that an ISR change may be delayed before sending the notification
-  maxDelayMs: Long,
-
-  // Maximum time to await additional changes before sending the notification
-  lingerMs: Long
-)
-
 object ReplicaManager {
   val HighWatermarkFilename = "replication-offset-checkpoint"
-
-  // This field is mutable to allow overriding change notification behavior in test cases
-  @volatile var DefaultIsrPropagationConfig: IsrChangePropagationConfig = IsrChangePropagationConfig(
-    checkIntervalMs = 2500,
-    lingerMs = 5000,
-    maxDelayMs = 60000,
-  )
 }
 
 class ReplicaManager(val config: KafkaConfig,
