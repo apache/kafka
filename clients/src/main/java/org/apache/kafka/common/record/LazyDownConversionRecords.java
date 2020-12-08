@@ -77,8 +77,8 @@ public class LazyDownConversionRecords implements BaseRecords {
     }
 
     @Override
-    public LazyDownConversionRecordsSend toSend(String destination) {
-        return new LazyDownConversionRecordsSend(destination, this);
+    public LazyDownConversionRecordsSend toSend() {
+        return new LazyDownConversionRecordsSend(this);
     }
 
     public TopicPartition topicPartition() {

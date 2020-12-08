@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
@@ -159,12 +160,9 @@ public final class MessageUtil {
     }
 
     public static byte[] duplicate(byte[] array) {
-        if (array == null) {
+        if (array == null)
             return null;
-        }
-        byte[] newArray = new byte[array.length];
-        System.arraycopy(array, 0, newArray, 0, array.length);
-        return newArray;
+        return Arrays.copyOf(array, array.length);
     }
 
     /**
@@ -182,19 +180,27 @@ public final class MessageUtil {
         }
     }
 
-    public static ByteBuffer toByteBuffer(final short version, final Message message) {
+    public static ByteBuffer toByteBuffer(final Message message, final short version) {
         ObjectSerializationCache cache = new ObjectSerializationCache();
-        int size = message.size(cache, version);
-        ByteBuffer bytes = ByteBuffer.allocate(2 + size);
-        ByteBufferAccessor accessor = new ByteBufferAccessor(bytes);
-        accessor.writeShort(version);
-        message.write(accessor, cache, version);
+        int messageSize = message.size(cache, version);
+        ByteBufferAccessor bytes = new ByteBufferAccessor(ByteBuffer.allocate(messageSize));
+        message.write(bytes, cache, version);
         bytes.flip();
-        return bytes;
+        return bytes.buffer();
     }
 
-    public static byte[] toBytes(final short version, final Message message) {
-        ByteBuffer buffer = toByteBuffer(version, message);
+    public static ByteBuffer toVersionPrefixedByteBuffer(final short version, final Message message) {
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+        int messageSize = message.size(cache, version);
+        ByteBufferAccessor bytes = new ByteBufferAccessor(ByteBuffer.allocate(messageSize + 2));
+        bytes.writeShort(version);
+        message.write(bytes, cache, version);
+        bytes.flip();
+        return bytes.buffer();
+    }
+
+    public static byte[] toVersionPrefixedBytes(final short version, final Message message) {
+        ByteBuffer buffer = toVersionPrefixedByteBuffer(version, message);
         // take the inner array directly if it is full with data
         if (buffer.hasArray() &&
                 buffer.arrayOffset() == 0 &&

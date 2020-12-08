@@ -14,18 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package org.apache.kafka.common.protocol;
+package org.apache.kafka.common.network;
 
 import java.nio.ByteBuffer;
 
-public final class MessageTestUtil {
-    public static ByteBuffer messageToByteBuffer(Message message, short version) {
-        ObjectSerializationCache cache = new ObjectSerializationCache();
-        int size = message.size(cache, version);
-        ByteBuffer bytes = ByteBuffer.allocate(size);
-        message.write(new ByteBufferAccessor(bytes), cache, version);
-        bytes.rewind();
-        return bytes;
+/**
+ * A size delimited Send that consists of a 4 byte network-ordered size N followed by N bytes of content.
+ */
+public class SizeDelimitedSend extends ByteBufferSend {
+
+    public SizeDelimitedSend(ByteBuffer buffer) {
+        super(sizeBuffer(buffer.remaining()), buffer);
+    }
+
+    private static ByteBuffer sizeBuffer(int size) {
+        ByteBuffer sizeBuffer = ByteBuffer.allocate(4);
+        sizeBuffer.putInt(0, size);
+        return sizeBuffer;
     }
 }

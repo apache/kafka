@@ -59,7 +59,7 @@ public class DescribeAclsRequestTest {
     @Test
     public void shouldRoundTripLiteralV0() {
         final DescribeAclsRequest original = new DescribeAclsRequest.Builder(LITERAL_FILTER).build(V0);
-        final DescribeAclsRequest result = DescribeAclsRequest.parse(original.serializeBody(), V0);
+        final DescribeAclsRequest result = DescribeAclsRequest.parse(original.serialize(), V0);
 
         assertRequestEquals(original, result);
     }
@@ -74,28 +74,28 @@ public class DescribeAclsRequestTest {
                 PatternType.LITERAL),
                 ANY_FILTER.entryFilter())).build(V0);
 
-        final DescribeAclsRequest result = DescribeAclsRequest.parse(original.serializeBody(), V0);
+        final DescribeAclsRequest result = DescribeAclsRequest.parse(original.serialize(), V0);
         assertRequestEquals(expected, result);
     }
 
     @Test
     public void shouldRoundTripLiteralV1() {
         final DescribeAclsRequest original = new DescribeAclsRequest.Builder(LITERAL_FILTER).build(V1);
-        final DescribeAclsRequest result = DescribeAclsRequest.parse(original.serializeBody(), V1);
+        final DescribeAclsRequest result = DescribeAclsRequest.parse(original.serialize(), V1);
         assertRequestEquals(original, result);
     }
 
     @Test
     public void shouldRoundTripPrefixedV1() {
         final DescribeAclsRequest original = new DescribeAclsRequest.Builder(PREFIXED_FILTER).build(V1);
-        final DescribeAclsRequest result = DescribeAclsRequest.parse(original.serializeBody(), V1);
+        final DescribeAclsRequest result = DescribeAclsRequest.parse(original.serialize(), V1);
         assertRequestEquals(original, result);
     }
 
     @Test
     public void shouldRoundTripAnyV1() {
         final DescribeAclsRequest original = new DescribeAclsRequest.Builder(ANY_FILTER).build(V1);
-        final DescribeAclsRequest result = DescribeAclsRequest.parse(original.serializeBody(), V1);
+        final DescribeAclsRequest result = DescribeAclsRequest.parse(original.serialize(), V1);
         assertRequestEquals(original, result);
     }
 

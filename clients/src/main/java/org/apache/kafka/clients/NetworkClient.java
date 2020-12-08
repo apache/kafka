@@ -26,6 +26,7 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.ChannelState;
+import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.network.Send;
@@ -519,7 +520,7 @@ public class NetworkClient implements KafkaClient {
             log.debug("Sending {} request with header {} and timeout {} to node {}: {}",
                 clientRequest.apiKey(), header, clientRequest.requestTimeoutMs(), destination, request);
         }
-        Send send = request.toSend(destination, header);
+        Send send = request.toSend(header);
         InFlightRequest inFlightRequest = new InFlightRequest(
                 clientRequest,
                 header,
@@ -528,7 +529,7 @@ public class NetworkClient implements KafkaClient {
                 send,
                 now);
         this.inFlightRequests.add(inFlightRequest);
-        selector.send(send);
+        selector.send(new NetworkSend(clientRequest.destination(), send));
     }
 
     /**
@@ -831,10 +832,10 @@ public class NetworkClient implements KafkaClient {
      */
     private void handleCompletedSends(List<ClientResponse> responses, long now) {
         // if no response is expected then when the send is completed, return it
-        for (Send send : this.selector.completedSends()) {
-            InFlightRequest request = this.inFlightRequests.lastSent(send.destination());
+        for (NetworkSend send : this.selector.completedSends()) {
+            InFlightRequest request = this.inFlightRequests.lastSent(send.destinationId());
             if (!request.expectResponse) {
-                this.inFlightRequests.completeLastSent(send.destination());
+                this.inFlightRequests.completeLastSent(send.destinationId());
                 responses.add(request.completed(null, now));
             }
         }

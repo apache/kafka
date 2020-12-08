@@ -33,6 +33,14 @@ public class MessageSizeAccumulator {
     }
 
     /**
+     * Size excluding zero copy fields as specified by {@link #zeroCopySize}. This is typically the size of the byte
+     * buffer used to serialize messages.
+     */
+    public int sizeExcludingZeroCopy() {
+        return totalSize - zeroCopySize;
+    }
+
+    /**
      * Get the total "zero-copy" size of the message. This is the summed
      * total of all fields which have either have a type of 'bytes' with
      * 'zeroCopy' enabled, or a type of 'records'

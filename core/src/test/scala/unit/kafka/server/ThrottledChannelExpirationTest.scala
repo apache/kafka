@@ -22,7 +22,6 @@ import java.net.InetAddress
 import java.util
 import java.util.Collections
 import java.util.concurrent.{DelayQueue, TimeUnit}
-
 import kafka.network.RequestChannel
 import kafka.network.RequestChannel.{EndThrottlingResponse, Response, StartThrottlingResponse}
 import org.apache.kafka.common.TopicPartition
@@ -31,7 +30,7 @@ import org.apache.kafka.common.metrics.MetricConfig
 import org.apache.kafka.common.network.ClientInformation
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
-import org.apache.kafka.common.requests.{AbstractRequest, FetchRequest, RequestContext, RequestHeader}
+import org.apache.kafka.common.requests.{AbstractRequest, FetchRequest, RequestContext, RequestHeader, RequestTestUtils}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.MockTime
 import org.easymock.EasyMock
@@ -50,7 +49,8 @@ class ThrottledChannelExpirationTest {
                                                  listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)): (T, RequestChannel.Request) = {
 
     val request = builder.build()
-    val buffer = request.serializeWithHeader(new RequestHeader(builder.apiKey, request.version, "", 0))
+    val buffer = RequestTestUtils.serializeRequestWithHeader(
+      new RequestHeader(builder.apiKey, request.version, "", 0), request)
     val requestChannelMetrics: RequestChannel.Metrics = EasyMock.createNiceMock(classOf[RequestChannel.Metrics])
 
     // read the header from the buffer first so that the body can be read next from the Request constructor

@@ -25,11 +25,6 @@ import java.nio.channels.GatheringByteChannel;
 public interface Send {
 
     /**
-     * The id for the destination of this send
-     */
-    String destination();
-
-    /**
      * Is this send complete?
      */
     boolean completed();
