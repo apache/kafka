@@ -1047,8 +1047,29 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                     logger.info("Truncated to offset {} from Fetch response from leader {}",
                         truncationOffset, quorum.leaderIdOrNil());
                 });
-            } else if (partitionResponse.snapshotId().epoch() >= 0 && partitionResponse.snapshotId().endOffset() >= 0) {
+            } else if (partitionResponse.snapshotId().epoch() >= 0 ||
+                       partitionResponse.snapshotId().endOffset() >= 0) {
                 // The leader is asking us to fetch a snapshot
+
+                if (partitionResponse.snapshotId().epoch() < 0) {
+                    throw new KafkaException(
+                        String.format(
+                            "The leader sent a snapshot id with a valid end offset %s but with an invalid epoch %s",
+                            partitionResponse.snapshotId().endOffset(),
+                            partitionResponse.snapshotId().epoch()
+                        )
+                    );
+                }
+                if (partitionResponse.snapshotId().endOffset() < 0) {
+                    throw new KafkaException(
+                        String.format(
+                            "The leader sent a snapshot id with a valid epoch %s but with an invalid end offset %s",
+                            partitionResponse.snapshotId().epoch(),
+                            partitionResponse.snapshotId().endOffset()
+                        )
+                    );
+                }
+
                 OffsetAndEpoch snapshotId = new OffsetAndEpoch(
                     partitionResponse.snapshotId().endOffset(),
                     partitionResponse.snapshotId().epoch()
