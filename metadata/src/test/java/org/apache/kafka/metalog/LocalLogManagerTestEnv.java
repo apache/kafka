@@ -53,7 +53,10 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
         LocalLogManagerTestEnv testEnv = new LocalLogManagerTestEnv(numManagers);
         try {
             for (LocalLogManager logManager : testEnv.logManagers) {
-                logManager.initialize(new MockMetaLogManagerListener());
+                logManager.initialize();
+            }
+            for (LocalLogManager logManager : testEnv.logManagers) {
+                logManager.register(new MockMetaLogManagerListener());
             }
         } catch (Exception e) {
             testEnv.close();

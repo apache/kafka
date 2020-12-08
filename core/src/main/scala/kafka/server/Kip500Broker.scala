@@ -258,7 +258,8 @@ class Kip500Broker(val config: KafkaConfig,
       // TODO: Replace w/ the raft log implementation
       metaLogManager = new LocalLogManager(new LogContext(),
         config.controllerId, config.metadataLogDir, "log-manager")
-      metaLogManager.initialize(brokerMetadataListener)
+      metaLogManager.initialize()
+      metaLogManager.register(brokerMetadataListener)
 
       brokerLifecycleManager = new BrokerLifecycleManagerImpl(brokerMetadataListener, config,
         alterIsrChannelManager, kafkaScheduler, time, config.brokerId, config.rack.getOrElse(""),

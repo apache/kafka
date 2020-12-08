@@ -112,7 +112,7 @@ public final class QuorumController implements Controller {
             return this;
         }
 
-        public QuorumController build() {
+        public QuorumController build() throws Exception {
             if (logManager == null) {
                 throw new RuntimeException("You must set a metadata log manager.");
             }
@@ -560,7 +560,7 @@ public final class QuorumController implements Controller {
                              Time time,
                              Map<ConfigResource.Type, ConfigDef> configDefs,
                              MetaLogManager logManager,
-                             Map<String, VersionRange> supportedFeatures) {
+                             Map<String, VersionRange> supportedFeatures) throws Exception {
         this.log = logContext.logger(QuorumController.class);
         this.nodeId = nodeId;
         this.queue = queue;
@@ -581,7 +581,8 @@ public final class QuorumController implements Controller {
         this.curClaimEpoch = -1L;
         this.lastCommittedOffset = -1L;
         this.writeOffset = -1L;
-        this.logManager.initialize(metaLogListener);
+        this.logManager.initialize();
+        this.logManager.register(metaLogListener);
     }
 
     @Override

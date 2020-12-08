@@ -34,6 +34,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.metalog.MockMetaLogManagerListener.COMMIT;
 import static org.apache.kafka.metalog.MockMetaLogManagerListener.LAST_COMMITTED_OFFSET;
@@ -160,7 +161,7 @@ public class LocalLogManagerTest {
                 LocalLogManager logManager) throws InterruptedException {
         TestUtils.retryOnExceptionWithTimeout(3, 20000, () -> {
             MockMetaLogManagerListener listener =
-                (MockMetaLogManagerListener) logManager.listener();
+                (MockMetaLogManagerListener) logManager.listeners().get(0);
             long highestOffset = -1;
             for (String event : listener.serializedEvents()) {
                 if (event.startsWith(LAST_COMMITTED_OFFSET)) {
@@ -198,10 +199,11 @@ public class LocalLogManagerTest {
             for (LocalLogManager logManager : env.logManagers()) {
                 waitForLastCommittedOffset(2, logManager);
             }
+            List<MockMetaLogManagerListener> listeners = env.logManagers().stream().
+                map(m -> (MockMetaLogManagerListener) m.listeners().get(0)).
+                collect(Collectors.toList());
             env.close();
-            for (LocalLogManager logManager : env.logManagers()) {
-                MockMetaLogManagerListener listener =
-                    (MockMetaLogManagerListener) logManager.listener();
+            for (MockMetaLogManagerListener listener : listeners) {
                 List<String> events = listener.serializedEvents();
                 assertEquals(SHUTDOWN, events.get(events.size() - 1));
                 int foundIndex = 0;

@@ -270,7 +270,8 @@ class BrokerMetadataListenerTest {
       eventQueueTimeoutMs = 50)
     val localLogManager = new LocalLogManager(new LogContext("log-manager-broker-test"), 1,
       logdir.getAbsolutePath, "log-manager")
-    localLogManager.initialize(listener)
+    localLogManager.initialize()
+    localLogManager.register(listener)
 
     // Invoke dummy APIs
     val apisInvoked = mutable.ListBuffer[ApiMessageAndVersion]()

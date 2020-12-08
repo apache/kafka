@@ -35,7 +35,7 @@ public class QuorumControllerTestEnv implements AutoCloseable {
 
     public QuorumControllerTestEnv(LocalLogManagerTestEnv logEnv,
                                    Consumer<QuorumController.Builder> builderConsumer)
-                                   throws InterruptedException {
+                                   throws Exception {
         int numControllers = logEnv.logManagers().size();
         this.controllers = new ArrayList<>(numControllers);
         try {

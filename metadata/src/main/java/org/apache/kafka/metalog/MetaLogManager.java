@@ -26,13 +26,19 @@ import java.util.List;
  */
 public interface MetaLogManager extends AutoCloseable {
     /**
-     * Register the listener, and start this meta log manager.
+     * Start this meta log manager.
      * The manager must be ready to accept incoming calls after this function returns.
      * It is an error to initialize a MetaLogManager more than once.
+     */
+    void initialize() throws Exception;
+
+    /**
+     * Register the listener.  The manager must be initialized already.
+     * The listener must be ready to accept incoming calls immediately.
      *
      * @param listener      The listener to register.
      */
-    void initialize(MetaLogListener listener);
+    void register(MetaLogListener listener) throws Exception;
 
     /**
      * Schedule a write to the log.

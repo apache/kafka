@@ -22,7 +22,6 @@ import org.apache.kafka.common.protocol.ApiMessageAndVersion;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.MetadataParser;
 import org.slf4j.Logger;
@@ -38,12 +37,15 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.WatchService;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Collectors;
 
 import static java.nio.file.StandardOpenOption.CREATE;
 import static java.nio.file.StandardOpenOption.WRITE;
@@ -69,25 +71,6 @@ import static java.nio.file.StandardOpenOption.READ;
  * The WatcherThread watches the log directory and wakes up the ScribeThread when bytes
  * are added to the log file.  The ScribeThread will pause this thread when the scribe
  * is active, since its services are not needed at that point.
- *
- *                            |                |
- *                            | beginShutdown  | renounce
- *                            V                V
- *                 +-------------------------------------------+
- *                 |         LeadershipClaimerThread           |
- *                 +-------------------------------------------+
- *                      | blocking | blocking |
- *                      | claim    | renounce | beginShutdown
- *                      V          V          V
- *                +-------------------------------------------+      +----------+
- * maybeWrite --} |               ScribeThread                | ---} | Listener |
- *                +-------------------------------------------+      +----------+
- *                      |        |          ^       |
- *                      | pause  | unpause  | wake  | beginShutdown
- *                      V        V          |       V
- *                +-------------------------------------------+
- *                |               WatcherThread               |
- *                +-------------------------------------------+
  */
 public final class LocalLogManager implements MetaLogManager {
     /**
@@ -100,7 +83,7 @@ public final class LocalLogManager implements MetaLogManager {
      */
     private static final ByteBuffer EMPTY = ByteBuffer.allocate(0);
 
-    private static final int DEFAULT_LOG_CHECK_INTERVAL_MS = 10;
+    private static final int DEFAULT_LOG_CHECK_INTERVAL_MS = 2;
 
     /**
      * A lock plus the number of threads waiting on it.  Waiters must be updated while
@@ -190,11 +173,10 @@ public final class LocalLogManager implements MetaLogManager {
         private final String leaderPath;
         private final FileChannel leaderChannel;
         private volatile boolean shuttingDown = false;
-        private volatile long claimedEpoch = -1;
+        private volatile WriterThread curWriterThread = null;
 
         LeadershipClaimerThread(Path leaderPath,
-                                FileChannel leaderChannel,
-                                String threadNamePrefix) {
+                                FileChannel leaderChannel) {
             super(threadNamePrefix + "LeadershipClaimerThread", true);
             this.leaderPath = leaderPath.toString();
             this.leaderChannel = leaderChannel;
@@ -207,8 +189,14 @@ public final class LocalLogManager implements MetaLogManager {
                 while (!shuttingDown) {
                     LOCK_REGISTRY.lock(leaderPath, leaderChannel,
                         () -> {
+                            WriterThread thread = null;
                             try {
-                                claimedEpoch = scribeThread.blockingClaim();
+                                log.debug("starting WriterThread for {}", logPath);
+                                thread = new WriterThread(
+                                    FileChannel.open(logPath, CREATE, WRITE, READ));
+                                thread.writeClaim();
+                                thread.start();
+                                curWriterThread = thread;
                                 while (!shuttingDown) {
                                     synchronized (this) {
                                         this.wait();
@@ -221,14 +209,20 @@ public final class LocalLogManager implements MetaLogManager {
                                 // Once we catch the exception, we're done with it and
                                 // can discard it.
                                 log.trace("LeadershipClaimerThread received " +
-                                    "InterruptedException.");
+                                    e.getClass().getSimpleName());
+                            } catch (Exception e) {
+                                log.warn("LeadershipClaimerThread received unexpected " +
+                                    e.getClass().getSimpleName(), e);
                             } finally {
-                                try {
-                                    scribeThread.blockingRenounce();
-                                } catch (InterruptedException e) {
-                                    Thread.currentThread().interrupt();
+                                if (thread != null) {
+                                    thread.shutdown();
+                                    try {
+                                        thread.join();
+                                    } catch (InterruptedException e) {
+                                        Thread.currentThread().interrupt();
+                                    }
                                 }
-                                claimedEpoch = -1;
+                                curWriterThread = null;
                             }
                         });
                 }
@@ -237,22 +231,23 @@ public final class LocalLogManager implements MetaLogManager {
                 log.error("exiting LeadershipClaimer with error", e);
             } finally {
                 Utils.closeQuietly(leaderChannel, leaderPath);
-                scribeThread.beginShutdown();
             }
         }
 
         void renounce(long epoch) {
-            long curClaimedEpoch = claimedEpoch;
-            while (epoch > curClaimedEpoch) {
+            while (true) {
+                WriterThread writerThread = curWriterThread;
+                if (writerThread != null &&  writerThread.leader().epoch() >= epoch) {
+                    break;
+                }
                 try {
                     Thread.sleep(1);
                 } catch (InterruptedException e) {
                     break;
                 }
-                curClaimedEpoch = claimedEpoch;
             }
             log.info("Interrupting LeadershipClaimerThread in order to " +
-                "renounce epoch {}", curClaimedEpoch);
+                "renounce epoch {}", epoch);
             this.interrupt();
         }
 
@@ -260,212 +255,325 @@ public final class LocalLogManager implements MetaLogManager {
             shuttingDown = true;
             this.interrupt();
         }
-    }
 
-    enum ScribeState {
-        FOLLOWER,
-        BECOMING_LEADER,
-        LEADER;
+        public long scheduleWrite(long epoch, List<ApiMessageAndVersion> batch) {
+            WriterThread writerThread = curWriterThread;
+            if (writerThread != null) {
+                return writerThread.scheduleWrite(epoch, batch);
+            } else {
+                return Long.MAX_VALUE;
+            }
+        }
     }
 
     private final static int FRAME_LENGTH = 4;
 
-    class ScribeThread extends KafkaThread {
+    class WriterThread extends KafkaThread {
+        private final FileChannel logChannel;
+        private final Scribe scribe;
+        private final List<List<ApiMessageAndVersion>> toWrite;
         private final ReentrantLock lock = new ReentrantLock();
         private final Condition wakeCond = lock.newCondition();
-        private final Condition claimedCond = lock.newCondition();
-        private final Condition renouncedCond = lock.newCondition();
-        private final Condition maxAllowedOffsetCond = lock.newCondition();
-        private long maxAllowedOffset = Long.MAX_VALUE;
-        private final FileChannel logChannel;
-        private MetaLogListener listener = null;
-        private final long logCheckIntervalMs;
+        private MetaLogLeader leader = null;
         private boolean shuttingDown = false;
-        private boolean shouldLead = false;
-        private long nextLogCheckMs = 0;
-        private List<ApiMessageAndVersion> incomingWrites = null;
-        private ScribeState state = ScribeState.FOLLOWER;
-        private MetaLogLeader prevLeader = new MetaLogLeader(-1, -1);
-        private MetaLogLeader leader = prevLeader;
-        private long nextReadOffset = 0;
         private long nextWriteOffset = 0;
-        private long fileOffset = 0;
-        private final ByteBuffer frameBuffer = ByteBuffer.allocate(FRAME_LENGTH);
-        private ByteBuffer dataBuffer = EMPTY;
 
-        ScribeThread(FileChannel logChannel,
-                     long logCheckIntervalMs,
-                     String threadNamePrefix) {
-            super(threadNamePrefix + "LeadershipClaimerThread", true);
+        WriterThread(FileChannel logChannel) {
+            super(threadNamePrefix + "WriterThread", true);
             this.logChannel = logChannel;
-            this.logCheckIntervalMs = logCheckIntervalMs;
+            this.scribe = new Scribe(logChannel);
+            this.toWrite = new ArrayList<>();
+        }
+
+        public void writeClaim() throws IOException {
+            MetaLogLeader prevLeader = new MetaLogLeader(-1, -1);
+            while (true) {
+                ReadResult result = scribe.read();
+                if (!result.batch.isEmpty()) {
+                    nextWriteOffset = scribe.nextOffset;
+                }
+                if (result.newLeader != null) {
+                    prevLeader = result.newLeader;
+                }
+                if (result.partialRead) {
+                    throw new RuntimeException("Partial write found in log.");
+                }
+                if (result.eof) {
+                    break;
+                }
+            }
+            lock.lock();
+            try {
+                leader = new MetaLogLeader(nodeId, prevLeader.epoch() + 1);
+            } finally {
+                lock.unlock();
+            }
+            scribe.writeClaim(leader);
+            log.debug("wrote claim {}", leader);
         }
 
         @Override
         public void run() {
             try {
-                log.debug("starting ScribeThread");
-                MetaLogLeader claim = null;
-                List<ApiMessageAndVersion> toWrite = new ArrayList<>();
                 while (true) {
-                    ScribeState curState;
+                    List<ApiMessageAndVersion> nextBatch = Collections.emptyList();
                     lock.lock();
-                    long curMaxAllowedOffset = Long.MAX_VALUE;
                     try {
                         if (shuttingDown) {
                             break;
                         }
-                        if (shouldLead) {
-                            // If shouldLead is true then we need to become a leader.
-                            // This requires reading all the previous log entries, and
-                            // writing out our claim to the log file.
-                            if (state != ScribeState.LEADER) {
-                                // If claim is non-null here, that means we are ready
-                                // to become a leader.  Otherwise, we have to enter
-                                // the BECOMING_LEADER state.
-                                if (claim != null) {
-                                    state = ScribeState.LEADER;
-                                    incomingWrites = null;
-                                    leader = claim;
-                                    nextWriteOffset = nextReadOffset;
-                                    claimedCond.signalAll();
-                                } else {
-                                    state = ScribeState.BECOMING_LEADER;
-                                }
+                        while (true) {
+                            if (shuttingDown) {
+                                break;
                             }
-                        } else if (state != ScribeState.FOLLOWER) {
-                            // If shouldLead is false, and we're not already a follower,
-                            // become one immediately.
-                            state = ScribeState.FOLLOWER;
-                            nextLogCheckMs = 0;
-                            renouncedCond.signalAll();
-                        }
-                        while (nextReadOffset > maxAllowedOffset) {
-                            maxAllowedOffsetCond.await();
-                        }
-                        if (leader.equals(prevLeader)) {
-                            switch (state) {
-                                case FOLLOWER:
-                                    // Followers wait until they get woken up, or until a
-                                    // few milliseconds have elapsed, before rechecking
-                                    // the log.
-                                    long now = SystemTime.SYSTEM.milliseconds();
-                                    if (nextLogCheckMs > now) {
-                                        wakeCond.await(nextLogCheckMs - now,
-                                            TimeUnit.MILLISECONDS);
-                                        now = SystemTime.SYSTEM.milliseconds();
-                                    }
-                                    nextLogCheckMs = now + logCheckIntervalMs;
-                                    break;
-                                case BECOMING_LEADER:
-                                    // No need to wait here.
-                                    break;
-                                case LEADER:
-                                    // Wait to be signalled before waking up.  The signal
-                                    // may indicate that we should stop being the leader,
-                                    // or that there are new writes to be done.
-                                    if (toWrite.isEmpty() && incomingWrites == null && shouldLead) {
-                                        wakeCond.await();
-                                    }
-                                    if (incomingWrites != null) {
-                                        toWrite.addAll(incomingWrites);
-                                        incomingWrites = null;
-                                    }
-                                    break;
+                            if (!toWrite.isEmpty()) {
+                                nextBatch = toWrite.remove(0);
+                                break;
                             }
+                            wakeCond.await();
                         }
-                        claim = null;
-                        curMaxAllowedOffset = maxAllowedOffset;
                     } finally {
-                        curState = state;
                         lock.unlock();
                     }
-                    if (log.isTraceEnabled()) {
-                        log.trace("ScribeThread state = {}, prevLeader = {}, " +
-                                "leader = {}", curState, prevLeader, leader);
-                    }
-                    if (!prevLeader.equals(leader)) {
-                        if (prevLeader.nodeId() == nodeId && leader.nodeId() != nodeId) {
-                            listener.handleRenounce(prevLeader.epoch());
-                        }
-                        listener.handleNewLeader(leader);
-                        prevLeader = leader;
-                    }
-                    switch (curState) {
-                        case FOLLOWER:
-                        case BECOMING_LEADER:
-                            // Read until we get EOF or a partial read.
-                            int result;
-                            List<ApiMessage> messages = new ArrayList<>();
-                            do {
-                                if (nextReadOffset > curMaxAllowedOffset) {
-                                    log.trace("ScribeThread can't read any more " +
-                                        "messages because we are at the maximum allowed " +
-                                        "offset.");
-                                    result = -1;
-                                    break;
-                                }
-                                result = readNextMessage(messages);
-                                if (log.isTraceEnabled()) {
-                                    if (result < 0) {
-                                        log.trace("ScribeThread read partial message.");
-                                    } else if (result == 0) {
-                                        log.trace("ScribeThread hit EOF while reading.");
-                                    } else {
-                                        log.trace("ScribeThread read message of length " +
-                                            result);
-                                    }
-                                }
-                            } while (result > 0);
-                            if (!messages.isEmpty()) {
-                                listener.handleCommits(nextReadOffset - 1, messages);
-                            }
-                            if (curState == ScribeState.BECOMING_LEADER && result == 0) {
-                                // If the result is 0, that means we did not read a partial
-                                // record at the end.  So we should be ready to write our
-                                // claim to the file.
-                                claim = new MetaLogLeader(nodeId, leader.epoch() + 1);
-                                writeClaim(claim);
-                                log.debug("ScribeThread wrote claim {}", claim);
-                            }
-                            break;
-                        case LEADER:
-                            // Write out the messages that we were given earlier.
-                            if (!toWrite.isEmpty()) {
-                                if (nextReadOffset + toWrite.size() > curMaxAllowedOffset) {
-                                    log.trace("ScribeThread can't write the next batch " +
-                                        "of messages because the next offset would exceed " +
-                                        "{}.", curMaxAllowedOffset);
-                                } else {
-                                    List<ApiMessage> written = new ArrayList<>();
-                                    for (ApiMessageAndVersion message : toWrite) {
-                                        writeMessage(message);
-                                        written.add(message.message());
-                                        nextWriteOffset++;
-                                        nextReadOffset++;
-                                    }
-                                    toWrite.clear();
-                                    listener.handleCommits(nextReadOffset - 1, written);
-                                }
-                            }
-                            break;
+                    for (ApiMessageAndVersion messageAndVersion : nextBatch) {
+                        scribe.writeMessage(messageAndVersion);
                     }
                 }
-                log.debug("shutting down ScribeThread.");
-                listener.beginShutdown();
             } catch (Throwable t) {
-                log.error("exiting ScribeThread with unexpected error", t);
+                log.error("exiting WriterThread with unexpected error", t);
             } finally {
                 Utils.closeQuietly(logChannel, "logChannel");
-                lock.lock();
-                try {
-                    renouncedCond.signal();
-                } finally {
-                    lock.unlock();
-                }
-                watcherThread.beginShutdown();
-                listener.beginShutdown();
             }
+        }
+
+        private MetaLogLeader leader() {
+            lock.lock();
+            try {
+                return leader;
+            } finally {
+                lock.unlock();
+            }
+        }
+
+        public void shutdown() {
+            lock.lock();
+            try {
+                this.shuttingDown = true;
+                wakeCond.signal();
+            } finally {
+                lock.unlock();
+            }
+        }
+
+        public long scheduleWrite(long epoch, List<ApiMessageAndVersion> batch) {
+            lock.lock();
+            try {
+                if (leader.epoch() != epoch) {
+                    return Long.MAX_VALUE;
+                }
+                long returnOffset = nextWriteOffset;
+                toWrite.add(batch);
+                nextWriteOffset += batch.size();
+                wakeCond.signal();
+                return returnOffset;
+            } finally {
+                lock.unlock();
+            }
+        }
+    }
+
+    class ReaderThread extends KafkaThread {
+        private final FileChannel logChannel;
+        private final MetaLogListener listener;
+        private MetaLogLeader leader = new MetaLogLeader(-1, -1);
+        private final Scribe scribe;
+        private final ReentrantLock lock = new ReentrantLock();
+        private final Condition wakeCond = lock.newCondition();
+        private boolean shuttingDown = false;
+
+        ReaderThread(FileChannel logChannel,
+                     MetaLogListener listener) {
+            super(threadNamePrefix + "ReaderThread(" + listener.toString() + ")", true);
+            this.logChannel = logChannel;
+            this.listener = listener;
+            this.scribe = new Scribe(logChannel);
+        }
+
+        @Override
+        public void run() {
+            try {
+                log.debug("starting ReaderThread");
+                while (true) {
+                    ReadResult result;
+                    if (scribe.nextOffset >= maxReadOffset) {
+                        result = new ReadResult(Collections.emptyList(), false, true, null);
+                    } else {
+                        result = scribe.read();
+                        log.info("WATERMELON: read {}", result);
+                        if (!result.batch.isEmpty()) {
+                            listener.handleCommits(scribe.nextOffset - 1, result.batch);
+                        }
+                        if (result.newLeader != null) {
+                            if (leader.nodeId() == nodeId) {
+                                listener.handleRenounce(leader.epoch());
+                            }
+                            listener.handleNewLeader(result.newLeader);
+                            leader = result.newLeader;
+                            managerLock.lock();
+                            try {
+                                if (leader.epoch() > latestLeader.epoch()) {
+                                    latestLeader = leader;
+                                }
+                            } finally {
+                                managerLock.unlock();
+                            }
+                        }
+                    }
+                    lock.lock();
+                    try {
+                        if (shuttingDown) {
+                            break;
+                        }
+                        if (result.eof || result.partialRead) {
+                            wakeCond.await(logCheckIntervalMs, TimeUnit.MILLISECONDS);
+                        }
+                        if (shuttingDown) {
+                            break;
+                        }
+                    } finally {
+                        lock.unlock();
+                    }
+                }
+            } catch (Throwable t) {
+                log.error("exiting ReaderThread with unexpected error", t);
+            } finally {
+                Utils.closeQuietly(logChannel, "logChannel");
+            }
+            listener.beginShutdown();
+        }
+
+        public void shutdown() {
+            lock.lock();
+            try {
+                this.shuttingDown = true;
+                wakeCond.signal();
+            } finally {
+                lock.unlock();
+            }
+        }
+
+        public void wake() {
+            lock.lock();
+            try {
+                wakeCond.signal();
+            } finally {
+                lock.unlock();
+            }
+        }
+    }
+
+    static class ReadResult {
+        private final List<ApiMessage> batch;
+        private final boolean eof;
+        private final boolean partialRead;
+        private final MetaLogLeader newLeader;
+
+        public ReadResult(List<ApiMessage> batch,
+                          boolean eof,
+                          boolean partialRead,
+                          MetaLogLeader newLeader) {
+            this.batch = batch;
+            this.eof = eof;
+            this.partialRead = partialRead;
+            this.newLeader = newLeader;
+        }
+
+        public List<ApiMessage> batch() {
+            return batch;
+        }
+
+        public boolean eof() {
+            return eof;
+        }
+
+        public boolean partialRead() {
+            return partialRead;
+        }
+
+        public MetaLogLeader newLeader() {
+            return newLeader;
+        }
+
+        @Override
+        public String toString() {
+            return "ReadResult(batch=" + batch.stream().map(m -> m.toString()).
+                collect(Collectors.joining(", ")) +
+                ", eof=" + eof + ", partialRead=" + partialRead +
+                ", newLeader=" + newLeader + ")";
+        }
+    }
+
+    private class Scribe {
+        private final FileChannel channel;
+        private long nextOffset = 0;
+        private long fileOffset = 0;
+        private final ByteBuffer frameBuffer;
+        private ByteBuffer dataBuffer;
+        private ReadResult next = null;
+
+        Scribe(FileChannel channel) {
+            this.channel = channel;
+            this.frameBuffer = ByteBuffer.allocate(FRAME_LENGTH);
+            this.dataBuffer = EMPTY;
+        }
+
+        public ReadResult read() throws IOException {
+            List<ApiMessage> batch = new ArrayList<>();
+            while (true) {
+                if (next == null) {
+                    next = readOne();
+                }
+                if (next.eof || next.partialRead || next.newLeader != null) {
+                   if (!batch.isEmpty())  {
+                       return new ReadResult(batch, false, false, null);
+                   }
+                   ReadResult result = next;
+                   next = null;
+                   return result;
+                }
+                batch.addAll(next.batch);
+                next = null;
+                if (batch.size() > 100) {
+                    // TODO: preserve batching
+                    return new ReadResult(batch, false, false, null);
+                }
+            }
+        }
+
+        private ReadResult readOne() throws IOException {
+            frameBuffer.clear();
+            int frameLength = readData(frameBuffer, fileOffset);
+            log.info("WATERMELON5: read frameLength " + frameLength);
+            if (frameLength <= 0) {
+                return new ReadResult(Collections.emptyList(), true, frameLength < 0, null);
+            }
+            int frameInt = frameBuffer.getInt();
+            int length = frameInt < 0 ? -frameInt : frameInt;
+            setupDataBuffer(length);
+            int dataLength = readData(dataBuffer, fileOffset + FRAME_LENGTH);
+            if (dataLength <= 0) {
+                return new ReadResult(Collections.emptyList(), true, true, null);
+            }
+            if (frameInt < 0) {
+                ReadResult result = new ReadResult(Collections.emptyList(), false, false,
+                    readLeader(dataBuffer));
+                fileOffset += FRAME_LENGTH + dataLength;
+                return result;
+            }
+            ApiMessage message = MetadataParser.read(dataBuffer);
+            nextOffset++;
+            fileOffset += FRAME_LENGTH + dataLength;
+            return new ReadResult(Collections.singletonList(message), false, false, null);
         }
 
         private void writeMessage(ApiMessageAndVersion messageAndVersion)
@@ -490,38 +598,6 @@ public final class LocalLogManager implements MetaLogManager {
         }
 
         /**
-         * Read a message from the log.  If it is a regular message, send it to the
-         * log listener.  If it is a leader epoch message, update the leader epoch.
-         *
-         * @return  A negative number if we got a partial message.
-         *          0 if we hit EOF.
-         *          A positive size of what we read, if we read a message.
-         */
-        private int readNextMessage(List<ApiMessage> messages) throws IOException {
-            frameBuffer.clear();
-            int frameLength = readData(frameBuffer, fileOffset);
-            if (frameLength <= 0) {
-                return frameLength;
-            }
-            int frameInt = frameBuffer.getInt();
-            int length = frameInt < 0 ? -frameInt : frameInt;
-            setupDataBuffer(length);
-            int dataLength = readData(dataBuffer, fileOffset + FRAME_LENGTH);
-            if (dataLength <= 0) {
-                return -FRAME_LENGTH + dataLength;
-            }
-            if (frameInt < 0) {
-                leader = readLeader(dataBuffer);
-            } else {
-                ApiMessage message = MetadataParser.read(dataBuffer);
-                messages.add(message);
-                nextReadOffset++;
-            }
-            fileOffset += FRAME_LENGTH + dataLength;
-            return FRAME_LENGTH + dataLength;
-        }
-
-        /**
          * Read data from the log into a provided buffer.
          *
          * @param buf           The buffer to read the data into.
@@ -534,7 +610,7 @@ public final class LocalLogManager implements MetaLogManager {
         private int readData(ByteBuffer buf, long curOffset) throws IOException {
             int numRead = 0;
             while (buf.hasRemaining()) {
-                int result = logChannel.read(buf, curOffset + buf.position());
+                int result = channel.read(buf, curOffset + buf.position());
                 if (result < 0) {
                     return -numRead;
                 }
@@ -589,108 +665,9 @@ public final class LocalLogManager implements MetaLogManager {
         private void writeBuffer(ByteBuffer buf) throws IOException {
             int size = buf.remaining();
             while (buf.hasRemaining()) {
-                logChannel.write(buf, fileOffset + buf.position());
+                channel.write(buf, fileOffset + buf.position());
             }
             fileOffset += size;
-        }
-
-        void beginShutdown() {
-            lock.lock();
-            try {
-                shuttingDown = true;
-                wakeCond.signal();
-            } finally {
-                lock.unlock();
-            }
-        }
-
-        long blockingClaim() throws InterruptedException {
-            lock.lock();
-            try {
-                if (log.isTraceEnabled()) {
-                    log.trace("ScribeThread setting shouldLead to true.");
-                }
-                shouldLead = true;
-                wakeCond.signal();
-                do {
-                    if (shuttingDown) throw new InterruptedException();
-                    claimedCond.await();
-                } while (state != ScribeState.LEADER);
-                return leader.epoch();
-            } finally {
-                lock.unlock();
-            }
-        }
-
-        void blockingRenounce() throws InterruptedException {
-            lock.lock();
-            try {
-                shouldLead = false;
-                wakeCond.signal();
-                while (state != ScribeState.FOLLOWER) {
-                    if (shuttingDown) throw new InterruptedException();
-                    renouncedCond.await();
-                }
-            } finally {
-                lock.unlock();
-            }
-        }
-
-        long scheduleWrite(long epoch, List<ApiMessageAndVersion> messages) {
-            lock.lock();
-            try {
-                if (shuttingDown || leader.nodeId() != nodeId || leader.epoch() != epoch) {
-                    return Long.MAX_VALUE;
-                }
-                if (incomingWrites == null) {
-                    incomingWrites = new ArrayList<>();
-                }
-                for (ApiMessageAndVersion message : messages) {
-                    incomingWrites.add(message);
-                }
-                long curWriteOffset = nextWriteOffset;
-                nextWriteOffset++;
-                wakeCond.signal();
-                return curWriteOffset;
-            } finally {
-                lock.unlock();
-            }
-        }
-
-        void wake() {
-            lock.lock();
-            try {
-                wakeCond.signal();
-            } finally {
-                lock.unlock();
-            }
-        }
-
-        private void setListener(MetaLogListener listener) {
-            if (this.listener != null) {
-                throw new RuntimeException("The listener was already set.");
-            }
-            this.listener = listener;
-        }
-
-        void setMaxAllowedOffset(long maxAllowedOffset) {
-            log.info("setting maximum allowed offset to {}.", maxAllowedOffset);
-            lock.lock();
-            try {
-                this.maxAllowedOffset = maxAllowedOffset;
-                maxAllowedOffsetCond.signal();
-            } finally {
-                lock.unlock();
-            }
-        }
-
-        MetaLogLeader leader() {
-            lock.lock();
-            try {
-                return leader;
-            } finally {
-                lock.unlock();
-            }
         }
     }
 
@@ -700,8 +677,7 @@ public final class LocalLogManager implements MetaLogManager {
         private volatile boolean shuttingDown = false;
 
         WatcherThread(Path basePath,
-                      WatchService watchService,
-                      String threadNamePrefix) {
+                      WatchService watchService) {
             super(threadNamePrefix + "WatcherThread", true);
             this.basePath = basePath;
             this.watchService = watchService;
@@ -714,7 +690,10 @@ public final class LocalLogManager implements MetaLogManager {
                 while (!shuttingDown) {
                     try {
                         watchService.take();
-                        scribeThread.wake();
+                        Iterator<ReaderThread> iter = readerThreads.iterator();
+                        while (iter.hasNext()) {
+                            iter.next().wake();
+                        }
                     } catch (InterruptedException e) {
                         log.trace("WatcherThread received InterruptedException.");
                     }
@@ -735,9 +714,17 @@ public final class LocalLogManager implements MetaLogManager {
 
     private final Logger log;
     private final int nodeId;
+    private final int logCheckIntervalMs;
+    private final String threadNamePrefix;
+    private final Path logPath;
     private final LeadershipClaimerThread leadershipClaimerThread;
-    private final ScribeThread scribeThread;
+    private final List<ReaderThread> readerThreads;
     private final WatcherThread watcherThread;
+    private final ReentrantLock managerLock = new ReentrantLock();
+    private boolean initialized = false;
+    private boolean shuttingDown = false;
+    private MetaLogLeader latestLeader = new MetaLogLeader(-1, -1);
+    private volatile long maxReadOffset = Long.MAX_VALUE;
 
     public LocalLogManager(LogContext logContext,
                            int nodeId,
@@ -757,20 +744,20 @@ public final class LocalLogManager implements MetaLogManager {
         this.log = logContext.logger(LocalLogManager.class);
         try {
             this.nodeId = nodeId;
+            this.logCheckIntervalMs = logCheckIntervalMs;
+            this.threadNamePrefix = threadNamePrefix;
             Path base = Paths.get(basePath);
             Files.createDirectories(base);
             Path realBase = base.toRealPath();
             Path leaderPath = realBase.resolve("leader");
             leaderChannel = FileChannel.open(leaderPath, CREATE, WRITE, READ);
-            Path logPath = realBase.resolve("log");
+            this.logPath = realBase.resolve("log");
             logChannel = FileChannel.open(logPath, CREATE, WRITE, READ);
             watchService = FileSystems.getDefault().newWatchService();
             this.leadershipClaimerThread =
-                new LeadershipClaimerThread(leaderPath, leaderChannel, threadNamePrefix);
-            this.scribeThread =
-                new ScribeThread(logChannel, logCheckIntervalMs, threadNamePrefix);
-            this.watcherThread =
-                new WatcherThread(realBase, watchService, threadNamePrefix);
+                new LeadershipClaimerThread(leaderPath, leaderChannel);
+            this.readerThreads = new ArrayList<>();
+            this.watcherThread = new WatcherThread(realBase, watchService);
         } catch (Throwable t) {
             log.error("Error creating LocalFileMetaLog", t);
             Utils.closeQuietly(leaderChannel, "leaderChannel");
@@ -780,16 +767,40 @@ public final class LocalLogManager implements MetaLogManager {
         }
     }
 
-    public void initialize(MetaLogListener listener) {
-        this.scribeThread.setListener(listener);
+    @Override
+    public void initialize() throws Exception {
+        managerLock.lock();
+        try {
+            if (initialized) {
+                return;
+            }
+            initialized = true;
+        } finally {
+            managerLock.unlock();
+        }
         this.leadershipClaimerThread.start();
-        this.scribeThread.start();
         this.watcherThread.start();
     }
 
     @Override
-    public long scheduleWrite(long epoch, List<ApiMessageAndVersion> messages) {
-        return scribeThread.scheduleWrite(epoch, messages);
+    public void register(MetaLogListener listener) throws Exception {
+        managerLock.lock();
+        try {
+            if (!initialized || shuttingDown) {
+                throw new RuntimeException("Invalid state");
+            }
+            ReaderThread thread = new ReaderThread(
+                FileChannel.open(logPath, CREATE, WRITE, READ), listener);
+            this.readerThreads.add(thread);
+            thread.start();
+        } finally {
+            managerLock.unlock();
+        }
+    }
+
+    @Override
+    public long scheduleWrite(long epoch, List<ApiMessageAndVersion> batch) {
+        return leadershipClaimerThread.scheduleWrite(epoch, batch);
     }
 
     @Override
@@ -800,11 +811,17 @@ public final class LocalLogManager implements MetaLogManager {
     @Override
     public void beginShutdown() {
         leadershipClaimerThread.beginShutdown();
+        watcherThread.beginShutdown();
     }
 
     @Override
     public MetaLogLeader leader() {
-        return scribeThread.leader();
+        managerLock.lock();
+        try {
+            return latestLeader;
+        } finally {
+            managerLock.unlock();
+        }
     }
 
     @Override
@@ -812,22 +829,46 @@ public final class LocalLogManager implements MetaLogManager {
         return nodeId;
     }
 
-    MetaLogListener listener() {
-        return scribeThread.listener;
-    }
-
     @Override
     public void close() throws InterruptedException {
+        List<ReaderThread> curReaderThreads = new ArrayList<>();
+        managerLock.lock();
+        try {
+            if (shuttingDown)
+                return;
+            shuttingDown = true;
+            curReaderThreads.addAll(readerThreads);
+            readerThreads.clear();
+        } finally {
+            managerLock.unlock();
+        }
         beginShutdown();
         leadershipClaimerThread.join();
-        scribeThread.join();
         watcherThread.join();
+        for (ReaderThread readerThread : curReaderThreads) {
+            readerThread.shutdown();
+        }
+        for (ReaderThread readerThread : curReaderThreads) {
+            readerThread.join();
+        }
         Utils.closeQuietly(leadershipClaimerThread.leaderChannel, "leaderChannel");
-        Utils.closeQuietly(scribeThread.logChannel, "logPath");
         Utils.closeQuietly(watcherThread.watchService, "watchService");
     }
 
-    public void setMaxAllowedOffset(long maxAllowedOffset) {
-        scribeThread.setMaxAllowedOffset(maxAllowedOffset);
+    public List<MetaLogListener> listeners() {
+        List<MetaLogListener> results = new ArrayList<>();
+        managerLock.lock();
+        try {
+            for (ReaderThread readerThread : readerThreads) {
+                results.add(readerThread.listener);
+            }
+        } finally {
+            managerLock.unlock();
+        }
+        return results;
+    }
+
+    public void setMaxReadOffset(long newMaxReadOffset) {
+        maxReadOffset = newMaxReadOffset;
     }
 }
