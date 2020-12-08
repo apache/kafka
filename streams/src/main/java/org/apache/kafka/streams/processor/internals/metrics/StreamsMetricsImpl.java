@@ -234,8 +234,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                           final Sensor... parents) {
         final String key = threadSensorPrefix(threadId);
         synchronized (threadLevelSensors) {
-            final String fullSensorName = key + SENSOR_NAME_DELIMITER + sensorName;
-            return getSensors(threadLevelSensors, fullSensorName, key, recordingLevel, parents);
+            return getSensors(threadLevelSensors, sensorName, key, recordingLevel, parents);
         }
     }
 
@@ -323,8 +322,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                         final Sensor... parents) {
         final String key = taskSensorPrefix(threadId, taskId);
         synchronized (taskLevelSensors) {
-            final String fullSensorName = key + SENSOR_NAME_DELIMITER + sensorName;
-            return getSensors(taskLevelSensors, fullSensorName, key, recordingLevel, parents);
+            return getSensors(taskLevelSensors, sensorName, key, recordingLevel, parents);
         }
     }
 
@@ -351,8 +349,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                   final Sensor... parents) {
         final String key = nodeSensorPrefix(threadId, taskId, processorNodeName);
         synchronized (nodeLevelSensors) {
-            final String fullSensorName = key + SENSOR_NAME_DELIMITER + sensorName;
-            return getSensors(nodeLevelSensors, fullSensorName, key, recordingLevel, parents);
+            return getSensors(nodeLevelSensors, sensorName, key, recordingLevel, parents);
         }
     }
 
@@ -381,8 +378,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                    final Sensor... parents) {
         final String key = cacheSensorPrefix(threadId, taskName, storeName);
         synchronized (cacheLevelSensors) {
-            final String fullSensorName = key + SENSOR_NAME_DELIMITER + sensorName;
-            return getSensors(cacheLevelSensors, fullSensorName, key, recordingLevel, parents);
+            return getSensors(cacheLevelSensors, sensorName, key, recordingLevel, parents);
         }
     }
 
@@ -421,7 +417,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                          final RecordingLevel recordingLevel,
                                          final Sensor... parents) {
         final String key = storeSensorPrefix(Thread.currentThread().getName(), taskId, storeName);
-        final String fullSensorName = key + SENSOR_NAME_DELIMITER + sensorName;
             // since the keys in the map storeLevelSensors contain the name of the current thread and threads only
             // access keys in which their name is contained, the value in the maps do not need to be thread safe
             // and we can use a LinkedList here.
@@ -429,7 +424,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             //  that contain its name. Similar is true for the other metric levels. Thread-level metrics need some
             //  special attention, since they are created before the thread is constructed. The creation of those
             //  metrics could be moved into the run() method of the thread.
-        return getSensors(storeLevelSensors, fullSensorName, key, recordingLevel, parents);
+        return getSensors(storeLevelSensors, sensorName, key, recordingLevel, parents);
     }
 
     public <T> void addStoreLevelMutableMetric(final String taskId,
@@ -905,11 +900,12 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         }
     }
 
-    public final Sensor getSensors(final Map<String, Deque<String>> sensors,
-                                   final String fullSensorName,
-                                   final String key,
-                                   final RecordingLevel recordingLevel,
-                                   final Sensor... parents) {
+    private Sensor getSensors(final Map<String, Deque<String>> sensors,
+                              final String sensorName,
+                              final String key,
+                              final RecordingLevel recordingLevel,
+                              final Sensor... parents) {
+        final String fullSensorName = key + SENSOR_NAME_DELIMITER + sensorName;
         final Sensor sensor = metrics.getSensor(fullSensorName);
         if (sensor == null) {
             sensors.computeIfAbsent(key, ignored -> new LinkedList<>()).push(fullSensorName);
