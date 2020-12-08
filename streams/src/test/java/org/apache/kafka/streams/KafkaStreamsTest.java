@@ -78,6 +78,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.Executors;
@@ -312,6 +313,9 @@ public class KafkaStreamsTest {
                 StreamThread.State.PARTITIONS_ASSIGNED);
             return null;
         }).anyTimes();
+        thread.resizeCache(EasyMock.anyLong());
+        EasyMock.expectLastCall().anyTimes();
+        EasyMock.expect(thread.getName()).andStubReturn("newThread");
         thread.shutdown();
         EasyMock.expectLastCall().andAnswer(() -> {
             supplier.consumer.close();
@@ -587,6 +591,46 @@ public class KafkaStreamsTest {
         Assert.assertEquals("subsequent close() calls should do nothing",
             closeCount, MockMetricsReporter.CLOSE_COUNT.get());
     }
+
+    @Test
+    public void shouldAddThreadWhenRunning() throws InterruptedException {
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
+        streams.start();
+        final int oldSize = streams.threads.size();
+        TestUtils.waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, 15L, "wait until running");
+        assertThat(streams.addStreamThread(), equalTo(Optional.of("newThread")));
+        assertThat(streams.threads.size(), equalTo(oldSize + 1));
+    }
+
+    @Test
+    public void shouldNotAddThreadWhenCreated() {
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
+        final int oldSize = streams.threads.size();
+        assertThat(streams.addStreamThread(), equalTo(Optional.empty()));
+        assertThat(streams.threads.size(), equalTo(oldSize));
+    }
+
+    @Test
+    public void shouldNotAddThreadWhenClosed() {
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
+        final int oldSize = streams.threads.size();
+        streams.close();
+        assertThat(streams.addStreamThread(), equalTo(Optional.empty()));
+        assertThat(streams.threads.size(), equalTo(oldSize));
+    }
+
+    @Test
+    public void shouldNotAddThreadWhenError() {
+        final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
+        final int oldSize = streams.threads.size();
+        streams.start();
+        streamThreadOne.shutdown();
+        streamThreadTwo.shutdown();
+        assertThat(streams.addStreamThread(), equalTo(Optional.empty()));
+        assertThat(streams.threads.size(), equalTo(oldSize));
+    }
+
 
     @Test
     public void testCannotStartOnceClosed() {

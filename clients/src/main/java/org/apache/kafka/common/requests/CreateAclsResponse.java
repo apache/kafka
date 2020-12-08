@@ -18,8 +18,8 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.CreateAclsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -29,16 +29,13 @@ public class CreateAclsResponse extends AbstractResponse {
     private final CreateAclsResponseData data;
 
     public CreateAclsResponse(CreateAclsResponseData data) {
+        super(ApiKeys.CREATE_ACLS);
         this.data = data;
     }
 
-    public CreateAclsResponse(Struct struct, short version) {
-        this.data = new CreateAclsResponseData(struct, version);
-    }
-
     @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
+    protected CreateAclsResponseData data() {
+        return data;
     }
 
     @Override
@@ -56,7 +53,7 @@ public class CreateAclsResponse extends AbstractResponse {
     }
 
     public static CreateAclsResponse parse(ByteBuffer buffer, short version) {
-        return new CreateAclsResponse(ApiKeys.CREATE_ACLS.responseSchema(version).read(buffer), version);
+        return new CreateAclsResponse(new CreateAclsResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

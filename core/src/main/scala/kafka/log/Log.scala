@@ -770,9 +770,7 @@ class Log(@volatile private var _dir: File,
             baseOffset = 0,
             config,
             time = time,
-            fileAlreadyExists = false,
-            initFileSize = this.initFileSize,
-            preallocate = false))
+            initFileSize = this.initFileSize))
        }
       0
     }
@@ -858,7 +856,6 @@ class Log(@volatile private var _dir: File,
         baseOffset = logStartOffset,
         config,
         time = time,
-        fileAlreadyExists = false,
         initFileSize = this.initFileSize,
         preallocate = config.preallocate))
     }
@@ -2124,7 +2121,6 @@ class Log(@volatile private var _dir: File,
           baseOffset = newOffset,
           config = config,
           time = time,
-          fileAlreadyExists = false,
           initFileSize = initFileSize,
           preallocate = config.preallocate))
         updateLogEndOffset(newOffset)

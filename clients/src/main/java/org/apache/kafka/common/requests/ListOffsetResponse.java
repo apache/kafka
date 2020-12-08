@@ -27,8 +27,8 @@ import org.apache.kafka.common.message.ListOffsetResponseData;
 import org.apache.kafka.common.message.ListOffsetResponseData.ListOffsetPartitionResponse;
 import org.apache.kafka.common.message.ListOffsetResponseData.ListOffsetTopicResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.RecordBatch;
 
 /**
@@ -55,11 +55,8 @@ public class ListOffsetResponse extends AbstractResponse {
     private final ListOffsetResponseData data;
 
     public ListOffsetResponse(ListOffsetResponseData data) {
+        super(ApiKeys.LIST_OFFSETS);
         this.data = data;
-    }
-
-    public ListOffsetResponse(Struct struct, short version) {
-        data = new ListOffsetResponseData(struct, version);
     }
 
     @Override
@@ -67,6 +64,7 @@ public class ListOffsetResponse extends AbstractResponse {
         return data.throttleTimeMs();
     }
 
+    @Override
     public ListOffsetResponseData data() {
         return data;
     }
@@ -87,12 +85,7 @@ public class ListOffsetResponse extends AbstractResponse {
     }
 
     public static ListOffsetResponse parse(ByteBuffer buffer, short version) {
-        return new ListOffsetResponse(ApiKeys.LIST_OFFSETS.parseResponse(version, buffer), version);
-    }
-
-    @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
+        return new ListOffsetResponse(new ListOffsetResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

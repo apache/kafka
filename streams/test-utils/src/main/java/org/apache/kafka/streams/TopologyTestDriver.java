@@ -99,6 +99,7 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
@@ -244,6 +245,16 @@ public class TopologyTestDriver implements Closeable {
 
     /**
      * Create a new test diver instance.
+     * Default test properties are used to initialize the driver instance
+     *
+     * @param topology the topology to be tested
+     */
+    public TopologyTestDriver(final Topology topology) {
+        this(topology, new Properties());
+    }
+
+    /**
+     * Create a new test diver instance.
      * Initialized the internally mocked wall-clock time with {@link System#currentTimeMillis() current system time}.
      *
      * @param topology the topology to be tested
@@ -253,6 +264,18 @@ public class TopologyTestDriver implements Closeable {
                               final Properties config) {
         this(topology, config, null);
     }
+
+    /**
+     * Create a new test diver instance.
+     *
+     * @param topology the topology to be tested
+     * @param initialWallClockTimeMs the initial value of internally mocked wall-clock time
+     */
+    public TopologyTestDriver(final Topology topology,
+                              final Instant initialWallClockTimeMs) {
+        this(topology, new Properties(), initialWallClockTimeMs);
+    }
+
 
     /**
      * Create a new test diver instance.
@@ -299,7 +322,8 @@ public class TopologyTestDriver implements Closeable {
         final Properties configCopy = new Properties();
         configCopy.putAll(config);
         configCopy.putIfAbsent(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-bootstrap-host:0");
-        configCopy.putIfAbsent(StreamsConfig.APPLICATION_ID_CONFIG, "dummy-topology-test-driver-app-id");
+        // provide randomized dummy app-id if it's not specified
+        configCopy.putIfAbsent(StreamsConfig.APPLICATION_ID_CONFIG,  "dummy-topology-test-driver-app-id-" + ThreadLocalRandom.current().nextInt());
         final StreamsConfig streamsConfig = new ClientUtils.QuietStreamsConfig(configCopy);
         logIfTaskIdleEnabled(streamsConfig);
 

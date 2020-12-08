@@ -353,7 +353,7 @@ class KafkaApisTest {
       configResource -> new AlterConfigsRequest.Config(
         Seq(new AlterConfigsRequest.ConfigEntry("foo", "bar")).asJava))
     val alterConfigsRequest = new AlterConfigsRequest.Builder(configs.asJava, false).build(requestHeader.apiVersion)
-    val serializedRequestData = alterConfigsRequest.serialize(requestHeader)
+    val serializedRequestData = alterConfigsRequest.serializeWithHeader(requestHeader)
 
     val capturedResponse = expectNoThrottling()
 
@@ -376,7 +376,7 @@ class KafkaApisTest {
       clientId, 0)
     val leaveGroupRequest = new LeaveGroupRequest.Builder("group",
       Collections.singletonList(new MemberIdentity())).build(requestHeader.apiVersion)
-    val serializedRequestData = leaveGroupRequest.serialize(requestHeader)
+    val serializedRequestData = leaveGroupRequest.serializeWithHeader(requestHeader)
 
     val capturedResponse = expectNoThrottling()
 
@@ -1359,7 +1359,7 @@ class KafkaApisTest {
 
     val markersResponse = readResponse(writeTxnMarkersRequest, capturedResponse)
       .asInstanceOf[WriteTxnMarkersResponse]
-    assertEquals(expectedErrors, markersResponse.errors(1))
+    assertEquals(expectedErrors, markersResponse.errorsByProducerId.get(1L))
   }
 
   @Test
@@ -1378,7 +1378,7 @@ class KafkaApisTest {
 
     val markersResponse = readResponse(writeTxnMarkersRequest, capturedResponse)
       .asInstanceOf[WriteTxnMarkersResponse]
-    assertEquals(expectedErrors, markersResponse.errors(1))
+    assertEquals(expectedErrors, markersResponse.errorsByProducerId.get(1L))
   }
 
   @Test
@@ -1413,7 +1413,7 @@ class KafkaApisTest {
 
     val markersResponse = readResponse(writeTxnMarkersRequest, capturedResponse)
       .asInstanceOf[WriteTxnMarkersResponse]
-    assertEquals(expectedErrors, markersResponse.errors(1))
+    assertEquals(expectedErrors, markersResponse.errorsByProducerId.get(1L))
     EasyMock.verify(replicaManager)
   }
 
@@ -1550,7 +1550,7 @@ class KafkaApisTest {
 
     val markersResponse = readResponse(writeTxnMarkersRequest, capturedResponse)
       .asInstanceOf[WriteTxnMarkersResponse]
-    assertEquals(expectedErrors, markersResponse.errors(1))
+    assertEquals(expectedErrors, markersResponse.errorsByProducerId.get(1L))
     EasyMock.verify(replicaManager)
   }
 
@@ -2827,8 +2827,8 @@ class KafkaApisTest {
   ): RequestChannel.Request = {
     val listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
 
-    val requestHeader = new RequestHeader(request.api, request.version, clientId, 0)
-    val requestBuffer = request.serialize(requestHeader)
+    val requestHeader = new RequestHeader(request.apiKey, request.version, clientId, 0)
+    val requestBuffer = request.serializeWithHeader(requestHeader)
     val requestContext = new RequestContext(requestHeader, "1", InetAddress.getLocalHost,
       KafkaPrincipal.ANONYMOUS, listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY,
       fromPrivilegedListener)
@@ -2838,7 +2838,7 @@ class KafkaApisTest {
       requestBuffer,
       new Array[Byte](0),
       InetAddress.getLocalHost.getAddress
-    ).build().serialize(envelopeHeader)
+    ).build().serializeWithHeader(envelopeHeader)
     val envelopeContext = new RequestContext(envelopeHeader, "1", InetAddress.getLocalHost,
       KafkaPrincipal.ANONYMOUS, listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY,
       fromPrivilegedListener, principalSerde.asJava)
@@ -2869,8 +2869,8 @@ class KafkaApisTest {
                            listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
                            fromPrivilegedListener: Boolean = false,
                            requestHeader: Option[RequestHeader] = None): RequestChannel.Request = {
-    val buffer = request.serialize(requestHeader.getOrElse(
-      new RequestHeader(request.api, request.version, clientId, 0)))
+    val buffer = request.serializeWithHeader(requestHeader.getOrElse(
+      new RequestHeader(request.apiKey, request.version, clientId, 0)))
 
     // read the header from the buffer first so that the body can be read next from the Request constructor
     val header = RequestHeader.parse(buffer)
@@ -2882,7 +2882,7 @@ class KafkaApisTest {
   }
 
   private def readResponse(request: AbstractRequest, capturedResponse: Capture[RequestChannel.Response]) = {
-    val api = request.api
+    val api = request.apiKey
     val response = capturedResponse.getValue
     assertTrue(s"Unexpected response type: ${response.getClass}", response.isInstanceOf[SendResponse])
     val sendResponse = response.asInstanceOf[SendResponse]
@@ -2892,8 +2892,7 @@ class KafkaApisTest {
     channel.close()
     channel.buffer.getInt() // read the size
     ResponseHeader.parse(channel.buffer, api.responseHeaderVersion(request.version))
-    val struct = api.responseSchema(request.version).read(channel.buffer)
-    AbstractResponse.parseResponse(api, struct, request.version)
+    AbstractResponse.parseResponse(api, channel.buffer, request.version)
   }
 
   private def expectNoThrottling(): Capture[RequestChannel.Response] = {
