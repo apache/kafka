@@ -36,8 +36,11 @@ final public class FetchSnapshotRequest extends AbstractRequest {
 
     @Override
     public FetchSnapshotResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        // TODO: we need to handle throttleTimeMs
-        return new FetchSnapshotResponse(new FetchSnapshotResponseData().setErrorCode(Errors.forException(e).code()));
+        return new FetchSnapshotResponse(
+            new FetchSnapshotResponseData()
+                .setThrottleTimeMs(throttleTimeMs)
+                .setErrorCode(Errors.forException(e).code())
+        );
     }
 
     @Override
@@ -45,6 +48,15 @@ final public class FetchSnapshotRequest extends AbstractRequest {
         return data;
     }
 
+    /**
+     * Creates a FetchSnapshotRequestData with a single PartitionSnapshot for the topic partition.
+     *
+     * The partition index will already be populated when calling operator.
+     *
+     * @param topicPartition the topic partition to include
+     * @param operator unary operator responsible for populating all the appropriate fields
+     * @return the created fetch snapshot request data
+     */
     public static FetchSnapshotRequestData singleton(
         TopicPartition topicPartition,
         UnaryOperator<FetchSnapshotRequestData.PartitionSnapshot> operator
@@ -63,7 +75,13 @@ final public class FetchSnapshotRequest extends AbstractRequest {
             );
     }
 
-    // TODO: write documentation. This function assumes that topic partitions are unique in `data`
+    /**
+     * Finds the PartitionSnapshot for a given topic partition.
+     *
+     * @param data the fetch snapshot request data
+     * @param topicPartition the topic partition to find
+     * @return the request partition snapshot if found, otherwise an empty Optional
+     */
     public static Optional<FetchSnapshotRequestData.PartitionSnapshot> forTopicPartition(
         FetchSnapshotRequestData data,
         TopicPartition topicPartition

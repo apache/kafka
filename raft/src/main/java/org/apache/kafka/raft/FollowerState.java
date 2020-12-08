@@ -31,10 +31,12 @@ public class FollowerState implements EpochState {
     private final int epoch;
     private final int leaderId;
     private final Set<Integer> voters;
-    // TODO: Document that this timer is for both Fetch and FetchSnapshot
+    // Used for tracking the expiration of both the Fetch and FetchSnapshot requests
     private final Timer fetchTimer;
     private Optional<LogOffsetMetadata> highWatermark;
-    // TODO: Document what this field is doing
+    /* Used to track the currently fetching snapshot. When fetching snapshot regular
+     * Fetch request are paused
+     */
     private Optional<RawSnapshotWriter> fetchingSnapshot;
 
     public FollowerState(

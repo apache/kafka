@@ -1302,8 +1302,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             // Finished fetching the snapshot.
             snapshot.freeze();
             state.setFetchingSnapshot(Optional.empty());
-
-            // TODO: Create a Jira: We need to update the log start offset and the log end offset
         }
 
         state.resetFetchTimeout(currentTimeMs);
@@ -1669,7 +1667,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private FetchSnapshotRequestData buildFetchSnapshotRequest(OffsetAndEpoch snapshotId, long snapshotSize) {
-        // TODO: Create a Jira. Set the cluster id on the request if we have it.
         FetchSnapshotRequestData.SnapshotId requestSnapshotId = new FetchSnapshotRequestData.SnapshotId()
             .setEpoch(snapshotId.epoch)
             .setEndOffset(snapshotId.offset);

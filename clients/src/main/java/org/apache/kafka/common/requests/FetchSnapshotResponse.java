@@ -65,10 +65,25 @@ final public class FetchSnapshotResponse extends AbstractResponse {
         return data;
     }
 
+    /**
+     * Creates a FetchSnapshotResponseData with a top level error.
+     *
+     * @param error the top level error
+     * @return the created fetch snapshot response data
+     */
     public static FetchSnapshotResponseData withTopError(Errors error) {
         return new FetchSnapshotResponseData().setErrorCode(error.code());
     }
 
+    /**
+     * Creates a FetchSnapshotResponseData with a single PartitionSnapshot for the topic partition.
+     *
+     * The partition index will already by populated when calling operator.
+     *
+     * @param topicPartition the topic partition to include
+     * @param operator unary operator responsible for populating all of the appropriate fields
+     * @return the created fetch snapshot response data
+     */
     public static FetchSnapshotResponseData singleton(
         TopicPartition topicPartition,
         UnaryOperator<FetchSnapshotResponseData.PartitionSnapshot> operator
@@ -87,7 +102,13 @@ final public class FetchSnapshotResponse extends AbstractResponse {
             );
     }
 
-    // TODO: write documentation. This function assumes that topic partitions are unique in `data`
+    /**
+     * Finds the PartitionSnapshot for a given topic partition.
+     *
+     * @param data the fetch snapshot response data
+     * @param topicPartition the topic partition to find
+     * @return the response partition snapshot if found, otherwise an empty Optional
+     */
     public static Optional<FetchSnapshotResponseData.PartitionSnapshot> forTopicPartition(
         FetchSnapshotResponseData data,
         TopicPartition topicPartition
