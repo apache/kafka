@@ -34,8 +34,19 @@ import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
 trait BrokerToControllerChannelManager {
+
+  /**
+   * Send request to the controller.
+   *
+   * @param request         The request to be sent.
+   * @param callback        Request completion callback.
+   * @param retryDeadlineMs The retry deadline which will only be checked after receiving a response.
+   *                        This means that in the worst case, the total timeout would be twice of
+   *                        the configured timeout.
+   */
   def sendRequest(request: AbstractRequest.Builder[_ <: AbstractRequest],
-                  callback: RequestCompletionHandler): Unit
+                  callback: ControllerRequestCompletionHandler,
+                  retryDeadlineMs: Long): Unit
 
   def start(): Unit
 
@@ -125,15 +136,25 @@ class BrokerToControllerChannelManagerImpl(metadataCache: kafka.server.MetadataC
   }
 
   override def sendRequest(request: AbstractRequest.Builder[_ <: AbstractRequest],
-                           callback: RequestCompletionHandler): Unit = {
-    requestQueue.put(BrokerToControllerQueueItem(request, callback))
+                           callback: ControllerRequestCompletionHandler,
+                           retryDeadlineMs: Long): Unit = {
+    requestQueue.put(BrokerToControllerQueueItem(request, callback, retryDeadlineMs))
     requestThread.wakeup()
   }
+}
 
+abstract class ControllerRequestCompletionHandler extends RequestCompletionHandler {
+
+  /**
+   * Fire when the request transmission time passes the caller defined deadline on the channel queue.
+   * It covers the total waiting time including retries which might be the result of individual request timeout.
+   */
+  def onTimeout(): Unit
 }
 
 case class BrokerToControllerQueueItem(request: AbstractRequest.Builder[_ <: AbstractRequest],
-                                       callback: RequestCompletionHandler)
+                                       callback: ControllerRequestCompletionHandler,
+                                       deadlineMs: Long)
 
 class BrokerToControllerRequestThread(networkClient: KafkaClient,
                                       metadataUpdater: ManualMetadataUpdater,
@@ -165,7 +186,9 @@ class BrokerToControllerRequestThread(networkClient: KafkaClient,
   }
 
   private[server] def handleResponse(request: BrokerToControllerQueueItem)(response: ClientResponse): Unit = {
-    if (response.wasDisconnected()) {
+    if (hasTimedOut(request, response)) {
+      request.callback.onTimeout()
+    } else if (response.wasDisconnected()) {
       activeController = None
       requestQueue.putFirst(request)
     } else if (response.responseBody().errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
@@ -176,6 +199,10 @@ class BrokerToControllerRequestThread(networkClient: KafkaClient,
     } else {
       request.callback.onComplete(response)
     }
+  }
+
+  private def hasTimedOut(request: BrokerToControllerQueueItem, response: ClientResponse): Boolean = {
+    response.receivedTimeMs() > request.deadlineMs
   }
 
   private[server] def backoff(): Unit = pause(100, TimeUnit.MILLISECONDS)
