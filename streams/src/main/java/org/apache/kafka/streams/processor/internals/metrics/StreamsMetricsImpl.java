@@ -235,12 +235,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         final String key = threadSensorPrefix(threadId);
         synchronized (threadLevelSensors) {
             final String fullSensorName = key + SENSOR_NAME_DELIMITER + sensorName;
-            final Sensor sensor = metrics.getSensor(fullSensorName);
-            if (sensor == null) {
-                threadLevelSensors.computeIfAbsent(key, ignored -> new LinkedList<>()).push(fullSensorName);
-                return metrics.sensor(fullSensorName, recordingLevel, parents);
-            }
-            return sensor;
+            return getSensors(threadLevelSensors, fullSensorName, key, recordingLevel, parents);
         }
     }
 
@@ -329,12 +324,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         final String key = taskSensorPrefix(threadId, taskId);
         synchronized (taskLevelSensors) {
             final String fullSensorName = key + SENSOR_NAME_DELIMITER + sensorName;
-            final Sensor sensor = metrics.getSensor(fullSensorName);
-            if (sensor == null) {
-                taskLevelSensors.computeIfAbsent(key, ignored -> new LinkedList<>()).push(fullSensorName);
-                return metrics.sensor(fullSensorName, recordingLevel, parents);
-            }
-            return sensor;
+            return getSensors(taskLevelSensors, fullSensorName, key, recordingLevel, parents);
         }
     }
 
@@ -362,12 +352,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         final String key = nodeSensorPrefix(threadId, taskId, processorNodeName);
         synchronized (nodeLevelSensors) {
             final String fullSensorName = key + SENSOR_NAME_DELIMITER + sensorName;
-            final Sensor sensor = metrics.getSensor(fullSensorName);
-            if (sensor == null) {
-                nodeLevelSensors.computeIfAbsent(key, ignored -> new LinkedList<>()).push(fullSensorName);
-                return metrics.sensor(fullSensorName, recordingLevel, parents);
-            }
-            return sensor;
+            return getSensors(nodeLevelSensors, fullSensorName, key, recordingLevel, parents);
         }
     }
 
@@ -397,12 +382,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         final String key = cacheSensorPrefix(threadId, taskName, storeName);
         synchronized (cacheLevelSensors) {
             final String fullSensorName = key + SENSOR_NAME_DELIMITER + sensorName;
-            final Sensor sensor = metrics.getSensor(fullSensorName);
-            if (sensor == null) {
-                cacheLevelSensors.computeIfAbsent(key, ignored -> new LinkedList<>()).push(fullSensorName);
-                return metrics.sensor(fullSensorName, recordingLevel, parents);
-            }
-            return sensor;
+            return getSensors(cacheLevelSensors, fullSensorName, key, recordingLevel, parents);
         }
     }
 
@@ -442,8 +422,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                          final Sensor... parents) {
         final String key = storeSensorPrefix(Thread.currentThread().getName(), taskId, storeName);
         final String fullSensorName = key + SENSOR_NAME_DELIMITER + sensorName;
-        final Sensor sensor = metrics.getSensor(fullSensorName);
-        if (sensor == null) {
             // since the keys in the map storeLevelSensors contain the name of the current thread and threads only
             // access keys in which their name is contained, the value in the maps do not need to be thread safe
             // and we can use a LinkedList here.
@@ -451,10 +429,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             //  that contain its name. Similar is true for the other metric levels. Thread-level metrics need some
             //  special attention, since they are created before the thread is constructed. The creation of those
             //  metrics could be moved into the run() method of the thread.
-            storeLevelSensors.computeIfAbsent(key, ignored -> new LinkedList<>()).push(fullSensorName);
-            return metrics.sensor(fullSensorName, recordingLevel, parents);
-        }
-        return sensor;
+        return getSensors(storeLevelSensors, fullSensorName, key, recordingLevel, parents);
     }
 
     public <T> void addStoreLevelMutableMetric(final String taskId,
@@ -928,6 +903,19 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         } else {
             return actionToMeasure.get();
         }
+    }
+
+    public final Sensor getSensors(final Map<String, Deque<String>> sensors,
+                                   final String fullSensorName,
+                                   final String key,
+                                   final RecordingLevel recordingLevel,
+                                   final Sensor... parents) {
+        final Sensor sensor = metrics.getSensor(fullSensorName);
+        if (sensor == null) {
+            sensors.computeIfAbsent(key, ignored -> new LinkedList<>()).push(fullSensorName);
+            return metrics.sensor(fullSensorName, recordingLevel, parents);
+        }
+        return sensor;
     }
 
     /**
