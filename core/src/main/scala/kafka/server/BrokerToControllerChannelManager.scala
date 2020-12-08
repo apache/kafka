@@ -94,7 +94,7 @@ class BrokerToControllerChannelManager(controllerNodeProvider: ControllerNodePro
                                        managerName: String,
                                        threadNamePrefix: Option[String] = None) extends Logging {
   private val requestQueue = new LinkedBlockingDeque[BrokerToControllerQueueItem]
-  private val logContext = new LogContext(s"[broker-${config.brokerId}-to-controller] ")
+  private val logContext = new LogContext(s"[broker-${config.brokerId}-to-controller-$managerName] ")
   private val manualMetadataUpdater = new ManualMetadataUpdater()
   private val requestThread = newRequestThread
 
@@ -127,7 +127,7 @@ class BrokerToControllerChannelManager(controllerNodeProvider: ControllerNodePro
         Selector.NO_IDLE_TIMEOUT_MS,
         metrics,
         time,
-        "BrokerToControllerChannel",
+        s"${managerName}BrokerToControllerChannel",
         Map("BrokerId" -> config.brokerId.toString).asJava,
         false,
         channelBuilder,
