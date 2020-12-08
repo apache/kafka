@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import java.net.{InetAddress, UnknownHostException}
 import java.util.Properties
 
 import kafka.log.LogConfig
@@ -25,6 +26,8 @@ import org.apache.kafka.common.config.ConfigDef
 import org.apache.kafka.common.config.ConfigDef.Importance._
 import org.apache.kafka.common.config.ConfigDef.Range._
 import org.apache.kafka.common.config.ConfigDef.Type._
+import org.apache.kafka.common.errors.InvalidRequestException
+import org.apache.kafka.common.utils.Utils
 
 import scala.jdk.CollectionConverters._
 
@@ -141,6 +144,18 @@ object DynamicConfig {
     def names = ipConfigs.names
 
     def validate(props: Properties) = DynamicConfig.validate(ipConfigs, props, customPropsAllowed = false)
+
+    def validateIpOrHost(ip: String): Unit = {
+      if (ip != ConfigEntityName.Default) {
+        if (!Utils.validHostPattern(ip))
+          throw new InvalidRequestException(s"$ip is not a valid hostname")
+        try {
+          InetAddress.getByName(ip)
+        } catch {
+          case _ :UnknownHostException => throw new InvalidRequestException(s"$ip is not a valid IP or resolvable hostname")
+        }
+      }
+    }
   }
 
   private def validate(configDef: ConfigDef, props: Properties, customPropsAllowed: Boolean) = {

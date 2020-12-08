@@ -288,6 +288,14 @@ class ClientQuotasRequestTest extends BaseRequestTest {
   }
 
   @Test
+  def testAlterClientQuotasBadIp(): Unit = {
+    val invalidHostPatternEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.IP -> "abc-123").asJava)
+    val unresolvableHostEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.IP -> "ip").asJava)
+    assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(invalidHostPatternEntity, Map(RequestPercentageProp -> Some(12.34)), validateOnly = true))
+    assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(unresolvableHostEntity, Map(RequestPercentageProp -> Some(12.34)), validateOnly = true))
+  }
+
+  @Test
   def testDescribeClientQuotasInvalidFilterCombination(): Unit = {
     val ipFilterComponent = ClientQuotaFilterComponent.ofEntityType(ClientQuotaEntity.IP)
     val userFilterComponent = ClientQuotaFilterComponent.ofEntityType(ClientQuotaEntity.USER)

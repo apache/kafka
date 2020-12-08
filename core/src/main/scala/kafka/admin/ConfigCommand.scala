@@ -886,10 +886,7 @@ object ConfigCommand extends Config {
       }
 
       if (hasEntityName && entityTypeVals.contains(ConfigType.Ip)) {
-        Seq(entityName, ip).filter(options.has(_)).map(options.valueOf(_)).foreach { ipAddress =>
-          if (!Utils.validHostPattern(ipAddress))
-            throw new IllegalArgumentException(s"The entity name for ${entityTypeVals.head} must be a valid IP, but it is: $ipAddress")
-        }
+        Seq(entityName, ip).filter(options.has(_)).map(options.valueOf(_)).foreach(DynamicConfig.Ip.validateIpOrHost)
       }
 
       if (options.has(describeOpt) && entityTypeVals.contains(BrokerLoggerConfigType) && !hasEntityName)

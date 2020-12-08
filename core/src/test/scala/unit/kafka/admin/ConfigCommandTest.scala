@@ -28,7 +28,7 @@ import kafka.zk.{AdminZkClient, BrokerInfo, KafkaZkClient, ZooKeeperTestHarness}
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.config.{ConfigException, ConfigResource}
-import org.apache.kafka.common.errors.InvalidConfigurationException
+import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException}
 import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
@@ -392,11 +392,32 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     createOpts.checkArgs()
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test(expected = classOf[InvalidRequestException])
   def shouldFailIfInvalidHost(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
       "--entity-name", "A,B", "--entity-type", "ips", "--describe"))
     createOpts.checkArgs()
+  }
+
+  @Test(expected = classOf[InvalidRequestException])
+  def shouldFailIfInvalidHostUsingZookeeper(): Unit = {
+    val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
+      "--entity-name", "A,B", "--entity-type", "ips", "--describe"))
+    ConfigCommand.alterConfigWithZk(null, createOpts, new DummyAdminZkClient(zkClient))
+  }
+
+  @Test(expected = classOf[InvalidRequestException])
+  def shouldFailIfUnresolvableHost(): Unit = {
+    val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
+      "--entity-name", "admin", "--entity-type", "ips", "--describe"))
+    createOpts.checkArgs()
+  }
+
+  @Test(expected = classOf[InvalidRequestException])
+  def shouldFailIfUnresolvableHostUsingZookeeper(): Unit = {
+    val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
+      "--entity-name", "admin", "--entity-type", "ips", "--describe"))
+    ConfigCommand.alterConfigWithZk(null, createOpts, new DummyAdminZkClient(zkClient))
   }
 
   @Test
