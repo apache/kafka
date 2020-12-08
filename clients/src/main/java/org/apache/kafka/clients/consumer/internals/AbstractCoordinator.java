@@ -137,6 +137,7 @@ public abstract class AbstractCoordinator implements Closeable {
     private HeartbeatThread heartbeatThread = null;
     private RequestFuture<ByteBuffer> joinFuture = null;
     private RequestFuture<Void> findCoordinatorFuture = null;
+    private volatile RuntimeException fatalFindCoordinatorException = null;
     private Generation generation = Generation.NO_GENERATION;
     private long lastRebalanceStartMs = -1L;
     private long lastRebalanceEndMs = -1L;
@@ -235,6 +236,11 @@ public abstract class AbstractCoordinator implements Closeable {
             return true;
 
         do {
+            if (fatalFindCoordinatorException != null) {
+                final RuntimeException fatalException = fatalFindCoordinatorException;
+                fatalFindCoordinatorException = null;
+                throw fatalException;
+            }
             final RequestFuture<Void> future = lookupCoordinator();
             client.poll(future, timer);
 
@@ -250,7 +256,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     log.debug("Coordinator discovery failed, refreshing metadata", future.exception());
                     client.awaitMetadataUpdate(timer);
                 } else {
-                    log.info("FindCoordinator request hit fatal  exception", fatalException);
+                    log.info("FindCoordinator request hit fatal exception", fatalException);
                     fatalException = future.exception();
                 }
             } else if (coordinator != null && client.isUnavailable(coordinator)) {
@@ -854,7 +860,13 @@ public abstract class AbstractCoordinator implements Closeable {
 
         @Override
         public void onFailure(RuntimeException e, RequestFuture<Void> future) {
-            log.debug("FindCoordinator request failed", e);
+            log.debug("FindCoordinator request failed due to {}", e.getMessage());
+
+            if (!(e instanceof RetriableException)) {
+                // Remember the exception if fatal so we can ensure it gets thrown by the main thread
+                fatalFindCoordinatorException = e;
+            }
+
             super.onFailure(e, future);
         }
     }
@@ -1357,6 +1369,9 @@ public abstract class AbstractCoordinator implements Closeable {
 
                         if (coordinatorUnknown()) {
                             if (findCoordinatorFuture != null || lookupCoordinator().failed())
+                                if (findCoordinatorFuture != null && findCoordinatorFuture.failed()) {
+                                    clearFindCoordinatorFuture();
+                                }
                                 // the immediate future check ensures that we backoff properly in the case that no
                                 // brokers are available to connect to.
                                 AbstractCoordinator.this.wait(rebalanceConfig.retryBackoffMs);
