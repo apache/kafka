@@ -96,26 +96,25 @@ class AlterIsrManagerImpl(val controllerChannelManager: BrokerToControllerChanne
       }
     }
 
-    class AlterIsrResponseHandler extends ControllerRequestCompletionHandler {
-      override def onComplete(response: ClientResponse): Unit = {
-        try {
-          val body = response.responseBody().asInstanceOf[AlterIsrResponse]
-          handleAlterIsrResponse(body, message.brokerEpoch, inflightAlterIsrItems)
-        } finally {
-          clearInflightRequests()
-        }
-      }
-
-      override def onTimeout(): Unit = {
-        throw new IllegalStateException("Encountered unexpected timeout when sending AlterIsr to the controller")
-      }
-    }
-
     debug(s"Sending AlterIsr to controller $message")
     // We will not timeout AlterISR request, instead letting it retry indefinitely
-    // until a response is received or the request is cancelled after receiving new LeaderAndIsr state.
+    // until a response is received, or a new LeaderAndIsr overwrites the existing isrState
+    // which causes the inflight requests to be ignored.
     controllerChannelManager.sendRequest(new AlterIsrRequest.Builder(message),
-      new AlterIsrResponseHandler, Long.MaxValue)
+      new ControllerRequestCompletionHandler {
+        override def onComplete(response: ClientResponse): Unit = {
+          try {
+            val body = response.responseBody().asInstanceOf[AlterIsrResponse]
+            handleAlterIsrResponse(body, message.brokerEpoch, inflightAlterIsrItems)
+          } finally {
+            clearInflightRequests()
+          }
+        }
+
+        override def onTimeout(): Unit = {
+          throw new IllegalStateException("Encountered unexpected timeout when sending AlterIsr to the controller")
+        }
+      }, Long.MaxValue)
   }
 
   private def buildRequest(inflightAlterIsrItems: Seq[AlterIsrItem]): AlterIsrRequestData = {
