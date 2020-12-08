@@ -21,8 +21,8 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -34,6 +34,7 @@ public class IncrementalAlterConfigsResponse extends AbstractResponse {
 
     public IncrementalAlterConfigsResponse(final int requestThrottleMs,
                                            final Map<ConfigResource, ApiError> results) {
+        super(ApiKeys.INCREMENTAL_ALTER_CONFIGS);
         final List<AlterConfigsResourceResponse> newResults = new ArrayList<>(results.size());
         results.forEach(
             (resource, error) -> newResults.add(
@@ -61,11 +62,8 @@ public class IncrementalAlterConfigsResponse extends AbstractResponse {
     private final IncrementalAlterConfigsResponseData data;
 
     public IncrementalAlterConfigsResponse(IncrementalAlterConfigsResponseData data) {
+        super(ApiKeys.INCREMENTAL_ALTER_CONFIGS);
         this.data = data;
-    }
-
-    public IncrementalAlterConfigsResponse(final Struct struct, final short version) {
-        this.data = new IncrementalAlterConfigsResponseData(struct, version);
     }
 
     public IncrementalAlterConfigsResponseData data() {
@@ -82,11 +80,6 @@ public class IncrementalAlterConfigsResponse extends AbstractResponse {
     }
 
     @Override
-    protected Struct toStruct(final short version) {
-        return data.toStruct(version);
-    }
-
-    @Override
     public boolean shouldClientThrottle(short version) {
         return version >= 0;
     }
@@ -97,7 +90,7 @@ public class IncrementalAlterConfigsResponse extends AbstractResponse {
     }
 
     public static IncrementalAlterConfigsResponse parse(ByteBuffer buffer, short version) {
-        return new IncrementalAlterConfigsResponse(
-                ApiKeys.INCREMENTAL_ALTER_CONFIGS.responseSchema(version).read(buffer), version);
+        return new IncrementalAlterConfigsResponse(new IncrementalAlterConfigsResponseData(
+            new ByteBufferAccessor(buffer), version));
     }
 }

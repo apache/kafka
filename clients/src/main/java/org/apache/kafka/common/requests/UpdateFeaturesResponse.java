@@ -19,12 +19,13 @@ package org.apache.kafka.common.requests;
 import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.stream.Collectors;
+
 import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData.UpdatableFeatureResult;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData.UpdatableFeatureResultCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 
 /**
@@ -40,16 +41,8 @@ public class UpdateFeaturesResponse extends AbstractResponse {
     private final UpdateFeaturesResponseData data;
 
     public UpdateFeaturesResponse(UpdateFeaturesResponseData data) {
+        super(ApiKeys.UPDATE_FEATURES);
         this.data = data;
-    }
-
-    public UpdateFeaturesResponse(Struct struct) {
-        final short latestVersion = (short) (UpdateFeaturesResponseData.SCHEMAS.length - 1);
-        this.data = new UpdateFeaturesResponseData(struct, latestVersion);
-    }
-
-    public UpdateFeaturesResponse(Struct struct, short version) {
-        this.data = new UpdateFeaturesResponseData(struct, version);
     }
 
     public Map<String, ApiError> errors() {
@@ -70,11 +63,6 @@ public class UpdateFeaturesResponse extends AbstractResponse {
     }
 
     @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
-    }
-
-    @Override
     public String toString() {
         return data.toString();
     }
@@ -84,7 +72,7 @@ public class UpdateFeaturesResponse extends AbstractResponse {
     }
 
     public static UpdateFeaturesResponse parse(ByteBuffer buffer, short version) {
-        return new UpdateFeaturesResponse(ApiKeys.UPDATE_FEATURES.parseResponse(version, buffer), version);
+        return new UpdateFeaturesResponse(new UpdateFeaturesResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     public static UpdateFeaturesResponse createWithErrors(ApiError topLevelError, Map<String, ApiError> updateErrors, int throttleTimeMs) {

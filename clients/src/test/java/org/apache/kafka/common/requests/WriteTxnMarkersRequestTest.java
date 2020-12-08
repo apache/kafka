@@ -72,7 +72,7 @@ public class WriteTxnMarkersRequestTest {
                 request.getErrorResponse(throttleTimeMs, Errors.UNKNOWN_PRODUCER_ID.exception());
 
             assertEquals(Collections.singletonMap(
-                topicPartition, Errors.UNKNOWN_PRODUCER_ID), errorResponse.errors(producerId));
+                topicPartition, Errors.UNKNOWN_PRODUCER_ID), errorResponse.errorsByProducerId().get(producerId));
             assertEquals(Collections.singletonMap(Errors.UNKNOWN_PRODUCER_ID, 1), errorResponse.errorCounts());
             // Write txn marker has no throttle time defined in response.
             assertEquals(0, errorResponse.throttleTimeMs());

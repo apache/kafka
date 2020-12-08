@@ -22,7 +22,6 @@ import org.apache.kafka.common.network.ClientInformation;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.KafkaPrincipalSerde;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -93,9 +92,7 @@ public class RequestContext implements AuthorizableRequestContext {
             ApiKeys apiKey = header.apiKey();
             try {
                 short apiVersion = header.apiVersion();
-                Struct struct = apiKey.parseRequest(apiVersion, buffer);
-                AbstractRequest body = AbstractRequest.parseRequest(apiKey, apiVersion, struct);
-                return new RequestAndSize(body, struct.sizeOf());
+                return AbstractRequest.parseRequest(apiKey, apiVersion, buffer);
             } catch (Throwable ex) {
                 throw new InvalidRequestException("Error getting request for apiKey: " + apiKey +
                         ", apiVersion: " + header.apiVersion() +
@@ -111,8 +108,7 @@ public class RequestContext implements AuthorizableRequestContext {
      * over the network.
      */
     public Send buildResponseSend(AbstractResponse body) {
-        ResponseHeader responseHeader = header.toResponseHeader();
-        return body.toSend(connectionId, responseHeader, apiVersion());
+        return body.toSend(connectionId, header.toResponseHeader(), apiVersion());
     }
 
     /**
@@ -126,8 +122,7 @@ public class RequestContext implements AuthorizableRequestContext {
      * so we do not lose the benefit of "zero copy" transfers from disk.
      */
     public ByteBuffer buildResponseEnvelopePayload(AbstractResponse body) {
-        ResponseHeader responseHeader = header.toResponseHeader();
-        return RequestUtils.serialize(responseHeader.toStruct(), body.toStruct(header.apiVersion()));
+        return body.serializeWithHeader(header.toResponseHeader(), apiVersion());
     }
 
     private boolean isUnsupportedApiVersionsRequest() {

@@ -3356,7 +3356,7 @@ public class TransactionManagerTest {
     private MockClient.RequestMatcher produceRequestMatcher(final long producerId, final short epoch, TopicPartition tp) {
         return body -> {
             ProduceRequest produceRequest = (ProduceRequest) body;
-            MemoryRecords records = produceRequest.dataOrException().topicData()
+            MemoryRecords records = produceRequest.data().topicData()
                     .stream()
                     .filter(t -> t.name().equals(tp.topic()))
                     .findAny()

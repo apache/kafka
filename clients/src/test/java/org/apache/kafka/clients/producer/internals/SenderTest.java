@@ -160,7 +160,7 @@ public class SenderTest {
 
     private static Map<TopicPartition, MemoryRecords> partitionRecords(ProduceRequest request) {
         Map<TopicPartition, MemoryRecords> partitionRecords = new HashMap<>();
-        request.dataOrException().topicData().forEach(tpData -> tpData.partitionData().forEach(p -> {
+        request.data().topicData().forEach(tpData -> tpData.partitionData().forEach(p -> {
             TopicPartition tp = new TopicPartition(tpData.name(), p.index());
             partitionRecords.put(tp, (MemoryRecords) p.records());
         }));
@@ -285,8 +285,9 @@ public class SenderTest {
                 1000, 1000, 64 * 1024, 64 * 1024, 1000, 10 * 1000, 127 * 1000, ClientDnsLookup.USE_ALL_DNS_IPS,
                 time, true, new ApiVersions(), throttleTimeSensor, logContext);
 
-        ByteBuffer buffer = ApiVersionsResponse.createApiVersionsResponse(
-            400, RecordBatch.CURRENT_MAGIC_VALUE).serialize(ApiKeys.API_VERSIONS, ApiKeys.API_VERSIONS.latestVersion(), 0);
+        ByteBuffer buffer = ApiVersionsResponse.createApiVersionsResponse(400, RecordBatch.CURRENT_MAGIC_VALUE).
+            serializeWithHeader(ApiKeys.API_VERSIONS.latestVersion(), 0);
+
         selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));
         while (!client.ready(node, time.milliseconds())) {
             client.poll(1, time.milliseconds());
@@ -305,8 +306,7 @@ public class SenderTest {
             client.send(request, time.milliseconds());
             client.poll(1, time.milliseconds());
             ProduceResponse response = produceResponse(tp0, i, Errors.NONE, throttleTimeMs);
-            buffer = response.
-                serialize(ApiKeys.PRODUCE, ApiKeys.PRODUCE.latestVersion(), request.correlationId());
+            buffer = response.serializeWithHeader(ApiKeys.PRODUCE.latestVersion(), request.correlationId());
             selector.completeReceive(new NetworkReceive(node.idString(), buffer));
             client.poll(1, time.milliseconds());
             // If a throttled response is received, advance the time to ensure progress.

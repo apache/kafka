@@ -335,7 +335,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           forwardingChannelManager = new BrokerToControllerChannelManagerImpl(metadataCache, time, metrics,
             config, "forwardingChannel", threadNamePrefix)
           forwardingChannelManager.start()
-          forwardingManager = new ForwardingManager(forwardingChannelManager)
+          forwardingManager = new ForwardingManager(forwardingChannelManager, time, config.requestTimeoutMs.longValue())
         }
 
         adminManager = new AdminManager(config, metrics, metadataCache, zkClient)

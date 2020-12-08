@@ -2031,7 +2031,7 @@ public class FetcherTest {
             altTopics.add(alteredTopic);
         }
         Node controller = originalResponse.controller();
-        MetadataResponse altered = MetadataResponse.prepareResponse(
+        MetadataResponse altered = TestUtils.metadataResponse(
             originalResponse.brokers(),
             originalResponse.clusterId(),
             controller != null ? controller.id() : MetadataResponse.NO_CONTROLLER_ID,
@@ -2065,7 +2065,8 @@ public class FetcherTest {
                 time, true, new ApiVersions(), throttleTimeSensor, new LogContext());
 
         ByteBuffer buffer = ApiVersionsResponse.createApiVersionsResponse(
-            400, RecordBatch.CURRENT_MAGIC_VALUE).serialize(ApiKeys.API_VERSIONS, ApiKeys.API_VERSIONS.latestVersion(), 0);
+            400, RecordBatch.CURRENT_MAGIC_VALUE).serializeWithHeader(ApiKeys.API_VERSIONS.latestVersion(), 0);
+
         selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));
         while (!client.ready(node, time.milliseconds())) {
             client.poll(1, time.milliseconds());
@@ -2082,9 +2083,7 @@ public class FetcherTest {
             client.send(request, time.milliseconds());
             client.poll(1, time.milliseconds());
             FetchResponse<MemoryRecords> response = fullFetchResponse(tp0, nextRecords, Errors.NONE, i, throttleTimeMs);
-            buffer = response.serialize(ApiKeys.FETCH,
-                    ApiKeys.FETCH.latestVersion(),
-                    request.correlationId());
+            buffer = response.serializeWithHeader(ApiKeys.FETCH.latestVersion(), request.correlationId());
             selector.completeReceive(new NetworkReceive(node.idString(), buffer));
             client.poll(1, time.milliseconds());
             // If a throttled response is received, advance the time to ensure progress.
@@ -4507,7 +4506,7 @@ public class FetcherTest {
         MetadataResponse.TopicMetadata topicMetadata = new MetadataResponse.TopicMetadata(error, topic, false,
                 partitionsMetadata);
         List<Node> brokers = new ArrayList<>(initialUpdateResponse.brokers());
-        return MetadataResponse.prepareResponse(brokers, initialUpdateResponse.clusterId(),
+        return TestUtils.metadataResponse(brokers, initialUpdateResponse.clusterId(),
                 initialUpdateResponse.controller().id(), Collections.singletonList(topicMetadata));
     }
 

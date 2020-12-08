@@ -18,8 +18,8 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
@@ -28,20 +28,9 @@ public class AlterUserScramCredentialsResponse extends AbstractResponse {
 
     private final AlterUserScramCredentialsResponseData data;
 
-    public AlterUserScramCredentialsResponse(Struct struct) {
-        this(struct, ApiKeys.ALTER_USER_SCRAM_CREDENTIALS.latestVersion());
-    }
-
     public AlterUserScramCredentialsResponse(AlterUserScramCredentialsResponseData responseData) {
+        super(ApiKeys.ALTER_USER_SCRAM_CREDENTIALS);
         this.data = responseData;
-    }
-
-    AlterUserScramCredentialsResponse(Struct struct, short version) {
-        this.data = new AlterUserScramCredentialsResponseData(struct, version);
-    }
-
-    public static AlterUserScramCredentialsResponse parse(ByteBuffer buffer, short version) {
-        return new AlterUserScramCredentialsResponse(ApiKeys.ALTER_USER_SCRAM_CREDENTIALS.responseSchema(version).read(buffer), version);
     }
 
     public AlterUserScramCredentialsResponseData data() {
@@ -63,8 +52,7 @@ public class AlterUserScramCredentialsResponse extends AbstractResponse {
         return errorCounts(data.results().stream().map(r -> Errors.forCode(r.errorCode())));
     }
 
-    @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
+    public static AlterUserScramCredentialsResponse parse(ByteBuffer buffer, short version) {
+        return new AlterUserScramCredentialsResponse(new AlterUserScramCredentialsResponseData(new ByteBufferAccessor(buffer), version));
     }
 }

@@ -18,11 +18,9 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.EnvelopeRequestData;
 import org.apache.kafka.common.message.EnvelopeResponseData;
-import org.apache.kafka.common.network.Send;
-import org.apache.kafka.common.protocol.SendBuilder;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
@@ -60,11 +58,6 @@ public class EnvelopeRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public EnvelopeRequest(Struct struct, short version) {
-        super(ApiKeys.ENVELOPE, version);
-        this.data = new EnvelopeRequestData(struct, version);
-    }
-
     public ByteBuffer requestData() {
         return data.requestData();
     }
@@ -78,27 +71,16 @@ public class EnvelopeRequest extends AbstractRequest {
     }
 
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
-    }
-
-    @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         return new EnvelopeResponse(new EnvelopeResponseData()
                                         .setErrorCode(Errors.forException(e).code()));
     }
 
     public static EnvelopeRequest parse(ByteBuffer buffer, short version) {
-        return new EnvelopeRequest(ApiKeys.ENVELOPE.parseRequest(version, buffer), version);
+        return new EnvelopeRequest(new EnvelopeRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
     public EnvelopeRequestData data() {
         return data;
     }
-
-    @Override
-    public Send toSend(String destination, RequestHeader header) {
-        return SendBuilder.buildRequestSend(destination, header, this.data);
-    }
-
 }

@@ -20,16 +20,12 @@ package org.apache.kafka.common.protocol;
 import java.nio.ByteBuffer;
 
 public final class MessageTestUtil {
-    public static int messageSize(Message message, short version) {
-        return message.size(new ObjectSerializationCache(), version);
-    }
-
     public static ByteBuffer messageToByteBuffer(Message message, short version) {
         ObjectSerializationCache cache = new ObjectSerializationCache();
         int size = message.size(cache, version);
         ByteBuffer bytes = ByteBuffer.allocate(size);
         message.write(new ByteBufferAccessor(bytes), cache, version);
-        bytes.flip();
+        bytes.rewind();
         return bytes;
     }
 }

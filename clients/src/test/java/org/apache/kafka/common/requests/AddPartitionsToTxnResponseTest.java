@@ -67,7 +67,7 @@ public class AddPartitionsToTxnResponseTest {
     }
 
     @Test
-    public void testConstructorWithStruct() {
+    public void testParse() {
 
         AddPartitionsToTxnTopicResultCollection topicCollection = new AddPartitionsToTxnTopicResultCollection();
 
@@ -87,14 +87,13 @@ public class AddPartitionsToTxnResponseTest {
         AddPartitionsToTxnResponseData data = new AddPartitionsToTxnResponseData()
                                                   .setResults(topicCollection)
                                                   .setThrottleTimeMs(throttleTimeMs);
+        AddPartitionsToTxnResponse response = new AddPartitionsToTxnResponse(data);
 
         for (short version = 0; version <= ApiKeys.ADD_PARTITIONS_TO_TXN.latestVersion(); version++) {
-            AddPartitionsToTxnResponse response = new AddPartitionsToTxnResponse(data.toStruct(version), version);
-            assertEquals(expectedErrorCounts, response.errorCounts());
-
-            assertEquals(throttleTimeMs, response.throttleTimeMs());
-
-            assertEquals(version >= 1, response.shouldClientThrottle(version));
+            AddPartitionsToTxnResponse parsedResponse = AddPartitionsToTxnResponse.parse(response.serializeBody(version), version);
+            assertEquals(expectedErrorCounts, parsedResponse.errorCounts());
+            assertEquals(throttleTimeMs, parsedResponse.throttleTimeMs());
+            assertEquals(version >= 1, parsedResponse.shouldClientThrottle(version));
         }
     }
 }

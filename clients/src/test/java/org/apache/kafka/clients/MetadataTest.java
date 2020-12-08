@@ -30,7 +30,7 @@ import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopi
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopicCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.protocol.MessageTestUtil;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -41,6 +41,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -68,7 +69,7 @@ public class MetadataTest {
             new ClusterResourceListeners());
 
     private static MetadataResponse emptyMetadataResponse() {
-        return MetadataResponse.prepareResponse(
+        return TestUtils.metadataResponse(
                 Collections.emptyList(),
                 null,
                 -1,
@@ -196,8 +197,8 @@ public class MetadataTest {
                 .setBrokers(new MetadataResponseBrokerCollection());
 
         for (short version = ApiKeys.METADATA.oldestVersion(); version < 9; version++) {
-            Struct struct = data.toStruct(version);
-            MetadataResponse response = new MetadataResponse(struct, version);
+            ByteBuffer buffer = MessageTestUtil.messageToByteBuffer(data, version);
+            MetadataResponse response = MetadataResponse.parse(buffer, version);
             assertFalse(response.hasReliableLeaderEpochs());
             metadata.updateWithCurrentRequestVersion(response, false, 100);
             assertTrue(metadata.partitionMetadataIfCurrent(tp).isPresent());
@@ -206,8 +207,8 @@ public class MetadataTest {
         }
 
         for (short version = 9; version <= ApiKeys.METADATA.latestVersion(); version++) {
-            Struct struct = data.toStruct(version);
-            MetadataResponse response = new MetadataResponse(struct, version);
+            ByteBuffer buffer = MessageTestUtil.messageToByteBuffer(data, version);
+            MetadataResponse response = MetadataResponse.parse(buffer, version);
             assertTrue(response.hasReliableLeaderEpochs());
             metadata.updateWithCurrentRequestVersion(response, false, 100);
             assertTrue(metadata.partitionMetadataIfCurrent(tp).isPresent());
@@ -244,7 +245,7 @@ public class MetadataTest {
                 .setTopics(topics)
                 .setBrokers(new MetadataResponseBrokerCollection());
 
-        metadata.updateWithCurrentRequestVersion(new MetadataResponse(data), false, 100);
+        metadata.updateWithCurrentRequestVersion(new MetadataResponse(data, ApiKeys.METADATA.latestVersion()), false, 100);
 
         // Older epoch with changed ISR should be ignored
         partitionMetadata
@@ -256,7 +257,7 @@ public class MetadataTest {
                 .setOfflineReplicas(Collections.emptyList())
                 .setErrorCode(Errors.NONE.code());
 
-        metadata.updateWithCurrentRequestVersion(new MetadataResponse(data), false, 101);
+        metadata.updateWithCurrentRequestVersion(new MetadataResponse(data, ApiKeys.METADATA.latestVersion()), false, 101);
         assertEquals(Optional.of(10), metadata.lastSeenLeaderEpoch(tp));
 
         assertTrue(metadata.partitionMetadataIfCurrent(tp).isPresent());
@@ -757,12 +758,14 @@ public class MetadataTest {
 
         metadata.updateWithCurrentRequestVersion(new MetadataResponse(new MetadataResponseData()
                         .setTopics(buildTopicCollection(tp.topic(), firstPartitionMetadata))
-                        .setBrokers(buildBrokerCollection(Arrays.asList(node0, node1, node2)))),
+                        .setBrokers(buildBrokerCollection(Arrays.asList(node0, node1, node2))),
+                        ApiKeys.METADATA.latestVersion()),
                 false, 10L);
 
         metadata.updateWithCurrentRequestVersion(new MetadataResponse(new MetadataResponseData()
                         .setTopics(buildTopicCollection(tp.topic(), secondPartitionMetadata))
-                        .setBrokers(buildBrokerCollection(Arrays.asList(node1, node2)))),
+                        .setBrokers(buildBrokerCollection(Arrays.asList(node1, node2))),
+                        ApiKeys.METADATA.latestVersion()),
                 false, 20L);
 
         assertNull(metadata.fetch().leaderFor(tp));
