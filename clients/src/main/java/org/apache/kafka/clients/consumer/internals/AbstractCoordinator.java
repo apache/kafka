@@ -1368,13 +1368,17 @@ public abstract class AbstractCoordinator implements Closeable {
                         long now = time.milliseconds();
 
                         if (coordinatorUnknown()) {
-                            if (findCoordinatorFuture != null || lookupCoordinator().failed())
+                            if (findCoordinatorFuture != null || lookupCoordinator().failed()) {
                                 if (findCoordinatorFuture != null && findCoordinatorFuture.failed()) {
+                                    // if the future did complete and has failed, clear it so that the hb thread
+                                    // can send a new FindCoordinator request in case the main thread is busy
                                     clearFindCoordinatorFuture();
                                 }
+
                                 // the immediate future check ensures that we backoff properly in the case that no
                                 // brokers are available to connect to.
                                 AbstractCoordinator.this.wait(rebalanceConfig.retryBackoffMs);
+                            }
                         } else if (heartbeat.sessionTimeoutExpired(now)) {
                             // the session timeout has expired without seeing a successful heartbeat, so we should
                             // probably make sure the coordinator is still healthy.
