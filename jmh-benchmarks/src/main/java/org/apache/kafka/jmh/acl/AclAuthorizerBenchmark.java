@@ -216,7 +216,7 @@ public class AclAuthorizerBenchmark {
     public void testUpdateCache() {
         AclAuthorizer aclAuthorizer = new AclAuthorizer();
         scala.collection.mutable.Set<AclEntry> entries = new scala.collection.mutable.HashSet<>();
-        for (int i = 0; i < resourceCount; i ++){
+        for (int i = 0; i < resourceCount; i++) {
             scala.collection.immutable.Set<AclEntry> immutable = new scala.collection.immutable.HashSet<>();
             for (int j = 0; j < aclCount; j++) {
                 entries.add(new AclEntry(new AccessControlEntry(
