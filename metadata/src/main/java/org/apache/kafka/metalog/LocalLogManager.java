@@ -409,7 +409,6 @@ public final class LocalLogManager implements MetaLogManager {
                         result = new ReadResult(Collections.emptyList(), false, true, null);
                     } else {
                         result = scribe.read();
-                        log.info("WATERMELON: read {}", result);
                         if (!result.batch.isEmpty()) {
                             listener.handleCommits(scribe.nextOffset - 1, result.batch);
                         }
@@ -513,7 +512,7 @@ public final class LocalLogManager implements MetaLogManager {
         }
     }
 
-    private class Scribe {
+    private static class Scribe {
         private final FileChannel channel;
         private long nextOffset = 0;
         private long fileOffset = 0;
@@ -553,7 +552,6 @@ public final class LocalLogManager implements MetaLogManager {
         private ReadResult readOne() throws IOException {
             frameBuffer.clear();
             int frameLength = readData(frameBuffer, fileOffset);
-            log.info("WATERMELON5: read frameLength " + frameLength);
             if (frameLength <= 0) {
                 return new ReadResult(Collections.emptyList(), true, frameLength < 0, null);
             }
