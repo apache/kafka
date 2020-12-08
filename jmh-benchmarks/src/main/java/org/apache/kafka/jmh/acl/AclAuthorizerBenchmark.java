@@ -61,7 +61,9 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 @State(Scope.Benchmark)
@@ -71,11 +73,14 @@ import java.util.concurrent.TimeUnit;
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 public class AclAuthorizerBenchmark {
-    @Param({"10000", "50000", "200000"})
+    @Param({"200000"})
     private int resourceCount;
     //no. of. rules per resource
-    @Param({"10", "50"})
+    @Param({"50"})
     private int aclCount;
+
+    @Param({"0", "20", "50", "90", "99", "99.9", "99.99", "100"})
+    private double denyPercentage;
 
     private final int hostPreCount = 1000;
     private final String resourceNamePrefix = "foo-bar35_resource-";
@@ -89,6 +94,8 @@ public class AclAuthorizerBenchmark {
     private TreeMap<ResourcePattern, VersionedAcls> aclCache = new TreeMap<>(new AclAuthorizer.ResourceOrdering());
     private scala.collection.mutable.HashMap<ResourceIndex, scala.collection.mutable.HashSet<String>> resourceCache =
         new scala.collection.mutable.HashMap<>();
+    Random rand = new Random(System.currentTimeMillis());
+    double eps = 1e-9;
 
     @Setup(Level.Trial)
     public void setup() throws Exception {
@@ -118,7 +125,7 @@ public class AclAuthorizerBenchmark {
         for (int resourceId = 0; resourceId < resourceCount; resourceId++) {
             ResourcePattern resource = new ResourcePattern(
                 (resourceId % 10 == 0) ? ResourceType.GROUP : ResourceType.TOPIC,
-                resourceNamePrefix + resourceId,
+                resourceName(resourceNamePrefix),
                 (resourceId % 5 == 0) ? PatternType.PREFIXED : PatternType.LITERAL);
 
             Set<AclEntry> entries = aclEntries.computeIfAbsent(resource, k -> new HashSet<>());
@@ -132,24 +139,12 @@ public class AclAuthorizerBenchmark {
                     acePrincipal,
                     "*", AclOperation.WRITE, AclPermissionType.DENY);
                 entries.add(new AclEntry(allowAce));
-                // dominantly deny all the literal resource
-                entries.add(new AclEntry(denyAce));
+                if ((denyPercentage > 0) && (shouldDeny())) {
+                    // dominantly deny the resource
+                    entries.add(new AclEntry(denyAce));
+                }
             }
         }
-
-        ResourcePattern prefixedAllowResource = new ResourcePattern(ResourceType.TOPIC, resourceNamePrefix,
-            PatternType.PREFIXED);
-        // dominantly deny all the prefixed resource
-        ResourcePattern prefixedDenyResource = new ResourcePattern(ResourceType.TOPIC,
-            resourceNamePrefix.substring(0, resourceNamePrefix.length()-1),
-            PatternType.PREFIXED);
-        Set<AclEntry> prefixedAllowEntries = aclEntries.computeIfAbsent(prefixedAllowResource, k -> new HashSet<>());
-        Set<AclEntry> prefixedDenyEntries = aclEntries.computeIfAbsent(prefixedDenyResource, k -> new HashSet<>());
-
-        ResourcePattern literalResource = new ResourcePattern(ResourceType.TOPIC, resourceName,
-            PatternType.LITERAL);
-        // dominantly deny all the literal resource
-        Set<AclEntry> literalEntries = aclEntries.computeIfAbsent(literalResource, k -> new HashSet<>());
 
         // get dynamic entries number for wildcard acl
         for (int hostId = 0; hostId < resourceCount / 10; hostId++) {
@@ -157,10 +152,22 @@ public class AclAuthorizerBenchmark {
                 AclOperation.WRITE, AclPermissionType.ALLOW);
             AccessControlEntry denyAce = new AccessControlEntry(principal.toString(), "127.0.0." + hostId,
                 AclOperation.WRITE, AclPermissionType.DENY);
-            prefixedAllowEntries.add(new AclEntry(allowAce));
-            prefixedDenyEntries.add(new AclEntry(denyAce));
+
+            ResourcePattern prefixedAllowResource = new ResourcePattern(
+                ResourceType.TOPIC, resourceName(resourceNamePrefix), PatternType.PREFIXED);
+            ResourcePattern literalResource = new ResourcePattern(
+                ResourceType.TOPIC, resourceName(resourceNamePrefix), PatternType.LITERAL);
+
+            Set<AclEntry> prefixedEntires = aclEntries.computeIfAbsent(prefixedAllowResource, k -> new HashSet<>());
+            Set<AclEntry> literalEntries = aclEntries.computeIfAbsent(literalResource, k -> new HashSet<>());
+
+            prefixedEntires.add(new AclEntry(allowAce));
             literalEntries.add(new AclEntry(allowAce));
-            literalEntries.add(new AclEntry(denyAce));
+            if ((denyPercentage > 0) && (shouldDeny())) {
+                // dominantly deny the literal and prefixed resource
+                literalEntries.add(new AclEntry(denyAce));
+                prefixedEntires.add(new AclEntry(denyAce));
+            }
         }
 
         for (Map.Entry<ResourcePattern, Set<AclEntry>> entryMap : aclEntries.entrySet()) {
@@ -177,10 +184,18 @@ public class AclAuthorizerBenchmark {
         }
     }
 
+    private String resourceName(String prefix) {
+        return prefix + UUID.randomUUID().toString().substring(0, 5);
+    }
+
+    private Boolean shouldDeny() {
+        return rand.nextDouble() * 100.0 - eps < denyPercentage;
+    }
+
     @TearDown(Level.Trial)
     public void tearDown() {
         aclAuthorizer.close();
-}
+    }
 
     @Benchmark
     public void testAclsIterator() {
