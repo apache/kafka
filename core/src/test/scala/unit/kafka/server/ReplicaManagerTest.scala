@@ -32,7 +32,7 @@ import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
 import kafka.utils.TestUtils.createBroker
 import kafka.utils.timer.MockTimer
-import kafka.utils.{MockScheduler, MockTime, ReplicationUtils, TestUtils}
+import kafka.utils.{MockScheduler, MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
@@ -2178,38 +2178,6 @@ class ReplicaManagerTest {
       replicaManager.shutdown(false)
     }
   }
-
-
-  def testZkIsr(): Unit = {
-    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), propsModifier = props => {
-      props.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, "2.7-IV1")
-    })
-    replicaManager.startup()
-
-    // We expect to send the ISR notification via ZK
-    EasyMock.reset(kafkaZkClient)
-    kafkaZkClient.propagateIsrChanges(EasyMock.anyObject(classOf[Set[TopicPartition]]))
-    EasyMock.expectLastCall().times(1)
-    EasyMock.replay(kafkaZkClient)
-
-    // Validate the ZK-specific ISR code paths in ReplicaManager
-    val tp0 = new TopicPartition("test", 0)
-    val zkIsrManager = alterIsrManager match {
-      case zkIsr: ZkIsrManager => zkIsr
-      case _ => fail("Expected instance of ZkIsrManager"); null
-    }
-
-    EasyMock.expect(ReplicationUtils.updateLeaderAndIsr(EasyMock.eq(kafkaZkClient), EasyMock.eq(tp0),
-      EasyMock.anyObject(classOf[LeaderAndIsr]), EasyMock.anyInt())).andReturn((true, 2))
-    EasyMock.replay(ReplicationUtils)
-
-    zkIsrManager.enqueue(AlterIsrItem(tp0, leaderAndIsr = null, callback = _ => { }, controllerEpoch = 0))
-    assertEquals(1, zkIsrManager.isrChangeSet.size)
-    time.sleep(ReplicaManager.DefaultIsrPropagationConfig.lingerMs * 2)
-    scheduler.tick()
-    assertEquals(0, zkIsrManager.isrChangeSet.size)
-  }
-
 
   def testAlterIsr(): Unit = {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), propsModifier = props => {

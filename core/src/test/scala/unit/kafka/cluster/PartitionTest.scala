@@ -19,15 +19,15 @@ package kafka.cluster
 import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.{CountDownLatch, Semaphore}
-
 import com.yammer.metrics.core.Metric
-import kafka.api.ApiVersion
+import kafka.api.{ApiVersion, KAFKA_2_6_IV0}
 import kafka.common.UnexpectedAppendOffsetException
 import kafka.log.{Defaults => _, _}
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.utils._
+import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.errors.{ApiException, NotLeaderOrFollowerException, OffsetNotAvailableException, OffsetOutOfRangeException}
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
@@ -41,6 +41,7 @@ import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.junit.Assert._
 import org.junit.Test
 import org.mockito.ArgumentMatchers
+import org.mockito.ArgumentMatchers.{any, anyString}
 import org.mockito.Mockito._
 import org.mockito.invocation.InvocationOnMock
 import org.scalatest.Assertions.assertThrows
@@ -1576,6 +1577,74 @@ class PartitionTest extends AbstractPartitionTest {
     // Try to modify ISR again, should do nothing
     partition.shrinkIsr(Set(follower3))
     assertEquals(alterIsrManager.isrUpdates.size, 1)
+  }
+
+  @Test
+  def testZkIsrManagerAsyncCallback(): Unit = {
+    // We need a real scheduler here so that the ISR write lock works properly
+    val scheduler = new KafkaScheduler(1, "zk-isr-test")
+    scheduler.startup()
+    val kafkaZkClient = mock(classOf[KafkaZkClient])
+
+    doAnswer(_ => (true, 2))
+      .when(kafkaZkClient)
+      .conditionalUpdatePath(anyString(), any(), ArgumentMatchers.eq(1), any())
+
+    val zkIsrManager = AlterIsrManager(scheduler, time, kafkaZkClient)
+    zkIsrManager.start()
+
+    val partition = new Partition(topicPartition,
+      replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
+      interBrokerProtocolVersion = KAFKA_2_6_IV0, // shouldn't matter, but set this to a ZK isr version
+      localBrokerId = brokerId,
+      time,
+      topicConfigProvider,
+      isrChangeListener,
+      delayedOperations,
+      metadataCache,
+      logManager,
+      zkIsrManager)
+
+    val log = logManager.getOrCreateLog(topicPartition, () => logConfig)
+    seedLogData(log, numRecords = 10, leaderEpoch = 4)
+
+    val controllerEpoch = 0
+    val leaderEpoch = 5
+    val follower1 = brokerId + 1
+    val follower2 = brokerId + 2
+    val follower3 = brokerId + 3
+    val replicas = List[Integer](brokerId, follower1, follower2, follower3).asJava
+    val isr = List[Integer](brokerId, follower1, follower2).asJava
+
+    doNothing().when(delayedOperations).checkAndCompleteAll()
+
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints)
+    assertTrue("Expected become leader transition to succeed",
+      partition.makeLeader(
+        new LeaderAndIsrPartitionState()
+          .setControllerEpoch(controllerEpoch)
+          .setLeader(brokerId)
+          .setLeaderEpoch(leaderEpoch)
+          .setIsr(isr)
+          .setZkVersion(1)
+          .setReplicas(replicas)
+          .setIsNew(true),
+        offsetCheckpoints))
+    assertEquals(Set(brokerId, follower1, follower2), partition.isrState.isr)
+    assertEquals(0L, partition.localLogOrException.highWatermark)
+
+    // Expand ISR
+    partition.expandIsr(follower3)
+
+    // Try avoiding a race
+    TestUtils.waitUntilTrue(() => !partition.isrState.isInflight, "Expected ISR state to be committed", 100)
+
+    partition.isrState match {
+      case committed: CommittedIsr => assertEquals(Set(brokerId, follower1, follower2, follower3), committed.isr)
+      case _ => fail("Expected a committed ISR following Zk expansion")
+    }
+
+    scheduler.shutdown()
   }
 
   @Test
