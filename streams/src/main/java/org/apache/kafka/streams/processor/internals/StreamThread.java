@@ -230,6 +230,7 @@ public class StreamThread extends Thread {
             } else {
                 updateThreadMetadata(Collections.emptyMap(), Collections.emptyMap());
             }
+            stateLock.notifyAll();
         }
 
         if (stateListener != null) {
@@ -595,6 +596,18 @@ public class StreamThread extends Thread {
      */
     public void setStreamsUncaughtExceptionHandler(final java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler) {
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
+    }
+
+    public void waitOnThreadState(final StreamThread.State targetState) {
+        synchronized (stateLock) {
+            while (state != targetState) {
+                try {
+                    stateLock.wait();
+                } catch (final InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
     }
 
     public void shutdownToError() {

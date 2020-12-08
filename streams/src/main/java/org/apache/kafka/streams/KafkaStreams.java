@@ -965,10 +965,12 @@ public class KafkaStreams implements AutoCloseable {
                     streamThread.shutdown();
                     threads.remove(streamThread);
                     resizeThreadCache(getCacheSizePerThread(threads.size()));
+                    log.warn("Cannot add a stream thread in state " + state());
                     return Optional.empty();
                 }
             }
         }
+        log.warn("Cannot add a stream thread in state " + state());
         return Optional.empty();
     }
 
@@ -990,14 +992,8 @@ public class KafkaStreams implements AutoCloseable {
             for (final StreamThread streamThread : threads) {
                 if (streamThread.isAlive()) {
                     streamThread.shutdown();
-                    while (streamThread.state() != StreamThread.State.DEAD && !streamThread.getName().equals(Thread.currentThread().getName())) {
-                        try {
-                            synchronized (streamThread.state()) {
-                                streamThread.state().wait(100);
-                            }
-                        } catch (final InterruptedException e) {
-                            e.printStackTrace();
-                        }
+                    if (!streamThread.getName().equals(Thread.currentThread().getName())) {
+                        streamThread.waitOnThreadState(StreamThread.State.DEAD);
                     }
                     synchronized (changeThreadCount) {
                         final long cacheSizePerThread = threads.size() == 1 ? 0 : getCacheSizePerThread(threads.size() - 1);
@@ -1008,6 +1004,7 @@ public class KafkaStreams implements AutoCloseable {
                 }
             }
         }
+        log.warn("Cannot remove a stream thread in state " + state());
         return Optional.empty();
     }
 

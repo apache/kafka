@@ -313,6 +313,8 @@ public class KafkaStreamsTest {
                 StreamThread.State.PARTITIONS_ASSIGNED);
             return null;
         }).anyTimes();
+        thread.waitOnThreadState(StreamThread.State.DEAD);
+        EasyMock.expectLastCall().anyTimes();
         EasyMock.expect(thread.isAlive()).andReturn(true).times(0, 1);
         thread.resizeCache(EasyMock.anyLong());
         EasyMock.expectLastCall().anyTimes();
@@ -633,7 +635,7 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void shoulRemoveThread() throws InterruptedException {
+    public void shouldRemoveThread() throws InterruptedException {
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
         final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         streams.start();
