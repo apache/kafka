@@ -1056,7 +1056,15 @@ public class EosBetaUpgradeIntegrationTest {
         addAllKeys(allKeys, expectedResult);
 
         for (final Long key : allKeys) {
-            assertThat(getAllRecordPerKey(key, result), equalTo(getAllRecordPerKey(key, expectedResult)));
+            try {
+                assertThat(getAllRecordPerKey(key, result), equalTo(getAllRecordPerKey(key, expectedResult)));
+            } catch (final AssertionError error) {
+                throw new AssertionError(
+                    "expected result: " + expectedResult.stream().map(KeyValue::toString).reduce("", (kv, str) -> str.isEmpty() ? kv : str + ", " + kv) +
+                    "\nreceived records: " + result.stream().map(KeyValue::toString).reduce("", (kv, str) -> str.isEmpty() ? kv : str + ", " + kv),
+                    error
+                );
+            }
         }
     }
 
