@@ -19,20 +19,24 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.util.Collection;
 
 public class KTablePassThrough<K, V> implements KTableProcessorSupplier<K, V, V> {
     private final Collection<KStreamAggProcessorSupplier> parents;
+    private final String storeName;
 
-    KTablePassThrough(final Collection<KStreamAggProcessorSupplier> parents) {
+
+    KTablePassThrough(final Collection<KStreamAggProcessorSupplier> parents, final String storeName) {
         this.parents = parents;
+        this.storeName = storeName;
     }
 
     @Override
     public Processor<K, Change<V>> get() {
-        return new KTablePassThroughProcessor<>();
+        return new KTablePassThroughProcessor();
     }
 
     @Override
@@ -54,39 +58,30 @@ public class KTablePassThrough<K, V> implements KTableProcessorSupplier<K, V, V>
 
             @Override
             public String[] storeNames() {
-                return new String[2];
+                return new String[]{storeName};
             }
         };
     }
 
-    private static final class KTablePassThroughProcessor<K, V> extends AbstractProcessor<K, V> {
+    private class KTablePassThroughProcessor extends AbstractProcessor<K, Change<V>> {
         @Override
-        public void process(final K key, final V value) {
+        public void process(final K key, final Change<V> value) {
             context().forward(key, value);
         }
     }
 
     private class KTablePassThroughValueGetter implements KTableValueGetter<K, V> {
-        //private final KTableValueGetter<K, V> parentGetter;
-        private final ValueAndTimestamp<V> timestamp = ValueAndTimestamp.make(null, 50L);
+        private TimestampedKeyValueStore<K, V> store;
 
-        KTablePassThroughValueGetter() {
-        }
-
+        @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
-            //parentGetter.init(context);
+            store = (TimestampedKeyValueStore<K, V>) context.getStateStore(storeName);
         }
 
         @Override
         public ValueAndTimestamp<V> get(final K key) {
-            //return parentGetter.get(key);
-            return timestamp;
-        }
-
-        @Override
-        public void close() {
-            //parentGetter.close();
+            return store.get(key);
         }
 
     }
