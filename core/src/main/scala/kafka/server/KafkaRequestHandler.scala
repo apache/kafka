@@ -34,6 +34,10 @@ trait ApiRequestHandler {
   def handle(request: RequestChannel.Request): Unit
 }
 
+trait BaseApis extends ApiRequestHandler {
+  this: ApisUtils =>
+}
+
 /**
  * A thread that answers kafka requests.
  */

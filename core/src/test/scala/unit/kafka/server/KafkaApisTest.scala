@@ -124,7 +124,6 @@ class KafkaApisTest {
     properties.put(KafkaConfig.LogMessageFormatVersionProp, interBrokerProtocolVersion.toString)
     properties.put(KafkaConfig.EnableMetadataQuorumProp, enableForwarding.toString)
     new KafkaApis(requestChannel,
-      new ApisUtils(requestChannel, authorizer, quotas, time),
       replicaManager,
       adminManager,
       groupCoordinator,
@@ -171,7 +170,7 @@ class KafkaApisTest {
 
     EasyMock.replay(authorizer)
 
-    val result = createKafkaApis(authorizer = Some(authorizer)).apisUtils.authorize(
+    val result = createKafkaApis(authorizer = Some(authorizer)).authorize(
       requestContext, operation, resourceType, resourceName)
 
     verify(authorizer)

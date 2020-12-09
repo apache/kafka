@@ -39,10 +39,11 @@ import scala.jdk.CollectionConverters._
 /**
  * Helper class for request handlers. Provides common functionality around throttling, authorizations, and error handling
  */
-class ApisUtils(val requestChannel: RequestChannel,
-                val authorizer: Option[Authorizer],
-                val quotas: QuotaManagers,
-                val time: Time) extends Logging {
+trait ApisUtils extends Logging {
+  val requestChannel: RequestChannel
+  val quotas: QuotaManagers
+  val time: Time
+  val authorizer: Option[Authorizer]
 
   // private package for testing
   def authorize(requestContext: RequestContext,
