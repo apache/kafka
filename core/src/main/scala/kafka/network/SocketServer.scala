@@ -1757,9 +1757,9 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
     }
 
     /**
-     * Creates sensor for tracking the average throttle time on this listener due to hitting connection rate quota.
-     * The average is out of all throttle times > 0, which is consistent with the bandwidth and request quota throttle
-     * time metrics.
+     * Creates sensor for tracking the average throttle time on this listener due to hitting broker/listener connection
+     * rate or IP connection rate quota. The average is out of all throttle times > 0, which is consistent with the
+     * bandwidth and request quota throttle time metrics.
      */
     private def createConnectionRateThrottleSensor(throttlePrefix: String): Sensor = {
       val sensor = metrics.sensor(s"${throttlePrefix}ConnectionRateThrottleTime-${listener.value}")
