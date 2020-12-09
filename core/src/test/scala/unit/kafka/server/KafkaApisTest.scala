@@ -22,13 +22,13 @@ import java.nio.charset.StandardCharsets
 import java.util
 import java.util.Arrays.asList
 import java.util.concurrent.TimeUnit
-import java.util.{Collections, Optional, Random}
+import java.util.{Collections, Optional, Properties, Random}
 
 import kafka.api.{ApiVersion, KAFKA_0_10_2_IV0, KAFKA_2_2_IV1, LeaderAndIsr}
-import kafka.cluster.Partition
+import kafka.cluster.{Broker, Partition}
 import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest.{JoinGroupCallback, SyncGroupCallback}
-import kafka.coordinator.group.{GroupCoordinator, GroupOverview, GroupSummary, JoinGroupResult, MemberSummary, SyncGroupResult}
+import kafka.coordinator.group._
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.log.AppendOrigin
 import kafka.network.RequestChannel
@@ -47,6 +47,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, 
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.ListOffsetRequestData.{ListOffsetPartition, ListOffsetTopic}
+import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
 import org.apache.kafka.common.message.OffsetDeleteRequestData.{OffsetDeleteRequestPartition, OffsetDeleteRequestTopic, OffsetDeleteRequestTopicCollection}
 import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
@@ -68,7 +69,7 @@ import org.apache.kafka.common.{IsolationLevel, Node, TopicPartition}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.easymock.EasyMock._
 import org.easymock.{Capture, EasyMock, IAnswer, IArgumentMatcher}
-import org.junit.Assert.{assertArrayEquals, assertEquals, assertNull, assertTrue}
+import org.junit.Assert._
 import org.junit.{After, Test}
 
 import scala.annotation.nowarn
@@ -94,7 +95,7 @@ class KafkaApisTest {
   private val zkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
   private val metrics = new Metrics()
   private val brokerId = 1
-  private val metadataCache = new MetadataCache(brokerId)
+  private var metadataCache: MetadataCache = new MetadataCache(brokerId)
   private val clientQuotaManager: ClientQuotaManager = EasyMock.createNiceMock(classOf[ClientQuotaManager])
   private val clientRequestQuotaManager: ClientRequestQuotaManager = EasyMock.createNiceMock(classOf[ClientRequestQuotaManager])
   private val clientControllerQuotaManager: ControllerMutationQuotaManager = EasyMock.createNiceMock(classOf[ControllerMutationQuotaManager])
@@ -1826,7 +1827,7 @@ class KafkaApisTest {
     assertEquals(Set(0, 1), response.brokers.asScala.map(_.id).toSet)
   }
 
-  /*
+  /**
    * Verifies that the metadata response is correct if the broker listeners are inconsistent (i.e. one broker has
    * more listeners than another) and the request is sent on the listener that exists in one broker.
    */
@@ -1835,6 +1836,71 @@ class KafkaApisTest {
     val (_, anotherListener) = updateMetadataCacheWithInconsistentListeners()
     val response = sendMetadataRequestWithInconsistentListeners(anotherListener)
     assertEquals(Set(0), response.brokers.asScala.map(_.id).toSet)
+  }
+
+
+  /**
+   * Metadata request to fetch all topics should not result in the followings:
+   * 1) Auto topic creation
+   * 2) UNKNOWN_TOPIC_OR_PARTITION
+   *
+   * This case is testing the case that a topic is being deleted from MetadataCache right after
+   * authorization but before checking in MetadataCache.
+   */
+  @Test
+  def getAllTopicMetadataShouldNotCreateTopicOrReturnUnknownTopicPartition(): Unit = {
+    // Setup: authorizer authorizes 2 topics, but one got deleted in metadata cache
+    metadataCache =
+      EasyMock.partialMockBuilder(classOf[MetadataCache])
+        .withConstructor(classOf[Int])
+        .withArgs(Int.box(brokerId))  // Need to box it for Scala 2.12 and before
+        .addMockedMethod("getAllTopics")
+        .addMockedMethod("getTopicMetadata")
+        .createMock()
+
+    // 2 topics returned for authorization in during handle
+    val topicsReturnedFromMetadataCacheForAuthorization = Set("remaining-topic", "later-deleted-topic")
+    expect(metadataCache.getAllTopics()).andReturn(topicsReturnedFromMetadataCacheForAuthorization).once()
+    // 1 topic is deleted from metadata right at the time between authorization and the next getTopicMetadata() call
+    expect(metadataCache.getTopicMetadata(
+      EasyMock.eq(topicsReturnedFromMetadataCacheForAuthorization),
+      anyObject[ListenerName],
+      anyBoolean,
+      anyBoolean
+    )).andStubReturn(Seq(
+      new MetadataResponseTopic()
+        .setErrorCode(Errors.NONE.code)
+        .setName("remaining-topic")
+        .setIsInternal(false)
+    ))
+
+    EasyMock.replay(metadataCache)
+
+    var createTopicIsCalled: Boolean = false;
+    // Specific mock on zkClient for this use case
+    // Expect it's never called to do auto topic creation
+    expect(zkClient.setOrCreateEntityConfigs(
+      EasyMock.eq(ConfigType.Topic),
+      EasyMock.anyString,
+      EasyMock.anyObject[Properties]
+    )).andStubAnswer(() => {
+      createTopicIsCalled = true
+    })
+    // No need to use
+    expect(zkClient.getAllBrokersInCluster)
+      .andStubReturn(Seq(new Broker(
+        brokerId, "localhost", 9902,
+        ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), SecurityProtocol.PLAINTEXT
+      )))
+
+    EasyMock.replay(zkClient)
+
+    val (requestListener, _) = updateMetadataCacheWithInconsistentListeners()
+    val response = sendMetadataRequestWithInconsistentListeners(requestListener)
+
+    assertFalse(createTopicIsCalled)
+    assertEquals(List("remaining-topic"), response.topicMetadata().asScala.map { metadata => metadata.topic() })
+    assertTrue(response.topicsByError(Errors.UNKNOWN_TOPIC_OR_PARTITION).isEmpty)
   }
 
   /**
