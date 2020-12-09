@@ -201,7 +201,7 @@ class BrokerToControllerRequestThread(networkClient: KafkaClient,
     } else {
       waitForControllerRetries = 0
       if (curController.isEmpty || curController.get != nextController.get) {
-        metadataUpdater.setNodes(Collections.singletonList(curController.get))
+        metadataUpdater.setNodes(Collections.singletonList(nextController.get))
         curController = nextController
         info(s"Controller node is now ${curController}")
       }
