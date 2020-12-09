@@ -280,8 +280,8 @@ public class BatchAccumulator<T> implements Closeable {
     }
 
     /**
-     * Get the number of batches including the one that is currently being
-     * written to (if it exists).
+     * Get the number of completed batches which are ready to be drained.
+     * This does not include the batch that is currently being filled.
      */
     public int numCompletedBatches() {
         return completed.size();

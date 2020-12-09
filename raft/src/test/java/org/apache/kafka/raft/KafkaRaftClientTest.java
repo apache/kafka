@@ -502,11 +502,11 @@ public class KafkaRaftClientTest {
         context.client.poll();
         assertEquals(OptionalLong.of(lingerMs), context.channel.lastReceiveTimeout());
 
-        context.time.sleep(25);
+        context.time.sleep(20);
         context.client.poll();
-        assertEquals(OptionalLong.of(25), context.channel.lastReceiveTimeout());
+        assertEquals(OptionalLong.of(30), context.channel.lastReceiveTimeout());
 
-        context.time.sleep(25);
+        context.time.sleep(30);
         context.client.poll();
         assertEquals(2L, context.log.endOffset().offset);
     }
