@@ -1807,15 +1807,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         return offset;
     }
 
-    // For testing only
-    public int numWaitingFetch() {
-        return fetchPurgatory.numWaiting();
-    }
-
-    public QuorumState quorumState() {
-        return quorum;
-    }
-
     @Override
     public CompletableFuture<Void> shutdown(int timeoutMs) {
         logger.info("Beginning graceful shutdown");

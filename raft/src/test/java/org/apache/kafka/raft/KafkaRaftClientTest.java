@@ -224,7 +224,6 @@ public class KafkaRaftClientTest {
         int epoch = context.currentEpoch();
         context.deliverRequest(context.fetchRequest(epoch, otherNodeId, context.log.endOffset().offset, epoch, 1000));
         context.client.poll();
-        assertEquals(context.client.numWaitingFetch(), 1);
 
         // append some record, but the fetch in purgatory will still fail
         context.log.appendAsLeader(Collections.singleton(new SimpleRecord("raft".getBytes())), epoch);
@@ -232,9 +231,8 @@ public class KafkaRaftClientTest {
         // when transition to resign, all request in fetchPurgatory will fail
         context.client.shutdown(1000);
         context.client.poll();
-        assertTrue(context.client.quorumState().isResigned());
-        assertEquals(context.client.numWaitingFetch(), 0);
         context.assertSentFetchResponse(Errors.BROKER_NOT_AVAILABLE, epoch, OptionalInt.of(localId));
+        context.assertResignedLeader(epoch, localId);
 
         // shutting down finished
         context.time.sleep(1000);
