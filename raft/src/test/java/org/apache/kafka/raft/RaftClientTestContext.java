@@ -391,9 +391,9 @@ public final class RaftClientTestContext {
         return raftMessage.correlationId();
     }
 
-    int assertSentVoteRequest(int epoch, int lastEpoch, long lastEpochOffset) {
+    int assertSentVoteRequest(int epoch, int lastEpoch, long lastEpochOffset, int numVoteReceivers) {
         List<RaftRequest.Outbound> voteRequests = collectVoteRequests(epoch, lastEpoch, lastEpochOffset);
-        assertEquals(1, voteRequests.size());
+        assertEquals(numVoteReceivers, voteRequests.size());
         return voteRequests.iterator().next().correlationId();
     }
 
@@ -448,9 +448,9 @@ public final class RaftClientTestContext {
         channel.mockReceive(new RaftResponse.Inbound(correlationId, response, sourceId));
     }
 
-    int assertSentBeginQuorumEpochRequest(int epoch) {
+    int assertSentBeginQuorumEpochRequest(int epoch, int numBeginEpochRequests) {
         List<RaftRequest.Outbound> requests = collectBeginEpochRequests(epoch);
-        assertEquals(1, requests.size());
+        assertEquals(numBeginEpochRequests, requests.size());
         return requests.get(0).correlationId;
     }
 
@@ -723,6 +723,7 @@ public final class RaftClientTestContext {
     static void verifyLeaderChangeMessage(
         int leaderId,
         List<Integer> voters,
+        List<Integer> grantingVoters,
         ByteBuffer recordKey,
         ByteBuffer recordValue
     ) {
@@ -732,6 +733,8 @@ public final class RaftClientTestContext {
         assertEquals(leaderId, leaderChangeMessage.leaderId());
         assertEquals(voters.stream().map(voterId -> new Voter().setVoterId(voterId)).collect(Collectors.toList()),
             leaderChangeMessage.voters());
+        assertEquals(grantingVoters.stream().map(voterId -> new Voter().setVoterId(voterId)).collect(Collectors.toSet()),
+            new HashSet<>(leaderChangeMessage.grantingVoters()));
     }
 
     void assertFetchRequestData(
