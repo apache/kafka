@@ -122,7 +122,6 @@ public class SnapshotRegistry {
             if (target == null) {
                 if (snapshot.epoch() == epoch) {
                     target = snapshot;
-                    iter.remove();
                 }
             } else {
                 iter.remove();
