@@ -58,6 +58,7 @@ import org.apache.kafka.raft.internals.BatchMemoryPool;
 import org.apache.kafka.raft.internals.CloseListener;
 import org.apache.kafka.raft.internals.FuturePurgatory;
 import org.apache.kafka.raft.internals.KafkaRaftMetrics;
+import org.apache.kafka.raft.internals.LogWriteFailureException;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.raft.internals.RecordsBatchReader;
 import org.apache.kafka.raft.internals.ThresholdPurgatory;
@@ -131,6 +132,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private final int electionBackoffMaxMs;
     private final int fetchMaxWaitMs;
     private final int appendLingerMs;
+    private final int gracefulShutdownTimeoutMs;
     private final KafkaRaftMetrics kafkaRaftMetrics;
     private final NetworkChannel channel;
     private final ReplicatedLog log;
@@ -153,6 +155,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         ReplicatedLog log,
         QuorumState quorum,
         Time time,
+        int gracefulShutdownTimeoutMs,
         ExpirationService expirationService,
         LogContext logContext
     ) {
@@ -170,6 +173,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             raftConfig.requestTimeoutMs(),
             1000,
             raftConfig.appendLingerMs(),
+            gracefulShutdownTimeoutMs,
             logContext,
             new Random());
     }
@@ -189,6 +193,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         int requestTimeoutMs,
         int fetchMaxWaitMs,
         int appendLingerMs,
+        int gracefulShutdownTimeoutMs,
         LogContext logContext,
         Random random
     ) {
@@ -203,6 +208,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         this.electionBackoffMaxMs = electionBackoffMaxMs;
         this.fetchMaxWaitMs = fetchMaxWaitMs;
         this.appendLingerMs = appendLingerMs;
+        this.gracefulShutdownTimeoutMs = gracefulShutdownTimeoutMs;
         this.logger = logContext.logger(KafkaRaftClient.class);
         this.random = random;
         this.requestManager = new RequestManager(voterAddresses.keySet(), retryBackoffMs, requestTimeoutMs, random);
@@ -444,8 +450,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         resetConnections();
     }
 
-    private void transitionToResigned(List<Integer> preferredSuccessors) {
-        quorum.transitionToResigned(preferredSuccessors);
+    private void transitionToResigned() {
+        quorum.transitionToResigned(quorum.leaderStateOrThrow().nonLeaderVotersByDescendingFetchOffset());
         resetConnections();
     }
 
@@ -1494,6 +1500,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                     maybeFireHandleCommit(batch.baseOffset, epoch, batch.records);
                 }
             });
+        } catch (Exception e) {
+          throw new LogWriteFailureException("Failed to append to the leader", e, true);
         } finally {
             batch.release();
         }
@@ -1554,7 +1562,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
         GracefulShutdown shutdown = this.shutdown.get();
         if (shutdown != null) {
-            transitionToResigned(state.nonLeaderVotersByDescendingFetchOffset());
+            transitionToResigned();
             return 0L;
         }
 
@@ -1781,24 +1789,33 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     public void poll() throws IOException {
-        pollListeners();
+        try {
+            pollListeners();
 
-        long currentTimeMs = time.milliseconds();
-        if (maybeCompleteShutdown(currentTimeMs)) {
-            return;
-        }
+            long currentTimeMs = time.milliseconds();
+            if (maybeCompleteShutdown(currentTimeMs)) {
+                return;
+            }
 
-        long pollTimeoutMs = pollCurrentState(currentTimeMs);
-        kafkaRaftMetrics.updatePollStart(currentTimeMs);
+            long pollTimeoutMs = pollCurrentState(currentTimeMs);
+            kafkaRaftMetrics.updatePollStart(currentTimeMs);
 
-        List<RaftMessage> inboundMessages = channel.receive(pollTimeoutMs);
+            List<RaftMessage> inboundMessages = channel.receive(pollTimeoutMs);
 
-        currentTimeMs = time.milliseconds();
-        kafkaRaftMetrics.updatePollEnd(currentTimeMs);
-
-        for (RaftMessage message : inboundMessages) {
-            handleInboundMessage(message, currentTimeMs);
             currentTimeMs = time.milliseconds();
+            kafkaRaftMetrics.updatePollEnd(currentTimeMs);
+
+            for (RaftMessage message : inboundMessages) {
+                handleInboundMessage(message, currentTimeMs);
+                currentTimeMs = time.milliseconds();
+            }
+        } catch (LogWriteFailureException e) {
+            logger.error("Failed to append records to the log, will resign the leadership now", e);
+            transitionToResigned();
+            if (e.shutdownNeeded() && shutdown.get() == null) {
+                logger.error("Transit to graceful shutdown state due to fatal error", e.getCause());
+                shutdown(gracefulShutdownTimeoutMs);
+            }
         }
     }
 
