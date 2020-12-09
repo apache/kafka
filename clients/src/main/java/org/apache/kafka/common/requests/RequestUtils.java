@@ -85,7 +85,7 @@ public final class RequestUtils {
 
         int headerSize = header.size(cache, headerVersion);
         int messageSize = apiMessage.size(cache, apiVersion);
-        ByteBufferAccessor writable = new ByteBufferAccessor(ByteBuffer.allocate(4 + headerSize + messageSize));
+        ByteBufferAccessor writable = new ByteBufferAccessor(ByteBuffer.allocate(headerSize + messageSize));
 
         header.write(writable, cache, headerVersion);
         apiMessage.write(writable, cache, apiVersion);
