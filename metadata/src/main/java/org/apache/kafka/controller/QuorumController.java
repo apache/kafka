@@ -184,7 +184,7 @@ public final class QuorumController implements Controller {
             return exception;
         }
         log.warn("{}: failed with unknown server exception {} at epoch {} in {} us.  " +
-            "Reverting to last committed offset {].",
+            "Reverting to last committed offset {}.",
             this, exception.getClass().getSimpleName(), curClaimEpoch, deltaUs,
             lastCommittedOffset, exception);
         renounce();
