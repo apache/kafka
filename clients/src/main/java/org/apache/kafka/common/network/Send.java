@@ -20,7 +20,7 @@ import java.io.IOException;
 import java.nio.channels.GatheringByteChannel;
 
 /**
- * This interface models the in-progress sending of data to a specific destination
+ * This interface models the in-progress sending of data.
  */
 public interface Send {
 

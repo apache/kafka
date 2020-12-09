@@ -42,8 +42,8 @@ public class MultiRecordsSend implements Send {
     private Send current;
 
     /**
-     * Construct a MultiRecordsSend for the given destination from a queue of Send objects. The queue will be
-     * consumed as the MultiRecordsSend progresses (on completion, it will be empty).
+     * Construct a MultiRecordsSend from a queue of Send objects. The queue will be consumed as the MultiRecordsSend
+     * progresses (on completion, it will be empty).
      */
     public MultiRecordsSend(Queue<Send> sends) {
         this.sendQueue = sends;
