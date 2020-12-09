@@ -308,9 +308,6 @@ class AclAuthorizer extends Authorizer with Logging {
     if (zkClient != null) zkClient.close()
   }
 
-  // TODO: 1. Discuss how to log audit message
-  // TODO: 2. Discuss if we need a trie to optimize（mainly for the O(n^2) loop but I think
-  //  in most of the cases it would be O(1) because denyDominatePrefixAllow should be rare
   override def authorizeByResourceType(requestContext: AuthorizableRequestContext,
                                        op: AclOperation,
                                        resourceType: ResourceType): AuthorizationResult = {
@@ -354,7 +351,7 @@ class AclAuthorizer extends Authorizer with Logging {
   def matchingResources(principal: String, host: String, op: AclOperation, permission: AclPermissionType,
                         resourceType: ResourceType, patternType: PatternType): List[mutable.HashSet[String]] = {
     var matched = List[mutable.HashSet[String]]()
-    for (p <- Set(principal, AclEntry.WildcardPrincipal.toString)) {
+    for (p <- Set(principal, AclEntry.WildcardPrincipalString)) {
       for (h <- Set(host, AclEntry.WildcardHost)) {
         for (o <- Set(op, AclOperation.ALL)) {
           val ace = new AccessControlEntry(p, h, o, permission)
@@ -369,7 +366,7 @@ class AclAuthorizer extends Authorizer with Logging {
     matched
   }
 
-  def denyAll(denyLiterals: List[mutable.HashSet[String]]): Boolean =
+  private def denyAll(denyLiterals: List[mutable.HashSet[String]]): Boolean =
     denyLiterals.exists(r => r.contains(ResourcePattern.WILDCARD_RESOURCE))
 
 
