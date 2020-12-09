@@ -1093,18 +1093,19 @@ class Log(@volatile private var _dir: File,
                      assignOffsets: Boolean,
                      leaderEpoch: Int,
                      ignoreRecordSize: Boolean): LogAppendInfo = {
-    maybeHandleIOException(s"Error while appending records to $topicPartition in dir ${dir.getParent}") {
-      val appendInfo = analyzeAndValidateRecords(records, origin, ignoreRecordSize)
 
-      // return if we have no valid messages or if this is a duplicate of the last appended entry
-      if (appendInfo.shallowCount == 0) appendInfo
-      else {
+    val appendInfo = analyzeAndValidateRecords(records, origin, ignoreRecordSize)
 
-        // trim any invalid bytes or partial messages before appending it to the on-disk log
-        var validRecords = trimInvalidBytes(records, appendInfo)
+    // return if we have no valid messages or if this is a duplicate of the last appended entry
+    if (appendInfo.shallowCount == 0) appendInfo
+    else {
 
-        // they are valid, insert them in the log
-        lock synchronized {
+      // trim any invalid bytes or partial messages before appending it to the on-disk log
+      var validRecords = trimInvalidBytes(records, appendInfo)
+
+      // they are valid, insert them in the log
+      lock synchronized {
+        maybeHandleIOException(s"Error while appending records to $topicPartition in dir ${dir.getParent}") {
           checkIfMemoryMappedBufferClosed()
 
           // check for offline log dir in case a retry following an IOException happens before the log dir
@@ -1561,6 +1562,10 @@ class Log(@volatile private var _dir: File,
           } else segmentEntry = segments.higherEntry(segmentEntry.getKey)
 
           done = fetchDataInfo != null || segmentEntry == null
+        }
+
+        if (logDirFailureChannel.logDirIsOffline(parentDir)) {
+          throw new KafkaStorageException(s"The log dir $parentDir is offline due to a previous IO exception.");
         }
 
         if (fetchDataInfo != null) fetchDataInfo

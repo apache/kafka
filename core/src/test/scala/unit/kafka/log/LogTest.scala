@@ -2819,13 +2819,13 @@ class LogTest {
   }
 
   @Test
-  def testAppendToLogInFailedLogDir(): Unit = {
+  def testAppendToOrReadFromLogInFailedLogDir(): Unit = {
     val log = createLog(logDir, LogConfig())
     log.appendAsLeader(TestUtils.singletonRecords(value = null), leaderEpoch = 0)
     assertEquals(0, readLog(log, 0, 4096).records.records.iterator.next().offset)
     log.logDirFailureChannel.maybeAddOfflineLogDir(logDir.getParent, "Simulating failed log dir", new IOException("Test failure"))
     assertThrows[KafkaStorageException](log.appendAsLeader(TestUtils.singletonRecords(value = null), leaderEpoch = 0))
-    assertEquals(0, readLog(log, 0, 4096).records.records.iterator.next().offset)
+    assertThrows[KafkaStorageException](readLog(log, 0, 4096).records.records.iterator.next().offset)
   }
 
   @Test
