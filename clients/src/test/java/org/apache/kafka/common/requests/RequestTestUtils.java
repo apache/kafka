@@ -56,14 +56,22 @@ public class RequestTestUtils {
     public static MetadataResponse metadataResponse(Collection<Node> brokers,
                                                     String clusterId, int controllerId,
                                                     List<MetadataResponse.TopicMetadata> topicMetadataList) {
+        return metadataResponse(brokers, clusterId, controllerId, topicMetadataList, ApiKeys.METADATA.latestVersion());
+    }
+
+    public static MetadataResponse metadataResponse(Collection<Node> brokers,
+                                                    String clusterId, int controllerId,
+                                                    List<MetadataResponse.TopicMetadata> topicMetadataList,
+                                                    short responseVersion) {
         return metadataResponse(MetadataResponse.DEFAULT_THROTTLE_TIME, brokers, clusterId, controllerId,
-                topicMetadataList, MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED);
+                topicMetadataList, MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED, responseVersion);
     }
 
     public static MetadataResponse metadataResponse(int throttleTimeMs, Collection<Node> brokers,
                                                     String clusterId, int controllerId,
                                                     List<MetadataResponse.TopicMetadata> topicMetadatas,
-                                                    int clusterAuthorizedOperations) {
+                                                    int clusterAuthorizedOperations,
+                                                    short responseVersion) {
         List<MetadataResponseData.MetadataResponseTopic> topics = new ArrayList<>();
         topicMetadatas.forEach(topicMetadata -> {
             MetadataResponseData.MetadataResponseTopic metadataResponseTopic = new MetadataResponseData.MetadataResponseTopic();
@@ -85,7 +93,7 @@ public class RequestTestUtils {
             }
             topics.add(metadataResponseTopic);
         });
-        return MetadataResponse.prepareResponse(true, throttleTimeMs, brokers, clusterId, controllerId,
+        return MetadataResponse.prepareResponse(responseVersion, throttleTimeMs, brokers, clusterId, controllerId,
                 topics, clusterAuthorizedOperations); }
 
     public static MetadataResponse metadataUpdateWith(final int numNodes,
@@ -169,7 +177,7 @@ public class RequestTestUtils {
                     Topic.isInternal(topic), Collections.emptyList()));
         }
 
-        return metadataResponse(nodes, clusterId, 0, topicMetadata);
+        return metadataResponse(nodes, clusterId, 0, topicMetadata, responseVersion);
     }
 
     @FunctionalInterface

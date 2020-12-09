@@ -2049,7 +2049,8 @@ public class KafkaAdminClientTest {
                     env.cluster().clusterResource().clusterId(),
                     2,
                     Collections.emptyList(),
-                    MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED);
+                    MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED,
+                    ApiKeys.METADATA.latestVersion());
             env.kafkaClient().prepareResponse(response);
 
             // Prepare the metadata response used for the second describe cluster
@@ -2058,7 +2059,8 @@ public class KafkaAdminClientTest {
                     env.cluster().clusterResource().clusterId(),
                     3,
                     Collections.emptyList(),
-                    1 << AclOperation.DESCRIBE.code() | 1 << AclOperation.ALTER.code());
+                    1 << AclOperation.DESCRIBE.code() | 1 << AclOperation.ALTER.code(),
+                    ApiKeys.METADATA.latestVersion());
             env.kafkaClient().prepareResponse(response2);
 
             // Test DescribeCluster with the authorized operations omitted.
