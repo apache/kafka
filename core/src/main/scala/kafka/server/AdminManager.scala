@@ -996,11 +996,8 @@ class AdminManager(val config: KafkaConfig,
         case (Some(user), None, None) => (user, ConfigType.User, DynamicConfig.User.configKeys)
         case (None, Some(clientId), None) => (clientId, ConfigType.Client, DynamicConfig.Client.configKeys)
         case (None, None, Some(ip)) =>
-          try {
-            DynamicConfig.Ip.validateIpOrHost(ip)
-          } catch {
-            case e: IllegalArgumentException => throw new InvalidRequestException(e.getMessage)
-          }
+          if (!DynamicConfig.Ip.isValidIpEntity(ip))
+            throw new InvalidRequestException(s"$ip is not a valid IP or resolvable host.")
           (ip, ConfigType.Ip, DynamicConfig.Ip.configKeys)
         case (_, _, Some(_)) => throw new InvalidRequestException(s"Invalid quota entity combination, " +
           s"IP entity should not be used with user/client ID entity.")

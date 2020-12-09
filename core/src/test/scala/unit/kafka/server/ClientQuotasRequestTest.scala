@@ -279,20 +279,31 @@ class ClientQuotasRequestTest extends BaseRequestTest {
     alterEntityQuotas(entity, Map((ProducerByteRateProp -> Some(10000.5))), validateOnly = true)
   }
 
+  private def expectInvalidRequestWithMessage(runnable: => Unit, expectedMessage: String): Unit = {
+    val exception = assertThrows(classOf[InvalidRequestException], () => runnable)
+    assertTrue(s"Expected message $exception to contain $expectedMessage", exception.getMessage.contains(expectedMessage))
+  }
+
   @Test
   def testAlterClientQuotasInvalidEntityCombination(): Unit = {
     val userAndIpEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.USER -> "user", ClientQuotaEntity.IP -> "1.2.3.4").asJava)
     val clientAndIpEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.CLIENT_ID -> "client", ClientQuotaEntity.IP -> "1.2.3.4").asJava)
-    assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(userAndIpEntity, Map(RequestPercentageProp -> Some(12.34)), validateOnly = true))
-    assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(clientAndIpEntity, Map(RequestPercentageProp -> Some(12.34)), validateOnly = true))
+    val expectedExceptionMessage = "Invalid quota entity combination"
+    expectInvalidRequestWithMessage(alterEntityQuotas(userAndIpEntity, Map(RequestPercentageProp -> Some(12.34)),
+      validateOnly = true), expectedExceptionMessage)
+    expectInvalidRequestWithMessage(alterEntityQuotas(clientAndIpEntity, Map(RequestPercentageProp -> Some(12.34)),
+      validateOnly = true), expectedExceptionMessage)
   }
 
   @Test
   def testAlterClientQuotasBadIp(): Unit = {
     val invalidHostPatternEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.IP -> "abc-123").asJava)
     val unresolvableHostEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.IP -> "ip").asJava)
-    assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(invalidHostPatternEntity, Map(IpConnectionRateProp -> Some(50.0)), validateOnly = true))
-    assertThrows(classOf[InvalidRequestException], () => alterEntityQuotas(unresolvableHostEntity, Map(IpConnectionRateProp -> Some(50.0)), validateOnly = true))
+    val expectedExceptionMessage = "not a valid IP"
+    expectInvalidRequestWithMessage(alterEntityQuotas(invalidHostPatternEntity, Map(IpConnectionRateProp -> Some(50.0)),
+      validateOnly = true), expectedExceptionMessage)
+    expectInvalidRequestWithMessage(alterEntityQuotas(unresolvableHostEntity, Map(IpConnectionRateProp -> Some(50.0)),
+      validateOnly = true), expectedExceptionMessage)
   }
 
   @Test
@@ -300,9 +311,11 @@ class ClientQuotasRequestTest extends BaseRequestTest {
     val ipFilterComponent = ClientQuotaFilterComponent.ofEntityType(ClientQuotaEntity.IP)
     val userFilterComponent = ClientQuotaFilterComponent.ofEntityType(ClientQuotaEntity.USER)
     val clientIdFilterComponent = ClientQuotaFilterComponent.ofEntityType(ClientQuotaEntity.CLIENT_ID)
-
-    assertThrows(classOf[InvalidRequestException], () => describeClientQuotas(ClientQuotaFilter.contains(List(ipFilterComponent, userFilterComponent).asJava)))
-    assertThrows(classOf[InvalidRequestException], () => describeClientQuotas(ClientQuotaFilter.contains(List(ipFilterComponent, clientIdFilterComponent).asJava)))
+    val expectedExceptionMessage = "Invalid entity filter component combination"
+    expectInvalidRequestWithMessage(describeClientQuotas(ClientQuotaFilter.contains(List(ipFilterComponent, userFilterComponent).asJava)),
+      expectedExceptionMessage)
+    expectInvalidRequestWithMessage(describeClientQuotas(ClientQuotaFilter.contains(List(ipFilterComponent, clientIdFilterComponent).asJava)),
+      expectedExceptionMessage)
   }
 
   // Entities to be matched against.

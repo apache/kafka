@@ -886,7 +886,10 @@ object ConfigCommand extends Config {
       }
 
       if (hasEntityName && entityTypeVals.contains(ConfigType.Ip)) {
-        Seq(entityName, ip).filter(options.has(_)).map(options.valueOf(_)).foreach(DynamicConfig.Ip.validateIpOrHost)
+        Seq(entityName, ip).filter(options.has(_)).map(options.valueOf(_)).foreach { ipEntity =>
+          if (!DynamicConfig.Ip.isValidIpEntity(ipEntity))
+            throw new IllegalArgumentException(s"The entity name for ${entityTypeVals.head} must be a valid IP or resolvable host, but it is: $ipEntity")
+        }
       }
 
       if (options.has(describeOpt) && entityTypeVals.contains(BrokerLoggerConfigType) && !hasEntityName)

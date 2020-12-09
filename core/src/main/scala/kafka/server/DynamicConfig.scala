@@ -143,14 +143,15 @@ object DynamicConfig {
 
     def validate(props: Properties) = DynamicConfig.validate(ipConfigs, props, customPropsAllowed = false)
 
-    def validateIpOrHost(ip: String): Unit = {
+    def isValidIpEntity(ip: String): Boolean = {
       if (ip != ConfigEntityName.Default) {
         try {
           InetAddress.getByName(ip)
         } catch {
-          case _: UnknownHostException => throw new IllegalArgumentException(s"$ip is not a valid IP or resolvable hostname")
+          case _: UnknownHostException => return false
         }
       }
+      true
     }
   }
 

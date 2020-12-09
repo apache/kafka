@@ -16,6 +16,7 @@
   */
 package kafka.server
 
+import kafka.admin.AdminOperationException
 import kafka.utils.CoreUtils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.config._
@@ -52,12 +53,12 @@ class DynamicConfigTest extends ZooKeeperTestHarness {
     adminZkClient.changeIpConfig("1.2.3.4", propsWith(DynamicConfig.Ip.IpConnectionRateOverrideProp, "-1"))
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test(expected = classOf[AdminOperationException])
   def shouldFailIpConfigsWithInvalidIpv4Entity(): Unit = {
     adminZkClient.changeIpConfig("1,1.1.1", propsWith(DynamicConfig.Ip.IpConnectionRateOverrideProp, "2"));
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test(expected = classOf[AdminOperationException])
   def shouldFailIpConfigsWithBadHost(): Unit = {
     adminZkClient.changeIpConfig("ip", propsWith(DynamicConfig.Ip.IpConnectionRateOverrideProp, "2"));
   }

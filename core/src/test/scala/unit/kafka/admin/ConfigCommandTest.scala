@@ -401,9 +401,9 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
   @Test(expected = classOf[IllegalArgumentException])
   def shouldFailIfInvalidHostUsingZookeeper(): Unit = {
-    val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
+    val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "A,B", "--entity-type", "ips", "--describe"))
-    ConfigCommand.alterConfigWithZk(null, createOpts, new DummyAdminZkClient(zkClient))
+    createOpts.checkArgs()
   }
 
   @Test(expected = classOf[IllegalArgumentException])
@@ -415,9 +415,9 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
   @Test(expected = classOf[IllegalArgumentException])
   def shouldFailIfUnresolvableHostUsingZookeeper(): Unit = {
-    val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
+    val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "admin", "--entity-type", "ips", "--describe"))
-    ConfigCommand.alterConfigWithZk(null, createOpts, new DummyAdminZkClient(zkClient))
+    createOpts.checkArgs()
   }
 
   @Test

@@ -393,7 +393,8 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
    * @param configs properties to validate for the IP
    */
   def validateIpConfig(ip: String, configs: Properties): Unit = {
-    DynamicConfig.Ip.validateIpOrHost(ip)
+    if (!DynamicConfig.Ip.isValidIpEntity(ip))
+      throw new AdminOperationException(s"$ip is not a valid IP or resolvable host.")
     DynamicConfig.Ip.validate(configs)
   }
 
