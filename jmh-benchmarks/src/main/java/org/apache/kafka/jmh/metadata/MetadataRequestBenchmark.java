@@ -22,7 +22,6 @@ import kafka.coordinator.group.GroupCoordinator;
 import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
 import kafka.server.AdminManager;
-import kafka.server.ApisUtils;
 import kafka.server.BrokerFeatures;
 import kafka.server.BrokerTopicStats;
 import kafka.server.ClientQuotaManager;
@@ -173,7 +172,6 @@ public class MetadataRequestBenchmark {
         BrokerFeatures brokerFeatures = BrokerFeatures.createDefault();
         Time time = new SystemTime();
         return new KafkaApis(requestChannel,
-            new ApisUtils(requestChannel, Option.empty(), quotaManagers, time),
             replicaManager,
             adminManager,
             groupCoordinator,

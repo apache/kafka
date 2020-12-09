@@ -109,8 +109,7 @@ trait ApisUtils extends Logging {
   // Throttle the channel if the request quota is enabled but has been violated. Regardless of throttling, send the
   // response immediately.
   def sendResponseMaybeThrottle(request: RequestChannel.Request,
-                                createResponse: Int => AbstractResponse,
-                                onComplete: Option[Send => Unit] = None): Unit = {
+                                createResponse: Int => AbstractResponse): Unit = {
     val throttleTimeMs = maybeRecordAndGetThrottleTimeMs(request)
     // Only throttle non-forwarded requests
     if (!request.isForwarded)
@@ -123,7 +122,7 @@ trait ApisUtils extends Logging {
     // Only throttle non-forwarded requests or cluster authorization failures
     if (error.isInstanceOf[ClusterAuthorizationException] || !request.isForwarded)
       quotas.request.throttle(request, throttleTimeMs, requestChannel.sendResponse)
-    sendErrorOrCloseConnection(request, error, throttleTimeMs)
+    requestChannel.sendErrorOrCloseConnection(request, error, throttleTimeMs)
   }
 
   private def maybeRecordAndGetThrottleTimeMs(request: RequestChannel.Request): Int = {
@@ -138,8 +137,7 @@ trait ApisUtils extends Logging {
    */
   def sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota: ControllerMutationQuota,
                                                    request: RequestChannel.Request,
-                                                   createResponse: Int => AbstractResponse,
-                                                   onComplete: Option[Send => Unit]): Unit = {
+                                                   createResponse: Int => AbstractResponse): Unit = {
     val timeMs = time.milliseconds
     val controllerThrottleTimeMs = controllerMutationQuota.throttleTime
     val requestThrottleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request, timeMs)
@@ -166,16 +164,7 @@ trait ApisUtils extends Logging {
 
   def sendErrorResponseExemptThrottle(request: RequestChannel.Request, error: Throwable): Unit = {
     quotas.request.maybeRecordExempt(request)
-    sendErrorOrCloseConnection(request, error, 0)
-  }
-
-  def sendErrorOrCloseConnection(request: RequestChannel.Request, error: Throwable, throttleMs: Int): Unit = {
-    val requestBody = request.body[AbstractRequest]
-    val response = requestBody.getErrorResponse(throttleMs, error)
-    if (response == null)
-      requestChannel.closeConnection(request, requestBody.errorCounts(error))
-    else
-      requestChannel.sendResponse(request, Some(response), None)
+    requestChannel.sendErrorOrCloseConnection(request, error, 0)
   }
 
   def sendNoOpResponseExemptThrottle(request: RequestChannel.Request): Unit = {
