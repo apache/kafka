@@ -38,7 +38,7 @@ class EnvelopeResponseTest {
             short headerVersion = ApiKeys.ENVELOPE.responseHeaderVersion(version);
             ResponseHeader header = new ResponseHeader(15, headerVersion);
 
-            Send send = response.toSend("a", header, version);
+            Send send = response.toSend(header, version);
             ByteBuffer buffer = TestUtils.toBuffer(send);
             assertEquals(send.size() - 4, buffer.getInt());
             assertEquals(header, ResponseHeader.parse(buffer, headerVersion));

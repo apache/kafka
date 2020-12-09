@@ -183,7 +183,6 @@ import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
 import java.nio.BufferUnderflowException;
@@ -571,7 +570,7 @@ public class RequestResponseTest {
             short apiVersion = (short) version;
             DescribeConfigsResponse response = createDescribeConfigsResponse(apiVersion);
             DescribeConfigsResponse deserialized0 = (DescribeConfigsResponse) AbstractResponse.parseResponse(ApiKeys.DESCRIBE_CONFIGS,
-                    response.serializeBody(apiVersion), apiVersion);
+                    response.serialize(apiVersion), apiVersion);
             verifyDescribeConfigsResponse(response, deserialized0, apiVersion);
         }
     }
@@ -591,9 +590,9 @@ public class RequestResponseTest {
         // Check for equality of the ByteBuffer only if indicated (it is likely to fail if any of the fields
         // in the request is a HashMap with multiple elements since ordering of the elements may vary)
         try {
-            ByteBuffer serializedBytes = req.serializeBody();
+            ByteBuffer serializedBytes = req.serialize();
             AbstractRequest deserialized = AbstractRequest.parseRequest(req.apiKey(), req.version(), serializedBytes).request;
-            ByteBuffer serializedBytes2 = deserialized.serializeBody();
+            ByteBuffer serializedBytes2 = deserialized.serialize();
             serializedBytes.rewind();
             if (checkEquality)
                 assertEquals("Request " + req + "failed equality test", serializedBytes, serializedBytes2);
@@ -607,9 +606,9 @@ public class RequestResponseTest {
         // Check for equality and hashCode of the Struct only if indicated (it is likely to fail if any of the fields
         // in the response is a HashMap with multiple elements since ordering of the elements may vary)
         try {
-            ByteBuffer serializedBytes = response.serializeBody((short) version);
+            ByteBuffer serializedBytes = response.serialize((short) version);
             AbstractResponse deserialized = AbstractResponse.parseResponse(response.apiKey(), serializedBytes, (short) version);
-            ByteBuffer serializedBytes2 = deserialized.serializeBody((short) version);
+            ByteBuffer serializedBytes2 = deserialized.serialize((short) version);
             serializedBytes.rewind();
             if (checkEquality)
                 assertEquals("Response " + response + "failed equality test", serializedBytes, serializedBytes2);
@@ -734,7 +733,7 @@ public class RequestResponseTest {
                 6, FetchResponse.INVALID_LOG_START_OFFSET, Optional.empty(), emptyList(), records));
 
         FetchResponse<MemoryRecords> response = new FetchResponse<>(Errors.NONE, responseData, 10, INVALID_SESSION_ID);
-        FetchResponse<MemoryRecords> deserialized = FetchResponse.parse(response.serializeBody((short) 4), (short) 4);
+        FetchResponse<MemoryRecords> deserialized = FetchResponse.parse(response.serialize((short) 4), (short) 4);
         assertEquals(responseData, deserialized.responseData());
     }
 
@@ -752,7 +751,7 @@ public class RequestResponseTest {
         int correlationId = 15;
 
         short responseHeaderVersion = FETCH.responseHeaderVersion(apiVersion);
-        Send send = fetchResponse.toSend("1", new ResponseHeader(correlationId, responseHeaderVersion), apiVersion);
+        Send send = fetchResponse.toSend(new ResponseHeader(correlationId, responseHeaderVersion), apiVersion);
         ByteBufferChannel channel = new ByteBufferChannel(send.size());
         send.writeTo(channel);
         channel.close();
@@ -767,7 +766,7 @@ public class RequestResponseTest {
         ResponseHeader responseHeader = ResponseHeader.parse(channel.buffer(), responseHeaderVersion);
         assertEquals(correlationId, responseHeader.correlationId());
 
-        assertEquals(fetchResponse.serializeBody(apiVersion), buf);
+        assertEquals(fetchResponse.serialize(apiVersion), buf);
         FetchResponseData deserialized = new FetchResponseData(new ByteBufferAccessor(buf), apiVersion);
         ObjectSerializationCache serializationCache = new ObjectSerializationCache();
         assertEquals(size, responseHeader.size(serializationCache) + deserialized.size(serializationCache, apiVersion));
@@ -777,7 +776,7 @@ public class RequestResponseTest {
     public void testControlledShutdownResponse() {
         ControlledShutdownResponse response = createControlledShutdownResponse();
         short version = ApiKeys.CONTROLLED_SHUTDOWN.latestVersion();
-        ByteBuffer buffer = response.serializeBody(version);
+        ByteBuffer buffer = response.serialize(version);
         ControlledShutdownResponse deserialized = ControlledShutdownResponse.parse(buffer, version);
         assertEquals(response.error(), deserialized.error());
         assertEquals(response.data().remainingPartitions(), deserialized.data().remainingPartitions());
@@ -814,7 +813,7 @@ public class RequestResponseTest {
     public void testFetchRequestMaxBytesOldVersions() {
         final short version = 1;
         FetchRequest fr = createFetchRequest(version);
-        FetchRequest fr2 = FetchRequest.parse(fr.serializeBody(), version);
+        FetchRequest fr2 = FetchRequest.parse(fr.serialize(), version);
         assertEquals(fr2.maxBytes(), fr.maxBytes());
     }
 
@@ -822,12 +821,12 @@ public class RequestResponseTest {
     public void testFetchRequestIsolationLevel() throws Exception {
         FetchRequest request = createFetchRequest(4, IsolationLevel.READ_COMMITTED);
         FetchRequest deserialized = (FetchRequest) AbstractRequest.parseRequest(request.apiKey(), request.version(),
-                request.serializeBody()).request;
+                request.serialize()).request;
         assertEquals(request.isolationLevel(), deserialized.isolationLevel());
 
         request = createFetchRequest(4, IsolationLevel.READ_UNCOMMITTED);
         deserialized = (FetchRequest) AbstractRequest.parseRequest(request.apiKey(), request.version(),
-                request.serializeBody()).request;
+                request.serialize()).request;
         assertEquals(request.isolationLevel(), deserialized.isolationLevel());
     }
 
@@ -835,12 +834,12 @@ public class RequestResponseTest {
     public void testFetchRequestWithMetadata() throws Exception {
         FetchRequest request = createFetchRequest(4, IsolationLevel.READ_COMMITTED);
         FetchRequest deserialized = (FetchRequest) AbstractRequest.parseRequest(ApiKeys.FETCH, request.version(),
-                request.serializeBody()).request;
+                request.serialize()).request;
         assertEquals(request.isolationLevel(), deserialized.isolationLevel());
 
         request = createFetchRequest(4, IsolationLevel.READ_UNCOMMITTED);
         deserialized = (FetchRequest) AbstractRequest.parseRequest(ApiKeys.FETCH, request.version(),
-                request.serializeBody()).request;
+                request.serialize()).request;
         assertEquals(request.isolationLevel(), deserialized.isolationLevel());
     }
 
@@ -866,7 +865,7 @@ public class RequestResponseTest {
     public void testJoinGroupRequestVersion0RebalanceTimeout() {
         final short version = 0;
         JoinGroupRequest jgr = createJoinGroupRequest(version);
-        JoinGroupRequest jgr2 = JoinGroupRequest.parse(jgr.serializeBody(), version);
+        JoinGroupRequest jgr2 = JoinGroupRequest.parse(jgr.serialize(), version);
         assertEquals(jgr2.data().rebalanceTimeoutMs(), jgr.data().rebalanceTimeoutMs());
     }
 
@@ -958,7 +957,7 @@ public class RequestResponseTest {
 
     @Test
     public void testApiVersionResponseParsingFallback() {
-        ByteBuffer buffer = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.serializeBody((short) 0);
+        ByteBuffer buffer = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.serialize((short) 0);
         ApiVersionsResponse response = ApiVersionsResponse.parse(buffer, ApiKeys.API_VERSIONS.latestVersion());
 
         assertEquals(Errors.NONE.code(), response.data.errorCode());
@@ -972,7 +971,7 @@ public class RequestResponseTest {
 
     @Test
     public void testApiVersionResponseParsing() {
-        ByteBuffer buffer = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.serializeBody(ApiKeys.API_VERSIONS.latestVersion());
+        ByteBuffer buffer = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.serialize(ApiKeys.API_VERSIONS.latestVersion());
         ApiVersionsResponse response = ApiVersionsResponse.parse(buffer, ApiKeys.API_VERSIONS.latestVersion());
 
         assertEquals(Errors.NONE.code(), response.data.errorCode());
@@ -985,7 +984,7 @@ public class RequestResponseTest {
                 setTransactionalId("abracadabra").
                 setProducerId(123));
         final UnsupportedVersionException exception = assertThrows(
-            UnsupportedVersionException.class, () -> bld.build((short) 2).serializeBody());
+            UnsupportedVersionException.class, () -> bld.build((short) 2).serialize());
         assertTrue(exception.getMessage().contains("Attempted to write a non-default producerId at version 2"));
         bld.build((short) 3);
     }
@@ -1349,7 +1348,7 @@ public class RequestResponseTest {
                     new TopicPartition("topic3", 0), Optional.empty(),
                     Optional.empty(), replicas, isr, offlineReplicas))));
 
-        return TestUtils.metadataResponse(asList(node), null, MetadataResponse.NO_CONTROLLER_ID, allTopicMetadata);
+        return RequestTestUtils.metadataResponse(asList(node), null, MetadataResponse.NO_CONTROLLER_ID, allTopicMetadata);
     }
 
     private OffsetCommitRequest createOffsetCommitRequest(int version) {

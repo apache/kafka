@@ -79,6 +79,7 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
+import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.SyncGroupResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -629,7 +630,7 @@ public class KafkaConsumerTest {
     }
 
     private void initMetadata(MockClient mockClient, Map<String, Integer> partitionCounts) {
-        MetadataResponse initialMetadata = TestUtils.metadataUpdateWith(1, partitionCounts);
+        MetadataResponse initialMetadata = RequestTestUtils.metadataUpdateWith(1, partitionCounts);
 
         mockClient.updateMetadata(initialMetadata);
     }
@@ -900,7 +901,7 @@ public class KafkaConsumerTest {
 
         consumer.subscribe(Pattern.compile(topic), getConsumerRebalanceListener(consumer));
 
-        client.prepareMetadataUpdate(TestUtils.metadataUpdateWith(1, partitionCounts));
+        client.prepareMetadataUpdate(RequestTestUtils.metadataUpdateWith(1, partitionCounts));
 
         consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
 
@@ -939,7 +940,7 @@ public class KafkaConsumerTest {
 
         consumer.subscribe(Pattern.compile(otherTopic), getConsumerRebalanceListener(consumer));
 
-        client.prepareMetadataUpdate(TestUtils.metadataUpdateWith(1, partitionCounts));
+        client.prepareMetadataUpdate(RequestTestUtils.metadataUpdateWith(1, partitionCounts));
         prepareRebalance(client, node, singleton(otherTopic), assignor, singletonList(otherTopicPartition), coordinator);
         consumer.poll(Duration.ZERO);
 
@@ -1685,7 +1686,7 @@ public class KafkaConsumerTest {
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         Node coordinator = prepareRebalance(client, node, assignor, singletonList(tp0), null);
 
-        client.prepareMetadataUpdate(TestUtils.metadataUpdateWith(1, Collections.singletonMap(topic, 1)));
+        client.prepareMetadataUpdate(RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap(topic, 1)));
 
         consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
 
@@ -2408,7 +2409,7 @@ public class KafkaConsumerTest {
         List<MetadataResponse.TopicMetadata> topicMetadata = new ArrayList<>();
         topicMetadata.add(new MetadataResponse.TopicMetadata(Errors.INVALID_TOPIC_EXCEPTION,
                 invalidTopicName, false, Collections.emptyList()));
-        MetadataResponse updateResponse = TestUtils.metadataResponse(cluster.nodes(),
+        MetadataResponse updateResponse = RequestTestUtils.metadataResponse(cluster.nodes(),
                 cluster.clusterResource().clusterId(),
                 cluster.controller().id(),
                 topicMetadata);

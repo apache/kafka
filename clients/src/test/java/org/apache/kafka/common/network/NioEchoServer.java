@@ -35,6 +35,7 @@ import org.apache.kafka.test.TestUtils;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.nio.channels.GatheringByteChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
@@ -75,7 +76,7 @@ public class NioEchoServer extends Thread {
     private final List<SocketChannel> socketChannels;
     private final AcceptorThread acceptorThread;
     private final Selector selector;
-    private volatile WritableByteChannel outputChannel;
+    private volatile GatheringByteChannel outputChannel;
     private final CredentialCache credentialCache;
     private final Metrics metrics;
     private volatile int numSent = 0;
@@ -225,18 +226,17 @@ public class NioEchoServer extends Thread {
                     if (!maybeBeginServerReauthentication(channel, rcv, time)) {
                         String channelId = channel.id();
                         selector.mute(channelId);
-                        NetworkSend send = new NetworkSend(rcv.source(), rcv.payload());
+                        NetworkSend send = new NetworkSend(rcv.source(), ByteBufferSend.sizePrefixed(rcv.payload()));
                         if (outputChannel == null)
                             selector.send(send);
                         else {
-                            for (ByteBuffer buffer : send.buffers)
-                                outputChannel.write(buffer);
+                            send.writeTo(outputChannel);
                             selector.unmute(channelId);
                         }
                     }
                 }
-                for (Send send : selector.completedSends()) {
-                    selector.unmute(send.destination());
+                for (NetworkSend send : selector.completedSends()) {
+                    selector.unmute(send.destinationId());
                     numSent += 1;
                 }
             }
@@ -276,14 +276,46 @@ public class NioEchoServer extends Thread {
      * the responses (eg. testing graceful close).
      */
     public void outputChannel(WritableByteChannel channel) {
-        this.outputChannel = channel;
+        if (channel instanceof GatheringByteChannel)
+            this.outputChannel = (GatheringByteChannel) channel;
+        else {
+            this.outputChannel = new GatheringByteChannel() {
+                @Override
+                public boolean isOpen() {
+                    return channel.isOpen();
+                }
+
+                @Override
+                public void close() throws IOException {
+                    channel.close();
+                }
+
+                @Override
+                public int write(ByteBuffer src) throws IOException {
+                    return channel.write(src);
+                }
+
+                @Override
+                public long write(ByteBuffer[] srcs, int offset, int length) throws IOException {
+                    long result = 0;
+                    for (int i = offset; i < offset + length; ++i)
+                        result += write(srcs[i]);
+                    return result;
+                }
+
+                @Override
+                public long write(ByteBuffer[] srcs) throws IOException {
+                    return write(srcs, 0, srcs.length);
+                }
+            };
+        }
     }
 
     public Selector selector() {
         return selector;
     }
 
-    public void closeKafkaChannels() throws IOException {
+    public void closeKafkaChannels() {
         closeKafkaChannels = true;
         selector.wakeup();
         try {

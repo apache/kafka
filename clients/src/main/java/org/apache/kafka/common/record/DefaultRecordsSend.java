@@ -20,12 +20,12 @@ import java.io.IOException;
 import java.nio.channels.GatheringByteChannel;
 
 public class DefaultRecordsSend extends RecordsSend<Records> {
-    public DefaultRecordsSend(String destination, Records records) {
-        this(destination, records, records.sizeInBytes());
+    public DefaultRecordsSend(Records records) {
+        this(records, records.sizeInBytes());
     }
 
-    public DefaultRecordsSend(String destination, Records records, int maxBytesToWrite) {
-        super(destination, records, maxBytesToWrite);
+    public DefaultRecordsSend(Records records, int maxBytesToWrite) {
+        super(records, maxBytesToWrite);
     }
 
     @Override

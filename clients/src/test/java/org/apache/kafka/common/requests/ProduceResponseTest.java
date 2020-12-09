@@ -46,8 +46,7 @@ public class ProduceResponseTest {
         ProduceResponse v5Response = new ProduceResponse(responseData, 10);
         short version = 5;
 
-        ByteBuffer buffer = v5Response.serializeWithHeader(version, 0);
-        buffer.rewind();
+        ByteBuffer buffer = RequestTestUtils.serializeResponseWithHeader(v5Response, version, 0);
 
         ResponseHeader.parse(buffer, ApiKeys.PRODUCE.responseHeaderVersion(version)); // throw away.
         ProduceResponse v5FromBytes = (ProduceResponse) AbstractResponse.parseResponse(ApiKeys.PRODUCE,
@@ -92,7 +91,7 @@ public class ProduceResponseTest {
 
         for (short ver = 0; ver <= PRODUCE.latestVersion(); ver++) {
             ProduceResponse response = new ProduceResponse(responseData);
-            ProduceResponse.PartitionResponse deserialized = ProduceResponse.parse(response.serializeBody(ver), ver).responses().get(tp);
+            ProduceResponse.PartitionResponse deserialized = ProduceResponse.parse(response.serialize(ver), ver).responses().get(tp);
             if (ver >= 8) {
                 assertEquals(1, deserialized.recordErrors.size());
                 assertEquals(3, deserialized.recordErrors.get(0).batchIndex);

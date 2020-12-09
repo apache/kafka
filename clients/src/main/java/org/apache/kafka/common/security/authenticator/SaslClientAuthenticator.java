@@ -28,8 +28,8 @@ import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
 import org.apache.kafka.common.network.Authenticator;
+import org.apache.kafka.common.network.ByteBufferSend;
 import org.apache.kafka.common.network.NetworkReceive;
-import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.ReauthenticationContext;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.network.TransportLayer;
@@ -243,7 +243,7 @@ public class SaslClientAuthenticator implements Authenticator {
             case SEND_APIVERSIONS_REQUEST:
                 // Always use version 0 request since brokers treat requests with schema exceptions as GSSAPI tokens
                 ApiVersionsRequest apiVersionsRequest = new ApiVersionsRequest.Builder().build((short) 0);
-                send(apiVersionsRequest.toSend(node, nextRequestHeader(ApiKeys.API_VERSIONS, apiVersionsRequest.version())));
+                send(apiVersionsRequest.toSend(nextRequestHeader(ApiKeys.API_VERSIONS, apiVersionsRequest.version())));
                 setSaslState(SaslState.RECEIVE_APIVERSIONS_RESPONSE);
                 break;
             case RECEIVE_APIVERSIONS_RESPONSE:
@@ -325,7 +325,7 @@ public class SaslClientAuthenticator implements Authenticator {
 
     private void sendHandshakeRequest(short version) throws IOException {
         SaslHandshakeRequest handshakeRequest = createSaslHandshakeRequest(version);
-        send(handshakeRequest.toSend(node, nextRequestHeader(ApiKeys.SASL_HANDSHAKE, handshakeRequest.version())));
+        send(handshakeRequest.toSend(nextRequestHeader(ApiKeys.SASL_HANDSHAKE, handshakeRequest.version())));
     }
 
     private void sendInitialToken() throws IOException {
@@ -435,12 +435,12 @@ public class SaslClientAuthenticator implements Authenticator {
                 ByteBuffer tokenBuf = ByteBuffer.wrap(saslToken);
                 Send send;
                 if (saslAuthenticateVersion == DISABLE_KAFKA_SASL_AUTHENTICATE_HEADER) {
-                    send = new NetworkSend(node, tokenBuf);
+                    send = ByteBufferSend.sizePrefixed(tokenBuf);
                 } else {
                     SaslAuthenticateRequestData data = new SaslAuthenticateRequestData()
                             .setAuthBytes(tokenBuf.array());
                     SaslAuthenticateRequest request = new SaslAuthenticateRequest.Builder(data).build(saslAuthenticateVersion);
-                    send = request.toSend(node, nextRequestHeader(ApiKeys.SASL_AUTHENTICATE, saslAuthenticateVersion));
+                    send = request.toSend(nextRequestHeader(ApiKeys.SASL_AUTHENTICATE, saslAuthenticateVersion));
                 }
                 send(send);
                 return true;

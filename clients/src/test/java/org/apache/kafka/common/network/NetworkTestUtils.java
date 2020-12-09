@@ -70,7 +70,7 @@ public class NetworkTestUtils {
         String prefix = TestUtils.randomString(minMessageSize);
         int requests = 0;
         int responses = 0;
-        selector.send(new NetworkSend(node, ByteBuffer.wrap((prefix + "-0").getBytes(StandardCharsets.UTF_8))));
+        selector.send(new NetworkSend(node, ByteBufferSend.sizePrefixed(ByteBuffer.wrap((prefix + "-0").getBytes(StandardCharsets.UTF_8)))));
         requests++;
         while (responses < messageCount) {
             selector.poll(0L);
@@ -82,7 +82,7 @@ public class NetworkTestUtils {
             }
 
             for (int i = 0; i < selector.completedSends().size() && requests < messageCount && selector.isChannelReady(node); i++, requests++) {
-                selector.send(new NetworkSend(node, ByteBuffer.wrap((prefix + "-" + requests).getBytes())));
+                selector.send(new NetworkSend(node, ByteBufferSend.sizePrefixed(ByteBuffer.wrap((prefix + "-" + requests).getBytes()))));
             }
         }
     }

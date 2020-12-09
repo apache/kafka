@@ -139,7 +139,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
         .setTimeoutMs(10000)
         .setTransactionalId(null))
         .build()
-      val bodyBytes = request.serializeBody
+      val bodyBytes = request.serialize
       val byteBuffer = ByteBuffer.allocate(headerBytes.length + bodyBytes.remaining())
       byteBuffer.put(headerBytes)
       byteBuffer.put(bodyBytes)

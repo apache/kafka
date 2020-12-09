@@ -200,14 +200,13 @@ public class MetadataRequestBenchmark {
 
     private RequestChannel.Request buildAllTopicMetadataRequest() {
         MetadataRequest metadataRequest = MetadataRequest.Builder.allTopics().build();
-        ByteBuffer buffer = metadataRequest.serializeWithHeader(new RequestHeader(metadataRequest.apiKey(),
-            metadataRequest.version(), "", 0));
-        RequestHeader header = RequestHeader.parse(buffer);
+        RequestHeader header = new RequestHeader(metadataRequest.apiKey(), metadataRequest.version(), "", 0);
+        ByteBuffer bodyBuffer = metadataRequest.serialize();
 
         RequestContext context = new RequestContext(header, "1", null, principal,
             ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
             SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false);
-        return new RequestChannel.Request(1, context, 0, MemoryPool.NONE, buffer, requestChannelMetrics, Option.empty());
+        return new RequestChannel.Request(1, context, 0, MemoryPool.NONE, bodyBuffer, requestChannelMetrics, Option.empty());
     }
 
     @Benchmark

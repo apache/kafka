@@ -36,7 +36,7 @@ public class SendBuilderTest {
     public void testZeroCopyByteBuffer() {
         byte[] data = Utils.utf8("foo");
         ByteBuffer zeroCopyBuffer = ByteBuffer.wrap(data);
-        SendBuilder builder = new SendBuilder("a", 8);
+        SendBuilder builder = new SendBuilder(8);
 
         builder.writeInt(5);
         builder.writeByteBuffer(zeroCopyBuffer);
@@ -63,7 +63,7 @@ public class SendBuilderTest {
         assertEquals(4, data.length);
 
         ByteBuffer buffer = ByteBuffer.wrap(data);
-        SendBuilder builder = new SendBuilder("a", 0);
+        SendBuilder builder = new SendBuilder(0);
 
         buffer.limit(2);
         builder.writeByteBuffer(buffer);
@@ -84,7 +84,7 @@ public class SendBuilderTest {
         ByteBuffer buffer = ByteBuffer.allocate(128);
         MemoryRecords records = createRecords(buffer, "foo");
 
-        SendBuilder builder = new SendBuilder("a", 8);
+        SendBuilder builder = new SendBuilder(8);
         builder.writeInt(5);
         builder.writeRecords(records);
         builder.writeInt(15);

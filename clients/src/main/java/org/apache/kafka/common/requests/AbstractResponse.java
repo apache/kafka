@@ -20,6 +20,7 @@ import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
+import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.protocol.SendBuilder;
 
 import java.nio.ByteBuffer;
@@ -27,7 +28,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -40,25 +40,20 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
         this.apiKey = apiKey;
     }
 
-    public final Send toSend(String destination, ResponseHeader header, short version) {
-        return SendBuilder.buildResponseSend(destination, header, data(), version);
+    public final Send toSend(ResponseHeader header, short version) {
+        return SendBuilder.buildResponseSend(header, data(), version);
     }
 
     /**
-     * Visible for testing, typically {@link #toSend(String, ResponseHeader, short)} should be used instead.
+     * Serializes header and body without prefixing with size (unlike `toSend`, which does include a size prefix).
      */
-    public final ByteBuffer serializeWithHeader(short version, int correlationId) {
-        return serializeWithHeader(new ResponseHeader(correlationId, apiKey.responseHeaderVersion(version)), version);
-    }
-
     final ByteBuffer serializeWithHeader(ResponseHeader header, short version) {
-        Objects.requireNonNull(header, "header should not be null");
         return RequestUtils.serialize(header.data(), header.headerVersion(), data(), version);
     }
 
     // Visible for testing
-    final ByteBuffer serializeBody(short version) {
-        return RequestUtils.serialize(null, (short) 0, data(), version);
+    final ByteBuffer serialize(short version) {
+        return MessageUtil.toByteBuffer(data(), version);
     }
 
     /**

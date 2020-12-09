@@ -25,6 +25,7 @@ import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.requests.JoinGroupRequest;
+import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
@@ -145,7 +146,7 @@ public class TransactionManagerTest {
     @Before
     public void setup() {
         this.metadata.add("test", time.milliseconds());
-        this.client.updateMetadata(TestUtils.metadataUpdateWith(1, singletonMap("test", 2)));
+        this.client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, singletonMap("test", 2)));
         this.brokerNode = new Node(0, "localhost", 2211);
 
         initializeTransactionManager(Optional.of(transactionalId), false);

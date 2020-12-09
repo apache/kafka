@@ -96,7 +96,7 @@ public class FetchResponseBenchmark {
 
     @Benchmark
     public int testSerializeFetchResponse() throws IOException {
-        Send send = fetchResponse.toSend("dest", header, ApiKeys.FETCH.latestVersion());
+        Send send = fetchResponse.toSend(header, ApiKeys.FETCH.latestVersion());
         ByteBufferChannel channel = new ByteBufferChannel(send.size());
         send.writeTo(channel);
         return channel.buffer().limit();

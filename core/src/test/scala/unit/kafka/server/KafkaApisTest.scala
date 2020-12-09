@@ -353,7 +353,7 @@ class KafkaApisTest {
       configResource -> new AlterConfigsRequest.Config(
         Seq(new AlterConfigsRequest.ConfigEntry("foo", "bar")).asJava))
     val alterConfigsRequest = new AlterConfigsRequest.Builder(configs.asJava, false).build(requestHeader.apiVersion)
-    val serializedRequestData = alterConfigsRequest.serializeWithHeader(requestHeader)
+    val serializedRequestData = RequestTestUtils.serializeRequestWithHeader(requestHeader, alterConfigsRequest)
 
     val capturedResponse = expectNoThrottling()
 
@@ -376,7 +376,7 @@ class KafkaApisTest {
       clientId, 0)
     val leaveGroupRequest = new LeaveGroupRequest.Builder("group",
       Collections.singletonList(new MemberIdentity())).build(requestHeader.apiVersion)
-    val serializedRequestData = leaveGroupRequest.serializeWithHeader(requestHeader)
+    val serializedRequestData = RequestTestUtils.serializeRequestWithHeader(requestHeader, leaveGroupRequest)
 
     val capturedResponse = expectNoThrottling()
 
@@ -2893,17 +2893,17 @@ class KafkaApisTest {
     val listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
 
     val requestHeader = new RequestHeader(request.apiKey, request.version, clientId, 0)
-    val requestBuffer = request.serializeWithHeader(requestHeader)
+    val requestBuffer = RequestTestUtils.serializeRequestWithHeader(requestHeader, request)
     val requestContext = new RequestContext(requestHeader, "1", InetAddress.getLocalHost,
       KafkaPrincipal.ANONYMOUS, listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY,
       fromPrivilegedListener)
 
     val envelopeHeader = new RequestHeader(ApiKeys.ENVELOPE, ApiKeys.ENVELOPE.latestVersion(), clientId, 0)
-    val envelopeBuffer = new EnvelopeRequest.Builder(
+    val envelopeBuffer = RequestTestUtils.serializeRequestWithHeader(envelopeHeader, new EnvelopeRequest.Builder(
       requestBuffer,
       new Array[Byte](0),
       InetAddress.getLocalHost.getAddress
-    ).build().serializeWithHeader(envelopeHeader)
+    ).build())
     val envelopeContext = new RequestContext(envelopeHeader, "1", InetAddress.getLocalHost,
       KafkaPrincipal.ANONYMOUS, listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY,
       fromPrivilegedListener, principalSerde.asJava)
@@ -2934,8 +2934,8 @@ class KafkaApisTest {
                            listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
                            fromPrivilegedListener: Boolean = false,
                            requestHeader: Option[RequestHeader] = None): RequestChannel.Request = {
-    val buffer = request.serializeWithHeader(requestHeader.getOrElse(
-      new RequestHeader(request.apiKey, request.version, clientId, 0)))
+    val buffer = RequestTestUtils.serializeRequestWithHeader(requestHeader.getOrElse(
+      new RequestHeader(request.apiKey, request.version, clientId, 0)), request)
 
     // read the header from the buffer first so that the body can be read next from the Request constructor
     val header = RequestHeader.parse(buffer)

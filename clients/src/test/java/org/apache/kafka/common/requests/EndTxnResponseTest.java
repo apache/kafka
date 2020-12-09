@@ -44,7 +44,7 @@ public class EndTxnResponseTest {
             assertEquals(throttleTimeMs, response.throttleTimeMs());
             assertEquals(version >= 1, response.shouldClientThrottle(version));
 
-            response = EndTxnResponse.parse(response.serializeBody(version), version);
+            response = EndTxnResponse.parse(response.serialize(version), version);
             assertEquals(expectedErrorCounts, response.errorCounts());
             assertEquals(throttleTimeMs, response.throttleTimeMs());
             assertEquals(version >= 1, response.shouldClientThrottle(version));

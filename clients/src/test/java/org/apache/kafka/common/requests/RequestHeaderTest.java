@@ -18,7 +18,6 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
-import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
@@ -45,7 +44,7 @@ public class RequestHeaderTest {
         assertEquals("", deserialized.clientId());
         assertEquals(0, deserialized.headerVersion());
 
-        ByteBuffer serializedBuffer = TestUtils.serializeRequestHeader(deserialized);
+        ByteBuffer serializedBuffer = RequestTestUtils.serializeRequestHeader(deserialized);
 
         assertEquals(ApiKeys.CONTROLLED_SHUTDOWN.id, serializedBuffer.getShort(0));
         assertEquals(0, serializedBuffer.getShort(2));
@@ -59,7 +58,7 @@ public class RequestHeaderTest {
         RequestHeader header = new RequestHeader(ApiKeys.FIND_COORDINATOR, apiVersion, "", 10);
         assertEquals(1, header.headerVersion());
 
-        ByteBuffer buffer = TestUtils.serializeRequestHeader(header);
+        ByteBuffer buffer = RequestTestUtils.serializeRequestHeader(header);
         assertEquals(10, buffer.remaining());
         RequestHeader deserialized = RequestHeader.parse(buffer);
         assertEquals(header, deserialized);
@@ -71,7 +70,7 @@ public class RequestHeaderTest {
         RequestHeader header = new RequestHeader(ApiKeys.CREATE_DELEGATION_TOKEN, apiVersion, "", 10);
         assertEquals(2, header.headerVersion());
 
-        ByteBuffer buffer = TestUtils.serializeRequestHeader(header);
+        ByteBuffer buffer = RequestTestUtils.serializeRequestHeader(header);
         assertEquals(11, buffer.remaining());
         RequestHeader deserialized = RequestHeader.parse(buffer);
         assertEquals(header, deserialized);

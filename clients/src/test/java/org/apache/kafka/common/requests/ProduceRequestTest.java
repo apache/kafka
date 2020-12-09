@@ -299,7 +299,7 @@ public class ProduceRequestTest {
 
     private void assertThrowsInvalidRecordException(ProduceRequest.Builder builder, short version) {
         try {
-            builder.build(version).serializeBody();
+            builder.build(version).serialize();
             fail("Builder did not raise " + InvalidRecordException.class.getName() + " as expected");
         } catch (RuntimeException e) {
             assertTrue("Unexpected exception type " + e.getClass().getName(),

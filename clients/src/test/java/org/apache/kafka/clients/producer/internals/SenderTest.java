@@ -29,6 +29,7 @@ import org.apache.kafka.common.errors.TransactionAbortedException;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.MetadataRequest;
+import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.RequestUtils;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -285,8 +286,9 @@ public class SenderTest {
                 1000, 1000, 64 * 1024, 64 * 1024, 1000, 10 * 1000, 127 * 1000, ClientDnsLookup.USE_ALL_DNS_IPS,
                 time, true, new ApiVersions(), throttleTimeSensor, logContext);
 
-        ByteBuffer buffer = ApiVersionsResponse.createApiVersionsResponse(400, RecordBatch.CURRENT_MAGIC_VALUE).
-            serializeWithHeader(ApiKeys.API_VERSIONS.latestVersion(), 0);
+        ByteBuffer buffer = RequestTestUtils.serializeResponseWithHeader(
+            ApiVersionsResponse.createApiVersionsResponse(400, RecordBatch.CURRENT_MAGIC_VALUE),
+            ApiKeys.API_VERSIONS.latestVersion(), 0);
 
         selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));
         while (!client.ready(node, time.milliseconds())) {
@@ -306,7 +308,7 @@ public class SenderTest {
             client.send(request, time.milliseconds());
             client.poll(1, time.milliseconds());
             ProduceResponse response = produceResponse(tp0, i, Errors.NONE, throttleTimeMs);
-            buffer = response.serializeWithHeader(ApiKeys.PRODUCE.latestVersion(), request.correlationId());
+            buffer = RequestTestUtils.serializeResponseWithHeader(response, ApiKeys.PRODUCE.latestVersion(), request.correlationId());
             selector.completeReceive(new NetworkReceive(node.idString(), buffer));
             client.poll(1, time.milliseconds());
             // If a throttled response is received, advance the time to ensure progress.
@@ -417,7 +419,7 @@ public class SenderTest {
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
                     senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, null, apiVersions);
             // Create a two broker cluster, with partition 0 on broker 0 and partition 1 on broker 1
-            MetadataResponse metadataUpdate1 = TestUtils.metadataUpdateWith(2, Collections.singletonMap("test", 2));
+            MetadataResponse metadataUpdate1 = RequestTestUtils.metadataUpdateWith(2, Collections.singletonMap("test", 2));
             client.prepareMetadataUpdate(metadataUpdate1);
 
             // Send the first message.
@@ -438,7 +440,7 @@ public class SenderTest {
             appendToAccumulator(tp2, 0L, "key2", "value2");
 
             // Update metadata before sender receives response from broker 0. Now partition 2 moves to broker 0
-            MetadataResponse metadataUpdate2 = TestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2));
+            MetadataResponse metadataUpdate2 = RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2));
             client.prepareMetadataUpdate(metadataUpdate2);
             // Sender should not send the second message to node 0.
             assertEquals(1, sender.inFlightBatches(tp2).size());
@@ -505,12 +507,12 @@ public class SenderTest {
     @Test
     public void testMetadataTopicExpiry() throws Exception {
         long offset = 0;
-        client.updateMetadata(TestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)));
+        client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)));
 
         Future<RecordMetadata> future = appendToAccumulator(tp0);
         sender.runOnce();
         assertTrue("Topic not added to metadata", metadata.containsTopic(tp0.topic()));
-        client.updateMetadata(TestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)));
+        client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)));
         sender.runOnce();  // send produce request
         client.respond(produceResponse(tp0, offset, Errors.NONE, 0));
         sender.runOnce();
@@ -522,12 +524,12 @@ public class SenderTest {
 
         assertTrue("Topic not retained in metadata list", metadata.containsTopic(tp0.topic()));
         time.sleep(TOPIC_IDLE_MS);
-        client.updateMetadata(TestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)));
+        client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)));
         assertFalse("Unused topic has not been expired", metadata.containsTopic(tp0.topic()));
         future = appendToAccumulator(tp0);
         sender.runOnce();
         assertTrue("Topic not added to metadata", metadata.containsTopic(tp0.topic()));
-        client.updateMetadata(TestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)));
+        client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)));
         sender.runOnce();  // send produce request
         client.respond(produceResponse(tp0, offset + 1, Errors.NONE, 0));
         sender.runOnce();
@@ -570,7 +572,7 @@ public class SenderTest {
 
         // Process metadata response, prepare FindCoordinator and InitProducerId responses.
         // Verify producerId after the sender is run to process responses.
-        MetadataResponse metadataUpdate = TestUtils.metadataUpdateWith(1, Collections.emptyMap());
+        MetadataResponse metadataUpdate = RequestTestUtils.metadataUpdateWith(1, Collections.emptyMap());
         client.respond(metadataUpdate);
         prepareFindCoordinatorResponse(Errors.NONE);
         prepareInitProducerResponse(Errors.NONE, producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
@@ -595,7 +597,7 @@ public class SenderTest {
 
         // Process metadata and InitProducerId responses.
         // Verify producerId after the sender is run to process responses.
-        MetadataResponse metadataUpdate = TestUtils.metadataUpdateWith(1, Collections.emptyMap());
+        MetadataResponse metadataUpdate = RequestTestUtils.metadataUpdateWith(1, Collections.emptyMap());
         client.respond(metadataUpdate);
         sender.runOnce();
         sender.runOnce();
@@ -2086,7 +2088,7 @@ public class SenderTest {
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
                     senderMetrics, time, REQUEST_TIMEOUT, 1000L, txnManager, new ApiVersions());
             // Create a two broker cluster, with partition 0 on broker 0 and partition 1 on broker 1
-            MetadataResponse metadataUpdate1 = TestUtils.metadataUpdateWith(2, Collections.singletonMap(topic, 2));
+            MetadataResponse metadataUpdate1 = RequestTestUtils.metadataUpdateWith(2, Collections.singletonMap(topic, 2));
             client.prepareMetadataUpdate(metadataUpdate1);
             // Send the first message.
             long nowMs = time.milliseconds();
@@ -2701,7 +2703,7 @@ public class SenderTest {
 
         metadata.add("test", time.milliseconds());
         if (updateMetadata)
-            this.client.updateMetadata(TestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)));
+            this.client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)));
     }
 
     private void assertSendFailure(Class<? extends RuntimeException> expectedError) throws Exception {

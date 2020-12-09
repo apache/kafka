@@ -49,7 +49,7 @@ public class OffsetsForLeaderEpochRequestTest {
             OffsetsForLeaderEpochRequest.Builder builder = OffsetsForLeaderEpochRequest.Builder.forFollower(
                     version, Collections.emptyMap(), replicaId);
             OffsetsForLeaderEpochRequest request = builder.build();
-            OffsetsForLeaderEpochRequest parsed = OffsetsForLeaderEpochRequest.parse(request.serializeBody(), version);
+            OffsetsForLeaderEpochRequest parsed = OffsetsForLeaderEpochRequest.parse(request.serialize(), version);
             if (version < 3)
                 assertEquals(OffsetsForLeaderEpochRequest.DEBUGGING_REPLICA_ID, parsed.replicaId());
             else

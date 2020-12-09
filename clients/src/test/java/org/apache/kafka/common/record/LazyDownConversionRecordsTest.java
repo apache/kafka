@@ -158,7 +158,7 @@ public class LazyDownConversionRecordsTest {
 
             LazyDownConversionRecords lazyRecords = new LazyDownConversionRecords(new TopicPartition("test", 1),
                     inputRecords, toMagic, 0L, Time.SYSTEM);
-            LazyDownConversionRecordsSend lazySend = lazyRecords.toSend("foo");
+            LazyDownConversionRecordsSend lazySend = lazyRecords.toSend();
             File outputFile = tempFile();
             FileChannel channel = FileChannel.open(outputFile.toPath(), StandardOpenOption.READ, StandardOpenOption.WRITE);
 

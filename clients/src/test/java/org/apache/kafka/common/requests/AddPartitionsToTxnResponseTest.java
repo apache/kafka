@@ -90,7 +90,7 @@ public class AddPartitionsToTxnResponseTest {
         AddPartitionsToTxnResponse response = new AddPartitionsToTxnResponse(data);
 
         for (short version = 0; version <= ApiKeys.ADD_PARTITIONS_TO_TXN.latestVersion(); version++) {
-            AddPartitionsToTxnResponse parsedResponse = AddPartitionsToTxnResponse.parse(response.serializeBody(version), version);
+            AddPartitionsToTxnResponse parsedResponse = AddPartitionsToTxnResponse.parse(response.serialize(version), version);
             assertEquals(expectedErrorCounts, parsedResponse.errorCounts());
             assertEquals(throttleTimeMs, parsedResponse.throttleTimeMs());
             assertEquals(version >= 1, parsedResponse.shouldClientThrottle(version));

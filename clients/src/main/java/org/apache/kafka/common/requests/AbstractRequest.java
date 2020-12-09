@@ -21,6 +21,7 @@ import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
+import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.SendBuilder;
 
@@ -97,20 +98,15 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
         return apiKey;
     }
 
-    public final Send toSend(String destination, RequestHeader header) {
-        return SendBuilder.buildRequestSend(destination, header, data());
-    }
-
-    // Visible for testing
-    public final ByteBuffer serializeWithHeader(RequestHeader header) {
-        return RequestUtils.serialize(header.data(), header.headerVersion(), data(), version);
+    public final Send toSend(RequestHeader header) {
+        return SendBuilder.buildRequestSend(header, data());
     }
 
     protected abstract Message data();
 
     // Visible for testing
-    public final ByteBuffer serializeBody() {
-        return RequestUtils.serialize(null, (short) 0, data(), version);
+    public final ByteBuffer serialize() {
+        return MessageUtil.toByteBuffer(data(), version);
     }
 
     // Visible for testing
