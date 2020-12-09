@@ -953,7 +953,9 @@ class Log(@volatile private var _dir: File,
     val completedTxns = ListBuffer.empty[CompletedTxn]
     records.batches.forEach { batch =>
       if (batch.hasProducerId) {
-        val maybeCompletedTxn = updateProducers(batch,
+        val maybeCompletedTxn = updateProducers(
+          producerStateManager,
+          batch,
           loadedProducers,
           firstOffsetMetadata = None,
           origin = AppendOrigin.Replication)
@@ -1349,7 +1351,7 @@ class Log(@volatile private var _dir: File,
         else
           None
 
-        val maybeCompletedTxn = updateProducers(batch, updatedProducers, firstOffsetMetadata, origin)
+        val maybeCompletedTxn = updateProducers(producerStateManager, batch, updatedProducers, firstOffsetMetadata, origin)
         maybeCompletedTxn.foreach(completedTxns += _)
       }
 
@@ -1456,7 +1458,8 @@ class Log(@volatile private var _dir: File,
       RecordConversionStats.EMPTY, sourceCodec, targetCodec, shallowMessageCount, validBytesCount, monotonic, lastOffsetOfFirstBatch)
   }
 
-  private def updateProducers(batch: RecordBatch,
+  private def updateProducers(producerStateManager: ProducerStateManager,
+                              batch: RecordBatch,
                               producers: mutable.Map[Long, ProducerAppendInfo],
                               firstOffsetMetadata: Option[LogOffsetMetadata],
                               origin: AppendOrigin): Option[CompletedTxn] = {
