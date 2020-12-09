@@ -963,7 +963,7 @@ private[kafka] class Processor(val id: Int,
     // removed from the Selector after discarding any pending staged receives.
     // `openOrClosingChannel` can be None if the selector closed the connection because it was idle for too long
     if (openOrClosingChannel(connectionId).isDefined) {
-      selector.send(new NetworkSend(response.request.context.connectionId, responseSend))
+      selector.send(new NetworkSend(connectionId, responseSend))
       inflightResponses += (connectionId -> response)
     }
   }
@@ -1122,8 +1122,8 @@ private[kafka] class Processor(val id: Int,
   private def processCompletedSends(): Unit = {
     selector.completedSends.forEach { send =>
       try {
-        val response = inflightResponses.remove(send.destinationId()).getOrElse {
-          throw new IllegalStateException(s"Send for ${send.destinationId()} completed, but not in `inflightResponses`")
+        val response = inflightResponses.remove(send.destinationId).getOrElse {
+          throw new IllegalStateException(s"Send for ${send.destinationId} completed, but not in `inflightResponses`")
         }
         updateRequestMetrics(response)
 
@@ -1133,11 +1133,11 @@ private[kafka] class Processor(val id: Int,
         // Try unmuting the channel. If there was no quota violation and the channel has not been throttled,
         // it will be unmuted immediately. If the channel has been throttled, it will unmuted only if the throttling
         // delay has already passed by now.
-        handleChannelMuteEvent(send.destinationId(), ChannelMuteEvent.RESPONSE_SENT)
-        tryUnmuteChannel(send.destinationId())
+        handleChannelMuteEvent(send.destinationId, ChannelMuteEvent.RESPONSE_SENT)
+        tryUnmuteChannel(send.destinationId)
       } catch {
-        case e: Throwable => processChannelException(send.destinationId(),
-          s"Exception while processing completed send to ${send.destinationId()}", e)
+        case e: Throwable => processChannelException(send.destinationId,
+          s"Exception while processing completed send to ${send.destinationId}", e)
       }
     }
     selector.clearCompletedSends()
