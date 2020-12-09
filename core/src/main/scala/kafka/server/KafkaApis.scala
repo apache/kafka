@@ -475,11 +475,11 @@ class KafkaApis(val requestChannel: RequestChannel,
         // the producer client will know that some error has happened and will refresh its metadata
         if (errorInResponse) {
           val exceptionsSummary = mergedResponseStatus.map { case (topicPartition, status) =>
-            topicPartition -> status.error.exceptionName
+            topicPartition -> status.error.exceptionName + s"(${status.error.message})"
           }.mkString(", ")
-          info(
+          error(
             s"Closing connection due to error during produce request with correlation id ${request.header.correlationId} " +
-              s"from client id ${request.header.clientId} with ack=0\n" +
+              s"from client id ${request.header.clientId} with ack=0" +
               s"Topic and partition to exceptions: $exceptionsSummary"
           )
           closeConnection(request, new ProduceResponse(mergedResponseStatus.asJava).errorCounts)
