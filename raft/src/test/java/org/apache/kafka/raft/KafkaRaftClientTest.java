@@ -518,6 +518,74 @@ public class KafkaRaftClientTest {
     }
 
     @Test
+    public void testChannelWokenUpIfLingerTimeoutReachedWithoutAppend() throws Exception {
+        // This test verifies that the client will set its poll timeout accounting
+        // for the lingerMs of a pending append
+
+        int localId = 0;
+        int otherNodeId = 1;
+        int lingerMs = 50;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withAppendLingerMs(lingerMs)
+            .build();
+
+        context.becomeLeader();
+        assertEquals(OptionalInt.of(localId), context.currentLeader());
+        assertEquals(1L, context.log.endOffset().offset);
+
+        int epoch = context.currentEpoch();
+        assertEquals(1L, context.client.scheduleAppend(epoch, singletonList("a")));
+        assertTrue(context.channel.wakeupRequested());
+
+        context.client.poll();
+        assertEquals(OptionalLong.of(lingerMs), context.channel.lastReceiveTimeout());
+
+        context.time.sleep(20);
+        context.client.poll();
+        assertEquals(OptionalLong.of(30), context.channel.lastReceiveTimeout());
+
+        context.time.sleep(30);
+        context.client.poll();
+        assertEquals(2L, context.log.endOffset().offset);
+    }
+
+    @Test
+    public void testChannelWokenUpIfLingerTimeoutReachedDuringAppend() throws Exception {
+        // This test verifies that the client will get woken up immediately
+        // if the linger timeout has expired during an append
+
+        int localId = 0;
+        int otherNodeId = 1;
+        int lingerMs = 50;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withAppendLingerMs(lingerMs)
+            .build();
+
+        context.becomeLeader();
+        assertEquals(OptionalInt.of(localId), context.currentLeader());
+        assertEquals(1L, context.log.endOffset().offset);
+
+        int epoch = context.currentEpoch();
+        assertEquals(1L, context.client.scheduleAppend(epoch, singletonList("a")));
+        assertTrue(context.channel.wakeupRequested());
+
+        context.client.poll();
+        assertFalse(context.channel.wakeupRequested());
+        assertEquals(OptionalLong.of(lingerMs), context.channel.lastReceiveTimeout());
+
+        context.time.sleep(lingerMs);
+        assertEquals(2L, context.client.scheduleAppend(epoch, singletonList("b")));
+        assertTrue(context.channel.wakeupRequested());
+
+        context.client.poll();
+        assertEquals(3L, context.log.endOffset().offset);
+    }
+
+    @Test
     public void testHandleEndQuorumRequest() throws Exception {
         int localId = 0;
         int oldLeaderId = 1;
