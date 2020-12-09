@@ -7,6 +7,9 @@ another JVM language).
 
 ### Running benchmarks
 
+If you want to set specific JMH flags or only run certain benchmarks, passing arguments via
+gradle tasks is cumbersome. These are simplified by the provided `jmh.sh` script.
+
 You can run all the benchmarks using:
 
     ./jmh-benchmarks/jmh.sh
@@ -15,40 +18,48 @@ Pass a pattern or name after the command to select the benchmarks, for example:
 
     ./jmh-benchmarks/jmh.sh LRUCacheBenchmark
 
-It's good practice to check profiler output for microbenchmarks in order to verify that they are valid.
-JMH includes [async-profiler](https://github.com/jvm-profiling-tools/async-profiler) integration that makes this easy:
- 
-    LD_LIBRARY_PATH=/path/to/async-profiler ./jmh-benchmarks/jmh.sh -prof async
-    
-A number of arguments can be passed to async-profiler, run the following for a description: 
+Run a specific test setting fork-mode (number iterations) to 2:
 
-    ./jmh-benchmarks/jmh.sh -prof async:help
+    ./jmh-benchmarks/jmh.sh -f 2 LRUCacheBenchmark
 
-### Using the jmh script
-If you want to set specific JMH flags or only run a certain test(s) passing arguments via
-gradle tasks is cumbersome.  Instead you can use the `jhm.sh` script.  NOTE: It is assumed users run
-the jmh.sh script from the jmh-benchmarks module.
+All JMH output goes to stdout by default, to run a benchmark and capture the results in a file:
 
-* Run a specific test setting fork-mode (number iterations) to 2 :`./jmh.sh -f 2 LRUCacheBenchmark`
-
-* By default all JMH output goes to stdout.  To run a benchmark and capture the results in a file:
-`./jmh.sh -f 2 -o benchmarkResults.txt LRUCacheBenchmark`
-NOTE: For now this script needs to be run from the jmh-benchmarks directory.
+    ./jmh-benchmarks/jmh.sh -f 2 -o benchmarkResults.txt LRUCacheBenchmark
 
 ### Using JMH with async-profiler
 
 It's good practice to check profiler output for microbenchmarks in order to verify that they are valid.
-JMH includes [async-profiler](https://github.com/jvm-profiling-tools/async-profiler) integration that makes this easy:
- 
+JMH includes [async-profiler](https://github.com/jvm-profiling-tools/async-profiler) integration that makes this easy,
+although the specifics vary slightly depending on the platform. A simple Linux example:
+
     LD_LIBRARY_PATH=/path/to/async-profiler ./jmh-benchmarks/jmh.sh -prof async
-    
+
+`DYLD_LIBRARY_PATH` should be used on macOS instead:
+
+    DYLD_LIBRARY_PATH=/path/to/async-profiler ./jmh-benchmarks/jmh.sh -prof async 
+
+A number of arguments can be passed to async-profiler, run the following for a description:
+
+    ./jmh-benchmarks/jmh.sh -prof async:help
+ 
 A number of arguments can be passed to async-profiler, run the following for a description: 
 
     ./jmh-benchmarks/jmh.sh -prof async:help
 
+### Using JMH GC profiler
+
+It's good practice to run your benchmark with `-prof gc` to measure its allocation rate:
+
+      ./jmh-benchmarks/jmh.sh -prof gc
+
+Of particular importance is the `norm` alloc rates, which measure the allocations per operation rather than allocations
+per second which can increase when you have make your code faster.
+
 ### Running JMH outside of gradle
+
 The JMH benchmarks can be run outside of gradle as you would with any executable jar file:
-`java -jar <kafka-repo-dir>/jmh-benchmarks/build/libs/kafka-jmh-benchmarks-all.jar -f2 LRUCacheBenchmark`
+
+    java -jar <kafka-repo-dir>/jmh-benchmarks/build/libs/kafka-jmh-benchmarks-all.jar -f2 LRUCacheBenchmark
 
 ### Writing benchmarks
 
@@ -65,14 +76,15 @@ on what options are available. A good tutorial for using JMH can be found [here]
 ### Gradle Tasks
 
 If no benchmark mode is specified, the default is used which is throughput. It is assumed that users run
-the gradle tasks with './gradlew' from the root of the Kafka project.
+the gradle tasks with `./gradlew` from the root of the Kafka project.
 
-*  jmh-benchmarks:shadowJar - creates the uber jar required to run the benchmarks.
+* `jmh-benchmarks:shadowJar` - creates the uber jar required to run the benchmarks.
 
-*  jmh-benchmarks:jmh - runs the `clean` and `shadowJar` tasks followed by all the benchmarks.
+* `jmh-benchmarks:jmh` - runs the `clean` and `shadowJar` tasks followed by all the benchmarks.
 
 ### JMH Options
 Some common JMH options are:
+
 ```text
  
    -e <regexp+>                Benchmarks to exclude from the run. 
@@ -93,4 +105,5 @@ Some common JMH options are:
                                all OSes. Please see the list of available profilers 
                                with -lprof. 
 ```
+
 To view all options run jmh with the -h flag. 
