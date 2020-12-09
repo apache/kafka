@@ -220,7 +220,7 @@ final class RaftClientTestContext {
                 channel,
                 time,
                 quorumStateStore,
-                    quorum,
+                quorum,
                 voters,
                 metrics,
                 listener
