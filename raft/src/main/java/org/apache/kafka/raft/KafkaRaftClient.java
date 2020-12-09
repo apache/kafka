@@ -1809,8 +1809,15 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             return Long.MAX_VALUE;
         }
 
+        boolean isFirstAppend = accumulator.isEmpty();
         Long offset = accumulator.append(epoch, records);
-        if (accumulator.needsDrain(time.milliseconds())) {
+
+        // Wakeup the network channel if either this is the first append
+        // or the accumulator is ready to drain now. Checking for the first
+        // append ensures that we give the IO thread a chance to observe
+        // the linger timeout so that it can schedule its own wakeup in case
+        // there are no additional appends.
+        if (isFirstAppend || accumulator.needsDrain(time.milliseconds())) {
             channel.wakeup();
         }
         return offset;
