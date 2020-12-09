@@ -174,7 +174,6 @@ public class StandbyTaskEOSIntegrationTest {
     }
 
     @Test
-    @Deprecated
     public void shouldWipeOutStandbyStateDirectoryIfCheckpointIsMissing() throws Exception {
         final String base = TestUtils.tempDirectory(appId).getPath();
 
@@ -198,9 +197,6 @@ public class StandbyTaskEOSIntegrationTest {
             final KafkaStreams streamInstanceOneRecovery = buildWithDeduplicationTopology(base + "-1")
         ) {
             // start first instance and wait for processing
-            streamInstanceOne.setUncaughtExceptionHandler((t, e) -> { });
-            streamInstanceTwo.setUncaughtExceptionHandler((t, e) -> { });
-            streamInstanceOneRecovery.setUncaughtExceptionHandler((t, e) -> { });
 
             startApplicationAndWaitUntilRunning(Collections.singletonList(streamInstanceOne), Duration.ofSeconds(30));
             IntegrationTestUtils.waitUntilMinRecordsReceived(

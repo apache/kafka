@@ -113,13 +113,13 @@ public class EosBetaUpgradeIntegrationTest {
     private static final List<KeyValue<KafkaStreams.State, KafkaStreams.State>> CRASH =
         Collections.unmodifiableList(
             Collections.singletonList(
-                KeyValue.pair(KafkaStreams.State.RUNNING, KafkaStreams.State.ERROR)
+                KeyValue.pair(KafkaStreams.State.RUNNING, State.PENDING_ERROR)
             )
         );
     private static final List<KeyValue<KafkaStreams.State, KafkaStreams.State>> CLOSE_CRASHED =
         Collections.unmodifiableList(
             Arrays.asList(
-                KeyValue.pair(KafkaStreams.State.ERROR, KafkaStreams.State.PENDING_SHUTDOWN),
+                KeyValue.pair(State.RUNNING, KafkaStreams.State.PENDING_SHUTDOWN),
                 KeyValue.pair(KafkaStreams.State.PENDING_SHUTDOWN, KafkaStreams.State.NOT_RUNNING)
             )
         );
@@ -533,8 +533,6 @@ public class EosBetaUpgradeIntegrationTest {
 
                 assignmentListener.waitForNextStableAssignment(MAX_WAIT_TIME_MS);
 
-                waitForStateTransition(stateTransitions2, CRASH);
-
                 commitErrorInjectedClient2.set(false);
                 stateTransitions2.clear();
                 streams2Alpha.close();
@@ -624,7 +622,6 @@ public class EosBetaUpgradeIntegrationTest {
                 verifyUncommitted(expectedUncommittedResult);
 
                 assignmentListener.waitForNextStableAssignment(MAX_WAIT_TIME_MS);
-                waitForStateTransition(stateTransitions1, CRASH);
 
                 commitErrorInjectedClient1.set(false);
                 stateTransitions1.clear();
