@@ -489,10 +489,7 @@ public class StreamsResetter {
     private void resetByDuration(final Consumer<byte[], byte[]> client,
                                  final Set<TopicPartition> inputTopicPartitions,
                                  final Duration duration) {
-        final Instant now = Instant.now();
-        final long timestamp = now.minus(duration).toEpochMilli();
-        
-        resetToDatetime(client, inputTopicPartitions, timestamp);
+        resetToDatetime(client, inputTopicPartitions, Instant.now().minus(duration).toEpochMilli());
     }
 
     private void resetToDatetime(final Consumer<byte[], byte[]> client,
