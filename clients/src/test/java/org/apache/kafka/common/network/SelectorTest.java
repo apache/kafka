@@ -298,7 +298,7 @@ public class SelectorTest {
         String payload = TestUtils.randomString(payloadSize);
         String nodeId = "0";
         blockingConnect(nodeId);
-        SizeDelimitedSend send = new SizeDelimitedSend(ByteBuffer.wrap(payload.getBytes()));
+        ByteBufferSend send = ByteBufferSend.sizePrefixed(ByteBuffer.wrap(payload.getBytes()));
         NetworkSend networkSend = new NetworkSend(nodeId, send);
 
         selector.send(networkSend);
@@ -1048,7 +1048,7 @@ public class SelectorTest {
     }
 
     protected final NetworkSend createSend(String node, String payload) {
-        return new NetworkSend(node, new SizeDelimitedSend(ByteBuffer.wrap(payload.getBytes())));
+        return new NetworkSend(node, ByteBufferSend.sizePrefixed(ByteBuffer.wrap(payload.getBytes())));
     }
 
     protected String asString(NetworkReceive receive) {

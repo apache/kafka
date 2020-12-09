@@ -66,6 +66,7 @@ import org.apache.kafka.common.message.ListOffsetResponseData.ListOffsetPartitio
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
+import org.apache.kafka.common.network.ByteBufferSend;
 import org.apache.kafka.common.network.CertStores;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.ChannelBuilders;
@@ -78,7 +79,6 @@ import org.apache.kafka.common.network.NetworkTestUtils;
 import org.apache.kafka.common.network.NioEchoServer;
 import org.apache.kafka.common.network.SaslChannelBuilder;
 import org.apache.kafka.common.network.Selector;
-import org.apache.kafka.common.network.SizeDelimitedSend;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -865,7 +865,7 @@ public class SaslAuthenticatorTest {
         Random random = new Random();
         byte[] bytes = new byte[1024];
         random.nextBytes(bytes);
-        selector.send(new NetworkSend(node1, new SizeDelimitedSend(ByteBuffer.wrap(bytes))));
+        selector.send(new NetworkSend(node1, ByteBufferSend.sizePrefixed(ByteBuffer.wrap(bytes))));
         NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.READY.state());
         selector.close();
 
@@ -876,7 +876,7 @@ public class SaslAuthenticatorTest {
         String node2 = "invalid2";
         createClientConnection(SecurityProtocol.PLAINTEXT, node2);
         random.nextBytes(bytes);
-        selector.send(new NetworkSend(node2, new SizeDelimitedSend(ByteBuffer.wrap(bytes))));
+        selector.send(new NetworkSend(node2, ByteBufferSend.sizePrefixed(ByteBuffer.wrap(bytes))));
         NetworkTestUtils.waitForChannelClose(selector, node2, ChannelState.READY.state());
         selector.close();
 
@@ -931,7 +931,7 @@ public class SaslAuthenticatorTest {
         buffer.putInt(Integer.MAX_VALUE);
         buffer.put(new byte[buffer.capacity() - 4]);
         buffer.rewind();
-        selector.send(new NetworkSend(node1, new SizeDelimitedSend(buffer)));
+        selector.send(new NetworkSend(node1, ByteBufferSend.sizePrefixed(buffer)));
         NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.READY.state());
         selector.close();
 
@@ -945,7 +945,7 @@ public class SaslAuthenticatorTest {
         buffer.putInt(Integer.MAX_VALUE);
         buffer.put(new byte[buffer.capacity() - 4]);
         buffer.rewind();
-        selector.send(new NetworkSend(node2, new SizeDelimitedSend(buffer)));
+        selector.send(new NetworkSend(node2, ByteBufferSend.sizePrefixed(buffer)));
         NetworkTestUtils.waitForChannelClose(selector, node2, ChannelState.READY.state());
         selector.close();
 
@@ -2043,7 +2043,7 @@ public class SaslAuthenticatorTest {
             SaslAuthenticateRequest request = new SaslAuthenticateRequest.Builder(data).build();
             sendKafkaRequestReceiveResponse(node, ApiKeys.SASL_AUTHENTICATE, request);
         } else {
-            selector.send(new NetworkSend(node, new SizeDelimitedSend(authBuf)));
+            selector.send(new NetworkSend(node, ByteBufferSend.sizePrefixed(authBuf)));
             waitForResponse();
         }
 

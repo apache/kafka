@@ -641,7 +641,7 @@ public class SslTransportLayerTest {
         NetworkTestUtils.waitForChannelReady(selector, node);
         int messageSize = 1024 * 1024;
         String message = TestUtils.randomString(messageSize);
-        selector.send(new NetworkSend(node, new SizeDelimitedSend(ByteBuffer.wrap(message.getBytes()))));
+        selector.send(new NetworkSend(node, ByteBufferSend.sizePrefixed(ByteBuffer.wrap(message.getBytes()))));
         while (selector.completedReceives().isEmpty()) {
             selector.poll(100L);
         }
@@ -667,7 +667,7 @@ public class SslTransportLayerTest {
         // Send a message of 80K. This is 5X as large as the socket buffer. It should take at least three selector.poll()
         // to read this message from socket if the SslTransportLayer.read() does not read all data from socket buffer.
         String message = TestUtils.randomString(81920);
-        selector.send(new NetworkSend(node, new SizeDelimitedSend(ByteBuffer.wrap(message.getBytes()))));
+        selector.send(new NetworkSend(node, ByteBufferSend.sizePrefixed(ByteBuffer.wrap(message.getBytes()))));
 
         // Send the message to echo server
         TestUtils.waitForCondition(() -> {
@@ -756,7 +756,7 @@ public class SslTransportLayerTest {
             assertEquals("Time not reset", 0, channel.getAndResetNetworkThreadTimeNanos());
 
             selector.mute(node);
-            selector.send(new NetworkSend(node, new SizeDelimitedSend(ByteBuffer.wrap(message.getBytes()))));
+            selector.send(new NetworkSend(node, ByteBufferSend.sizePrefixed(ByteBuffer.wrap(message.getBytes()))));
             while (selector.completedSends().isEmpty()) {
                 selector.poll(100L);
             }
@@ -945,7 +945,7 @@ public class SslTransportLayerTest {
         int count = 20;
         final int totalSendSize = count * (message.length + 4);
         for (int i = 0; i < count; i++) {
-            selector.send(new NetworkSend(node, new SizeDelimitedSend(ByteBuffer.wrap(message))));
+            selector.send(new NetworkSend(node, ByteBufferSend.sizePrefixed(ByteBuffer.wrap(message))));
             do {
                 selector.poll(0L);
             } while (selector.completedSends().isEmpty());

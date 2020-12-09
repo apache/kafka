@@ -42,7 +42,7 @@ public class KafkaChannelTest {
 
         KafkaChannel channel = new KafkaChannel("0", transport, () -> authenticator,
             1024, pool, metadataRegistry);
-        SizeDelimitedSend send = new SizeDelimitedSend(ByteBuffer.wrap(TestUtils.randomBytes(128)));
+        ByteBufferSend send = ByteBufferSend.sizePrefixed(ByteBuffer.wrap(TestUtils.randomBytes(128)));
         NetworkSend networkSend = new NetworkSend("0", send);
 
         channel.setSend(networkSend);

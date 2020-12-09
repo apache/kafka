@@ -139,7 +139,7 @@ class SocketServerTest {
 
   def processRequest(channel: RequestChannel, request: RequestChannel.Request): Unit = {
     val byteBuffer = RequestTestUtils.serializeRequestWithHeader(request.header, request.body[AbstractRequest])
-    val send = new NetworkSend(request.context.connectionId, new SizeDelimitedSend(byteBuffer))
+    val send = new NetworkSend(request.context.connectionId, ByteBufferSend.sizePrefixed(byteBuffer))
     channel.sendResponse(new RequestChannel.SendResponse(request, send, Some(request.header.toString), None))
   }
 
@@ -671,7 +671,7 @@ class SocketServerTest {
     // throttled channel.
     val request = receiveRequest(server.dataPlaneRequestChannel)
     val byteBuffer = RequestTestUtils.serializeRequestWithHeader(request.header, request.body[AbstractRequest])
-    val send = new NetworkSend(request.context.connectionId, new SizeDelimitedSend(byteBuffer))
+    val send = new NetworkSend(request.context.connectionId, ByteBufferSend.sizePrefixed(byteBuffer))
     def channelThrottlingCallback(response: RequestChannel.Response): Unit = {
       server.dataPlaneRequestChannel.sendResponse(response)
     }
@@ -1092,7 +1092,7 @@ class SocketServerTest {
 
       val requestMetrics = channel.metrics(request.header.apiKey.name)
       def totalTimeHistCount(): Long = requestMetrics.totalTimeHist.count
-      val send = new NetworkSend(request.context.connectionId, new SizeDelimitedSend(ByteBuffer.allocate(responseBufferSize)))
+      val send = new NetworkSend(request.context.connectionId, ByteBufferSend.sizePrefixed(ByteBuffer.allocate(responseBufferSize)))
       channel.sendResponse(new RequestChannel.SendResponse(request, send, Some("someResponse"), None))
 
       val expectedTotalTimeCount = totalTimeHistCount() + 1

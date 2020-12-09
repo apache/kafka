@@ -28,10 +28,10 @@ import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
 import org.apache.kafka.common.network.Authenticator;
+import org.apache.kafka.common.network.ByteBufferSend;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.ReauthenticationContext;
 import org.apache.kafka.common.network.Send;
-import org.apache.kafka.common.network.SizeDelimitedSend;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -435,7 +435,7 @@ public class SaslClientAuthenticator implements Authenticator {
                 ByteBuffer tokenBuf = ByteBuffer.wrap(saslToken);
                 Send send;
                 if (saslAuthenticateVersion == DISABLE_KAFKA_SASL_AUTHENTICATE_HEADER) {
-                    send = new SizeDelimitedSend(tokenBuf);
+                    send = ByteBufferSend.sizePrefixed(tokenBuf);
                 } else {
                     SaslAuthenticateRequestData data = new SaslAuthenticateRequestData()
                             .setAuthBytes(tokenBuf.array());

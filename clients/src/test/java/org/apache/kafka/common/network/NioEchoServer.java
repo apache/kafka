@@ -226,7 +226,7 @@ public class NioEchoServer extends Thread {
                     if (!maybeBeginServerReauthentication(channel, rcv, time)) {
                         String channelId = channel.id();
                         selector.mute(channelId);
-                        NetworkSend send = new NetworkSend(rcv.source(), new SizeDelimitedSend(rcv.payload()));
+                        NetworkSend send = new NetworkSend(rcv.source(), ByteBufferSend.sizePrefixed(rcv.payload()));
                         if (outputChannel == null)
                             selector.send(send);
                         else {

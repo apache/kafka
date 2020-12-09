@@ -76,4 +76,10 @@ public class ByteBufferSend implements Send {
             ", pending=" + pending +
             ')';
     }
+
+    public static ByteBufferSend sizePrefixed(ByteBuffer buffer) {
+        ByteBuffer sizeBuffer = ByteBuffer.allocate(4);
+        sizeBuffer.putInt(0, buffer.remaining());
+        return new ByteBufferSend(sizeBuffer, buffer);
+    }
 }
