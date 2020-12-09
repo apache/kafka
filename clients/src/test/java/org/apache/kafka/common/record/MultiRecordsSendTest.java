@@ -33,7 +33,6 @@ public class MultiRecordsSendTest {
 
     @Test
     public void testSendsFreedAfterWriting() throws IOException {
-        String dest = "1";
         int numChunks = 4;
         int chunkSize = 32;
         int totalSize = numChunks * chunkSize;
@@ -44,10 +43,10 @@ public class MultiRecordsSendTest {
         for (int i = 0; i < numChunks; i++) {
             ByteBuffer buffer = ByteBuffer.wrap(TestUtils.randomBytes(chunkSize));
             chunks[i] = buffer;
-            sends.add(new ByteBufferSend(dest, buffer));
+            sends.add(new ByteBufferSend(buffer));
         }
 
-        MultiRecordsSend send = new MultiRecordsSend(dest, sends);
+        MultiRecordsSend send = new MultiRecordsSend(sends);
         assertEquals(totalSize, send.size());
 
         for (int i = 0; i < numChunks; i++) {

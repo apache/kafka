@@ -34,7 +34,6 @@ import java.util.Queue;
 public class MultiRecordsSend implements Send {
     private static final Logger log = LoggerFactory.getLogger(MultiRecordsSend.class);
 
-    private final String dest;
     private final Queue<Send> sendQueue;
     private final long size;
     private Map<TopicPartition, RecordConversionStats> recordConversionStats;
@@ -43,11 +42,10 @@ public class MultiRecordsSend implements Send {
     private Send current;
 
     /**
-     * Construct a MultiRecordsSend for the given destination from a queue of Send objects. The queue will be
-     * consumed as the MultiRecordsSend progresses (on completion, it will be empty).
+     * Construct a MultiRecordsSend from a queue of Send objects. The queue will be consumed as the MultiRecordsSend
+     * progresses (on completion, it will be empty).
      */
-    public MultiRecordsSend(String dest, Queue<Send> sends) {
-        this.dest = dest;
+    public MultiRecordsSend(Queue<Send> sends) {
         this.sendQueue = sends;
 
         long size = 0;
@@ -58,8 +56,7 @@ public class MultiRecordsSend implements Send {
         this.current = sendQueue.poll();
     }
 
-    public MultiRecordsSend(String dest, Queue<Send> sends, long size) {
-        this.dest = dest;
+    public MultiRecordsSend(Queue<Send> sends, long size) {
         this.sendQueue = sends;
         this.size = size;
         this.current = sendQueue.poll();
@@ -68,11 +65,6 @@ public class MultiRecordsSend implements Send {
     @Override
     public long size() {
         return size;
-    }
-
-    @Override
-    public String destination() {
-        return dest;
     }
 
     @Override
@@ -128,8 +120,7 @@ public class MultiRecordsSend implements Send {
     @Override
     public String toString() {
         return "MultiRecordsSend(" +
-            "dest='" + dest + "'" +
-            ", size=" + size +
+            "size=" + size +
             ", totalWritten=" + totalWritten +
             ')';
     }

@@ -28,12 +28,12 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.SaslAuthenticateResponseData;
 import org.apache.kafka.common.message.SaslHandshakeResponseData;
 import org.apache.kafka.common.network.Authenticator;
+import org.apache.kafka.common.network.ByteBufferSend;
 import org.apache.kafka.common.network.ChannelBuilders;
 import org.apache.kafka.common.network.ChannelMetadataRegistry;
 import org.apache.kafka.common.network.ClientInformation;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.NetworkReceive;
-import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.ReauthenticationContext;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.network.TransportLayer;
@@ -408,7 +408,7 @@ public class SaslServerAuthenticator implements Authenticator {
                     reauthInfo.ensurePrincipalUnchanged(principal());
             }
             if (response != null) {
-                netOutBuffer = new NetworkSend(connectionId, ByteBuffer.wrap(response));
+                netOutBuffer = ByteBufferSend.sizePrefixed(ByteBuffer.wrap(response));
                 flushNetOutBufferAndUpdateInterestOps();
             }
         } else {

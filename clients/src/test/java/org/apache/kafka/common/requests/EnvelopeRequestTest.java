@@ -55,7 +55,7 @@ public class EnvelopeRequestTest {
                 InetAddress.getLocalHost().getAddress()
             ).build(version);
 
-            Send send = request.toSend("a", header);
+            Send send = request.toSend(header);
             ByteBuffer buffer = TestUtils.toBuffer(send);
             assertEquals(send.size() - 4, buffer.getInt());
             assertEquals(header, RequestHeader.parse(buffer));

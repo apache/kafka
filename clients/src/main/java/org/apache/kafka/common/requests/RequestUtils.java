@@ -19,7 +19,6 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Message;
-import org.apache.kafka.common.protocol.MessageSizeAccumulator;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.RecordBatch;
@@ -76,36 +75,22 @@ public final class RequestUtils {
         return new AbstractMap.SimpleEntry<>(hasIdempotentRecords, hasTransactionalRecords);
     }
 
-    public static MessageSizeAccumulator size(
-        ObjectSerializationCache serializationCache,
-        Message header,
-        short headerVersion,
-        Message apiMessage,
-        short apiVersion
-    ) {
-        MessageSizeAccumulator messageSize = new MessageSizeAccumulator();
-        if (header != null)
-            header.addSize(messageSize, serializationCache, headerVersion);
-        apiMessage.addSize(messageSize, serializationCache, apiVersion);
-        return messageSize;
-    }
-
     public static ByteBuffer serialize(
         Message header,
         short headerVersion,
         Message apiMessage,
         short apiVersion
     ) {
-        ObjectSerializationCache serializationCache = new ObjectSerializationCache();
-        MessageSizeAccumulator messageSize = RequestUtils.size(serializationCache, header, headerVersion, apiMessage, apiVersion);
+        ObjectSerializationCache cache = new ObjectSerializationCache();
 
-        ByteBuffer buffer = ByteBuffer.allocate(messageSize.totalSize());
-        ByteBufferAccessor bufferWritable = new ByteBufferAccessor(buffer);
-        if (header != null)
-            header.write(bufferWritable, serializationCache, headerVersion);
-        apiMessage.write(bufferWritable, serializationCache, apiVersion);
+        int headerSize = header.size(cache, headerVersion);
+        int messageSize = apiMessage.size(cache, apiVersion);
+        ByteBufferAccessor writable = new ByteBufferAccessor(ByteBuffer.allocate(headerSize + messageSize));
 
-        buffer.rewind();
-        return buffer;
+        header.write(writable, cache, headerVersion);
+        apiMessage.write(writable, cache, apiVersion);
+
+        writable.flip();
+        return writable.buffer();
     }
 }

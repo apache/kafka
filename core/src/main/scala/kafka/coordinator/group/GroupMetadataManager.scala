@@ -1004,7 +1004,7 @@ object GroupMetadataManager {
    * @return key for offset commit message
    */
   def offsetCommitKey(groupId: String, topicPartition: TopicPartition): Array[Byte] = {
-    MessageUtil.toBytes(OffsetCommitKey.HIGHEST_SUPPORTED_VERSION,
+    MessageUtil.toVersionPrefixedBytes(OffsetCommitKey.HIGHEST_SUPPORTED_VERSION,
       new OffsetCommitKey()
         .setGroup(groupId)
         .setTopic(topicPartition.topic)
@@ -1018,7 +1018,7 @@ object GroupMetadataManager {
    * @return key bytes for group metadata message
    */
   def groupMetadataKey(groupId: String): Array[Byte] = {
-    MessageUtil.toBytes(GroupMetadataKeyData.HIGHEST_SUPPORTED_VERSION,
+    MessageUtil.toVersionPrefixedBytes(GroupMetadataKeyData.HIGHEST_SUPPORTED_VERSION,
       new GroupMetadataKeyData()
         .setGroup(groupId))
   }
@@ -1036,7 +1036,7 @@ object GroupMetadataManager {
       if (apiVersion < KAFKA_2_1_IV0 || offsetAndMetadata.expireTimestamp.nonEmpty) 1.toShort
       else if (apiVersion < KAFKA_2_1_IV1) 2.toShort
       else 3.toShort
-    MessageUtil.toBytes(version, new OffsetCommitValue()
+    MessageUtil.toVersionPrefixedBytes(version, new OffsetCommitValue()
       .setOffset(offsetAndMetadata.offset)
       .setMetadata(offsetAndMetadata.metadata)
       .setCommitTimestamp(offsetAndMetadata.commitTimestamp)
@@ -1065,7 +1065,7 @@ object GroupMetadataManager {
       else if (apiVersion < KAFKA_2_3_IV0) 2.toShort
       else 3.toShort
 
-    MessageUtil.toBytes(version, new GroupMetadataValue()
+    MessageUtil.toVersionPrefixedBytes(version, new GroupMetadataValue()
       .setProtocolType(groupMetadata.protocolType.getOrElse(""))
       .setGeneration(groupMetadata.generationId)
       .setProtocol(groupMetadata.protocolName.orNull)

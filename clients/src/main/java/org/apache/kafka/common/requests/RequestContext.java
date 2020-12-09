@@ -108,7 +108,7 @@ public class RequestContext implements AuthorizableRequestContext {
      * over the network.
      */
     public Send buildResponseSend(AbstractResponse body) {
-        return body.toSend(connectionId, header.toResponseHeader(), apiVersion());
+        return body.toSend(header.toResponseHeader(), apiVersion());
     }
 
     /**

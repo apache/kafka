@@ -60,7 +60,7 @@ object TransactionLog {
     * @return key bytes
     */
   private[transaction] def keyToBytes(transactionalId: String): Array[Byte] = {
-    MessageUtil.toBytes(TransactionLogKey.HIGHEST_SUPPORTED_VERSION,
+    MessageUtil.toVersionPrefixedBytes(TransactionLogKey.HIGHEST_SUPPORTED_VERSION,
       new TransactionLogKey().setTransactionalId(transactionalId))
   }
 
@@ -82,7 +82,7 @@ object TransactionLog {
             .setPartitionIds(partitions.map(tp => Integer.valueOf(tp.partition)).toList.asJava)
         }.toList.asJava
 
-    MessageUtil.toBytes(TransactionLogValue.HIGHEST_SUPPORTED_VERSION,
+    MessageUtil.toVersionPrefixedBytes(TransactionLogValue.HIGHEST_SUPPORTED_VERSION,
       new TransactionLogValue()
         .setProducerId(txnMetadata.producerId)
         .setProducerEpoch(txnMetadata.producerEpoch)

@@ -115,7 +115,7 @@ public class SslVersionsTransportLayerTest {
 
             int msgSz = 1024 * 1024;
             String message = TestUtils.randomString(msgSz);
-            selector.send(new NetworkSend(node, ByteBuffer.wrap(message.getBytes())));
+            selector.send(new NetworkSend(node, ByteBufferSend.sizePrefixed(ByteBuffer.wrap(message.getBytes()))));
             while (selector.completedReceives().isEmpty()) {
                 selector.poll(100L);
             }
