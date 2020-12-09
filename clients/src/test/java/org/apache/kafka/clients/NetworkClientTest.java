@@ -201,7 +201,6 @@ public class NetworkClientTest {
         assertEquals(1, networkClient.inFlightRequestCount());
         ProduceResponse produceResponse = new ProduceResponse(new ProduceResponseData());
         ByteBuffer buffer = RequestTestUtils.serializeResponseWithHeader(produceResponse, requestVersion, request.correlationId());
-        buffer.rewind();
         selector.completeReceive(new NetworkReceive(node.idString(), buffer));
         List<ClientResponse> responses = networkClient.poll(1, time.milliseconds());
         assertEquals(1, responses.size());
@@ -510,7 +509,6 @@ public class NetworkClientTest {
         int throttleTime = 100;
         ProduceResponse produceResponse = new ProduceResponse(new ProduceResponseData().setThrottleTimeMs(throttleTime));
         ByteBuffer buffer = RequestTestUtils.serializeResponseWithHeader(produceResponse, requestVersion, request.correlationId());
-        buffer.rewind();
         selector.completeReceive(new NetworkReceive(node.idString(), buffer));
         client.poll(1, time.milliseconds());
 
@@ -591,7 +589,6 @@ public class NetworkClientTest {
 
     private void sendResponse(AbstractResponse response, short version, int correlationId) {
         ByteBuffer buffer = RequestTestUtils.serializeResponseWithHeader(response, version, correlationId);
-        buffer.rewind();
         selector.completeReceive(new NetworkReceive(node.idString(), buffer));
     }
 

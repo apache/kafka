@@ -47,7 +47,6 @@ public class ProduceResponseTest {
         short version = 5;
 
         ByteBuffer buffer = RequestTestUtils.serializeResponseWithHeader(v5Response, version, 0);
-        buffer.rewind();
 
         ResponseHeader.parse(buffer, ApiKeys.PRODUCE.responseHeaderVersion(version)); // throw away.
         ProduceResponse v5FromBytes = (ProduceResponse) AbstractResponse.parseResponse(ApiKeys.PRODUCE,
