@@ -332,7 +332,7 @@ class Kip500Broker(val config: KafkaConfig,
     } catch {
       case e: Throwable =>
         maybeChangeStatus(STARTING, STARTED)
-        fatal("Fatal error during controller startup. Prepare to shutdown", e)
+        fatal("Fatal error during broker startup. Prepare to shutdown", e)
         shutdown()
         throw e
     }
