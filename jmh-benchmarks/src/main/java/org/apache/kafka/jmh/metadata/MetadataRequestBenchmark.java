@@ -53,7 +53,6 @@ import org.apache.kafka.common.requests.UpdateMetadataRequest;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.SystemTime;
-import org.apache.kafka.common.utils.Time;
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -170,7 +169,6 @@ public class MetadataRequestBenchmark {
         kafkaProps.put(KafkaConfig$.MODULE$.ZkConnectProp(), "zk");
         kafkaProps.put(KafkaConfig$.MODULE$.BrokerIdProp(), brokerId + "");
         BrokerFeatures brokerFeatures = BrokerFeatures.createDefault();
-        Time time = new SystemTime();
         return new KafkaApis(requestChannel,
             replicaManager,
             adminManager,
@@ -188,7 +186,7 @@ public class MetadataRequestBenchmark {
             fetchManager,
             brokerTopicStats,
             "clusterId",
-            time,
+            new SystemTime(),
             null,
             brokerFeatures,
             new FinalizedFeatureCache(brokerFeatures));
