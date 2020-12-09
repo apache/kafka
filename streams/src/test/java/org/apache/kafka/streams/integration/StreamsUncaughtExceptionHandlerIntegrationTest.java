@@ -67,7 +67,7 @@ import static org.junit.Assert.fail;
 @SuppressWarnings("deprecation") //Need to call the old handler, will remove those calls when the old handler is removed
 public class StreamsUncaughtExceptionHandlerIntegrationTest {
     @ClassRule
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1, new Properties(), 0L, 0L);
     public static final Duration DEFAULT_DURATION = Duration.ofSeconds(30);
 
     @Rule
@@ -233,6 +233,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
             waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.NOT_RUNNING, DEFAULT_DURATION);
 
             assertThat(processorValueCollector.size(), equalTo(3));
+            //because we only have 2 threads at the start and each record kills a thread we must have replaced threads
         }
     }
 }

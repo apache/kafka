@@ -452,7 +452,7 @@ public class KafkaStreams implements AutoCloseable {
                             " The streams client is going to shut down now. ", throwable);
                     close(Duration.ZERO);
                 }
-                final StreamThread deadThread = (StreamThread) threads.stream().filter(n -> n.getName().equals(Thread.currentThread().getName())).toArray()[0];
+                final StreamThread deadThread = (StreamThread) Thread.currentThread();
                 threads.remove(deadThread);
                 addStreamThread();
                 deadThread.shutdown();
