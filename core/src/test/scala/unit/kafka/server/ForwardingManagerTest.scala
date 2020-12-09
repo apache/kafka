@@ -60,7 +60,7 @@ class ForwardingManagerTest {
 
     val responseBody = new AlterConfigsResponse(new AlterConfigsResponseData())
     val responseBuffer = RequestTestUtils.serializeResponseWithHeader(responseBody, requestHeader.apiVersion,
-      requestHeader.correlationId + 1)
+      requestCorrelationId + 1)
 
     Mockito.when(brokerToController.sendRequest(
       any(classOf[EnvelopeRequest.Builder]),
