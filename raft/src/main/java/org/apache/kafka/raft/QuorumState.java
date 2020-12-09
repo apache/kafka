@@ -420,7 +420,8 @@ public class QuorumState {
             localId,
             epoch(),
             epochStartOffset,
-            voters
+            voters,
+            candidateState.grantingVoters()
         ));
     }
 

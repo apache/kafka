@@ -314,7 +314,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
         long currentTimeMs = time.milliseconds();
         if (quorum.isLeader()) {
-            onBecomeLeader(currentTimeMs);
+            throw new IllegalStateException("Voter cannot initialize as a Leader");
         } else if (quorum.isCandidate()) {
             onBecomeCandidate(currentTimeMs);
         } else if (quorum.isFollower()) {
@@ -371,14 +371,23 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         );
     }
 
-    private void appendLeaderChangeMessage(LeaderState state, long currentTimeMs) {
-        List<Voter> voters = state.followers().stream()
+    private static List<Voter> convertToVoters(Set<Integer> voterIds) {
+        return voterIds.stream()
             .map(follower -> new Voter().setVoterId(follower))
             .collect(Collectors.toList());
+    }
+
+    private void appendLeaderChangeMessage(LeaderState state, long currentTimeMs) {
+        List<Voter> voters = convertToVoters(state.followers());
+        List<Voter> grantingVoters = convertToVoters(state.grantingVoters());
+
+        // Adding the leader to the voters as any voter always votes for itself.
+        voters.add(new Voter().setVoterId(state.election().leaderId()));
 
         LeaderChangeMessage leaderChangeMessage = new LeaderChangeMessage()
             .setLeaderId(state.election().leaderId())
-            .setVoters(voters);
+            .setVoters(voters)
+            .setGrantingVoters(grantingVoters);
 
         MemoryRecords records = MemoryRecords.withLeaderChangeMessage(
             currentTimeMs, quorum.epoch(), leaderChangeMessage);
@@ -1556,7 +1565,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
         long timeUntilSend = maybeSendRequests(
             currentTimeMs,
-            state.nonEndorsingFollowers(),
+            state.nonEndorsingVoters(),
             this::buildBeginQuorumEpochRequest
         );
 

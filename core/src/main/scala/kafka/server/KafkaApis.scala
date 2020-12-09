@@ -1236,28 +1236,37 @@ class KafkaApis(val requestChannel: RequestChannel,
     topicMetadata.headOption.getOrElse(createInternalTopic(topic))
   }
 
-  private def getTopicMetadata(allowAutoTopicCreation: Boolean, topics: Set[String], listenerName: ListenerName,
+  private def getTopicMetadata(allowAutoTopicCreation: Boolean, isFetchAllMetadata: Boolean,
+                               topics: Set[String], listenerName: ListenerName,
                                errorUnavailableEndpoints: Boolean,
                                errorUnavailableListeners: Boolean): Seq[MetadataResponseTopic] = {
     val topicResponses = metadataCache.getTopicMetadata(topics, listenerName,
         errorUnavailableEndpoints, errorUnavailableListeners)
+
     if (topics.isEmpty || topicResponses.size == topics.size) {
       topicResponses
     } else {
       val nonExistentTopics = topics.diff(topicResponses.map(_.name).toSet)
-      val responsesForNonExistentTopics = nonExistentTopics.map { topic =>
+      val responsesForNonExistentTopics = nonExistentTopics.flatMap { topic =>
         if (isInternal(topic)) {
           val topicMetadata = createInternalTopic(topic)
-          if (topicMetadata.errorCode == Errors.COORDINATOR_NOT_AVAILABLE.code)
-            metadataResponseTopic(Errors.INVALID_REPLICATION_FACTOR, topic, true, util.Collections.emptyList())
-          else
-            topicMetadata
+          Some(
+            if (topicMetadata.errorCode == Errors.COORDINATOR_NOT_AVAILABLE.code)
+              metadataResponseTopic(Errors.INVALID_REPLICATION_FACTOR, topic, true, util.Collections.emptyList())
+            else
+              topicMetadata
+          )
+        } else if (isFetchAllMetadata) {
+          // A metadata request for all topics should never result in topic auto creation, but a topic may be deleted
+          // in between the creation of the topics parameter and topicResponses, so make sure to return None for this case.
+          None
         } else if (allowAutoTopicCreation && config.autoCreateTopicsEnable) {
-          createTopic(topic, config.numPartitions, config.defaultReplicationFactor)
+          Some(createTopic(topic, config.numPartitions, config.defaultReplicationFactor))
         } else {
-          metadataResponseTopic(Errors.UNKNOWN_TOPIC_OR_PARTITION, topic, false, util.Collections.emptyList())
+          Some(metadataResponseTopic(Errors.UNKNOWN_TOPIC_OR_PARTITION, topic, false, util.Collections.emptyList()))
         }
       }
+
       topicResponses ++ responsesForNonExistentTopics
     }
   }
@@ -1313,9 +1322,16 @@ class KafkaApis(val requestChannel: RequestChannel,
     val topicMetadata =
       if (authorizedTopics.isEmpty)
         Seq.empty[MetadataResponseTopic]
-      else
-        getTopicMetadata(metadataRequest.allowAutoTopicCreation, authorizedTopics, request.context.listenerName,
-          errorUnavailableEndpoints, errorUnavailableListeners)
+      else {
+        getTopicMetadata(
+          metadataRequest.allowAutoTopicCreation,
+          metadataRequest.isAllTopics,
+          authorizedTopics,
+          request.context.listenerName,
+          errorUnavailableEndpoints,
+          errorUnavailableListeners
+        )
+      }
 
     var clusterAuthorizedOperations = Int.MinValue
     if (request.header.apiVersion >= 8) {

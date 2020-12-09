@@ -25,7 +25,6 @@ import java.util.stream.Collectors;
 import org.apache.kafka.common.config.ConfigException;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
@@ -43,8 +42,6 @@ public class ClientUtilsTest {
         InetSocketAddress onlyAddress = validatedAddresses.get(0);
         assertEquals("localhost", onlyAddress.getHostName());
         assertEquals(10000, onlyAddress.getPort());
-        assertThrows(ConfigException.class, () -> ClientUtils.parseAndValidateAddresses(
-                Arrays.asList("localhost:8000;localhost:9000"), ClientDnsLookup.USE_ALL_DNS_IPS));
     }
 
     @Test
