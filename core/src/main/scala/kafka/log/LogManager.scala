@@ -441,7 +441,7 @@ class LogManager(logDirs: Seq[File],
    * @param jobs jobs
    * @return true if all pass. Otherwise, false
    */
-  private[log] def allPass(jobs: Seq[Future[_]]): Boolean = {
+  private[log] def waitForAllToComplete(jobs: Seq[Future[_]]): Boolean = {
     jobs.count(future => Try(future.get) match {
       case Success(_) => false
       case Failure(e) =>
@@ -494,7 +494,7 @@ class LogManager(logDirs: Seq[File],
 
     try {
       jobs.forKeyValue { (dir, dirJobs) =>
-        if (allPass(dirJobs)) {
+        if (waitForAllToComplete(dirJobs)) {
           val logs = logsInDir(localLogsByDir, dir)
 
           // update the last flush point
