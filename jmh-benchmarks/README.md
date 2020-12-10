@@ -28,7 +28,7 @@ Run a specific test and override the number of forks, iterations and warm-up ite
 
 Run a specific test with async and GC profilers on Linux and flame graph output:
 
-    ./jmh-benchmarks/jmh.sh -prof gc -prof async:libPath=/path/to/async-profiler.so;output=flamegraph LRUCacheBenchmark
+    ./jmh-benchmarks/jmh.sh -prof gc -prof 'async:libPath=/path/to/async-profiler.so;output=flamegraph' LRUCacheBenchmark
 
 The following sections cover async profiler and GC profilers in more detail.
 
