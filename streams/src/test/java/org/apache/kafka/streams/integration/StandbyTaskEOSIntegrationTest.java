@@ -294,6 +294,16 @@ public class StandbyTaskEOSIntegrationTest {
                 "Could not get key from recovered main store"
             );
 
+//            waitForCondition(
+//                () -> streamInstanceOneRecovery.store(
+//                    StoreQueryParameters.fromNameAndType(
+//                            storeName,
+//                            QueryableStoreTypes.<Integer, Integer>keyValueStore()
+//                    ).enableStaleStores()
+//                ).get(KEY_1) != null,
+//                "Could not get key from recovered standby store"
+//            );
+
             // re-inject poison pill and wait for crash of first instance
             skipRecord.set(false);
             IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
