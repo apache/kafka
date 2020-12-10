@@ -34,7 +34,6 @@ import org.apache.kafka.test.TestUtils;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
@@ -276,16 +275,6 @@ public class NioEchoServer extends Thread {
      */
     public void outputChannel(WritableByteChannel channel) {
         this.outputChannel = new TransferableChannel() {
-            @Override
-            public boolean hasPendingWrites() {
-                return false;
-            }
-
-            @Override
-            public long transferFrom(FileChannel fileChannel, long position, long count) throws IOException {
-                return fileChannel.transferTo(position, count, this);
-            }
-
             @Override
             public boolean isOpen() {
                 return channel.isOpen();

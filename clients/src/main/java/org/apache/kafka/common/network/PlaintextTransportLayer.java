@@ -20,15 +20,13 @@ package org.apache.kafka.common.network;
  * Transport layer for PLAINTEXT communication
  */
 
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
-import java.nio.channels.SocketChannel;
 import java.nio.channels.SelectionKey;
-
+import java.nio.channels.SocketChannel;
 import java.security.Principal;
-
-import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 public class PlaintextTransportLayer implements TransportLayer {
     private final SelectionKey key;
@@ -167,15 +165,6 @@ public class PlaintextTransportLayer implements TransportLayer {
     }
 
     /**
-     * always returns false as there will be not be any
-     * pending writes since we directly write to socketChannel.
-     */
-    @Override
-    public boolean hasPendingWrites() {
-        return false;
-    }
-
-    /**
      * Returns ANONYMOUS as Principal.
      */
     @Override
@@ -208,10 +197,5 @@ public class PlaintextTransportLayer implements TransportLayer {
     @Override
     public boolean hasBytesBuffered() {
         return false;
-    }
-
-    @Override
-    public long transferFrom(FileChannel fileChannel, long position, long count) throws IOException {
-        return fileChannel.transferTo(position, count, socketChannel);
     }
 }

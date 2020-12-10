@@ -21,18 +21,20 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.GatheringByteChannel;
 
 /**
- * TransportLayer is a fat interface so it is a bit weird to use TransportLayer in write-only path.
- * Hence, we extract all write-related methods from TransportLayer to be a new interface - TransferableChannel
+ * Extends GatheringByteChannel with the minimal set of methods required by the Send interface. Supporting TLS and
+ * efficient zero copy transfers are the main reasons for the additional methods. (see SslTransportLayer)
  */
 public interface TransferableChannel extends GatheringByteChannel {
 
     /**
-     * @return true if there are any pending writes
+     * @return true if there are any pending writes. false if the implementation directly write all data to output.
      */
-    boolean hasPendingWrites();
+    default boolean hasPendingWrites() {
+        return false;
+    }
 
     /**
-     * Transfers bytes from `fileChannel` to this `TransportLayer`.
+     * Transfers bytes from `fileChannel` to this `TransferableChannel`.
      *
      * This method will delegate to {@link FileChannel#transferTo(long, long, java.nio.channels.WritableByteChannel)},
      * but it will unwrap the destination channel, if possible, in order to benefit from zero copy. This is required
@@ -45,5 +47,7 @@ public interface TransferableChannel extends GatheringByteChannel {
      * @return The number of bytes, possibly zero, that were actually transferred
      * @see FileChannel#transferTo(long, long, java.nio.channels.WritableByteChannel)
      */
-    long transferFrom(FileChannel fileChannel, long position, long count) throws IOException;
+    default long transferFrom(FileChannel fileChannel, long position, long count) throws IOException {
+        return fileChannel.transferTo(position, count, this);
+    }
 }

@@ -19,6 +19,7 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.network.TransferableChannel;
 import org.apache.kafka.common.utils.Time;
 
 import org.junit.Test;
@@ -162,22 +163,46 @@ public class LazyDownConversionRecordsTest {
             LazyDownConversionRecordsSend lazySend = lazyRecords.toSend();
             File outputFile = tempFile();
             ByteBuffer convertedRecordsBuffer;
-            try (FileChannel fileChannel = FileChannel.open(outputFile.toPath(), StandardOpenOption.READ, StandardOpenOption.WRITE)) {
-                ByteBuffer buf;
-                try (org.apache.kafka.common.requests.ByteBufferChannel channel =
-                             new org.apache.kafka.common.requests.ByteBufferChannel(bytesToConvert)) {
-                    int written = 0;
-                    while (written < bytesToConvert) written += lazySend.writeTo(channel, written, bytesToConvert - written);
-                    buf = channel.buffer();
-                }
-                fileChannel.write(buf);
-                try (FileRecords convertedRecords = FileRecords.open(outputFile, true, (int) fileChannel.size(), false)) {
+            try (TransferableChannel channel = toTransferableChannel(FileChannel.open(outputFile.toPath(), StandardOpenOption.READ, StandardOpenOption.WRITE))) {
+                int written = 0;
+                while (written < bytesToConvert) written += lazySend.writeTo(channel, written, bytesToConvert - written);
+                try (FileRecords convertedRecords = FileRecords.open(outputFile, true, written, false)) {
                     convertedRecordsBuffer = ByteBuffer.allocate(convertedRecords.sizeInBytes());
                     convertedRecords.readInto(convertedRecordsBuffer, 0);
                 }
             }
             return MemoryRecords.readableRecords(convertedRecordsBuffer);
         }
+    }
+
+    private static TransferableChannel toTransferableChannel(FileChannel fileChannel) {
+        return new TransferableChannel() {
+
+            @Override
+            public boolean isOpen() {
+                return fileChannel.isOpen();
+            }
+
+            @Override
+            public void close() throws IOException {
+                fileChannel.close();
+            }
+
+            @Override
+            public int write(ByteBuffer src) throws IOException {
+                return fileChannel.write(src);
+            }
+
+            @Override
+            public long write(ByteBuffer[] srcs, int offset, int length) throws IOException {
+                return fileChannel.write(srcs, offset, length);
+            }
+
+            @Override
+            public long write(ByteBuffer[] srcs) throws IOException {
+                return fileChannel.write(srcs);
+            }
+        };
     }
 
     private static void verifyDownConvertedRecords(List<SimpleRecord> initialRecords,
