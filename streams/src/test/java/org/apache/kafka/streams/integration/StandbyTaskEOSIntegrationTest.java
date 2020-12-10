@@ -38,11 +38,13 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
+import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -67,6 +69,7 @@ import static org.junit.Assert.assertTrue;
  * task towards a standby task is safe across restarts of the application.
  */
 @RunWith(Parameterized.class)
+@Category(IntegrationTest.class)
 public class StandbyTaskEOSIntegrationTest {
 
     private final static long REBALANCE_TIMEOUT = Duration.ofMinutes(2L).toMillis();
@@ -175,6 +178,7 @@ public class StandbyTaskEOSIntegrationTest {
 
     @Test
     public void shouldWipeOutStandbyStateDirectoryIfCheckpointIsMissing() throws Exception {
+        final long time = System.currentTimeMillis();
         final String base = TestUtils.tempDirectory(appId).getPath();
 
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
@@ -188,7 +192,7 @@ public class StandbyTaskEOSIntegrationTest {
                 IntegerSerializer.class,
                 new Properties()
             ),
-            10L
+            10L + time
         );
 
         try (
@@ -244,7 +248,7 @@ public class StandbyTaskEOSIntegrationTest {
                     IntegerSerializer.class,
                     new Properties()
                 ),
-                10L
+                10L + time
             );
             waitForCondition(
                 () -> streamInstanceOne.state() == KafkaStreams.State.ERROR,
@@ -290,6 +294,16 @@ public class StandbyTaskEOSIntegrationTest {
                 "Could not get key from recovered main store"
             );
 
+//            waitForCondition(
+//                () -> streamInstanceOneRecovery.store(
+//                    StoreQueryParameters.fromNameAndType(
+//                            storeName,
+//                            QueryableStoreTypes.<Integer, Integer>keyValueStore()
+//                    ).enableStaleStores()
+//                ).get(KEY_1) != null,
+//                "Could not get key from recovered standby store"
+//            );
+
             // re-inject poison pill and wait for crash of first instance
             skipRecord.set(false);
             IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
@@ -303,11 +317,11 @@ public class StandbyTaskEOSIntegrationTest {
                     IntegerSerializer.class,
                     new Properties()
                 ),
-                10L
+                10L + time
             );
             waitForCondition(
                 () -> streamInstanceOneRecovery.state() == KafkaStreams.State.ERROR,
-                "Stream instance 1 did not go into error state"
+                "Stream instance 1 did not go into error state. Is in " + streamInstanceOneRecovery.state() + " state."
             );
         }
     }
