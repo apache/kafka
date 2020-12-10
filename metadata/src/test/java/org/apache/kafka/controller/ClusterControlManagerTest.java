@@ -18,7 +18,9 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
+import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
@@ -36,10 +38,12 @@ public class ClusterControlManagerTest {
     @Test
     public void testReplay() {
         MockTime time = new MockTime(0, 0, 0);
+
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(-1);
         ClusterControlManager clusterControl =
-            new ClusterControlManager(time, snapshotRegistry, 1000, 100);
-        assertFalse(clusterControl.isRegistered(0));
+            new ClusterControlManager(new LogContext(), time, snapshotRegistry, 1000, 100);
+        assertFalse(clusterControl.isUsable(0));
+
         RegisterBrokerRecord brokerRecord = new RegisterBrokerRecord().setBrokerEpoch(100).setBrokerId(1);
         brokerRecord.endPoints().add(new RegisterBrokerRecord.BrokerEndpoint().
             setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
@@ -47,31 +51,41 @@ public class ClusterControlManagerTest {
             setName("PLAINTEXT").
             setHost("example.com"));
         clusterControl.replay(brokerRecord);
-        assertFalse(clusterControl.isRegistered(0));
-        assertTrue(clusterControl.isRegistered(1));
+        assertFalse(clusterControl.isUsable(0));
+        assertFalse(clusterControl.isUsable(1));
+
+        UnfenceBrokerRecord unfenceBrokerRecord =
+            new UnfenceBrokerRecord().setId(1).setEpoch(100);
+        clusterControl.replay(unfenceBrokerRecord);
+        assertFalse(clusterControl.isUsable(0));
+        assertTrue(clusterControl.isUsable(1));
     }
 
     @Test
     public void testChooseRandomRegistered() {
         MockTime time = new MockTime(0, 0, 0);
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(-1);
-        ClusterControlManager clusterControl =
-            new ClusterControlManager(time, snapshotRegistry, 1000, 100);
+        ClusterControlManager clusterControl = new ClusterControlManager(
+            new LogContext(), time, snapshotRegistry, 1000, 100);
         for (int i = 0; i < 10; i++) {
-            RegisterBrokerRecord brokerRecord = new RegisterBrokerRecord().setBrokerEpoch(100).setBrokerId(i);
+            RegisterBrokerRecord brokerRecord =
+                new RegisterBrokerRecord().setBrokerEpoch(100).setBrokerId(i);
             brokerRecord.endPoints().add(new RegisterBrokerRecord.BrokerEndpoint().
                 setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
                 setPort((short) 9092).
                 setName("PLAINTEXT").
                 setHost("example.com"));
             clusterControl.replay(brokerRecord);
+            UnfenceBrokerRecord unfenceBrokerRecord =
+                new UnfenceBrokerRecord().setId(i).setEpoch(100);
+            clusterControl.replay(unfenceBrokerRecord);
         }
         for (int i = 0; i < 10; i++) {
-            assertTrue(clusterControl.isRegistered(i));
+            assertTrue(clusterControl.isUsable(i));
         }
         for (int i = 0; i < 100; i++) {
             Random random = new Random(123);
-            List<Integer> results = clusterControl.chooseRandomRegistered(random, 3);
+            List<Integer> results = clusterControl.chooseRandomUsable(random, 3);
             HashSet<Integer> seen = new HashSet<>();
             for (Integer result : results) {
                 assertTrue(result >= 0);

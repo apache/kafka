@@ -571,7 +571,7 @@ public final class QuorumController implements Controller {
         this.configurationControl = new ConfigurationControlManager(snapshotRegistry,
             configDefs);
         this.clusterControl =
-            new ClusterControlManager(time, snapshotRegistry, 18000, 9000);
+            new ClusterControlManager(logContext, time, snapshotRegistry, 18000, 9000);
         this.featureControl =
             new FeatureControlManager(supportedFeatures, snapshotRegistry);
         this.replicationControl = new ReplicationControlManager(snapshotRegistry,
@@ -655,7 +655,7 @@ public final class QuorumController implements Controller {
     @Override
     public CompletableFuture<HeartbeatReply>
             processBrokerHeartbeat(BrokerHeartbeatRequestData request) {
-        return appendReadEvent("processBrokerHeartbeat", () ->
+        return appendWriteEvent("processBrokerHeartbeat", () ->
             clusterControl.processBrokerHeartbeat(request, lastCommittedOffset));
     }
 
@@ -663,7 +663,8 @@ public final class QuorumController implements Controller {
     public CompletableFuture<RegistrationReply>
             registerBroker(BrokerRegistrationRequestData request) {
         return appendWriteEvent("registerBroker", () ->
-            clusterControl.registerBroker(request, writeOffset));
+            clusterControl.registerBroker(request, writeOffset,
+                featureControl.finalizedFeaturesAndEpoch(Long.MAX_VALUE)));
     }
 
     @Override

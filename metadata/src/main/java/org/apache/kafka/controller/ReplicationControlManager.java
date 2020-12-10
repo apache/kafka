@@ -49,10 +49,10 @@ import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
 
 public class ReplicationControlManager {
     static class TopicControlInfo {
-        private final java.util.UUID id;
+        private final Uuid id;
         private final TimelineHashMap<Integer, PartitionControlInfo> parts;
 
-        TopicControlInfo(SnapshotRegistry snapshotRegistry, java.util.UUID id) {
+        TopicControlInfo(SnapshotRegistry snapshotRegistry, Uuid id) {
             this.id = id;
             this.parts = new TimelineHashMap<>(snapshotRegistry, 0);
         }
@@ -81,8 +81,8 @@ public class ReplicationControlManager {
     private final Random random;
     private final ConfigurationControlManager configurationControl;
     private final ClusterControlManager clusterControl;
-    private final TimelineHashMap<String, java.util.UUID> topicsByName;
-    private final TimelineHashMap<java.util.UUID, TopicControlInfo> topics;
+    private final TimelineHashMap<String, Uuid> topicsByName;
+    private final TimelineHashMap<Uuid, TopicControlInfo> topics;
 
     ReplicationControlManager(SnapshotRegistry snapshotRegistry,
                               Random random,
@@ -174,10 +174,10 @@ public class ReplicationControlManager {
                         return new ApiError(Errors.INVALID_REPLICA_ASSIGNMENT,
                             "The manual partition assignment specifies the same node " +
                                 "id more than once.");
-                    } else if (!clusterControl.isRegistered(brokerId)) {
+                    } else if (!clusterControl.isUsable(brokerId)) {
                         return new ApiError(Errors.INVALID_REPLICA_ASSIGNMENT,
                             "The manual partition assignment contains node " + brokerId +
-                                ", but that node is not registered.");
+                                ", but that node is not usable.");
                     }
                 }
                 int[] replicas = new int[assignment.brokerIds().size()];
@@ -202,7 +202,7 @@ public class ReplicationControlManager {
             for (int partitionId = 0; partitionId < topic.numPartitions(); partitionId++) {
                 List<Integer> replicas;
                 try {
-                    replicas = clusterControl.chooseRandomRegistered(random,
+                    replicas = clusterControl.chooseRandomUsable(random,
                         topic.replicationFactor());
                 } catch (Exception e) {
                     return new ApiError(Errors.INVALID_REQUEST,

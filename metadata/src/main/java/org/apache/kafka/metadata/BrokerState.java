@@ -28,69 +28,43 @@ import java.util.Map;
  * The numeric values used here are part of Kafka's public API.  They appear in metrics,
  * and are also sent over the wire in some cases.
  *
- * For the legacy broker, the expected state transitions are:
+ * The expected state transitions are:
  *
- *                +-----------+
- *                |NOT_RUNNING|
- *                +-----+-----+
- *                      |
- *                      v
- *                +-----+-----+
- *                |REGISTERING+--+
- *                +-----+-----+  | +----+------------+
- *                      |        +-+RecoveringFrom   |
- *                      v          |UncleanShutdown  |
- *               +-------+-------+ +-------+---------+
- *               | RUNNING       |            |
- *               +-------+-------+<-----------+
- *                       |
- *                       v
- *                +-----+------------+
- *                |PendingControlled |
- *                |Shutdown          |
- *                +-----+------------+
- *                      |
- *                      v
- *               +-----+----------+
- *               |BrokerShutting  |
- *               |Down            |
- *               +-----+----------+
- *                     |
- *                     v
- *               +-----+-----+
- *               |Not Running|
- *               +-----------+
+ * NOT_RUNNING
+ *     ↓
+ * STARTING
+ *     ↓
+ * RECOVERY
+ *     ↓
+ * RUNNING
+ *     ↓
+ * PENDING_CONTROLLED_SHUTDOWN
+ *     ↓
+ * SHUTTING_DOWN
  */
 @InterfaceStability.Evolving
 public enum BrokerState {
     /**
-     * The state the broker is in when it first starts up, and hasn't acquired a
-     * lease.
+     * The state the broker is in when it first starts up.
      */
     NOT_RUNNING((byte) 0),
 
     /**
-     * The state the broker is in when it is registering with the active controller.
-     * Note: in pre-500-brokers this state was previously known as Starting.
+     * The state the broker is in when it is catching up with cluster metadata.
      */
-    REGISTERING((byte) 1),
+    STARTING((byte) 1),
 
     /**
-     * The state the broker is in when it has a lease, but is still recovering
-     * from an unclean shutdown.
+     * The broker has caught up with cluster metadata, but has not yet
+     * been unfenced by the controller.
      */
-    RECOVERING_FROM_UNCLEAN_SHUTDOWN((byte) 2),
+    RECOVERY((byte) 2),
 
     /**
-     * The state the broker is in when it is running and accepting client
-     * requests.
+     * The state the broker is in when it has registered at least once, and is
+     * accepting client requests.
      */
     RUNNING((byte) 3),
-
-    /**
-     * The state the broker is in when it is fenced.
-     */
-    FENCED((byte) 4),
 
     /**
      * The state the broker is in when it is attempting to perform a controlled

@@ -64,7 +64,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -109,7 +108,6 @@ public class PartitionMakeFollowerBenchmark {
             1000L,
             60000,
             scheduler,
-            new CompletableFuture<>(),
             brokerTopicStats,
             logDirFailureChannel,
             Time.SYSTEM);

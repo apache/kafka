@@ -136,7 +136,7 @@ object Partition extends KafkaMetricsGroup {
           // wait for the broker metadata listener to be available
           val brokerMetadataListener = brokerMetadataListenerFuture.get()
           // wait for it to initially catch up on the metadata log if necessary
-          brokerMetadataListener.initiallyCaughtUpFuture.get().topicConfigProperties(topicPartition.topic())
+          brokerMetadataListener.topicConfigProperties(topicPartition.topic())
         }
 
         override def shrinkIsr(controllerEpoch: Int, leaderAndIsr: LeaderAndIsr): Option[Int] = {

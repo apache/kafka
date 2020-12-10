@@ -24,7 +24,9 @@
       "about": "Duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
       "about": "The error code, or 0 if there was no error." },
-    { "name": "NextState", "type": "int8", "versions": "0+",
-      "about": "The state to which the broker should transition." }
+    { "name": "IsCaughtUp", "type": "bool", "versions": "0+", "default": "false",
+      "about": "True if the broker has approximately caught up with the latest metadata." },
+    { "name": "IsFenced", "type": "bool", "versions": "0+", "default": "true",
+      "about": "True if the broker is fenced." }
   ]
 }

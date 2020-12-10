@@ -20,15 +20,13 @@
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
-    { "name": "CurrentState", "type": "int8", "versions": "0+",
-      "about": "The current state that the broker is in." },
-    { "name": "TargetState", "type": "int8", "versions": "0+",
-      "about": "The state that the broker wants to reach." },
     { "name": "BrokerId", "type": "int32", "versions": "0+",
       "about": "The broker ID." },
     { "name": "BrokerEpoch", "type": "int64", "versions": "0+", "default": "-1",
       "about": "The broker epoch." },
     { "name": "CurrentMetadataOffset", "type": "int64", "versions": "0+",
-      "about": "The highest metadata offset which the broker has reached." }
+      "about": "The highest metadata offset which the broker has reached." },
+    { "name": "ShouldFence", "type": "bool", "versions": "0+",
+      "about": "True if the broker wants to be fenced, false otherwise." }
   ]
 }

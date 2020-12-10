@@ -3472,7 +3472,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             val topic = resource.resourceName
             Topic.validate(topic)
             if (metadataCache.contains(topic)) {
-              val topicProps = brokerMetadataListener.initiallyCaughtUpFuture.get.configProperties(new ConfigResource(ConfigResource.Type.TOPIC, topic))
+              val topicProps = brokerMetadataListener.configProperties(new ConfigResource(ConfigResource.Type.TOPIC, topic))
               val logConfig = LogConfig.fromProps(KafkaBroker.copyKafkaConfigToLog(config), topicProps)
               createResponseConfig(allConfigs(logConfig), createTopicConfigEntry(logConfig, topicProps, includeSynonyms, includeDocumentation))
             } else {

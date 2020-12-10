@@ -27,7 +27,7 @@ import org.apache.kafka.common.protocol.{ApiMessage, ApiMessageAndVersion}
 import org.apache.kafka.common.utils.{LogContext, MockTime, Utils}
 import org.apache.kafka.metalog.{LocalLogManager, MetaLogLeader}
 import org.apache.kafka.test.{TestCondition, TestUtils => KTestUtils}
-import org.junit.Assert.{assertEquals, assertFalse, assertTrue, fail}
+import org.junit.Assert.{assertEquals, assertTrue, fail}
 import org.junit.{After, Test}
 import org.mockito.Mockito.{mock, times, verify}
 import org.scalatest.Assertions.intercept
@@ -127,8 +127,6 @@ class BrokerMetadataListenerTest {
     val listener = new BrokerMetadataListener(mock(classOf[KafkaConfig]), metadataCache, new MockTime(), List(processor))
     assertEquals(expectedInitialMetadataOffset, listener.currentMetadataOffset())
 
-    assertFalse(listener.initiallyCaughtUpFuture.isDone)
-    assertFalse(listener.brokerEpochFuture().isDone)
     val brokerEpoch = 1
     val msg0 = RegisterBrokerEvent(brokerEpoch)
     val msg1 = FenceBrokerEvent(1, true)
@@ -136,9 +134,6 @@ class BrokerMetadataListenerTest {
     listener.put(msg1)
     listener.drain()
     assertEquals(List(msg0, msg1), processor.processed.toList)
-    assertFalse(listener.initiallyCaughtUpFuture.isDone)
-    assertTrue(listener.brokerEpochFuture().isDone)
-    assertEquals(brokerEpoch, listener.brokerEpochFuture().get())
 
     // offset should not be updated
     assertEquals(expectedInitialMetadataOffset, listener.currentMetadataOffset())
@@ -152,7 +147,6 @@ class BrokerMetadataListenerTest {
     // offset should not be updated
     assertEquals(expectedInitialMetadataOffset, listener.currentMetadataOffset())
     // but we should now be "caught up"
-    assertTrue(listener.initiallyCaughtUpFuture.isDone)
 
   }
 
@@ -185,19 +179,6 @@ class BrokerMetadataListenerTest {
 
     listener.close()
     assertTrue(allRegisteredMetricNames.isEmpty)
-  }
-
-  @Test
-  def testFuturesCancelledOnClose(): Unit = {
-    val listener = new BrokerMetadataListener(mock(classOf[KafkaConfig]), metadataCache, new MockTime(),
-      List(new MockMetadataProcessor))
-    listener.start()
-    assertFalse(listener.initiallyCaughtUpFuture.isDone)
-    assertFalse(listener.brokerEpochFuture().isDone)
-
-    listener.close()
-    assertTrue(listener.initiallyCaughtUpFuture.isCancelled)
-    assertTrue(listener.brokerEpochFuture().isCancelled)
   }
 
   @Test

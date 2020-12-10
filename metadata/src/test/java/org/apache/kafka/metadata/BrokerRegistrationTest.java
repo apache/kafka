@@ -18,6 +18,7 @@
 package org.apache.kafka.metadata;
 
 import org.apache.kafka.common.Endpoint;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -33,14 +34,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Timeout(value = 40)
 public class BrokerRegistrationTest {
     private static final List<BrokerRegistration> REGISTRATIONS = Arrays.asList(
-        new BrokerRegistration(0, 0, Arrays.asList(new Endpoint("INTERNAL",
-            SecurityProtocol.PLAINTEXT, "localhost", 9090)),
+        new BrokerRegistration(0, 0, Uuid.fromString("pc1GhUlBS92cGGaKXl6ipw"),
+            Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9090)),
             Collections.singletonMap("foo", new VersionRange((short) 1, (short) 2)), null),
-        new BrokerRegistration(1, 0, Arrays.asList(new Endpoint("INTERNAL",
-            SecurityProtocol.PLAINTEXT, "localhost", 9091)),
+        new BrokerRegistration(1, 0, Uuid.fromString("3MfdxWlNSn2UDYsmDP1pYg"),
+            Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9091)),
             Collections.singletonMap("foo", new VersionRange((short) 1, (short) 2)), null),
-        new BrokerRegistration(2, 0, Arrays.asList(new Endpoint("INTERNAL",
-            SecurityProtocol.PLAINTEXT, "localhost", 9092)),
+        new BrokerRegistration(2, 0, Uuid.fromString("eY7oaG1RREie5Kk9uy1l6g"),
+            Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9092)),
             Collections.singletonMap("foo", new VersionRange((short) 2, (short) 3)), null));
 
     @Test
@@ -63,7 +64,8 @@ public class BrokerRegistrationTest {
 
     @Test
     public void testToString() {
-        assertEquals("BrokerRegistration(id=1, epoch=0, listeners=[Endpoint(" +
+        assertEquals("BrokerRegistration(id=1, epoch=0, " +
+            "incarnationId=3MfdxWlNSn2UDYsmDP1pYg, listeners=[Endpoint(" +
             "listenerName='INTERNAL', securityProtocol=PLAINTEXT, " +
             "host='localhost', port=9091)], supportedFeatures={foo: 1-2})",
             REGISTRATIONS.get(1).toString());

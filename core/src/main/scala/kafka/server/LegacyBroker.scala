@@ -178,7 +178,7 @@ class LegacyBroker(val config: KafkaConfig,
 
       val canStartup = isStartingUp.compareAndSet(false, true)
       if (canStartup) {
-        brokerState.set(BrokerState.REGISTERING)
+        brokerState.set(BrokerState.STARTING)
 
         /* setup zookeeper */
         initZkClient(time)
@@ -238,11 +238,9 @@ class LegacyBroker(val config: KafkaConfig,
         logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
 
         /* start log manager */
-        val cleanShutdownCompletableFuture = new CompletableFuture[Boolean]()
-        cleanShutdownCompletableFuture.thenApply[Unit](
-          wasClean => if (!wasClean) brokerState.set(BrokerState.RECOVERING_FROM_UNCLEAN_SHUTDOWN))
-        logManager = LogManager(config, initialOfflineDirs, Some(zkClient), cleanShutdownCompletableFuture, kafkaScheduler, time, brokerTopicStats, logDirFailureChannel)
+        brokerState.set(BrokerState.RECOVERY)
         logManager.startup()
+        brokerState.set(BrokerState.RUNNING)
 
         metadataCache = new MetadataCache(config.brokerId)
         // Enable delegation token cache for all SCRAM mechanisms to simplify dynamic update.

@@ -18,6 +18,7 @@
 package org.apache.kafka.metadata;
 
 import org.apache.kafka.common.Endpoint;
+import org.apache.kafka.common.Uuid;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -32,17 +33,20 @@ import java.util.stream.Collectors;
 public class BrokerRegistration {
     private final int id;
     private final long epoch;
+    private final Uuid incarnationId;
     private final Map<String, Endpoint> listeners;
     private final Map<String, VersionRange> supportedFeatures;
     private final String rack;
 
     public BrokerRegistration(int id,
                               long epoch,
+                              Uuid incarnationId,
                               List<Endpoint> listeners,
                               Map<String, VersionRange> supportedFeatures,
                               String rack) {
         this.id = id;
         this.epoch = epoch;
+        this.incarnationId = incarnationId;
         Map<String, Endpoint> listenersMap = new HashMap<>();
         for (Endpoint endpoint : listeners) {
             listenersMap.put(endpoint.listenerName().get(), endpoint);
@@ -61,6 +65,10 @@ public class BrokerRegistration {
         return epoch;
     }
 
+    public Uuid incarnationId() {
+        return incarnationId;
+    }
+
     public Map<String, Endpoint> listeners() {
         return listeners;
     }
@@ -75,7 +83,7 @@ public class BrokerRegistration {
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, epoch, listeners, supportedFeatures, rack);
+        return Objects.hash(id, epoch, incarnationId, listeners, supportedFeatures, rack);
     }
 
     @Override
@@ -84,6 +92,7 @@ public class BrokerRegistration {
         BrokerRegistration other = (BrokerRegistration) o;
         return other.id == id &&
             other.epoch == epoch &&
+            other.incarnationId.equals(incarnationId) &&
             other.listeners.equals(listeners) &&
             other.supportedFeatures.equals(supportedFeatures) &&
             Objects.equals(other.rack, rack);
@@ -94,6 +103,7 @@ public class BrokerRegistration {
         StringBuilder bld = new StringBuilder();
         bld.append("BrokerRegistration(id=").append(id);
         bld.append(", epoch=").append(epoch);
+        bld.append(", incarnationId=").append(incarnationId);
         bld.append(", listeners=[").append(
             listeners.keySet().stream().sorted().
                 map(n -> listeners.get(n).toString()).

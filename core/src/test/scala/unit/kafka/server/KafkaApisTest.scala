@@ -21,8 +21,8 @@ import java.net.InetAddress
 import java.nio.charset.StandardCharsets
 import java.util
 import java.util.Arrays.asList
-import java.util.concurrent.{CompletableFuture, TimeUnit}
 import java.util.{Collections, Optional, Properties, Random}
+import java.util.concurrent.TimeUnit
 
 import kafka.api.{ApiVersion, KAFKA_0_10_2_IV0, KAFKA_2_2_IV1, LeaderAndIsr}
 import kafka.cluster.{Broker, Partition}
@@ -86,8 +86,6 @@ class KafkaApisTest {
   private val groupCoordinator: GroupCoordinator = EasyMock.createNiceMock(classOf[GroupCoordinator])
   private val adminManager: LegacyAdminManager = EasyMock.createNiceMock(classOf[LegacyAdminManager])
   private val brokerMetadataListener: BrokerMetadataListener = EasyMock.createNiceMock(classOf[BrokerMetadataListener])
-  private val initiallyCaughtUpFuture = new CompletableFuture[BrokerMetadataListener]()
-  initiallyCaughtUpFuture.complete(brokerMetadataListener)
   private val txnCoordinator: TransactionCoordinator = EasyMock.createNiceMock(classOf[TransactionCoordinator])
   private val controller: KafkaController = EasyMock.createNiceMock(classOf[KafkaController])
   private val forwardingManager: ForwardingManager = EasyMock.createNiceMock(classOf[ForwardingManager])
@@ -326,7 +324,6 @@ class KafkaApisTest {
 
     val configResource = new ConfigResource(ConfigResource.Type.TOPIC, resourceName)
     EasyMock.expect(mockMetadataCache.contains(resourceName)).andReturn(true)
-    EasyMock.expect(brokerMetadataListener.initiallyCaughtUpFuture).andReturn(initiallyCaughtUpFuture)
     EasyMock.expect(brokerMetadataListener.configProperties(EasyMock.eq(configResource))).andReturn(new Properties())
 
     val capturedResponse = expectNoThrottling()
@@ -359,7 +356,6 @@ class KafkaApisTest {
   @Test
   def testDescribeConfigsWithNullConfigurationKeysKip500(): Unit = {
     val topic = "topic-1"
-    EasyMock.expect(brokerMetadataListener.initiallyCaughtUpFuture).andReturn(initiallyCaughtUpFuture)
     EasyMock.expect(brokerMetadataListener.configProperties(EasyMock.eq(new ConfigResource(ConfigResource.Type.TOPIC, topic))))
       .andReturn(TestUtils.createBrokerConfig(brokerId, "zk"))
     EasyMock.expect(mockMetadataCache.contains(topic)).andReturn(true)
@@ -379,7 +375,6 @@ class KafkaApisTest {
   @Test
   def testDescribeConfigsWithEmptyConfigurationKeysKip500(): Unit = {
     val topic = "topic-1"
-    EasyMock.expect(brokerMetadataListener.initiallyCaughtUpFuture).andReturn(initiallyCaughtUpFuture)
     EasyMock.expect(brokerMetadataListener.configProperties(EasyMock.eq(new ConfigResource(ConfigResource.Type.TOPIC, topic))))
       .andReturn(TestUtils.createBrokerConfig(brokerId, "zk"))
     EasyMock.expect(mockMetadataCache.contains(topic)).andReturn(true)
@@ -398,7 +393,6 @@ class KafkaApisTest {
   @Test
   def testDescribeConfigsWithDocumentationKip500(): Unit = {
     val topic = "topic-1"
-    EasyMock.expect(brokerMetadataListener.initiallyCaughtUpFuture).andReturn(initiallyCaughtUpFuture)
     EasyMock.expect(brokerMetadataListener.configProperties(EasyMock.eq(new ConfigResource(ConfigResource.Type.TOPIC, topic))))
       .andReturn(new Properties)
     EasyMock.expect(brokerMetadataListener.configProperties(EasyMock.eq(new ConfigResource(ConfigResource.Type.BROKER, brokerId.toString))))

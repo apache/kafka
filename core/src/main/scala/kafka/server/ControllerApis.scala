@@ -221,24 +221,23 @@ class ControllerApis(val requestChannel: RequestChannel,
     val registrationRequest = request.body[BrokerRegistrationRequest]
     apisUtils.authorizeClusterOperation(request, CLUSTER_ACTION)
 
-    controller.registerBroker(registrationRequest.data).handle[Unit]((reply, ex) => {
-      val err = if (ex != null) {
-        error(s"Failed to register broker: ${ex.getMessage}")
-        Errors.forException(ex)
-      } else {
-        Errors.NONE
+    controller.registerBroker(registrationRequest.data).handle[Unit]((reply, e) => {
+      def createResponseCallback(requestThrottleMs: Int,
+                                 reply: RegistrationReply,
+                                 e: Throwable): BrokerRegistrationResponse = {
+        if (e != null) {
+          new BrokerRegistrationResponse(new BrokerRegistrationResponseData().
+            setThrottleTimeMs(requestThrottleMs).
+            setErrorCode(Errors.forException(e).code()))
+        } else {
+          new BrokerRegistrationResponse(new BrokerRegistrationResponseData().
+            setThrottleTimeMs(requestThrottleMs).
+            setErrorCode(Errors.NONE.code()).
+            setBrokerEpoch(reply.epoch))
+        }
       }
-
-      def createResponseCallback(requestThrottleMs: Int, reply: RegistrationReply, error: Errors): BrokerRegistrationResponse = {
-        val brokerRegistrationResponseData = new BrokerRegistrationResponseData()
-        brokerRegistrationResponseData.setBrokerEpoch(reply.epoch)
-        brokerRegistrationResponseData.setThrottleTimeMs(requestThrottleMs)
-        brokerRegistrationResponseData.setErrorCode(error.code)
-        new BrokerRegistrationResponse(brokerRegistrationResponseData)
-      }
-
       apisUtils.sendResponseMaybeThrottle(request,
-        requestThrottleMs => createResponseCallback(requestThrottleMs, reply, err))
+        requestThrottleMs => createResponseCallback(requestThrottleMs, reply, e))
     })
   }
 
@@ -246,24 +245,24 @@ class ControllerApis(val requestChannel: RequestChannel,
     val heartbeatRequest = request.body[BrokerHeartbeatRequest]
     apisUtils.authorizeClusterOperation(request, CLUSTER_ACTION)
 
-    controller.processBrokerHeartbeat(heartbeatRequest.data).handle[Unit]((reply, ex) => {
-      val err = if (ex != null) {
-        error(s"Failed to acknowledge broker heartbeat: ${ex.getMessage}")
-        Errors.forException(ex)
-      } else {
-        Errors.NONE
+    controller.processBrokerHeartbeat(heartbeatRequest.data).handle[Unit]((reply, e) => {
+      def createResponseCallback(requestThrottleMs: Int,
+                                 reply: HeartbeatReply,
+                                 e: Throwable): BrokerHeartbeatResponse = {
+        if (e != null) {
+          new BrokerHeartbeatResponse(new BrokerHeartbeatResponseData().
+            setThrottleTimeMs(requestThrottleMs).
+            setErrorCode(Errors.forException(e).code()))
+        } else {
+          new BrokerHeartbeatResponse(new BrokerHeartbeatResponseData().
+            setThrottleTimeMs(requestThrottleMs).
+            setErrorCode(Errors.NONE.code()).
+            setIsCaughtUp(reply.isCaughtUp).
+            setIsFenced(reply.isFenced))
+        }
       }
-
-      def createResponseCallback(requestThrottleMs: Int, reply: HeartbeatReply, error: Errors): BrokerHeartbeatResponse = {
-        val brokerHeartbeatResponseData = new BrokerHeartbeatResponseData()
-        brokerHeartbeatResponseData.setThrottleTimeMs(requestThrottleMs)
-        brokerHeartbeatResponseData.setErrorCode(error.code)
-        brokerHeartbeatResponseData.setNextState(reply.nextState.value)
-        new BrokerHeartbeatResponse(brokerHeartbeatResponseData)
-      }
-
       apisUtils.sendResponseMaybeThrottle(request,
-        requestThrottleMs => createResponseCallback(requestThrottleMs, reply, err))
+        requestThrottleMs => createResponseCallback(requestThrottleMs, reply, e))
     })
   }
 }
