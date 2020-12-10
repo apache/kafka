@@ -153,7 +153,8 @@ public class EOSUncleanShutdownIntegrationTest {
                 "Expected " + RECORD_TOTAL + " records processed but only got " + recordCount.get());
         } finally {
             TestUtils.waitForCondition(() -> driver.state().equals(State.ERROR),
-                    "Expected ERROR state but driver is on " + driver.state());
+                "Expected ERROR state but driver is on " + driver.state());
+
             driver.close();
 
             // the state directory should still exist with the empty checkpoint file
