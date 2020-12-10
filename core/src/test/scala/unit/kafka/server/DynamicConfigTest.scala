@@ -57,4 +57,9 @@ class DynamicConfigTest extends ZooKeeperTestHarness {
   def shouldFailIpConfigsWithInvalidIpv4Entity(): Unit = {
     adminZkClient.changeIpConfig("1,1.1.1", propsWith(DynamicConfig.Ip.IpConnectionRateOverrideProp, "2"));
   }
+
+  @Test(expected = classOf[AdminOperationException])
+  def shouldFailIpConfigsWithBadHost(): Unit = {
+    adminZkClient.changeIpConfig("ip", propsWith(DynamicConfig.Ip.IpConnectionRateOverrideProp, "2"));
+  }
 }
