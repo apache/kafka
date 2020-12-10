@@ -61,7 +61,7 @@ class ZkIsrManager(scheduler: Scheduler, time: Time, zkClient: KafkaZkClient) ex
     // has already happened, so we may as well send the notification to the controller.
   }
 
-  override def enqueue(alterIsrItem: AlterIsrItem): Boolean = {
+  override def submit(alterIsrItem: AlterIsrItem, onSubmit: Boolean => Unit): Unit = {
     debug(s"Writing new ISR " + alterIsrItem.leaderAndIsr.isr + " to ZooKeeper with version " +
       alterIsrItem.leaderAndIsr.zkVersion + " for partition " + alterIsrItem.topicPartition)
 
@@ -75,23 +75,14 @@ class ZkIsrManager(scheduler: Scheduler, time: Time, zkClient: KafkaZkClient) ex
         lastIsrChangeMs.set(time.milliseconds())
       }
 
-      // We actually need to apply the callback in another thread since Partition#sendAlterIsrRequest will write
-      // isrState after enqueuing the AlterIsrItem. This is safe because the callback (Partition#handleAlterIsrResponse)
-      // holds the ISR write lock.
-      //
-      // For the callback value, return the given LeaderAndIsr but updated with the new ZK version
-      scheduler.schedule(
-        "zk-async-callback",
-        () => alterIsrItem.callback.apply(Right(alterIsrItem.leaderAndIsr.withZkVersion(newVersion))))
+      onSubmit.apply(true)
+      alterIsrItem.callback.apply(Right(alterIsrItem.leaderAndIsr.withZkVersion(newVersion)))
     } else {
-      scheduler.schedule(
-        "zk-async-callback",
-        () => alterIsrItem.callback.apply(Left(Errors.INVALID_UPDATE_VERSION)))
+      // Even if we fail to apply the update, we still accept it. The failure is indicated through the async callback
+      // which is actually synchronously applied here
+      onSubmit.apply(true)
+      alterIsrItem.callback.apply(Left(Errors.INVALID_UPDATE_VERSION))
     }
-
-    // Return true since we unconditionally accept the AlterIsrItem. The result of the operation is indicated by the
-    // callback, not the return value of this method
-    true
   }
 
   /**

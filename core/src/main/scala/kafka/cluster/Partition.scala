@@ -1326,14 +1326,16 @@ class Partition(val topicPartition: TopicPartition,
     val newLeaderAndIsr = new LeaderAndIsr(localBrokerId, leaderEpoch, isrToSend.toList, zkVersion)
     val alterIsrItem = AlterIsrItem(topicPartition, newLeaderAndIsr, handleAlterIsrResponse(proposedIsrState), controllerEpoch)
 
-    if (!alterIsrManager.enqueue(alterIsrItem)) {
-      isrChangeListener.markFailed()
-      throw new IllegalStateException(s"Failed to enqueue `AlterIsr` request with state " +
-        s"$newLeaderAndIsr for partition $topicPartition")
-    }
-
-    isrState = proposedIsrState
-    debug(s"Sent `AlterIsr` request to change state to $newLeaderAndIsr after transition to $proposedIsrState")
+    alterIsrManager.submit(alterIsrItem, (wasSubmitted: Boolean) => {
+      if (wasSubmitted) {
+        isrState = proposedIsrState
+        debug(s"Sent ISR update to change state to $newLeaderAndIsr after transition to $proposedIsrState")
+      } else {
+        isrChangeListener.markFailed()
+        throw new IllegalStateException(s"Failed to submit ISR update with state " +
+          s"$newLeaderAndIsr for partition $topicPartition")
+      }
+    })
   }
 
   /**

@@ -284,8 +284,8 @@ class PartitionLockTest extends Logging {
     }
     when(offsetCheckpoints.fetch(ArgumentMatchers.anyString, ArgumentMatchers.eq(topicPartition)))
       .thenReturn(None)
-    when(alterIsrManager.enqueue(ArgumentMatchers.any[AlterIsrItem]))
-      .thenReturn(true)
+    //when(alterIsrManager.submit(ArgumentMatchers.any[AlterIsrItem]))
+    //  .thenReturn(true)
 
     partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints)
 
