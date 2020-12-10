@@ -10,23 +10,29 @@ another JVM language).
 If you want to set specific JMH flags or only run certain benchmarks, passing arguments via
 gradle tasks is cumbersome. These are simplified by the provided `jmh.sh` script.
 
-You can run all the benchmarks using:
+The default behavior is to run all benchmarks:
 
     ./jmh-benchmarks/jmh.sh
     
-Pass a pattern or name after the command to select the benchmarks, for example:
+Pass a pattern or name after the command to select the benchmarks:
 
     ./jmh-benchmarks/jmh.sh LRUCacheBenchmark
 
-Run a specific test setting fork-mode (number iterations) to 2:
+Check which benchmarks that match the provided pattern:
 
-    ./jmh-benchmarks/jmh.sh -f 2 LRUCacheBenchmark
+    ./jmh-benchmarks/jmh.sh -l LRUCacheBenchmark
 
-All JMH output goes to stdout by default, to run a benchmark and capture the results in a file:
+Run a specific test and override the number of forks, iterations and warm-up iteration to `2`:
 
-    ./jmh-benchmarks/jmh.sh -f 2 -o benchmarkResults.txt LRUCacheBenchmark
+    ./jmh-benchmarks/jmh.sh -f 2 -i 2 -wi 2 LRUCacheBenchmark
 
-### Using JMH with async-profiler
+Run a specific test with async and GC profilers on Linux and flame graph output:
+
+    LD_LIBRARY_PATH=/path/to/async-profiler ./jmh-benchmarks/jmh.sh -prof gc -prof async:output=flamegraph LRUCacheBenchmark
+
+The following sections cover async profiler and GC profilers in more detail.
+
+### Using JMH with async profiler
 
 It's good practice to check profiler output for microbenchmarks in order to verify that they are valid.
 JMH includes [async-profiler](https://github.com/jvm-profiling-tools/async-profiler) integration that makes this easy,
@@ -36,13 +42,13 @@ although the specifics vary slightly depending on the platform. A simple Linux e
 
 `DYLD_LIBRARY_PATH` should be used on macOS instead:
 
-    DYLD_LIBRARY_PATH=/path/to/async-profiler ./jmh-benchmarks/jmh.sh -prof async 
+    DYLD_LIBRARY_PATH=/path/to/async-profiler ./jmh-benchmarks/jmh.sh -prof async
+
+With flame graph output:
+
+    LD_LIBRARY_PATH=/path/to/async-profiler ./jmh-benchmarks/jmh.sh -prof async:output=flamegraph
 
 A number of arguments can be passed to async-profiler, run the following for a description:
-
-    ./jmh-benchmarks/jmh.sh -prof async:help
- 
-A number of arguments can be passed to async-profiler, run the following for a description: 
 
     ./jmh-benchmarks/jmh.sh -prof async:help
 
@@ -50,7 +56,7 @@ A number of arguments can be passed to async-profiler, run the following for a d
 
 It's good practice to run your benchmark with `-prof gc` to measure its allocation rate:
 
-      ./jmh-benchmarks/jmh.sh -prof gc
+    ./jmh-benchmarks/jmh.sh -prof gc
 
 Of particular importance is the `norm` alloc rates, which measure the allocations per operation rather than allocations
 per second which can increase when you have make your code faster.
@@ -86,24 +92,37 @@ the gradle tasks with `./gradlew` from the root of the Kafka project.
 Some common JMH options are:
 
 ```text
- 
+
    -e <regexp+>                Benchmarks to exclude from the run. 
- 
+
    -f <int>                    How many times to fork a single benchmark. Use 0 to 
                                disable forking altogether. Warning: disabling 
                                forking may have detrimental impact on benchmark 
                                and infrastructure reliability, you might want 
-                               to use different warmup mode instead. 
- 
+                               to use different warmup mode instead.
+
+   -i <int>                    Number of measurement iterations to do. Measurement
+                               iterations are counted towards the benchmark score.
+                               (default: 1 for SingleShotTime, and 5 for all other
+                               modes)
+
+   -l                          List the benchmarks that match a filter, and exit.
+
+   -lprof                      List profilers, and exit.
+
    -o <filename>               Redirect human-readable output to a given file. 
- 
-   -v <mode>                   Verbosity mode. Available modes are: [SILENT, NORMAL, 
-                               EXTRA]
 
    -prof <profiler>            Use profilers to collect additional benchmark data. 
                                Some profilers are not available on all JVMs and/or 
                                all OSes. Please see the list of available profilers 
-                               with -lprof. 
+                               with -lprof.
+
+   -v <mode>                   Verbosity mode. Available modes are: [SILENT, NORMAL,
+                               EXTRA]
+
+   -wi <int>                   Number of warmup iterations to do. Warmup iterations
+                               are not counted towards the benchmark score. (default:
+                               0 for SingleShotTime, and 5 for all other modes)
 ```
 
 To view all options run jmh with the -h flag. 
