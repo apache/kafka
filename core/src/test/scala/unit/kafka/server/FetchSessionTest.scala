@@ -698,4 +698,43 @@ class FetchSessionTest {
     assertEquals(resp1.sessionId, resp4.sessionId)
     assertEquals(Utils.mkSet(tp1, tp2), resp4.responseData.keySet)
   }
+
+  @Test
+  def testKeyComparison(): Unit = {
+    assertEquals(-1, EvictableKey(false, 0, 0)
+      .compareTo(EvictableKey(true, 0, 0)))
+
+    assertEquals(1, EvictableKey(true, 0, 0)
+      .compareTo(EvictableKey(false, 0, 0)))
+
+    assertEquals(0, EvictableKey(true, 0, 0)
+      .compareTo(EvictableKey(true, 0, 0)))
+
+    assertEquals(-1, EvictableKey(true, -1, 0)
+      .compareTo(EvictableKey(true, 0, 0)))
+
+    assertEquals(1, EvictableKey(true, 10, 0)
+      .compareTo(EvictableKey(true, 0, 0)))
+
+    assertEquals(-1, EvictableKey(true, 0, -1)
+      .compareTo(EvictableKey(true, 0, 0)))
+
+    assertEquals(1, EvictableKey(true, 0, 10)
+      .compareTo(EvictableKey(true, 0, 0)))
+
+    assertEquals(0, LastUsedKey(0, 10)
+      .compareTo(LastUsedKey(0, 10)))
+
+    assertEquals(-1, LastUsedKey(-1, 10)
+      .compareTo(LastUsedKey(0, 10)))
+
+    assertEquals(1, LastUsedKey(10, 10)
+      .compareTo(LastUsedKey(0, 10)))
+
+    assertEquals(-1, LastUsedKey(0, 5)
+      .compareTo(LastUsedKey(0, 10)))
+
+    assertEquals(1, LastUsedKey(0, 12)
+      .compareTo(LastUsedKey(0, 10)))
+  }
 }

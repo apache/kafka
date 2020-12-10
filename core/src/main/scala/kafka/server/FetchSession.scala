@@ -30,7 +30,6 @@ import org.apache.kafka.common.requests.FetchMetadata.{FINAL_EPOCH, INITIAL_EPOC
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.utils.{ImplicitLinkedHashCollection, Time, Utils}
 
-import scala.math.Ordered.orderingToOrdered
 import scala.collection.{mutable, _}
 
 object FetchSession {
@@ -502,13 +501,22 @@ class IncrementalFetchContext(private val time: Time,
 }
 
 case class LastUsedKey(lastUsedMs: Long, id: Int) extends Comparable[LastUsedKey] {
-  override def compareTo(other: LastUsedKey): Int =
-    (lastUsedMs, id) compare (other.lastUsedMs, other.id)
+  override def compareTo(other: LastUsedKey): Int = {
+    // this is a hot method in fetch request so implementing it by java code avoids object wrap by scala compiler.
+    var result = java.lang.Long.compare(lastUsedMs, other.lastUsedMs)
+    if (result == 0) result = java.lang.Integer.compare(id, other.id)
+    result
+  }
 }
 
 case class EvictableKey(privileged: Boolean, size: Int, id: Int) extends Comparable[EvictableKey] {
-  override def compareTo(other: EvictableKey): Int =
-    (privileged, size, id) compare (other.privileged, other.size, other.id)
+  override def compareTo(other: EvictableKey): Int = {
+    // this is a hot method in fetch request so implementing it by java code avoids object wrap by scala compiler.
+    var result = java.lang.Boolean.compare(privileged, other.privileged)
+    if (result == 0) result = java.lang.Integer.compare(size, other.size)
+    if (result == 0) result = java.lang.Integer.compare(id, other.id)
+    result
+  }
 }
 
 /**
