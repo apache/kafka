@@ -291,8 +291,12 @@ public class KafkaStreams implements AutoCloseable {
             } else if (state == State.REBALANCING && newState == State.REBALANCING) {
                 // when the state is already in REBALANCING, it should not transit to REBALANCING again
                 return false;
-            } else if (state == State.ERROR && newState == State.ERROR) {
-                // when the state is already in ERROR, it should not transit to ERROR again
+            } else if (state == State.ERROR && (newState == State.PENDING_ERROR || newState == State.ERROR)) {
+                // when the state is already in ERROR, its transition to PENDING_ERROR or ERROR (due to consecutive close calls)
+                return false;
+            } else if (state == State.PENDING_ERROR && newState != State.ERROR) {
+                // when the state is already in PENDING_ERROR, all other transitions than ERROR (due to thread dying) will be
+                // refused but we do not throw exception here, to allow appropriate error handling
                 return false;
             } else if (!state.isValidTransition(newState)) {
                 throw new IllegalStateException("Stream-client " + clientId + ": Unexpected state transition from " + oldState + " to " + newState);
