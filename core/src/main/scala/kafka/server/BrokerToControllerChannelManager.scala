@@ -18,7 +18,6 @@
 package kafka.server
 
 import java.util.Collections
-import java.util.concurrent.LinkedBlockingDeque
 
 import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
 import kafka.utils.Logging
@@ -93,7 +92,6 @@ class BrokerToControllerChannelManager(controllerNodeProvider: ControllerNodePro
                                        config: KafkaConfig,
                                        managerName: String,
                                        threadNamePrefix: Option[String] = None) extends Logging {
-  private val requestQueue = new LinkedBlockingDeque[BrokerToControllerQueueItem]
   private val logContext = new LogContext(s"[broker-${config.brokerId}-to-controller-$managerName] ")
   private val manualMetadataUpdater = new ManualMetadataUpdater()
   private val requestThread = newRequestThread
@@ -159,7 +157,6 @@ class BrokerToControllerChannelManager(controllerNodeProvider: ControllerNodePro
 
     new BrokerToControllerRequestThread(networkClient,
       manualMetadataUpdater,
-      requestQueue,
       controllerNodeProvider,
       config,
       time,
@@ -167,23 +164,32 @@ class BrokerToControllerChannelManager(controllerNodeProvider: ControllerNodePro
   }
 
   def sendRequest(request: AbstractRequest.Builder[_ <: AbstractRequest],
-                           callback: RequestCompletionHandler): Unit = {
-    requestQueue.put(BrokerToControllerQueueItem(request, callback))
-    requestThread.wakeup()
+                  callback: RequestCompletionHandler): Unit = {
+    requestThread.sendRequest(request, callback)
   }
 }
 
-case class BrokerToControllerQueueItem(request: AbstractRequest.Builder[_ <: AbstractRequest],
-                                       callback: RequestCompletionHandler)
-
 class BrokerToControllerRequestThread(networkClient: KafkaClient,
                                       metadataUpdater: ManualMetadataUpdater,
-                                      requestQueue: LinkedBlockingDeque[BrokerToControllerQueueItem],
                                       val controllerNodeProvider: ControllerNodeProvider,
                                       config: KafkaConfig,
                                       time: Time,
                                       threadName: String)
   extends InterBrokerSendThread(threadName, networkClient, time, isInterruptible = false) {
+
+  case class RequestData(request: AbstractRequest.Builder[_ <: AbstractRequest],
+                         callback: RequestCompletionHandler)
+
+  val sendableRequests = new mutable.ListBuffer[RequestData]()
+
+  def sendRequest(request: AbstractRequest.Builder[_ <: AbstractRequest],
+                     callback: RequestCompletionHandler): Unit =
+    sendRequest(RequestData(request, callback))
+
+  def sendRequest(request: RequestData): Unit = synchronized {
+    sendableRequests.addOne(request)
+    networkClient.wakeup()
+  }
 
   private val exponentialBackoff = new ExponentialBackoff(100, 2, 30000, 0.1)
   private var waitForControllerRetries = 0L
@@ -191,41 +197,46 @@ class BrokerToControllerRequestThread(networkClient: KafkaClient,
 
   override def requestTimeoutMs: Int = config.controllerSocketTimeoutMs
 
-  override def generateRequests(): (Iterable[RequestAndCompletionHandler], Long) = {
-    val nextController: Option[Node] = controllerNodeProvider.controllerNode()
-    if (nextController.isEmpty) {
-      curController = None
-      val waitMs = exponentialBackoff.backoff(waitForControllerRetries)
-      waitForControllerRetries = waitForControllerRetries + 1
-      (Seq(), waitMs)
-    } else {
+  override def generateRequests(): (Iterable[RequestAndCompletionHandler], Long) = synchronized {
+    if (sendableRequests.isEmpty) {
       waitForControllerRetries = 0
-      if (curController.isEmpty || curController.get != nextController.get) {
-        metadataUpdater.setNodes(Collections.singletonList(nextController.get))
-        curController = nextController
-        info(s"Controller node is now ${curController}")
+      (Seq(), Long.MaxValue)
+    } else {
+      val nextController: Option[Node] = controllerNodeProvider.controllerNode()
+      if (nextController.isEmpty) {
+        curController = None
+        val waitMs = exponentialBackoff.backoff(waitForControllerRetries)
+        waitForControllerRetries = waitForControllerRetries + 1
+        (Seq(), waitMs)
+      } else {
+        waitForControllerRetries = 0
+        if (curController.isEmpty || curController.get != nextController.get) {
+          metadataUpdater.setNodes(Collections.singletonList(curController.get))
+          curController = nextController
+          info(s"Controller node is now ${curController}")
+        }
+        val requestsToSend = sendableRequests.map {
+          request => RequestAndCompletionHandler(curController.get,
+              request.request, handleResponse(curController.get, request))
+        }
+        sendableRequests.clear()
+        (requestsToSend, Long.MaxValue)
       }
-      val requestsToSend = new mutable.Queue[RequestAndCompletionHandler]
-      val topRequest = requestQueue.poll()
-      if (topRequest != null) {
-        val request = RequestAndCompletionHandler(curController.get,
-          topRequest.request, handleResponse(curController.get, topRequest))
-        requestsToSend.enqueue(request)
-      }
-      (requestsToSend, Long.MaxValue)
     }
   }
 
-  private[server] def handleResponse(controller: Node, request: BrokerToControllerQueueItem)(response: ClientResponse): Unit = {
-    if (response.wasDisconnected()) {
+  private[server] def handleResponse(controller: Node, request: RequestData)(response: ClientResponse): Unit = {
+    if (response.authenticationException() != null || response.versionMismatch() != null) {
+      request.callback.onComplete(response)
+    } else if (response.wasDisconnected()) {
       info(s"Unable to send control request to node ${controller.id()}: disconnected.")
-      requestQueue.putFirst(request)
+      sendRequest(request)
     } else if (response.responseBody().errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
       info(s"Unable to send control request to node ${controller.id()}: received NOT_CONTROLLER response.")
       // Disconnect the current connection.  This will trigger exponential backoff behavior so that
       // we don't sit in a tight loop and try to send messages to the ex-controller.
       networkClient.close(controller.idString())
-      requestQueue.putFirst(request)
+      sendRequest(request)
     } else {
       request.callback.onComplete(response)
     }
