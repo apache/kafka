@@ -855,10 +855,18 @@ public class StreamsProducerTest {
     }
 
     @Test
-    public void shouldThrowTaskMigratedExceptionOnEosSendFenced() {
-        // cannot use `eosMockProducer.fenceProducer()` because this would already trigger in `beginTransaction()`
-        final ProducerFencedException exception = new ProducerFencedException("KABOOM!");
+    public void shouldThrowTaskMigratedExceptionOnEosSendProducerFenced() {
+        testThrowTaskMigratedExceptionOnEosSend(new ProducerFencedException("KABOOM!"));
+    }
+
+    @Test
+    public void shouldThrowTaskMigratedExceptionOnEosSendInvalidEpoch() {
+        testThrowTaskMigratedExceptionOnEosSend(new InvalidProducerEpochException("KABOOM!"));
+    }
+
+    private void testThrowTaskMigratedExceptionOnEosSend(final RuntimeException exception) {
         // we need to mimic that `send()` always wraps error in a KafkaException
+        // cannot use `eosMockProducer.fenceProducer()` because this would already trigger in `beginTransaction()`
         eosAlphaMockProducer.sendException = new KafkaException(exception);
 
         final TaskMigratedException thrown = assertThrows(
@@ -894,9 +902,20 @@ public class StreamsProducerTest {
     }
 
     @Test
-    public void shouldThrowTaskMigrateExceptionOnEosSendOffsetFenced() {
+    public void shouldThrowTaskMigrateExceptionOnEosSendOffsetProducerFenced() {
         // cannot use `eosMockProducer.fenceProducer()` because this would already trigger in `beginTransaction()`
-        eosAlphaMockProducer.sendOffsetsToTransactionException = new ProducerFencedException("KABOOM!");
+        testThrowTaskMigrateExceptionOnEosSendOffset(new ProducerFencedException("KABOOM!"));
+    }
+
+    @Test
+    public void shouldThrowTaskMigrateExceptionOnEosSendOffsetInvalidEpoch() {
+        // cannot use `eosMockProducer.fenceProducer()` because this would already trigger in `beginTransaction()`
+        testThrowTaskMigrateExceptionOnEosSendOffset(new InvalidProducerEpochException("KABOOM!"));
+    }
+
+    private void testThrowTaskMigrateExceptionOnEosSendOffset(final RuntimeException exception) {
+        // cannot use `eosMockProducer.fenceProducer()` because this would already trigger in `beginTransaction()`
+        eosAlphaMockProducer.sendOffsetsToTransactionException = exception;
 
         final TaskMigratedException thrown = assertThrows(
             TaskMigratedException.class,
@@ -932,24 +951,6 @@ public class StreamsProducerTest {
     }
 
     @Test
-    public void shouldThrowTaskMigratedExceptionOnEosWithInvalidProducerEpoch() {
-        eosAlphaMockProducer.commitTransactionException = new InvalidProducerEpochException("KABOOM!");
-
-        final TaskMigratedException thrown = assertThrows(
-            TaskMigratedException.class,
-            () -> eosAlphaStreamsProducer.commitTransaction(offsetsAndMetadata, new ConsumerGroupMetadata("appId"))
-        );
-
-        assertThat(eosAlphaMockProducer.sentOffsets(), is(true));
-        assertThat(thrown.getCause(), is(eosAlphaMockProducer.commitTransactionException));
-        assertThat(
-            thrown.getMessage(),
-            is("Producer got fenced trying to commit a transaction [test];" +
-                   " it means all tasks belonging to this thread should be migrated.")
-        );
-    }
-
-    @Test
     public void shouldFailOnEosSendOffsetFatal() {
         eosAlphaMockProducer.sendOffsetsToTransactionException = new RuntimeException("KABOOM!");
 
@@ -964,9 +965,18 @@ public class StreamsProducerTest {
     }
 
     @Test
-    public void shouldThrowTaskMigrateExceptionOnEosCommitTxFenced() {
+    public void shouldThrowTaskMigratedExceptionOnEosCommitWithProducerFenced() {
+        testThrowTaskMigratedExceptionOnEos(new ProducerFencedException("KABOOM!"));
+    }
+
+    @Test
+    public void shouldThrowTaskMigratedExceptionOnEosCommitWithInvalidEpoch() {
+        testThrowTaskMigratedExceptionOnEos(new InvalidProducerEpochException("KABOOM!"));
+    }
+
+    private void testThrowTaskMigratedExceptionOnEos(final RuntimeException exception) {
         // cannot use `eosMockProducer.fenceProducer()` because this would already trigger in `beginTransaction()`
-        eosAlphaMockProducer.commitTransactionException = new ProducerFencedException("KABOOM!");
+        eosAlphaMockProducer.commitTransactionException = exception;
 
         final TaskMigratedException thrown = assertThrows(
             TaskMigratedException.class,
@@ -1013,12 +1023,21 @@ public class StreamsProducerTest {
     }
 
     @Test
-    public void shouldSwallowExceptionOnEosAbortTxFenced() {
+    public void shouldSwallowExceptionOnEosAbortTxProducerFenced() {
+        testSwallowExceptionOnEosAbortTx(new ProducerFencedException("KABOOM!"));
+    }
+
+    @Test
+    public void shouldSwallowExceptionOnEosAbortTxInvalidEpoch() {
+        testSwallowExceptionOnEosAbortTx(new InvalidProducerEpochException("KABOOM!"));
+    }
+
+    private void testSwallowExceptionOnEosAbortTx(final RuntimeException exception) {
         mockedProducer.initTransactions();
         mockedProducer.beginTransaction();
         expect(mockedProducer.send(record, null)).andReturn(null);
         mockedProducer.abortTransaction();
-        expectLastCall().andThrow(new ProducerFencedException("KABOOM!"));
+        expectLastCall().andThrow(exception);
         replay(mockedProducer);
 
         eosAlphaStreamsProducerWithMock.initTransaction();
