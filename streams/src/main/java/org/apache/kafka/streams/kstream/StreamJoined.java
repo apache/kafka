@@ -338,7 +338,7 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             name,
             storeName,
             false,
-            null
+            new HashMap<>()
         );
     }
 
