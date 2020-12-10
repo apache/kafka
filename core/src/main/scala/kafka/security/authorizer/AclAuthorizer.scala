@@ -332,12 +332,24 @@ class AclAuthorizer extends Authorizer with Logging {
       return AuthorizationResult.ALLOWED
     }
 
+    val denyPrefixes = matchingResources(
+      principal, host, op, AclPermissionType.DENY, resourceType, PatternType.PREFIXED)
+
+    if (denyLiterals.isEmpty && denyPrefixes.isEmpty) {
+      if (hasMatchingResources(principal, host, op, AclPermissionType.ALLOW, resourceType, PatternType.PREFIXED)
+          || hasMatchingResources(principal, host, op, AclPermissionType.ALLOW, resourceType, PatternType.LITERAL)) {
+        logAuditMessage(requestContext, action, true)
+        return AuthorizationResult.ALLOWED
+      } else {
+        logAuditMessage(requestContext, action, false)
+        return AuthorizationResult.DENIED
+      }
+    }
+
     val allowLiterals = matchingResources(
       principal, host, op, AclPermissionType.ALLOW, resourceType, PatternType.LITERAL)
     val allowPrefixes = matchingResources(
       principal, host, op, AclPermissionType.ALLOW, resourceType, PatternType.PREFIXED)
-    val denyPrefixes = matchingResources(
-      principal, host, op, AclPermissionType.DENY, resourceType, PatternType.PREFIXED)
 
     if (allowAny(allowLiterals, allowPrefixes, denyLiterals, denyPrefixes)) {
       logAuditMessage(requestContext, action, true)
@@ -354,8 +366,8 @@ class AclAuthorizer extends Authorizer with Logging {
     for (p <- Set(principal, AclEntry.WildcardPrincipalString)) {
       for (h <- Set(host, AclEntry.WildcardHost)) {
         for (o <- Set(op, AclOperation.ALL)) {
-          val ace = new AccessControlEntry(p, h, o, permission)
-          val resourceIndex = new ResourceIndex(ace, resourceType, patternType)
+          val resourceIndex = new ResourceIndex(
+            new AccessControlEntry(p, h, o, permission), resourceType, patternType)
           resourceCache.get(resourceIndex) match {
             case Some(resources) => matched = matched :+ resources
             case None =>
@@ -364,6 +376,23 @@ class AclAuthorizer extends Authorizer with Logging {
       }
     }
     matched
+  }
+
+  def hasMatchingResources(principal: String, host: String, op: AclOperation, permission: AclPermissionType,
+                           resourceType: ResourceType, patternType: PatternType): Boolean = {
+    for (p <- Set(principal, AclEntry.WildcardPrincipalString)) {
+      for (h <- Set(host, AclEntry.WildcardHost)) {
+        for (o <- Set(op, AclOperation.ALL)) {
+          val resourceIndex = new ResourceIndex(
+            new AccessControlEntry(p, h, o, permission), resourceType, patternType)
+          resourceCache.get(resourceIndex) match {
+            case Some(_) => return true
+            case None =>
+          }
+        }
+      }
+    }
+    false
   }
 
   private def denyAll(denyLiterals: List[mutable.HashSet[String]]): Boolean =
