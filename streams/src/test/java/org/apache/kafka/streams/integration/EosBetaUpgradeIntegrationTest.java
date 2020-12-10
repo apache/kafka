@@ -35,6 +35,7 @@ import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils.StableAssignmentListener;
@@ -114,13 +115,6 @@ public class EosBetaUpgradeIntegrationTest {
         Collections.unmodifiableList(
             Collections.singletonList(
                 KeyValue.pair(KafkaStreams.State.RUNNING, State.PENDING_ERROR)
-            )
-        );
-    private static final List<KeyValue<KafkaStreams.State, KafkaStreams.State>> CLOSE_CRASHED =
-        Collections.unmodifiableList(
-            Arrays.asList(
-                KeyValue.pair(State.RUNNING, KafkaStreams.State.PENDING_SHUTDOWN),
-                KeyValue.pair(KafkaStreams.State.PENDING_SHUTDOWN, KafkaStreams.State.NOT_RUNNING)
             )
         );
 
@@ -395,11 +389,11 @@ public class EosBetaUpgradeIntegrationTest {
                     new HashMap<>(committedState)
                 ));
                 verifyUncommitted(expectedUncommittedResult);
+                waitForStateTransitionContains(stateTransitions1, CRASH);
 
                 errorInjectedClient1.set(false);
                 stateTransitions1.clear();
                 streams1Alpha.close();
-                waitForStateTransition(stateTransitions1, CLOSE_CRASHED);
                 assertFalse(UNEXPECTED_EXCEPTION_MSG, hasUnexpectedError);
             }
 
@@ -533,10 +527,11 @@ public class EosBetaUpgradeIntegrationTest {
 
                 assignmentListener.waitForNextStableAssignment(MAX_WAIT_TIME_MS);
 
+                waitForStateTransitionContains(stateTransitions2, CRASH);
+
                 commitErrorInjectedClient2.set(false);
                 stateTransitions2.clear();
                 streams2Alpha.close();
-                waitForStateTransition(stateTransitions2, CLOSE_CRASHED);
                 assertFalse(UNEXPECTED_EXCEPTION_MSG, hasUnexpectedError);
 
                 final List<KeyValue<Long, Long>> expectedCommittedResultAfterFailure =
@@ -623,10 +618,11 @@ public class EosBetaUpgradeIntegrationTest {
 
                 assignmentListener.waitForNextStableAssignment(MAX_WAIT_TIME_MS);
 
+                waitForStateTransitionContains(stateTransitions1, CRASH);
+
                 commitErrorInjectedClient1.set(false);
                 stateTransitions1.clear();
                 streams1Beta.close();
-                waitForStateTransition(stateTransitions1, CLOSE_CRASHED);
                 assertFalse(UNEXPECTED_EXCEPTION_MSG, hasUnexpectedError);
 
                 final List<KeyValue<Long, Long>> expectedCommittedResultAfterFailure =
@@ -744,11 +740,11 @@ public class EosBetaUpgradeIntegrationTest {
                     new HashMap<>(committedState)
                 ));
                 verifyUncommitted(expectedUncommittedResult);
+                waitForStateTransitionContains(stateTransitions2, CRASH);
 
                 errorInjectedClient2.set(false);
                 stateTransitions2.clear();
                 streams2AlphaTwo.close();
-                waitForStateTransition(stateTransitions2, CLOSE_CRASHED);
                 assertFalse(UNEXPECTED_EXCEPTION_MSG, hasUnexpectedError);
             }
 
@@ -853,7 +849,7 @@ public class EosBetaUpgradeIntegrationTest {
             }
         }
     }
-    @SuppressWarnings("deprecation") //Thread should no longer die by themselves
+
     private KafkaStreams getKafkaStreams(final String appDir,
                                          final String processingGuarantee) {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -949,7 +945,7 @@ public class EosBetaUpgradeIntegrationTest {
         );
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), config, new TestKafkaClientSupplier());
-        streams.setUncaughtExceptionHandler((t, e) -> {
+        streams.setUncaughtExceptionHandler(e -> {
             if (!injectError) {
                 // we don't expect any exception thrown in stop case
                 e.printStackTrace(System.err);
@@ -966,6 +962,7 @@ public class EosBetaUpgradeIntegrationTest {
                 }
                 exceptionCounts.put(appDir, exceptionCount);
             }
+            return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
         });
 
         return streams;
@@ -987,6 +984,17 @@ public class EosBetaUpgradeIntegrationTest {
             () -> observed.equals(expected),
             MAX_WAIT_TIME_MS,
             () -> "Client did not have the expected state transition on time. Observers transitions: " + observed
+        );
+    }
+
+    private void waitForStateTransitionContains(final List<KeyValue<KafkaStreams.State, KafkaStreams.State>> observed,
+                                                final List<KeyValue<KafkaStreams.State, KafkaStreams.State>> expected)
+            throws Exception {
+
+        waitForCondition(
+            () -> observed.containsAll(expected),
+            MAX_WAIT_TIME_MS,
+            () -> "Client did not startup on time. Observers transitions: " + observed
         );
     }
 
