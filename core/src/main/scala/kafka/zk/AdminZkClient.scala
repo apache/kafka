@@ -28,7 +28,6 @@ import kafka.utils.Implicits._
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.utils.Utils
 import org.apache.zookeeper.KeeperException.NodeExistsException
 
 import scala.collection.{Map, Seq}
@@ -351,7 +350,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
       case ConfigType.User => changeUserOrUserClientIdConfig(entityName, configs)
       case ConfigType.Broker => changeBrokerConfig(parseBroker(entityName), configs)
       case ConfigType.Ip => changeIpConfig(entityName, configs)
-      case _ => throw new IllegalArgumentException(s"$entityType is not a known entityType. Should be one of ${ConfigType.Topic}, ${ConfigType.Client}, ${ConfigType.Broker}")
+      case _ => throw new IllegalArgumentException(s"$entityType is not a known entityType. Should be one of ${ConfigType.all}")
     }
   }
 
@@ -394,8 +393,8 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
    * @param configs properties to validate for the IP
    */
   def validateIpConfig(ip: String, configs: Properties): Unit = {
-    if (ip != ConfigEntityName.Default && !Utils.validHostPattern(ip))
-      throw new AdminOperationException(s"IP $ip is not a valid address.")
+    if (!DynamicConfig.Ip.isValidIpEntity(ip))
+      throw new AdminOperationException(s"$ip is not a valid IP or resolvable host.")
     DynamicConfig.Ip.validate(configs)
   }
 
@@ -480,8 +479,8 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
   }
 
   /**
-   * Read the entity (topic, broker, client, user or <user, client>) config (if any) from zk
-   * sanitizedEntityName is <topic>, <broker>, <client-id>, <user> or <user>/clients/<client-id>.
+   * Read the entity (topic, broker, client, user, <user, client> or <ip>) config (if any) from zk
+   * sanitizedEntityName is <topic>, <broker>, <client-id>, <user>, <user>/clients/<client-id> or <ip>.
    * @param rootEntityType
    * @param sanitizedEntityName
    * @return

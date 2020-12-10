@@ -32,6 +32,7 @@ public class ClientQuotaEntity {
      */
     public static final String USER = "user";
     public static final String CLIENT_ID = "client-id";
+    public static final String IP = "ip";
 
     /**
      * Constructs a quota entity for the given types and names. If a name is null,

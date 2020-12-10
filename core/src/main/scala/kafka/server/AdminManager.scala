@@ -727,7 +727,7 @@ class AdminManager(val config: KafkaConfig,
       case _ => DescribeConfigsResponse.ConfigType.UNKNOWN
     }
   }
-  
+
   private def configSynonyms(name: String, synonyms: List[String], isSensitive: Boolean): List[DescribeConfigsResponseData.DescribeConfigsSynonym] = {
     val dynamicConfig = config.dynamicConfig
     val allSynonyms = mutable.Buffer[DescribeConfigsResponseData.DescribeConfigsSynonym]()
@@ -807,23 +807,25 @@ class AdminManager(val config: KafkaConfig,
       case name => Sanitizer.desanitize(name)
     }
 
-  private def entityToSanitizedUserClientId(entity: ClientQuotaEntity): (Option[String], Option[String]) = {
+  private def parseAndSanitizeQuotaEntity(entity: ClientQuotaEntity): (Option[String], Option[String], Option[String]) = {
     if (entity.entries.isEmpty)
       throw new InvalidRequestException("Invalid empty client quota entity")
 
     var user: Option[String] = None
     var clientId: Option[String] = None
+    var ip: Option[String] = None
     entity.entries.forEach { (entityType, entityName) =>
       val sanitizedEntityName = Some(sanitizeEntityName(entityName))
       entityType match {
         case ClientQuotaEntity.USER => user = sanitizedEntityName
         case ClientQuotaEntity.CLIENT_ID => clientId = sanitizedEntityName
+        case ClientQuotaEntity.IP => ip = sanitizedEntityName
         case _ => throw new InvalidRequestException(s"Unhandled client quota entity type: ${entityType}")
       }
       if (entityName != null && entityName.isEmpty)
         throw new InvalidRequestException(s"Empty ${entityType} not supported")
     }
-    (user, clientId)
+    (user, clientId, ip)
   }
 
   private def userClientIdToEntity(user: Option[String], clientId: Option[String]): ClientQuotaEntity = {
@@ -833,16 +835,21 @@ class AdminManager(val config: KafkaConfig,
   def describeClientQuotas(filter: ClientQuotaFilter): Map[ClientQuotaEntity, Map[String, Double]] = {
     var userComponent: Option[ClientQuotaFilterComponent] = None
     var clientIdComponent: Option[ClientQuotaFilterComponent] = None
+    var ipComponent: Option[ClientQuotaFilterComponent] = None
     filter.components.forEach { component =>
       component.entityType match {
         case ClientQuotaEntity.USER =>
           if (userComponent.isDefined)
-            throw new InvalidRequestException(s"Duplicate user filter component entity type");
+            throw new InvalidRequestException(s"Duplicate user filter component entity type")
           userComponent = Some(component)
         case ClientQuotaEntity.CLIENT_ID =>
           if (clientIdComponent.isDefined)
-            throw new InvalidRequestException(s"Duplicate client filter component entity type");
+            throw new InvalidRequestException(s"Duplicate client filter component entity type")
           clientIdComponent = Some(component)
+        case ClientQuotaEntity.IP =>
+          if (ipComponent.isDefined)
+            throw new InvalidRequestException(s"Duplicate ip filter component entity type")
+          ipComponent = Some(component)
         case "" =>
           throw new InvalidRequestException(s"Unexpected empty filter component entity type")
         case et =>
@@ -850,28 +857,55 @@ class AdminManager(val config: KafkaConfig,
           throw new UnsupportedVersionException(s"Custom entity type '${et}' not supported")
       }
     }
-    handleDescribeClientQuotas(userComponent, clientIdComponent, filter.strict)
+    if ((userComponent.isDefined || clientIdComponent.isDefined) && ipComponent.isDefined)
+      throw new InvalidRequestException(s"Invalid entity filter component combination, IP filter component should not be used with " +
+        s"user or clientId filter component.")
+
+    val userClientQuotas = if (ipComponent.isEmpty)
+      handleDescribeClientQuotas(userComponent, clientIdComponent, filter.strict)
+    else
+      Map.empty
+
+    val ipQuotas = if (userComponent.isEmpty && clientIdComponent.isEmpty)
+      handleDescribeIpQuotas(ipComponent, filter.strict)
+    else
+      Map.empty
+
+    (userClientQuotas ++ ipQuotas).toMap
+  }
+
+  private def wantExact(component: Option[ClientQuotaFilterComponent]): Boolean = component.exists(_.`match` != null)
+
+  private def toOption(opt: java.util.Optional[String]): Option[String] = {
+    if (opt == null)
+      None
+    else if (opt.isPresent)
+      Some(opt.get)
+    else
+      Some(null)
+  }
+
+  private def sanitized(name: Option[String]): String = name.map(n => sanitizeEntityName(n)).getOrElse("")
+
+  private def fromProps(props: Map[String, String]): Map[String, Double] = {
+    props.map { case (key, value) =>
+      val doubleValue = try value.toDouble catch {
+        case _: NumberFormatException =>
+          throw new IllegalStateException(s"Unexpected client quota configuration value: $key -> $value")
+      }
+      key -> doubleValue
+    }
   }
 
   def handleDescribeClientQuotas(userComponent: Option[ClientQuotaFilterComponent],
     clientIdComponent: Option[ClientQuotaFilterComponent], strict: Boolean): Map[ClientQuotaEntity, Map[String, Double]] = {
 
-    def toOption(opt: java.util.Optional[String]): Option[String] =
-      if (opt == null)
-        None
-      else if (opt.isPresent)
-        Some(opt.get)
-      else
-        Some(null)
-
     val user = userComponent.flatMap(c => toOption(c.`match`))
     val clientId = clientIdComponent.flatMap(c => toOption(c.`match`))
 
-    def sanitized(name: Option[String]): String = name.map(n => sanitizeEntityName(n)).getOrElse("")
     val sanitizedUser = sanitized(user)
     val sanitizedClientId = sanitized(clientId)
 
-    def wantExact(component: Option[ClientQuotaFilterComponent]): Boolean = component.exists(_.`match` != null)
     val exactUser = wantExact(userComponent)
     val exactClientId = wantExact(clientIdComponent)
 
@@ -920,32 +954,54 @@ class AdminManager(val config: KafkaConfig,
         !name.isDefined || !strict
     }
 
-    def fromProps(props: Map[String, String]): Map[String, Double] = {
-      props.map { case (key, value) =>
-        val doubleValue = try value.toDouble catch {
-          case _: NumberFormatException =>
-            throw new IllegalStateException(s"Unexpected client quota configuration value: $key -> $value")
-        }
-        key -> doubleValue
-      }
-    }
-
-    (userEntries ++ clientIdEntries ++ bothEntries).map { case ((u, c), p) =>
+    (userEntries ++ clientIdEntries ++ bothEntries).flatMap { case ((u, c), p) =>
       val quotaProps = p.asScala.filter { case (key, _) => QuotaConfigs.isQuotaConfig(key) }
       if (quotaProps.nonEmpty && matches(userComponent, u) && matches(clientIdComponent, c))
         Some(userClientIdToEntity(u, c) -> fromProps(quotaProps))
       else
         None
-    }.flatten.toMap
+    }.toMap
+  }
+
+  def handleDescribeIpQuotas(ipComponent: Option[ClientQuotaFilterComponent], strict: Boolean): Map[ClientQuotaEntity, Map[String, Double]] = {
+    val ip = ipComponent.flatMap(c => toOption(c.`match`))
+    val exactIp = wantExact(ipComponent)
+    val allIps = ipComponent.exists(_.`match` == null) || (ipComponent.isEmpty && !strict)
+    val ipEntries = if (exactIp)
+      Map(Some(ip.get) -> adminZkClient.fetchEntityConfig(ConfigType.Ip, sanitized(ip)))
+    else if (allIps)
+      adminZkClient.fetchAllEntityConfigs(ConfigType.Ip).map { case (name, props) =>
+        Some(desanitizeEntityName(name)) -> props
+      }
+    else
+      Map.empty
+
+    def ipToQuotaEntity(ip: Option[String]): ClientQuotaEntity = {
+      new ClientQuotaEntity(ip.map(ipName => ClientQuotaEntity.IP -> ipName).toMap.asJava)
+    }
+
+    ipEntries.flatMap { case (ip, props) =>
+      val ipQuotaProps = props.asScala.filter { case (key, _) => DynamicConfig.Ip.names.contains(key) }
+      if (ipQuotaProps.nonEmpty)
+        Some(ipToQuotaEntity(ip) -> fromProps(ipQuotaProps))
+      else
+        None
+    }
   }
 
   def alterClientQuotas(entries: Seq[ClientQuotaAlteration], validateOnly: Boolean): Map[ClientQuotaEntity, ApiError] = {
     def alterEntityQuotas(entity: ClientQuotaEntity, ops: Iterable[ClientQuotaAlteration.Op]): Unit = {
-      val (path, configType, configKeys) = entityToSanitizedUserClientId(entity) match {
-        case (Some(user), Some(clientId)) => (user + "/clients/" + clientId, ConfigType.User, DynamicConfig.User.configKeys)
-        case (Some(user), None) => (user, ConfigType.User, DynamicConfig.User.configKeys)
-        case (None, Some(clientId)) => (clientId, ConfigType.Client, DynamicConfig.Client.configKeys)
-        case _ => throw new InvalidRequestException("Invalid empty client quota entity")
+      val (path, configType, configKeys) = parseAndSanitizeQuotaEntity(entity) match {
+        case (Some(user), Some(clientId), None) => (user + "/clients/" + clientId, ConfigType.User, DynamicConfig.User.configKeys)
+        case (Some(user), None, None) => (user, ConfigType.User, DynamicConfig.User.configKeys)
+        case (None, Some(clientId), None) => (clientId, ConfigType.Client, DynamicConfig.Client.configKeys)
+        case (None, None, Some(ip)) =>
+          if (!DynamicConfig.Ip.isValidIpEntity(ip))
+            throw new InvalidRequestException(s"$ip is not a valid IP or resolvable host.")
+          (ip, ConfigType.Ip, DynamicConfig.Ip.configKeys)
+        case (_, _, Some(_)) => throw new InvalidRequestException(s"Invalid quota entity combination, " +
+          s"IP entity should not be used with user/client ID entity.")
+        case _ => throw new InvalidRequestException("Invalid client quota entity")
       }
 
       val props = adminZkClient.fetchEntityConfig(configType, path)
@@ -959,12 +1015,15 @@ class AdminManager(val config: KafkaConfig,
             case key => key.`type` match {
               case ConfigDef.Type.DOUBLE =>
                 props.setProperty(op.key, value.toString)
-              case ConfigDef.Type.LONG =>
+              case ConfigDef.Type.LONG | ConfigDef.Type.INT =>
                 val epsilon = 1e-6
-                val longValue = (value + epsilon).toLong
-                if ((longValue.toDouble - value).abs > epsilon)
-                  throw new InvalidRequestException(s"Configuration ${op.key} must be a Long value")
-                props.setProperty(op.key, longValue.toString)
+                val intValue = if (key.`type` == ConfigDef.Type.LONG)
+                  (value + epsilon).toLong
+                else
+                  (value + epsilon).toInt
+                if ((intValue.toDouble - value).abs > epsilon)
+                  throw new InvalidRequestException(s"Configuration ${op.key} must be a ${key.`type`} value")
+                props.setProperty(op.key, intValue.toString)
               case _ =>
                 throw new IllegalStateException(s"Unexpected config type ${key.`type`}")
             }
