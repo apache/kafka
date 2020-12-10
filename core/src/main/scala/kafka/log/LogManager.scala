@@ -35,6 +35,7 @@ import scala.jdk.CollectionConverters._
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Success, Try}
+import kafka.utils.Implicits._
 
 /**
  * The entry point to the kafka log management subsystem. The log manager is responsible for log creation, retrieval, and cleaning.
@@ -436,6 +437,20 @@ class LogManager(logDirs: Seq[File],
   }
 
   /**
+   * wait all jobs to complete
+   * @param jobs jobs
+   * @return true if all pass. Otherwise, false
+   */
+  private[log] def allPass(jobs: Seq[Future[_]]): Boolean = {
+    jobs.count(future => Try(future.get) match {
+      case Success(_) => false
+      case Failure(e) =>
+        warn(s"There was an error in one of the threads during LogManager shutdown: ${e.getCause}")
+        true
+    }) == 0
+  }
+
+  /**
    * Close all the logs
    */
   def shutdown(): Unit = {
@@ -478,17 +493,8 @@ class LogManager(logDirs: Seq[File],
     }
 
     try {
-      for ((dir, dirJobs) <- jobs) {
-        val hasErrors = dirJobs.exists  { future =>
-          Try(future.get) match {
-            case Success(_) => false
-            case Failure(e) =>
-              warn(s"There was an error in one of the threads during LogManager shutdown: ${e.getCause}")
-              true
-          }
-        }
-
-        if (!hasErrors) {
+      jobs.forKeyValue { (dir, dirJobs) =>
+        if (allPass(dirJobs)) {
           val logs = logsInDir(localLogsByDir, dir)
 
           // update the last flush point

@@ -20,7 +20,6 @@ package kafka.log
 import java.io._
 import java.nio.file.Files
 import java.util.{Collections, Properties}
-
 import com.yammer.metrics.core.MetricName
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server.{FetchDataInfo, FetchLogEnd}
@@ -36,6 +35,7 @@ import org.junit.{After, Before, Test}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{doAnswer, spy}
 
+import java.util.concurrent.CompletableFuture
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Try}
@@ -679,5 +679,16 @@ class LogManagerTest {
     // Trigger the deletion of the former current directory and verify that one set of metrics is still present
     time.sleep(logConfig.fileDeleteDelayMs + 1)
     verifyMetrics(1)
+  }
+
+  @Test
+  def testAllPass(): Unit = {
+    val success = CompletableFuture.completedFuture(true)
+    val failure = new CompletableFuture[Boolean]
+    failure.completeExceptionally(new RuntimeException)
+
+    assertTrue(logManager.allPass(Seq(success)))
+    assertFalse(logManager.allPass(Seq(success, failure)))
+    assertFalse(logManager.allPass(Seq(failure, success)))
   }
 }
