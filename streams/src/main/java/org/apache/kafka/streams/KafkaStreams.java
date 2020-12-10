@@ -436,6 +436,26 @@ public class KafkaStreams implements AutoCloseable {
         }
     }
 
+    private void replaceThreadHelper(final Throwable throwable) {
+        if (globalStreamThread != null && Thread.currentThread().getName().equals(globalStreamThread.getName())) {
+            log.warn("The global thread cannot be replaced. Reverting to shutting down the client.");
+            log.error("Encountered the following exception during processing " +
+                    " The streams client is going to shut down now. ", throwable);
+            close(Duration.ZERO);
+        }
+        final StreamThread deadThread = (StreamThread) Thread.currentThread();
+        threads.remove(deadThread);
+        addStreamThread();
+        deadThread.shutdown();
+        if (throwable instanceof RuntimeException) {
+            throw (RuntimeException) throwable;
+        } else if (throwable instanceof Error) {
+            throw (Error) throwable;
+        } else {
+            throw new RuntimeException("Unexpected checked exception caught in the uncaught exception handler", throwable);
+        }
+    }
+
     private void handleStreamsUncaughtException(final Throwable throwable,
                                                 final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler) {
         final StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse action = streamsUncaughtExceptionHandler.handle(throwable);
@@ -445,24 +465,8 @@ public class KafkaStreams implements AutoCloseable {
         }
         switch (action) {
             case REPLACE_THREAD:
-                if (globalStreamThread != null && Thread.currentThread().getName().equals(globalStreamThread.getName())) {
-                    log.warn("The global thread cannot be replaced. Reverting to shutting down the client.");
-                    log.error("Encountered the following exception during processing " +
-                            "and the registered exception handler opted to " + action + "." +
-                            " The streams client is going to shut down now. ", throwable);
-                    close(Duration.ZERO);
-                }
-                final StreamThread deadThread = (StreamThread) Thread.currentThread();
-                threads.remove(deadThread);
-                addStreamThread();
-                deadThread.shutdown();
-                if (throwable instanceof RuntimeException) {
-                    throw (RuntimeException) throwable;
-                } else if (throwable instanceof Error) {
-                    throw (Error) throwable;
-                } else {
-                    throw new RuntimeException("Unexpected checked exception caught in the uncaught exception handler", throwable);
-                }
+                replaceThreadHelper(throwable);
+                break;
             case SHUTDOWN_CLIENT:
                 log.error("Encountered the following exception during processing " +
                         "and the registered exception handler opted to " + action + "." +

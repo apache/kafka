@@ -48,6 +48,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -78,6 +79,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
     private static Properties properties;
     private static List<String> processorValueCollector;
     private static String appId = "";
+    private static AtomicBoolean throwError = new AtomicBoolean(true);
 
     @Before
     public void setup() {
@@ -188,7 +190,10 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
         @Override
         public void process(final String key, final String value) {
             valueList.add(value + " " + context.taskId());
-            throw new StreamsException(Thread.currentThread().getName());
+            if (throwError.get()) {
+                throw new StreamsException(Thread.currentThread().getName());
+            }
+            throwError.set(true);
         }
     }
 
@@ -221,21 +226,21 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
 
             final AtomicInteger count = new AtomicInteger();
             kafkaStreams.setUncaughtExceptionHandler(exception -> {
-                count.getAndIncrement();
-                if (count.get() > 2) {
-                    return SHUTDOWN_CLIENT;
+                if (count.incrementAndGet() == numThreads) {
+                    throwError.set(false);
                 }
                 return REPLACE_THREAD;
             });
             StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
 
             produceMessages(0L, inputTopic, "A");
+            TestUtils.waitForCondition(() -> count.get() == numThreads, "finished replacing threads");
+            TestUtils.waitForCondition(() -> throwError.get(), "finished replacing threads");
+            kafkaStreams.close();
             waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.NOT_RUNNING, DEFAULT_DURATION);
 
-            assertThat(processorValueCollector.size(), equalTo(3));
-            //because we only have 2 threads at the start and each record kills a thread we must have replaced threads
+            assertThat("All initial threads have failed and the replacement thread had processed on record",
+                        processorValueCollector.size(), equalTo(numThreads + 1));
         }
     }
 }
-
-
