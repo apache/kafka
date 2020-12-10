@@ -183,12 +183,12 @@ public class StreamsProducer {
         transactionInitialized = false;
     }
 
-    private void maybeBeginTransaction() throws ProducerFencedException {
+    private void maybeBeginTransaction() {
         if (eosEnabled() && !transactionInFlight) {
             try {
                 producer.beginTransaction();
                 transactionInFlight = true;
-            } catch (final ProducerFencedException error) {
+            } catch (final ProducerFencedException | InvalidProducerEpochException error) {
                 throw new TaskMigratedException(
                     formatException("Producer got fenced trying to begin a new transaction"),
                     error
@@ -211,7 +211,7 @@ public class StreamsProducer {
             if (isRecoverable(uncaughtException)) {
                 // producer.send() call may throw a KafkaException which wraps a FencedException,
                 // in this case we should throw its wrapped inner cause so that it can be
-                // captured and re-wrapped as TaskMigrationException
+                // captured and re-wrapped as TaskMigratedException
                 throw new TaskMigratedException(
                     formatException("Producer got fenced trying to send a record"),
                     uncaughtException.getCause()
@@ -227,6 +227,7 @@ public class StreamsProducer {
 
     private static boolean isRecoverable(final KafkaException uncaughtException) {
         return uncaughtException.getCause() instanceof ProducerFencedException ||
+            uncaughtException.getCause() instanceof InvalidProducerEpochException ||
             uncaughtException.getCause() instanceof UnknownProducerIdException;
     }
 
@@ -235,7 +236,7 @@ public class StreamsProducer {
      * @throws TaskMigratedException
      */
     void commitTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                           final ConsumerGroupMetadata consumerGroupMetadata) throws ProducerFencedException {
+                           final ConsumerGroupMetadata consumerGroupMetadata) {
         if (!eosEnabled()) {
             throw new IllegalStateException(formatException("Exactly-once is not enabled"));
         }
@@ -270,7 +271,7 @@ public class StreamsProducer {
         if (transactionInFlight) {
             try {
                 producer.abortTransaction();
-            } catch (final ProducerFencedException error) {
+            } catch (final ProducerFencedException | InvalidProducerEpochException error) {
                 // The producer is aborting the txn when there's still an ongoing one,
                 // which means that we did not commit the task while closing it, which
                 // means that it is a dirty close. Therefore it is possible that the dirty
