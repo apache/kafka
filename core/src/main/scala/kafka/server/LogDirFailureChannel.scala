@@ -19,7 +19,6 @@
 package kafka.server
 
 import java.io.IOException
-import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.{ArrayBlockingQueue, ConcurrentHashMap}
 
 import kafka.utils.Logging
@@ -37,7 +36,7 @@ import kafka.utils.Logging
  */
 class LogDirFailureChannel(logDirNum: Int) extends Logging {
 
-  private val offlineLogDirs = new AtomicReference[ConcurrentHashMap[String, String]]()
+  private val offlineLogDirs = new ConcurrentHashMap[String, String]
   private val offlineLogDirQueue = new ArrayBlockingQueue[String](logDirNum)
 
   /*
@@ -46,17 +45,8 @@ class LogDirFailureChannel(logDirNum: Int) extends Logging {
    */
   def maybeAddOfflineLogDir(logDir: String, msg: => String, e: IOException): Unit = {
     error(msg, e)
-    val map =
-      offlineLogDirs.updateAndGet(map => if (map == null) new ConcurrentHashMap[String, String]() else map)
-    if (map.putIfAbsent(logDir, logDir) == null)
+    if (offlineLogDirs.putIfAbsent(logDir, logDir) == null)
       offlineLogDirQueue.add(logDir)
-  }
-
-  /*
-   * Return whether the given log dir is offline.
-   */
-  def logDirIsOffline(logDir: String): Boolean = synchronized {
-    Option(offlineLogDirs.get()).exists(x => x.containsKey(logDir))
   }
 
   /*

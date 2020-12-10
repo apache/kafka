@@ -246,7 +246,7 @@ class Log(@volatile private var _dir: File,
           val producerIdExpirationCheckIntervalMs: Int,
           val topicPartition: TopicPartition,
           val producerStateManager: ProducerStateManager,
-          val logDirFailureChannel: LogDirFailureChannel,
+          logDirFailureChannel: LogDirFailureChannel,
           private val hadCleanShutdown: Boolean = true) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.Log._
@@ -267,6 +267,10 @@ class Log(@volatile private var _dir: File,
   private val lastFlushedTime = new AtomicLong(time.milliseconds)
 
   @volatile private var nextOffsetMetadata: LogOffsetMetadata = _
+
+  // Log dir failure is handled asynchronously we need to prevent threads
+  // from reading inconsistent state caused by a failure in another thread
+  @volatile private var logDirOffline = false
 
   /* The earliest offset which is part of an incomplete transaction. This is used to compute the
    * last stable offset (LSO) in ReplicaManager. Note that it is possible that the "true" first unstable offset
@@ -1110,9 +1114,7 @@ class Log(@volatile private var _dir: File,
 
           // check for offline log dir in case a retry following an IOException happens before the log dir
           // is taken offline, which would result in inconsistent producer state
-          if (logDirFailureChannel.logDirIsOffline(parentDir)) {
-            throw new KafkaStorageException(s"The log dir $parentDir is offline due to a previous IO exception.");
-          }
+          checkForLogDirFailure()
 
           if (assignOffsets) {
             // assign offsets to the message set
@@ -1268,6 +1270,12 @@ class Log(@volatile private var _dir: File,
           appendInfo
         }
       }
+    }
+  }
+
+  private def checkForLogDirFailure(): Unit = {
+    if (logDirOffline) {
+      throw new KafkaStorageException(s"The log dir $parentDir is offline due to a previous IO exception.");
     }
   }
 
@@ -1564,9 +1572,7 @@ class Log(@volatile private var _dir: File,
           done = fetchDataInfo != null || segmentEntry == null
         }
 
-        if (logDirFailureChannel.logDirIsOffline(parentDir)) {
-          throw new KafkaStorageException(s"The log dir $parentDir is offline due to a previous IO exception.");
-        }
+        checkForLogDirFailure()
 
         if (fetchDataInfo != null) fetchDataInfo
         else {
@@ -2363,11 +2369,12 @@ class Log(@volatile private var _dir: File,
   @threadsafe
   def addSegment(segment: LogSegment): LogSegment = this.segments.put(segment.baseOffset, segment)
 
-  private def maybeHandleIOException[T](msg: => String)(fun: => T): T = {
+  private[log] def maybeHandleIOException[T](msg: => String)(fun: => T): T = {
     try {
       fun
     } catch {
       case e: IOException =>
+        logDirOffline = true
         logDirFailureChannel.maybeAddOfflineLogDir(dir.getParent, msg, e)
         throw new KafkaStorageException(msg, e)
     }
