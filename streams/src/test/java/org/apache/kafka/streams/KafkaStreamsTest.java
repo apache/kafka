@@ -470,9 +470,6 @@ public class KafkaStreamsTest {
                     "Thread never stopped.");
                 streams.threads.get(i).join();
             }
-            TestUtils.waitForCondition(
-                () -> streams.state() == KafkaStreams.State.RUNNING,
-                "Streams never stopped.");
         } finally {
             streams.close();
         }
