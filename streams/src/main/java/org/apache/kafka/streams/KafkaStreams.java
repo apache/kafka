@@ -424,6 +424,7 @@ public class KafkaStreams implements AutoCloseable {
 
     private void defaultStreamsUncaughtExceptionHandler(final Throwable throwable) {
         if (oldHandler) {
+            threads.remove((StreamThread) Thread.currentThread());
             if (throwable instanceof RuntimeException) {
                 throw (RuntimeException) throwable;
             } else if (throwable instanceof Error) {
@@ -990,21 +991,23 @@ public class KafkaStreams implements AutoCloseable {
     public Optional<String> removeStreamThread() {
         if (isRunningOrRebalancing()) {
             for (final StreamThread streamThread : threads) {
-                if (streamThread.isAlive()) {
-                    streamThread.shutdown();
-                    if (!streamThread.getName().equals(Thread.currentThread().getName())) {
-                        streamThread.waitOnThreadState(StreamThread.State.DEAD);
-                    }
-                    synchronized (changeThreadCount) {
+                synchronized (changeThreadCount) {
+                    if (streamThread.isAlive()) {
+                        streamThread.shutdown();
+                        if (!streamThread.getName().equals(Thread.currentThread().getName())) {
+                            streamThread.waitOnThreadState(StreamThread.State.DEAD);
+                        }
                         final long cacheSizePerThread = threads.size() == 1 ? 0 : getCacheSizePerThread(threads.size() - 1);
                         resizeThreadCache(cacheSizePerThread);
                         threads.remove(streamThread);
+                        return Optional.of(streamThread.getName());
                     }
-                    return Optional.of(streamThread.getName());
                 }
             }
+            log.warn("There are no threads eligible for removal");
+        } else {
+            log.warn("Cannot remove a stream thread in state " + state());
         }
-        log.warn("Cannot remove a stream thread in state " + state());
         return Optional.empty();
     }
 

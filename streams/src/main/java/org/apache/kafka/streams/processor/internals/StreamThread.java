@@ -604,7 +604,7 @@ public class StreamThread extends Thread {
                 try {
                     stateLock.wait();
                 } catch (final InterruptedException e) {
-                    e.printStackTrace();
+                    // it is ok: just move on to the next iteration
                 }
             }
         }

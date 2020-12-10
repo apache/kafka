@@ -640,7 +640,8 @@ public class KafkaStreamsTest {
         final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         streams.start();
         final int oldSize = streams.threads.size();
-        TestUtils.waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, 15L, "wait until running");
+        TestUtils.waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, 15L,
+                        "Kafka Streams client did not reach state RUNNING");
         assertThat(streams.removeStreamThread(), equalTo(Optional.of("newThread")));
         assertThat(streams.threads.size(), equalTo(oldSize - 1));
     }
@@ -650,6 +651,7 @@ public class KafkaStreamsTest {
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time);
         assertThat(streams.removeStreamThread(), equalTo(Optional.empty()));
+        assertThat(streams.threads.size(), equalTo(1));
     }
 
     @Test

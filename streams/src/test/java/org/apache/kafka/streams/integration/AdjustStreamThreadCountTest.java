@@ -26,7 +26,6 @@ import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
-import org.hamcrest.CoreMatchers;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
@@ -45,6 +44,7 @@ import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.purgeLocalStreamsState;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 @Category(IntegrationTest.class)
@@ -97,15 +97,25 @@ public class AdjustStreamThreadCountTest {
 
             final Optional<String> name = kafkaStreams.addStreamThread();
 
-            assertThat(name, CoreMatchers.not(Optional.empty()));
+            assertThat(name, not(Optional.empty()));
             TestUtils.waitForCondition(
                 () -> kafkaStreams.localThreadsMetadata().stream().sequential()
                         .map(ThreadMetadata::threadName).anyMatch(t -> t.equals(name.orElse(""))),
                 "Wait for the thread to be added"
             );
             assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount + 1));
-            assertThat(kafkaStreams.localThreadsMetadata().stream().map(t -> t.threadName().split("-StreamThread-")[1]).sorted().toArray(), equalTo(new String[] {"1", "2", "3"}));
-            TestUtils.waitForCondition(() -> kafkaStreams.state() == KafkaStreams.State.RUNNING, "wait for running");
+            assertThat(
+                kafkaStreams
+                    .localThreadsMetadata()
+                    .stream()
+                    .map(t -> t.threadName().split("-StreamThread-")[1])
+                    .sorted().toArray(),
+                equalTo(new String[] {"1", "2", "3"})
+            );
+            TestUtils.waitForCondition(
+                () -> kafkaStreams.state() == KafkaStreams.State.RUNNING,
+                "Kafka Streams client did not reach state RUNNING"
+            );
         }
     }
 
@@ -114,7 +124,7 @@ public class AdjustStreamThreadCountTest {
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
             StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
             final int oldThreadCount = kafkaStreams.localThreadsMetadata().size();
-            kafkaStreams.removeStreamThread();
+            assertThat(kafkaStreams.removeStreamThread().get().split("-")[0], equalTo(appId));
             assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount - 1));
         }
     }
@@ -124,37 +134,70 @@ public class AdjustStreamThreadCountTest {
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
             StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
             int oldThreadCount = kafkaStreams.localThreadsMetadata().size();
-            assertThat(kafkaStreams.localThreadsMetadata().stream().map(t -> t.threadName().split("-StreamThread-")[1]).sorted().toArray(), equalTo(new String[] {"1", "2"}));
+            assertThat(
+                kafkaStreams.localThreadsMetadata()
+                    .stream()
+                    .map(t -> t.threadName().split("-StreamThread-")[1])
+                    .sorted()
+                    .toArray(),
+                equalTo(new String[] {"1", "2"})
+            );
 
             final Optional<String> name = kafkaStreams.addStreamThread();
 
-            assertThat(name, CoreMatchers.not(Optional.empty()));
+            assertThat("New thread has index 3", "3".equals(name.get().split("-StreamThread-")[1]));
             TestUtils.waitForCondition(
-                () -> kafkaStreams.localThreadsMetadata().stream().sequential()
-                        .map(ThreadMetadata::threadName).anyMatch(t -> t.equals(name.orElse(""))),
-                "Wait for the thread to be added"
+                () -> kafkaStreams
+                    .localThreadsMetadata()
+                    .stream().sequential()
+                    .map(ThreadMetadata::threadName)
+                    .anyMatch(t -> t.equals(name.get())),
+                "Stream thread has not been added"
             );
             assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount + 1));
-            assertThat(kafkaStreams.localThreadsMetadata().stream().map(t -> t.threadName().split("-StreamThread-")[1]).sorted().toArray(), equalTo(new String[] {"1", "2", "3"}));
-            TestUtils.waitForCondition(() -> kafkaStreams.state() == KafkaStreams.State.RUNNING, "wait for running");
-
-
+            assertThat(
+                kafkaStreams
+                    .localThreadsMetadata()
+                    .stream()
+                    .map(t -> t.threadName().split("-StreamThread-")[1])
+                    .sorted()
+                    .toArray(),
+                equalTo(new String[] {"1", "2", "3"})
+            );
+            TestUtils.waitForCondition(
+                () -> kafkaStreams.state() == KafkaStreams.State.RUNNING,
+                "Kafka Streams client did not reach state RUNNING"
+            );
             oldThreadCount = kafkaStreams.localThreadsMetadata().size();
-            kafkaStreams.removeStreamThread();
+
+            final Optional<String> removedThread = kafkaStreams.removeStreamThread();
+
+            assertThat(removedThread, not(Optional.empty()));
             assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount - 1));
-            assertThat(kafkaStreams.localThreadsMetadata().stream().map(t -> t.threadName().split("-StreamThread-")[1]).sorted().toArray(), equalTo(new String[] {"2", "3"}));
 
             final Optional<String> name2 = kafkaStreams.addStreamThread();
 
-            assertThat(name, CoreMatchers.not(Optional.empty()));
+            assertThat(name2, not(Optional.empty()));
             TestUtils.waitForCondition(
                 () -> kafkaStreams.localThreadsMetadata().stream().sequential()
                         .map(ThreadMetadata::threadName).anyMatch(t -> t.equals(name2.orElse(""))),
                 "Wait for the thread to be added"
             );
             assertThat(kafkaStreams.localThreadsMetadata().size(), equalTo(oldThreadCount));
-            assertThat(kafkaStreams.localThreadsMetadata().stream().map(t -> t.threadName().split("-StreamThread-")[1]).sorted().toArray(), equalTo(new String[] {"1", "2", "3"}));
-            TestUtils.waitForCondition(() -> kafkaStreams.state() == KafkaStreams.State.RUNNING, "wait for running");
+            assertThat(
+                kafkaStreams
+                    .localThreadsMetadata()
+                    .stream()
+                    .map(t -> t.threadName().split("-StreamThread-")[1])
+                    .sorted()
+                    .toArray(),
+                equalTo(new String[] {"1", "2", "3"})
+            );
+            assertThat("the new thread should have received the old threads name", name2.equals(removedThread));
+            TestUtils.waitForCondition(
+                () -> kafkaStreams.state() == KafkaStreams.State.RUNNING,
+                "Kafka Streams client did not reach state RUNNING"
+            );
         }
     }
 }
