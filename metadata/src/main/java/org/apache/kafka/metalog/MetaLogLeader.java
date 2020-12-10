@@ -26,7 +26,7 @@ public class MetaLogLeader {
     private final int nodeId;
     private final long epoch;
 
-    MetaLogLeader(int nodeId, long epoch) {
+    public MetaLogLeader(int nodeId, long epoch) {
         this.nodeId = nodeId;
         this.epoch = epoch;
     }

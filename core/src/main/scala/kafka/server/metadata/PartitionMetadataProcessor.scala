@@ -401,18 +401,16 @@ class PartitionMetadataProcessor(kafkaConfig: KafkaConfig,
       || mgr.hasFencedBrokerChanges() || mgr.hasBrokerEpochChanges()) {
       // Be sure to update metadata cache before potentially updating quota metric configs below
       // because the decision to update quota metric configs requires an accurate cluster metadata cache
-      metadataCache.writeState(
+      metadataCache.updatePartitionMetadata(
         // We know that at least one of these data structures has changed, but we don't want to copy
         // anything that hasn't changed already, so use the current version; this will
         // use the copy if there is one or the original if not.
-        MetadataSnapshot(
-          mgr.getCurrentPartitionStates(),
-          mgr.getMetadataSnapshot().controllerId,
-          mgr.getCurrentAliveBrokers(),
-          mgr.getCurrentAliveNodes(),
-          mgr.getCurrentTopicIdMap(),
-          mgr.getCurrentFencedBrokers(),
-          mgr.getCurrentBrokerEpochs()))
+        mgr.getCurrentPartitionStates(),
+        mgr.getCurrentAliveBrokers(),
+        mgr.getCurrentAliveNodes(),
+        mgr.getCurrentTopicIdMap(),
+        mgr.getCurrentFencedBrokers(),
+        mgr.getCurrentBrokerEpochs())
       if (mgr.requiresUpdateQuotaMetricConfigs) {
         quotaManagers.clientQuotaCallback.foreach { callback =>
           val listenerName = kafkaConfig.interBrokerListenerName // TODO: confirm that this is correct
@@ -871,15 +869,13 @@ class PartitionMetadataProcessor(kafkaConfig: KafkaConfig,
       val numBrokersAdding = 1
       val mgr = MetadataMgr(numBrokersAdding, 0, 0)
       mgr.getCopiedBrokerEpochs().put(kafkaConfig.brokerId, requestedBrokerEpoch)
-      metadataCache.writeState(
-        MetadataSnapshot(
-          mgr.getCurrentPartitionStates(),
-          mgr.getMetadataSnapshot().controllerId,
-          mgr.getCurrentAliveBrokers(),
-          mgr.getCurrentAliveNodes(),
-          mgr.getCurrentTopicIdMap(),
-          mgr.getCurrentFencedBrokers(),
-          mgr.getCurrentBrokerEpochs()))
+      metadataCache.updatePartitionMetadata(
+        mgr.getCurrentPartitionStates(),
+        mgr.getCurrentAliveBrokers(),
+        mgr.getCurrentAliveNodes(),
+        mgr.getCurrentTopicIdMap(),
+        mgr.getCurrentFencedBrokers(),
+        mgr.getCurrentBrokerEpochs())
     }
   }
 
@@ -910,15 +906,13 @@ class PartitionMetadataProcessor(kafkaConfig: KafkaConfig,
         // Remove the current broker from all leadership (leader will be unknown).
         // No need to log errors since they are already logged.
         removeAllLeadershipForLocalBroker(mgr)
-        metadataCache.writeState(
-          MetadataSnapshot(
-            mgr.getCurrentPartitionStates(),
-            mgr.getMetadataSnapshot().controllerId,
-            mgr.getCurrentAliveBrokers(),
-            mgr.getCurrentAliveNodes(),
-            mgr.getCurrentTopicIdMap(),
-            mgr.getCurrentFencedBrokers(),
-            mgr.getCurrentBrokerEpochs()))
+        metadataCache.updatePartitionMetadata(
+          mgr.getCurrentPartitionStates(),
+          mgr.getCurrentAliveBrokers(),
+          mgr.getCurrentAliveNodes(),
+          mgr.getCurrentTopicIdMap(),
+          mgr.getCurrentFencedBrokers(),
+          mgr.getCurrentBrokerEpochs())
       }
     }
   }

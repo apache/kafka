@@ -141,24 +141,23 @@ class ControllerApis(val requestChannel: RequestChannel,
             setName(k).setMaxVersionLevel(v.max()).setMinVersionLevel(v.min()))
         }
         ApiKeys.enabledApis().asScala.foreach {
-          case key => if (supportedApiKeys.contains(key)) {
-            data.apiKeys().add(new ApiVersionsResponseKey().
-              setApiKey(key.id).
-              setMaxVersion(key.latestVersion()).
-              setMinVersion(key.oldestVersion()))
-          }
+          key =>
+            if (supportedApiKeys.contains(key)) {
+              data.apiKeys().add(new ApiVersionsResponseKey().
+                setApiKey(key.id).
+                setMaxVersion(key.latestVersion()).
+                setMinVersion(key.oldestVersion()))
+            }
         }
         new ApiVersionsResponse(data)
       }
     }
-    FutureConverters.toScala(controller.finalizedFeatures()).onComplete(
-      result => result match {
-        case Success(features) =>
-          apisUtils.sendResponseMaybeThrottle(request,
-            requestThrottleMs => createResponseCallback(features, requestThrottleMs))
-        case Failure(e) => apisUtils.handleError(request, e)
-      }
-    )
+    FutureConverters.toScala(controller.finalizedFeatures()).onComplete {
+      case Success(features) =>
+        apisUtils.sendResponseMaybeThrottle(request,
+          requestThrottleMs => createResponseCallback(features, requestThrottleMs))
+      case Failure(e) => apisUtils.handleError(request, e)
+    }
   }
 
   def handleMetadataRequest(request: RequestChannel.Request): Unit = {
@@ -167,16 +166,16 @@ class ControllerApis(val requestChannel: RequestChannel,
       val metadataResponseData = new MetadataResponseData()
       metadataResponseData.setThrottleTimeMs(requestThrottleMs)
       controllerNodes.foreach {
-        case node => metadataResponseData.brokers().add(
-          new MetadataResponseBroker().setHost(node.host()).
-            setNodeId(node.id()).setPort(node.port()).setRack(node.rack()))
+        node =>
+          metadataResponseData.brokers().add(
+            new MetadataResponseBroker().setHost(node.host()).
+              setNodeId(node.id()).setPort(node.port()).setRack(node.rack()))
       }
       metadataResponseData.setClusterId(metaProperties.clusterId.toString)
-      // TODO: get a better estimate of the current active controller from Raft or somewhere.
       if (controller.curClaimEpoch() > 0) {
         metadataResponseData.setControllerId(config.controllerId)
       } else {
-        metadataResponseData.setControllerId(-1)
+        metadataResponseData.setControllerId(MetadataResponse.NO_CONTROLLER_ID)
       }
       val clusterAuthorizedOperations = if (metadataRequest.data.includeClusterAuthorizedOperations) {
         if (apisUtils.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME)) {

@@ -389,9 +389,38 @@ class MetadataCache(brokerId: Int) extends Logging {
     retval
   }
 
-  def writeState(state: MetadataSnapshot): Unit = {
+  // Used ONLY in KIP-500 mode
+  // Should deprecate updateMetadata used by the legacy broker
+  def updatePartitionMetadata(partitionStates: mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataPartitionState]],
+                              aliveBrokers: mutable.LongMap[Broker],
+                              aliveNodes: mutable.LongMap[collection.Map[ListenerName, Node]],
+                              topicIdMap: util.Map[Uuid, String],
+                              fencedBrokers: mutable.LongMap[Broker],
+                              brokerEpochs: mutable.LongMap[Long]): Unit = {
     inWriteLock(partitionMetadataLock) {
-      metadataSnapshot = state
+      // Read the controller ID under the lock to ensure updates to the controller ID are not overwritten
+      metadataSnapshot = MetadataSnapshot(partitionStates, getControllerId, aliveBrokers, aliveNodes, topicIdMap, fencedBrokers, brokerEpochs)
+    }
+  }
+
+  // Used ONLY in KIP-500 mode
+  // Updates to the partition metadata and the controller ID are out-of-band in KIP-500 mode.
+  // This API coupled w/ updatePartitionMetadata should allow the cache to be independently updated
+  // without introducing any race conditions that could cause either data to be overwritten.
+  // Alternatively, we can process all updates serially through the PartitionMetadataProcessor, but
+  // that would mean updates to the active controller ID will not be propagated relatively quickly.
+  def updateController(newControllerId: Int): Unit = {
+    inWriteLock(partitionMetadataLock) {
+      // Read the latest metadata snapshot under the lock to ensure the fields are not overwritten
+      metadataSnapshot = MetadataSnapshot(
+        metadataSnapshot.partitionStates,
+        Some(newControllerId), // New controller ID
+        metadataSnapshot.aliveBrokers,
+        metadataSnapshot.aliveNodes,
+        metadataSnapshot.topicIdMap,
+        metadataSnapshot.fencedBrokers,
+        metadataSnapshot.brokerEpochs
+      )
     }
   }
 }

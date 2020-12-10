@@ -91,7 +91,10 @@ trait BrokerLifecycleManager {
  * @param metadataOffset           - The last committed/processed metadata offset provider for this broker
  * @param brokerEpoch              - This broker's current epoch provider
  */
-class BrokerLifecycleManagerImpl(val brokerMetadataListener: BrokerMetadataListener, val config: KafkaConfig, val controllerChannelManager: BrokerToControllerChannelManager, val scheduler: Scheduler, val time: Time, val brokerID: Int, val rack: String, val metadataOffset: () => Long, val brokerEpoch: () => Long) extends BrokerLifecycleManager with Logging with KafkaMetricsGroup {
+class BrokerLifecycleManagerImpl(val brokerMetadataListener: BrokerMetadataListener,
+                                 val config: KafkaConfig, val controllerChannelManager: BrokerToControllerChannelManager,
+                                 val scheduler: Scheduler, val time: Time, val brokerID: Int, val rack: String,
+                                 val metadataOffset: () => Long, val brokerEpoch: () => Long) extends BrokerLifecycleManager with Logging with KafkaMetricsGroup {
 
   // Request queue
   private val requestQueue: util.Queue[(jmetadata.BrokerState, Promise[Unit])] = new ConcurrentLinkedQueue[(jmetadata.BrokerState, Promise[Unit])]()

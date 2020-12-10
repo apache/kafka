@@ -17,20 +17,20 @@
 
 package kafka.server.metadata
 
-import java.util
-import java.util.Properties
-import java.util.concurrent.{CompletableFuture, Future, LinkedBlockingQueue, TimeUnit}
-
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.LogManager
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.{BrokerConfigHandler, ConfigHandler, KafkaConfig, MetadataCache, QuotaFactory, ReplicaManager, TopicConfigHandler}
+import kafka.server._
 import kafka.utils.ShutdownableThread
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.protocol.ApiMessage
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.metalog.MetaLogListener
+import org.apache.kafka.metalog.{MetaLogLeader, MetaLogListener}
+
+import java.util
+import java.util.Properties
+import java.util.concurrent.{CompletableFuture, Future, LinkedBlockingQueue, TimeUnit}
 
 object BrokerMetadataListener {
   val ThreadNamePrefix = "broker-"
@@ -123,6 +123,7 @@ trait ConfigRepository {
 
 class BrokerMetadataListener(
   config: KafkaConfig,
+  metadataCache: MetadataCache,
   time: Time,
   processors: List[BrokerMetadataProcessor],
   eventQueueTimeoutMs: Long = BrokerMetadataListener.DefaultEventQueueTimeoutMs
@@ -203,6 +204,10 @@ class BrokerMetadataListener(
 
   override def handleCommits(lastOffset: Long, messages: util.List[ApiMessage]): Unit = {
     put(MetadataLogEvent(messages, lastOffset))
+  }
+
+  override def handleNewLeader(leader: MetaLogLeader): Unit = {
+    metadataCache.updateController(leader.nodeId)
   }
 
   def put(event: BrokerMetadataEvent): QueuedEvent = {

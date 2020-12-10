@@ -19,13 +19,13 @@ package kafka.server.metadata
 
 import com.yammer.metrics.core.{Gauge, Histogram, MetricName}
 import kafka.metrics.KafkaYammerMetrics
-import kafka.server.KafkaConfig
+import kafka.server.{KafkaConfig, MetadataCache}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.metadata.{FenceBrokerRecord, RegisterBrokerRecord}
 import org.apache.kafka.common.protocol.{ApiMessage, ApiMessageAndVersion}
 import org.apache.kafka.common.utils.{LogContext, MockTime, Utils}
-import org.apache.kafka.metalog.LocalLogManager
+import org.apache.kafka.metalog.{LocalLogManager, MetaLogLeader}
 import org.apache.kafka.test.{TestCondition, TestUtils => KTestUtils}
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue, fail}
 import org.junit.{After, Test}
@@ -41,6 +41,7 @@ class BrokerMetadataListenerTest {
   val expectedEventQueueSizeMetricName = "EventQueueSize"
   val eventQueueSizeMetricMBeanName = s"$expectedMetricMBeanPrefix,name=$expectedEventQueueSizeMetricName"
   val eventQueueTimeMsMetricMBeanName = s"$expectedMetricMBeanPrefix,name=$expectedEventQueueTimeMsMetricName"
+  val metadataCache = mock(classOf[MetadataCache])
 
   def eventQueueSizeGauge() = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.filter {
     case (k, _) => k.getMBeanName == eventQueueSizeMetricMBeanName
@@ -63,19 +64,19 @@ class BrokerMetadataListenerTest {
 
   @Test(expected = classOf[IllegalArgumentException])
   def testEmptyBrokerMetadataProcessors(): Unit = {
-    new BrokerMetadataListener(mock(classOf[KafkaConfig]), new MockTime(), List.empty)
+    new BrokerMetadataListener(mock(classOf[KafkaConfig]), metadataCache, new MockTime(), List.empty)
   }
 
   @Test(expected = classOf[IllegalStateException])
   def testNoConfigMetadataProcessors(): Unit = {
-    val listener = new BrokerMetadataListener(mock(classOf[KafkaConfig]), new MockTime(), List(mock(classOf[BrokerMetadataProcessor])))
+    val listener = new BrokerMetadataListener(mock(classOf[KafkaConfig]), metadataCache, new MockTime(), List(mock(classOf[BrokerMetadataProcessor])))
     listener.brokerConfigProperties(1)
   }
 
   @Test(expected = classOf[IllegalArgumentException])
   def testMultipleConfigMetadataProcessors(): Unit = {
     trait ConfigRepositoryProcessor extends BrokerMetadataProcessor with ConfigRepository
-    new BrokerMetadataListener(mock(classOf[KafkaConfig]), new MockTime(),
+    new BrokerMetadataListener(mock(classOf[KafkaConfig]), metadataCache, new MockTime(),
       List(mock(classOf[ConfigRepositoryProcessor]), mock(classOf[ConfigRepositoryProcessor])))
   }
 
@@ -83,7 +84,7 @@ class BrokerMetadataListenerTest {
   def testConfigMetadataProcessor(): Unit = {
     trait ConfigRepositoryProcessor extends BrokerMetadataProcessor with ConfigRepository
     val configProcessor = mock(classOf[ConfigRepositoryProcessor])
-    val listener = new BrokerMetadataListener(mock(classOf[KafkaConfig]), new MockTime(), List(configProcessor))
+    val listener = new BrokerMetadataListener(mock(classOf[KafkaConfig]), metadataCache, new MockTime(), List(configProcessor))
     val brokerId = 0
     listener.brokerConfigProperties(brokerId)
     val topicName = "foo"
@@ -95,7 +96,7 @@ class BrokerMetadataListenerTest {
   @Test
   def testEventIsProcessedAfterStartup(): Unit = {
     val processor = new MockMetadataProcessor
-    val listener = new BrokerMetadataListener(mock(classOf[KafkaConfig]), new MockTime(), List(processor))
+    val listener = new BrokerMetadataListener(mock(classOf[KafkaConfig]), metadataCache, new MockTime(), List(processor))
 
     val metadataLogEvent = MetadataLogEvent(List[ApiMessage](new RegisterBrokerRecord()).asJava, 1)
     listener.put(metadataLogEvent)
@@ -106,7 +107,7 @@ class BrokerMetadataListenerTest {
   @Test
   def testInitialAndSubsequentMetadataOffsets(): Unit = {
     val processor = new MockMetadataProcessor
-    val listener = new BrokerMetadataListener(mock(classOf[KafkaConfig]), new MockTime(), List(processor))
+    val listener = new BrokerMetadataListener(mock(classOf[KafkaConfig]), metadataCache, new MockTime(), List(processor))
     assertEquals(expectedInitialMetadataOffset, listener.currentMetadataOffset())
 
     val nextMetadataOffset = expectedInitialMetadataOffset + 2
@@ -123,7 +124,7 @@ class BrokerMetadataListenerTest {
   @Test
   def testOutOfBandHeartbeatMessages(): Unit = {
     val processor = new MockMetadataProcessor
-    val listener = new BrokerMetadataListener(mock(classOf[KafkaConfig]), new MockTime(), List(processor))
+    val listener = new BrokerMetadataListener(mock(classOf[KafkaConfig]), metadataCache, new MockTime(), List(processor))
     assertEquals(expectedInitialMetadataOffset, listener.currentMetadataOffset())
 
     assertFalse(listener.initiallyCaughtUpFuture.isDone)
@@ -158,7 +159,7 @@ class BrokerMetadataListenerTest {
   @Test
   def testBadMetadataOffset(): Unit = {
     val processor = new MockMetadataProcessor
-    val listener = new BrokerMetadataListener(mock(classOf[KafkaConfig]), new MockTime(), List(processor))
+    val listener = new BrokerMetadataListener(mock(classOf[KafkaConfig]), metadataCache, new MockTime(), List(processor))
     assertEquals(expectedInitialMetadataOffset, listener.currentMetadataOffset())
 
     val metadataLogEvent = MetadataLogEvent(List[ApiMessage](new RegisterBrokerRecord()).asJava, -1)
@@ -177,7 +178,7 @@ class BrokerMetadataListenerTest {
 
   @Test
   def testMetricsCleanedOnClose(): Unit = {
-    val listener = new BrokerMetadataListener(mock(classOf[KafkaConfig]), new MockTime(),
+    val listener = new BrokerMetadataListener(mock(classOf[KafkaConfig]), metadataCache, new MockTime(),
       List(new MockMetadataProcessor))
     listener.start()
     assertTrue(allRegisteredMetricNames.nonEmpty)
@@ -188,7 +189,7 @@ class BrokerMetadataListenerTest {
 
   @Test
   def testFuturesCancelledOnClose(): Unit = {
-    val listener = new BrokerMetadataListener(mock(classOf[KafkaConfig]), new MockTime(),
+    val listener = new BrokerMetadataListener(mock(classOf[KafkaConfig]), metadataCache, new MockTime(),
       List(new MockMetadataProcessor))
     listener.start()
     assertFalse(listener.initiallyCaughtUpFuture.isDone)
@@ -202,7 +203,7 @@ class BrokerMetadataListenerTest {
   @Test
   def testOutOfBandEventIsProcessed(): Unit = {
     val processor = new MockMetadataProcessor
-    val listener = new BrokerMetadataListener(mock(classOf[KafkaConfig]), new MockTime(), List(processor))
+    val listener = new BrokerMetadataListener(mock(classOf[KafkaConfig]), metadataCache, new MockTime(), List(processor))
     val logEvent1 = MetadataLogEvent(List(mock(classOf[ApiMessage])).asJava, 1)
     val logEvent2 = MetadataLogEvent(List(mock(classOf[ApiMessage])).asJava, 2)
     val registerEvent = RegisterBrokerEvent(1)
@@ -227,7 +228,7 @@ class BrokerMetadataListenerTest {
       k.getMBeanName == eventQueueTimeMsMetricMBeanName
     }.values.isEmpty)
 
-    val listener = new BrokerMetadataListener(mock(classOf[KafkaConfig]), time, List(brokerMetadataProcessor))
+    val listener = new BrokerMetadataListener(mock(classOf[KafkaConfig]), metadataCache, time, List(brokerMetadataProcessor))
     val apiMessagesEvent = List(mock(classOf[ApiMessage]))
     listener.put(MetadataLogEvent(apiMessagesEvent.asJava, 1))
     listener.drain()
@@ -247,7 +248,7 @@ class BrokerMetadataListenerTest {
     val time = new MockTime()
     val brokerMetadataProcessor = new MockMetadataProcessor
 
-    val listener = new BrokerMetadataListener(mock(classOf[KafkaConfig]), time, List(brokerMetadataProcessor),
+    val listener = new BrokerMetadataListener(mock(classOf[KafkaConfig]), metadataCache, time, List(brokerMetadataProcessor),
       eventQueueTimeoutMs = 50)
     val histogram = queueTimeHistogram()
 
@@ -266,7 +267,7 @@ class BrokerMetadataListenerTest {
     val leaderEpoch = 0
     val apiVersion: Short = 1
     val brokerMetadataProcessor = new MockMetadataProcessor
-    val listener = new BrokerMetadataListener(mock(classOf[KafkaConfig]), new MockTime, List(brokerMetadataProcessor),
+    val listener = new BrokerMetadataListener(mock(classOf[KafkaConfig]), metadataCache, new MockTime, List(brokerMetadataProcessor),
       eventQueueTimeoutMs = 50)
     val localLogManager = new LocalLogManager(new LogContext("log-manager-broker-test"), 1,
       logdir.getAbsolutePath, "log-manager")
@@ -303,6 +304,34 @@ class BrokerMetadataListenerTest {
 
     // Verify that the events were processed
     assertTrue(listener.currentMetadataOffset() == apisInvoked.size - 1)
+  }
+
+  @Test
+  def testLocalLogManagerNewLeaderNotification(): Unit = {
+    val logdir = KTestUtils.tempDirectory()
+    val leaderEpoch = 0
+    val brokerMetadataProcessor = new MockMetadataProcessor
+    val brokerID = 1;
+
+    // Use a real metadata cache
+    val realMetadataCache = new MetadataCache(brokerID)
+    val listener = new BrokerMetadataListener(mock(classOf[KafkaConfig]), realMetadataCache, new MockTime, List(brokerMetadataProcessor),
+      eventQueueTimeoutMs = 50)
+
+    // Controller ID change notification
+    val newControllerID = 999;
+
+    // Let BrokerMetadataListener know of the new controller ID
+    listener.handleNewLeader(new MetaLogLeader(newControllerID, leaderEpoch + 1))
+
+    // Cleanup
+    listener.beginShutdown()
+    listener.close()
+    Utils.delete(logdir)
+
+    // Verify that the leadership change was processed
+    assertTrue(realMetadataCache.getControllerId.isDefined)
+    assertEquals(realMetadataCache.getControllerId.get, newControllerID)
   }
 
   private class MockMetadataProcessor extends BrokerMetadataProcessor {
