@@ -290,6 +290,7 @@ public class MemoryRecordsTest {
                 assertEquals(numRecords, filterResult.messagesRead());
                 assertEquals(records.sizeInBytes(), filterResult.bytesRead());
                 assertEquals(baseOffset + 1, filterResult.maxOffset());
+                assertEquals(baseOffset, filterResult.minOffset());
                 assertEquals(0, filterResult.messagesRetained());
                 assertEquals(DefaultRecordBatch.RECORD_BATCH_OVERHEAD, filterResult.bytesRetained());
                 assertEquals(12, filterResult.maxTimestamp());
@@ -351,6 +352,7 @@ public class MemoryRecordsTest {
             assertEquals(0, filterResult.messagesRead());
             assertEquals(records.sizeInBytes(), filterResult.bytesRead());
             assertEquals(baseOffset, filterResult.maxOffset());
+            assertEquals(baseOffset, filterResult.minOffset());
             assertEquals(0, filterResult.messagesRetained());
             assertEquals(DefaultRecordBatch.RECORD_BATCH_OVERHEAD, filterResult.bytesRetained());
             assertEquals(timestamp, filterResult.maxTimestamp());
@@ -398,6 +400,7 @@ public class MemoryRecordsTest {
 
                 // Verify filter result
                 assertEquals(0, filterResult.outputBuffer().position());
+                assertEquals(-1, filterResult.minOffset());
 
                 // Verify filtered records
                 filtered.flip();
@@ -510,7 +513,7 @@ public class MemoryRecordsTest {
         buffer.flip();
 
         ByteBuffer filtered = ByteBuffer.allocate(2048);
-        MemoryRecords.readableRecords(buffer).filterTo(new TopicPartition("foo", 0), new MemoryRecords.RecordFilter() {
+        MemoryRecords.FilterResult result = MemoryRecords.readableRecords(buffer).filterTo(new TopicPartition("foo", 0), new MemoryRecords.RecordFilter() {
             @Override
             protected BatchRetention checkBatchRetention(RecordBatch batch) {
                 // discard the second and fourth batches
@@ -524,6 +527,7 @@ public class MemoryRecordsTest {
                 return true;
             }
         }, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+        assertEquals(0, result.minOffset());
 
         filtered.flip();
         MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
@@ -551,8 +555,10 @@ public class MemoryRecordsTest {
         buffer.flip();
 
         ByteBuffer filtered = ByteBuffer.allocate(2048);
-        MemoryRecords.readableRecords(buffer).filterTo(new TopicPartition("foo", 0), new RetainNonNullKeysFilter(),
+        MemoryRecords.FilterResult result = MemoryRecords.readableRecords(buffer).filterTo(new TopicPartition("foo", 0), new RetainNonNullKeysFilter(),
                 filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+        assertEquals(8, result.minOffset());
+        
         filtered.flip();
         MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
 
@@ -619,8 +625,10 @@ public class MemoryRecordsTest {
             buffer.flip();
 
             ByteBuffer filtered = ByteBuffer.allocate(2048);
-            MemoryRecords.readableRecords(buffer).filterTo(new TopicPartition("foo", 0), new RetainNonNullKeysFilter(),
+            MemoryRecords.FilterResult result = MemoryRecords.readableRecords(buffer).filterTo(new TopicPartition("foo", 0), new RetainNonNullKeysFilter(),
                     filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+            
+            assertEquals(1, result.minOffset());
 
             filtered.flip();
             MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
