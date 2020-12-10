@@ -18,12 +18,13 @@
 package unit.kafka.server
 
 import java.net.InetAddress
-import java.util.{Properties, UUID}
+import java.util.Properties
 
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.{ClientQuotaManager, ClientRequestQuotaManager, ControllerApis, ControllerMutationQuotaManager, KafkaConfig, MetaProperties, ReplicationQuotaManager}
 import kafka.utils.MockTime
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ClusterAuthorizationException
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.BrokerRegistrationRequestData
@@ -71,7 +72,7 @@ class ControllerApisTest {
       supportedFeatures,
       controller,
       new KafkaConfig(new Properties()),
-      new MetaProperties(UUID.fromString("7ace6e94-d39e-4a2f-a722-167eab2d0d9d")),
+      new MetaProperties(Uuid.fromString("JgxuGe9URy-E-ceaL04lEw")),
       Seq.empty
     )
   }

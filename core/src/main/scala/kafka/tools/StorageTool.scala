@@ -19,13 +19,13 @@ package kafka.tools
 
 import java.io.PrintStream
 import java.nio.file.{Files, Paths}
-import java.util.UUID
 
 import kafka.server.{BrokerMetadataCheckpoint, KafkaConfig, LegacyMetaProperties, MetaProperties}
 import kafka.utils.{Exit, Logging}
 import net.sourceforge.argparse4j.ArgumentParsers
 import net.sourceforge.argparse4j.impl.Arguments.{store, storeTrue}
 import org.apache.kafka.common.KafkaException
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.mutable
@@ -90,7 +90,7 @@ object StorageTool extends Logging {
           Exit.exit(formatCommand(System.out, directories, clusterId, ignoreFormatted ))
         }
         case "random-uuid" => {
-          System.out.println(UUID.randomUUID())
+          System.out.println(Uuid.randomUuid())
           Exit.exit(0)
         }
         case _ => {
@@ -219,10 +219,10 @@ object StorageTool extends Logging {
       throw new TerseFailure("All of the log directories are already formatted.")
     }
     val effectiveClusterId = try {
-      UUID.fromString(clusterId)
+      Uuid.fromString(clusterId)
     } catch {
       case e: Throwable => throw new TerseFailure(s"Cluster ID string ${clusterId} " +
-        s"does not appear to be a valid UUID: ${e.getMessage}")
+        s"does not appear to be a valid Uuid: ${e.getMessage}")
     }
     val metaProperties = new MetaProperties(effectiveClusterId)
     unformattedDirectories.foreach(directory => {

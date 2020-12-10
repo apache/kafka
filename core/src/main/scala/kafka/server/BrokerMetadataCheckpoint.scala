@@ -19,9 +19,10 @@ package kafka.server
 
 import java.io._
 import java.nio.file.{Files, NoSuchFileException}
-import java.util.{Properties, UUID}
+import java.util.Properties
 
 import kafka.utils._
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.Utils
 
 object LegacyMetaProperties {
@@ -59,10 +60,10 @@ object MetaProperties {
     }
   }
 
-  def getRequiredUuidProperty(properties: Properties, key: String): UUID = {
+  def getRequiredUuidProperty(properties: Properties, key: String): Uuid = {
     val value = getRequiredStringProperty(properties, key)
     try {
-      UUID.fromString(value)
+      Uuid.fromString(value)
     } catch {
       case e: Throwable => throw new RuntimeException(s"Failed to parse $key property " +
         s"as a UUID: ${e.getMessage}")
@@ -95,7 +96,7 @@ case class LegacyMetaProperties(brokerId: Int,
   }
 }
 
-case class MetaProperties(clusterId: UUID) {
+case class MetaProperties(clusterId: Uuid) {
   def toProperties(): Properties = {
     val properties = new Properties()
     properties.setProperty("version", 1.toString)

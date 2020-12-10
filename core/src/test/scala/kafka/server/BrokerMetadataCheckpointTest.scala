@@ -10,11 +10,12 @@
   * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
   * specific language governing permissions and limitations under the License.
   */
+
 package kafka.server
 
-import java.io.File
-import java.util.UUID
+import org.apache.kafka.common.Uuid;
 
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -42,7 +43,7 @@ class BrokerMetadataCheckpointTest {
 
   @Test
   def testCreateMetadataProperties(): Unit = {
-    val meta = new MetaProperties(UUID.fromString("623c048c-787a-41ac-9e86-7d9d4b07c1a3"))
+    val meta = new MetaProperties(Uuid.fromString("H3KKO4NTRPaCWtEmm3vW7A"))
     val properties = meta.toProperties()
     val meta2 = MetaProperties(properties)
     assertEquals(meta, meta2)
