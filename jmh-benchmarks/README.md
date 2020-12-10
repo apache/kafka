@@ -28,27 +28,22 @@ Run a specific test and override the number of forks, iterations and warm-up ite
 
 Run a specific test with async and GC profilers on Linux and flame graph output:
 
-    LD_LIBRARY_PATH=/path/to/async-profiler ./jmh-benchmarks/jmh.sh -prof gc -prof async:output=flamegraph LRUCacheBenchmark
+    ./jmh-benchmarks/jmh.sh -prof gc -prof async:libPath=/path/to/async-profiler.so;output=flamegraph LRUCacheBenchmark
 
 The following sections cover async profiler and GC profilers in more detail.
 
 ### Using JMH with async profiler
 
 It's good practice to check profiler output for microbenchmarks in order to verify that they are valid.
-JMH includes [async-profiler](https://github.com/jvm-profiling-tools/async-profiler) integration that makes this easy,
-although the specifics vary slightly depending on the platform. A simple Linux example:
+JMH includes [async-profiler](https://github.com/jvm-profiling-tools/async-profiler) integration that makes this easy:
 
-    LD_LIBRARY_PATH=/path/to/async-profiler ./jmh-benchmarks/jmh.sh -prof async
+    ./jmh-benchmarks/jmh.sh -prof async:libPath=/path/to/async-profiler.so
 
-`DYLD_LIBRARY_PATH` should be used on macOS instead:
+With flame graph output (single quotes are required to ensure the semicolon is not treated as a command separator):
 
-    DYLD_LIBRARY_PATH=/path/to/async-profiler ./jmh-benchmarks/jmh.sh -prof async
+    ./jmh-benchmarks/jmh.sh -prof 'async:libPath=/path/to/async-profiler.so;output=flamegraph'
 
-With flame graph output:
-
-    LD_LIBRARY_PATH=/path/to/async-profiler ./jmh-benchmarks/jmh.sh -prof async:output=flamegraph
-
-A number of arguments can be passed to async-profiler, run the following for a description:
+A number of arguments can be passed to configure async profiler, run the following for a description:
 
     ./jmh-benchmarks/jmh.sh -prof async:help
 
