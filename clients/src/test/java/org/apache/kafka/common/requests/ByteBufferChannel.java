@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.nio.ByteBuffer;
-import java.nio.channels.GatheringByteChannel;
+import org.apache.kafka.common.network.WritableChannel;
 
-public class ByteBufferChannel implements GatheringByteChannel {
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+
+public class ByteBufferChannel implements WritableChannel {
     private final ByteBuffer buf;
     private boolean closed = false;
 
@@ -67,5 +70,15 @@ public class ByteBufferChannel implements GatheringByteChannel {
 
     public ByteBuffer buffer() {
         return buf;
+    }
+
+    @Override
+    public boolean hasPendingWrites() {
+        return false;
+    }
+
+    @Override
+    public long transferFrom(FileChannel fileChannel, long position, long count) throws IOException {
+        return fileChannel.transferTo(position, count, this);
     }
 }

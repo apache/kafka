@@ -17,7 +17,6 @@
 package org.apache.kafka.common.network;
 
 import java.io.IOException;
-import java.nio.channels.GatheringByteChannel;
 
 public class NetworkSend implements Send {
     private final String destinationId;
@@ -38,7 +37,7 @@ public class NetworkSend implements Send {
     }
 
     @Override
-    public long writeTo(GatheringByteChannel channel) throws IOException {
+    public long writeTo(WritableChannel channel) throws IOException {
         return send.writeTo(channel);
     }
 
