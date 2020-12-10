@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.UpdateMetadataRequestData;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataBroker;
@@ -33,6 +34,7 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,12 +46,15 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
     public static class Builder extends AbstractControlRequest.Builder<UpdateMetadataRequest> {
         private final List<UpdateMetadataPartitionState> partitionStates;
         private final List<UpdateMetadataBroker> liveBrokers;
+        private final Map<String, Uuid> topicIds;
 
         public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
-                       List<UpdateMetadataPartitionState> partitionStates, List<UpdateMetadataBroker> liveBrokers) {
+                       List<UpdateMetadataPartitionState> partitionStates, List<UpdateMetadataBroker> liveBrokers,
+                       Map<String, Uuid> topicIds) {
             super(ApiKeys.UPDATE_METADATA, version, controllerId, controllerEpoch, brokerEpoch);
             this.partitionStates = partitionStates;
             this.liveBrokers = liveBrokers;
+            this.topicIds = topicIds;
         }
 
         @Override
@@ -82,7 +87,7 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
                     .setLiveBrokers(liveBrokers);
 
             if (version >= 5) {
-                Map<String, UpdateMetadataTopicState> topicStatesMap = groupByTopic(partitionStates);
+                Map<String, UpdateMetadataTopicState> topicStatesMap = groupByTopic(topicIds, partitionStates);
                 data.setTopicStates(new ArrayList<>(topicStatesMap.values()));
             } else {
                 data.setUngroupedPartitionStates(partitionStates);
@@ -91,13 +96,17 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
             return new UpdateMetadataRequest(data, version);
         }
 
-        private static Map<String, UpdateMetadataTopicState> groupByTopic(List<UpdateMetadataPartitionState> partitionStates) {
+        private static Map<String, UpdateMetadataTopicState> groupByTopic(Map<String, Uuid> topicIds, List<UpdateMetadataPartitionState> partitionStates) {
             Map<String, UpdateMetadataTopicState> topicStates = new HashMap<>();
             for (UpdateMetadataPartitionState partition : partitionStates) {
                 // We don't null out the topic name in UpdateMetadataPartitionState since it's ignored by the generated
                 // code if version >= 5
                 UpdateMetadataTopicState topicState = topicStates.computeIfAbsent(partition.topicName(),
-                    t -> new UpdateMetadataTopicState().setTopicName(partition.topicName()));
+                    t -> new UpdateMetadataTopicState()
+                            .setTopicName(partition.topicName())
+                            .setTopicId(topicIds.getOrDefault(partition.topicName(), Uuid.ZERO_UUID))
+
+                );
                 topicState.partitionStates().add(partition);
             }
             return topicStates;
@@ -194,6 +203,13 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
                 topicState -> topicState.partitionStates().iterator());
         }
         return data.ungroupedPartitionStates();
+    }
+
+    public List<UpdateMetadataTopicState> topicStates() {
+        if (version() >= 5) {
+            return data.topicStates();
+        }
+        return Collections.emptyList();
     }
 
     public List<UpdateMetadataBroker> liveBrokers() {
