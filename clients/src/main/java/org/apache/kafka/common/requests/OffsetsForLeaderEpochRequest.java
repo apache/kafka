@@ -134,17 +134,4 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
     public static boolean supportsTopicPermission(short latestUsableVersion) {
         return latestUsableVersion >= 3;
     }
-
-    /**
-     * Exposed `OffsetForLeaderPartition.currentLeaderEpoch` as an `java.util.Optional`.
-     *
-     * Classes auto-generated based on the protocol do not support `java.util.Optional` yet. This
-     * is a temporary workaround until that work is completed.
-     */
-    public static Optional<Integer> currentLeaderEpochOpt(OffsetForLeaderPartition offsetForLeaderPartition) {
-        if (offsetForLeaderPartition.currentLeaderEpoch() != RecordBatch.NO_PARTITION_LEADER_EPOCH)
-            return Optional.of(offsetForLeaderPartition.currentLeaderEpoch());
-        else
-            return Optional.empty();
-    }
 }

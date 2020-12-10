@@ -356,7 +356,7 @@ class ReplicaFetcherThread(name: String,
       val responseBody = response.responseBody.asInstanceOf[OffsetsForLeaderEpochResponse]
       debug(s"Received leaderEpoch response $response")
       responseBody.data.topics.asScala.flatMap { offsetForLeaderTopicResult =>
-        offsetForLeaderTopicResult.partitions().asScala.map { offsetForLeaderPartitionResult =>
+        offsetForLeaderTopicResult.partitions.asScala.map { offsetForLeaderPartitionResult =>
           val tp = new TopicPartition(offsetForLeaderTopicResult.topic, offsetForLeaderPartitionResult.partition)
           tp -> offsetForLeaderPartitionResult
         }

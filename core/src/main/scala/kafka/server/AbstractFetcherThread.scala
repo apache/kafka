@@ -162,6 +162,7 @@ abstract class AbstractFetcherThread(name: String,
         latestEpoch(tp) match {
           case Some(epoch) if isOffsetForLeaderEpochSupported =>
             partitionsWithEpochs += tp -> new EpochData()
+              .setPartition(tp.partition)
               .setCurrentLeaderEpoch(state.currentLeaderEpoch)
               .setLeaderEpoch(epoch)
           case _ =>
@@ -272,7 +273,7 @@ abstract class AbstractFetcherThread(name: String,
 
         case Errors.FENCED_LEADER_EPOCH =>
           val currentLeaderEpoch = latestEpochsForPartitions.get(tp) match {
-            case Some(p) => OffsetsForLeaderEpochRequest.currentLeaderEpochOpt(p)
+            case Some(p) => RequestUtils.getLeaderEpoch(p.currentLeaderEpoch)
             case None => Optional.empty[Integer]()
           }
           if (onPartitionFenced(tp, currentLeaderEpoch))

@@ -27,6 +27,7 @@ import kafka.message.NoCompressionCodec
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server.AbstractFetcherThread.ReplicaFetch
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
+import kafka.utils.Implicits.MapExtensionMethods
 import kafka.utils.TestUtils
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.TopicPartition
@@ -640,7 +641,7 @@ class AbstractFetcherThreadTest {
   }
 
   private def testLeaderEpochChangeDuringFetchEpochsFromLeader(leaderEpochOnLeader: Int): Unit = {
-    val partition = new TopicPartition("topic", 0)
+    val partition = new TopicPartition("topic", 1)
     val initialLeaderEpochOnFollower = 0
     val nextLeaderEpochOnFollower = initialLeaderEpochOnFollower + 1
 
@@ -1104,7 +1105,9 @@ class AbstractFetcherThreadTest {
 
     override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
       val endOffsets = mutable.Map[TopicPartition, EpochEndOffset]()
-      partitions.foreach { case (partition, epochData) =>
+      partitions.forKeyValue { (partition, epochData) =>
+        assert(partition.partition == epochData.partition,
+          "Partition must be consistent between TopicPartition and EpochData")
         val leaderState = leaderPartitionState(partition)
         val epochEndOffset = lookupEndOffsetForEpoch(partition, epochData, leaderState)
         endOffsets.put(partition, epochEndOffset)
