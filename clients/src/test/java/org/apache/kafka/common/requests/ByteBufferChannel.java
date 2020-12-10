@@ -18,7 +18,9 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.network.TransferableChannel;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 
 public class ByteBufferChannel implements TransferableChannel {
     private final ByteBuffer buf;
@@ -63,5 +65,15 @@ public class ByteBufferChannel implements TransferableChannel {
 
     public ByteBuffer buffer() {
         return buf;
+    }
+
+    @Override
+    public boolean hasPendingWrites() {
+        return false;
+    }
+
+    @Override
+    public long transferFrom(FileChannel fileChannel, long position, long count) throws IOException {
+        return fileChannel.transferTo(position, count, this);
     }
 }

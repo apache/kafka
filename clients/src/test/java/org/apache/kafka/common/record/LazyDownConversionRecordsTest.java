@@ -175,32 +175,42 @@ public class LazyDownConversionRecordsTest {
         }
     }
 
-    private static TransferableChannel toTransferableChannel(FileChannel fileChannel) {
+    private static TransferableChannel toTransferableChannel(FileChannel channel) {
         return new TransferableChannel() {
 
             @Override
+            public boolean hasPendingWrites() {
+                return false;
+            }
+
+            @Override
+            public long transferFrom(FileChannel fileChannel, long position, long count) throws IOException {
+                return fileChannel.transferTo(position, count, channel);
+            }
+
+            @Override
             public boolean isOpen() {
-                return fileChannel.isOpen();
+                return channel.isOpen();
             }
 
             @Override
             public void close() throws IOException {
-                fileChannel.close();
+                channel.close();
             }
 
             @Override
             public int write(ByteBuffer src) throws IOException {
-                return fileChannel.write(src);
+                return channel.write(src);
             }
 
             @Override
             public long write(ByteBuffer[] srcs, int offset, int length) throws IOException {
-                return fileChannel.write(srcs, offset, length);
+                return channel.write(srcs, offset, length);
             }
 
             @Override
             public long write(ByteBuffer[] srcs) throws IOException {
-                return fileChannel.write(srcs);
+                return channel.write(srcs);
             }
         };
     }

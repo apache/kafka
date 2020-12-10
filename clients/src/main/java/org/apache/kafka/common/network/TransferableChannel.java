@@ -29,9 +29,7 @@ public interface TransferableChannel extends GatheringByteChannel {
     /**
      * @return true if there are any pending writes. false if the implementation directly write all data to output.
      */
-    default boolean hasPendingWrites() {
-        return false;
-    }
+    boolean hasPendingWrites();
 
     /**
      * Transfers bytes from `fileChannel` to this `TransferableChannel`.
@@ -47,7 +45,5 @@ public interface TransferableChannel extends GatheringByteChannel {
      * @return The number of bytes, possibly zero, that were actually transferred
      * @see FileChannel#transferTo(long, long, java.nio.channels.WritableByteChannel)
      */
-    default long transferFrom(FileChannel fileChannel, long position, long count) throws IOException {
-        return fileChannel.transferTo(position, count, this);
-    }
+    long transferFrom(FileChannel fileChannel, long position, long count) throws IOException;
 }
