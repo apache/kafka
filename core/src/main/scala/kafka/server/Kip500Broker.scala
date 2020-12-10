@@ -86,7 +86,6 @@ class Kip500Broker(val config: KafkaConfig,
 
   var logDirFailureChannel: LogDirFailureChannel = null
   var logManager: LogManager = null
-  var cleanShutdown: Option[Boolean] = None
 
   var tokenManager: DelegationTokenManager = null
 
@@ -194,12 +193,17 @@ class Kip500Broker(val config: KafkaConfig,
 
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
 
-      /* create log manager, which will perform recovery from unclean shutdown if necessary before returning */
+      // Create log manager, but don't start it because we need to delay any potential unclean shutdown log recovery
+      // until we catch up on the metadata log and have up-to-date topic and broker configs.
       val cleanShutdownCompletableFuture = new CompletableFuture[Boolean]()
+      cleanShutdownCompletableFuture.thenApply[Unit](_ =>
+        // If the shutdown was unclean then transition to the "recovering-from-unclean-shutdown" state;
+        // otherwise remain in the current state ("fenced" by the time this code runs).
+        if (!cleanShutdownCompletableFuture.get()) {
+          brokerLifecycleManager.enqueue(BrokerState.RECOVERING_FROM_UNCLEAN_SHUTDOWN)
+        }
+      )
       logManager = LogManager(config, initialOfflineDirs, cleanShutdownCompletableFuture, kafkaScheduler, time, brokerTopicStats, logDirFailureChannel)
-      cleanShutdown = Some(cleanShutdownCompletableFuture.get())
-      /* start log manager */
-      logManager.startup()
 
       metadataCache = new MetadataCache(config.brokerId)
       // Enable delegation token cache for all SCRAM mechanisms to simplify dynamic update.
@@ -213,9 +217,8 @@ class Kip500Broker(val config: KafkaConfig,
       socketServer = new SocketServer(config, metrics, time, credentialProvider)
       socketServer.startup(startProcessingRequests = false)
 
-      /* start replica manager */
+      // Create replica manager, but don't start it until we've started log manager.
       replicaManager = createReplicaManager(isShuttingDown)
-      replicaManager.startup()
 
       /* start broker-to-controller channel managers */
       val controllerNodeProvider = new RaftControllerNodeProvider(metaLogManager, config.controllerConnectNodes)
@@ -234,20 +237,18 @@ class Kip500Broker(val config: KafkaConfig,
       tokenManager = new DelegationTokenManager(config, tokenCache, time , null)
       tokenManager.startup() // does nothing, we just need a token manager in order to compile right now...
 
-      /* start group coordinator */
+      // Create group coordinator, but don't start it until we've started replica manager.
       // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
       groupCoordinator = GroupCoordinator(config, () => getGroupMetadataTopicPartitionCount(), replicaManager, Time.SYSTEM, metrics)
-      groupCoordinator.startup()
 
-      /* start transaction coordinator, with a separate background thread scheduler for transaction expiration and log loading */
+      // Create transaction coordinator, but don't start it until we've started replica manager.
       // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
       transactionCoordinator = TransactionCoordinator(config, replicaManager, new KafkaScheduler(threads = 1, threadNamePrefix = "transaction-log-manager-"),
         createTemporaryProducerIdManager(), getTransactionTopicPartitionCount,
         metrics, metadataCache, Time.SYSTEM)
-      transactionCoordinator.startup()
 
       /* Add all reconfigurables for config change notification before starting the metadata listener */
-      config.dynamicConfig.addReconfigurables(this.asInstanceOf[Kip500Broker])
+      config.dynamicConfig.addReconfigurables(this)
 
       brokerMetadataListener = new BrokerMetadataListener(
         config, time,
@@ -271,7 +272,7 @@ class Kip500Broker(val config: KafkaConfig,
           .setSecurityProtocol(ep.securityProtocol.id))
       }
       val features = new FeatureCollection()
-      brokerLifecycleManager.start(listeners, features)
+      brokerLifecycleManager.start(listeners, features) // gets us into the "fenced" state
 
       val endPoints = new ArrayBuffer[EndPoint](listeners.size())
       listeners.iterator().forEachRemaining(listener => {
@@ -303,7 +304,8 @@ class Kip500Broker(val config: KafkaConfig,
         new FetchSessionCache(config.maxIncrementalFetchSessionCacheSlots,
           KafkaBroker.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS))
 
-      /* start processing requests */
+      // Start processing requests once we've caught up on the metadata log, recovered logs if necessary,
+      // and started all services that we previously delayed starting.
       val adminManager: LegacyAdminManager = null
       val zkClient: KafkaZkClient = null
       val kafkaController: KafkaController = null
@@ -325,11 +327,22 @@ class Kip500Broker(val config: KafkaConfig,
           1, s"${SocketServer.ControlPlaneMetricPrefix}RequestHandlerAvgIdlePercent", SocketServer.ControlPlaneThreadPrefix)
       }
 
+      // Block until we've caught up on the metadata log
+      brokerMetadataListener.initiallyCaughtUpFuture.get()
+      // Start log manager, which will perform (potentially lengthy) recovery-from-unclean-shutdown if required.
+      logManager.startup()
+      // Start other services that we've delayed starting, in the appropriate order.
+      replicaManager.startup()
+      groupCoordinator.startup()
+      transactionCoordinator.startup()
+
+      // Now start processing requests
       Mx4jLoader.maybeLoad()
 
       socketServer.startProcessingRequests(authorizerFutures)
 
       AppInfoParser.registerAppInfo(metricsPrefix, config.brokerId.toString, metrics, time.milliseconds())
+      brokerLifecycleManager.enqueue(BrokerState.RUNNING)
       info("started")
       maybeChangeStatus(STARTING, STARTED)
     } catch {
@@ -500,18 +513,11 @@ class Kip500Broker(val config: KafkaConfig,
   }
 
   override def currentState(): BrokerState = {
-    if (logManager == null) {
-      // we haven't instantiated log manager yet, so we are either not running or recovering from unclean shutdown
-      if (cleanShutdown.isDefined && !cleanShutdown.get) {
-        BrokerState.RECOVERING_FROM_UNCLEAN_SHUTDOWN
-      } else {
-        BrokerState.NOT_RUNNING
-      }
-    } else if (brokerLifecycleManager == null) {
-      // we've instantiated our log manager but not yet our lifecycle manager, so we are not running
+    if (brokerLifecycleManager == null) {
+      // We have not yet instantiated our lifecycle manager, so we are not running.
       BrokerState.NOT_RUNNING
     } else {
-      // we've instantiated everything, so the lifecycle manager has our current state
+      // We've instantiated it, and it has our current state
       brokerLifecycleManager.brokerState
     }
   }

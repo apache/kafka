@@ -145,9 +145,10 @@ class LogManagerTest {
       logManagerForTest1 = Some(createLogManager(Seq(logDir1, logDir2)))
       assertFalse(Files.exists(new File(logDir1, Log.CleanShutdownFile).toPath))
       assertFalse(Files.exists(new File(logDir2, Log.CleanShutdownFile).toPath))
+      assertFalse(logManagerForTest1.get.cleanShutdownCompletableFuture.isDone)
+      logManagerForTest1.get.startup()
       assertTrue(logManagerForTest1.get.cleanShutdownCompletableFuture.isDone)
       assertFalse(logManagerForTest1.get.cleanShutdownCompletableFuture.get())
-      logManagerForTest1.get.startup()
       val log1 = logManagerForTest1.get.getOrCreateLog(new TopicPartition(name, 0), () => logConfig)
       val log2 = logManagerForTest1.get.getOrCreateLog(new TopicPartition(name, 1), () => logConfig)
       val logFile1 = new File(logDir1, name + "-0")
@@ -168,16 +169,20 @@ class LogManagerTest {
       assertTrue(Files.exists(new File(logDir1, Log.CleanShutdownFile).toPath))
       assertTrue(Files.exists(new File(logDir2, Log.CleanShutdownFile).toPath))
       logManagerForTest2 = Some(createLogManager(Seq(logDir1, logDir2)))
+      assertFalse(logManagerForTest2.get.cleanShutdownCompletableFuture.isDone)
+      logManagerForTest2.get.startup()
       assertTrue(logManagerForTest2.get.cleanShutdownCompletableFuture.isDone)
       assertTrue(logManagerForTest2.get.cleanShutdownCompletableFuture.get())
-      logManagerForTest2.get.startup()
       logManagerForTest2.get.shutdown()
 
       // now delete the file indicating a clean shutdown and make sure we get false for completion on a new manager's future
       FileUtils.forceDelete(new File(logDir2, Log.CleanShutdownFile))
       logManagerForTest3 = Some(createLogManager(Seq(logDir1, logDir2)))
+      assertFalse(logManagerForTest3.get.cleanShutdownCompletableFuture.isDone)
+      logManagerForTest3.get.startup()
       assertTrue(logManagerForTest3.get.cleanShutdownCompletableFuture.isDone)
       assertFalse(logManagerForTest3.get.cleanShutdownCompletableFuture.get())
+      logManagerForTest3.get.shutdown()
     } finally {
       logManagerForTest1.foreach(manager => manager.liveLogDirs.foreach(Utils.delete))
     }

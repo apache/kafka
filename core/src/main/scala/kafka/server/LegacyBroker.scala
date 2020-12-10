@@ -344,7 +344,7 @@ class LegacyBroker(val config: KafkaConfig,
         Mx4jLoader.maybeLoad()
 
         /* Add all reconfigurables for config change notification before starting config handlers */
-        config.dynamicConfig.addReconfigurables(this.asInstanceOf[LegacyBroker])
+        config.dynamicConfig.addReconfigurables(this)
 
         /* start dynamic config manager */
         dynamicConfigHandlers = Map[String, ConfigHandler](ConfigType.Topic -> new TopicConfigHandler(logManager, config, quotaManagers, Some(kafkaController.enableTopicUncleanLeaderElection)),

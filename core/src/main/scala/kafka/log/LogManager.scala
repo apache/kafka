@@ -116,8 +116,6 @@ class LogManager(logDirs: Seq[File],
     logDirsSet
   }
 
-  loadLogs()
-
   private[kafka] val cleaner: LogCleaner =
     if (cleanerConfig.enableCleaner)
       new LogCleaner(cleanerConfig, liveLogDirs, currentLogs, logDirFailureChannel, time = time)
@@ -405,6 +403,8 @@ class LogManager(logDirs: Seq[File],
    *  Start the background threads to flush logs and do log cleanup
    */
   def startup(): Unit = {
+    loadLogs() // this could take a while if shutdown was not clean
+
     /* Schedule the cleanup task to delete old logs */
     if (scheduler != null) {
       info("Starting log cleanup with a period of %d ms.".format(retentionCheckMs))
