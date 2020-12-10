@@ -16,10 +16,8 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.util.Optional;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData;
-import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopicCollection;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
@@ -27,7 +25,6 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetFo
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.RecordBatch;
 
 import java.nio.ByteBuffer;
 
