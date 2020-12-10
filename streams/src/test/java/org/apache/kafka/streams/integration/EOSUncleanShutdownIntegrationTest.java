@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -98,7 +99,6 @@ public class EOSUncleanShutdownIntegrationTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void shouldWorkWithUncleanShutdownWipeOutStateStore() throws InterruptedException {
         final String appId = "shouldWorkWithUncleanShutdownWipeOutStateStore";
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
@@ -134,7 +134,6 @@ public class EOSUncleanShutdownIntegrationTest {
         ));
         final KafkaStreams driver =  new KafkaStreams(builder.build(), STREAMS_CONFIG);
         driver.cleanUp();
-        driver.setUncaughtExceptionHandler((t, e) -> { });
         driver.start();
 
         final File stateDir = new File(String.join("/", TEST_FOLDER.getRoot().getPath(), appId, "0_0"));
@@ -153,6 +152,8 @@ public class EOSUncleanShutdownIntegrationTest {
             TestUtils.waitForCondition(() -> recordCount.get() == RECORD_TOTAL,
                 "Expected " + RECORD_TOTAL + " records processed but only got " + recordCount.get());
         } finally {
+            TestUtils.waitForCondition(() -> driver.state().equals(State.ERROR),
+                    "Expected ERROR state but driver is on " + driver.state());
             driver.close();
 
             // the state directory should still exist with the empty checkpoint file
