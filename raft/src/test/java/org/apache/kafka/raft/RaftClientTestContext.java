@@ -90,6 +90,7 @@ public final class RaftClientTestContext {
     final int retryBackoffMs = Builder.RETRY_BACKOFF_MS;
 
     private final QuorumStateStore quorumStateStore;
+    private final QuorumState quorum;
     final int localId;
     public final KafkaRaftClient<String> client;
     final Metrics metrics;
@@ -219,6 +220,7 @@ public final class RaftClientTestContext {
                 channel,
                 time,
                 quorumStateStore,
+                quorum,
                 voters,
                 metrics,
                 listener
@@ -233,6 +235,7 @@ public final class RaftClientTestContext {
         MockNetworkChannel channel,
         MockTime time,
         QuorumStateStore quorumStateStore,
+        QuorumState quorum,
         Set<Integer> voters,
         Metrics metrics,
         MockListener listener
@@ -243,6 +246,7 @@ public final class RaftClientTestContext {
         this.channel = channel;
         this.time = time;
         this.quorumStateStore = quorumStateStore;
+        this.quorum = quorum;
         this.voters = voters;
         this.metrics = metrics;
         this.listener = listener;
@@ -364,6 +368,11 @@ public final class RaftClientTestContext {
 
     void assertUnknownLeader(int epoch) throws IOException {
         assertEquals(ElectionState.withUnknownLeader(epoch, voters), quorumStateStore.readElectionState());
+    }
+
+    void assertResignedLeader(int epoch, int leaderId) throws IOException {
+        assertTrue(quorum.isResigned());
+        assertEquals(ElectionState.withElectedLeader(epoch, leaderId, voters), quorumStateStore.readElectionState());
     }
 
     int assertSentDescribeQuorumResponse(int leaderId,
