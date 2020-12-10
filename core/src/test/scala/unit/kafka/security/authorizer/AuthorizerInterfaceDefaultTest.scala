@@ -87,43 +87,43 @@ class AuthorizerInterfaceDefaultTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testAuthorizeAnyMultipleAddAndRemoveInterfaceDefault(): Unit = {
-    authorizerTestFactory.testAuthorizeAnyMultipleAddAndRemove(interfaceDefaultAuthorizer)
+  def testAuthorizeByResourceTypeMultipleAddAndRemoveInterfaceDefault(): Unit = {
+    authorizerTestFactory.testAuthorizeByResourceTypeMultipleAddAndRemove(interfaceDefaultAuthorizer)
   }
 
   @Test
-  def testAuthorizeAnyUnrelatedDenyWontDominateAllowInterfaceDefault(): Unit = {
-    authorizerTestFactory.testAuthorizeAnyIsolationUnrelatedDenyWontDominateAllow(interfaceDefaultAuthorizer)
+  def testAuthorizeByResourceTypeUnrelatedDenyWontDominateAllowInterfaceDefault(): Unit = {
+    authorizerTestFactory.testAuthorizeByResourceTypeIsolationUnrelatedDenyWontDominateAllow(interfaceDefaultAuthorizer)
   }
 
   @Test
-  def testAuthorizeAnyDenyTakesPrecedenceInterfaceDefault(): Unit = {
-    authorizerTestFactory.testAuthorizeAnyDenyTakesPrecedence(interfaceDefaultAuthorizer)
+  def testAuthorizeByResourceTypeDenyTakesPrecedenceInterfaceDefault(): Unit = {
+    authorizerTestFactory.testAuthorizeByResourceTypeDenyTakesPrecedence(interfaceDefaultAuthorizer)
   }
 
   @Test
-  def testAuthorizeAnyWildcardResourceDenyDominateInterfaceDefault(): Unit = {
-    authorizerTestFactory.testAuthorizeAnyWildcardResourceDenyDominate(interfaceDefaultAuthorizer)
+  def testAuthorizeByResourceTypeWildcardResourceDenyDominateInterfaceDefault(): Unit = {
+    authorizerTestFactory.testAuthorizeByResourceTypeWildcardResourceDenyDominate(interfaceDefaultAuthorizer)
   }
 
   @Test
-  def testAuthorizeAnyPrefixedDenyDominateInterfaceDefault(): Unit = {
-    authorizerTestFactory.testAuthorizeAnyPrefixedResourceDenyDominate(interfaceDefaultAuthorizer)
+  def testAuthorizeByResourceTypePrefixedDenyDominateInterfaceDefault(): Unit = {
+    authorizerTestFactory.testAuthorizeByResourceTypePrefixedResourceDenyDominate(interfaceDefaultAuthorizer)
   }
 
   @Test
-  def testAuthorizeAnyWithAllOperationAceInterfaceDefault(): Unit = {
-    authorizerTestFactory.testAuthorizeAnyWithAllOperationAce(interfaceDefaultAuthorizer)
+  def testAuthorizeByResourceTypeWithAllOperationAceInterfaceDefault(): Unit = {
+    authorizerTestFactory.testAuthorizeByResourceTypeWithAllOperationAce(interfaceDefaultAuthorizer)
   }
 
   @Test
-  def testAuthorizeAnyWithAllHostAceInterfaceDefault(): Unit = {
-    authorizerTestFactory.testAuthorizeAnyWithAllHostAce(interfaceDefaultAuthorizer)
+  def testAuthorizeByResourceTypeWithAllHostAceInterfaceDefault(): Unit = {
+    authorizerTestFactory.testAuthorizeByResourceTypeWithAllHostAce(interfaceDefaultAuthorizer)
   }
 
   @Test
-  def testAuthorizeAnyWithAllPrincipalAceInterfaceDefault(): Unit = {
-    authorizerTestFactory.testAuthorizeAnyWithAllPrincipalAce(interfaceDefaultAuthorizer)
+  def testAuthorizeByResourceTypeWithAllPrincipalAceInterfaceDefault(): Unit = {
+    authorizerTestFactory.testAuthorizeByResourceTypeWithAllPrincipalAce(interfaceDefaultAuthorizer)
   }
 
   private def newRequestContext(principal: KafkaPrincipal, clientAddress: InetAddress, apiKey: ApiKeys = ApiKeys.PRODUCE): RequestContext = {

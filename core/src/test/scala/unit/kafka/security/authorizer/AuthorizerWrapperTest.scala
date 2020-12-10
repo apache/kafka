@@ -54,7 +54,7 @@ import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
-class AclAuthorizerTest extends ZooKeeperTestHarness {
+class AclWrapperTest extends ZooKeeperTestHarness {
 
   private val allowReadAcl = new AccessControlEntry(WildcardPrincipalString, WildcardHost, READ, ALLOW)
   private val allowWriteAcl = new AccessControlEntry(WildcardPrincipalString, WildcardHost, WRITE, ALLOW)
@@ -193,7 +193,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   /**
-    CustomPrincipals should be compared with their principal type and name
+  CustomPrincipals should be compared with their principal type and name
    */
   @Test
   def testAllowAccessWithCustomPrincipal(): Unit = {
@@ -254,7 +254,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   /**
-    CustomPrincipals should be compared with their principal type and name
+  CustomPrincipals should be compared with their principal type and name
    */
   @Test
   def testSuperUserWithCustomPrincipalHasAccess(): Unit = {
@@ -501,8 +501,8 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   /**
-    * Test ACL inheritance, as described in #{org.apache.kafka.common.acl.AclOperation}
-    */
+   * Test ACL inheritance, as described in #{org.apache.kafka.common.acl.AclOperation}
+   */
   @Test
   def testAclInheritance(): Unit = {
     testImplicationsOfAllow(AclOperation.ALL, Set(READ, WRITE, CREATE, DELETE, ALTER, DESCRIBE,
@@ -867,12 +867,12 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     assertTrue(zkClientConfig.isDefined)
     // confirm we get all the values we expect
     KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.foreach(prop => prop match {
-        case KafkaConfig.ZkSslClientEnableProp | KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp =>
-          assertEquals("true", KafkaConfig.getZooKeeperClientProperty(zkClientConfig.get, prop).getOrElse("<None>"))
-        case KafkaConfig.ZkSslCrlEnableProp | KafkaConfig.ZkSslOcspEnableProp =>
-          assertEquals("false", KafkaConfig.getZooKeeperClientProperty(zkClientConfig.get, prop).getOrElse("<None>"))
-        case _ => assertEquals(kafkaValue, KafkaConfig.getZooKeeperClientProperty(zkClientConfig.get, prop).getOrElse("<None>"))
-      })
+      case KafkaConfig.ZkSslClientEnableProp | KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp =>
+        assertEquals("true", KafkaConfig.getZooKeeperClientProperty(zkClientConfig.get, prop).getOrElse("<None>"))
+      case KafkaConfig.ZkSslCrlEnableProp | KafkaConfig.ZkSslOcspEnableProp =>
+        assertEquals("false", KafkaConfig.getZooKeeperClientProperty(zkClientConfig.get, prop).getOrElse("<None>"))
+      case _ => assertEquals(kafkaValue, KafkaConfig.getZooKeeperClientProperty(zkClientConfig.get, prop).getOrElse("<None>"))
+    })
   }
 
   @Test
