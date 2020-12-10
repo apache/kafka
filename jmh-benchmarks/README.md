@@ -28,7 +28,7 @@ Run a specific test and override the number of forks, iterations and warm-up ite
 
 Run a specific test with async and GC profilers on Linux and flame graph output:
 
-    ./jmh-benchmarks/jmh.sh -prof gc -prof 'async:libPath=/path/to/async-profiler.so;output=flamegraph' LRUCacheBenchmark
+    ./jmh-benchmarks/jmh.sh -prof gc -prof async:libPath=/path/to/libasyncProfiler.so\;output=flamegraph LRUCacheBenchmark
 
 The following sections cover async profiler and GC profilers in more detail.
 
@@ -37,11 +37,11 @@ The following sections cover async profiler and GC profilers in more detail.
 It's good practice to check profiler output for microbenchmarks in order to verify that they are valid.
 JMH includes [async-profiler](https://github.com/jvm-profiling-tools/async-profiler) integration that makes this easy:
 
-    ./jmh-benchmarks/jmh.sh -prof async:libPath=/path/to/async-profiler.so
+    ./jmh-benchmarks/jmh.sh -prof async:libPath=/path/to/libasyncProfiler.so
 
-With flame graph output (single quotes are required to ensure the semicolon is not treated as a command separator):
+With flame graph output (the semicolon is escaped to ensure it is not treated as a command separator):
 
-    ./jmh-benchmarks/jmh.sh -prof 'async:libPath=/path/to/async-profiler.so;output=flamegraph'
+    ./jmh-benchmarks/jmh.sh -prof async:libPath=/path/to/libasyncProfiler.so\;output=flamegraph
 
 A number of arguments can be passed to configure async profiler, run the following for a description:
 
