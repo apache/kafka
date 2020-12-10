@@ -24,11 +24,7 @@
       "about": "Duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
       "about": "The error code, or 0 if there was no error." },
-    { "name": "ActiveControllerId", "type": "int32", "versions": "0+",
-      "about": "The ID of the active controller, or -1 if the controller doesn't know." },
     { "name": "NextState", "type": "int8", "versions": "0+",
-      "about": "The state to which the broker should transition." },
-    { "name": "LeaseDurationMs", "type": "int64", "versions": "0+",
-      "about": "If BrokerEpoch is not -1, the number of milliseconds that we want the lease to last" }
+      "about": "The state to which the broker should transition." }
   ]
 }

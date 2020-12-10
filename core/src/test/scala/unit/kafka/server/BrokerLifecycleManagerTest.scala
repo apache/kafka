@@ -96,10 +96,8 @@ class BrokerLifecycleManagerTest {
       new IAnswer[Unit]() {
         override def answer(): Unit = {
           val response = new BrokerRegistrationResponseData()
-            .setActiveControllerId(activeControllerID)
             .setBrokerEpoch(registrationEpoch)
             .setErrorCode(Errors.NONE.code())
-            .setLeaseDurationMs(TimeUnit.SECONDS.toMillis(leaseDuration))
             .setThrottleTimeMs(0)
           val clientResponse = new ClientResponse(
             null, null, null,
@@ -686,10 +684,8 @@ class BrokerLifecycleManagerTest {
       new IAnswer[Unit]() {
         override def answer(): Unit = {
           val response = new BrokerRegistrationResponseData()
-            .setActiveControllerId(activeControllerID)
             .setBrokerEpoch(1)
             .setErrorCode(Errors.NONE.code())
-            .setLeaseDurationMs(TimeUnit.SECONDS.toMillis(leaseDuration))
             .setThrottleTimeMs(0)
           val clientResponse = new ClientResponse(
             null, null, null,
@@ -738,10 +734,8 @@ class BrokerLifecycleManagerTest {
       new IAnswer[Unit]() {
         override def answer(): Unit = {
           val response = new BrokerRegistrationResponseData()
-            .setActiveControllerId(activeControllerID)
             .setBrokerEpoch(1)
             .setErrorCode(Errors.NONE.code())
-            .setLeaseDurationMs(TimeUnit.SECONDS.toMillis(leaseDuration))
             .setThrottleTimeMs(0)
           val clientResponse = new ClientResponse(
             null, null, null,
@@ -789,10 +783,8 @@ class BrokerLifecycleManagerTest {
       new IAnswer[Unit]() {
         override def answer(): Unit = {
           val response = new BrokerRegistrationResponseData()
-            .setActiveControllerId(activeControllerID)
             .setBrokerEpoch(1)
             .setErrorCode(Errors.NONE.code())
-            .setLeaseDurationMs(TimeUnit.SECONDS.toMillis(leaseDuration))
             .setThrottleTimeMs(0)
           val clientResponse = new ClientResponse(
             null, null, null,
@@ -885,10 +877,8 @@ class BrokerLifecycleManagerTest {
       new IAnswer[Unit]() {
         override def answer(): Unit = {
           val response = new BrokerRegistrationResponseData()
-            .setActiveControllerId(activeControllerID)
             .setBrokerEpoch(1)
             .setErrorCode(Errors.DUPLICATE_BROKER_REGISTRATION.code())
-            .setLeaseDurationMs(TimeUnit.SECONDS.toMillis(leaseDuration))
             .setThrottleTimeMs(0)
           val clientResponse = new ClientResponse(
             null, null, null,
