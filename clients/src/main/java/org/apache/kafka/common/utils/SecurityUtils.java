@@ -150,7 +150,7 @@ public class SecurityUtils {
     }
 
     public static void authorizeByResourceTypeCheckArgs(AclOperation op,
-                                                         ResourceType type) {
+                                                        ResourceType type) {
         if (type == ResourceType.ANY) {
             throw new IllegalArgumentException(
                 "Must specify a non-filter resource type for authorizeByResourceType");

@@ -1611,7 +1611,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @Test
   def testIdempotentProducerNoIdempotentWriteAclInInitProducerId(): Unit = {
     createTopic(topic)
-    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)), topicResource)
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), topicResource)
     shouldIdempotentProducerFailInInitProducerId(true)
   }
 
@@ -1799,7 +1799,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testAuthorizeAnyMultipleAddAndRemove(): Unit = {
+  def testAuthorizeByResourceTypeMultipleAddAndRemove(): Unit = {
     createTopic(topic)
 
     for (_ <- 1 to 3) {
@@ -1816,7 +1816,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testAuthorizeAnyIsolationUnrelatedDenyWontDominateAllow(): Unit = {
+  def testAuthorizeByResourceTypeIsolationUnrelatedDenyWontDominateAllow(): Unit = {
     createTopic(topic)
     createTopic("topic-2")
     createTopic("to")
@@ -1838,7 +1838,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testAuthorizeAnyDenyTakesPrecedence(): Unit = {
+  def testAuthorizeByResourceTypeDenyTakesPrecedence(): Unit = {
     createTopic(topic)
     val allowWriteAce = new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)
     addAndVerifyAcls(Set(allowWriteAce), topicResource)
@@ -1850,7 +1850,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testAuthorizeAnyWildcardResourceDenyDominate(): Unit = {
+  def testAuthorizeByResourceTypeWildcardResourceDenyDominate(): Unit = {
     createTopic(topic)
     val wildcard = new ResourcePattern(TOPIC, ResourcePattern.WILDCARD_RESOURCE, LITERAL)
     val prefixed = new ResourcePattern(TOPIC, "t", PREFIXED)
@@ -1867,7 +1867,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testAuthorizeAnyPrefixedResourceDenyDominate(): Unit = {
+  def testAuthorizeByResourceTypePrefixedResourceDenyDominate(): Unit = {
     createTopic(topic)
     val prefixed = new ResourcePattern(TOPIC, topic.substring(0, 1), PREFIXED)
     val literal = new ResourcePattern(TOPIC, topic, LITERAL)
