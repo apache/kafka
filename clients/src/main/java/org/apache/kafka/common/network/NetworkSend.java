@@ -37,7 +37,7 @@ public class NetworkSend implements Send {
     }
 
     @Override
-    public long writeTo(WritableChannel channel) throws IOException {
+    public long writeTo(TransferableChannel channel) throws IOException {
         return send.writeTo(channel);
     }
 

@@ -75,7 +75,7 @@ public class NioEchoServer extends Thread {
     private final List<SocketChannel> socketChannels;
     private final AcceptorThread acceptorThread;
     private final Selector selector;
-    private volatile WritableChannel outputChannel;
+    private volatile TransferableChannel outputChannel;
     private final CredentialCache credentialCache;
     private final Metrics metrics;
     private volatile int numSent = 0;
@@ -275,7 +275,7 @@ public class NioEchoServer extends Thread {
      * the responses (eg. testing graceful close).
      */
     public void outputChannel(WritableByteChannel channel) {
-        this.outputChannel = new WritableChannel() {
+        this.outputChannel = new TransferableChannel() {
             @Override
             public boolean hasPendingWrites() {
                 return false;

@@ -17,7 +17,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.network.WritableChannel;
+import org.apache.kafka.common.network.TransferableChannel;
 import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Time;
@@ -269,7 +269,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     @Override
-    public long writeTo(WritableChannel destChannel, long offset, int length) throws IOException {
+    public long writeTo(TransferableChannel destChannel, long offset, int length) throws IOException {
         long newSize = Math.min(channel.size(), end) - start;
         int oldSize = sizeInBytes();
         if (newSize < oldSize)

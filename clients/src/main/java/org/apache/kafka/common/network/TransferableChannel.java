@@ -20,7 +20,11 @@ import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.GatheringByteChannel;
 
-public interface WritableChannel extends GatheringByteChannel {
+/**
+ * TransportLayer is a fat interface so it is a bit weird to use TransportLayer in write-only path.
+ * Hence, we extract all write-related methods from TransportLayer to be a new interface - TransferableChannel
+ */
+public interface TransferableChannel extends GatheringByteChannel {
 
     /**
      * @return true if there are any pending writes

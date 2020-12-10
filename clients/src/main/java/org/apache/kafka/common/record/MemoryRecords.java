@@ -19,7 +19,7 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.message.LeaderChangeMessage;
-import org.apache.kafka.common.network.WritableChannel;
+import org.apache.kafka.common.network.TransferableChannel;
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention;
 import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
@@ -64,7 +64,7 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     @Override
-    public long writeTo(WritableChannel channel, long position, int length) throws IOException {
+    public long writeTo(TransferableChannel channel, long position, int length) throws IOException {
         if (position > Integer.MAX_VALUE)
             throw new IllegalArgumentException("position should not be greater than Integer.MAX_VALUE: " + position);
         if (position + length > buffer.limit())

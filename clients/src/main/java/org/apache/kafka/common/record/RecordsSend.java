@@ -17,7 +17,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.network.Send;
-import org.apache.kafka.common.network.WritableChannel;
+import org.apache.kafka.common.network.TransferableChannel;
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -43,7 +43,7 @@ public abstract class RecordsSend<T extends BaseRecords> implements Send {
     }
 
     @Override
-    public final long writeTo(WritableChannel channel) throws IOException {
+    public final long writeTo(TransferableChannel channel) throws IOException {
         long written = 0;
 
         if (remaining > 0) {
@@ -75,10 +75,10 @@ public abstract class RecordsSend<T extends BaseRecords> implements Send {
      * the to maximum bytes we want to write the to `channel`. `previouslyWritten` and `remaining` will be adjusted
      * appropriately for every subsequent invocation. See {@link #writeTo} for example expected usage.
      * @param channel The channel to write to
-     * @param previouslyWritten Bytes written in previous calls to {@link #writeTo(WritableChannel, long, int)}; 0 if being called for the first time
+     * @param previouslyWritten Bytes written in previous calls to {@link #writeTo(TransferableChannel, long, int)}; 0 if being called for the first time
      * @param remaining Number of bytes remaining to be written
      * @return The number of bytes actually written
      * @throws IOException For any IO errors
      */
-    protected abstract long writeTo(WritableChannel channel, long previouslyWritten, int remaining) throws IOException;
+    protected abstract long writeTo(TransferableChannel channel, long previouslyWritten, int remaining) throws IOException;
 }

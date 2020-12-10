@@ -32,7 +32,7 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.security.Principal;
 
-public interface TransportLayer extends ScatteringByteChannel, WritableChannel {
+public interface TransportLayer extends ScatteringByteChannel, TransferableChannel {
 
     /**
      * Returns true if the channel has handshake and authentication done.

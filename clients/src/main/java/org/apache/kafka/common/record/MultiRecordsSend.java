@@ -19,7 +19,7 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.network.Send;
-import org.apache.kafka.common.network.WritableChannel;
+import org.apache.kafka.common.network.TransferableChannel;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -83,7 +83,7 @@ public class MultiRecordsSend implements Send {
     }
 
     @Override
-    public long writeTo(WritableChannel channel) throws IOException {
+    public long writeTo(TransferableChannel channel) throws IOException {
         if (completed())
             throw new KafkaException("This operation cannot be invoked on a complete request.");
 

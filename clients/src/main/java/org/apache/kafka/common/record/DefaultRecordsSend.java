@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.record;
 
-import org.apache.kafka.common.network.WritableChannel;
+import org.apache.kafka.common.network.TransferableChannel;
 
 import java.io.IOException;
 
@@ -30,7 +30,7 @@ public class DefaultRecordsSend extends RecordsSend<Records> {
     }
 
     @Override
-    protected long writeTo(WritableChannel channel, long previouslyWritten, int remaining) throws IOException {
+    protected long writeTo(TransferableChannel channel, long previouslyWritten, int remaining) throws IOException {
         return records().writeTo(channel, previouslyWritten, remaining);
     }
 }

@@ -18,7 +18,7 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
-import org.apache.kafka.common.network.WritableChannel;
+import org.apache.kafka.common.network.TransferableChannel;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -67,7 +67,7 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
     }
 
     @Override
-    public long writeTo(WritableChannel channel, long previouslyWritten, int remaining) throws IOException {
+    public long writeTo(TransferableChannel channel, long previouslyWritten, int remaining) throws IOException {
         if (convertedRecordsWriter == null || convertedRecordsWriter.completed()) {
             MemoryRecords convertedRecords;
 
