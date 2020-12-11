@@ -92,7 +92,7 @@ public class SyncGroupRequest extends AbstractRequest {
     }
 
     @Override
-    protected SyncGroupRequestData data() {
+    public SyncGroupRequestData data() {
         return data;
     }
 }

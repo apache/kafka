@@ -52,6 +52,7 @@ public class DeleteTopicsRequest extends AbstractRequest {
         this.data = data;
     }
 
+    @Override
     public DeleteTopicsRequestData data() {
         return data;
     }

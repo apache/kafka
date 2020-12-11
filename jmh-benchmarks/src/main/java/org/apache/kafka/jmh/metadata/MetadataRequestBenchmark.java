@@ -21,6 +21,7 @@ import kafka.controller.KafkaController;
 import kafka.coordinator.group.GroupCoordinator;
 import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
+import kafka.network.RequestConvertToJson;
 import kafka.server.AdminManager;
 import kafka.server.BrokerFeatures;
 import kafka.server.BrokerTopicStats;
@@ -216,6 +217,6 @@ public class MetadataRequestBenchmark {
 
     @Benchmark
     public String testRequestToJson() {
-        return allTopicMetadataRequest.requestDesc().toString();
+        return RequestConvertToJson.requestDesc(allTopicMetadataRequest.header(), allTopicMetadataRequest.requestLog(), allTopicMetadataRequest.isForwarded()).toString();
     }
 }

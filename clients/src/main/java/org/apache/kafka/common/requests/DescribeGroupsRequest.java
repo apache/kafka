@@ -52,6 +52,7 @@ public class DescribeGroupsRequest extends AbstractRequest {
         this.data = data;
     }
 
+    @Override
     public DescribeGroupsRequestData data() {
         return data;
     }

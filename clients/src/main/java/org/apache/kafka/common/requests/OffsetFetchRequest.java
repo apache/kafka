@@ -175,7 +175,7 @@ public class OffsetFetchRequest extends AbstractRequest {
     }
 
     @Override
-    protected OffsetFetchRequestData data() {
+    public OffsetFetchRequestData data() {
         return data;
     }
 }

@@ -38,6 +38,7 @@ public class RenewDelegationTokenRequest extends AbstractRequest {
             new ByteBufferAccessor(buffer), version), version);
     }
 
+    @Override
     public RenewDelegationTokenRequestData data() {
         return data;
     }

@@ -67,6 +67,7 @@ public class UpdateFeaturesResponse extends AbstractResponse {
         return data.toString();
     }
 
+    @Override
     public UpdateFeaturesResponseData data() {
         return data;
     }

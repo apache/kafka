@@ -99,6 +99,12 @@ object RequestChannel extends Logging {
 
     private val bodyAndSize: RequestAndSize = context.parseRequest(buffer)
 
+    // This is constructed on creation of a Request so that the JSON representation is computed before the request is
+    // processed by the api layer. Otherwise, a ProduceRequest can occur without its data (ie. it goes into purgatory).
+    val requestLog: Option[JsonNode] =
+      if (RequestChannel.isRequestLoggingEnabled) Some(RequestConvertToJson.request(loggableRequest))
+      else None
+
     def header: RequestHeader = context.header
 
     def sizeOfBodyInBytes: Int = bodyAndSize.size
@@ -125,13 +131,6 @@ object RequestChannel extends Logging {
       }
     }
 
-    def requestLog: Option[JsonNode] = {
-      if (RequestChannel.isRequestLoggingEnabled)
-        Some(RequestConvertToJson.request(loggableRequest))
-      else
-        None
-    }
-
     def responseNode(response: AbstractResponse): Option[JsonNode] = {
       if (RequestChannel.isRequestLoggingEnabled)
         Some(RequestConvertToJson.response(response, context.apiVersion()))
@@ -148,8 +147,11 @@ object RequestChannel extends Logging {
       }
     }
 
-    def requestDesc: JsonNode = {
-      RequestConvertToJson.requestDesc(header, requestLog, envelope)
+    def requestDesc(details: Boolean): String = {
+      val forwardDescription = envelope.map { request =>
+        s"Forwarded request: ${request.context} "
+      }.getOrElse("")
+      s"$forwardDescription$header -- ${loggableRequest.toString(details)}"
     }
 
     def body[T <: AbstractRequest](implicit classTag: ClassTag[T], @nowarn("cat=unused") nn: NotNothing[T]): T = {
@@ -206,7 +208,7 @@ object RequestChannel extends Logging {
       }
     }
 
-    trace(s"Processor $processor received request: $requestDesc")
+    trace(s"Processor $processor received request: ${RequestConvertToJson.requestDesc(header, requestLog, isForwarded)}")
 
     def requestThreadTimeNanos: Long = {
       if (apiLocalCompleteTimeNanos == -1L) apiLocalCompleteTimeNanos = Time.SYSTEM.nanoseconds
@@ -268,7 +270,7 @@ object RequestChannel extends Logging {
 
       if (isRequestLoggingEnabled) {
         val desc = RequestConvertToJson.requestDescMetrics(header, requestLog, response.responseLog,
-          context, session,
+          context, session, isForwarded,
           totalTimeMs, requestQueueTimeMs, apiLocalTimeMs,
           apiRemoteTimeMs, apiThrottleTimeMs, responseQueueTimeMs,
           responseSendTimeMs, temporaryMemoryBytes,

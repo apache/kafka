@@ -50,6 +50,7 @@ public class CreateTopicsResponse extends AbstractResponse {
         this.data = data;
     }
 
+    @Override
     public CreateTopicsResponseData data() {
         return data;
     }

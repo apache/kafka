@@ -44,7 +44,7 @@ public class RenewDelegationTokenResponse extends AbstractResponse {
     }
 
     @Override
-    protected RenewDelegationTokenResponseData data() {
+    public RenewDelegationTokenResponseData data() {
         return data;
     }
 

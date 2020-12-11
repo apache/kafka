@@ -34,7 +34,7 @@ public class CreateAclsResponse extends AbstractResponse {
     }
 
     @Override
-    protected CreateAclsResponseData data() {
+    public CreateAclsResponseData data() {
         return data;
     }
 

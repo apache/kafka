@@ -48,7 +48,7 @@ public class SyncGroupResponse extends AbstractResponse {
     }
 
     @Override
-    protected SyncGroupResponseData data() {
+    public SyncGroupResponseData data() {
         return data;
     }
 

@@ -52,7 +52,7 @@ public class OffsetDeleteResponse extends AbstractResponse {
     }
 
     @Override
-    protected OffsetDeleteResponseData data() {
+    public OffsetDeleteResponseData data() {
         return data;
     }
 

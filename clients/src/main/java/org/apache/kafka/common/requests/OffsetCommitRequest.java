@@ -73,6 +73,7 @@ public class OffsetCommitRequest extends AbstractRequest {
         this.data = data;
     }
 
+    @Override
     public OffsetCommitRequestData data() {
         return data;
     }

@@ -111,7 +111,7 @@ public class AlterClientQuotasRequest extends AbstractRequest {
     }
 
     @Override
-    protected AlterClientQuotasRequestData data() {
+    public AlterClientQuotasRequestData data() {
         return data;
     }
 

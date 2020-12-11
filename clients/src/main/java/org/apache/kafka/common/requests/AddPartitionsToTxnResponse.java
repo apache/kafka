@@ -89,10 +89,6 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
                         .setResults(topicCollection);
     }
 
-    public AddPartitionsToTxnResponseData data() {
-        return data;
-    }
-
     @Override
     public int throttleTimeMs() {
         return data.throttleTimeMs();
@@ -121,7 +117,7 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
     }
 
     @Override
-    protected AddPartitionsToTxnResponseData data() {
+    public AddPartitionsToTxnResponseData data() {
         return data;
     }
 

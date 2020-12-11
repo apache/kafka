@@ -40,6 +40,7 @@ public class AlterPartitionReassignmentsResponse extends AbstractResponse {
             new AlterPartitionReassignmentsResponseData(new ByteBufferAccessor(buffer), version));
     }
 
+    @Override
     public AlterPartitionReassignmentsResponseData data() {
         return data;
     }

@@ -1095,7 +1095,7 @@ class SocketServerTest {
 
       val requestMetrics = channel.metrics(request.header.apiKey.name)
       def totalTimeHistCount(): Long = requestMetrics.totalTimeHist.count
-      val send = new NetworkSend(request.context.connectionId, ByteBuffer.allocate(responseBufferSize))
+      val send = new NetworkSend(request.context.connectionId, ByteBufferSend.sizePrefixed(ByteBuffer.allocate(responseBufferSize)))
       val headerLog = new ObjectNode(JsonNodeFactory.instance)
       headerLog.set("response", new TextNode("someResponse"))
       channel.sendResponse(new RequestChannel.SendResponse(request, send, Some(headerLog), None))

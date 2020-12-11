@@ -63,7 +63,7 @@ public class DescribeQuorumResponse extends AbstractResponse {
     }
 
     @Override
-    protected DescribeQuorumResponseData data() {
+    public DescribeQuorumResponseData data() {
         return data;
     }
 

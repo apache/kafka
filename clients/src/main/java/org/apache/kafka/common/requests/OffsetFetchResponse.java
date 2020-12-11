@@ -176,10 +176,6 @@ public class OffsetFetchResponse extends AbstractResponse {
         return Errors.NONE;
     }
 
-    public OffsetFetchResponseData data() {
-        return data;
-    }
-
     @Override
     public int throttleTimeMs() {
         return data.throttleTimeMs();
@@ -223,7 +219,7 @@ public class OffsetFetchResponse extends AbstractResponse {
     }
 
     @Override
-    protected OffsetFetchResponseData data() {
+    public OffsetFetchResponseData data() {
         return data;
     }
 

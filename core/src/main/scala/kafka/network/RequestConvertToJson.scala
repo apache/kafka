@@ -18,9 +18,8 @@
 package kafka.network
 
 import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.node.{BooleanNode, DoubleNode, IntNode, JsonNodeFactory, LongNode, ObjectNode, TextNode}
+import com.fasterxml.jackson.databind.node.{BooleanNode, DoubleNode, JsonNodeFactory, LongNode, ObjectNode, TextNode}
 import kafka.network.RequestChannel.Session
-import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.network.ClientInformation
 import org.apache.kafka.common.requests._
@@ -76,7 +75,7 @@ object RequestConvertToJson {
       case req: OffsetDeleteRequest => OffsetDeleteRequestDataJsonConverter.write(req.data, request.version)
       case req: OffsetFetchRequest => OffsetFetchRequestDataJsonConverter.write(req.data, request.version)
       case req: OffsetsForLeaderEpochRequest => OffsetForLeaderEpochRequestDataJsonConverter.write(req.data, request.version)
-      case req: ProduceRequest => ProduceRequestDataJsonConverter.write(req.data, request.version)
+      case req: ProduceRequest => ProduceRequestDataJsonConverter.write(req.data, request.version, false)
       case req: RenewDelegationTokenRequest => RenewDelegationTokenRequestDataJsonConverter.write(req.data, request.version)
       case req: SaslAuthenticateRequest => SaslAuthenticateRequestDataJsonConverter.write(req.data, request.version)
       case req: SaslHandshakeRequest => SaslHandshakeRequestDataJsonConverter.write(req.data, request.version)
@@ -87,7 +86,7 @@ object RequestConvertToJson {
       case req: UpdateMetadataRequest => UpdateMetadataRequestDataJsonConverter.write(req.data, request.version)
       case req: VoteRequest => VoteRequestDataJsonConverter.write(req.data, request.version)
       case req: WriteTxnMarkersRequest => WriteTxnMarkersRequestDataJsonConverter.write(req.data, request.version)
-      case _ => throw new IllegalStateException(s"ApiKey ${request.api} is not currently handled in `request`, the " +
+      case _ => throw new IllegalStateException(s"ApiKey ${request.apiKey} is not currently handled in `request`, the " +
         "code should be updated to do so.");
     }
   }
@@ -141,8 +140,8 @@ object RequestConvertToJson {
       case res: OffsetCommitResponse => OffsetCommitResponseDataJsonConverter.write(res.data, version)
       case res: OffsetDeleteResponse => OffsetDeleteResponseDataJsonConverter.write(res.data, version)
       case res: OffsetFetchResponse => OffsetFetchResponseDataJsonConverter.write(res.data, version)
-      case res: OffsetsForLeaderEpochResponse => OffsetForLeaderEpochResponseDataJsonConverter.write(res.data(), version)
-      case res: ProduceResponse => ProduceResponseDataJsonConverter.write(res.data(), version)
+      case res: OffsetsForLeaderEpochResponse => OffsetForLeaderEpochResponseDataJsonConverter.write(res.data, version)
+      case res: ProduceResponse => ProduceResponseDataJsonConverter.write(res.data, version)
       case res: RenewDelegationTokenResponse => RenewDelegationTokenResponseDataJsonConverter.write(res.data, version)
       case res: SaslAuthenticateResponse => SaslAuthenticateResponseDataJsonConverter.write(res.data, version)
       case res: SaslHandshakeResponse => SaslHandshakeResponseDataJsonConverter.write(res.data, version)
@@ -153,7 +152,7 @@ object RequestConvertToJson {
       case res: UpdateMetadataResponse => UpdateMetadataResponseDataJsonConverter.write(res.data, version)
       case res: WriteTxnMarkersResponse => WriteTxnMarkersResponseDataJsonConverter.write(res.data, version)
       case res: VoteResponse => VoteResponseDataJsonConverter.write(res.data, version)
-      case _ => throw new IllegalStateException(s"ApiKey $response is not currently handled in `response`, the " +
+      case _ => throw new IllegalStateException(s"ApiKey ${response.apiKey} is not currently handled in `response`, the " +
         "code should be updated to do so.");
     }
   }
@@ -173,10 +172,9 @@ object RequestConvertToJson {
     node
   }
 
-  def requestDesc(header: RequestHeader, requestNode: Option[JsonNode], envelope: Option[RequestChannel.Request] = None): JsonNode = {
+  def requestDesc(header: RequestHeader, requestNode: Option[JsonNode], isForwarded: Boolean): JsonNode = {
     val node = new ObjectNode(JsonNodeFactory.instance)
-    node.set("isForwarded", if (envelope.isDefined) BooleanNode.TRUE else BooleanNode.FALSE)
-    node.set("forwardedRequest", envelope.map(request => requestContextNode(request.context)).getOrElse(new TextNode("")))
+    node.set("isForwarded", if (isForwarded) BooleanNode.TRUE else BooleanNode.FALSE)
     node.set("requestHeader", requestHeaderNode(header))
     node.set("request", requestNode.getOrElse(new TextNode("")))
     node
@@ -189,20 +187,13 @@ object RequestConvertToJson {
     node
   }
 
-  def topicPartitionNode(topicPartition: TopicPartition): JsonNode = {
-    val node = new ObjectNode(JsonNodeFactory.instance)
-    node.set("topic", new TextNode(topicPartition.topic))
-    node.set("partition", new IntNode(topicPartition.partition))
-    node
-  }
-
   def requestDescMetrics(header: RequestHeader, requestNode: Option[JsonNode], responseNode: Option[JsonNode],
-                         context: RequestContext, session: Session,
+                         context: RequestContext, session: Session, isForwarded: Boolean,
                          totalTimeMs: Double, requestQueueTimeMs: Double, apiLocalTimeMs: Double,
                          apiRemoteTimeMs: Double, apiThrottleTimeMs: Long, responseQueueTimeMs: Double,
                          responseSendTimeMs: Double, temporaryMemoryBytes: Long,
                          messageConversionsTimeMs: Double): JsonNode = {
-    val node = requestDesc(header, requestNode).asInstanceOf[ObjectNode]
+    val node = requestDesc(header, requestNode, isForwarded).asInstanceOf[ObjectNode]
     node.set("response", responseNode.getOrElse(new TextNode("")))
     node.set("connection", new TextNode(context.connectionId))
     node.set("totalTimeMs", new DoubleNode(totalTimeMs))

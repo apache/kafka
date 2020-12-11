@@ -46,6 +46,7 @@ public class DeleteRecordsResponse extends AbstractResponse {
         this.data = data;
     }
 
+    @Override
     public DeleteRecordsResponseData data() {
         return data;
     }

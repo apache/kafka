@@ -54,7 +54,7 @@ public class InitProducerIdResponse extends AbstractResponse {
     }
 
     @Override
-    protected InitProducerIdResponseData data() {
+    public InitProducerIdResponseData data() {
         return data;
     }
 

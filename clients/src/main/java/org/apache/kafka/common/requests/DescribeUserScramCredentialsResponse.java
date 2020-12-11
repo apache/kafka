@@ -33,6 +33,7 @@ public class DescribeUserScramCredentialsResponse extends AbstractResponse {
         this.data = responseData;
     }
 
+    @Override
     public DescribeUserScramCredentialsResponseData data() {
         return data;
     }

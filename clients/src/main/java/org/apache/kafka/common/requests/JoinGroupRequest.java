@@ -107,6 +107,7 @@ public class JoinGroupRequest extends AbstractRequest {
         }
     }
 
+    @Override
     public JoinGroupRequestData data() {
         return data;
     }

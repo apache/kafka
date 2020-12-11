@@ -19,13 +19,14 @@ package kafka.network
 
 import java.net.InetAddress
 import java.nio.ByteBuffer
+
 import com.fasterxml.jackson.databind.node.{DoubleNode, LongNode, ObjectNode, TextNode}
 import kafka.network
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.network.{ClientInformation, ListenerName, NetworkSend}
 import org.junit.Test
-import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.common.protocol.{ApiKeys, ByteBufferAccessor, ObjectSerializationCache}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.easymock.EasyMock.createNiceMock
@@ -40,8 +41,20 @@ class RequestConvertToJsonTest {
     val unhandledKeys = ArrayBuffer[String]()
     ApiKeys.values().foreach { key => {
       val version: Short = key.latestVersion()
-      val struct = ApiMessageType.fromApiKey(key.id).newRequest().toStruct(version)
-      val req = AbstractRequest.parseRequest(key, version, struct)
+      val cache = new ObjectSerializationCache
+      val message = key match {
+        case ApiKeys.DESCRIBE_ACLS =>
+          ApiMessageType.fromApiKey(key.id).newRequest().asInstanceOf[DescribeAclsRequestData]
+            .setPatternTypeFilter(1).setResourceTypeFilter(1).setPermissionType(1).setOperation(1)
+        case _ =>
+          ApiMessageType.fromApiKey(key.id).newRequest()
+      }
+      val messageSize = message.size(cache, version)
+      val bytes = new ByteBufferAccessor(ByteBuffer.allocate(messageSize))
+      message.write(bytes, cache, version)
+      bytes.flip()
+
+      val req = AbstractRequest.parseRequest(key, version, bytes.buffer).request
       try {
         RequestConvertToJson.request(req)
       } catch {
@@ -56,8 +69,13 @@ class RequestConvertToJsonTest {
     val unhandledKeys = ArrayBuffer[String]()
     ApiKeys.values().foreach { key => {
       val version: Short = key.latestVersion()
-      val struct = ApiMessageType.fromApiKey(key.id).newResponse().toStruct(version)
-      val res = AbstractResponse.parseResponse(key, struct, version)
+      val cache = new ObjectSerializationCache
+      val message = ApiMessageType.fromApiKey(key.id).newResponse()
+      val messageSize = message.size(cache, version)
+      val bytes = new ByteBufferAccessor(ByteBuffer.allocate(messageSize))
+      message.write(bytes, cache, version)
+      bytes.flip()
+      val res = AbstractResponse.parseResponse(key, bytes.buffer, version)
       try {
         RequestConvertToJson.response(res, version)
       } catch {
@@ -69,9 +87,9 @@ class RequestConvertToJsonTest {
 
   @Test
   def testRequestDescMetrics(): Unit = {
-    val req = request(new AlterIsrRequest(new AlterIsrRequestData(), 0))
-    val byteBuffer = req.body[AbstractRequest].serialize(req.header)
-    val send = new NetworkSend(req.context.connectionId, byteBuffer)
+    val rwq = new AlterIsrRequest(new AlterIsrRequestData(), 0)
+    val req = request(rwq)
+    val send = new NetworkSend(req.context.connectionId, rwq.toSend(req.header))
     val headerLog = RequestConvertToJson.requestHeaderNode(req.header)
     val res = new RequestChannel.SendResponse(req, send, Some(headerLog), None)
 
@@ -85,7 +103,7 @@ class RequestConvertToJsonTest {
     val temporaryMemoryBytes = 8
     val messageConversionsTimeMs = 9
 
-    val expectedNode = req.requestDesc.asInstanceOf[ObjectNode]
+    val expectedNode = RequestConvertToJson.requestDesc(req.header, req.requestLog, req.isForwarded).asInstanceOf[ObjectNode]
     expectedNode.set("response", res.responseLog.getOrElse(new TextNode("")))
     expectedNode.set("connection", new TextNode(req.context.connectionId))
     expectedNode.set("totalTimeMs", new DoubleNode(totalTimeMs))
@@ -102,15 +120,16 @@ class RequestConvertToJsonTest {
     expectedNode.set("temporaryMemoryBytes", new LongNode(temporaryMemoryBytes))
     expectedNode.set("messageConversionsTime", new DoubleNode(messageConversionsTimeMs))
 
-    val actualNode = RequestConvertToJson.requestDescMetrics(req.header, req.requestLog, res.responseLog, req.context, req.session,
+    val actualNode = RequestConvertToJson.requestDescMetrics(req.header, req.requestLog, res.responseLog, req.context, req.session, req.isForwarded,
       totalTimeMs, requestQueueTimeMs, apiLocalTimeMs, apiRemoteTimeMs, apiThrottleTimeMs, responseQueueTimeMs,
       responseSendTimeMs, temporaryMemoryBytes, messageConversionsTimeMs).asInstanceOf[ObjectNode]
 
     assertEquals(expectedNode, actualNode)
   }
 
-  private def request(req: AbstractRequest): RequestChannel.Request = {
-    val buffer = req.serialize(new RequestHeader(req.api, req.version, "client-id", 1))
+  def request(req: AbstractRequest): RequestChannel.Request = {
+    val buffer = RequestTestUtils.serializeRequestWithHeader(new RequestHeader(req.apiKey, req.version, "client-id", 1),
+      req)
     val requestContext = newRequestContext(buffer)
     new network.RequestChannel.Request(processor = 1,
       requestContext,

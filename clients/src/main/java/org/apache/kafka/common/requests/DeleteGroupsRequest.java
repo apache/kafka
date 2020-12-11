@@ -75,7 +75,7 @@ public class DeleteGroupsRequest extends AbstractRequest {
     }
 
     @Override
-    protected DeleteGroupsRequestData data() {
+    public DeleteGroupsRequestData data() {
         return data;
     }
 }

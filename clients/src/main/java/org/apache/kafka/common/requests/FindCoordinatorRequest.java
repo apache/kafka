@@ -77,6 +77,7 @@ public class FindCoordinatorRequest extends AbstractRequest {
             version);
     }
 
+    @Override
     public FindCoordinatorRequestData data() {
         return data;
     }

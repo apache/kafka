@@ -61,6 +61,7 @@ public class SaslHandshakeRequest extends AbstractRequest {
         this.data = data;
     }
 
+    @Override
     public SaslHandshakeRequestData data() {
         return data;
     }

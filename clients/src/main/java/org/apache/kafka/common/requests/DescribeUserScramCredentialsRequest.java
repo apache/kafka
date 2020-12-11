@@ -58,6 +58,7 @@ public class DescribeUserScramCredentialsRequest extends AbstractRequest {
                 new ByteBufferAccessor(buffer), version), version);
     }
 
+    @Override
     public DescribeUserScramCredentialsRequestData data() {
         return data;
     }

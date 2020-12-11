@@ -35,6 +35,7 @@ public class AlterIsrResponse extends AbstractResponse {
         this.data = data;
     }
 
+    @Override
     public AlterIsrResponseData data() {
         return data;
     }

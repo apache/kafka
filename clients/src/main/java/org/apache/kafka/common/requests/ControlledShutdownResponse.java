@@ -62,6 +62,7 @@ public class ControlledShutdownResponse extends AbstractResponse {
         return new ControlledShutdownResponse(new ControlledShutdownResponseData(new ByteBufferAccessor(buffer), version));
     }
 
+    @Override
     public ControlledShutdownResponseData data() {
         return data;
     }

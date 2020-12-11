@@ -34,6 +34,7 @@ public class AlterIsrRequest extends AbstractRequest {
         this.data = data;
     }
 
+    @Override
     public AlterIsrRequestData data() {
         return data;
     }

@@ -77,12 +77,8 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
                    .setThrottleTimeMs(requestThrottleMs);
     }
 
-    public TxnOffsetCommitResponseData data() {
-        return data;
-    }
-
     @Override
-    protected TxnOffsetCommitResponseData data() {
+    public TxnOffsetCommitResponseData data() {
         return data;
     }
 

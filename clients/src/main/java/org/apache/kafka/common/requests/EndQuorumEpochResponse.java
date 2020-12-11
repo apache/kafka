@@ -64,7 +64,7 @@ public class EndQuorumEpochResponse extends AbstractResponse {
     }
 
     @Override
-    protected EndQuorumEpochResponseData data() {
+    public EndQuorumEpochResponseData data() {
         return data;
     }
 

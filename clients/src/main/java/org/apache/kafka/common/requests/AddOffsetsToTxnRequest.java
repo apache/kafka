@@ -53,7 +53,7 @@ public class AddOffsetsToTxnRequest extends AbstractRequest {
     }
 
     @Override
-    protected AddOffsetsToTxnRequestData data() {
+    public AddOffsetsToTxnRequestData data() {
         return data;
     }
 

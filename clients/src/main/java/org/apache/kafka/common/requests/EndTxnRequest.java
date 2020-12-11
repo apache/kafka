@@ -60,7 +60,7 @@ public class EndTxnRequest extends AbstractRequest {
     }
 
     @Override
-    protected EndTxnRequestData data() {
+    public EndTxnRequestData data() {
         return data;
     }
 

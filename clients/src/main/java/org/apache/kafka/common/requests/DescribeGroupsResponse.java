@@ -105,6 +105,7 @@ public class DescribeGroupsResponse extends AbstractResponse {
         return  groupMetadata;
     }
 
+    @Override
     public DescribeGroupsResponseData data() {
         return data;
     }

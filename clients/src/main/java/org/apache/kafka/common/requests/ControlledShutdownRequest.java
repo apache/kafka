@@ -65,6 +65,7 @@ public class ControlledShutdownRequest extends AbstractRequest {
             version);
     }
 
+    @Override
     public ControlledShutdownRequestData data() {
         return data;
     }
