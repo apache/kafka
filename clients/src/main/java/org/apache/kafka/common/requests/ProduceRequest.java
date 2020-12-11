@@ -128,7 +128,7 @@ public class ProduceRequest extends AbstractRequest {
     }
 
     // visible for testing
-    Map<TopicPartition, Integer> createOrGetPartitionSizes() {
+    Map<TopicPartition, Integer> partitionSizes() {
         if (partitionSizes == null) {
             // this method may be called by different thread (see the comment on data)
             synchronized (this) {
@@ -167,9 +167,9 @@ public class ProduceRequest extends AbstractRequest {
                 .append(",timeout=").append(timeout);
 
         if (verbose)
-            bld.append(",partitionSizes=").append(Utils.mkString(createOrGetPartitionSizes(), "[", "]", "=", ","));
+            bld.append(",partitionSizes=").append(Utils.mkString(partitionSizes(), "[", "]", "=", ","));
         else
-            bld.append(",numPartitions=").append(createOrGetPartitionSizes().size());
+            bld.append(",numPartitions=").append(partitionSizes().size());
 
         bld.append("}");
         return bld.toString();
@@ -181,7 +181,7 @@ public class ProduceRequest extends AbstractRequest {
         if (acks == 0) return null;
         ApiError apiError = ApiError.fromThrowable(e);
         ProduceResponseData data = new ProduceResponseData().setThrottleTimeMs(throttleTimeMs);
-        createOrGetPartitionSizes().forEach((tp, ignored) -> {
+        partitionSizes().forEach((tp, ignored) -> {
             ProduceResponseData.TopicProduceResponse tpr = data.responses().find(tp.topic());
             if (tpr == null) {
                 tpr = new ProduceResponseData.TopicProduceResponse().setName(tp.topic());
@@ -202,7 +202,7 @@ public class ProduceRequest extends AbstractRequest {
     @Override
     public Map<Errors, Integer> errorCounts(Throwable e) {
         Errors error = Errors.forException(e);
-        return Collections.singletonMap(error, createOrGetPartitionSizes().size());
+        return Collections.singletonMap(error, partitionSizes().size());
     }
 
     public short acks() {
@@ -221,13 +221,9 @@ public class ProduceRequest extends AbstractRequest {
         return data;
     }
 
-    public Map<TopicPartition, Integer> partitionSizes() {
-        return partitionSizes;
-    }
-
     public void clearPartitionRecords() {
         // lazily initialize partitionSizes.
-        createOrGetPartitionSizes();
+        partitionSizes();
         data = null;
     }
 

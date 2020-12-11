@@ -18,8 +18,8 @@
 package kafka.network
 
 import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.node.{ArrayNode, DoubleNode, IntNode, JsonNodeFactory, LongNode, NullNode, ObjectNode, ShortNode, TextNode}
-import kafka.network.RequestChannel.{Response, Session}
+import com.fasterxml.jackson.databind.node.{BooleanNode, DoubleNode, IntNode, JsonNodeFactory, LongNode, ObjectNode, TextNode}
+import kafka.network.RequestChannel.Session
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.network.ClientInformation
@@ -76,7 +76,7 @@ object RequestConvertToJson {
       case req: OffsetDeleteRequest => OffsetDeleteRequestDataJsonConverter.write(req.data, request.version)
       case req: OffsetFetchRequest => OffsetFetchRequestDataJsonConverter.write(req.data, request.version)
       case req: OffsetsForLeaderEpochRequest => OffsetForLeaderEpochRequestDataJsonConverter.write(req.data, request.version)
-      case req: ProduceRequest => produceRequestJson(req, request.version, false)
+      case req: ProduceRequest => ProduceRequestDataJsonConverter.write(req.data, request.version)
       case req: RenewDelegationTokenRequest => RenewDelegationTokenRequestDataJsonConverter.write(req.data, request.version)
       case req: SaslAuthenticateRequest => SaslAuthenticateRequestDataJsonConverter.write(req.data, request.version)
       case req: SaslHandshakeRequest => SaslHandshakeRequestDataJsonConverter.write(req.data, request.version)
@@ -164,10 +164,21 @@ object RequestConvertToJson {
     node
   }
 
-  def requestDesc(header: RequestHeader, req: AbstractRequest): JsonNode = {
+  def requestContextNode(context: RequestContext): JsonNode = {
     val node = new ObjectNode(JsonNodeFactory.instance)
+    node.set("connection", new TextNode(context.connectionId))
+    node.set("securityProtocol", new TextNode(context.securityProtocol.toString))
+    node.set("listener", new TextNode(context.listenerName.value))
+    node.set("clientInformation", clientInfoNode(context.clientInformation))
+    node
+  }
+
+  def requestDesc(header: RequestHeader, requestNode: Option[JsonNode], envelope: Option[RequestChannel.Request] = None): JsonNode = {
+    val node = new ObjectNode(JsonNodeFactory.instance)
+    node.set("isForwarded", if (envelope.isDefined) BooleanNode.TRUE else BooleanNode.FALSE)
+    node.set("forwardedRequest", envelope.map(request => requestContextNode(request.context)).getOrElse(new TextNode("")))
     node.set("requestHeader", requestHeaderNode(header))
-    node.set("request", request(req))
+    node.set("request", requestNode.getOrElse(new TextNode("")))
     node
   }
 
@@ -185,14 +196,14 @@ object RequestConvertToJson {
     node
   }
 
-  def requestDescMetrics(header: RequestHeader, res: Response, req: AbstractRequest,
+  def requestDescMetrics(header: RequestHeader, requestNode: Option[JsonNode], responseNode: Option[JsonNode],
                          context: RequestContext, session: Session,
                          totalTimeMs: Double, requestQueueTimeMs: Double, apiLocalTimeMs: Double,
                          apiRemoteTimeMs: Double, apiThrottleTimeMs: Long, responseQueueTimeMs: Double,
                          responseSendTimeMs: Double, temporaryMemoryBytes: Long,
                          messageConversionsTimeMs: Double): JsonNode = {
-    val node = requestDesc(header, req).asInstanceOf[ObjectNode]
-    node.set("response", res.responseLog.getOrElse(new TextNode("")))
+    val node = requestDesc(header, requestNode).asInstanceOf[ObjectNode]
+    node.set("response", responseNode.getOrElse(new TextNode("")))
     node.set("connection", new TextNode(context.connectionId))
     node.set("totalTimeMs", new DoubleNode(totalTimeMs))
     node.set("requestQueueTimeMs", new DoubleNode(requestQueueTimeMs))
@@ -209,38 +220,6 @@ object RequestConvertToJson {
       node.set("temporaryMemoryBytes", new LongNode(temporaryMemoryBytes))
     if (messageConversionsTimeMs > 0)
       node.set("messageConversionsTime", new DoubleNode(messageConversionsTimeMs))
-    node
-  }
-
-  /**
-   * ProduceRequest has a specific handling because it can go into purgatory where its data becomes null.
-   */
-  def produceRequestJson(req: ProduceRequest, version: Short, serializeRecords: Boolean): JsonNode = {
-    val node = new ObjectNode(JsonNodeFactory.instance)
-    if (version >= 3) {
-      if (req.transactionalId == null)
-        node.set("transactionalId", NullNode.instance)
-      else
-        node.set("transactionalId", new TextNode(req.transactionalId))
-    }
-    node.set("acks", new ShortNode(req.acks))
-    node.set("timeoutMs", new IntNode(req.timeout))
-    if (serializeRecords) {
-      if (req.partitionSizes() != null) {
-        val topicDataNode = new ArrayNode(JsonNodeFactory.instance)
-        req.partitionSizes().forEach { (topicPartition, size) => {
-          val partitionNode = new ObjectNode(JsonNodeFactory.instance)
-          partitionNode.set("topicPartition", topicPartitionNode(topicPartition))
-          partitionNode.set("size", new IntNode(size))
-          topicDataNode.add(partitionNode)
-        }}
-        node.set("partitionSizes", topicDataNode)
-      } else {
-        node.set("partitionSizes", NullNode.instance)
-      }
-    } else {
-      node.set("numPartitions", new IntNode(req.partitionSizes().size()))
-    }
     node
   }
 }

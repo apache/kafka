@@ -125,6 +125,13 @@ object RequestChannel extends Logging {
       }
     }
 
+    def requestLog: Option[JsonNode] = {
+      if (RequestChannel.isRequestLoggingEnabled)
+        Some(RequestConvertToJson.request(loggableRequest))
+      else
+        None
+    }
+
     def responseNode(response: AbstractResponse): Option[JsonNode] = {
       if (RequestChannel.isRequestLoggingEnabled)
         Some(RequestConvertToJson.response(response, context.apiVersion()))
@@ -141,11 +148,8 @@ object RequestChannel extends Logging {
       }
     }
 
-    def requestDesc(details: Boolean): String = {
-      val forwardDescription = envelope.map { request =>
-        s"Forwarded request: ${request.context} "
-      }.getOrElse("")
-      s"$forwardDescription$header -- ${loggableRequest.toString(details)}"
+    def requestDesc: JsonNode = {
+      RequestConvertToJson.requestDesc(header, requestLog, envelope)
     }
 
     def body[T <: AbstractRequest](implicit classTag: ClassTag[T], @nowarn("cat=unused") nn: NotNothing[T]): T = {
@@ -202,7 +206,7 @@ object RequestChannel extends Logging {
       }
     }
 
-    trace(s"Processor $processor received request: ${RequestConvertToJson.requestDesc(header, loggableRequest)}")
+    trace(s"Processor $processor received request: $requestDesc")
 
     def requestThreadTimeNanos: Long = {
       if (apiLocalCompleteTimeNanos == -1L) apiLocalCompleteTimeNanos = Time.SYSTEM.nanoseconds
@@ -263,7 +267,7 @@ object RequestChannel extends Logging {
       recordNetworkThreadTimeCallback.foreach(record => record(networkThreadTimeNanos))
 
       if (isRequestLoggingEnabled) {
-        val desc = RequestConvertToJson.requestDescMetrics(header, response, loggableRequest,
+        val desc = RequestConvertToJson.requestDescMetrics(header, requestLog, response.responseLog,
           context, session,
           totalTimeMs, requestQueueTimeMs, apiLocalTimeMs,
           apiRemoteTimeMs, apiThrottleTimeMs, responseQueueTimeMs,

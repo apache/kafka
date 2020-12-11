@@ -85,7 +85,7 @@ class RequestConvertToJsonTest {
     val temporaryMemoryBytes = 8
     val messageConversionsTimeMs = 9
 
-    val expectedNode = RequestConvertToJson.requestDesc(req.header, req.loggableRequest).asInstanceOf[ObjectNode]
+    val expectedNode = req.requestDesc.asInstanceOf[ObjectNode]
     expectedNode.set("response", res.responseLog.getOrElse(new TextNode("")))
     expectedNode.set("connection", new TextNode(req.context.connectionId))
     expectedNode.set("totalTimeMs", new DoubleNode(totalTimeMs))
@@ -102,7 +102,7 @@ class RequestConvertToJsonTest {
     expectedNode.set("temporaryMemoryBytes", new LongNode(temporaryMemoryBytes))
     expectedNode.set("messageConversionsTime", new DoubleNode(messageConversionsTimeMs))
 
-    val actualNode = RequestConvertToJson.requestDescMetrics(req.header, res, req.loggableRequest, req.context, req.session,
+    val actualNode = RequestConvertToJson.requestDescMetrics(req.header, req.requestLog, res.responseLog, req.context, req.session,
       totalTimeMs, requestQueueTimeMs, apiLocalTimeMs, apiRemoteTimeMs, apiThrottleTimeMs, responseQueueTimeMs,
       responseSendTimeMs, temporaryMemoryBytes, messageConversionsTimeMs).asInstanceOf[ObjectNode]
 

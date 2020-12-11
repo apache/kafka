@@ -34,7 +34,7 @@ import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult, LeaveGroupRes
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.log.AppendOrigin
 import kafka.message.ZStdCompressionCodec
-import kafka.network.{RequestChannel, RequestConvertToJson}
+import kafka.network.RequestChannel
 import kafka.security.authorizer.{AclEntry, AuthorizerUtils}
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.utils.{CoreUtils, Logging}
@@ -183,7 +183,7 @@ class KafkaApis(val requestChannel: RequestChannel,
    */
   override def handle(request: RequestChannel.Request): Unit = {
     try {
-      trace(s"Handling request:${RequestConvertToJson.requestDesc(request.header, request.loggableRequest)} from connection ${request.context.connectionId};" +
+      trace(s"Handling request:${request.requestLog} from connection ${request.context.connectionId};" +
         s"securityProtocol:${request.context.securityProtocol},principal:${request.context.principal}")
 
       request.envelope.foreach { envelope =>

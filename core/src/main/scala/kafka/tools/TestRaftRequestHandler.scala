@@ -40,7 +40,7 @@ class TestRaftRequestHandler(
 
   override def handle(request: RequestChannel.Request): Unit = {
     try {
-      trace(s"Handling request:${RequestConvertToJson.requestDesc(request.header, request.loggableRequest)} from connection ${request.context.connectionId};" +
+      trace(s"Handling request:${request.requestDesc} from connection ${request.context.connectionId};" +
         s"securityProtocol:${request.context.securityProtocol},principal:${request.context.principal}")
       request.header.apiKey match {
         case ApiKeys.VOTE
