@@ -172,7 +172,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
     }
 
     @Test
-    public void testGlobalThreadException() throws InterruptedException {
+    public void shouldShutDownClientIfGlobalStreamThreadWantsToReplaceThread() throws InterruptedException {
         builder  = new StreamsBuilder();
         builder.addGlobalStore(
             new KeyValueStoreBuilder<>(
@@ -189,7 +189,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
 
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
             kafkaStreams.setUncaughtExceptionHandler((t, e) -> fail("should not hit old handler"));
-            kafkaStreams.setUncaughtExceptionHandler(exception -> SHUTDOWN_CLIENT);
+            kafkaStreams.setUncaughtExceptionHandler(exception -> REPLACE_THREAD);
 
             StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
 
