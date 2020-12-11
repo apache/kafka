@@ -96,6 +96,11 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
         return metadata;
     }
 
+    public ConsumerRecords(final Map<TopicPartition, List<ConsumerRecord<K, V>>> records) {
+        this.records = records;
+        this.metadata = new HashMap<>();
+    }
+
     public ConsumerRecords(final Map<TopicPartition, List<ConsumerRecord<K, V>>> records,
                            final Map<TopicPartition, Metadata> metadata) {
         this.records = records;

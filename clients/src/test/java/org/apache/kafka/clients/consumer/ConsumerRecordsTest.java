@@ -44,7 +44,7 @@ public class ConsumerRecordsTest {
         records.put(new TopicPartition(topic, 1), Arrays.asList(record1, record2));
         records.put(new TopicPartition(topic, 2), new ArrayList<ConsumerRecord<Integer, String>>());
 
-        ConsumerRecords<Integer, String> consumerRecords = new ConsumerRecords<>(records, Collections.emptyMap());
+        ConsumerRecords<Integer, String> consumerRecords = new ConsumerRecords<>(records);
         Iterator<ConsumerRecord<Integer, String>> iter = consumerRecords.iterator();
 
         int c = 0;
