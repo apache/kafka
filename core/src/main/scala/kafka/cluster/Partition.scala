@@ -51,8 +51,8 @@ trait IsrChangeListener {
   def markFailed(): Unit
 }
 
-trait TopicConfigProvider {
-  def get(): Properties
+trait TopicConfigFetcher {
+  def fetch(): Properties
 }
 
 class DelayedOperations(topicPartition: TopicPartition,
@@ -87,8 +87,8 @@ object Partition extends KafkaMetricsGroup {
       override def markFailed(): Unit = replicaManager.failedIsrUpdatesRate.mark()
     }
 
-    val configProvider = new TopicConfigProvider {
-      override def get(): Properties = {
+    val configProvider = new TopicConfigFetcher {
+      override def fetch(): Properties = {
         val adminZkClient = new AdminZkClient(replicaManager.zkClient)
         adminZkClient.fetchEntityConfig(ConfigType.Topic, topicPartition.topic)
       }
@@ -228,7 +228,7 @@ class Partition(val topicPartition: TopicPartition,
                 interBrokerProtocolVersion: ApiVersion,
                 localBrokerId: Int,
                 time: Time,
-                topicConfigProvider: TopicConfigProvider,
+                topicConfigProvider: TopicConfigFetcher,
                 isrChangeListener: IsrChangeListener,
                 delayedOperations: DelayedOperations,
                 metadataCache: MetadataCache,
@@ -342,7 +342,7 @@ class Partition(val topicPartition: TopicPartition,
   // Visible for testing
   private[cluster] def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints): Log = {
     def fetchLogConfig: LogConfig = {
-      val props = topicConfigProvider.get()
+      val props = topicConfigProvider.fetch()
       LogConfig.fromProps(logManager.currentDefaultConfig.originals, props)
     }
 

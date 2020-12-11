@@ -28,7 +28,7 @@ import java.util.{Arrays, Collections, Properties}
 import java.util.concurrent.{Callable, ExecutionException, Executors, TimeUnit}
 import javax.net.ssl.X509TrustManager
 import kafka.api._
-import kafka.cluster.{Broker, EndPoint, IsrChangeListener, TopicConfigProvider}
+import kafka.cluster.{Broker, EndPoint, IsrChangeListener, TopicConfigFetcher}
 import kafka.log._
 import kafka.security.auth.{Acl, Resource, Authorizer => LegacyAuthorizer}
 import kafka.server._
@@ -1128,12 +1128,12 @@ object TestUtils extends Logging {
     new MockIsrChangeListener()
   }
 
-  class MockTopicConfigProvider(var props: Properties) extends TopicConfigProvider {
-    override def get(): Properties = props
+  class MockTopicConfigFetcher(var props: Properties) extends TopicConfigFetcher {
+    override def fetch(): Properties = props
   }
 
-  def createTopicConfigProvider(props: Properties): MockTopicConfigProvider = {
-    new MockTopicConfigProvider(props)
+  def createTopicConfigProvider(props: Properties): MockTopicConfigFetcher = {
+    new MockTopicConfigFetcher(props)
   }
 
   def produceMessages(servers: Seq[KafkaServer],

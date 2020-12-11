@@ -1778,7 +1778,7 @@ class PartitionTest extends AbstractPartitionTest {
       ArgumentMatchers.any()) // This doesn't get evaluated, but needed to satisfy compilation
 
     // We should get config from ZK only once
-    verify(spyConfigProvider, times(1)).get()
+    verify(spyConfigProvider, times(1)).fetch()
   }
 
   /**
@@ -1816,7 +1816,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     // We should get config from ZK twice, once before log is created, and second time once
     // we find log config is dirty and refresh it.
-    verify(spyConfigProvider, times(2)).get()
+    verify(spyConfigProvider, times(2)).fetch()
   }
 
   /**
@@ -1854,7 +1854,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     // We should get config from ZK twice, once before log is created, and second time once
     // we find log config is dirty and refresh it.
-    verify(spyConfigProvider, times(2)).get()
+    verify(spyConfigProvider, times(2)).fetch()
   }
 
   private def seedLogData(log: Log, numRecords: Int, leaderEpoch: Int): Unit = {

@@ -64,7 +64,7 @@ class AlterIsrManagerTest {
     val scheduler = new MockScheduler(time)
     val alterIsrManager = new DefaultAlterIsrManager(brokerToController, scheduler, time, brokerId, () => 2)
     alterIsrManager.start()
-    alterIsrManager.submit(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}), _ => { })
+    alterIsrManager.submit(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}, 0), _ => { })
     time.sleep(50)
     scheduler.tick()
 
@@ -82,8 +82,8 @@ class AlterIsrManagerTest {
     alterIsrManager.start()
 
     // Only send one ISR update for a given topic+partition
-    alterIsrManager.submit(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}), assertTrue)
-    alterIsrManager.submit(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2), 10), _ => {}), assertFalse)
+    alterIsrManager.submit(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}, 0), assertTrue)
+    alterIsrManager.submit(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2), 10), _ => {}, 0), assertFalse)
 
     time.sleep(50)
     scheduler.tick()
@@ -107,7 +107,7 @@ class AlterIsrManagerTest {
 
     for (i <- 0 to 9) {
       alterIsrManager.submit(AlterIsrItem(new TopicPartition(topic, i),
-        new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}), _ => {})
+        new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}, 0), _ => {})
       time.sleep(1)
     }
 
@@ -116,7 +116,7 @@ class AlterIsrManagerTest {
 
     // This should not be included in the batch
     alterIsrManager.submit(AlterIsrItem(new TopicPartition(topic, 10),
-      new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}), _ => {})
+      new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}, 0), _ => {})
 
     EasyMock.verify(brokerToController)
 
@@ -127,26 +127,26 @@ class AlterIsrManagerTest {
 
   @Test
   def testAuthorizationFailed(): Unit = {
-    val isrs = Seq(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => { }))
+    val isrs = Seq(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => { }, 0))
     val manager = testTopLevelError(isrs, Errors.CLUSTER_AUTHORIZATION_FAILED)
     // On authz error, we log the exception and keep retrying
-    manager.submit(AlterIsrItem(tp0, null, _ => { }), assertFalse)
+    manager.submit(AlterIsrItem(tp0, null, _ => { }, 0), assertFalse)
   }
 
   @Test
   def testStaleBrokerEpoch(): Unit = {
-    val isrs = Seq(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => { }))
+    val isrs = Seq(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => { }, 0))
     val manager = testTopLevelError(isrs, Errors.STALE_BROKER_EPOCH)
     // On stale broker epoch, we want to retry, so we don't clear items from the pending map
-    manager.submit(AlterIsrItem(tp0, null, _ => { }), assertFalse)
+    manager.submit(AlterIsrItem(tp0, null, _ => { }, 0), assertFalse)
   }
 
   @Test
   def testOtherErrors(): Unit = {
-    val isrs = Seq(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => { }))
+    val isrs = Seq(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => { }, 0))
     val manager = testTopLevelError(isrs, Errors.UNKNOWN_SERVER_ERROR)
     // On other unexpected errors, we also want to retry
-    manager.submit(AlterIsrItem(tp0, null, _ => { }), assertFalse)
+    manager.submit(AlterIsrItem(tp0, null, _ => { }, 0), assertFalse)
   }
 
   def testTopLevelError(isrs: Seq[AlterIsrItem], error: Errors): AlterIsrManager = {
@@ -178,7 +178,7 @@ class AlterIsrManagerTest {
     errors.foreach(error => {
       val alterIsrManager = testPartitionError(tp0, error)
       // Any partition-level error should clear the item from the pending queue allowing for future updates
-      alterIsrManager.submit(AlterIsrItem(tp0, null, _ => { }), assertTrue)
+      alterIsrManager.submit(AlterIsrItem(tp0, null, _ => { }, 0), assertTrue)
     })
   }
 
@@ -200,7 +200,7 @@ class AlterIsrManagerTest {
       }
     }
 
-    alterIsrManager.submit(AlterIsrItem(tp, new LeaderAndIsr(1, 1, List(1,2,3), 10), callback), _ => { })
+    alterIsrManager.submit(AlterIsrItem(tp, new LeaderAndIsr(1, 1, List(1,2,3), 10), callback, 0), _ => { })
 
     time.sleep(100)
     scheduler.tick()
@@ -233,14 +233,14 @@ class AlterIsrManagerTest {
     val scheduler = new MockScheduler(time)
     val alterIsrManager = new DefaultAlterIsrManager(brokerToController, scheduler, time, brokerId, () => 2)
     alterIsrManager.start()
-    alterIsrManager.submit(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}), _ => { })
+    alterIsrManager.submit(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}, 0), _ => { })
 
     time.sleep(100)
     scheduler.tick() // Triggers a request
 
     // Enqueue more updates
-    alterIsrManager.submit(AlterIsrItem(tp1, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}), _ => { })
-    alterIsrManager.submit(AlterIsrItem(tp2, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}), _ => { })
+    alterIsrManager.submit(AlterIsrItem(tp1, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}, 0), _ => { })
+    alterIsrManager.submit(AlterIsrItem(tp2, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}, 0), _ => { })
 
     time.sleep(100)
     scheduler.tick() // Trigger the schedule again, but no request this time
@@ -278,9 +278,9 @@ class AlterIsrManagerTest {
       count.incrementAndGet()
       return
     }
-    alterIsrManager.submit(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), callback), _ => { })
-    alterIsrManager.submit(AlterIsrItem(tp1, new LeaderAndIsr(1, 1, List(1,2,3), 10), callback), _ => { })
-    alterIsrManager.submit(AlterIsrItem(tp2, new LeaderAndIsr(1, 1, List(1,2,3), 10), callback), _ => { })
+    alterIsrManager.submit(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), callback, 0), _ => { })
+    alterIsrManager.submit(AlterIsrItem(tp1, new LeaderAndIsr(1, 1, List(1,2,3), 10), callback, 0), _ => { })
+    alterIsrManager.submit(AlterIsrItem(tp2, new LeaderAndIsr(1, 1, List(1,2,3), 10), callback, 0), _ => { })
 
 
     time.sleep(100)
@@ -326,10 +326,10 @@ class AlterIsrManagerTest {
 
     // Correct ZK version
     zkIsrManager.submit(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 1),
-      expectMatch(Right(new LeaderAndIsr(1, 1, List(1,2,3), 2)))), assertTrue)
+      expectMatch(Right(new LeaderAndIsr(1, 1, List(1,2,3), 2))), 0), assertTrue)
 
     // Wrong ZK version
     zkIsrManager.submit(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 3),
-      expectMatch(Left(Errors.INVALID_UPDATE_VERSION))), assertTrue)
+      expectMatch(Left(Errors.INVALID_UPDATE_VERSION)), 0), assertTrue)
   }
 }

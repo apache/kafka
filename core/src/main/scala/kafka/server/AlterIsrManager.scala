@@ -54,7 +54,7 @@ trait AlterIsrManager {
 case class AlterIsrItem(topicPartition: TopicPartition,
                         leaderAndIsr: LeaderAndIsr,
                         callback: Either[Errors, LeaderAndIsr] => Unit,
-                        controllerEpoch: Int = -1) // controllerEpoch needed for Zk impl
+                        controllerEpoch: Int) // controllerEpoch needed for Zk impl
 
 object AlterIsrManager {
   /**
