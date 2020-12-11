@@ -33,6 +33,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
@@ -901,7 +902,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
-    // visible for testing
+    @VisibleForTesting
     void invokeCompletedOffsetCommitCallbacks() {
         if (asyncCommitFenced.get()) {
             throw new FencedInstanceIdException("Get fenced exception for group.instance.id "
@@ -1084,11 +1085,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      * which returns a request future that can be polled in the case of a synchronous commit or ignored in the
      * asynchronous case.
      *
-     * NOTE: This is visible only for testing
-     *
      * @param offsets The list of offsets per partition that should be committed.
      * @return A request future whose value indicates whether the commit was successful or not
      */
+    @VisibleForTesting
     RequestFuture<Void> sendOffsetCommitRequest(final Map<TopicPartition, OffsetAndMetadata> offsets) {
         if (offsets.isEmpty())
             return RequestFuture.voidSuccess();

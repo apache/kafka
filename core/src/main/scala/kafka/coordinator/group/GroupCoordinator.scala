@@ -26,6 +26,7 @@ import kafka.server._
 import kafka.utils.Logging
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.annotation.VisibleForTesting
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
@@ -1121,7 +1122,7 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
-  // package private for testing
+  @VisibleForTesting
   private[group] def prepareRebalance(group: GroupMetadata, reason: String): Unit = {
     // if any members are awaiting sync, cancel their request and have them rejoin
     if (group.is(CompletingRebalance))

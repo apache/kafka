@@ -25,6 +25,7 @@ import java.util.concurrent.locks.ReentrantLock
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.ShutdownableThread
+import org.apache.kafka.common.annotation.VisibleForTesting
 import org.apache.kafka.common.utils.Time
 
 import scala.collection._
@@ -77,7 +78,7 @@ class ControllerEventManager(controllerId: Int,
   @volatile private var _state: ControllerState = ControllerState.Idle
   private val putLock = new ReentrantLock()
   private val queue = new LinkedBlockingQueue[QueuedEvent]
-  // Visible for test
+  @VisibleForTesting
   private[controller] var thread = new ControllerEventThread(ControllerEventThreadName)
 
   private val eventQueueTimeHist = newHistogram(EventQueueTimeMetricName)

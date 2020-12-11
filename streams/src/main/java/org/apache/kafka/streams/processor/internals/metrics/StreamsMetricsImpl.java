@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals.metrics;
 
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -928,9 +929,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         }
     }
 
-    /**
-     * Visible for testing
-     */
+    @VisibleForTesting
     Map<Sensor, Sensor> parentSensors() {
         return Collections.unmodifiableMap(parentSensors);
     }

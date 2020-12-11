@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.security.authenticator;
 
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.types.Password;
@@ -126,7 +127,7 @@ public class LoginManager {
         return login.serviceName();
     }
 
-    // Only for testing
+    @VisibleForTesting
     Object cacheKey() {
         return loginMetadata.configInfo;
     }

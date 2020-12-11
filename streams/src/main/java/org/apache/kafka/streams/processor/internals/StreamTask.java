@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.LogContext;
@@ -67,7 +68,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
  */
 public class StreamTask extends AbstractTask implements ProcessorNodePunctuator, Task {
 
-    // visible for testing
+    @VisibleForTesting
     static final byte LATEST_MAGIC_BYTE = 1;
 
     private final Time time;
@@ -1111,11 +1112,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return recordCollector;
     }
 
-    // below are visible for testing only
+    @VisibleForTesting
     int numBuffered() {
         return partitionGroup.numBuffered();
     }
 
+    @VisibleForTesting
     long streamTime() {
         return partitionGroup.streamTime();
     }

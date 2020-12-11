@@ -25,6 +25,7 @@ import kafka.utils.{CoreUtils, Logging, nonthreadsafe}
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.annotation.VisibleForTesting
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.types.SchemaException
@@ -363,7 +364,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def allStaticMembers = staticMembers.keySet
 
-  // For testing only.
+  @VisibleForTesting
   def allDynamicMembers = {
     val dynamicMemberSet = new mutable.HashSet[String]
     allMembers.foreach(memberId => dynamicMemberSet.add(memberId))
@@ -774,7 +775,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def offset(topicPartition: TopicPartition): Option[OffsetAndMetadata] = offsets.get(topicPartition).map(_.offsetAndMetadata)
 
-  // visible for testing
+  @VisibleForTesting
   private[group] def offsetWithRecordMetadata(topicPartition: TopicPartition): Option[CommitRecordMetadataAndOffset] = offsets.get(topicPartition)
 
   def numOffsets = offsets.size

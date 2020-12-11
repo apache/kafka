@@ -18,6 +18,8 @@ package org.apache.kafka.common.config;
 
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
 
@@ -514,7 +516,7 @@ public class ConfigDef {
         return validate(parsed, configValues);
     }
 
-    // package accessible for testing
+    @VisibleForTesting
     Map<String, Object> parseForValidate(Map<String, String> props, Map<String, ConfigValue> configValues) {
         Map<String, Object> parsed = new HashMap<>();
         Set<String> configsWithNoParent = getConfigsWithNoParent();
@@ -545,7 +547,7 @@ public class ConfigDef {
         return new ArrayList<>(undefinedConfigKeys);
     }
 
-    // package accessible for testing
+    @VisibleForTesting
     Set<String> getConfigsWithNoParent() {
         if (this.configsWithNoParent != null) {
             return this.configsWithNoParent;

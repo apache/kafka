@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamsConfig;
@@ -331,7 +332,7 @@ public class InternalTopologyBuilder {
         }
     }
 
-    // public for testing only
+    @VisibleForTesting
     public synchronized final InternalTopologyBuilder setApplicationId(final String applicationId) {
         Objects.requireNonNull(applicationId, "applicationId can't be null");
         this.applicationId = applicationId;
@@ -1746,7 +1747,7 @@ public class InternalTopologyBuilder {
             return Collections.unmodifiableSet(nodes);
         }
 
-        // visible for testing
+        @VisibleForTesting
         Iterator<TopologyDescription.Node> nodesInOrder() {
             return nodes.iterator();
         }
@@ -2013,11 +2014,12 @@ public class InternalTopologyBuilder {
         setRegexMatchedTopicToStateStore();
     }
 
-    // following functions are for test only
+    @VisibleForTesting
     public synchronized Set<String> sourceTopicNames() {
         return sourceTopicNames;
     }
 
+    @VisibleForTesting
     public synchronized Map<String, StateStoreFactory<?>> stateStores() {
         return stateFactories;
     }

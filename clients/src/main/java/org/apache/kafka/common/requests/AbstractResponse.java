@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -51,7 +52,7 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
         return RequestUtils.serialize(header.data(), header.headerVersion(), data(), version);
     }
 
-    // Visible for testing
+    @VisibleForTesting
     final ByteBuffer serialize(short version) {
         return MessageUtil.toByteBuffer(data(), version);
     }

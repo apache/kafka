@@ -28,6 +28,7 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -1592,43 +1593,52 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
     }
 
-    // following functions are for test only
+    @VisibleForTesting
     void setInternalTopicManager(final InternalTopicManager internalTopicManager) {
         this.internalTopicManager = internalTopicManager;
     }
 
+    @VisibleForTesting
     RebalanceProtocol rebalanceProtocol() {
         return rebalanceProtocol;
     }
 
+    @VisibleForTesting
     protected String userEndPoint() {
         return userEndPoint;
     }
 
+    @VisibleForTesting
     protected TaskManager taskManager() {
         return taskManager;
     }
 
+    @VisibleForTesting
     protected byte uniqueField() {
         return uniqueField;
     }
 
+    @VisibleForTesting
     protected void handleRebalanceStart(final Set<String> topics) {
         taskManager.handleRebalanceStart(topics);
     }
 
+    @VisibleForTesting
     long acceptableRecoveryLag() {
         return assignmentConfigs.acceptableRecoveryLag;
     }
 
+    @VisibleForTesting
     int maxWarmupReplicas() {
         return assignmentConfigs.maxWarmupReplicas;
     }
 
+    @VisibleForTesting
     int numStandbyReplicas() {
         return assignmentConfigs.numStandbyReplicas;
     }
 
+    @VisibleForTesting
     long probingRebalanceIntervalMs() {
         return assignmentConfigs.probingRebalanceIntervalMs;
     }

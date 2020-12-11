@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.slf4j.Logger;
@@ -88,7 +89,7 @@ public class Connect {
         return herder.isRunning();
     }
 
-    // Visible for testing
+    @VisibleForTesting
     public URI restUrl() {
         return rest.serverUrl();
     }

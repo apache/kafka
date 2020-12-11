@@ -24,6 +24,7 @@ import kafka.api.{ApiVersion, ApiVersionValidator}
 import kafka.message.BrokerCompressionCodec
 import kafka.server.{KafkaConfig, ThrottledReplicaListValidator}
 import kafka.utils.Implicits._
+import org.apache.kafka.common.annotation.VisibleForTesting
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, TopicConfig}
 import org.apache.kafka.common.record.{LegacyRecord, TimestampType}
@@ -183,7 +184,7 @@ object LogConfig {
 
   private[log] val ServerDefaultHeaderName = "Server Default Property"
 
-  // Package private for testing
+  @VisibleForTesting
   private[log] class LogConfigDef(base: ConfigDef) extends ConfigDef(base) {
     def this() = this(new ConfigDef)
 
@@ -227,7 +228,7 @@ object LogConfig {
     def serverConfigName(configName: String): Option[String] = serverDefaultConfigNames.get(configName)
   }
 
-  // Package private for testing, return a copy since it's a mutable global variable
+  @VisibleForTesting
   private[log] def configDefCopy: LogConfigDef = new LogConfigDef(configDef)
 
   private val configDef: LogConfigDef = {

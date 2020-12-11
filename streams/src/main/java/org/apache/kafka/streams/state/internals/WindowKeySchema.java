@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
@@ -174,7 +175,7 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
         return toStoreKeyBinary(serializedKey, timeKey.window().start(), seqnum);
     }
 
-    // package private for testing
+    @VisibleForTesting
     static Bytes toStoreKeyBinary(final byte[] serializedKey,
                                   final long timestamp,
                                   final int seqnum) {

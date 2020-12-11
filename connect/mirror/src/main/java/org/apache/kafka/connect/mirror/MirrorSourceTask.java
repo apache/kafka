@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -67,7 +68,7 @@ public class MirrorSourceTask extends SourceTask {
 
     public MirrorSourceTask() {}
 
-    // for testing
+    @VisibleForTesting
     MirrorSourceTask(String sourceClusterAlias, ReplicationPolicy replicationPolicy, long maxOffsetLag) {
         this.sourceClusterAlias = sourceClusterAlias;
         this.replicationPolicy = replicationPolicy;
@@ -228,7 +229,7 @@ public class MirrorSourceTask extends SourceTask {
         return MirrorUtils.unwrapOffset(wrappedOffset) + 1;
     }
 
-    // visible for testing 
+    @VisibleForTesting
     SourceRecord convertRecord(ConsumerRecord<byte[], byte[]> record) {
         String targetTopic = formatRemoteTopic(record.topic());
         Headers headers = convertHeaders(record);

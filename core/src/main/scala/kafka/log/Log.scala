@@ -35,6 +35,7 @@ import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.epoch.LeaderEpochFileCache
 import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchHighWatermark, FetchIsolation, FetchLogEnd, FetchTxnCommitted, LogDirFailureChannel, LogOffsetMetadata, OffsetAndEpoch}
 import kafka.utils._
+import org.apache.kafka.common.annotation.VisibleForTesting
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
@@ -294,7 +295,7 @@ class Log(@volatile private var _dir: File,
   /* the actual segments of the log */
   private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
 
-  // Visible for testing
+  @VisibleForTesting
   @volatile var leaderEpochCache: Option[LeaderEpochFileCache] = None
 
   locally {
@@ -2042,23 +2043,23 @@ class Log(@volatile private var _dir: File,
     }
   }
 
-  // visible for testing
+  @VisibleForTesting
   private[log] def takeProducerSnapshot(): Unit = lock synchronized {
     checkIfMemoryMappedBufferClosed()
     producerStateManager.takeSnapshot()
   }
 
-  // visible for testing
+  @VisibleForTesting
   private[log] def latestProducerSnapshotOffset: Option[Long] = lock synchronized {
     producerStateManager.latestSnapshotOffset
   }
 
-  // visible for testing
+  @VisibleForTesting
   private[log] def oldestProducerSnapshotOffset: Option[Long] = lock synchronized {
     producerStateManager.oldestSnapshotOffset
   }
 
-  // visible for testing
+  @VisibleForTesting
   private[log] def latestProducerStateEndOffset: Long = lock synchronized {
     producerStateManager.mapEndOffset
   }

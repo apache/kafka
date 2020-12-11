@@ -26,6 +26,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
@@ -648,7 +649,7 @@ public class StreamThread extends Thread {
      *                               or if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
      */
-    // Visible for testing
+    @VisibleForTesting
     void runOnce() {
         final long startMs = time.milliseconds();
         now = startMs;
@@ -920,11 +921,10 @@ public class StreamThread extends Thread {
     /**
      * Try to commit all active tasks owned by this thread.
      *
-     * Visible for testing.
-     *
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
      */
+    @VisibleForTesting
     int maybeCommit() {
         final int committed;
         if (now - lastCommitMs > commitTimeMs) {
@@ -1030,7 +1030,7 @@ public class StreamThread extends Thread {
         return threadMetadata;
     }
 
-    // package-private for testing only
+    @VisibleForTesting
     StreamThread updateThreadMetadata(final String adminClientId) {
 
         threadMetadata = new ThreadMetadata(
@@ -1114,7 +1114,7 @@ public class StreamThread extends Thread {
         return ClientUtils.adminClientMetrics(adminClient);
     }
 
-    // the following are for testing only
+    @VisibleForTesting
     void setNow(final long now) {
         this.now = now;
     }

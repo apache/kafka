@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.header;
 
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.connect.data.Date;
 import org.apache.kafka.connect.data.Decimal;
@@ -395,7 +396,7 @@ public class ConnectHeaders implements Headers {
      * @param schemaAndValue the schema and value pair
      * @throws DataException if the schema is not compatible with the value
      */
-    // visible for testing
+    @VisibleForTesting
     void checkSchemaMatches(SchemaAndValue schemaAndValue) {
         if (schemaAndValue != null) {
             Schema schema = schemaAndValue.schema();

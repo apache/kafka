@@ -39,6 +39,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -565,7 +566,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private static final String JMX_PREFIX = "kafka.consumer";
     static final long DEFAULT_CLOSE_TIMEOUT_MS = 30 * 1000;
 
-    // Visible for testing
+    @VisibleForTesting
     final Metrics metrics;
     final KafkaConsumerMetrics kafkaConsumerMetrics;
 
@@ -824,7 +825,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         }
     }
 
-    // visible for testing
+    @VisibleForTesting
     KafkaConsumer(LogContext logContext,
                   String clientId,
                   ConsumerCoordinator coordinator,
@@ -2471,11 +2472,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             offsetAndMetadata.leaderEpoch().ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(topicPartition, epoch));
     }
 
-    // Functions below are for testing only
+    @VisibleForTesting
     String getClientId() {
         return clientId;
     }
 
+    @VisibleForTesting
     boolean updateAssignmentMetadataIfNeeded(final Timer timer) {
         return updateAssignmentMetadataIfNeeded(timer, true);
     }

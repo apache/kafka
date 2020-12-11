@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Message;
@@ -38,12 +39,12 @@ public final class RequestUtils {
             Optional.empty() : Optional.of(leaderEpoch);
     }
 
-    // visible for testing
+    @VisibleForTesting
     public static boolean hasIdempotentRecords(ProduceRequest request) {
         return flags(request).getKey();
     }
 
-    // visible for testing
+    @VisibleForTesting
     public static boolean hasTransactionalRecords(ProduceRequest request) {
         return flags(request).getValue();
     }

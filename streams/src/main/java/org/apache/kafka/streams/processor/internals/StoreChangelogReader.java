@@ -27,6 +27,7 @@ import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -162,7 +163,7 @@ public class StoreChangelogReader implements ChangelogReader {
                 " (currentOffset " + currentOffset + ", endOffset " + restoreEndOffset + ")";
         }
 
-        // for testing only below
+        @VisibleForTesting
         ChangelogState state() {
             return changelogState;
         }
@@ -948,7 +949,7 @@ public class StoreChangelogReader implements ChangelogReader {
         return "StoreChangelogReader: " + changelogs + "\n";
     }
 
-    // for testing only
+    @VisibleForTesting
     ChangelogMetadata changelogMetadata(final TopicPartition partition) {
         return changelogs.get(partition);
     }

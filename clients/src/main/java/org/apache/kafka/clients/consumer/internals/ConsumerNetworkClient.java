@@ -22,6 +22,7 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InterruptException;
@@ -483,7 +484,7 @@ public class ConsumerNetworkClient implements Closeable {
         }
     }
 
-    // Visible for testing
+    @VisibleForTesting
     long trySend(long now) {
         long pollDelayMs = maxPollTimeoutMs;
 

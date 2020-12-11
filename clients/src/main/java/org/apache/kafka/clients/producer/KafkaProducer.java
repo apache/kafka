@@ -40,6 +40,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -240,7 +241,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public static final String PRODUCER_METRIC_GROUP_NAME = "producer-metrics";
 
     private final String clientId;
-    // Visible for testing
+    @VisibleForTesting
     final Metrics metrics;
     private final Partitioner partitioner;
     private final int maxRequestSize;
@@ -318,7 +319,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         this(Utils.propsToMap(properties), keySerializer, valueSerializer);
     }
 
-    // visible for testing
+    @VisibleForTesting
     @SuppressWarnings("unchecked")
     KafkaProducer(ProducerConfig config,
                   Serializer<K> keySerializer,
@@ -441,7 +442,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
     }
 
-    // visible for testing
+    @VisibleForTesting
     Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata) {
         int maxInflightRequests = configureInflightRequests(producerConfig);
         int requestTimeoutMs = producerConfig.getInt(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
@@ -1294,7 +1295,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     "by setting the " + ProducerConfig.TRANSACTIONAL_ID_CONFIG + " configuration property");
     }
 
-    // Visible for testing
+    @VisibleForTesting
     String getClientId() {
         return clientId;
     }

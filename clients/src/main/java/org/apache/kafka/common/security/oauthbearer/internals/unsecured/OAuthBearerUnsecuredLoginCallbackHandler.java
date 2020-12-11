@@ -37,6 +37,7 @@ import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.sasl.SaslException;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
@@ -121,11 +122,11 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
     private static final Pattern BACKSLASH = Pattern.compile("\\", Pattern.LITERAL);
 
     /**
-     * For testing
      *
      * @param time
      *            the mandatory time to set
      */
+    @VisibleForTesting
     void time(Time time) {
         this.time = Objects.requireNonNull(time);
     }

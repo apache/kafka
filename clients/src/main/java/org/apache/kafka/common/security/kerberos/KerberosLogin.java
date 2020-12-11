@@ -24,6 +24,7 @@ import javax.security.auth.login.LoginException;
 import javax.security.auth.kerberos.KerberosTicket;
 import javax.security.auth.Subject;
 
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
@@ -372,7 +373,7 @@ public class KerberosLogin extends AbstractLogin {
         }
     }
 
-    // Visibility to override for testing
+    @VisibleForTesting
     protected void logout() throws LoginException {
         loginContext.logout();
     }

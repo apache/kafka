@@ -26,6 +26,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import org.apache.kafka.clients.producer.BufferExhaustedException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Meter;
@@ -204,7 +205,7 @@ public class BufferPool {
             return buffer;
     }
 
-    // Protected for testing
+    @VisibleForTesting
     protected void recordWaitTime(long timeNs) {
         this.waitTime.record(timeNs, time.milliseconds());
     }
@@ -233,7 +234,7 @@ public class BufferPool {
         }
     }
 
-    // Protected for testing.
+    @VisibleForTesting
     protected ByteBuffer allocateByteBuffer(int size) {
         return ByteBuffer.allocate(size);
     }
@@ -288,7 +289,7 @@ public class BufferPool {
         }
     }
 
-    // Protected for testing.
+    @VisibleForTesting
     protected int freeSize() {
         return this.free.size();
     }
@@ -331,7 +332,7 @@ public class BufferPool {
         return this.totalMemory;
     }
 
-    // package-private method used only for testing
+    @VisibleForTesting
     Deque<Condition> waiters() {
         return this.waiters;
     }

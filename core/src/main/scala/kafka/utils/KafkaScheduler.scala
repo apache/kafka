@@ -19,6 +19,8 @@ package kafka.utils
 
 import java.util.concurrent._
 import atomic._
+
+import org.apache.kafka.common.annotation.VisibleForTesting
 import org.apache.kafka.common.utils.KafkaThread
 
 /**
@@ -125,9 +127,7 @@ class KafkaScheduler(val threads: Int,
     }
   }
 
-  /**
-   * Package private for testing.
-   */
+  @VisibleForTesting
   private[kafka] def taskRunning(task: ScheduledFuture[_]): Boolean = {
     executor.getQueue().contains(task)
   }

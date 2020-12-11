@@ -21,6 +21,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
@@ -300,7 +301,7 @@ public class RecordCollectorImpl implements RecordCollector {
         }
     }
 
-    // for testing only
+    @VisibleForTesting
     Producer<byte[], byte[]> producer() {
         return streamsProducer.kafkaProducer();
     }

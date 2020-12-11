@@ -36,6 +36,7 @@ import kafka.security.CredentialProvider
 import kafka.utils._
 import kafka.zk.{BrokerInfo, KafkaZkClient}
 import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, CommonClientConfigs, ManualMetadataUpdater, NetworkClient, NetworkClientUtils}
+import org.apache.kafka.common.annotation.VisibleForTesting
 import org.apache.kafka.common.internals.ClusterResourceListeners
 import org.apache.kafka.common.message.ControlledShutdownRequestData
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics, MetricsReporter, _}
@@ -195,7 +196,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   def clusterId: String = _clusterId
 
-  // Visible for testing
+  @VisibleForTesting
   private[kafka] def zkClient = _zkClient
 
   private[kafka] def brokerTopicStats = _brokerTopicStats

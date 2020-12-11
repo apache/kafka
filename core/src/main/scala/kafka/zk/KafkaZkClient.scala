@@ -30,6 +30,7 @@ import kafka.server.ConfigType
 import kafka.utils.Logging
 import kafka.zk.TopicZNode.TopicIdReplicaAssignment
 import kafka.zookeeper._
+import org.apache.kafka.common.annotation.VisibleForTesting
 import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
@@ -62,7 +63,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
 
   import KafkaZkClient._
 
-  // Only for testing
+  @VisibleForTesting
   private[kafka] def currentZooKeeper: ZooKeeper = zooKeeperClient.currentZooKeeper
 
   // This variable holds the Zookeeper session id at the moment a Broker gets registered in Zookeeper and the subsequent

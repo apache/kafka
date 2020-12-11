@@ -20,6 +20,7 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.KafkaException;
@@ -70,7 +71,7 @@ public class MirrorClient implements AutoCloseable {
         replicationPolicy = config.replicationPolicy();
     }
 
-    // for testing
+    @VisibleForTesting
     MirrorClient(AdminClient adminClient, ReplicationPolicy replicationPolicy,
             Map<String, Object> consumerConfig) {
         this.adminClient = adminClient;

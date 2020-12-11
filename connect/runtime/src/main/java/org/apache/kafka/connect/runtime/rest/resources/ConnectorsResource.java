@@ -21,6 +21,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import javax.ws.rs.core.HttpHeaders;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
@@ -100,7 +101,7 @@ public class ConnectorsResource {
         isTopicTrackingResetDisabled = !config.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG);
     }
 
-    // For testing purposes only
+    @VisibleForTesting
     public static void setRequestTimeout(long requestTimeoutMs) {
         ConnectorsResource.requestTimeoutMs = requestTimeoutMs;
     }

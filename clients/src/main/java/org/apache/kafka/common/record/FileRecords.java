@@ -17,6 +17,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.utils.AbstractIterator;
@@ -54,8 +55,8 @@ public class FileRecords extends AbstractRecords implements Closeable {
 
     /**
      * The {@code FileRecords.open} methods should be used instead of this constructor whenever possible.
-     * The constructor is visible for tests.
      */
+    @VisibleForTesting
     FileRecords(File file,
                 FileChannel channel,
                 int start,

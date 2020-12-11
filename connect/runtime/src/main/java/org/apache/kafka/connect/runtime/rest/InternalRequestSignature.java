@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.rest;
 
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.eclipse.jetty.client.api.Request;
@@ -96,7 +97,7 @@ public class InternalRequestSignature {
         );
     }
 
-    // Public for testing
+    @VisibleForTesting
     public InternalRequestSignature(byte[] requestBody, Mac mac, byte[] requestSignature) {
         this.requestBody = requestBody;
         this.mac = mac;

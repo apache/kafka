@@ -17,6 +17,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ByteUtils;
@@ -493,7 +494,7 @@ public final class LegacyRecord {
         return recordOverhead(magic) + keySize + valueSize;
     }
 
-    // visible only for testing
+    @VisibleForTesting
     public static byte computeAttributes(byte magic, CompressionType type, TimestampType timestampType) {
         byte attributes = 0;
         if (type.id > 0)
@@ -508,7 +509,7 @@ public final class LegacyRecord {
         return attributes;
     }
 
-    // visible only for testing
+    @VisibleForTesting
     public static long computeChecksum(byte magic, byte attributes, long timestamp, byte[] key, byte[] value) {
         return computeChecksum(magic, attributes, timestamp, wrapNullable(key), wrapNullable(value));
     }

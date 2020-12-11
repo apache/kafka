@@ -24,6 +24,7 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 
 import com.yammer.metrics.core.Meter
+import org.apache.kafka.common.annotation.VisibleForTesting
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.utils.{KafkaThread, Time}
 
@@ -205,7 +206,7 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
     metricTypeMap.put(BrokerTopicStats.ReassignmentBytesOutPerSec, MeterWrapper(BrokerTopicStats.ReassignmentBytesOutPerSec, "bytes"))
   }
 
-  // used for testing only
+  @VisibleForTesting
   def metricMap: Map[String, MeterWrapper] = metricTypeMap.toMap
 
   def messagesInRate: Meter = metricTypeMap.get(BrokerTopicStats.MessagesInPerSec).meter()

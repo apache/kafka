@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.standalone;
 
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -76,7 +77,7 @@ public class StandaloneHerder extends AbstractHerder {
              connectorClientConfigOverridePolicy);
     }
 
-    // visible for testing
+    @VisibleForTesting
     StandaloneHerder(Worker worker,
                      String workerId,
                      String kafkaClusterId,

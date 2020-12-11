@@ -27,6 +27,7 @@ import kafka.server.{KafkaConfig, MetadataCache}
 import kafka.utils.{CoreUtils, Logging}
 import kafka.utils.Implicits._
 import org.apache.kafka.clients._
+import org.apache.kafka.common.annotation.VisibleForTesting
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.protocol.Errors
@@ -123,7 +124,7 @@ class TxnMarkerQueue(@volatile var destination: Node) {
 
   def totalNumMarkers: Int = markersPerTxnTopicPartition.values.foldLeft(0) { _ + _.size }
 
-  // visible for testing
+  @VisibleForTesting
   def totalNumMarkers(txnTopicPartition: Int): Int = markersPerTxnTopicPartition.get(txnTopicPartition).fold(0)(_.size)
 }
 
@@ -161,12 +162,12 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
     markersQueuePerBroker.clear()
   }
 
-  // visible for testing
+  @VisibleForTesting
   private[transaction] def queueForBroker(brokerId: Int) = {
     markersQueuePerBroker.get(brokerId)
   }
 
-  // visible for testing
+  @VisibleForTesting
   private[transaction] def queueForUnknownBroker = markersQueueForUnknownBroker
 
   private[transaction] def addMarkersForBroker(broker: Node, txnTopicPartition: Int, txnIdAndMarker: TxnIdAndMarkerEntry): Unit = {

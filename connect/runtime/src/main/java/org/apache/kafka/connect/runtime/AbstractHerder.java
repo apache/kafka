@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
@@ -503,7 +504,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         return new ConfigInfos(connectorClass.toString(), errorCount, new ArrayList<>(groups), configInfoList);
     }
 
-    // public for testing
+    @VisibleForTesting
     public static ConfigInfos generateResult(String connType, Map<String, ConfigKey> configKeys, List<ConfigValue> configValues, List<String> groups) {
         int errorCount = 0;
         List<ConfigInfo> configInfoList = new LinkedList<>();
@@ -662,7 +663,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         return result;
     }
 
-    // Visible for testing
+    @VisibleForTesting
     static Set<String> keysWithVariableValues(Map<String, String> rawConfig, Pattern pattern) {
         Set<String> keys = new HashSet<>();
         for (Map.Entry<String, String> config : rawConfig.entrySet()) {

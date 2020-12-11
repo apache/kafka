@@ -38,6 +38,7 @@ import kafka.utils._
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
+import org.apache.kafka.common.annotation.VisibleForTesting
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.{Avg, Max, Meter}
@@ -201,7 +202,7 @@ class GroupMetadataManager(brokerId: Int,
     }
   }
 
-  // visible for testing
+  @VisibleForTesting
   private[group] def isGroupOpenForProducer(producerId: Long, groupId: String) = openGroupsForProducer.get(producerId) match {
     case Some(groups) =>
       groups.contains(groupId)
@@ -779,7 +780,7 @@ class GroupMetadataManager(brokerId: Int,
     }
   }
 
-  // visible for testing
+  @VisibleForTesting
   private[group] def cleanupGroupMetadata(): Unit = {
     val currentTimestamp = time.milliseconds()
     val numOffsetsRemoved = cleanupGroupMetadata(groupMetadataCache.values, group => {
@@ -953,9 +954,8 @@ class GroupMetadataManager(brokerId: Int,
 
   /**
    * Add the partition into the owned list
-   *
-   * NOTE: this is for test only
    */
+  @VisibleForTesting
   private[group] def addPartitionOwnership(partition: Int): Unit = {
     inLock(partitionLock) {
       ownedPartitions.add(partition)
@@ -965,9 +965,8 @@ class GroupMetadataManager(brokerId: Int,
   /**
    * Add a partition to the loading partitions set. Return true if the partition was not
    * already loading.
-   *
-   * Visible for testing
    */
+  @VisibleForTesting
   private[group] def addLoadingPartition(partition: Int): Boolean = {
     inLock(partitionLock) {
       loadingPartitions.add(partition)

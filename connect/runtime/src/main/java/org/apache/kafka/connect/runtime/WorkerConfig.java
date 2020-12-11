@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -454,7 +455,7 @@ public class WorkerConfig extends AbstractConfig {
         logPluginPathConfigProviderWarning(props);
     }
 
-    // Visible for testing
+    @VisibleForTesting
     static void validateHttpResponseHeaderConfig(String config) {
         try {
             // validate format
@@ -488,7 +489,7 @@ public class WorkerConfig extends AbstractConfig {
         }
     }
 
-    // Visible for testing
+    @VisibleForTesting
     static void validateHeaderConfigAction(String action) {
         if (!HEADER_ACTIONS.stream().anyMatch(action::equalsIgnoreCase)) {
             throw new ConfigException(String.format("Invalid header config action: '%s'. "

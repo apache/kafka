@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.resource.ResourcePattern;
@@ -118,7 +119,7 @@ public class DeleteAclsResponse extends AbstractResponse {
         return matchingAcl(acl, error);
     }
 
-    // Visible for testing
+    @VisibleForTesting
     public static DeleteAclsMatchingAcl matchingAcl(AclBinding acl, ApiError error) {
         return new DeleteAclsMatchingAcl()
             .setErrorCode(error.error().code())

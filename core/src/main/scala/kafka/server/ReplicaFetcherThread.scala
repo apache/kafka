@@ -28,6 +28,7 @@ import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.annotation.VisibleForTesting
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.message.ListOffsetRequestData.{ListOffsetPartition, ListOffsetTopic}
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
@@ -68,7 +69,7 @@ class ReplicaFetcherThread(name: String,
     new ReplicaFetcherBlockingSend(sourceBroker, brokerConfig, metrics, time, fetcherId,
       s"broker-$replicaId-fetcher-$fetcherId", logContext))
 
-  // Visible for testing
+  @VisibleForTesting
   private[server] val fetchRequestVersion: Short =
     if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_7_IV1) 12
     else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_3_IV1) 11
@@ -82,7 +83,7 @@ class ReplicaFetcherThread(name: String,
     else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_9_0) 1
     else 0
 
-  // Visible for testing
+  @VisibleForTesting
   private[server] val offsetForLeaderEpochRequestVersion: Short =
     if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_8_IV0) 4
     else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_3_IV1) 3
@@ -90,7 +91,7 @@ class ReplicaFetcherThread(name: String,
     else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV0) 1
     else 0
 
-  // Visible for testing
+  @VisibleForTesting
   private[server] val listOffsetRequestVersion: Short =
     if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_8_IV0) 6
     else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_2_IV1) 5

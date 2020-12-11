@@ -20,6 +20,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
@@ -235,9 +236,8 @@ public class Metadata implements Closeable {
 
     /**
      * Update metadata assuming the current request version.
-     *
-     * For testing only.
      */
+    @VisibleForTesting
     public synchronized void updateWithCurrentRequestVersion(MetadataResponse response, boolean isPartialUpdate, long nowMs) {
         this.update(this.requestVersion, response, isPartialUpdate, nowMs);
     }

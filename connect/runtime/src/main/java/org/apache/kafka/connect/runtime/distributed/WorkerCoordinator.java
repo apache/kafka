@@ -19,6 +19,7 @@ package org.apache.kafka.connect.runtime.distributed;
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.GroupRebalanceConfig;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -114,7 +115,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         return "connect";
     }
 
-    // expose for tests
+    @VisibleForTesting
     @Override
     protected synchronized boolean ensureCoordinatorReady(final Timer timer) {
         return super.ensureCoordinatorReady(timer);

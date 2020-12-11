@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.feature;
 
+import org.apache.kafka.common.annotation.VisibleForTesting;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -66,7 +68,7 @@ public class Features<VersionRangeType extends BaseVersionRange> {
         return new Features<>(features);
     }
 
-    // Visible for testing.
+    @VisibleForTesting
     public static Features<FinalizedVersionRange> emptyFinalizedFeatures() {
         return new Features<>(new HashMap<>());
     }

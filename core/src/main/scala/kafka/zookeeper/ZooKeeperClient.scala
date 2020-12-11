@@ -27,6 +27,7 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.CoreUtils.{inLock, inReadLock, inWriteLock}
 import kafka.utils.{KafkaScheduler, Logging}
 import kafka.zookeeper.ZooKeeperClient._
+import org.apache.kafka.common.annotation.VisibleForTesting
 import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.AsyncCallback.{Children2Callback, DataCallback, StatCallback}
 import org.apache.zookeeper.KeeperException.Code
@@ -187,7 +188,7 @@ class ZooKeeperClient(connectString: String,
     }
   }
 
-  // Visibility to override for testing
+  @VisibleForTesting
   private[zookeeper] def send[Req <: AsyncRequest](request: Req)(processResponse: Req#Response => Unit): Unit = {
     // Safe to cast as we always create a response of the right type
     def callback(response: AsyncResponse): Unit = processResponse(response.asInstanceOf[Req#Response])
@@ -370,7 +371,7 @@ class ZooKeeperClient(connectString: String,
     zooKeeper.getSessionId
   }
 
-  // Only for testing
+  @VisibleForTesting
   private[kafka] def currentZooKeeper: ZooKeeper = inReadLock(initializationLock) {
     zooKeeper
   }
@@ -428,7 +429,7 @@ class ZooKeeperClient(connectString: String,
     }
   }
 
-  // Visibility for testing
+  @VisibleForTesting
   private[zookeeper] def scheduleReinitialize(name: String, message: String, delayMs: Long): Unit = {
     reinitializeScheduler.schedule(name, () => {
       info(message)
@@ -438,7 +439,7 @@ class ZooKeeperClient(connectString: String,
 
   private def threadPrefix: String = name.map(n => n.replaceAll("\\s", "") + "-").getOrElse("")
 
-  // package level visibility for testing only
+  @VisibleForTesting
   private[zookeeper] object ZooKeeperClientWatcher extends Watcher {
     override def process(event: WatchedEvent): Unit = {
       debug(s"Received event: $event")

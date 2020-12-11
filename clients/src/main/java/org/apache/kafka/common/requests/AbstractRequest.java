@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -104,12 +105,12 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
 
     protected abstract Message data();
 
-    // Visible for testing
+    @VisibleForTesting
     public final ByteBuffer serialize() {
         return MessageUtil.toByteBuffer(data(), version);
     }
 
-    // Visible for testing
+    @VisibleForTesting
     final int sizeInBytes() {
         return data().size(new ObjectSerializationCache(), version);
     }

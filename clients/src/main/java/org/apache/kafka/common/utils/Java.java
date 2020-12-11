@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.utils;
 
+import org.apache.kafka.common.annotation.VisibleForTesting;
+
 import java.util.StringTokenizer;
 
 public final class Java {
@@ -24,7 +26,7 @@ public final class Java {
 
     private static final Version VERSION = parseVersion(System.getProperty("java.specification.version"));
 
-    // Package private for testing
+    @VisibleForTesting
     static Version parseVersion(String versionString) {
         final StringTokenizer st = new StringTokenizer(versionString, ".");
         int majorVersion = Integer.parseInt(st.nextToken());
@@ -44,7 +46,7 @@ public final class Java {
         return System.getProperty("java.vendor").contains("IBM");
     }
 
-    // Package private for testing
+    @VisibleForTesting
     static class Version {
         public final int majorVersion;
         public final int minorVersion;
@@ -60,7 +62,7 @@ public final class Java {
                     ", minorVersion=" + minorVersion + ")";
         }
 
-        // Package private for testing
+        @VisibleForTesting
         boolean isJava9Compatible() {
             return majorVersion >= 9;
         }

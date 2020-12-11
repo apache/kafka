@@ -39,6 +39,7 @@ import java.util.concurrent.atomic.AtomicLong
 import kafka.log.LogAppendInfo
 import kafka.server.AbstractFetcherThread.ReplicaFetch
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
+import org.apache.kafka.common.annotation.VisibleForTesting
 import org.apache.kafka.common.{InvalidRecordException, TopicPartition}
 import org.apache.kafka.common.internals.PartitionStates
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
@@ -236,7 +237,7 @@ abstract class AbstractFetcherThread(name: String,
     }
   }
 
-  // Visible for testing
+  @VisibleForTesting
   private[server] def truncateToHighWatermark(partitions: Set[TopicPartition]): Unit = inLock(partitionMapLock) {
     val fetchOffsets = mutable.HashMap.empty[TopicPartition, OffsetTruncationState]
 
@@ -725,7 +726,7 @@ abstract class AbstractFetcherThread(name: String,
     finally partitionMapLock.unlock()
   }
 
-  // Visible for testing
+  @VisibleForTesting
   private[server] def fetchState(topicPartition: TopicPartition): Option[PartitionFetchState] = inLock(partitionMapLock) {
     Option(partitionStates.stateValue(topicPartition))
   }

@@ -23,6 +23,7 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
@@ -200,7 +201,7 @@ public class InternalTopicManager {
      *
      * Topics that were not able to get its description will simply not be returned
      */
-    // visible for testing
+    @VisibleForTesting
     protected Map<String, Integer> getNumPartitions(final Set<String> topics,
                                                     final Set<String> tempUnknownTopics) {
         log.debug("Trying to check if topics {} have been created with expected number of partitions.", topics);

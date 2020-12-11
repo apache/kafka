@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.errors.WakeupException;
@@ -162,7 +163,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private Set<ConnectorTaskId> tasksToRestart = new HashSet<>();
     private ExtendedAssignment assignment;
     private boolean canReadConfigs;
-    // visible for testing
+    @VisibleForTesting
     protected ClusterConfigState configState;
 
     // To handle most external requests, like creating or destroying a connector, we can use a generic request where
@@ -198,7 +199,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         configBackingStore.setUpdateListener(new ConfigUpdateListener());
     }
 
-    // visible for testing
+    @VisibleForTesting
     DistributedHerder(DistributedConfig config,
                       Worker worker,
                       String workerId,
@@ -306,7 +307,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
     }
 
-    // public for testing
+    @VisibleForTesting
     public void tick() {
         // The main loop does two primary things: 1) drive the group membership protocol, responding to rebalance events
         // as they occur, and 2) handle external requests targeted at the leader. All the "real" work of the herder is
@@ -648,7 +649,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         tasksToRestart.addAll(tasksToStop);
     }
 
-    // public for testing
+    @VisibleForTesting
     public void halt() {
         synchronized (this) {
             // Clean up any connectors and tasks that are still running.

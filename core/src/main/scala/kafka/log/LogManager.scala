@@ -27,6 +27,7 @@ import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.{BrokerState, RecoveringFromUncleanShutdown, _}
 import kafka.utils._
 import kafka.zk.KafkaZkClient
+import org.apache.kafka.common.annotation.VisibleForTesting
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.errors.{KafkaStorageException, LogDirNotFoundException}
@@ -86,7 +87,7 @@ class LogManager(logDirs: Seq[File],
   // of these partitions get updated at the same time, the corresponding entry in this map is set to "true",
   // which triggers a config reload after initialization is finished (to get the latest config value).
   // See KAFKA-8813 for more detail on the race condition
-  // Visible for testing
+  @VisibleForTesting
   private[log] val partitionsInitializing = new ConcurrentHashMap[TopicPartition, Boolean]().asScala
 
   def reconfigureDefaultLogConfig(logConfig: LogConfig): Unit = {
@@ -249,7 +250,7 @@ class LogManager(logDirs: Seq[File],
     this.logsToBeDeleted.add((log, time.milliseconds()))
   }
 
-  // Only for testing
+  @VisibleForTesting
   private[log] def hasLogsToBeDeleted: Boolean = !logsToBeDeleted.isEmpty
 
   private[log] def loadLog(logDir: File,
@@ -609,7 +610,7 @@ class LogManager(logDirs: Seq[File],
    *
    * @param logDir the directory in which the logs to be checkpointed are
    */
-  // Only for testing
+  @VisibleForTesting
   private[log] def checkpointRecoveryOffsetsInDir(logDir: File): Unit = {
     checkpointRecoveryOffsetsInDir(logDir, logsInDir(logDir))
   }

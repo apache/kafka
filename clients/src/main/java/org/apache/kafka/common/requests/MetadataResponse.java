@@ -20,6 +20,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseBroker;
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponsePartition;
@@ -441,7 +442,7 @@ public class MetadataResponse extends AbstractResponse {
                 topics, clusterAuthorizedOperations);
     }
 
-    // Visible for testing
+    @VisibleForTesting
     public static MetadataResponse prepareResponse(boolean hasReliableEpoch,
                                                    int throttleTimeMs,
                                                    Collection<Node> brokers,
