@@ -164,13 +164,11 @@ class BrokerToControllerRequestThread(networkClient: KafkaClient,
                                       listenerName: ListenerName,
                                       time: Time,
                                       threadName: String)
-  extends InterBrokerSendThread(threadName, networkClient, time, isInterruptible = false) {
+  extends InterBrokerSendThread(threadName, networkClient, config.controllerSocketTimeoutMs, time, isInterruptible = false) {
 
   private var activeController: Option[Node] = None
 
-  override def requestTimeoutMs: Int = config.controllerSocketTimeoutMs
-
-  override def generateRequests(): Iterable[RequestAndCompletionHandler] = {
+  def generateRequests(): Iterable[RequestAndCompletionHandler] = {
     val requestsToSend = new mutable.Queue[RequestAndCompletionHandler]
     val topRequest = requestQueue.poll()
     if (topRequest != null) {
@@ -209,6 +207,7 @@ class BrokerToControllerRequestThread(networkClient: KafkaClient,
 
   override def doWork(): Unit = {
     if (activeController.isDefined) {
+      generateRequests().foreach(sendRequest)
       super.doWork()
     } else {
       debug("Controller isn't cached, looking for local metadata changes")

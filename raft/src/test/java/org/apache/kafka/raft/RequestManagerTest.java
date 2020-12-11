@@ -92,7 +92,7 @@ public class RequestManagerTest {
         long correlationId = 1;
         connectionState.onRequestSent(correlationId, time.milliseconds());
         assertFalse(connectionState.isReady(time.milliseconds()));
-        connectionState.onResponseReceived(correlationId, time.milliseconds());
+        connectionState.onResponseReceived(correlationId);
         assertTrue(connectionState.isReady(time.milliseconds()));
     }
 
@@ -109,7 +109,7 @@ public class RequestManagerTest {
         long correlationId = 1;
         connectionState.onRequestSent(correlationId, time.milliseconds());
         assertFalse(connectionState.isReady(time.milliseconds()));
-        connectionState.onResponseReceived(correlationId + 1, time.milliseconds());
+        connectionState.onResponseReceived(correlationId + 1);
         assertFalse(connectionState.isReady(time.milliseconds()));
     }
 
@@ -120,7 +120,6 @@ public class RequestManagerTest {
             retryBackoffMs,
             requestTimeoutMs,
             random);
-
 
         RequestManager.ConnectionState connectionState = cache.getOrCreate(1);
 
