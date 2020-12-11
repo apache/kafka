@@ -52,13 +52,9 @@ public class BrokerRegistrationRequest extends AbstractRequest {
         this.data = new BrokerRegistrationRequestData(struct, version);
     }
 
+    @Override
     public BrokerRegistrationRequestData data() {
         return data;
-    }
-
-    @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
     }
 
     @Override

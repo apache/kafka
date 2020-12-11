@@ -19,8 +19,8 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.BrokerHeartbeatResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -30,13 +30,11 @@ public class BrokerHeartbeatResponse extends AbstractResponse {
     private final BrokerHeartbeatResponseData data;
 
     public BrokerHeartbeatResponse(BrokerHeartbeatResponseData data) {
+        super(ApiKeys.BROKER_HEARTBEAT);
         this.data = data;
     }
 
-    public BrokerHeartbeatResponse(Struct struct, short version) {
-        this.data = new BrokerHeartbeatResponseData(struct, version);
-    }
-
+    @Override
     public BrokerHeartbeatResponseData data() {
         return data;
     }
@@ -55,14 +53,8 @@ public class BrokerHeartbeatResponse extends AbstractResponse {
         return errorCounts;
     }
 
-    @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
-    }
-
     public static BrokerHeartbeatResponse parse(ByteBuffer buffer, short version) {
-        return new BrokerHeartbeatResponse(
-            ApiKeys.BROKER_HEARTBEAT.parseResponse(version, buffer), version);
+        return new BrokerHeartbeatResponse(new BrokerHeartbeatResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

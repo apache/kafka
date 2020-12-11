@@ -20,8 +20,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
@@ -44,16 +44,8 @@ public class DescribeQuorumResponse extends AbstractResponse {
     public final DescribeQuorumResponseData data;
 
     public DescribeQuorumResponse(DescribeQuorumResponseData data) {
+        super(ApiKeys.DESCRIBE_QUORUM);
         this.data = data;
-    }
-
-    public DescribeQuorumResponse(Struct struct, short version) {
-        this.data = new DescribeQuorumResponseData(struct, version);
-    }
-
-    @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
     }
 
     @Override
@@ -68,6 +60,16 @@ public class DescribeQuorumResponse extends AbstractResponse {
             }
         }
         return errors;
+    }
+
+    @Override
+    protected DescribeQuorumResponseData data() {
+        return data;
+    }
+
+    @Override
+    public int throttleTimeMs() {
+        return DEFAULT_THROTTLE_TIME;
     }
 
     public static DescribeQuorumResponseData singletonResponse(TopicPartition topicPartition,
@@ -89,6 +91,6 @@ public class DescribeQuorumResponse extends AbstractResponse {
     }
 
     public static DescribeQuorumResponse parse(ByteBuffer buffer, short version) {
-        return new DescribeQuorumResponse(ApiKeys.DESCRIBE_QUORUM.responseSchema(version).read(buffer), version);
+        return new DescribeQuorumResponse(new DescribeQuorumResponseData(new ByteBufferAccessor(buffer), version));
     }
 }

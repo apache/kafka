@@ -49,6 +49,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -2484,6 +2485,58 @@ public class StreamThreadTest {
         adminClient.setMockMetrics(testMetricName, testMetric);
         final Map<MetricName, Metric> adminClientMetrics = thread.adminClientMetrics();
         assertEquals(testMetricName, adminClientMetrics.get(testMetricName).metricName());
+    }
+
+    @Test
+    public void shouldNotRecordFailedStreamThread() {
+        runAndVerifyFailedStreamThreadRecording(false);
+    }
+
+    @Test
+    public void shouldRecordFailedStreamThread() {
+        runAndVerifyFailedStreamThreadRecording(true);
+    }
+
+    public void runAndVerifyFailedStreamThreadRecording(final boolean shouldFail) {
+        final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
+        final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
+        final StreamsMetricsImpl streamsMetrics =
+            new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST, mockTime);
+        final StreamThread thread = new StreamThread(
+            mockTime,
+            config,
+            null,
+            consumer,
+            consumer,
+            null,
+            null,
+            taskManager,
+            streamsMetrics,
+            internalTopologyBuilder,
+            CLIENT_ID,
+            new LogContext(""),
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE),
+            null,
+            e -> { },
+            null
+        ) {
+            @Override
+            void runOnce() {
+                setState(StreamThread.State.PENDING_SHUTDOWN);
+                if (shouldFail) {
+                    throw new StreamsException(Thread.currentThread().getName());
+                }
+            }
+        };
+        EasyMock.replay(taskManager);
+        thread.updateThreadMetadata("metadata");
+        thread.setState(StreamThread.State.STARTING);
+
+        thread.runLoop();
+
+        final Metric failedThreads = StreamsTestUtils.getMetricByName(metrics.metrics(), "failed-stream-threads", "stream-metrics");
+        assertThat(failedThreads.metricValue(), is(shouldFail ? 1.0 : 0.0));
     }
 
     private TaskManager mockTaskManagerCommit(final Consumer<byte[], byte[]> consumer,

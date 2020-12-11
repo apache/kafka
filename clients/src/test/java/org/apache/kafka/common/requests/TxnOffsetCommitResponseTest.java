@@ -17,10 +17,8 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
-import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition;
-import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
-
+import org.apache.kafka.common.protocol.MessageUtil;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -42,26 +40,27 @@ public class TxnOffsetCommitResponseTest extends OffsetCommitResponseTest {
 
     @Test
     @Override
-    public void testConstructorWithStruct() {
+    public void testParse() {
         TxnOffsetCommitResponseData data = new TxnOffsetCommitResponseData()
             .setThrottleTimeMs(throttleTimeMs)
             .setTopics(Arrays.asList(
-                new TxnOffsetCommitResponseTopic().setPartitions(
-                    Collections.singletonList(new TxnOffsetCommitResponsePartition()
-                                                  .setPartitionIndex(partitionOne)
-                                                  .setErrorCode(errorOne.code()))),
-                new TxnOffsetCommitResponseTopic().setPartitions(
-                    Collections.singletonList(new TxnOffsetCommitResponsePartition()
-                                                  .setPartitionIndex(partitionTwo)
-                                                  .setErrorCode(errorTwo.code()))
-                    )
-            ));
+                new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic().setPartitions(
+                    Collections.singletonList(new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
+                        .setPartitionIndex(partitionOne)
+                        .setErrorCode(errorOne.code()))),
+                    new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic().setPartitions(
+                        Collections.singletonList(new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
+                            .setPartitionIndex(partitionTwo)
+                            .setErrorCode(errorTwo.code())))
+                ));
 
         for (short version = 0; version <= ApiKeys.TXN_OFFSET_COMMIT.latestVersion(); version++) {
-            TxnOffsetCommitResponse response = new TxnOffsetCommitResponse(data.toStruct(version), version);
+            TxnOffsetCommitResponse response = TxnOffsetCommitResponse.parse(
+                MessageUtil.toByteBuffer(data, version), version);
             assertEquals(expectedErrorCounts, response.errorCounts());
             assertEquals(throttleTimeMs, response.throttleTimeMs());
             assertEquals(version >= 1, response.shouldClientThrottle(version));
         }
     }
+
 }

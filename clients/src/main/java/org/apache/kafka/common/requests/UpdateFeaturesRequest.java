@@ -23,7 +23,7 @@ import org.apache.kafka.common.message.UpdateFeaturesRequestData;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData.UpdatableFeatureResult;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData.UpdatableFeatureResultCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 
 public class UpdateFeaturesRequest extends AbstractRequest {
 
@@ -54,11 +54,6 @@ public class UpdateFeaturesRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public UpdateFeaturesRequest(Struct struct, short version) {
-        super(ApiKeys.UPDATE_FEATURES, version);
-        this.data = new UpdateFeaturesRequestData(struct, version);
-    }
-
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         final ApiError apiError = ApiError.fromThrowable(e);
@@ -73,11 +68,7 @@ public class UpdateFeaturesRequest extends AbstractRequest {
         final UpdateFeaturesResponseData responseData = new UpdateFeaturesResponseData()
             .setThrottleTimeMs(throttleTimeMs)
             .setResults(results);
-        return new UpdateFeaturesResponse(responseData);    }
-
-    @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
+        return new UpdateFeaturesResponse(responseData);
     }
 
     public UpdateFeaturesRequestData data() {
@@ -85,8 +76,7 @@ public class UpdateFeaturesRequest extends AbstractRequest {
     }
 
     public static UpdateFeaturesRequest parse(ByteBuffer buffer, short version) {
-        return new UpdateFeaturesRequest(
-            ApiKeys.UPDATE_FEATURES.parseRequest(version, buffer), version);
+        return new UpdateFeaturesRequest(new UpdateFeaturesRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
     public static boolean isDeleteRequest(UpdateFeaturesRequestData.FeatureUpdateKey update) {

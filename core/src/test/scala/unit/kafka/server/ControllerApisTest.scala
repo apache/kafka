@@ -24,13 +24,13 @@ import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.{ClientQuotaManager, ClientRequestQuotaManager, ControllerApis, ControllerMutationQuotaManager, KafkaConfig, MetaProperties, ReplicationQuotaManager}
 import kafka.utils.MockTime
-import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.errors.ClusterAuthorizationException
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.BrokerRegistrationRequestData
 import org.apache.kafka.common.network.{ClientInformation, ListenerName, Send}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, BrokerRegistrationRequest, RequestContext, RequestHeader}
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, BrokerRegistrationRequest, RequestContext, RequestHeader, RequestTestUtils}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.controller.Controller
 import org.apache.kafka.metadata.VersionRange
@@ -87,7 +87,8 @@ class ControllerApisTest {
    */
   private def buildRequest[T <: AbstractRequest](request: AbstractRequest,
                                                  listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)): RequestChannel.Request = {
-    val buffer = request.serialize(new RequestHeader(request.api, request.version, clientID, 0))
+    val buffer = RequestTestUtils.serializeRequestWithHeader(
+      new RequestHeader(request.apiKey, request.version, clientID, 0), request)
 
     // read the header from the buffer first so that the body can be read next from the Request constructor
     val header = RequestHeader.parse(buffer)

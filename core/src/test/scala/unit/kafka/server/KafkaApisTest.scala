@@ -21,18 +21,17 @@ import java.net.InetAddress
 import java.nio.charset.StandardCharsets
 import java.util
 import java.util.Arrays.asList
-import java.util.{Collections, Optional, Properties, Random}
 import java.util.concurrent.{CompletableFuture, TimeUnit}
+import java.util.{Collections, Optional, Properties, Random}
 
 import kafka.api.{ApiVersion, KAFKA_0_10_2_IV0, KAFKA_2_2_IV1, LeaderAndIsr}
-import kafka.cluster.Partition
+import kafka.cluster.{Broker, Partition}
 import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest.{JoinGroupCallback, SyncGroupCallback}
-import kafka.coordinator.group.{GroupCoordinator, GroupOverview, GroupSummary, JoinGroupResult, MemberSummary, SyncGroupResult}
+import kafka.coordinator.group._
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.log.AppendOrigin
 import kafka.network.RequestChannel
-//import kafka.network.RequestChannel.CloseConnectionResponse
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.BrokerMetadataListener
 import kafka.utils.{MockTime, TestUtils}
@@ -49,6 +48,7 @@ import org.apache.kafka.common.message.DescribeConfigsResponseData.DescribeConfi
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.ListOffsetRequestData.{ListOffsetPartition, ListOffsetTopic}
+import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
 import org.apache.kafka.common.message.OffsetDeleteRequestData.{OffsetDeleteRequestPartition, OffsetDeleteRequestTopic, OffsetDeleteRequestTopicCollection}
 import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
@@ -70,7 +70,7 @@ import org.apache.kafka.common.{IsolationLevel, Node, TopicPartition}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.easymock.EasyMock._
 import org.easymock.{Capture, EasyMock, IAnswer, IArgumentMatcher}
-import org.junit.Assert.{assertArrayEquals, assertEquals, assertFalse, assertNotEquals, assertNotNull, assertNull, assertTrue, fail}
+import org.junit.Assert._
 import org.junit.{After, Test}
 
 import scala.annotation.nowarn
@@ -99,7 +99,7 @@ class KafkaApisTest {
   private val zkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
   private val metrics = new Metrics()
   private val brokerId = 1
-  private val metadataCache = new MetadataCache(brokerId)
+  private var metadataCache: MetadataCache = new MetadataCache(brokerId)
   private val mockMetadataCache: MetadataCache = EasyMock.createNiceMock(classOf[MetadataCache])
   private val clientQuotaManager: ClientQuotaManager = EasyMock.createNiceMock(classOf[ClientQuotaManager])
   private val clientRequestQuotaManager: ClientRequestQuotaManager = EasyMock.createNiceMock(classOf[ClientRequestQuotaManager])
@@ -494,7 +494,7 @@ class KafkaApisTest {
       configResource -> new AlterConfigsRequest.Config(
         Seq(new AlterConfigsRequest.ConfigEntry("foo", "bar")).asJava))
     val alterConfigsRequest = new AlterConfigsRequest.Builder(configs.asJava, false).build(requestHeader.apiVersion)
-    val serializedRequestData = alterConfigsRequest.serialize(requestHeader)
+    val serializedRequestData = RequestTestUtils.serializeRequestWithHeader(requestHeader, alterConfigsRequest)
 
     val capturedResponse = expectNoThrottling()
 
@@ -521,7 +521,7 @@ class KafkaApisTest {
       clientId, 0)
     val leaveGroupRequest = new LeaveGroupRequest.Builder("group",
       Collections.singletonList(new MemberIdentity())).build(requestHeader.apiVersion)
-    val serializedRequestData = leaveGroupRequest.serialize(requestHeader)
+    val serializedRequestData = RequestTestUtils.serializeRequestWithHeader(requestHeader, leaveGroupRequest)
 
     val capturedResponse = expectNoThrottling()
 
@@ -1595,7 +1595,7 @@ class KafkaApisTest {
       request,
       capturedResponse.getValue
     ).asInstanceOf[WriteTxnMarkersResponse]
-    assertEquals(expectedErrors, markersResponse.errors(1))
+    assertEquals(expectedErrors, markersResponse.errorsByProducerId.get(1L))
   }
 
   @Test
@@ -1622,7 +1622,7 @@ class KafkaApisTest {
       request,
       capturedResponse.getValue
     ).asInstanceOf[WriteTxnMarkersResponse]
-    assertEquals(expectedErrors, markersResponse.errors(1))
+    assertEquals(expectedErrors, markersResponse.errorsByProducerId.get(1L))
   }
 
   @Test
@@ -1665,7 +1665,7 @@ class KafkaApisTest {
       request,
       capturedResponse.getValue
     ).asInstanceOf[WriteTxnMarkersResponse]
-    assertEquals(expectedErrors, markersResponse.errors(1))
+    assertEquals(expectedErrors, markersResponse.errorsByProducerId.get(1L))
     EasyMock.verify(replicaManager)
   }
 
@@ -1810,7 +1810,7 @@ class KafkaApisTest {
       request,
       capturedResponse.getValue
     ).asInstanceOf[WriteTxnMarkersResponse]
-    assertEquals(expectedErrors, markersResponse.errors(1))
+    assertEquals(expectedErrors, markersResponse.errorsByProducerId.get(1L))
     EasyMock.verify(replicaManager)
   }
 
@@ -2108,7 +2108,7 @@ class KafkaApisTest {
     assertEquals(Set(0, 1), response.brokers.asScala.map(_.id).toSet)
   }
 
-  /*
+  /**
    * Verifies that the metadata response is correct if the broker listeners are inconsistent (i.e. one broker has
    * more listeners than another) and the request is sent on the listener that exists in one broker.
    */
@@ -2118,6 +2118,71 @@ class KafkaApisTest {
 
     val response = sendMetadataRequestWithInconsistentListeners(anotherListener).asInstanceOf[MetadataResponse]
     assertEquals(Set(0), response.brokers.asScala.map(_.id).toSet)
+  }
+
+
+  /**
+   * Metadata request to fetch all topics should not result in the followings:
+   * 1) Auto topic creation
+   * 2) UNKNOWN_TOPIC_OR_PARTITION
+   *
+   * This case is testing the case that a topic is being deleted from MetadataCache right after
+   * authorization but before checking in MetadataCache.
+   */
+  @Test
+  def getAllTopicMetadataShouldNotCreateTopicOrReturnUnknownTopicPartition(): Unit = {
+    // Setup: authorizer authorizes 2 topics, but one got deleted in metadata cache
+    metadataCache =
+      EasyMock.partialMockBuilder(classOf[MetadataCache])
+        .withConstructor(classOf[Int])
+        .withArgs(Int.box(brokerId))  // Need to box it for Scala 2.12 and before
+        .addMockedMethod("getAllTopics")
+        .addMockedMethod("getTopicMetadata")
+        .createMock()
+
+    // 2 topics returned for authorization in during handle
+    val topicsReturnedFromMetadataCacheForAuthorization = Set("remaining-topic", "later-deleted-topic")
+    expect(metadataCache.getAllTopics()).andReturn(topicsReturnedFromMetadataCacheForAuthorization).once()
+    // 1 topic is deleted from metadata right at the time between authorization and the next getTopicMetadata() call
+    expect(metadataCache.getTopicMetadata(
+      EasyMock.eq(topicsReturnedFromMetadataCacheForAuthorization),
+      anyObject[ListenerName],
+      anyBoolean,
+      anyBoolean
+    )).andStubReturn(Seq(
+      new MetadataResponseTopic()
+        .setErrorCode(Errors.NONE.code)
+        .setName("remaining-topic")
+        .setIsInternal(false)
+    ))
+
+    EasyMock.replay(metadataCache)
+
+    var createTopicIsCalled: Boolean = false;
+    // Specific mock on zkClient for this use case
+    // Expect it's never called to do auto topic creation
+    expect(zkClient.setOrCreateEntityConfigs(
+      EasyMock.eq(ConfigType.Topic),
+      EasyMock.anyString,
+      EasyMock.anyObject[Properties]
+    )).andStubAnswer(() => {
+      createTopicIsCalled = true
+    })
+    // No need to use
+    expect(zkClient.getAllBrokersInCluster)
+      .andStubReturn(Seq(new Broker(
+        brokerId, "localhost", 9902,
+        ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), SecurityProtocol.PLAINTEXT
+      )))
+
+    EasyMock.replay(zkClient)
+
+    val (requestListener, _) = updateMetadataCacheWithInconsistentListeners()
+    val response = sendMetadataRequestWithInconsistentListeners(requestListener)
+
+    assertFalse(createTopicIsCalled)
+    assertEquals(List("remaining-topic"), response.topicMetadata().asScala.map { metadata => metadata.topic() })
+    assertTrue(response.topicsByError(Errors.UNKNOWN_TOPIC_OR_PARTITION).isEmpty)
   }
 
   /**
@@ -2429,7 +2494,7 @@ class KafkaApisTest {
         channel.close()
         channel.buffer.getInt()
         ResponseHeader.parse(channel.buffer, api.responseHeaderVersion(apiVersion))
-        AbstractResponse.parseResponse(api, api.responseSchema(apiVersion).read(channel.buffer), apiVersion)
+        AbstractResponse.parseResponse(api, channel.buffer, apiVersion)
       case None =>
         fail("Empty response not expected")
         null
@@ -3156,7 +3221,7 @@ class KafkaApisTest {
     (plaintextListener, anotherListener)
   }
 
-  private def sendMetadataRequestWithInconsistentListeners(requestListener: ListenerName): AbstractResponse = {
+  private def sendMetadataRequestWithInconsistentListeners(requestListener: ListenerName): MetadataResponse = {
     val capturedResponse = expectNoThrottling()
     EasyMock.replay(clientRequestQuotaManager, requestChannel)
 
@@ -3169,7 +3234,7 @@ class KafkaApisTest {
       metadataRequest.version,
       requestChannelRequest,
       capturedResponse.getValue
-    )
+    ).asInstanceOf[MetadataResponse]
   }
 
   private def testConsumerListOffsetLatest(isolationLevel: IsolationLevel): Unit = {
@@ -3228,18 +3293,18 @@ class KafkaApisTest {
   ): RequestChannel.Request = {
     val listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
 
-    val requestHeader = new RequestHeader(request.api, request.version, clientId, 0)
-    val requestBuffer = request.serialize(requestHeader)
+    val requestHeader = new RequestHeader(request.apiKey, request.version, clientId, 0)
+    val requestBuffer = RequestTestUtils.serializeRequestWithHeader(requestHeader, request)
     val requestContext = new RequestContext(requestHeader, "1", InetAddress.getLocalHost,
       KafkaPrincipal.ANONYMOUS, listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY,
       fromPrivilegedListener)
 
     val envelopeHeader = new RequestHeader(ApiKeys.ENVELOPE, ApiKeys.ENVELOPE.latestVersion(), clientId, 0)
-    val envelopeBuffer = new EnvelopeRequest.Builder(
+    val envelopeBuffer = RequestTestUtils.serializeRequestWithHeader(envelopeHeader, new EnvelopeRequest.Builder(
       requestBuffer,
       new Array[Byte](0),
       InetAddress.getLocalHost.getAddress
-    ).build().serialize(envelopeHeader)
+    ).build())
     val envelopeContext = new RequestContext(envelopeHeader, "1", InetAddress.getLocalHost,
       KafkaPrincipal.ANONYMOUS, listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY,
       fromPrivilegedListener, principalSerde.asJava)
@@ -3270,8 +3335,8 @@ class KafkaApisTest {
                            listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
                            fromPrivilegedListener: Boolean = false,
                            requestHeader: Option[RequestHeader] = None): RequestChannel.Request = {
-    val buffer = request.serialize(requestHeader.getOrElse(
-      new RequestHeader(request.api, request.version, clientId, 0)))
+    val buffer = RequestTestUtils.serializeRequestWithHeader(requestHeader.getOrElse(
+      new RequestHeader(request.apiKey, request.version, clientId, 0)), request)
 
     // read the header from the buffer first so that the body can be read next from the Request constructor
     val header = RequestHeader.parse(buffer)

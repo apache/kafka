@@ -188,7 +188,7 @@ class ControllerApis(val requestChannel: RequestChannel,
       }
       // TODO: fill in information about the metadata topic
       metadataResponseData.setClusterAuthorizedOperations(clusterAuthorizedOperations)
-      new MetadataResponse(metadataResponseData)
+      new MetadataResponse(metadataResponseData, request.header.apiVersion)
     }
     apisUtils.sendResponseMaybeThrottle(request,
       requestThrottleMs => createResponseCallback(requestThrottleMs))

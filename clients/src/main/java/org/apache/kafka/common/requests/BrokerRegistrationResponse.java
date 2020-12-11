@@ -19,8 +19,8 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.BrokerRegistrationResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -30,13 +30,11 @@ public class BrokerRegistrationResponse extends AbstractResponse {
     private final BrokerRegistrationResponseData data;
 
     public BrokerRegistrationResponse(BrokerRegistrationResponseData data) {
+        super(ApiKeys.BROKER_REGISTRATION);
         this.data = data;
     }
 
-    public BrokerRegistrationResponse(Struct struct, short version) {
-        this.data = new BrokerRegistrationResponseData(struct, version);
-    }
-
+    @Override
     public BrokerRegistrationResponseData data() {
         return data;
     }
@@ -55,14 +53,8 @@ public class BrokerRegistrationResponse extends AbstractResponse {
         return errorCounts;
     }
 
-    @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
-    }
-
     public static BrokerRegistrationResponse parse(ByteBuffer buffer, short version) {
-        return new BrokerRegistrationResponse(
-            ApiKeys.BROKER_REGISTRATION.parseResponse(version, buffer), version);
+        return new BrokerRegistrationResponse(new BrokerRegistrationResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

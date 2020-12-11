@@ -609,8 +609,8 @@ class RequestQuotaTest extends BaseRequestTest {
             "client-id",
             0
           )
-          val embedRequestData = new AlterClientQuotasRequest.Builder(
-            List.empty.asJava, false).build().serialize(requestHeader)
+          val embedRequestData = RequestTestUtils.serializeRequestWithHeader(requestHeader,
+            new AlterClientQuotasRequest.Builder(List.empty.asJava, false).build())
           new EnvelopeRequest.Builder(embedRequestData, new Array[Byte](0),
             InetAddress.getByName("192.168.1.1").getAddress)
 
@@ -676,11 +676,9 @@ class RequestQuotaTest extends BaseRequestTest {
   }
 
   private def checkRequestThrottleTime(apiKey: ApiKeys): Unit = {
-
     // Request until throttled using client-id with default small quota
     val clientId = apiKey.toString
     val client = Client(clientId, apiKey)
-
     val throttled = client.runUntil(_.throttleTimeMs > 0)
 
     assertTrue(s"Response not throttled: $client", throttled)

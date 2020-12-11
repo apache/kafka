@@ -53,7 +53,7 @@ public interface KGroupedTable<K, V> {
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
      * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
      * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
-     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit interval}.
      * <p>
      * To query the local {@link ReadOnlyKeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
@@ -96,7 +96,7 @@ public interface KGroupedTable<K, V> {
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
      * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
      * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
-     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit interval}.
      * <p>
      * To query the local {@link ReadOnlyKeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
@@ -139,7 +139,7 @@ public interface KGroupedTable<K, V> {
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
      * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
      * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
-     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit interval}.
      * <p>
      * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
      * The changelog topic will be named "${applicationId}-${internalStoreName}-changelog", where "applicationId" is
@@ -168,7 +168,7 @@ public interface KGroupedTable<K, V> {
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
      * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
      * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
-     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit interval}.
      * <p>
      * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
      * The changelog topic will be named "${applicationId}-${internalStoreName}-changelog", where "applicationId" is
@@ -224,7 +224,7 @@ public interface KGroupedTable<K, V> {
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
      * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
      * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
-     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit interval}.
      * <p>
      * To query the local {@link ReadOnlyKeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
@@ -297,7 +297,7 @@ public interface KGroupedTable<K, V> {
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
      * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
      * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
-     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit interval}.
      * <p>
      * To query the local {@link ReadOnlyKeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
@@ -369,7 +369,7 @@ public interface KGroupedTable<K, V> {
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
      * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
      * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
-     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit interval}.
      * <p>
      * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
      * The changelog topic will be named "${applicationId}-${internalStoreName}-changelog", where "applicationId" is
@@ -435,7 +435,7 @@ public interface KGroupedTable<K, V> {
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
      * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
      * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
-     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit interval}.
      * <p>
      * To query the local {@link ReadOnlyKeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
@@ -519,7 +519,7 @@ public interface KGroupedTable<K, V> {
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
      * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
      * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
-     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit interval}.
      * <p>
      * To query the local {@link ReadOnlyKeyValueStore} it must be obtained via
      * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
@@ -605,7 +605,7 @@ public interface KGroupedTable<K, V> {
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
      * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
      * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
-     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit interval}.
      * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
      * The changelog topic will be named "${applicationId}-${internalStoreName}-changelog", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
@@ -675,7 +675,7 @@ public interface KGroupedTable<K, V> {
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
      * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
      * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
-     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit interval}.
      * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
      * The changelog topic will be named "${applicationId}-${internalStoreName}-changelog", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter

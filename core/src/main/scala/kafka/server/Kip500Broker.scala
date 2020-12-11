@@ -228,7 +228,7 @@ class Kip500Broker(val config: KafkaConfig,
       forwardingChannelManager = new BrokerToControllerChannelManager(controllerNodeProvider,
         time, metrics, config, "forwarding", threadNamePrefix)
       forwardingChannelManager.start()
-      val forwardingManager = new ForwardingManager(forwardingChannelManager)
+      val forwardingManager = new ForwardingManager(forwardingChannelManager, time, config.requestTimeoutMs.longValue)
 
       /* start token manager */
       if (config.tokenAuthEnabled) {

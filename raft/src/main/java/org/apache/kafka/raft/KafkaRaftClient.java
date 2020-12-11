@@ -23,14 +23,14 @@ import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.DescribeQuorumRequestData;
-import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
+import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
-import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
+import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.metrics.Metrics;
@@ -61,6 +61,7 @@ import org.apache.kafka.raft.internals.KafkaRaftMetrics;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.raft.internals.RecordsBatchReader;
 import org.apache.kafka.raft.internals.ThresholdPurgatory;
+import org.apache.kafka.snapshot.SnapshotWriter;
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -313,7 +314,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
         long currentTimeMs = time.milliseconds();
         if (quorum.isLeader()) {
-            onBecomeLeader(currentTimeMs);
+            throw new IllegalStateException("Voter cannot initialize as a Leader");
         } else if (quorum.isCandidate()) {
             onBecomeCandidate(currentTimeMs);
         } else if (quorum.isFollower()) {
@@ -370,14 +371,23 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         );
     }
 
-    private void appendLeaderChangeMessage(LeaderState state, long currentTimeMs) {
-        List<Voter> voters = state.followers().stream()
+    private static List<Voter> convertToVoters(Set<Integer> voterIds) {
+        return voterIds.stream()
             .map(follower -> new Voter().setVoterId(follower))
             .collect(Collectors.toList());
+    }
+
+    private void appendLeaderChangeMessage(LeaderState state, long currentTimeMs) {
+        List<Voter> voters = convertToVoters(state.followers());
+        List<Voter> grantingVoters = convertToVoters(state.grantingVoters());
+
+        // Adding the leader to the voters as any voter always votes for itself.
+        voters.add(new Voter().setVoterId(state.election().leaderId()));
 
         LeaderChangeMessage leaderChangeMessage = new LeaderChangeMessage()
             .setLeaderId(state.election().leaderId())
-            .setVoters(voters);
+            .setVoters(voters)
+            .setGrantingVoters(grantingVoters);
 
         MemoryRecords records = MemoryRecords.withLeaderChangeMessage(
             currentTimeMs, quorum.epoch(), leaderChangeMessage);
@@ -435,6 +445,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private void transitionToResigned(List<Integer> preferredSuccessors) {
+        fetchPurgatory.completeAllExceptionally(Errors.BROKER_NOT_AVAILABLE.exception("The broker is shutting down"));
         quorum.transitionToResigned(preferredSuccessors);
         resetConnections();
     }
@@ -1555,7 +1566,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
         long timeUntilSend = maybeSendRequests(
             currentTimeMs,
-            state.nonEndorsingFollowers(),
+            state.nonEndorsingVoters(),
             this::buildBeginQuorumEpochRequest
         );
 
@@ -1799,8 +1810,15 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             return Long.MAX_VALUE;
         }
 
+        boolean isFirstAppend = accumulator.isEmpty();
         Long offset = accumulator.append(epoch, records);
-        if (accumulator.needsDrain(time.milliseconds())) {
+
+        // Wakeup the network channel if either this is the first append
+        // or the accumulator is ready to drain now. Checking for the first
+        // append ensures that we give the IO thread a chance to observe
+        // the linger timeout so that it can schedule its own wakeup in case
+        // there are no additional appends.
+        if (isFirstAppend || accumulator.needsDrain(time.milliseconds())) {
             channel.wakeup();
         }
         return offset;
@@ -1813,6 +1831,18 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         shutdown.set(new GracefulShutdown(timeoutMs, shutdownComplete));
         channel.wakeup();
         return shutdownComplete;
+    }
+
+    @Override
+    public SnapshotWriter<T> createSnapshot(OffsetAndEpoch snapshotId) throws IOException {
+        return new SnapshotWriter<>(
+            log.createSnapshot(snapshotId),
+            MAX_BATCH_SIZE,
+            memoryPool,
+            time,
+            CompressionType.NONE,
+            serde
+        );
     }
 
     private void close() {

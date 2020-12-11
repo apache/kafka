@@ -21,9 +21,9 @@ import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Test;
 
@@ -287,7 +287,7 @@ public class ProducerMetadataTest {
         Map<String, Integer> partitionCounts = new HashMap<>();
         for (String topic : topics)
             partitionCounts.put(topic, 1);
-        return TestUtils.metadataUpdateWith(1, partitionCounts);
+        return RequestTestUtils.metadataUpdateWith(1, partitionCounts);
     }
 
     private void clearBackgroundError() {

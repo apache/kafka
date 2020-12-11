@@ -289,7 +289,7 @@ class LegacyBroker(val config: KafkaConfig,
           forwardingChannelManager = new BrokerToControllerChannelManager(controllerNodeProvider,
             time, metrics, config, "forwarding", threadNamePrefix)
           forwardingChannelManager.start()
-          forwardingManager = new ForwardingManager(forwardingChannelManager)
+          forwardingManager = new ForwardingManager(forwardingChannelManager, time, config.requestTimeoutMs.longValue())
         }
 
         adminManager = new LegacyAdminManager(config, metrics, metadataCache, zkClient)

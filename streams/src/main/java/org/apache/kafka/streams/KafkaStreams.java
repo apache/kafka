@@ -84,6 +84,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
@@ -161,11 +162,20 @@ public class KafkaStreams implements AutoCloseable {
     private final ProcessorTopology taskTopology;
     private final ProcessorTopology globalTaskTopology;
     private final long totalCacheSize;
+    private final StreamStateListener streamStateListener;
+    private final StateRestoreListener delegatingStateRestoreListener;
+    private final Map<Long, StreamThread.State> threadState;
+    private final ArrayList<StreamThreadStateStoreProvider> storeProviders;
+    private final UUID processId;
+    private final KafkaClientSupplier clientSupplier;
+    private final InternalTopologyBuilder internalTopologyBuilder;
 
     GlobalStreamThread globalStreamThread;
     private KafkaStreams.StateListener stateListener;
     private StateRestoreListener globalStateRestoreListener;
     private boolean oldHandler;
+    private java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler;
+    private final Object changeThreadCount = new Object();
 
     // container states
     /**
@@ -397,6 +407,7 @@ public class KafkaStreams implements AutoCloseable {
         final Consumer<Throwable> handler = exception -> handleStreamsUncaughtException(exception, streamsUncaughtExceptionHandler);
         synchronized (stateLock) {
             if (state == State.CREATED) {
+                this.streamsUncaughtExceptionHandler = handler;
                 Objects.requireNonNull(streamsUncaughtExceptionHandler);
                 for (final StreamThread thread : threads) {
                     thread.setStreamsUncaughtExceptionHandler(handler);
@@ -755,7 +766,7 @@ public class KafkaStreams implements AutoCloseable {
         this.config = config;
         this.time = time;
         // The application ID is a required config and hence should always have value
-        final UUID processId = UUID.randomUUID();
+        processId = UUID.randomUUID();
         final String userClientId = config.getString(StreamsConfig.CLIENT_ID_CONFIG);
         final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         if (userClientId.length() <= 0) {
@@ -765,7 +776,7 @@ public class KafkaStreams implements AutoCloseable {
         }
         final LogContext logContext = new LogContext(String.format("stream-client [%s] ", clientId));
         this.log = logContext.logger(getClass());
-
+        this.clientSupplier = clientSupplier;
         final MetricConfig metricConfig = new MetricConfig()
             .samples(config.getInt(StreamsConfig.METRICS_NUM_SAMPLES_CONFIG))
             .recordLevel(Sensor.RecordingLevel.forName(config.getString(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG)))
@@ -792,7 +803,7 @@ public class KafkaStreams implements AutoCloseable {
         ClientMetrics.addStateMetric(streamsMetrics, (metricsConfig, now) -> state);
         log.info("Kafka Streams version: {}", ClientMetrics.version());
         log.info("Kafka Streams commit ID: {}", ClientMetrics.commitId());
-
+        this.internalTopologyBuilder = internalTopologyBuilder;
         // re-write the physical topology according to the config
         internalTopologyBuilder.rewriteTopology(config);
 
@@ -820,18 +831,18 @@ public class KafkaStreams implements AutoCloseable {
             throw new TopologyException("Topology has no stream threads and no global threads, " +
                 "must subscribe to at least one source topic or global table.");
         }
-
+        oldHandler = false;
         totalCacheSize = config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG);
         final long cacheSizePerThread = getCacheSizePerThread(numStreamThreads);
         final boolean hasPersistentStores = taskTopology.hasPersistentLocalStore() ||
                 (hasGlobalTopology && globalTaskTopology.hasPersistentGlobalStore());
-
+        streamsUncaughtExceptionHandler = this::defaultStreamsUncaughtExceptionHandler;
         try {
             stateDirectory = new StateDirectory(config, time, hasPersistentStores);
         } catch (final ProcessorStateException fatal) {
             throw new StreamsException(fatal);
         }
-        final StateRestoreListener delegatingStateRestoreListener = new DelegatingStateRestoreListener();
+        delegatingStateRestoreListener = new DelegatingStateRestoreListener();
         GlobalStreamThread.State globalThreadState = null;
         if (hasGlobalTopology) {
             final String globalThreadId = clientId + "-GlobalStreamThread";
@@ -845,7 +856,7 @@ public class KafkaStreams implements AutoCloseable {
                 time,
                 globalThreadId,
                 delegatingStateRestoreListener,
-                this::defaultStreamsUncaughtExceptionHandler
+                streamsUncaughtExceptionHandler
             );
             globalThreadState = globalStreamThread.state();
         }
@@ -853,59 +864,110 @@ public class KafkaStreams implements AutoCloseable {
         // use client id instead of thread client id since this admin client may be shared among threads
         adminClient = clientSupplier.getAdmin(config.getAdminConfigs(ClientUtils.getSharedAdminClientId(clientId)));
 
-        final Map<Long, StreamThread.State> threadState = new HashMap<>(numStreamThreads);
-        final ArrayList<StreamThreadStateStoreProvider> storeProviders = new ArrayList<>();
-        for (int i = 0; i < numStreamThreads; i++) {
-            final StreamThread streamThread = StreamThread.create(
-                internalTopologyBuilder,
-                config,
-                clientSupplier,
-                adminClient,
-                processId,
-                clientId,
-                streamsMetrics,
-                time,
-                streamsMetadataState,
-                cacheSizePerThread,
-                stateDirectory,
-                delegatingStateRestoreListener,
-                i + 1,
-                KafkaStreams.this::closeToError,
-                this::defaultStreamsUncaughtExceptionHandler
-            );
-            threads.add(streamThread);
-            threadState.put(streamThread.getId(), streamThread.state());
-            storeProviders.add(new StreamThreadStateStoreProvider(streamThread));
+        threadState = new HashMap<>(numStreamThreads);
+        storeProviders = new ArrayList<>();
+        streamStateListener = new StreamStateListener(threadState, globalThreadState);
+        if (hasGlobalTopology) {
+            globalStreamThread.setStateListener(streamStateListener);
+        }
+        for (int i = 1; i <= numStreamThreads; i++) {
+            createStreamThread(cacheSizePerThread, i);
         }
 
         ClientMetrics.addNumAliveStreamThreadMetric(streamsMetrics, (metricsConfig, now) ->
             Math.toIntExact(threads.stream().filter(thread -> thread.state().isAlive()).count()));
 
-        final StreamStateListener streamStateListener = new StreamStateListener(threadState, globalThreadState);
-        if (hasGlobalTopology) {
-            globalStreamThread.setStateListener(streamStateListener);
-        }
-        for (final StreamThread thread : threads) {
-            thread.setStateListener(streamStateListener);
-        }
-
         final GlobalStateStoreProvider globalStateStoreProvider = new GlobalStateStoreProvider(internalTopologyBuilder.globalStateStores());
         queryableStoreProvider = new QueryableStoreProvider(storeProviders, globalStateStoreProvider);
 
         stateDirCleaner = setupStateDirCleaner();
-        oldHandler = false;
         maybeWarnAboutCodeInRocksDBConfigSetter(log, config);
         rocksDBMetricsRecordingService = maybeCreateRocksDBMetricsRecordingService(clientId, config);
+    }
+
+    private StreamThread createStreamThread(final long cacheSizePerThread, final int threadIdx) {
+        final StreamThread streamThread = StreamThread.create(
+            internalTopologyBuilder,
+            config,
+            clientSupplier,
+            adminClient,
+            processId,
+            clientId,
+            streamsMetrics,
+            time,
+            streamsMetadataState,
+            cacheSizePerThread,
+            stateDirectory,
+            delegatingStateRestoreListener,
+            threadIdx,
+            KafkaStreams.this::closeToError,
+            streamsUncaughtExceptionHandler
+        );
+        streamThread.setStateListener(streamStateListener);
+        threads.add(streamThread);
+        threadState.put(streamThread.getId(), streamThread.state());
+        storeProviders.add(new StreamThreadStateStoreProvider(streamThread));
+        return streamThread;
+    }
+
+    /**
+     * Adds and starts a stream thread in addition to the stream threads that are already running in this
+     * Kafka Streams client.
+     * <p>
+     * Since the number of stream threads increases, the sizes of the caches in the new stream thread
+     * and the existing stream threads are adapted so that the sum of the cache sizes over all stream
+     * threads does not exceed the total cache size specified in configuration
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG}.
+     * <p>
+     * Stream threads can only be added if this Kafka Streams client is in state RUNNING or REBALANCING.
+     *
+     * @return name of the added stream thread or empty if a new stream thread could not be added
+     */
+    public Optional<String> addStreamThread() {
+        synchronized (changeThreadCount) {
+            if (isRunningOrRebalancing()) {
+                final int threadIdx = getNextThreadIndex();
+                final long cacheSizePerThread = getCacheSizePerThread(threads.size() + 1);
+                resizeThreadCache(cacheSizePerThread);
+                final StreamThread streamThread = createStreamThread(cacheSizePerThread, threadIdx);
+                synchronized (stateLock) {
+                    if (isRunningOrRebalancing()) {
+                        streamThread.start();
+                        return Optional.of(streamThread.getName());
+                    } else {
+                        streamThread.shutdown();
+                        threads.remove(streamThread);
+                        resizeThreadCache(getCacheSizePerThread(threads.size()));
+                        return Optional.empty();
+                    }
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    private int getNextThreadIndex() {
+        final HashSet<String> names = new HashSet<>();
+        for (final StreamThread streamThread: threads) {
+            names.add(streamThread.getName());
+        }
+        final String baseName = clientId + "-StreamThread-";
+        for (int i = 1; i <= threads.size(); i++) {
+            final String name = baseName + i;
+            if (!names.contains(name)) {
+                return i;
+            }
+        }
+        return threads.size() + 1;
     }
 
     private long getCacheSizePerThread(final int numStreamThreads) {
         return totalCacheSize / (numStreamThreads + ((globalTaskTopology != null) ? 1 : 0));
     }
 
-    private void resizeThreadCache(final int numStreamThreads) {
-        final long cacheSizePreThread = getCacheSizePerThread(numStreamThreads);
+    private void resizeThreadCache(final long cacheSizePerThread) {
         for (final StreamThread streamThread: threads) {
-            streamThread.resizeCache(cacheSizePreThread);
+            streamThread.resizeCache(cacheSizePerThread);
         }
     }
 
@@ -1076,7 +1138,7 @@ public class KafkaStreams implements AutoCloseable {
 
             adminClient.close();
 
-            streamsMetrics.removeAllClientLevelMetrics();
+            streamsMetrics.removeAllClientLevelSensorsAndMetrics();
             metrics.close();
             if (!error) {
                 setState(State.NOT_RUNNING);

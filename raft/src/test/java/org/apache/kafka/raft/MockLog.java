@@ -26,13 +26,19 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.snapshot.RawSnapshotReader;
+import org.apache.kafka.snapshot.RawSnapshotWriter;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -45,6 +51,7 @@ public class MockLog implements ReplicatedLog {
 
     private final List<EpochStartOffset> epochStartOffsets = new ArrayList<>();
     private final List<LogBatch> log = new ArrayList<>();
+    private final Map<OffsetAndEpoch, MockRawSnapshotReader> snapshots = new HashMap<>();
     private final TopicPartition topicPartition;
 
     private long nextId = ID_GENERATOR.getAndIncrement();
@@ -351,6 +358,16 @@ public class MockLog implements ReplicatedLog {
         epochStartOffsets.add(new EpochStartOffset(epoch, startOffset));
     }
 
+    @Override
+    public RawSnapshotWriter createSnapshot(OffsetAndEpoch snapshotId) {
+        return new MockRawSnapshotWriter(snapshotId);
+    }
+
+    @Override
+    public Optional<RawSnapshotReader> readSnapshot(OffsetAndEpoch snapshotId) {
+        return Optional.ofNullable(snapshots.get(snapshotId));
+    }
+
     static class MockOffsetMetadata implements OffsetMetadata {
         final long id;
 
@@ -472,4 +489,94 @@ public class MockLog implements ReplicatedLog {
         }
     }
 
+    final class MockRawSnapshotWriter implements RawSnapshotWriter {
+        private final OffsetAndEpoch snapshotId;
+        private ByteBufferOutputStream data;
+        private boolean frozen;
+
+        public MockRawSnapshotWriter(OffsetAndEpoch snapshotId) {
+            this.snapshotId = snapshotId;
+            this.data = new ByteBufferOutputStream(0);
+            this.frozen = false;
+        }
+
+        @Override
+        public OffsetAndEpoch snapshotId() {
+            return snapshotId;
+        }
+
+        @Override
+        public long sizeInBytes() {
+            return data.position();
+        }
+
+        @Override
+        public void append(ByteBuffer buffer) {
+            if (frozen) {
+                throw new RuntimeException("Snapshot is already frozen " + snapshotId);
+            }
+
+            data.write(buffer);
+        }
+
+        @Override
+        public boolean isFrozen() {
+            return frozen;
+        }
+
+        @Override
+        public void freeze() {
+            if (frozen) {
+                throw new RuntimeException("Snapshot is already frozen " + snapshotId);
+            }
+
+            frozen = true;
+            ByteBuffer buffer = data.buffer();
+            buffer.flip();
+
+            snapshots.putIfAbsent(snapshotId, new MockRawSnapshotReader(snapshotId, buffer));
+        }
+
+        @Override
+        public void close() {}
+    }
+
+    final static class MockRawSnapshotReader implements RawSnapshotReader {
+        private final OffsetAndEpoch snapshotId;
+        private final MemoryRecords data;
+
+        MockRawSnapshotReader(OffsetAndEpoch snapshotId, ByteBuffer data) {
+            this.snapshotId = snapshotId;
+            this.data = MemoryRecords.readableRecords(data);
+        }
+
+        @Override
+        public OffsetAndEpoch snapshotId() {
+            return snapshotId;
+        }
+
+        @Override
+        public long sizeInBytes() {
+            return data.sizeInBytes();
+        }
+
+        @Override
+        public Iterator<RecordBatch> iterator() {
+            return Utils.covariantCast(data.batchIterator());
+        }
+
+        @Override
+        public int read(ByteBuffer buffer, long position) {
+            ByteBuffer copy = data.buffer();
+            copy.position((int) position);
+            copy.limit((int) position + Math.min(copy.remaining(), buffer.remaining()));
+
+            buffer.put(copy);
+
+            return copy.remaining();
+        }
+
+        @Override
+        public void close() {}
+    }
 }

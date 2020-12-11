@@ -81,7 +81,7 @@ public class ConsumerProtocol {
                 .setPartitions(topicEntry.getValue()));
         }
 
-        return MessageUtil.toByteBuffer(version, data);
+        return MessageUtil.toVersionPrefixedByteBuffer(version, data);
     }
 
     public static Subscription deserializeSubscription(final ByteBuffer buffer, short version) {
@@ -127,7 +127,7 @@ public class ConsumerProtocol {
                 .setPartitions(topicEntry.getValue()));
         }
 
-        return MessageUtil.toByteBuffer(version, data);
+        return MessageUtil.toVersionPrefixedByteBuffer(version, data);
     }
 
     public static Assignment deserializeAssignment(final ByteBuffer buffer, short version) {

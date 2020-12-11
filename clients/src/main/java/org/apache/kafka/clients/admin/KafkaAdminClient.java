@@ -1182,8 +1182,7 @@ public class KafkaAdminClient extends AdminClient {
                     try {
                         call.handleResponse(response.responseBody());
                         if (log.isTraceEnabled())
-                            log.trace("{} got response {}", call,
-                                    response.responseBody().toString(response.requestHeader().apiVersion()));
+                            log.trace("{} got response {}", call, response.responseBody());
                     } catch (Throwable t) {
                         if (log.isTraceEnabled())
                             log.trace("{} handleResponse failed with {}", call, prettyPrintException(t));

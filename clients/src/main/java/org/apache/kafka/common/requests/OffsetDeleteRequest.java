@@ -19,8 +19,8 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.OffsetDeleteRequestData;
 import org.apache.kafka.common.message.OffsetDeleteResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
@@ -53,11 +53,6 @@ public class OffsetDeleteRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public OffsetDeleteRequest(Struct struct, short version) {
-        super(ApiKeys.OFFSET_DELETE, version);
-        this.data = new OffsetDeleteRequestData(struct, version);
-    }
-
     public AbstractResponse getErrorResponse(int throttleTimeMs, Errors error) {
         return new OffsetDeleteResponse(
             new OffsetDeleteResponseData()
@@ -72,12 +67,11 @@ public class OffsetDeleteRequest extends AbstractRequest {
     }
 
     public static OffsetDeleteRequest parse(ByteBuffer buffer, short version) {
-        return new OffsetDeleteRequest(ApiKeys.OFFSET_DELETE.parseRequest(version, buffer),
-            version);
+        return new OffsetDeleteRequest(new OffsetDeleteRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
+    protected OffsetDeleteRequestData data() {
+        return data;
     }
 }

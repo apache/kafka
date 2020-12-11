@@ -19,7 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -48,37 +48,19 @@ public class AlterUserScramCredentialsRequest extends AbstractRequest {
         }
     }
 
-    private AlterUserScramCredentialsRequestData data;
-    private final short version;
+    private final AlterUserScramCredentialsRequestData data;
 
     private AlterUserScramCredentialsRequest(AlterUserScramCredentialsRequestData data, short version) {
         super(ApiKeys.ALTER_USER_SCRAM_CREDENTIALS, version);
         this.data = data;
-        this.version = version;
-    }
-
-    AlterUserScramCredentialsRequest(Struct struct, short version) {
-        super(ApiKeys.ALTER_USER_SCRAM_CREDENTIALS, version);
-        this.data = new AlterUserScramCredentialsRequestData(struct, version);
-        this.version = version;
     }
 
     public static AlterUserScramCredentialsRequest parse(ByteBuffer buffer, short version) {
-        return new AlterUserScramCredentialsRequest(
-                ApiKeys.ALTER_USER_SCRAM_CREDENTIALS.parseRequest(version, buffer), version
-        );
+        return new AlterUserScramCredentialsRequest(new AlterUserScramCredentialsRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
     public AlterUserScramCredentialsRequestData data() {
         return data;
-    }
-
-    /**
-     * Visible for testing.
-     */
-    @Override
-    public Struct toStruct() {
-        return data.toStruct(version);
     }
 
     @Override

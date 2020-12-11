@@ -52,13 +52,9 @@ public class BrokerHeartbeatRequest extends AbstractRequest {
         this.data = new BrokerHeartbeatRequestData(struct, version);
     }
 
+    @Override
     public BrokerHeartbeatRequestData data() {
         return data;
-    }
-
-    @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
     }
 
     @Override

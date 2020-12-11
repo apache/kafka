@@ -444,8 +444,12 @@ object ProducerStateManager {
     ByteUtils.writeUnsignedInt(buffer, CrcOffset, crc)
 
     val fileChannel = FileChannel.open(file.toPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE)
-    try fileChannel.write(buffer)
-    finally fileChannel.close()
+    try {
+      fileChannel.write(buffer)
+      fileChannel.force(true)
+    } finally {
+      fileChannel.close()
+    }
   }
 
   private def isSnapshotFile(file: File): Boolean = file.getName.endsWith(Log.ProducerSnapshotFileSuffix)

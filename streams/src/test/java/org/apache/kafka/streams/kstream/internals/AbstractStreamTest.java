@@ -22,7 +22,6 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.test.NoopValueTransformer;
 import org.apache.kafka.test.NoopValueTransformerWithKey;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -35,8 +34,8 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
+
 import java.util.Random;
 
 import static org.easymock.EasyMock.createMock;
@@ -44,9 +43,6 @@ import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
 import static org.junit.Assert.assertTrue;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkProperties;
 
 public class AbstractStreamTest {
 
@@ -86,8 +82,8 @@ public class AbstractStreamTest {
 
         stream.randomFilter().process(supplier);
 
-        final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), mkProperties(
-            mkMap(mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath()))));
+        final TopologyTestDriver driver = new TopologyTestDriver(builder.build());
+
         final TestInputTopic<Integer, String> inputTopic = driver.createInputTopic(topicName, new IntegerSerializer(), new StringSerializer());
         for (final int expectedKey : expectedKeys) {
             inputTopic.pipeInput(expectedKey, "V" + expectedKey);

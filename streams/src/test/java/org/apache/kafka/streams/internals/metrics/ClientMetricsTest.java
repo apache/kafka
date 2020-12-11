@@ -17,21 +17,43 @@
 package org.apache.kafka.streams.internals.metrics;
 
 import org.apache.kafka.common.metrics.Gauge;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.powermock.core.classloader.annotations.PrepareForTest;
+import org.powermock.modules.junit4.PowerMockRunner;
 
+import java.util.Collections;
+import java.util.Map;
+
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.CLIENT_LEVEL_GROUP;
 import static org.easymock.EasyMock.eq;
-import static org.easymock.EasyMock.mock;
+import static org.easymock.EasyMock.expect;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.powermock.api.easymock.PowerMock.createMock;
+import static org.powermock.api.easymock.PowerMock.mockStatic;
 import static org.powermock.api.easymock.PowerMock.replay;
 import static org.powermock.api.easymock.PowerMock.verify;
 
+@RunWith(PowerMockRunner.class)
+@PrepareForTest({StreamsMetricsImpl.class, Sensor.class, ClientMetrics.class})
 public class ClientMetricsTest {
     private static final String COMMIT_ID = "test-commit-ID";
     private static final String VERSION = "test-version";
 
-    private final StreamsMetricsImpl streamsMetrics = mock(StreamsMetricsImpl.class);
+    private final StreamsMetricsImpl streamsMetrics = createMock(StreamsMetricsImpl.class);
+    private final Sensor expectedSensor = createMock(Sensor.class);
+    private final Map<String, String> tagMap = Collections.singletonMap("hello", "world");
+
+    @Before
+    public void setUp() {
+        mockStatic(StreamsMetricsImpl.class);
+    }
 
     @Test
     public void shouldAddVersionMetric() {
@@ -97,6 +119,28 @@ public class ClientMetricsTest {
             valueProvider,
             () -> ClientMetrics.addNumAliveStreamThreadMetric(streamsMetrics, valueProvider)
         );
+    }
+
+    @Test
+    public void shouldGetFailedStreamThreadsSensor() {
+        final String name = "failed-stream-threads";
+        final String description = "The number of failed stream threads since the start of the Kafka Streams client";
+        expect(streamsMetrics.clientLevelSensor(name, RecordingLevel.INFO)).andReturn(expectedSensor);
+        expect(streamsMetrics.clientLevelTagMap()).andReturn(tagMap);
+        StreamsMetricsImpl.addSumMetricToSensor(
+            expectedSensor,
+            CLIENT_LEVEL_GROUP,
+            tagMap,
+            name,
+            false,
+            description
+        );
+        replay(StreamsMetricsImpl.class, streamsMetrics);
+
+        final Sensor sensor = ClientMetrics.failedStreamThreadSensor(streamsMetrics);
+
+        verify(StreamsMetricsImpl.class, streamsMetrics);
+        assertThat(sensor, is(expectedSensor));
     }
 
     private <K> void setUpAndVerifyMutableMetric(final String name,
