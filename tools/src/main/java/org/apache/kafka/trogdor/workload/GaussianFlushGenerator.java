@@ -54,7 +54,6 @@ public class GaussianFlushGenerator implements FlushGenerator {
     private final int messagesPerFlushAverage;
     private final int messagesPerFlushDeviation;
 
-    private final long windowMs = 100;
     private final Random random = new Random();
 
     private int messageTracker = 0;
