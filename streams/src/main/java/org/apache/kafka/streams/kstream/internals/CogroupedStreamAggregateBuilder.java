@@ -62,7 +62,8 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
         boolean stateCreated = false;
         int counter = 0;
         for (final Entry<KGroupedStreamImpl<K, ?>, Aggregator<? super K, Object, VOut>> kGroupedStream : groupPatterns.entrySet()) {
-            final KStreamAggProcessorSupplier<K, K, ?, ?> parentProcessor = new KStreamAggregate<>(storeBuilder.name(), initializer, kGroupedStream.getValue());
+            final KStreamAggProcessorSupplier<K, K, ?, ?> parentProcessor =
+                new KStreamAggregate<>(storeBuilder.name(), initializer, kGroupedStream.getValue());
             parentProcessors.add(parentProcessor);
             final StatefulProcessorNode<K, ?> statefulProcessorNode = getStatefulProcessorNode(
                 named.suffixWithOrElseGet(
@@ -95,7 +96,12 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
         boolean stateCreated = false;
         int counter = 0;
         for (final Entry<KGroupedStreamImpl<K, ?>, Aggregator<? super K, Object, VOut>> kGroupedStream : groupPatterns.entrySet()) {
-            final KStreamAggProcessorSupplier<K, K, ?, ?>  parentProcessor = (KStreamAggProcessorSupplier<K, K, ?, ?>) new KStreamWindowAggregate<K, K, VOut, W>(windows, storeBuilder.name(), initializer, kGroupedStream.getValue());
+            final KStreamAggProcessorSupplier<K, K, ?, ?>  parentProcessor =
+                (KStreamAggProcessorSupplier<K, K, ?, ?>) new KStreamWindowAggregate<K, K, VOut, W>(
+                    windows,
+                    storeBuilder.name(),
+                    initializer,
+                    kGroupedStream.getValue());
             parentProcessors.add(parentProcessor);
             final StatefulProcessorNode<K, ?> statefulProcessorNode = getStatefulProcessorNode(
                 named.suffixWithOrElseGet(
@@ -128,7 +134,13 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
         boolean stateCreated = false;
         int counter = 0;
         for (final Entry<KGroupedStreamImpl<K, ?>, Aggregator<? super K, Object, VOut>> kGroupedStream : groupPatterns.entrySet()) {
-            final KStreamAggProcessorSupplier<K, K, ?, ?> parentProcessor = (KStreamAggProcessorSupplier<K, K, ?, ?>) new KStreamSessionWindowAggregate<K, K, VOut>(sessionWindows, storeBuilder.name(), initializer, kGroupedStream.getValue(), sessionMerger);
+            final KStreamAggProcessorSupplier<K, K, ?, ?> parentProcessor =
+                (KStreamAggProcessorSupplier<K, K, ?, ?>) new KStreamSessionWindowAggregate<K, K, VOut>(
+                    sessionWindows,
+                    storeBuilder.name(),
+                    initializer,
+                    kGroupedStream.getValue(),
+                    sessionMerger);
             parentProcessors.add(parentProcessor);
             final StatefulProcessorNode<K, ?> statefulProcessorNode = getStatefulProcessorNode(
                 named.suffixWithOrElseGet(
@@ -160,7 +172,12 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
         boolean stateCreated = false;
         int counter = 0;
         for (final Entry<KGroupedStreamImpl<K, ?>, Aggregator<? super K, Object, VOut>> kGroupedStream : groupPatterns.entrySet()) {
-            final KStreamAggProcessorSupplier<K, K, ?, ?> parentProcessor = (KStreamAggProcessorSupplier<K, K, ?, ?>) new KStreamSlidingWindowAggregate<K, K, VOut>(slidingWindows, storeBuilder.name(), initializer, kGroupedStream.getValue());
+            final KStreamAggProcessorSupplier<K, K, ?, ?> parentProcessor =
+                (KStreamAggProcessorSupplier<K, K, ?, ?>) new KStreamSlidingWindowAggregate<K, K, VOut>(
+                    slidingWindows,
+                    storeBuilder.name(),
+                    initializer,
+                    kGroupedStream.getValue());
             parentProcessors.add(parentProcessor);
             final StatefulProcessorNode<K, ?> statefulProcessorNode = getStatefulProcessorNode(
                 named.suffixWithOrElseGet(
