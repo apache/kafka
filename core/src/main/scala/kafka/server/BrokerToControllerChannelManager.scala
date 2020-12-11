@@ -30,7 +30,6 @@ import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.utils.{LogContext, Time}
 
-import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
 /**
@@ -48,7 +47,6 @@ class BrokerToControllerChannelManager(
   channelName: String,
   threadNamePrefix: Option[String] = None
 ) extends Logging {
-  private val requestQueue = new LinkedBlockingDeque[BrokerToControllerQueueItem]
   private val logContext = new LogContext(s"[broker-${config.brokerId}-to-controller] ")
   private val manualMetadataUpdater = new ManualMetadataUpdater()
   private val requestThread = newRequestThread
@@ -113,7 +111,7 @@ class BrokerToControllerChannelManager(
       case Some(name) => s"$name:broker-${config.brokerId}-to-controller-send-thread"
     }
 
-    new BrokerToControllerRequestThread(networkClient, manualMetadataUpdater, requestQueue, metadataCache, config,
+    new BrokerToControllerRequestThread(networkClient, manualMetadataUpdater, metadataCache, config,
       brokerToControllerListenerName, time, threadName)
   }
 
@@ -126,11 +124,16 @@ class BrokerToControllerChannelManager(
    *                        This means that in the worst case, the total timeout would be twice of
    *                        the configured timeout.
    */
-  def sendRequest(request: AbstractRequest.Builder[_ <: AbstractRequest],
-                           callback: ControllerRequestCompletionHandler,
-                           retryDeadlineMs: Long): Unit = {
-    requestQueue.put(BrokerToControllerQueueItem(request, callback, retryDeadlineMs))
-    requestThread.wakeup()
+  def sendRequest(
+    request: AbstractRequest.Builder[_ <: AbstractRequest],
+    callback: ControllerRequestCompletionHandler,
+    retryDeadlineMs: Long
+  ): Unit = {
+    requestThread.enqueue(BrokerToControllerQueueItem(
+      request,
+      callback,
+      retryDeadlineMs
+    ))
   }
 }
 
@@ -149,7 +152,6 @@ case class BrokerToControllerQueueItem(request: AbstractRequest.Builder[_ <: Abs
 
 class BrokerToControllerRequestThread(networkClient: KafkaClient,
                                       metadataUpdater: ManualMetadataUpdater,
-                                      requestQueue: LinkedBlockingDeque[BrokerToControllerQueueItem],
                                       metadataCache: kafka.server.MetadataCache,
                                       config: KafkaConfig,
                                       listenerName: ListenerName,
@@ -157,21 +159,25 @@ class BrokerToControllerRequestThread(networkClient: KafkaClient,
                                       threadName: String)
   extends InterBrokerSendThread(threadName, networkClient, config.controllerSocketTimeoutMs, time, isInterruptible = false) {
 
+  private val requestQueue = new LinkedBlockingDeque[BrokerToControllerQueueItem]()
   private var activeController: Option[Node] = None
 
-  def generateRequests(): Iterable[RequestAndCompletionHandler] = {
-    val requestsToSend = new mutable.Queue[RequestAndCompletionHandler]
-    val topRequest = requestQueue.poll()
-    if (topRequest != null) {
-      val request = RequestAndCompletionHandler(
-        activeController.get,
-        topRequest.request,
-        handleResponse(topRequest)
-      )
-
-      requestsToSend.enqueue(request)
+  def enqueue(request: BrokerToControllerQueueItem): Unit = {
+    requestQueue.add(request)
+    if (activeController.isDefined) {
+      wakeup()
     }
-    requestsToSend
+  }
+
+  override def generateRequests(): Iterable[RequestAndCompletionHandler] = {
+    Option(requestQueue.poll()).map { queueItem =>
+      RequestAndCompletionHandler(
+        time.milliseconds(),
+        activeController.get,
+        queueItem.request,
+        handleResponse(queueItem)
+      )
+    }
   }
 
   private[server] def handleResponse(request: BrokerToControllerQueueItem)(response: ClientResponse): Unit = {
@@ -198,8 +204,7 @@ class BrokerToControllerRequestThread(networkClient: KafkaClient,
 
   override def doWork(): Unit = {
     if (activeController.isDefined) {
-      super.sendRequests(generateRequests())
-      super.doWork()
+      super.pollOnce(Long.MaxValue)
     } else {
       debug("Controller isn't cached, looking for local metadata changes")
       val controllerOpt = metadataCache.getControllerId.flatMap(metadataCache.getAliveBroker)
@@ -211,7 +216,7 @@ class BrokerToControllerRequestThread(networkClient: KafkaClient,
       } else {
         // need to backoff to avoid tight loops
         debug("No controller defined in metadata cache, retrying after backoff")
-        backoff()
+        super.pollOnce(100)
       }
     }
   }

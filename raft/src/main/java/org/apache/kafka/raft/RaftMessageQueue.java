@@ -29,7 +29,8 @@ public interface RaftMessageQueue {
      * Block for the arrival of a new message.
      *
      * @param timeoutMs timeout in milliseconds to wait for a new event
-     * @return the event or null if the timeout was reached
+     * @return the event or null if either the timeout was reached or there was
+     *     a call to {@link #wakeup()} before any events became available
      */
     RaftMessage poll(long timeoutMs);
 

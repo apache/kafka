@@ -17,7 +17,6 @@
 package kafka.common
 
 import java.util.Map.Entry
-import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.{ArrayDeque, ArrayList, Collection, Collections, HashMap, Iterator}
 
 import kafka.utils.ShutdownableThread
@@ -33,7 +32,7 @@ import scala.jdk.CollectionConverters._
 /**
  *  Class for inter-broker send thread that utilize a non-blocking network client.
  */
-class InterBrokerSendThread(
+abstract class InterBrokerSendThread(
   name: String,
   networkClient: KafkaClient,
   requestTimeoutMs: Int,
@@ -41,8 +40,9 @@ class InterBrokerSendThread(
   isInterruptible: Boolean = true
 ) extends ShutdownableThread(name, isInterruptible) {
 
-  private val inboundQueue = new ConcurrentLinkedQueue[RequestAndCompletionHandler]()
   private val unsentRequests = new UnsentRequests
+
+  def generateRequests(): Iterable[RequestAndCompletionHandler]
 
   def hasUnsentRequests: Boolean = unsentRequests.iterator().hasNext
 
@@ -53,35 +53,25 @@ class InterBrokerSendThread(
     awaitShutdown()
   }
 
-  def sendRequest(request: RequestAndCompletionHandler): Unit = {
-    sendRequests(Seq(request))
-  }
-
-  def sendRequests(requests: Iterable[RequestAndCompletionHandler]): Unit = {
-    inboundQueue.addAll(requests.asJavaCollection)
-    wakeup()
-  }
-
-  private def drainInboundQueue(): Unit = {
-    while (!inboundQueue.isEmpty) {
-      val request = inboundQueue.poll()
-      val completionHandler = request.handler
+  private def drainGeneratedRequests(): Unit = {
+    generateRequests().foreach { request =>
       unsentRequests.put(request.destination,
         networkClient.newClientRequest(
           request.destination.idString,
           request.request,
-          time.milliseconds(),
+          request.creationTimeMs,
           true,
           requestTimeoutMs,
-          completionHandler))
+          request.handler
+        ))
     }
   }
 
-  override def doWork(): Unit = {
+  protected def pollOnce(maxTimeoutMs: Long): Unit = {
     try {
+      drainGeneratedRequests()
       var now = time.milliseconds()
-      drainInboundQueue()
-      val timeout = sendRequests(now)
+      val timeout = sendRequests(now, maxTimeoutMs)
       networkClient.poll(timeout, now)
       now = time.milliseconds()
       checkDisconnects(now)
@@ -99,8 +89,12 @@ class InterBrokerSendThread(
     }
   }
 
-  private def sendRequests(now: Long): Long = {
-    var pollTimeout = Long.MaxValue
+  override def doWork(): Unit = {
+    pollOnce(Long.MaxValue)
+  }
+
+  private def sendRequests(now: Long, maxTimeoutMs: Long): Long = {
+    var pollTimeout = maxTimeoutMs
     for (node <- unsentRequests.nodes.asScala) {
       val requestIterator = unsentRequests.requestIterator(node)
       while (requestIterator.hasNext) {
@@ -157,9 +151,12 @@ class InterBrokerSendThread(
   def wakeup(): Unit = networkClient.wakeup()
 }
 
-case class RequestAndCompletionHandler(destination: Node,
-                                       request: AbstractRequest.Builder[_ <: AbstractRequest],
-                                       handler: RequestCompletionHandler)
+case class RequestAndCompletionHandler(
+  creationTimeMs: Long,
+  destination: Node,
+  request: AbstractRequest.Builder[_ <: AbstractRequest],
+  handler: RequestCompletionHandler
+)
 
 private class UnsentRequests {
   private val unsent = new HashMap[Node, ArrayDeque[ClientRequest]]

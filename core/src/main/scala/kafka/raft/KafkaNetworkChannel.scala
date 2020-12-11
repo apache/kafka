@@ -17,6 +17,7 @@
 package kafka.raft
 
 import java.net.InetSocketAddress
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
 
 import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
@@ -53,6 +54,41 @@ object KafkaNetworkChannel {
 
 }
 
+private[raft] class RaftSendThread(
+  name: String,
+  networkClient: KafkaClient,
+  requestTimeoutMs: Int,
+  time: Time,
+  isInterruptible: Boolean = true
+) extends InterBrokerSendThread(
+  name,
+  networkClient,
+  requestTimeoutMs,
+  time,
+  isInterruptible
+) {
+  private val queue = new ConcurrentLinkedQueue[RequestAndCompletionHandler]()
+
+  def generateRequests(): Iterable[RequestAndCompletionHandler] = {
+    val buffer =  mutable.Buffer[RequestAndCompletionHandler]()
+    while (true) {
+      val request = queue.poll()
+      if (request == null) {
+        return buffer
+      } else {
+        buffer += request
+      }
+    }
+    buffer
+  }
+
+  def sendRequest(request: RequestAndCompletionHandler): Unit = {
+    queue.add(request)
+  }
+
+}
+
+
 class KafkaNetworkChannel(
   time: Time,
   client: KafkaClient,
@@ -65,7 +101,7 @@ class KafkaNetworkChannel(
   private val correlationIdCounter = new AtomicInteger(0)
   private val endpoints = mutable.HashMap.empty[Int, Node]
 
-  private val requestThread = new InterBrokerSendThread(
+  private val requestThread = new RaftSendThread(
     name = "raft-outbound-request-thread",
     networkClient = client,
     requestTimeoutMs = requestTimeoutMs,
@@ -97,6 +133,7 @@ class KafkaNetworkChannel(
     endpoints.get(request.destinationId) match {
       case Some(node) =>
         requestThread.sendRequest(RequestAndCompletionHandler(
+          request.createdTimeMs,
           destination = node,
           request = buildRequest(request.data),
           handler = onComplete
@@ -107,7 +144,8 @@ class KafkaNetworkChannel(
     }
   }
 
-  def pollOnce(): Unit = {
+  // Visible for testing
+  private[raft] def pollOnce(): Unit = {
     requestThread.doWork()
   }
 
