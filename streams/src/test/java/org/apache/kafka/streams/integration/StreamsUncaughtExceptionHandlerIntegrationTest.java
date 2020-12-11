@@ -194,7 +194,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
             StreamsTestUtils.startKafkaStreamsAndWaitForRunningState(kafkaStreams);
 
             produceMessages(0L, inputTopic, "A");
-            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.NOT_RUNNING, DEFAULT_DURATION);
+            waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.ERROR, DEFAULT_DURATION);
 
             assertThat(processorValueCollector.size(), equalTo(1));
         }
