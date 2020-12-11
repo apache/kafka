@@ -222,7 +222,7 @@ class BrokerToControllerRequestThread(networkClient: KafkaClient,
     sendRequest(BrokerToControllerQueueItem(request, callback, deadlineMs))
 
   def sendRequest(request: BrokerToControllerQueueItem): Unit = synchronized {
-    sendableRequests.addOne(request)
+    sendableRequests += request
     networkClient.wakeup()
   }
 
