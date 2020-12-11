@@ -90,6 +90,11 @@ public final class ProcessorContextReverseAdapter implements InternalProcessorCo
     }
 
     @Override
+    public long currentStreamTimeMs() {
+        throw new UnsupportedOperationException("this method is not supported in ProcessorContextReverseAdapter");
+    }
+
+    @Override
     public ProcessorRecordContext recordContext() {
         return delegate.recordContext();
     }

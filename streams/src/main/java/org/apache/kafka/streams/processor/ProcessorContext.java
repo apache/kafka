@@ -286,4 +286,17 @@ public interface ProcessorContext {
      */
     Map<String, Object> appConfigsWithPrefix(final String prefix);
 
+    /**
+     * Returns current cached wall-clock system timestamp in milliseconds.
+     *
+     * @return the current cached wall-clock system timestamp in milliseconds
+     */
+    long currentSystemTimeMs();
+
+    /**
+     * Returns the maximum timestamp of any record yet processed by the task.
+     *
+     * @return the maximum timestamp of any record yet processed by the task
+     */
+    long currentStreamTimeMs();
 }

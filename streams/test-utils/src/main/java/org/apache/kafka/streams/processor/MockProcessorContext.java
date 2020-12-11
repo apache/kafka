@@ -258,6 +258,16 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     }
 
     @Override
+    public long currentSystemTimeMs() {
+        return timestamp;
+    }
+
+    @Override
+    public long currentStreamTimeMs() {
+        return timestamp;
+    }
+
+    @Override
     public Serde<?> keySerde() {
         return config.defaultKeySerde();
     }

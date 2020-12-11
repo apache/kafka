@@ -110,6 +110,11 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
     public void commit() {}
 
     @Override
+    public long currentStreamTimeMs() {
+        throw new UnsupportedOperationException("this method is not supported in NoOpProcessorContext");
+    }
+
+    @Override
     public void initialize() {
         initialized = true;
     }

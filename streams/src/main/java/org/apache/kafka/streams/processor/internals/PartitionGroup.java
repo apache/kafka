@@ -57,6 +57,7 @@ public class PartitionGroup {
     private final Sensor recordLatenessSensor;
     private final PriorityQueue<RecordQueue> nonEmptyQueuesByTime;
 
+    // the maximum timestamp of any record yet processed by the task
     private long streamTime;
     private int totalBuffered;
     private boolean allBuffered;

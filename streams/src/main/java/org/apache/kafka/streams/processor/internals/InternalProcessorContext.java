@@ -45,10 +45,10 @@ public interface InternalProcessorContext extends ProcessorContext {
      */
     void setSystemTimeMs(long timeMs);
 
-    /**
-     * @return the current wall-clock system timestamp in milliseconds
-     */
-    long currentSystemTimeMs();
+//    /**
+//     * @return the current wall-clock system timestamp in milliseconds
+//     */
+//    long currentSystemTimeMs();
 
     /**
      * Returns the current {@link RecordContext}

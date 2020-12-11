@@ -345,6 +345,11 @@ public class InternalMockProcessorContext
     }
 
     @Override
+    public long currentStreamTimeMs() {
+        throw new UnsupportedOperationException("this method is not supported in InternalMockProcessorContext");
+    }
+
+    @Override
     public String topic() {
         if (recordContext == null) {
             return null;

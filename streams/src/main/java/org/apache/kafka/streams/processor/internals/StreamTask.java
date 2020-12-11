@@ -70,6 +70,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     // visible for testing
     static final byte LATEST_MAGIC_BYTE = 1;
 
+    // This time is wall clock time
     private final Time time;
     private final Logger log;
     private final String logPrefix;
@@ -1085,14 +1086,19 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return recordCollector;
     }
 
+    public long streamTime() {
+        return partitionGroup.streamTime();
+    }
+
+    public long getWallClockTime() { 
+        return time.milliseconds(); 
+    }
+
     // below are visible for testing only
     int numBuffered() {
         return partitionGroup.numBuffered();
     }
 
-    long streamTime() {
-        return partitionGroup.streamTime();
-    }
 
     private class RecordQueueCreator {
         private final LogContext logContext;

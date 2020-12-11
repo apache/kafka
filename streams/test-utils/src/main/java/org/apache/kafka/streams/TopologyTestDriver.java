@@ -222,6 +222,7 @@ public class TopologyTestDriver implements Closeable {
     private Metrics metrics;
     ProcessorTopology processorTopology;
     ProcessorTopology globalTopology;
+    InternalProcessorContext context;
 
     private final MockConsumer<byte[], byte[]> consumer;
     private final MockProducer<byte[], byte[]> producer;
@@ -486,7 +487,7 @@ public class TopologyTestDriver implements Closeable {
                 streamsMetrics
             );
 
-            final InternalProcessorContext context = new ProcessorContextImpl(
+            context = new ProcessorContextImpl(
                 TASK_ID,
                 streamsConfig,
                 stateManager,
