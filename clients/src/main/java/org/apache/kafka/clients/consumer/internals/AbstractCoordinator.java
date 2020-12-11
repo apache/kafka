@@ -892,7 +892,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
 
     protected synchronized void markCoordinatorUnknown(Errors error) {
-        markCoordinatorUnknown(false, "error response {}" + error.message());
+        markCoordinatorUnknown(false, "error response {}" + error.name());
     }
 
     protected synchronized void markCoordinatorUnknown(String cause) {
@@ -902,7 +902,7 @@ public abstract class AbstractCoordinator implements Closeable {
     protected synchronized void markCoordinatorUnknown(boolean isDisconnected, String cause) {
         if (this.coordinator != null) {
             log.info("Group coordinator {} is unavailable or invalid due to cause: {}."
-                    + "isDisconnected: {}. Rediscovery will attempted.", this.coordinator,
+                    + "isDisconnected: {}. Rediscovery will be attempted.", this.coordinator,
                     cause, isDisconnected);
             Node oldCoordinator = this.coordinator;
 
@@ -1362,7 +1362,8 @@ public abstract class AbstractCoordinator implements Closeable {
                         } else if (heartbeat.sessionTimeoutExpired(now)) {
                             // the session timeout has expired without seeing a successful heartbeat, so we should
                             // probably make sure the coordinator is still healthy.
-                            markCoordinatorUnknown("session timed out without heartbeat");
+                            markCoordinatorUnknown("session timed out without receiving a "
+                                    + "heartbeat response");
                         } else if (heartbeat.pollTimeoutExpired(now)) {
                             // the poll timeout has expired, which means that the foreground thread has stalled
                             // in between calls to poll().
