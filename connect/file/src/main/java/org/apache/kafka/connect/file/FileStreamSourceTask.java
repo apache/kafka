@@ -137,16 +137,12 @@ public class FileStreamSourceTask extends SourceTask {
 
                 if (nread > 0) {
                     offset += nread;
-                    if (offset == buffer.length) {
-                        char[] newbuf = new char[buffer.length * 2];
-                        System.arraycopy(buffer, 0, newbuf, 0, buffer.length);
-                        buffer = newbuf;
-                    }
-
                     String line;
+                    boolean foundOneLine = false;
                     do {
                         line = extractLine();
                         if (line != null) {
+                            foundOneLine = true;
                             log.trace("Read a line from {}", logFilename());
                             if (records == null)
                                 records = new ArrayList<>();
@@ -158,6 +154,13 @@ public class FileStreamSourceTask extends SourceTask {
                             }
                         }
                     } while (line != null);
+
+                    if (!foundOneLine && offset == buffer.length) {
+                        char[] newbuf = new char[buffer.length * 2];
+                        System.arraycopy(buffer, 0, newbuf, 0, buffer.length);
+                        log.info("Increased buffer from {} to {}", buffer.length, newbuf.length);
+                        buffer = newbuf;
+                    }
                 }
             }
 
