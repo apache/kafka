@@ -26,6 +26,19 @@ public interface EventQueue extends AutoCloseable {
         default void handleException(Throwable e) {}
     }
 
+    class DeadlineFunction implements Function<Long, Long> {
+        private final long deadlineNs;
+
+        public DeadlineFunction(long deadlineNs) {
+            this.deadlineNs = deadlineNs;
+        }
+
+        @Override
+        public Long apply(Long t) {
+            return deadlineNs;
+        }
+    }
+
     class VoidEvent implements Event {
         public final static VoidEvent INSTANCE = new VoidEvent();
 
