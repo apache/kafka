@@ -72,7 +72,7 @@ public class ThreadCache {
         return numFlushes;
     }
 
-    public void resize(final long newCacheSizeBytes) {
+    public synchronized void resize(final long newCacheSizeBytes) {
         final boolean shrink = newCacheSizeBytes < maxCacheSizeBytes;
         maxCacheSizeBytes = newCacheSizeBytes;
         if (shrink) {
