@@ -609,8 +609,8 @@ class RequestQuotaTest extends BaseRequestTest {
             "client-id",
             0
           )
-          val embedRequestData = new AlterClientQuotasRequest.Builder(
-            List.empty.asJava, false).build().serializeWithHeader(requestHeader)
+          val embedRequestData = RequestTestUtils.serializeRequestWithHeader(requestHeader,
+            new AlterClientQuotasRequest.Builder(List.empty.asJava, false).build())
           new EnvelopeRequest.Builder(embedRequestData, new Array[Byte](0),
             InetAddress.getByName("192.168.1.1").getAddress)
 

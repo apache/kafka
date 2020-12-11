@@ -451,6 +451,8 @@ class ConnectionQuotasTest {
 
     // acceptor shouldn't block for IP rate throttling
     verifyNoBlockedPercentRecordedOnAllListeners()
+    // no IP throttle time should be recorded on any listeners
+    listeners.values.map(_.listenerName).foreach(verifyIpThrottleTimeOnListener(_, expectThrottle = false))
   }
 
   @Test
@@ -469,15 +471,21 @@ class ConnectionQuotasTest {
     val numConnections = 80
     acceptConnectionsAndVerifyRate(connectionQuotas, externalListener, numConnections, connCreateIntervalMs, ipConnectionRateLimit,
       1, expectIpThrottle = true)
+    verifyIpThrottleTimeOnListener(externalListener.listenerName, expectThrottle = true)
 
     // verify that default quota applies to IPs without a quota override
     connectionQuotas.updateIpConnectionRateQuota(None, Some(ipConnectionRateLimit))
     val adminListener = listeners("ADMIN")
+    // listener shouldn't have any IP throttle time recorded
+    verifyIpThrottleTimeOnListener(adminListener.listenerName, expectThrottle = false)
     acceptConnectionsAndVerifyRate(connectionQuotas, adminListener, numConnections, connCreateIntervalMs, ipConnectionRateLimit,
       1, expectIpThrottle = true)
+    verifyIpThrottleTimeOnListener(adminListener.listenerName, expectThrottle = true)
 
     // acceptor shouldn't block for IP rate throttling
     verifyNoBlockedPercentRecordedOnAllListeners()
+    // replication listener shouldn't have any IP throttling recorded
+    verifyIpThrottleTimeOnListener(listeners("REPLICATION").listenerName, expectThrottle = false)
   }
 
   @Test
@@ -757,8 +765,10 @@ class ConnectionQuotasTest {
           0, metricValue(listenerConnRateMetric(listenerName.value)), eps)
       assertNotNull(s"Expected connection-accept-throttle-time metric to exist for listener ${listenerName.value}",
         listenerConnThrottleMetric(listenerName.value))
-      assertEquals(s"Connection throttle metric for listener ${listenerName.value}",
+      assertEquals(s"Listener connection throttle metric for listener ${listenerName.value}",
         0, metricValue(listenerConnThrottleMetric(listenerName.value)).toLong)
+      assertEquals(s"Ip connection throttle metric for listener ${listenerName.value}",
+        0, metricValue(ipConnThrottleMetric(listenerName.value)).toLong)
     }
     verifyNoBlockedPercentRecordedOnAllListeners()
     assertEquals("Broker-wide connection acceptance rate metric", 0, metricValue(brokerConnRateMetric()), eps)
@@ -778,6 +788,11 @@ class ConnectionQuotasTest {
       assertTrue(s"Connection throttle metric for listener ${listener.listenerName.value}",
         metricValue(listenerConnThrottleMetric(listener.listenerName.value)).toLong > 0)
     }
+  }
+
+  private def verifyIpThrottleTimeOnListener(listener: ListenerName, expectThrottle: Boolean): Unit = {
+    assertEquals(s"IP connection throttle recorded for listener ${listener.value}", expectThrottle,
+      metricValue(ipConnThrottleMetric(listener.value)).toLong > 0)
   }
 
   private def verifyOnlyNonInterBrokerListenersBlockedPercentRecorded(): Unit = {
@@ -801,6 +816,14 @@ class ConnectionQuotasTest {
   private def listenerConnThrottleMetric(listener: String) : KafkaMetric = {
     val metricName = metrics.metricName(
       "connection-accept-throttle-time",
+      SocketServer.MetricsGroup,
+      Collections.singletonMap(Processor.ListenerMetricTag, listener))
+    metrics.metric(metricName)
+  }
+
+  private def ipConnThrottleMetric(listener: String): KafkaMetric = {
+    val metricName = metrics.metricName(
+      "ip-connection-accept-throttle-time",
       SocketServer.MetricsGroup,
       Collections.singletonMap(Processor.ListenerMetricTag, listener))
     metrics.metric(metricName)

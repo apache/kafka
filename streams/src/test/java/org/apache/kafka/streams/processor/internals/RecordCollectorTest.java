@@ -30,6 +30,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
@@ -449,7 +450,15 @@ public class RecordCollectorTest {
 
     @Test
     public void shouldThrowTaskMigratedExceptionOnSubsequentSendWhenProducerFencedInCallback() {
-        final KafkaException exception = new ProducerFencedException("KABOOM!");
+        testThrowTaskMigratedExceptionOnSubsequentSend(new ProducerFencedException("KABOOM!"));
+    }
+
+    @Test
+    public void shouldThrowTaskMigratedExceptionOnSubsequentSendWhenInvalidEpochInCallback() {
+        testThrowTaskMigratedExceptionOnSubsequentSend(new InvalidProducerEpochException("KABOOM!"));
+    }
+
+    private void testThrowTaskMigratedExceptionOnSubsequentSend(final RuntimeException exception) {
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
             taskId,
@@ -463,21 +472,22 @@ public class RecordCollectorTest {
 
         final TaskMigratedException thrown = assertThrows(
             TaskMigratedException.class, () ->
-                collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner)
+                                             collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner)
         );
         assertEquals(exception, thrown.getCause());
-        assertThat(
-            thrown.getMessage(),
-            equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
-                        "\norg.apache.kafka.common.errors.ProducerFencedException: KABOOM!" +
-                        "\nWritten offsets would not be recorded and no more records would be sent since the producer is fenced," +
-                        " indicating the task may be migrated out; it means all tasks belonging to this thread should be migrated.")
-        );
     }
 
     @Test
     public void shouldThrowTaskMigratedExceptionOnSubsequentFlushWhenProducerFencedInCallback() {
-        final KafkaException exception = new ProducerFencedException("KABOOM!");
+        testThrowTaskMigratedExceptionOnSubsequentFlush(new ProducerFencedException("KABOOM!"));
+    }
+
+    @Test
+    public void shouldThrowTaskMigratedExceptionOnSubsequentFlushWhenInvalidEpochInCallback() {
+        testThrowTaskMigratedExceptionOnSubsequentFlush(new InvalidProducerEpochException("KABOOM!"));
+    }
+
+    private void testThrowTaskMigratedExceptionOnSubsequentFlush(final RuntimeException exception) {
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
             taskId,
@@ -491,18 +501,19 @@ public class RecordCollectorTest {
 
         final TaskMigratedException thrown = assertThrows(TaskMigratedException.class, collector::flush);
         assertEquals(exception, thrown.getCause());
-        assertThat(
-            thrown.getMessage(),
-            equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
-                        "\norg.apache.kafka.common.errors.ProducerFencedException: KABOOM!" +
-                        "\nWritten offsets would not be recorded and no more records would be sent since the producer is fenced," +
-                        " indicating the task may be migrated out; it means all tasks belonging to this thread should be migrated.")
-        );
     }
 
     @Test
     public void shouldThrowTaskMigratedExceptionOnSubsequentCloseWhenProducerFencedInCallback() {
-        final KafkaException exception = new ProducerFencedException("KABOOM!");
+        testThrowTaskMigratedExceptionOnSubsequentClose(new ProducerFencedException("KABOOM!"));
+    }
+
+    @Test
+    public void shouldThrowTaskMigratedExceptionOnSubsequentCloseWhenInvalidEpochInCallback() {
+        testThrowTaskMigratedExceptionOnSubsequentClose(new InvalidProducerEpochException("KABOOM!"));
+    }
+
+    private void testThrowTaskMigratedExceptionOnSubsequentClose(final RuntimeException exception) {
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
             taskId,
@@ -516,13 +527,6 @@ public class RecordCollectorTest {
 
         final TaskMigratedException thrown = assertThrows(TaskMigratedException.class, collector::closeClean);
         assertEquals(exception, thrown.getCause());
-        assertThat(
-            thrown.getMessage(),
-            equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
-                        "\norg.apache.kafka.common.errors.ProducerFencedException: KABOOM!" +
-                        "\nWritten offsets would not be recorded and no more records would be sent since the producer is fenced," +
-                        " indicating the task may be migrated out; it means all tasks belonging to this thread should be migrated.")
-        );
     }
 
     @Test

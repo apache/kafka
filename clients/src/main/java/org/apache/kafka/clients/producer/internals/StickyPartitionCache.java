@@ -58,7 +58,7 @@ public class StickyPartitionCache {
                 newPart = availablePartitions.get(0).partition();
             } else {
                 while (newPart == null || newPart.equals(oldPart)) {
-                    Integer random = Utils.toPositive(ThreadLocalRandom.current().nextInt());
+                    int random = Utils.toPositive(ThreadLocalRandom.current().nextInt());
                     newPart = availablePartitions.get(random % availablePartitions.size()).partition();
                 }
             }

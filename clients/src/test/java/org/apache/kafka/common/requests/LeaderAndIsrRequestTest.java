@@ -128,7 +128,7 @@ public class LeaderAndIsrRequestTest {
             assertEquals(2, request.controllerEpoch());
             assertEquals(3, request.brokerEpoch());
 
-            ByteBuffer byteBuffer = request.serializeBody();
+            ByteBuffer byteBuffer = request.serialize();
             LeaderAndIsrRequest deserializedRequest = new LeaderAndIsrRequest(new LeaderAndIsrRequestData(
                 new ByteBufferAccessor(byteBuffer), version), version);
 

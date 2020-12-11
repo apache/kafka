@@ -156,7 +156,7 @@ public class UpdateMetadataRequestTest {
             assertEquals(2, request.controllerEpoch());
             assertEquals(3, request.brokerEpoch());
 
-            ByteBuffer byteBuffer = request.serializeBody();
+            ByteBuffer byteBuffer = request.serialize();
             UpdateMetadataRequest deserializedRequest = new UpdateMetadataRequest(new UpdateMetadataRequestData(
                     new ByteBufferAccessor(byteBuffer), version), version);
 

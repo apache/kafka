@@ -159,6 +159,7 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetDeleteResponse;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
+import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.UpdateFeaturesRequest;
 import org.apache.kafka.common.requests.UpdateFeaturesResponse;
 import org.apache.kafka.common.resource.PatternType;
@@ -561,7 +562,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareResponse(request -> request instanceof MetadataRequest, null, true);
             env.kafkaClient().prepareResponse(request -> request instanceof MetadataRequest,
-                    TestUtils.metadataResponse(discoveredCluster.nodes(), discoveredCluster.clusterResource().clusterId(),
+                    RequestTestUtils.metadataResponse(discoveredCluster.nodes(), discoveredCluster.clusterResource().clusterId(),
                             1, Collections.emptyList()));
             env.kafkaClient().prepareResponse(body -> body instanceof CreateTopicsRequest,
                     prepareCreateTopicsResponse("myTopic", Errors.NONE));
@@ -586,7 +587,7 @@ public class KafkaAdminClientTest {
             Cluster discoveredCluster = mockCluster(3, 0);
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareResponse(body -> body instanceof MetadataRequest,
-                    TestUtils.metadataResponse(discoveredCluster.nodes(), discoveredCluster.clusterResource().clusterId(),
+                    RequestTestUtils.metadataResponse(discoveredCluster.nodes(), discoveredCluster.clusterResource().clusterId(),
                             1, Collections.emptyList()));
             env.kafkaClient().prepareResponse(body -> body instanceof CreateTopicsRequest,
                 prepareCreateTopicsResponse("myTopic", Errors.NONE));
@@ -703,7 +704,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponseFrom(
                 prepareCreateTopicsResponse("myTopic", Errors.NOT_CONTROLLER),
                 env.cluster().nodeById(0));
-            env.kafkaClient().prepareResponse(TestUtils.metadataResponse(env.cluster().nodes(),
+            env.kafkaClient().prepareResponse(RequestTestUtils.metadataResponse(env.cluster().nodes(),
                 env.cluster().clusterResource().clusterId(),
                 1,
                 Collections.<MetadataResponse.TopicMetadata>emptyList()));
@@ -1047,7 +1048,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(null, true);
 
             // The next one succeeds and gives us the controller id
-            env.kafkaClient().prepareResponse(TestUtils.metadataResponse(initializedCluster.nodes(),
+            env.kafkaClient().prepareResponse(RequestTestUtils.metadataResponse(initializedCluster.nodes(),
                     initializedCluster.clusterResource().clusterId(),
                     initializedCluster.controller().id(),
                     Collections.emptyList()));
@@ -1057,7 +1058,7 @@ public class KafkaAdminClientTest {
             MetadataResponse.PartitionMetadata partitionMetadata = new MetadataResponse.PartitionMetadata(
                     Errors.NONE, new TopicPartition(topic, 0), Optional.of(leader.id()), Optional.of(10),
                     singletonList(leader.id()), singletonList(leader.id()), singletonList(leader.id()));
-            env.kafkaClient().prepareResponse(TestUtils.metadataResponse(initializedCluster.nodes(),
+            env.kafkaClient().prepareResponse(RequestTestUtils.metadataResponse(initializedCluster.nodes(),
                     initializedCluster.clusterResource().clusterId(), 1,
                     singletonList(new MetadataResponse.TopicMetadata(Errors.NONE, topic, false,
                             singletonList(partitionMetadata), MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED))));
@@ -1859,7 +1860,7 @@ public class KafkaAdminClientTest {
             topics.add(new MetadataResponse.TopicMetadata(Errors.TOPIC_AUTHORIZATION_FAILED, topic, false,
                     Collections.emptyList()));
 
-            env.kafkaClient().prepareResponse(TestUtils.metadataResponse(env.cluster().nodes(),
+            env.kafkaClient().prepareResponse(RequestTestUtils.metadataResponse(env.cluster().nodes(),
                     env.cluster().clusterResource().clusterId(), env.cluster().controller().id(), topics));
 
             Map<TopicPartition, RecordsToDelete> recordsToDelete = new HashMap<>();
@@ -1892,7 +1893,7 @@ public class KafkaAdminClientTest {
             List<MetadataResponse.TopicMetadata> topicMetadata = new ArrayList<>();
             topicMetadata.add(new MetadataResponse.TopicMetadata(Errors.NONE, topic, false, partitionMetadata));
 
-            env.kafkaClient().prepareResponse(TestUtils.metadataResponse(env.cluster().nodes(),
+            env.kafkaClient().prepareResponse(RequestTestUtils.metadataResponse(env.cluster().nodes(),
                     env.cluster().clusterResource().clusterId(), env.cluster().controller().id(), topicMetadata));
 
             env.kafkaClient().prepareResponseFrom(new DeleteRecordsResponse(new DeleteRecordsResponseData().setTopics(
@@ -1980,7 +1981,7 @@ public class KafkaAdminClientTest {
 
             t.add(new MetadataResponse.TopicMetadata(Errors.NONE, "my_topic", false, p));
 
-            env.kafkaClient().prepareResponse(TestUtils.metadataResponse(cluster.nodes(), cluster.clusterResource().clusterId(), cluster.controller().id(), t));
+            env.kafkaClient().prepareResponse(RequestTestUtils.metadataResponse(cluster.nodes(), cluster.clusterResource().clusterId(), cluster.controller().id(), t));
             env.kafkaClient().prepareResponse(new DeleteRecordsResponse(m));
 
             Map<TopicPartition, RecordsToDelete> recordsToDelete = new HashMap<>();
@@ -2043,21 +2044,23 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
             // Prepare the metadata response used for the first describe cluster
-            MetadataResponse response = TestUtils.metadataResponse(0,
+            MetadataResponse response = RequestTestUtils.metadataResponse(0,
                     env.cluster().nodes(),
                     env.cluster().clusterResource().clusterId(),
                     2,
                     Collections.emptyList(),
-                    MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED);
+                    MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED,
+                    ApiKeys.METADATA.latestVersion());
             env.kafkaClient().prepareResponse(response);
 
             // Prepare the metadata response used for the second describe cluster
-            MetadataResponse response2 = TestUtils.metadataResponse(0,
+            MetadataResponse response2 = RequestTestUtils.metadataResponse(0,
                     env.cluster().nodes(),
                     env.cluster().clusterResource().clusterId(),
                     3,
                     Collections.emptyList(),
-                    1 << AclOperation.DESCRIBE.code() | 1 << AclOperation.ALTER.code());
+                    1 << AclOperation.DESCRIBE.code() | 1 << AclOperation.ALTER.code(),
+                    ApiKeys.METADATA.latestVersion());
             env.kafkaClient().prepareResponse(response2);
 
             // Test DescribeCluster with the authorized operations omitted.
@@ -2083,14 +2086,14 @@ public class KafkaAdminClientTest {
 
             // Empty metadata response should be retried
             env.kafkaClient().prepareResponse(
-                     TestUtils.metadataResponse(
+                     RequestTestUtils.metadataResponse(
                             Collections.emptyList(),
                             env.cluster().clusterResource().clusterId(),
                             -1,
                             Collections.emptyList()));
 
             env.kafkaClient().prepareResponse(
-                     TestUtils.metadataResponse(
+                     RequestTestUtils.metadataResponse(
                             env.cluster().nodes(),
                             env.cluster().clusterResource().clusterId(),
                             env.cluster().controller().id(),
@@ -2196,7 +2199,7 @@ public class KafkaAdminClientTest {
             // Empty metadata causes the request to fail since we have no list of brokers
             // to send the ListGroups requests to
             env.kafkaClient().prepareResponse(
-                     TestUtils.metadataResponse(
+                     RequestTestUtils.metadataResponse(
                             Collections.emptyList(),
                             env.cluster().clusterResource().clusterId(),
                             -1,
@@ -3457,7 +3460,7 @@ public class KafkaAdminClientTest {
                                         .setName("B")
                                         .setPartitions(Collections.singletonList(normalPartitionResponse)))
                             );
-            MetadataResponse controllerNodeResponse = TestUtils.metadataResponse(env.cluster().nodes(),
+            MetadataResponse controllerNodeResponse = RequestTestUtils.metadataResponse(env.cluster().nodes(),
                     env.cluster().clusterResource().clusterId(), 1, Collections.emptyList());
             AlterPartitionReassignmentsResponseData normalResponse =
                     new AlterPartitionReassignmentsResponseData()
@@ -3585,7 +3588,7 @@ public class KafkaAdminClientTest {
             ListPartitionReassignmentsResponseData notControllerData = new ListPartitionReassignmentsResponseData()
                     .setErrorCode(Errors.NOT_CONTROLLER.code())
                     .setErrorMessage(Errors.NOT_CONTROLLER.message());
-            MetadataResponse controllerNodeResponse = TestUtils.metadataResponse(env.cluster().nodes(),
+            MetadataResponse controllerNodeResponse = RequestTestUtils.metadataResponse(env.cluster().nodes(),
                     env.cluster().clusterResource().clusterId(), 1, Collections.emptyList());
             ListPartitionReassignmentsResponseData reassignmentsData = new ListPartitionReassignmentsResponseData()
                     .setTopics(Arrays.asList(tp1Reassignment, tp2Reassignment));
@@ -4042,7 +4045,7 @@ public class KafkaAdminClientTest {
                     0),
                 env.cluster().nodeById(0));
             final int controllerId = 1;
-            env.kafkaClient().prepareResponse(TestUtils.metadataResponse(env.cluster().nodes(),
+            env.kafkaClient().prepareResponse(RequestTestUtils.metadataResponse(env.cluster().nodes(),
                 env.cluster().clusterResource().clusterId(),
                 controllerId,
                 Collections.emptyList()));

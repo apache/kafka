@@ -108,7 +108,7 @@ public class OffsetFetchResponseTest {
         for (short version = 0; version <= ApiKeys.OFFSET_FETCH.latestVersion(); version++) {
             Struct struct = latestResponse.data.toStruct(version);
 
-            OffsetFetchResponse oldResponse = OffsetFetchResponse.parse(latestResponse.serializeBody(version), version);
+            OffsetFetchResponse oldResponse = OffsetFetchResponse.parse(latestResponse.serialize(version), version);
 
             if (version <= 1) {
                 assertFalse(struct.hasField(ERROR_CODE));

@@ -99,6 +99,7 @@ public class RequestContextTest {
             ClientInformation.EMPTY, true);
 
         ByteBuffer buffer = context.buildResponseEnvelopePayload(new CreateTopicsResponse(expectedResponse));
+        assertEquals("Buffer limit and capacity should be the same", buffer.capacity(), buffer.limit());
         CreateTopicsResponse parsedResponse = (CreateTopicsResponse) AbstractResponse.parseResponse(buffer, header);
         assertEquals(expectedResponse, parsedResponse.data());
     }

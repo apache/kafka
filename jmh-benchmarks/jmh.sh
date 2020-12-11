@@ -35,7 +35,7 @@ $gradleCmd  -q :jmh-benchmarks:clean :jmh-benchmarks:shadowJar
 
 echo "gradle build done"
 
-echo "running JMH with args [$@]"
+echo "running JMH with args: $@"
 
 java -jar ${libDir}/kafka-jmh-benchmarks-all.jar "$@"
 
