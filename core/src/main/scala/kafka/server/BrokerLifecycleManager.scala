@@ -192,14 +192,12 @@ class BrokerLifecycleManager(val config: KafkaConfig,
   }
 
   private def sendBrokerRegistration(): Unit = {
-    val metadataOffset = _highestMetadataOffsetProvider()
     val data = new BrokerRegistrationRequestData().
         setBrokerId(brokerId).
         setClusterId(_clusterId).
       //setFeatures(...).
         setIncarnationId(incarnationId).
         setListeners(advertisedListeners).
-        setNextMetadataOffset(metadataOffset).
         setRack(rack)
     channelManager.sendRequest(new BrokerRegistrationRequest.Builder(data),
       new BrokerRegistrationResponseHandler())

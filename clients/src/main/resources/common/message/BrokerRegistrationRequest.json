@@ -26,8 +26,6 @@
 	  "about": "The cluster id of the broker process." },
    	{ "name": "IncarnationId", "type": "uuid", "versions": "0+",
 	  "about": "The incarnation id of the broker process." },
-    { "name": "NextMetadataOffset", "type": "int64", "versions": "0+",
-      "about": "The highest metadata offset which the broker has not reached." },
     { "name": "Listeners", "type": "[]Listener",
       "about": "The listeners of this broker", "versions": "0+", "fields": [
         { "name": "Name", "type": "string", "versions": "0+", "mapKey": true,
