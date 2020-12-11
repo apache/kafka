@@ -34,8 +34,10 @@ The following sections cover async profiler and GC profilers in more detail.
 
 ### Using JMH with async profiler
 
-It's good practice to check profiler output for microbenchmarks in order to verify that they are valid.
-JMH includes [async-profiler](https://github.com/jvm-profiling-tools/async-profiler) integration that makes this easy:
+It's good practice to check profiler output for microbenchmarks in order to verify that they represent the expected
+application behavior and measure what you expect to measure. Some example pitfalls include the use of expensive mocks
+or accidental inclusion of test setup code in the benchmarked code. JMH includes
+[async-profiler](https://github.com/jvm-profiling-tools/async-profiler) integration that makes this easy:
 
     ./jmh-benchmarks/jmh.sh -prof async:libPath=/path/to/libasyncProfiler.so
 
