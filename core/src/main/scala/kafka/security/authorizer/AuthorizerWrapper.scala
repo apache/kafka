@@ -201,16 +201,23 @@ class AuthorizerWrapper(private[kafka] val baseAuthorizer: kafka.security.auth.A
   }
 
   private def denyAllResource(requestContext: AuthorizableRequestContext,
-                      op: AclOperation,
-                      resourceType: ResourceType): Boolean = {
+                              op: AclOperation,
+                              resourceType: ResourceType): Boolean = {
     val resourceTypeFilter = new ResourcePatternFilter(
-      resourceType, null, PatternType.ANY)
+      resourceType, Resource.WildCardResource, PatternType.LITERAL)
     val principal = new KafkaPrincipal(requestContext.principal.getPrincipalType, requestContext.principal.getName)
-    val accessControlEntry = new AccessControlEntryFilter(
-      principal.toString, requestContext.clientAddress().getHostAddress, op, AclPermissionType.DENY)
+    val host = requestContext.clientAddress().getHostAddress
+    val accessControlEntry = new AccessControlEntryFilter(null, null, op, AclPermissionType.DENY)
     val aclFilter = new AclBindingFilter(resourceTypeFilter, accessControlEntry)
 
-    acls(aclFilter).asScala.exists(binding => SecurityUtils.canDenyAll(binding.pattern()))
+    acls(aclFilter).asScala.exists(b => principalHostMatch(b.entry(), principal, host))
+  }
+
+  private def principalHostMatch(ace: AccessControlEntry,
+                                 principal: KafkaPrincipal,
+                                 host: String): Boolean = {
+    ((ace.host() == AclEntry.WildcardHost || ace.host() == host)
+      && (ace.principal() == AclEntry.WildcardPrincipalString || ace.principal() == principal.toString))
   }
 
 }
