@@ -997,9 +997,9 @@ public class KafkaStreams implements AutoCloseable {
                         if (!streamThread.getName().equals(Thread.currentThread().getName())) {
                             streamThread.waitOnThreadState(StreamThread.State.DEAD);
                         }
-                        final long cacheSizePerThread = threads.size() == 1 ? 0 : getCacheSizePerThread(threads.size() - 1);
-                        resizeThreadCache(cacheSizePerThread);
                         threads.remove(streamThread);
+                        final long cacheSizePerThread = getCacheSizePerThread(threads.size());
+                        resizeThreadCache(cacheSizePerThread);
                         return Optional.of(streamThread.getName());
                     }
                 }
@@ -1027,12 +1027,18 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     private long getCacheSizePerThread(final int numStreamThreads) {
+        if (numStreamThreads == 0) {
+            return totalCacheSize;
+        }
         return totalCacheSize / (numStreamThreads + ((globalTaskTopology != null) ? 1 : 0));
     }
 
     private void resizeThreadCache(final long cacheSizePerThread) {
         for (final StreamThread streamThread: threads) {
             streamThread.resizeCache(cacheSizePerThread);
+        }
+        if (globalStreamThread != null) {
+            globalStreamThread.resize(cacheSizePerThread);
         }
     }
 
@@ -1474,7 +1480,9 @@ public class KafkaStreams implements AutoCloseable {
         validateIsRunningOrRebalancing();
         final Set<ThreadMetadata> threadMetadata = new HashSet<>();
         for (final StreamThread thread : threads) {
-            threadMetadata.add(thread.threadMetadata());
+            if (thread.state() != StreamThread.State.DEAD) {
+                threadMetadata.add(thread.threadMetadata());
+            }
         }
         return threadMetadata;
     }
