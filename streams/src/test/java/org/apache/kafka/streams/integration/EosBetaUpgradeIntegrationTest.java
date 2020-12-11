@@ -123,6 +123,13 @@ public class EosBetaUpgradeIntegrationTest {
                 KeyValue.pair(KafkaStreams.State.PENDING_SHUTDOWN, KafkaStreams.State.NOT_RUNNING)
             )
         );
+    private static final List<KeyValue<KafkaStreams.State, KafkaStreams.State>> REBALANCED_RUNNING =
+        Collections.unmodifiableList(
+            Arrays.asList(
+                KeyValue.pair(State.RUNNING, State.REBALANCING),
+                KeyValue.pair(State.REBALANCING, State.RUNNING)
+            )
+        );
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(
@@ -146,8 +153,6 @@ public class EosBetaUpgradeIntegrationTest {
     private final AtomicInteger commitCounterClient1 = new AtomicInteger(-1);
     private final AtomicInteger commitCounterClient2 = new AtomicInteger(-1);
     private final AtomicInteger commitRequested = new AtomicInteger(0);
-
-    private Throwable uncaughtException;
 
     private int testNumber = 0;
 
@@ -256,8 +261,8 @@ public class EosBetaUpgradeIntegrationTest {
             streams2Alpha.cleanUp();
             streams2Alpha.start();
             assignmentListener.waitForNextStableAssignment(MAX_WAIT_TIME_MS);
-            waitForRunning(stateTransitions1);
-            waitForRunning(stateTransitions2);
+            waitForRebalancingRunning(stateTransitions1);
+            waitForRebalancingRunning(stateTransitions2);
 
             // in all phases, we write comments that assume that p-0/p-1 are assigned to the first client
             // and p-2/p-3 are assigned to the second client (in reality the assignment might be different though)
@@ -416,8 +421,8 @@ public class EosBetaUpgradeIntegrationTest {
             assignmentListener.prepareForRebalance();
             streams1Beta.start();
             assignmentListener.waitForNextStableAssignment(MAX_WAIT_TIME_MS);
-            waitForRunning(stateTransitions1);
-            waitForRunning(stateTransitions2);
+            waitForRebalancingRunning(stateTransitions1);
+            waitForRebalancingRunning(stateTransitions2);
 
             final Set<Long> newlyCommittedKeys;
             if (!injectError) {
@@ -562,8 +567,8 @@ public class EosBetaUpgradeIntegrationTest {
                 assignmentListener.prepareForRebalance();
                 streams2AlphaTwo.start();
                 assignmentListener.waitForNextStableAssignment(MAX_WAIT_TIME_MS);
-                waitForRunning(stateTransitions1);
-                waitForRunning(stateTransitions2);
+                waitForRebalancingRunning(stateTransitions1);
+                waitForRebalancingRunning(stateTransitions2);
 
                 // 7b. write third batch of input data
                 final Set<Long> keysFirstClientBeta = keysFromInstance(streams1Beta);
@@ -631,8 +636,8 @@ public class EosBetaUpgradeIntegrationTest {
                 assignmentListener.prepareForRebalance();
                 streams1BetaTwo.start();
                 assignmentListener.waitForNextStableAssignment(MAX_WAIT_TIME_MS);
-                waitForRunning(stateTransitions1);
-                waitForRunning(stateTransitions2);
+                waitForRebalancingRunning(stateTransitions1);
+                waitForRebalancingRunning(stateTransitions2);
             }
 
             // phase 8: (write partial last batch of data)
@@ -766,8 +771,8 @@ public class EosBetaUpgradeIntegrationTest {
             assignmentListener.prepareForRebalance();
             streams2Beta.start();
             assignmentListener.waitForNextStableAssignment(MAX_WAIT_TIME_MS);
-            waitForRunning(stateTransitions1);
-            waitForRunning(stateTransitions2);
+            waitForRebalancingRunning(stateTransitions1);
+            waitForRebalancingRunning(stateTransitions2);
 
             newlyCommittedKeys.clear();
             if (!injectError) {
@@ -938,11 +943,13 @@ public class EosBetaUpgradeIntegrationTest {
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), config, new TestKafkaClientSupplier());
         streams.setUncaughtExceptionHandler((t, e) -> {
-            if (uncaughtException != null) {
+            // should only have our injected exception or commit exception
+            if (!(e instanceof RuntimeException) && !(e.getMessage().contains("test exception"))) {
+                // The exception won't cause the test fail since we actually "expected" exception thrown and failed the stream.
+                // So, log to stderr for debugging when the exception is not what we expected
                 e.printStackTrace(System.err);
                 fail("Should only get one uncaught exception from Streams.");
             }
-            uncaughtException = e;
         });
 
         return streams;
@@ -956,6 +963,20 @@ public class EosBetaUpgradeIntegrationTest {
         );
     }
 
+    // Wait state from RUNNING -> REBALANCING -> RUNNING because when new stream joined, we'll do 2 rebalancing: 1 for
+    // new member join, 1 for leader re-join group during Stable. So, if we only wait for Running, it might enter rebalancing soon
+    private void waitForRebalancingRunning(final List<KeyValue<KafkaStreams.State, KafkaStreams.State>> observed) throws Exception {
+        waitForCondition(
+            () -> !observed.isEmpty() && observed.size() >= 2 &&
+                Arrays.asList(
+                    observed.get(observed.size() - 2),
+                    observed.get(observed.size() - 1)
+                ).equals(REBALANCED_RUNNING),
+            MAX_WAIT_TIME_MS,
+            () -> "Client did not run from Rebalancing to Running on time. Observers transitions: " + observed
+        );
+    }
+
     private void waitForStateTransition(final List<KeyValue<KafkaStreams.State, KafkaStreams.State>> observed,
                                         final List<KeyValue<KafkaStreams.State, KafkaStreams.State>> expected)
             throws Exception {
@@ -963,7 +984,7 @@ public class EosBetaUpgradeIntegrationTest {
         waitForCondition(
             () -> observed.equals(expected),
             MAX_WAIT_TIME_MS,
-            () -> "Client did not startup on time. Observers transitions: " + observed
+            () -> "Client did not have the expected state transition on time. Observers transitions: " + observed
         );
     }
 
@@ -1156,7 +1177,7 @@ public class EosBetaUpgradeIntegrationTest {
             if (!crash.compareAndSet(true, false)) {
                 super.commitTransaction();
             } else {
-                throw new RuntimeException("Injected producer commit exception.");
+                throw new RuntimeException("Injected producer commit test exception.");
             }
         }
     }
