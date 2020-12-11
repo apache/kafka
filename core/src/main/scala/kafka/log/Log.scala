@@ -935,7 +935,7 @@ class Log(@volatile private var _dir: File,
             maxPosition = maxPosition,
             minOneMessage = false)
           if (fetchDataInfo != null)
-            loadProducersFromLog(producerStateManager, fetchDataInfo.records)
+            loadProducersFromRecords(producerStateManager, fetchDataInfo.records)
         }
       }
       producerStateManager.updateMapEndOffset(lastOffset)
@@ -2645,7 +2645,7 @@ object Log {
   private def isLogFile(file: File): Boolean =
     file.getPath.endsWith(LogFileSuffix)
 
-  private def loadProducersFromLog(producerStateManager: ProducerStateManager, records: Records): Unit = {
+  private def loadProducersFromRecords(producerStateManager: ProducerStateManager, records: Records): Unit = {
     val loadedProducers = mutable.Map.empty[Long, ProducerAppendInfo]
     val completedTxns = ListBuffer.empty[CompletedTxn]
     records.batches.forEach { batch =>
