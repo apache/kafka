@@ -315,7 +315,7 @@ public final class QuorumController implements Controller {
                     this.resultAndOffset = new ControllerResultAndOffset<>(-1,
                         Collections.emptyList(), result.response());
                     log.debug("Completing read-only operation {} immediately because " +
-                        "the purgatory is empty.");
+                        "the purgatory is empty.", this);
                     complete(null);
                     return;
                 }
