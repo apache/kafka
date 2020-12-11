@@ -54,7 +54,11 @@ class InterBrokerSendThread(
   }
 
   def sendRequest(request: RequestAndCompletionHandler): Unit = {
-    inboundQueue.offer(request)
+    sendRequests(Seq(request))
+  }
+
+  def sendRequests(requests: Iterable[RequestAndCompletionHandler]): Unit = {
+    inboundQueue.addAll(requests.asJavaCollection)
     wakeup()
   }
 

@@ -309,7 +309,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         socketServer.startup(startProcessingRequests = false)
 
         /* start replica manager */
-        alterIsrChannelManager = new BrokerToControllerChannelManagerImpl(
+        alterIsrChannelManager = new BrokerToControllerChannelManager(
           metadataCache, time, metrics, config, "alterIsrChannel", threadNamePrefix)
         replicaManager = createReplicaManager(isShuttingDown)
         replicaManager.startup()
@@ -332,7 +332,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         var forwardingManager: ForwardingManager = null
         if (config.metadataQuorumEnabled) {
           /* start forwarding manager */
-          forwardingChannelManager = new BrokerToControllerChannelManagerImpl(metadataCache, time, metrics,
+          forwardingChannelManager = new BrokerToControllerChannelManager(metadataCache, time, metrics,
             config, "forwardingChannel", threadNamePrefix)
           forwardingChannelManager.start()
           forwardingManager = new ForwardingManager(forwardingChannelManager, time, config.requestTimeoutMs.longValue())

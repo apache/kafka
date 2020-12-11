@@ -156,7 +156,7 @@ class TransactionMarkerChannelManager(
   newGauge("LogAppendRetryQueueSize", () => txnLogAppendRetryQueue.size)
 
   override def doWork(): Unit = {
-    drainQueuedTransactionMarkers().foreach(super.sendRequest)
+    super.sendRequests(drainQueuedTransactionMarkers())
     super.doWork()
   }
 

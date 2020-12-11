@@ -33,26 +33,6 @@ import org.apache.kafka.common.utils.{LogContext, Time}
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
-trait BrokerToControllerChannelManager {
-
-  /**
-   * Send request to the controller.
-   *
-   * @param request         The request to be sent.
-   * @param callback        Request completion callback.
-   * @param retryDeadlineMs The retry deadline which will only be checked after receiving a response.
-   *                        This means that in the worst case, the total timeout would be twice of
-   *                        the configured timeout.
-   */
-  def sendRequest(request: AbstractRequest.Builder[_ <: AbstractRequest],
-                  callback: ControllerRequestCompletionHandler,
-                  retryDeadlineMs: Long): Unit
-
-  def start(): Unit
-
-  def shutdown(): Unit
-}
-
 /**
  * This class manages the connection between a broker and the controller. It runs a single
  * {@link BrokerToControllerRequestThread} which uses the broker's metadata cache as its own metadata to find
@@ -60,22 +40,24 @@ trait BrokerToControllerChannelManager {
  * The maximum number of in-flight requests are set to one to ensure orderly response from the controller, therefore
  * care must be taken to not block on outstanding requests for too long.
  */
-class BrokerToControllerChannelManagerImpl(metadataCache: kafka.server.MetadataCache,
-                                           time: Time,
-                                           metrics: Metrics,
-                                           config: KafkaConfig,
-                                           channelName: String,
-                                           threadNamePrefix: Option[String] = None) extends BrokerToControllerChannelManager with Logging {
+class BrokerToControllerChannelManager(
+  metadataCache: kafka.server.MetadataCache,
+  time: Time,
+  metrics: Metrics,
+  config: KafkaConfig,
+  channelName: String,
+  threadNamePrefix: Option[String] = None
+) extends Logging {
   private val requestQueue = new LinkedBlockingDeque[BrokerToControllerQueueItem]
   private val logContext = new LogContext(s"[broker-${config.brokerId}-to-controller] ")
   private val manualMetadataUpdater = new ManualMetadataUpdater()
   private val requestThread = newRequestThread
 
-  override def start(): Unit = {
+  def start(): Unit = {
     requestThread.start()
   }
 
-  override def shutdown(): Unit = {
+  def shutdown(): Unit = {
     requestThread.shutdown()
     requestThread.awaitShutdown()
     info(s"Broker to controller channel manager for $channelName shutdown")
@@ -135,7 +117,16 @@ class BrokerToControllerChannelManagerImpl(metadataCache: kafka.server.MetadataC
       brokerToControllerListenerName, time, threadName)
   }
 
-  override def sendRequest(request: AbstractRequest.Builder[_ <: AbstractRequest],
+  /**
+   * Send request to the controller.
+   *
+   * @param request         The request to be sent.
+   * @param callback        Request completion callback.
+   * @param retryDeadlineMs The retry deadline which will only be checked after receiving a response.
+   *                        This means that in the worst case, the total timeout would be twice of
+   *                        the configured timeout.
+   */
+  def sendRequest(request: AbstractRequest.Builder[_ <: AbstractRequest],
                            callback: ControllerRequestCompletionHandler,
                            retryDeadlineMs: Long): Unit = {
     requestQueue.put(BrokerToControllerQueueItem(request, callback, retryDeadlineMs))
@@ -207,7 +198,7 @@ class BrokerToControllerRequestThread(networkClient: KafkaClient,
 
   override def doWork(): Unit = {
     if (activeController.isDefined) {
-      generateRequests().foreach(sendRequest)
+      super.sendRequests(generateRequests())
       super.doWork()
     } else {
       debug("Controller isn't cached, looking for local metadata changes")
