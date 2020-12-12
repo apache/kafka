@@ -33,10 +33,9 @@ import org.apache.kafka.streams.scala.FunctionsCompatConversions.{
 /**
  * Wraps the Java class TimeWindowedKStream and delegates method calls to the underlying Java object.
  *
- * @tparam K    Type of keys
- * @tparam V    Type of values
+ * @tparam K Type of keys
+ * @tparam V Type of values
  * @param inner The underlying Java abstraction for TimeWindowedKStream
- *
  * @see `org.apache.kafka.streams.kstream.TimeWindowedKStream`
  */
 class TimeWindowedKStream[K, V](val inner: TimeWindowedKStreamJ[K, V]) {
@@ -44,11 +43,11 @@ class TimeWindowedKStream[K, V](val inner: TimeWindowedKStreamJ[K, V]) {
   /**
    * Aggregate the values of records in this stream by the grouped key.
    *
-   * @param initializer   an initializer function that computes an initial intermediate aggregation result
-   * @param aggregator    an aggregator function that computes a new aggregate result
-   * @param materialized  an instance of `Materialized` used to materialize a state store.
+   * @param initializer  an initializer function that computes an initial intermediate aggregation result
+   * @param aggregator   an aggregator function that computes a new aggregate result
+   * @param materialized an instance of `Materialized` used to materialize a state store.
    * @return a [[KTable]] that contains "update" records with unmodified keys, and values that represent the
-   * latest (rolling) aggregate for each key
+   *         latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.TimeWindowedKStream#aggregate`
    */
   def aggregate[VR](initializer: => VR)(aggregator: (K, V, VR) => VR)(
@@ -59,12 +58,12 @@ class TimeWindowedKStream[K, V](val inner: TimeWindowedKStreamJ[K, V]) {
   /**
    * Aggregate the values of records in this stream by the grouped key.
    *
-   * @param initializer   an initializer function that computes an initial intermediate aggregation result
-   * @param named   a [[Named]] config used to name the processor in the topology
-   * @param aggregator    an aggregator function that computes a new aggregate result
-   * @param materialized  an instance of `Materialized` used to materialize a state store.
+   * @param initializer  an initializer function that computes an initial intermediate aggregation result
+   * @param named        a [[Named]] config used to name the processor in the topology
+   * @param aggregator   an aggregator function that computes a new aggregate result
+   * @param materialized an instance of `Materialized` used to materialize a state store.
    * @return a [[KTable]] that contains "update" records with unmodified keys, and values that represent the
-   * latest (rolling) aggregate for each key
+   *         latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.TimeWindowedKStream#aggregate`
    */
   def aggregate[VR](initializer: => VR, named: Named)(aggregator: (K, V, VR) => VR)(
@@ -75,9 +74,9 @@ class TimeWindowedKStream[K, V](val inner: TimeWindowedKStreamJ[K, V]) {
   /**
    * Count the number of records in this stream by the grouped key and the defined windows.
    *
-   * @param materialized  an instance of `Materialized` used to materialize a state store.
+   * @param materialized an instance of `Materialized` used to materialize a state store.
    * @return a [[KTable]] that contains "update" records with unmodified keys and `Long` values that
-   * represent the latest (rolling) count (i.e., number of records) for each key
+   *         represent the latest (rolling) count (i.e., number of records) for each key
    * @see `org.apache.kafka.streams.kstream.TimeWindowedKStream#count`
    */
   def count()(implicit materialized: Materialized[K, Long, ByteArrayWindowStore]): KTable[Windowed[K], Long] = {
@@ -95,10 +94,10 @@ class TimeWindowedKStream[K, V](val inner: TimeWindowedKStreamJ[K, V]) {
   /**
    * Count the number of records in this stream by the grouped key and the defined windows.
    *
-   * @param named a [[Named]] config used to name the processor in the topology
-   * @param materialized  an instance of `Materialized` used to materialize a state store.
+   * @param named        a [[Named]] config used to name the processor in the topology
+   * @param materialized an instance of `Materialized` used to materialize a state store.
    * @return a [[KTable]] that contains "update" records with unmodified keys and `Long` values that
-   * represent the latest (rolling) count (i.e., number of records) for each key
+   *         represent the latest (rolling) count (i.e., number of records) for each key
    * @see `org.apache.kafka.streams.kstream.TimeWindowedKStream#count`
    */
   def count(named: Named)(implicit materialized: Materialized[K, Long, ByteArrayWindowStore]): KTable[Windowed[K], Long] = {
@@ -116,10 +115,10 @@ class TimeWindowedKStream[K, V](val inner: TimeWindowedKStreamJ[K, V]) {
   /**
    * Combine the values of records in this stream by the grouped key.
    *
-   * @param reducer   a function that computes a new aggregate result
-   * @param materialized  an instance of `Materialized` used to materialize a state store.
+   * @param reducer      a function that computes a new aggregate result
+   * @param materialized an instance of `Materialized` used to materialize a state store.
    * @return a [[KTable]] that contains "update" records with unmodified keys, and values that represent the
-   * latest (rolling) aggregate for each key
+   *         latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.TimeWindowedKStream#reduce`
    */
   def reduce(reducer: (V, V) => V)(
@@ -130,11 +129,11 @@ class TimeWindowedKStream[K, V](val inner: TimeWindowedKStreamJ[K, V]) {
   /**
    * Combine the values of records in this stream by the grouped key.
    *
-   * @param reducer   a function that computes a new aggregate result
-   * @param named a [[Named]] config used to name the processor in the topology
-   * @param materialized  an instance of `Materialized` used to materialize a state store.
+   * @param reducer      a function that computes a new aggregate result
+   * @param named        a [[Named]] config used to name the processor in the topology
+   * @param materialized an instance of `Materialized` used to materialize a state store.
    * @return a [[KTable]] that contains "update" records with unmodified keys, and values that represent the
-   * latest (rolling) aggregate for each key
+   *         latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.TimeWindowedKStream#reduce`
    */
   def reduce(reducer: (V, V) => V, named: Named)(

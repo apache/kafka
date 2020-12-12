@@ -23,16 +23,22 @@ import org.apache.kafka.streams.scala.FunctionsCompatConversions.{AggregatorFrom
 /**
  * Wraps the Java class CogroupedKStream and delegates method calls to the underlying Java object.
  *
- * @tparam KIn Type of keys
+ * @tparam KIn  Type of keys
  * @tparam VOut Type of values
  * @param inner The underlying Java abstraction for CogroupedKStream
- *
  * @see `org.apache.kafka.streams.kstream.CogroupedKStream`
  */
 class CogroupedKStream[KIn, VOut](val inner: CogroupedKStreamJ[KIn, VOut]) {
 
+  /**
+   * Add an already [[KGroupedStream]] to this [[CogroupedKStream]].
+   *
+   * @param groupedStream a group stream
+   * @param aggregator    a function that computes a new aggregate result
+   * @return a [[CogroupedKStream]]
+   */
   def cogroup[VIn](groupedStream: KGroupedStream[KIn, VIn],
-                   aggregator: (KIn, VIn, VOut) => VOut): CogroupedKStream[KIn, VOut] =
+                   aggregator: (KIn, VIn, VOut) => VOut) =
     new CogroupedKStream(inner.cogroup(groupedStream.inner, aggregator.asAggregator))
 
   /**

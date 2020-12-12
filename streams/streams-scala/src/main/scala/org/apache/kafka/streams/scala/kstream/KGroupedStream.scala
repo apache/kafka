@@ -42,7 +42,6 @@ import org.apache.kafka.streams.scala.FunctionsCompatConversions.{
  * @tparam K Type of keys
  * @tparam V Type of values
  * @param inner The underlying Java abstraction for KGroupedStream
- *
  * @see `org.apache.kafka.streams.kstream.KGroupedStream`
  */
 class KGroupedStream[K, V](val inner: KGroupedStreamJ[K, V]) {
@@ -52,9 +51,9 @@ class KGroupedStream[K, V](val inner: KGroupedStreamJ[K, V]) {
    * The result is written into a local `KeyValueStore` (which is basically an ever-updating materialized view)
    * provided by the given `materialized`.
    *
-   * @param materialized  an instance of `Materialized` used to materialize a state store.
+   * @param materialized an instance of `Materialized` used to materialize a state store.
    * @return a [[KTable]] that contains "update" records with unmodified keys and `Long` values that
-   * represent the latest (rolling) count (i.e., number of records) for each key
+   *         represent the latest (rolling) count (i.e., number of records) for each key
    * @see `org.apache.kafka.streams.kstream.KGroupedStream#count`
    */
   def count()(implicit materialized: Materialized[K, Long, ByteArrayKeyValueStore]): KTable[K, Long] = {
@@ -74,10 +73,10 @@ class KGroupedStream[K, V](val inner: KGroupedStreamJ[K, V]) {
    * The result is written into a local `KeyValueStore` (which is basically an ever-updating materialized view)
    * provided by the given `materialized`.
    *
-   * @param named a [[Named]] config used to name the processor in the topology
-   * @param materialized  an instance of `Materialized` used to materialize a state store.
+   * @param named        a [[Named]] config used to name the processor in the topology
+   * @param materialized an instance of `Materialized` used to materialize a state store.
    * @return a [[KTable]] that contains "update" records with unmodified keys and `Long` values that
-   * represent the latest (rolling) count (i.e., number of records) for each key
+   *         represent the latest (rolling) count (i.e., number of records) for each key
    * @see `org.apache.kafka.streams.kstream.KGroupedStream#count`
    */
   def count(named: Named)(implicit materialized: Materialized[K, Long, ByteArrayKeyValueStore]): KTable[K, Long] = {
@@ -95,10 +94,10 @@ class KGroupedStream[K, V](val inner: KGroupedStreamJ[K, V]) {
   /**
    * Combine the values of records in this stream by the grouped key.
    *
-   * @param reducer   a function `(V, V) => V` that computes a new aggregate result.
-   * @param materialized  an instance of `Materialized` used to materialize a state store.
+   * @param reducer      a function `(V, V) => V` that computes a new aggregate result.
+   * @param materialized an instance of `Materialized` used to materialize a state store.
    * @return a [[KTable]] that contains "update" records with unmodified keys, and values that represent the
-   * latest (rolling) aggregate for each key
+   *         latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.KGroupedStream#reduce`
    */
   def reduce(reducer: (V, V) => V)(implicit materialized: Materialized[K, V, ByteArrayKeyValueStore]): KTable[K, V] =
@@ -107,11 +106,11 @@ class KGroupedStream[K, V](val inner: KGroupedStreamJ[K, V]) {
   /**
    * Combine the values of records in this stream by the grouped key.
    *
-   * @param reducer   a function `(V, V) => V` that computes a new aggregate result.
-   * @param named a [[Named]] config used to name the processor in the topology
-   * @param materialized  an instance of `Materialized` used to materialize a state store.
+   * @param reducer      a function `(V, V) => V` that computes a new aggregate result.
+   * @param named        a [[Named]] config used to name the processor in the topology
+   * @param materialized an instance of `Materialized` used to materialize a state store.
    * @return a [[KTable]] that contains "update" records with unmodified keys, and values that represent the
-   * latest (rolling) aggregate for each key
+   *         latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.KGroupedStream#reduce`
    */
   def reduce(reducer: (V, V) => V, named: Named)(implicit materialized: Materialized[K, V, ByteArrayKeyValueStore]): KTable[K, V] =
@@ -120,11 +119,11 @@ class KGroupedStream[K, V](val inner: KGroupedStreamJ[K, V]) {
   /**
    * Aggregate the values of records in this stream by the grouped key.
    *
-   * @param initializer   an `Initializer` that computes an initial intermediate aggregation result
-   * @param aggregator    an `Aggregator` that computes a new aggregate result
-   * @param materialized  an instance of `Materialized` used to materialize a state store.
+   * @param initializer  an `Initializer` that computes an initial intermediate aggregation result
+   * @param aggregator   an `Aggregator` that computes a new aggregate result
+   * @param materialized an instance of `Materialized` used to materialize a state store.
    * @return a [[KTable]] that contains "update" records with unmodified keys, and values that represent the
-   * latest (rolling) aggregate for each key
+   *         latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.KGroupedStream#aggregate`
    */
   def aggregate[VR](initializer: => VR)(aggregator: (K, V, VR) => VR)(
@@ -135,12 +134,12 @@ class KGroupedStream[K, V](val inner: KGroupedStreamJ[K, V]) {
   /**
    * Aggregate the values of records in this stream by the grouped key.
    *
-   * @param initializer   an `Initializer` that computes an initial intermediate aggregation result
-   * @param aggregator    an `Aggregator` that computes a new aggregate result
-   * @param named a [[Named]] config used to name the processor in the topology
-   * @param materialized  an instance of `Materialized` used to materialize a state store.
+   * @param initializer  an `Initializer` that computes an initial intermediate aggregation result
+   * @param aggregator   an `Aggregator` that computes a new aggregate result
+   * @param named        a [[Named]] config used to name the processor in the topology
+   * @param materialized an instance of `Materialized` used to materialize a state store.
    * @return a [[KTable]] that contains "update" records with unmodified keys, and values that represent the
-   * latest (rolling) aggregate for each key
+   *         latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.KGroupedStream#aggregate`
    */
   def aggregate[VR](initializer: => VR, named: Named)(aggregator: (K, V, VR) => VR)(
