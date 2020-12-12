@@ -61,6 +61,25 @@ class SessionWindowedKStream[K, V](val inner: SessionWindowedKStreamJ[K, V]) {
     )
 
   /**
+   * Aggregate the values of records in this stream by the grouped key and defined `SessionWindows`.
+   *
+   * @param initializer    the initializer function
+   * @param aggregator     the aggregator function
+   * @param merger         the merger function
+   * @param named a [[Named]] config used to name the processor in the topology
+   * @param materialized  an instance of `Materialized` used to materialize a state store.
+   * @return a windowed [[KTable]] that contains "update" records with unmodified keys, and values that represent
+   * the latest (rolling) aggregate for each key within a window
+   * @see `org.apache.kafka.streams.kstream.SessionWindowedKStream#aggregate`
+   */
+  def aggregate[VR](initializer: => VR, named: Named)(aggregator: (K, V, VR) => VR, merger: (K, VR, VR) => VR)(
+    implicit materialized: Materialized[K, VR, ByteArraySessionStore]
+  ): KTable[Windowed[K], VR] =
+    new KTable(
+      inner.aggregate((() => initializer).asInitializer, aggregator.asAggregator, merger.asMerger, named, materialized)
+    )
+
+  /**
    * Count the number of records in this stream by the grouped key into `SessionWindows`.
    *
    * @param materialized  an instance of `Materialized` used to materialize a state store.
@@ -71,6 +90,27 @@ class SessionWindowedKStream[K, V](val inner: SessionWindowedKStreamJ[K, V]) {
   def count()(implicit materialized: Materialized[K, Long, ByteArraySessionStore]): KTable[Windowed[K], Long] = {
     val javaCountTable: KTableJ[Windowed[K], java.lang.Long] =
       inner.count(materialized.asInstanceOf[Materialized[K, java.lang.Long, ByteArraySessionStore]])
+    val tableImpl = javaCountTable.asInstanceOf[KTableImpl[Windowed[K], ByteArraySessionStore, java.lang.Long]]
+    new KTable(
+      javaCountTable.mapValues[Long](
+        ((l: java.lang.Long) => Long2long(l)).asValueMapper,
+        Materialized.`with`[Windowed[K], Long, ByteArrayKeyValueStore](tableImpl.keySerde(), Serdes.longSerde)
+      )
+    )
+  }
+
+  /**
+   * Count the number of records in this stream by the grouped key into `SessionWindows`.
+   *
+   * @param named a [[Named]] config used to name the processor in the topology
+   * @param materialized  an instance of `Materialized` used to materialize a state store.
+   * @return a windowed [[KTable]] that contains "update" records with unmodified keys and `Long` values
+   * that represent the latest (rolling) count (i.e., number of records) for each key within a window
+   * @see `org.apache.kafka.streams.kstream.SessionWindowedKStream#count`
+   */
+  def count(named: Named)(implicit materialized: Materialized[K, Long, ByteArraySessionStore]): KTable[Windowed[K], Long] = {
+    val javaCountTable: KTableJ[Windowed[K], java.lang.Long] =
+      inner.count(named, materialized.asInstanceOf[Materialized[K, java.lang.Long, ByteArraySessionStore]])
     val tableImpl = javaCountTable.asInstanceOf[KTableImpl[Windowed[K], ByteArraySessionStore, java.lang.Long]]
     new KTable(
       javaCountTable.mapValues[Long](
@@ -93,4 +133,18 @@ class SessionWindowedKStream[K, V](val inner: SessionWindowedKStreamJ[K, V]) {
     implicit materialized: Materialized[K, V, ByteArraySessionStore]
   ): KTable[Windowed[K], V] =
     new KTable(inner.reduce(reducer.asReducer, materialized))
+
+  /**
+   * Combine values of this stream by the grouped key into `SessionWindows`.
+   *
+   * @param reducer           a reducer function that computes a new aggregate result.
+   * @param materialized  an instance of `Materialized` used to materialize a state store.
+   * @return a windowed [[KTable]] that contains "update" records with unmodified keys, and values that represent
+   * the latest (rolling) aggregate for each key within a window
+   * @see `org.apache.kafka.streams.kstream.SessionWindowedKStream#reduce`
+   */
+  def reduce(reducer: (V, V) => V, named: Named)(
+    implicit materialized: Materialized[K, V, ByteArraySessionStore]
+  ): KTable[Windowed[K], V] =
+    new KTable(inner.reduce(reducer.asReducer, named, materialized))
 }
