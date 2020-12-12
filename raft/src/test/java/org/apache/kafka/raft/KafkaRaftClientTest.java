@@ -1681,7 +1681,7 @@ public class KafkaRaftClientTest {
     }
 
     @Test
-    public void testFetchShouldBeTreatedAsLeaderEndorsement() throws Exception {
+    public void testFetchShouldBeTreatedAsLeaderAcknowledgement() throws Exception {
         int localId = 0;
         int otherNodeId = 1;
         int epoch = 5;
