@@ -38,7 +38,7 @@ class CogroupedKStream[KIn, VOut](val inner: CogroupedKStreamJ[KIn, VOut]) {
    * @return a [[CogroupedKStream]]
    */
   def cogroup[VIn](groupedStream: KGroupedStream[KIn, VIn],
-                   aggregator: (KIn, VIn, VOut) => VOut) =
+                   aggregator: (KIn, VIn, VOut) => VOut): CogroupedKStream[KIn, VOut] =
     new CogroupedKStream(inner.cogroup(groupedStream.inner, aggregator.asAggregator))
 
   /**

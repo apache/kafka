@@ -22,7 +22,15 @@ import java.time.Duration.ofSeconds
 import java.time.Instant
 
 import org.apache.kafka.streams.KeyValue
-import org.apache.kafka.streams.kstream.{JoinWindows, Named, Transformer, ValueTransformer, ValueTransformerSupplier, ValueTransformerWithKey, ValueTransformerWithKeySupplier}
+import org.apache.kafka.streams.kstream.{
+  JoinWindows,
+  Named,
+  Transformer,
+  ValueTransformer,
+  ValueTransformerSupplier,
+  ValueTransformerWithKey,
+  ValueTransformerWithKeySupplier
+}
 import org.apache.kafka.streams.processor.ProcessorContext
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.serialization.Serdes._
