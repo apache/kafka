@@ -87,17 +87,16 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
   override def setUp(): Unit = {
     super.setUp()
 
-    val authorizers = Seq(aclAuthorizer, aclAuthorizer2)
-
     // Increase maxUpdateRetries to avoid transient failures
-    authorizers.foreach(a => a.maxUpdateRetries = Int.MaxValue)
+    aclAuthorizer.maxUpdateRetries = Int.MaxValue
+    aclAuthorizer2.maxUpdateRetries = Int.MaxValue
 
     val props = TestUtils.createBrokerConfig(0, zkConnect)
     props.put(AclAuthorizer.SuperUsersProp, superUsers)
 
     config = KafkaConfig.fromProps(props)
-    authorizers.foreach(a => a.configure(config.originals))
-
+    aclAuthorizer.configure(config.originals)
+    aclAuthorizer2.configure(config.originals)
     resource = new ResourcePattern(TOPIC, "foo-" + UUID.randomUUID(), LITERAL)
 
     zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkMaxInFlightRequests,
