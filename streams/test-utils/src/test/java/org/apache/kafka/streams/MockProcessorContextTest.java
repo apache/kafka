@@ -331,6 +331,8 @@ public class MockProcessorContextTest {
             assertEquals(new KeyValue<>("timestamp", 10L), forwarded.next().keyValue());
             assertEquals(new KeyValue<>("key", "bar"), forwarded.next().keyValue());
             assertEquals(new KeyValue<>("value", 50L), forwarded.next().keyValue());
+            assertEquals(context.timestamp(), context.currentStreamTimeMs());
+            assertEquals(context.timestamp(), context.currentSystemTimeMs());
         }
 
         context.resetForwards();

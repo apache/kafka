@@ -1852,4 +1852,33 @@ public class TopologyTestDriverTest {
             );
         }
     }
+
+    @Test
+    public void shouldMatchSystemTime() {
+        testDriver = new TopologyTestDriver(setupSingleProcessorTopology(), config, Instant.ofEpochMilli(0L));
+
+        testDriver.advanceWallClockTime(Duration.ofMillis(5L));
+        assertEquals(5L, testDriver.context.currentSystemTimeMs());
+
+        testDriver.advanceWallClockTime(Duration.ofMillis(9L));
+        assertEquals(14L, testDriver.context.currentSystemTimeMs());
+
+        // stream time is unaffected - initially it's set to -1L
+        assertEquals(-1L, testDriver.context.currentStreamTimeMs());
+    }
+
+    @Test
+    public void shouldMatchStreamsTime() {
+        testDriver = new TopologyTestDriver(setupSingleProcessorTopology(), config, Instant.ofEpochMilli(0L));
+
+        pipeRecord(SOURCE_TOPIC_1, new TestRecord<>(key1, value1, null, 42L));
+        assertEquals(42L, testDriver.context.currentStreamTimeMs());
+
+        pipeRecord(SOURCE_TOPIC_1, new TestRecord<>(key1, value1, null, 42L));
+        assertEquals(42L, testDriver.context.currentStreamTimeMs());
+
+        // wall clock time is unaffected
+        assertEquals(0L, testDriver.context.currentSystemTimeMs());
+    }
+
 }
