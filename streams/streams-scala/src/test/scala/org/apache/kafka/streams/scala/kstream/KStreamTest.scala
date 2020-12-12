@@ -22,14 +22,7 @@ import java.time.Duration.ofSeconds
 import java.time.Instant
 
 import org.apache.kafka.streams.KeyValue
-import org.apache.kafka.streams.kstream.{
-  JoinWindows,
-  Transformer,
-  ValueTransformer,
-  ValueTransformerSupplier,
-  ValueTransformerWithKey,
-  ValueTransformerWithKeySupplier
-}
+import org.apache.kafka.streams.kstream.{JoinWindows, Named, Transformer, ValueTransformer, ValueTransformerSupplier, ValueTransformerWithKey, ValueTransformerWithKeySupplier}
 import org.apache.kafka.streams.processor.ProcessorContext
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.serialization.Serdes._
@@ -38,6 +31,8 @@ import org.apache.kafka.streams.scala.utils.TestDriver
 import org.junit.runner.RunWith
 import org.scalatest.{FlatSpec, Matchers}
 import org.scalatestplus.junit.JUnitRunner
+
+import scala.jdk.CollectionConverters.CollectionHasAsScala
 
 @RunWith(classOf[JUnitRunner])
 class KStreamTest extends FlatSpec with Matchers with TestDriver {
@@ -366,5 +361,24 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
     testOutput.isEmpty shouldBe true
 
     testDriver.close()
+  }
+
+  "setting a name on a processor" should "pass the name to the topology" in {
+    val builder = new StreamsBuilder()
+    val sourceTopic = "source"
+    val sinkTopic = "sink"
+
+    builder
+      .stream[String, String](sourceTopic)
+      .filter((_, value) => value != "value2", Named.as("my-name"))
+      .to(sinkTopic)
+
+    val filterNode =    builder
+      .build()
+      .describe()
+      .subtopologies().asScala.head
+      .nodes().asScala.toList(1)
+
+    filterNode.name() shouldBe "my-name"
   }
 }
