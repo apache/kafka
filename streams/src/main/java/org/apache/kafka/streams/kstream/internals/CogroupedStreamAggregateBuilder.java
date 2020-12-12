@@ -37,13 +37,13 @@ import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNo
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
-import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
+import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 class CogroupedStreamAggregateBuilder<K, VOut> {
     private final InternalStreamsBuilder builder;
-    private final Map<KGroupedStreamImpl<K, ?>, StreamsGraphNode> parentNodes = new LinkedHashMap<>();
+    private final Map<KGroupedStreamImpl<K, ?>, GraphNode> parentNodes = new LinkedHashMap<>();
 
     CogroupedStreamAggregateBuilder(final InternalStreamsBuilder builder) {
         this.builder = builder;
@@ -56,7 +56,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                                 final Serde<VOut> valueSerde,
                                 final String queryableName) {
         processRepartitions(groupPatterns, storeBuilder);
-        final Collection<StreamsGraphNode> processors = new ArrayList<>();
+        final Collection<GraphNode> processors = new ArrayList<>();
         boolean stateCreated = false;
         int counter = 0;
         for (final Entry<KGroupedStreamImpl<K, ?>, Aggregator<? super K, Object, VOut>> kGroupedStream : groupPatterns.entrySet()) {
@@ -85,7 +85,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                                                   final Windows<W> windows) {
         processRepartitions(groupPatterns, storeBuilder);
 
-        final Collection<StreamsGraphNode> processors = new ArrayList<>();
+        final Collection<GraphNode> processors = new ArrayList<>();
         boolean stateCreated = false;
         int counter = 0;
         for (final Entry<KGroupedStreamImpl<K, ?>, Aggregator<? super K, Object, VOut>> kGroupedStream : groupPatterns.entrySet()) {
@@ -114,7 +114,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                                 final SessionWindows sessionWindows,
                                 final Merger<? super K, VOut> sessionMerger) {
         processRepartitions(groupPatterns, storeBuilder);
-        final Collection<StreamsGraphNode> processors = new ArrayList<>();
+        final Collection<GraphNode> processors = new ArrayList<>();
         boolean stateCreated = false;
         int counter = 0;
         for (final Entry<KGroupedStreamImpl<K, ?>, Aggregator<? super K, Object, VOut>> kGroupedStream : groupPatterns.entrySet()) {
@@ -142,7 +142,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                                 final String queryableName,
                                 final SlidingWindows slidingWindows) {
         processRepartitions(groupPatterns, storeBuilder);
-        final Collection<StreamsGraphNode> processors = new ArrayList<>();
+        final Collection<GraphNode> processors = new ArrayList<>();
         boolean stateCreated = false;
         int counter = 0;
         for (final Entry<KGroupedStreamImpl<K, ?>, Aggregator<? super K, Object, VOut>> kGroupedStream : groupPatterns.entrySet()) {
@@ -175,12 +175,12 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                 createRepartitionSource(repartionNamePrefix, repartitionNodeBuilder, repartitionReqs.keySerde, repartitionReqs.valueSerde);
 
                 if (!parentNodes.containsKey(repartitionReqs)) {
-                    final StreamsGraphNode repartitionNode = repartitionNodeBuilder.build();
-                    builder.addGraphNode(repartitionReqs.streamsGraphNode, repartitionNode);
+                    final GraphNode repartitionNode = repartitionNodeBuilder.build();
+                    builder.addGraphNode(repartitionReqs.graphNode, repartitionNode);
                     parentNodes.put(repartitionReqs, repartitionNode);
                 }
             } else {
-                parentNodes.put(repartitionReqs, repartitionReqs.streamsGraphNode);
+                parentNodes.put(repartitionReqs, repartitionReqs.graphNode);
             }
         }
 
@@ -191,7 +191,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
 
     }
 
-    <KR, VIn> KTable<KR, VOut> createTable(final Collection<StreamsGraphNode> processors,
+    <KR, VIn> KTable<KR, VOut> createTable(final Collection<GraphNode> processors,
                                            final NamedInternal named,
                                            final Serde<KR> keySerde,
                                            final Serde<VOut> valueSerde,

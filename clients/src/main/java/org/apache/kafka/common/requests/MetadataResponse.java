@@ -25,9 +25,8 @@ import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseBrok
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponsePartition;
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
@@ -64,28 +63,19 @@ public class MetadataResponse extends AbstractResponse {
     private volatile Holder holder;
     private final boolean hasReliableLeaderEpochs;
 
-    public MetadataResponse(MetadataResponseData data) {
-        this(data, true);
+    public MetadataResponse(MetadataResponseData data, short version) {
+        this(data, hasReliableLeaderEpochs(version));
     }
 
-    public MetadataResponse(Struct struct, short version) {
-        // Prior to Kafka version 2.4 (which coincides with Metadata version 9), the broker
-        // does not propagate leader epoch information accurately while a reassignment is in
-        // progress. Relying on a stale epoch can lead to FENCED_LEADER_EPOCH errors which
-        // can prevent consumption throughout the course of a reassignment. It is safer in
-        // this case to revert to the behavior in previous protocol versions which checks
-        // leader status only.
-        this(new MetadataResponseData(struct, version), version >= 9);
-    }
-
-    private MetadataResponse(MetadataResponseData data, boolean hasReliableLeaderEpochs) {
+    MetadataResponse(MetadataResponseData data, boolean hasReliableLeaderEpochs) {
+        super(ApiKeys.METADATA);
         this.data = data;
         this.hasReliableLeaderEpochs = hasReliableLeaderEpochs;
     }
 
     @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
+    protected MetadataResponseData data() {
+        return data;
     }
 
     @Override
@@ -109,8 +99,10 @@ public class MetadataResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
-        data.topics().forEach(metadata ->
-            updateErrorCounts(errorCounts, Errors.forCode(metadata.errorCode())));
+        data.topics().forEach(metadata -> {
+            metadata.partitions().forEach(p -> updateErrorCounts(errorCounts, Errors.forCode(p.errorCode())));
+            updateErrorCounts(errorCounts, Errors.forCode(metadata.errorCode()));
+        });
         return errorCounts;
     }
 
@@ -241,8 +233,19 @@ public class MetadataResponse extends AbstractResponse {
         return hasReliableLeaderEpochs;
     }
 
+    // Prior to Kafka version 2.4 (which coincides with Metadata version 9), the broker
+    // does not propagate leader epoch information accurately while a reassignment is in
+    // progress. Relying on a stale epoch can lead to FENCED_LEADER_EPOCH errors which
+    // can prevent consumption throughout the course of a reassignment. It is safer in
+    // this case to revert to the behavior in previous protocol versions which checks
+    // leader status only.
+    private static boolean hasReliableLeaderEpochs(short version) {
+        return version >= 9;
+    }
+
     public static MetadataResponse parse(ByteBuffer buffer, short version) {
-        return new MetadataResponse(ApiKeys.METADATA.responseSchema(version).read(buffer), version);
+        return new MetadataResponse(new MetadataResponseData(new ByteBufferAccessor(buffer), version),
+            hasReliableLeaderEpochs(version));
     }
 
     public static class TopicMetadata {
@@ -427,79 +430,24 @@ public class MetadataResponse extends AbstractResponse {
 
     }
 
-    public static MetadataResponse prepareResponse(int throttleTimeMs, Collection<Node> brokers, String clusterId,
-                                                   int controllerId, List<TopicMetadata> topicMetadataList,
-                                                   int clusterAuthorizedOperations,
-                                                   short responseVersion) {
-        MetadataResponseData responseData = new MetadataResponseData();
-        responseData.setThrottleTimeMs(throttleTimeMs);
-        brokers.forEach(broker ->
-            responseData.brokers().add(new MetadataResponseBroker()
-                .setNodeId(broker.id())
-                .setHost(broker.host())
-                .setPort(broker.port())
-                .setRack(broker.rack()))
-        );
-
-        responseData.setClusterId(clusterId);
-        responseData.setControllerId(controllerId);
-        responseData.setClusterAuthorizedOperations(clusterAuthorizedOperations);
-
-        topicMetadataList.forEach(topicMetadata -> {
-            MetadataResponseTopic metadataResponseTopic = new MetadataResponseTopic();
-            metadataResponseTopic
-                .setErrorCode(topicMetadata.error.code())
-                .setName(topicMetadata.topic)
-                .setIsInternal(topicMetadata.isInternal)
-                .setTopicAuthorizedOperations(topicMetadata.authorizedOperations);
-
-            for (PartitionMetadata partitionMetadata : topicMetadata.partitionMetadata) {
-                metadataResponseTopic.partitions().add(new MetadataResponsePartition()
-                    .setErrorCode(partitionMetadata.error.code())
-                    .setPartitionIndex(partitionMetadata.partition())
-                    .setLeaderId(partitionMetadata.leaderId.orElse(NO_LEADER_ID))
-                    .setLeaderEpoch(partitionMetadata.leaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
-                    .setReplicaNodes(partitionMetadata.replicaIds)
-                    .setIsrNodes(partitionMetadata.inSyncReplicaIds)
-                    .setOfflineReplicas(partitionMetadata.offlineReplicaIds));
-            }
-            responseData.topics().add(metadataResponseTopic);
-        });
-        return new MetadataResponse(responseData.toStruct(responseVersion), responseVersion);
-    }
-
-    public static MetadataResponse prepareResponse(int throttleTimeMs,
+    public static MetadataResponse prepareResponse(short version,
+                                                   int throttleTimeMs,
                                                    Collection<Node> brokers,
                                                    String clusterId,
                                                    int controllerId,
-                                                   List<TopicMetadata> topicMetadataList,
-                                                   short responseVersion) {
-        return prepareResponse(throttleTimeMs, brokers, clusterId, controllerId, topicMetadataList,
-                MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED, responseVersion);
+                                                   List<MetadataResponseTopic> topics,
+                                                   int clusterAuthorizedOperations) {
+        return prepareResponse(hasReliableLeaderEpochs(version), throttleTimeMs, brokers, clusterId, controllerId,
+                topics, clusterAuthorizedOperations);
     }
 
-    public static MetadataResponse prepareResponse(Collection<Node> brokers,
-                                                   String clusterId,
-                                                   int controllerId,
-                                                   List<TopicMetadata> topicMetadata,
-                                                   short responseVersion) {
-        return prepareResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, brokers, clusterId, controllerId,
-            topicMetadata, responseVersion);
-    }
-
-    public static MetadataResponse prepareResponse(Collection<Node> brokers,
-                                                   String clusterId,
-                                                   int controllerId,
-                                                   List<TopicMetadata> topicMetadata) {
-        return prepareResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, brokers, clusterId, controllerId,
-            topicMetadata, ApiKeys.METADATA.latestVersion());
-    }
-
-    public static MetadataResponse prepareResponse(int throttleTimeMs,
-                                                   List<MetadataResponseTopic> topicMetadataList,
+    // Visible for testing
+    public static MetadataResponse prepareResponse(boolean hasReliableEpoch,
+                                                   int throttleTimeMs,
                                                    Collection<Node> brokers,
                                                    String clusterId,
                                                    int controllerId,
+                                                   List<MetadataResponseTopic> topics,
                                                    int clusterAuthorizedOperations) {
         MetadataResponseData responseData = new MetadataResponseData();
         responseData.setThrottleTimeMs(throttleTimeMs);
@@ -515,8 +463,8 @@ public class MetadataResponse extends AbstractResponse {
         responseData.setControllerId(controllerId);
         responseData.setClusterAuthorizedOperations(clusterAuthorizedOperations);
 
-        topicMetadataList.forEach(topicMetadata -> responseData.topics().add(topicMetadata));
-        return new MetadataResponse(responseData);
+        topics.forEach(topicMetadata -> responseData.topics().add(topicMetadata));
+        return new MetadataResponse(responseData, hasReliableEpoch);
     }
 
     @Override

@@ -646,6 +646,11 @@ public class Topology {
      * Add a new processor node that receives and processes records output by one or more parent source or processor
      * node.
      * Any new record output by this processor will be forwarded to its child processor or sink nodes.
+     * The supplier should always generate a new instance each time
+     * {@link org.apache.kafka.streams.processor.ProcessorSupplier#get()} gets called. Creating a single
+     * {@link org.apache.kafka.streams.processor.Processor} object and returning the same object reference in
+     * {@link org.apache.kafka.streams.processor.ProcessorSupplier#get()} would be a violation of the supplier pattern
+     * and leads to runtime exceptions.
      * If {@code supplier} provides stores via {@link ConnectedStoreProvider#stores()}, the provided {@link StoreBuilder}s
      * will be added to the topology and connected to this processor automatically.
      *
@@ -655,8 +660,10 @@ public class Topology {
      * and process
      * @return itself
      * @throws TopologyException if parent processor is not added yet, or if this processor's name is equal to the parent's name
+     * @deprecated Since 2.7.0 Use {@link #addProcessor(String, ProcessorSupplier, String...)} instead.
      */
     @SuppressWarnings("rawtypes")
+    @Deprecated
     public synchronized Topology addProcessor(final String name,
                                               final org.apache.kafka.streams.processor.ProcessorSupplier supplier,
                                               final String... parentNames) {
@@ -728,6 +735,11 @@ public class Topology {
      * <p>
      * The provided {@link org.apache.kafka.streams.processor.ProcessorSupplier} will be used to create an {@link ProcessorNode} that will receive all
      * records forwarded from the {@link SourceNode}.
+     * The supplier should always generate a new instance each time
+     * {@link org.apache.kafka.streams.processor.ProcessorSupplier#get()} gets called. Creating a single
+     * {@link org.apache.kafka.streams.processor.Processor} object and returning the same object reference in
+     * {@link org.apache.kafka.streams.processor.ProcessorSupplier#get()} would be a violation of the supplier pattern
+     * and leads to runtime exceptions.
      * This {@link ProcessorNode} should be used to keep the {@link StateStore} up-to-date.
      * The default {@link TimestampExtractor} as specified in the {@link StreamsConfig config} is used.
      *
@@ -740,7 +752,9 @@ public class Topology {
      * @param stateUpdateSupplier   the instance of {@link org.apache.kafka.streams.processor.ProcessorSupplier}
      * @return itself
      * @throws TopologyException if the processor of state is already registered
+     * @deprecated Since 2.7.0. Use {@link #addGlobalStore(StoreBuilder, String, Deserializer, Deserializer, String, String, ProcessorSupplier)} instead.
      */
+    @Deprecated
     public synchronized <K, V> Topology addGlobalStore(final StoreBuilder<?> storeBuilder,
                                                        final String sourceName,
                                                        final Deserializer<K> keyDeserializer,
@@ -771,6 +785,11 @@ public class Topology {
      * <p>
      * The provided {@link org.apache.kafka.streams.processor.ProcessorSupplier} will be used to create an {@link ProcessorNode} that will receive all
      * records forwarded from the {@link SourceNode}.
+     * The supplier should always generate a new instance each time
+     * {@link org.apache.kafka.streams.processor.ProcessorSupplier#get()} gets called. Creating a single
+     * {@link org.apache.kafka.streams.processor.Processor} object and returning the same object reference in
+     * {@link org.apache.kafka.streams.processor.ProcessorSupplier#get()} would be a violation of the supplier pattern
+     * and leads to runtime exceptions.
      * This {@link ProcessorNode} should be used to keep the {@link StateStore} up-to-date.
      *
      * @param storeBuilder          user defined key value store builder
@@ -784,7 +803,9 @@ public class Topology {
      * @param stateUpdateSupplier   the instance of {@link org.apache.kafka.streams.processor.ProcessorSupplier}
      * @return itself
      * @throws TopologyException if the processor of state is already registered
+     * @deprecated Since 2.7.0. Use {@link #addGlobalStore(StoreBuilder, String, TimestampExtractor, Deserializer, Deserializer, String, String, ProcessorSupplier)} instead.
      */
+    @Deprecated
     public synchronized <K, V> Topology addGlobalStore(final StoreBuilder<?> storeBuilder,
                                                        final String sourceName,
                                                        final TimestampExtractor timestampExtractor,

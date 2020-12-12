@@ -228,6 +228,13 @@ public class AbstractConfig {
         return copy;
     }
 
+    public Map<String, Object> originals(Map<String, Object> configOverrides) {
+        Map<String, Object> copy = new RecordingMap<>();
+        copy.putAll(originals);
+        copy.putAll(configOverrides);
+        return copy;
+    }
+
     /**
      * Get all the original settings, ensuring that all values are of type String.
      * @return the original settings
@@ -338,6 +345,17 @@ public class AbstractConfig {
         return new RecordingMap<>(values);
     }
 
+    public Map<String, ?> nonInternalValues() {
+        Map<String, Object> nonInternalConfigs = new RecordingMap<>();
+        values.forEach((key, value) -> {
+            ConfigDef.ConfigKey configKey = definition.configKeys().get(key);
+            if (configKey == null || !configKey.internalConfig) {
+                nonInternalConfigs.put(key, value);
+            }
+        });
+        return nonInternalConfigs;
+    }
+
     private void logAll() {
         StringBuilder b = new StringBuilder();
         b.append(getClass().getSimpleName());
@@ -394,9 +412,22 @@ public class AbstractConfig {
      * @return A configured instance of the class
      */
     public <T> T getConfiguredInstance(String key, Class<T> t) {
+        return getConfiguredInstance(key, t, Collections.emptyMap());
+    }
+
+    /**
+     * Get a configured instance of the give class specified by the given configuration key. If the object implements
+     * Configurable configure it using the configuration.
+     *
+     * @param key The configuration key for the class
+     * @param t The interface the class should implement
+     * @param configOverrides override origin configs
+     * @return A configured instance of the class
+     */
+    public <T> T getConfiguredInstance(String key, Class<T> t, Map<String, Object> configOverrides) {
         Class<?> c = getClass(key);
 
-        return getConfiguredInstance(c, t, originals());
+        return getConfiguredInstance(c, t, originals(configOverrides));
     }
 
     /**

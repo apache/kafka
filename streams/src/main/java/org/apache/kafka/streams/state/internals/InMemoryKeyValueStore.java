@@ -50,6 +50,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
         return name;
     }
 
+    @Deprecated
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {

@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -71,12 +72,13 @@ public class EosTestClient extends SmokeTestUtil {
                 uncaughtException = false;
 
                 streams = createKafkaStreams(properties);
-                streams.setUncaughtExceptionHandler((t, e) -> {
+                streams.setUncaughtExceptionHandler(e -> {
                     System.out.println(System.currentTimeMillis());
                     System.out.println("EOS-TEST-CLIENT-EXCEPTION");
                     e.printStackTrace();
                     System.out.flush();
                     uncaughtException = true;
+                    return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
                 });
                 streams.setStateListener((newState, oldState) -> {
                     // don't remove this -- it's required test output

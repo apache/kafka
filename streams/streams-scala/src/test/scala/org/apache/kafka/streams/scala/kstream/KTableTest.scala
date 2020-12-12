@@ -39,29 +39,27 @@ class KTableTest extends FlatSpec with Matchers with TestDriver {
     val sinkTopic = "sink"
 
     val table = builder.stream[String, String](sourceTopic).groupBy((key, _) => key).count()
-    table.filter((_, value) => value > 1).toStream.to(sinkTopic)
+    table.filter((key, value) => key.equals("a") && value == 1).toStream.to(sinkTopic)
 
     val testDriver = createTestDriver(builder)
     val testInput = testDriver.createInput[String, String](sourceTopic)
     val testOutput = testDriver.createOutput[String, Long](sinkTopic)
 
     {
-      testInput.pipeInput("1", "value1")
+      testInput.pipeInput("a", "passes filter : add new row to table")
       val record = testOutput.readKeyValue
-      record.key shouldBe "1"
+      record.key shouldBe "a"
+      record.value shouldBe 1
+    }
+    {
+      testInput.pipeInput("a", "fails filter : remove existing row from table")
+      val record = testOutput.readKeyValue
+      record.key shouldBe "a"
       record.value shouldBe (null: java.lang.Long)
     }
     {
-      testInput.pipeInput("1", "value2")
-      val record = testOutput.readKeyValue
-      record.key shouldBe "1"
-      record.value shouldBe 2
-    }
-    {
-      testInput.pipeInput("2", "value1")
-      val record = testOutput.readKeyValue
-      record.key shouldBe "2"
-      record.value shouldBe (null: java.lang.Long)
+      testInput.pipeInput("b", "fails filter : no output")
+      testOutput.isEmpty shouldBe true
     }
     testOutput.isEmpty shouldBe true
 

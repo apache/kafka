@@ -103,7 +103,7 @@ private[timer] class TimerTaskList(taskCounter: AtomicInteger) extends Delayed {
   }
 
   // Remove all task entries and apply the supplied function to each of them
-  def flush(f: (TimerTaskEntry)=>Unit): Unit = {
+  def flush(f: TimerTaskEntry => Unit): Unit = {
     synchronized {
       var head = root.next
       while (head ne root) {

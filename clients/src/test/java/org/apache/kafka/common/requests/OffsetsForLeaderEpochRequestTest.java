@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopicCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.junit.Test;
 
@@ -29,7 +30,7 @@ public class OffsetsForLeaderEpochRequestTest {
 
     @Test
     public void testForConsumerRequiresVersion3() {
-        OffsetsForLeaderEpochRequest.Builder builder = OffsetsForLeaderEpochRequest.Builder.forConsumer(Collections.emptyMap());
+        OffsetsForLeaderEpochRequest.Builder builder = OffsetsForLeaderEpochRequest.Builder.forConsumer(new OffsetForLeaderTopicCollection());
         for (short version = 0; version < 3; version++) {
             final short v = version;
             assertThrows(UnsupportedVersionException.class, () -> builder.build(v));
@@ -48,8 +49,7 @@ public class OffsetsForLeaderEpochRequestTest {
             OffsetsForLeaderEpochRequest.Builder builder = OffsetsForLeaderEpochRequest.Builder.forFollower(
                     version, Collections.emptyMap(), replicaId);
             OffsetsForLeaderEpochRequest request = builder.build();
-            OffsetsForLeaderEpochRequest parsed = (OffsetsForLeaderEpochRequest) AbstractRequest.parseRequest(
-                    ApiKeys.OFFSET_FOR_LEADER_EPOCH, version, request.toStruct());
+            OffsetsForLeaderEpochRequest parsed = OffsetsForLeaderEpochRequest.parse(request.serialize(), version);
             if (version < 3)
                 assertEquals(OffsetsForLeaderEpochRequest.DEBUGGING_REPLICA_ID, parsed.replicaId());
             else

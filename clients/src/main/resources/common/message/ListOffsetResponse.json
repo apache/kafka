@@ -27,8 +27,10 @@
   // Version 4 adds the leader epoch, which is used for fencing.
   //
   // Version 5 adds a new error code, OFFSET_NOT_AVAILABLE.
-  "validVersions": "0-5",
-  "flexibleVersions": "none",
+  //
+  // Version 6 enables flexible versions.
+  "validVersions": "0-6",
+  "flexibleVersions": "6+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "2+", "ignorable": true,
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
@@ -48,7 +50,7 @@
           "about": "The timestamp associated with the returned offset." },
         { "name": "Offset", "type": "int64", "versions": "1+", "default": "-1", "ignorable": false,
           "about": "The returned offset." },
-        { "name": "LeaderEpoch", "type": "int32", "versions": "4+" }
+        { "name": "LeaderEpoch", "type": "int32", "versions": "4+", "default": "-1" }
       ]}
     ]}
   ]

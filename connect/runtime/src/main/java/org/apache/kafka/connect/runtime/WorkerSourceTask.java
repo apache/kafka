@@ -102,9 +102,7 @@ class WorkerSourceTask extends WorkerTask {
     private CountDownLatch stopRequestedLatch;
 
     private Map<String, String> taskConfig;
-    private boolean finishedStart = false;
-    private boolean startedShutdownBeforeStartCompleted = false;
-    private boolean stopped = false;
+    private boolean started = false;
 
     public WorkerSourceTask(ConnectorTaskId id,
                             SourceTask task,
@@ -166,8 +164,12 @@ class WorkerSourceTask extends WorkerTask {
 
     @Override
     protected void close() {
-        if (!shouldPause()) {
-            tryStop();
+        if (started) {
+            try {
+                task.stop();
+            } catch (Throwable t) {
+                log.warn("Could not stop task", t);
+            }
         }
         if (producer != null) {
             try {
@@ -206,39 +208,21 @@ class WorkerSourceTask extends WorkerTask {
     public void stop() {
         super.stop();
         stopRequestedLatch.countDown();
-        synchronized (this) {
-            if (finishedStart)
-                tryStop();
-            else
-                startedShutdownBeforeStartCompleted = true;
-        }
-    }
-
-    private synchronized void tryStop() {
-        if (!stopped) {
-            try {
-                task.stop();
-                stopped = true;
-            } catch (Throwable t) {
-                log.warn("Could not stop task", t);
-            }
-        }
     }
 
     @Override
     public void execute() {
         try {
+            // If we try to start the task at all by invoking initialize, then count this as
+            // "started" and expect a subsequent call to the task's stop() method
+            // to properly clean up any resources allocated by its initialize() or 
+            // start() methods. If the task throws an exception during stop(),
+            // the worst thing that happens is another exception gets logged for an already-
+            // failed task
+            started = true;
             task.initialize(new WorkerSourceTaskContext(offsetReader, this, configState));
             task.start(taskConfig);
             log.info("{} Source task finished initialization and start", this);
-            synchronized (this) {
-                if (startedShutdownBeforeStartCompleted) {
-                    tryStop();
-                    return;
-                }
-                finishedStart = true;
-            }
-
             while (!isStopping()) {
                 if (shouldPause()) {
                     onPause();
@@ -344,7 +328,7 @@ class WorkerSourceTask extends WorkerTask {
                 continue;
             }
 
-            log.trace("{} Appending record with key {}, value {}", this, record.key(), record.value());
+            log.trace("{} Appending record to the topic {} with key {}, value {}", this, record.topic(), record.key(), record.value());
             // We need this queued first since the callback could happen immediately (even synchronously in some cases).
             // Because of this we need to be careful about handling retries -- we always save the previously attempted
             // record as part of toSend and need to use a flag to track whether we should actually add it to the outstanding
@@ -409,6 +393,9 @@ class WorkerSourceTask extends WorkerTask {
     // RegexRouter) topic creation can not be batched for multiple topics
     private void maybeCreateTopic(String topic) {
         if (!topicCreation.isTopicCreationRequired(topic)) {
+            log.trace("Topic creation by the connector is disabled or the topic {} was previously created." +
+                "If auto.create.topics.enable is enabled on the broker, " +
+                "the topic will be created with default settings", topic);
             return;
         }
         log.info("The task will send records to topic '{}' for the first time. Checking "
@@ -430,7 +417,7 @@ class WorkerSourceTask extends WorkerTask {
             log.info("Created topic '{}' using creation group {}", newTopic, topicGroup);
         } else {
             log.warn("Request to create new topic '{}' failed", topic);
-            throw new ConnectException("Task failed to create new topic " + topic + ". Ensure "
+            throw new ConnectException("Task failed to create new topic " + newTopic + ". Ensure "
                     + "that the task is authorized to create topics or that the topic exists and "
                     + "restart the task");
         }
@@ -475,7 +462,7 @@ class WorkerSourceTask extends WorkerTask {
     public boolean commitOffsets() {
         long commitTimeoutMs = workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
 
-        log.info("{} Committing offsets", this);
+        log.debug("{} Committing offsets", this);
 
         long started = time.milliseconds();
         long timeout = started + commitTimeoutMs;
@@ -571,7 +558,7 @@ class WorkerSourceTask extends WorkerTask {
         finishSuccessfulFlush();
         long durationMillis = time.milliseconds() - started;
         recordCommitSuccess(durationMillis);
-        log.info("{} Finished commitOffsets successfully in {} ms",
+        log.debug("{} Finished commitOffsets successfully in {} ms",
                 this, durationMillis);
 
         commitSourceTask();

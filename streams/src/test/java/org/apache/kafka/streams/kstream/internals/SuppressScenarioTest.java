@@ -50,7 +50,6 @@ import org.junit.Test;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Properties;
 
 import static java.time.Duration.ZERO;
@@ -72,9 +71,7 @@ public class SuppressScenarioTest {
     private static final Serde<String> STRING_SERDE = Serdes.String();
     private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
     private final Properties config = Utils.mkProperties(Utils.mkMap(
-        Utils.mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, getClass().getSimpleName().toLowerCase(Locale.getDefault())),
-        Utils.mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-        Utils.mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "bogus")
+        Utils.mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
     ));
 
     @Test
@@ -816,7 +813,7 @@ public class SuppressScenarioTest {
         for (final TestRecord<K, V> result : results) {
             final KeyValueTimestamp<K, V> expected = expectedIterator.next();
             try {
-                assertThat(result, equalTo(new TestRecord<K, V>(expected.key(), expected.value(), null, expected.timestamp())));
+                assertThat(result, equalTo(new TestRecord<>(expected.key(), expected.value(), null, expected.timestamp())));
             } catch (final AssertionError e) {
                 throw new AssertionError(printRecords(results) + " != " + expectedResults, e);
             }

@@ -29,7 +29,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Random;
 import java.util.Base64.Encoder;
 import java.util.Set;
@@ -53,7 +52,6 @@ import javax.security.sasl.SaslException;
 
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.config.types.Password;
@@ -62,9 +60,13 @@ import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
+import org.apache.kafka.common.message.ListOffsetResponseData;
+import org.apache.kafka.common.message.ListOffsetResponseData.ListOffsetTopicResponse;
+import org.apache.kafka.common.message.ListOffsetResponseData.ListOffsetPartitionResponse;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
+import org.apache.kafka.common.network.ByteBufferSend;
 import org.apache.kafka.common.network.CertStores;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.ChannelBuilders;
@@ -77,12 +79,12 @@ import org.apache.kafka.common.network.NetworkTestUtils;
 import org.apache.kafka.common.network.NioEchoServer;
 import org.apache.kafka.common.network.SaslChannelBuilder;
 import org.apache.kafka.common.network.Selector;
-import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.requests.ListOffsetResponse;
+import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.security.auth.Login;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -131,6 +133,7 @@ import static org.apache.kafka.common.protocol.ApiKeys.LIST_OFFSETS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -704,7 +707,7 @@ public class SaslAuthenticatorTest {
                 setCorrelationId(1),
                 (short) 2);
         ApiVersionsRequest request = new ApiVersionsRequest.Builder().build();
-        selector.send(request.toSend(node, header));
+        selector.send(new NetworkSend(node, request.toSend(header)));
         ByteBuffer responseBuffer = waitForResponse();
         ResponseHeader.parse(responseBuffer, ApiKeys.API_VERSIONS.responseHeaderVersion((short) 0));
         ApiVersionsResponse response = ApiVersionsResponse.parse(responseBuffer, (short) 0);
@@ -762,7 +765,7 @@ public class SaslAuthenticatorTest {
         ApiVersionsRequest request = new ApiVersionsRequest(new ApiVersionsRequestData().
                 setClientSoftwareName("  ").
                 setClientSoftwareVersion("   "), version);
-        selector.send(request.toSend(node, header));
+        selector.send(new NetworkSend(node, request.toSend(header)));
         ByteBuffer responseBuffer = waitForResponse();
         ResponseHeader.parse(responseBuffer, ApiKeys.API_VERSIONS.responseHeaderVersion(version));
         ApiVersionsResponse response =
@@ -804,7 +807,7 @@ public class SaslAuthenticatorTest {
         createClientConnection(SecurityProtocol.PLAINTEXT, node);
         RequestHeader header = new RequestHeader(ApiKeys.API_VERSIONS, version, "someclient", 1);
         ApiVersionsRequest request = new ApiVersionsRequest.Builder().build(version);
-        selector.send(request.toSend(node, header));
+        selector.send(new NetworkSend(node, request.toSend(header)));
         ByteBuffer responseBuffer = waitForResponse();
         ResponseHeader.parse(responseBuffer, ApiKeys.API_VERSIONS.responseHeaderVersion(version));
         ApiVersionsResponse response = ApiVersionsResponse.parse(responseBuffer, version);
@@ -834,7 +837,7 @@ public class SaslAuthenticatorTest {
         SaslHandshakeRequest request = buildSaslHandshakeRequest("PLAIN", ApiKeys.SASL_HANDSHAKE.latestVersion());
         RequestHeader header = new RequestHeader(ApiKeys.SASL_HANDSHAKE, Short.MAX_VALUE, "someclient", 2);
         
-        selector.send(request.toSend(node1, header));
+        selector.send(new NetworkSend(node1, request.toSend(header)));
         // This test uses a non-SASL PLAINTEXT client in order to do manual handshake.
         // So the channel is in READY state.
         NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.READY.state());
@@ -862,7 +865,7 @@ public class SaslAuthenticatorTest {
         Random random = new Random();
         byte[] bytes = new byte[1024];
         random.nextBytes(bytes);
-        selector.send(new NetworkSend(node1, ByteBuffer.wrap(bytes)));
+        selector.send(new NetworkSend(node1, ByteBufferSend.sizePrefixed(ByteBuffer.wrap(bytes))));
         NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.READY.state());
         selector.close();
 
@@ -873,7 +876,7 @@ public class SaslAuthenticatorTest {
         String node2 = "invalid2";
         createClientConnection(SecurityProtocol.PLAINTEXT, node2);
         random.nextBytes(bytes);
-        selector.send(new NetworkSend(node2, ByteBuffer.wrap(bytes)));
+        selector.send(new NetworkSend(node2, ByteBufferSend.sizePrefixed(ByteBuffer.wrap(bytes))));
         NetworkTestUtils.waitForChannelClose(selector, node2, ChannelState.READY.state());
         selector.close();
 
@@ -901,7 +904,7 @@ public class SaslAuthenticatorTest {
 
         ApiVersionsRequest request = createApiVersionsRequestV0();
         RequestHeader versionsHeader = new RequestHeader(ApiKeys.API_VERSIONS, request.version(), "someclient", 2);
-        selector.send(request.toSend(node1, versionsHeader));
+        selector.send(new NetworkSend(node1, request.toSend(versionsHeader)));
         NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.READY.state());
         selector.close();
 
@@ -928,7 +931,7 @@ public class SaslAuthenticatorTest {
         buffer.putInt(Integer.MAX_VALUE);
         buffer.put(new byte[buffer.capacity() - 4]);
         buffer.rewind();
-        selector.send(new NetworkSend(node1, buffer));
+        selector.send(new NetworkSend(node1, ByteBufferSend.sizePrefixed(buffer)));
         NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.READY.state());
         selector.close();
 
@@ -942,7 +945,7 @@ public class SaslAuthenticatorTest {
         buffer.putInt(Integer.MAX_VALUE);
         buffer.put(new byte[buffer.capacity() - 4]);
         buffer.rewind();
-        selector.send(new NetworkSend(node2, buffer));
+        selector.send(new NetworkSend(node2, ByteBufferSend.sizePrefixed(buffer)));
         NetworkTestUtils.waitForChannelClose(selector, node2, ChannelState.READY.state());
         selector.close();
 
@@ -967,7 +970,7 @@ public class SaslAuthenticatorTest {
                 true).build();
         RequestHeader metadataRequestHeader1 = new RequestHeader(ApiKeys.METADATA, metadataRequest1.version(),
                 "someclient", 1);
-        selector.send(metadataRequest1.toSend(node1, metadataRequestHeader1));
+        selector.send(new NetworkSend(node1, metadataRequest1.toSend(metadataRequestHeader1)));
         NetworkTestUtils.waitForChannelClose(selector, node1, ChannelState.READY.state());
         selector.close();
 
@@ -981,7 +984,7 @@ public class SaslAuthenticatorTest {
         MetadataRequest metadataRequest2 = new MetadataRequest.Builder(Collections.singletonList("sometopic"), true).build();
         RequestHeader metadataRequestHeader2 = new RequestHeader(ApiKeys.METADATA,
                 metadataRequest2.version(), "someclient", 2);
-        selector.send(metadataRequest2.toSend(node2, metadataRequestHeader2));
+        selector.send(new NetworkSend(node2, metadataRequest2.toSend(metadataRequestHeader2)));
         NetworkTestUtils.waitForChannelClose(selector, node2, ChannelState.READY.state());
         selector.close();
 
@@ -1235,9 +1238,18 @@ public class SaslAuthenticatorTest {
         saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "INVALID");
 
         server = createEchoServer(securityProtocol);
-        createAndCheckClientConnectionFailure(securityProtocol, node);
-        server.verifyAuthenticationMetrics(0, 1);
-        server.verifyReauthenticationMetrics(0, 0);
+        try {
+            createAndCheckClientConnectionFailure(securityProtocol, node);
+            fail("Did not generate exception prior to creating channel");
+        } catch (IOException expected) {
+            server.verifyAuthenticationMetrics(0, 0);
+            server.verifyReauthenticationMetrics(0, 0);
+            Throwable underlyingCause = expected.getCause().getCause().getCause();
+            assertEquals(SaslAuthenticationException.class, underlyingCause.getClass());
+            assertEquals("Failed to create SaslClient with mechanism INVALID", underlyingCause.getMessage());
+        } finally {
+            closeClientConnectionIfNecessary();
+        }
     }
 
     /**
@@ -1581,9 +1593,18 @@ public class SaslAuthenticatorTest {
 
     @Test
     public void testConvertListOffsetResponseToSaslHandshakeResponse() {
-        ListOffsetResponse response = new ListOffsetResponse(0, Collections.singletonMap(new TopicPartition("topic", 0),
-            new ListOffsetResponse.PartitionData(Errors.NONE, 0, 0, Optional.empty())));
-        ByteBuffer buffer = response.serialize(ApiKeys.LIST_OFFSETS, LIST_OFFSETS.latestVersion(), 0);
+        ListOffsetResponseData data = new ListOffsetResponseData()
+                .setThrottleTimeMs(0)
+                .setTopics(Collections.singletonList(new ListOffsetTopicResponse()
+                        .setName("topic")
+                        .setPartitions(Collections.singletonList(new ListOffsetPartitionResponse()
+                                .setErrorCode(Errors.NONE.code())
+                                .setLeaderEpoch(ListOffsetResponse.UNKNOWN_EPOCH)
+                                .setPartitionIndex(0)
+                                .setOffset(0)
+                                .setTimestamp(0)))));
+        ListOffsetResponse response = new ListOffsetResponse(data);
+        ByteBuffer buffer = RequestTestUtils.serializeResponseWithHeader(response, LIST_OFFSETS.latestVersion(), 0);
         final RequestHeader header0 = new RequestHeader(LIST_OFFSETS, LIST_OFFSETS.latestVersion(), "id", SaslClientAuthenticator.MIN_RESERVED_CORRELATION_ID);
         Assert.assertThrows(SchemaException.class, () -> NetworkClient.parseResponse(buffer.duplicate(), header0));
         final RequestHeader header1 = new RequestHeader(LIST_OFFSETS, LIST_OFFSETS.latestVersion(), "id", 1);
@@ -1662,19 +1683,18 @@ public class SaslAuthenticatorTest {
              * instead
              */
             time.sleep((long) (CONNECTIONS_MAX_REAUTH_MS_VALUE * 1.1));
-            NetworkTestUtils.checkClientConnection(selector, node, 1, 1);
-            fail("Expected a failure when trying to re-authenticate to quickly, but that did not occur");
-        } catch (AssertionError e) {
+            AssertionError exception = assertThrows(AssertionError.class,
+                () -> NetworkTestUtils.checkClientConnection(selector, node, 1, 1));
             String expectedResponseTextRegex = "\\w-" + node;
             String receivedResponseTextRegex = ".*" + OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
             assertTrue(
                     "Should have received the SaslHandshakeRequest bytes back since we re-authenticated too quickly, " +
                     "but instead we got our generated message echoed back, implying re-auth succeeded when it " +
-                    "should not have: " + e,
-                    e.getMessage().matches(
+                    "should not have: " + exception,
+                    exception.getMessage().matches(
                             ".*<\\[" + expectedResponseTextRegex + "]>.*<\\[" + receivedResponseTextRegex + ".*?]>"));
             server.verifyReauthenticationMetrics(1, 0); // unchanged
-        } finally { 
+        } finally {
             selector.close();
             selector = null;
         }
@@ -2023,7 +2043,7 @@ public class SaslAuthenticatorTest {
             SaslAuthenticateRequest request = new SaslAuthenticateRequest.Builder(data).build();
             sendKafkaRequestReceiveResponse(node, ApiKeys.SASL_AUTHENTICATE, request);
         } else {
-            selector.send(new NetworkSend(node, authBuf));
+            selector.send(new NetworkSend(node, ByteBufferSend.sizePrefixed(authBuf)));
             waitForResponse();
         }
 
@@ -2147,7 +2167,7 @@ public class SaslAuthenticatorTest {
 
     private AbstractResponse sendKafkaRequestReceiveResponse(String node, ApiKeys apiKey, AbstractRequest request) throws IOException {
         RequestHeader header = new RequestHeader(apiKey, request.version(), "someclient", nextCorrelationId++);
-        Send send = request.toSend(node, header);
+        NetworkSend send = new NetworkSend(node, request.toSend(header));
         selector.send(send);
         ByteBuffer responseBuffer = waitForResponse();
         return NetworkClient.parseResponse(responseBuffer, header);

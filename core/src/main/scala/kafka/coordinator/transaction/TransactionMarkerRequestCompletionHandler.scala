@@ -89,10 +89,11 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
 
       val writeTxnMarkerResponse = response.responseBody.asInstanceOf[WriteTxnMarkersResponse]
 
+      val responseErrors = writeTxnMarkerResponse.errorsByProducerId;
       for (txnIdAndMarker <- txnIdAndMarkerEntries.asScala) {
         val transactionalId = txnIdAndMarker.txnId
         val txnMarker = txnIdAndMarker.txnMarkerEntry
-        val errors = writeTxnMarkerResponse.errors(txnMarker.producerId)
+        val errors = responseErrors.get(txnMarker.producerId)
 
         if (errors == null)
           throw new IllegalStateException(s"WriteTxnMarkerResponse does not contain expected error map for producer id ${txnMarker.producerId}")

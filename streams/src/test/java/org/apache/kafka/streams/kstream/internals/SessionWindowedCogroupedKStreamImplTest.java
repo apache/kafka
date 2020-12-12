@@ -64,8 +64,7 @@ public class SessionWindowedCogroupedKStreamImplTest {
     private CogroupedKStream<String, String> cogroupedStream;
     private SessionWindowedCogroupedKStream<String, String> windowedCogroupedStream;
 
-    private final Properties props = StreamsTestUtils
-        .getStreamsConfig(Serdes.String(), Serdes.String());
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
     @Before
     public void setup() {

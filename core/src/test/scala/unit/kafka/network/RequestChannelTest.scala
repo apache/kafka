@@ -46,8 +46,9 @@ class RequestChannelTest {
 
     val sensitiveValue = "secret"
     def verifyConfig(resource: ConfigResource, entries: Seq[ConfigEntry], expectedValues: Map[String, String]): Unit = {
-      val alterConfigs = request(new AlterConfigsRequest.Builder(Collections.singletonMap(resource,
-        new Config(entries.asJavaCollection)), true).build())
+      val alterConfigs = request(new AlterConfigsRequest.Builder(
+          Collections.singletonMap(resource, new Config(entries.asJavaCollection)), true).build())
+
       val loggableAlterConfigs = alterConfigs.loggableRequest.asInstanceOf[AlterConfigsRequest]
       val loggedConfig = loggableAlterConfigs.configs.get(resource)
       assertEquals(expectedValues, toMap(loggedConfig))
@@ -85,7 +86,8 @@ class RequestChannelTest {
     verifyConfig(topicResource, Seq(customConfig), Map(customConfig.name -> Password.HIDDEN))
 
     // Verify empty request
-    val alterConfigs = request(new AlterConfigsRequest.Builder(Collections.emptyMap[ConfigResource, Config], true).build())
+    val alterConfigs = request(new AlterConfigsRequest.Builder(
+        Collections.emptyMap[ConfigResource, Config], true).build())
     assertEquals(Collections.emptyMap, alterConfigs.loggableRequest.asInstanceOf[AlterConfigsRequest].configs)
   }
 
@@ -163,7 +165,8 @@ class RequestChannelTest {
   }
 
   def request(req: AbstractRequest): RequestChannel.Request = {
-    val buffer = req.serialize(new RequestHeader(req.api, req.version, "client-id", 1))
+    val buffer = RequestTestUtils.serializeRequestWithHeader(new RequestHeader(req.apiKey, req.version, "client-id", 1),
+      req)
     val requestContext = newRequestContext(buffer)
     new network.RequestChannel.Request(processor = 1,
       requestContext,

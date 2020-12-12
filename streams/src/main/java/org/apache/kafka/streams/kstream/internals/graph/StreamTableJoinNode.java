@@ -26,7 +26,7 @@ import java.util.Arrays;
  * Represents a join between a KStream and a KTable or GlobalKTable
  */
 
-public class StreamTableJoinNode<K, V> extends StreamsGraphNode {
+public class StreamTableJoinNode<K, V> extends GraphNode {
 
     private final String[] storeNames;
     private final ProcessorParameters<K, V, ?, ?> processorParameters;

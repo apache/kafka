@@ -47,8 +47,10 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
     }
 
     @Override
-    public void enableSendingOldValues() {
+    public boolean enableSendingOldValues(final boolean forceMaterialization) {
+        // Aggregates are always materialized:
         sendOldValues = true;
+        return true;
     }
 
     @Override

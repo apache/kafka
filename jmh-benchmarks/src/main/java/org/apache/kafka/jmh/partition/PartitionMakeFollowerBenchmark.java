@@ -19,12 +19,14 @@ package org.apache.kafka.jmh.partition;
 
 import kafka.api.ApiVersion$;
 import kafka.cluster.DelayedOperations;
+import kafka.cluster.IsrChangeListener;
 import kafka.cluster.Partition;
 import kafka.cluster.PartitionStateStore;
 import kafka.log.CleanerConfig;
 import kafka.log.Defaults;
 import kafka.log.LogConfig;
 import kafka.log.LogManager;
+import kafka.server.AlterIsrManager;
 import kafka.server.BrokerState;
 import kafka.server.BrokerTopicStats;
 import kafka.server.LogDirFailureChannel;
@@ -117,10 +119,12 @@ public class PartitionMakeFollowerBenchmark {
         PartitionStateStore partitionStateStore = Mockito.mock(PartitionStateStore.class);
         Mockito.when(partitionStateStore.fetchTopicConfig()).thenReturn(new Properties());
         Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), tp)).thenReturn(Option.apply(0L));
+        IsrChangeListener isrChangeListener = Mockito.mock(IsrChangeListener.class);
+        AlterIsrManager alterIsrManager = Mockito.mock(AlterIsrManager.class);
         partition = new Partition(tp, 100,
             ApiVersion$.MODULE$.latestVersion(), 0, Time.SYSTEM,
-            partitionStateStore, delayedOperations,
-            Mockito.mock(MetadataCache.class), logManager);
+            partitionStateStore, isrChangeListener, delayedOperations,
+            Mockito.mock(MetadataCache.class), logManager, alterIsrManager);
         partition.createLogIfNotExists(true, false, offsetCheckpoints);
         executorService.submit((Runnable) () -> {
             SimpleRecord[] simpleRecords = new SimpleRecord[] {

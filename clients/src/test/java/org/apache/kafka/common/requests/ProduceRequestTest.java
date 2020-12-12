@@ -18,7 +18,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.InvalidRecordException;
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -30,10 +30,8 @@ import org.apache.kafka.common.record.TimestampType;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -50,30 +48,47 @@ public class ProduceRequestTest {
     public void shouldBeFlaggedAsTransactionalWhenTransactionalRecords() throws Exception {
         final MemoryRecords memoryRecords = MemoryRecords.withTransactionalRecords(0, CompressionType.NONE, 1L,
                 (short) 1, 1, 1, simpleRecord);
-        final ProduceRequest request = ProduceRequest.Builder.forCurrentMagic((short) -1,
-                10, Collections.singletonMap(new TopicPartition("topic", 1), memoryRecords)).build();
-        assertTrue(request.hasTransactionalRecords());
+
+        final ProduceRequest request = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+                .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
+                    new ProduceRequestData.TopicProduceData()
+                        .setName("topic")
+                        .setPartitionData(Collections.singletonList(
+                            new ProduceRequestData.PartitionProduceData()
+                                .setIndex(1)
+                                .setRecords(memoryRecords)))).iterator()))
+                .setAcks((short) -1)
+                .setTimeoutMs(10)).build();
+        assertTrue(RequestUtils.hasTransactionalRecords(request));
     }
 
     @Test
     public void shouldNotBeFlaggedAsTransactionalWhenNoRecords() throws Exception {
         final ProduceRequest request = createNonIdempotentNonTransactionalRecords();
-        assertFalse(request.hasTransactionalRecords());
+        assertFalse(RequestUtils.hasTransactionalRecords(request));
     }
 
     @Test
     public void shouldNotBeFlaggedAsIdempotentWhenRecordsNotIdempotent() throws Exception {
         final ProduceRequest request = createNonIdempotentNonTransactionalRecords();
-        assertFalse(request.hasTransactionalRecords());
+        assertFalse(RequestUtils.hasTransactionalRecords(request));
     }
 
     @Test
     public void shouldBeFlaggedAsIdempotentWhenIdempotentRecords() throws Exception {
         final MemoryRecords memoryRecords = MemoryRecords.withIdempotentRecords(1, CompressionType.NONE, 1L,
                 (short) 1, 1, 1, simpleRecord);
-        final ProduceRequest request = ProduceRequest.Builder.forCurrentMagic((short) -1, 10,
-                Collections.singletonMap(new TopicPartition("topic", 1), memoryRecords)).build();
-        assertTrue(request.hasIdempotentRecords());
+        final ProduceRequest request = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+                .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
+                    new ProduceRequestData.TopicProduceData()
+                        .setName("topic")
+                        .setPartitionData(Collections.singletonList(
+                            new ProduceRequestData.PartitionProduceData()
+                                .setIndex(1)
+                                .setRecords(memoryRecords)))).iterator()))
+                .setAcks((short) -1)
+                .setTimeoutMs(10)).build();
+        assertTrue(RequestUtils.hasIdempotentRecords(request));
     }
 
     @Test
@@ -82,11 +97,14 @@ public class ProduceRequestTest {
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, CompressionType.NONE,
                 TimestampType.CREATE_TIME, 0L);
         builder.append(10L, null, "a".getBytes());
-        Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
-        produceData.put(new TopicPartition("test", 0), builder.build());
-
-        ProduceRequest.Builder requestBuilder = ProduceRequest.Builder.forMagic(RecordBatch.MAGIC_VALUE_V1, (short) 1,
-                5000, produceData, null);
+        ProduceRequest.Builder requestBuilder = ProduceRequest.forMagic(RecordBatch.MAGIC_VALUE_V1,
+            new ProduceRequestData()
+                .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
+                    new ProduceRequestData.TopicProduceData().setName("test").setPartitionData(Collections.singletonList(
+                        new ProduceRequestData.PartitionProduceData().setIndex(9).setRecords(builder.build()))))
+                    .iterator()))
+                .setAcks((short) 1)
+                .setTimeoutMs(5000));
         assertEquals(2, requestBuilder.oldestAllowedVersion());
         assertEquals(2, requestBuilder.latestAllowedVersion());
     }
@@ -97,11 +115,14 @@ public class ProduceRequestTest {
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE,
                 CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
         builder.append(10L, null, "a".getBytes());
-        Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
-        produceData.put(new TopicPartition("test", 0), builder.build());
-
-        ProduceRequest.Builder requestBuilder = ProduceRequest.Builder.forMagic(RecordBatch.CURRENT_MAGIC_VALUE,
-                (short) 1, 5000, produceData, null);
+        ProduceRequest.Builder requestBuilder = ProduceRequest.forMagic(RecordBatch.CURRENT_MAGIC_VALUE,
+                new ProduceRequestData()
+                        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
+                                new ProduceRequestData.TopicProduceData().setName("test").setPartitionData(Collections.singletonList(
+                                        new ProduceRequestData.PartitionProduceData().setIndex(9).setRecords(builder.build()))))
+                                .iterator()))
+                        .setAcks((short) 1)
+                        .setTimeoutMs(5000));
         assertEquals(3, requestBuilder.oldestAllowedVersion());
         assertEquals(ApiKeys.PRODUCE.latestVersion(), requestBuilder.latestAllowedVersion());
     }
@@ -120,17 +141,31 @@ public class ProduceRequestTest {
 
         buffer.flip();
 
-        Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
-        produceData.put(new TopicPartition("test", 0), MemoryRecords.readableRecords(buffer));
-        ProduceRequest.Builder requestBuilder = ProduceRequest.Builder.forCurrentMagic((short) 1, 5000, produceData);
+        ProduceRequest.Builder requestBuilder = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+                .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
+                    new ProduceRequestData.TopicProduceData()
+                        .setName("test")
+                        .setPartitionData(Collections.singletonList(
+                            new ProduceRequestData.PartitionProduceData()
+                                .setIndex(0)
+                                    .setRecords(MemoryRecords.readableRecords(buffer))))).iterator()))
+                .setAcks((short) 1)
+                .setTimeoutMs(5000));
         assertThrowsInvalidRecordExceptionForAllVersions(requestBuilder);
     }
 
     @Test
     public void testV3AndAboveCannotHaveNoRecordBatches() {
-        Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
-        produceData.put(new TopicPartition("test", 0), MemoryRecords.EMPTY);
-        ProduceRequest.Builder requestBuilder = ProduceRequest.Builder.forCurrentMagic((short) 1, 5000, produceData);
+        ProduceRequest.Builder requestBuilder = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+                .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
+                        new ProduceRequestData.TopicProduceData()
+                                .setName("test")
+                                .setPartitionData(Collections.singletonList(
+                                        new ProduceRequestData.PartitionProduceData()
+                                                .setIndex(0)
+                                                .setRecords(MemoryRecords.EMPTY)))).iterator()))
+                .setAcks((short) 1)
+                .setTimeoutMs(5000));
         assertThrowsInvalidRecordExceptionForAllVersions(requestBuilder);
     }
 
@@ -141,9 +176,16 @@ public class ProduceRequestTest {
                 TimestampType.NO_TIMESTAMP_TYPE, 0L);
         builder.append(10L, null, "a".getBytes());
 
-        Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
-        produceData.put(new TopicPartition("test", 0), builder.build());
-        ProduceRequest.Builder requestBuilder = ProduceRequest.Builder.forCurrentMagic((short) 1, 5000, produceData);
+        ProduceRequest.Builder requestBuilder = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+                .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
+                        new ProduceRequestData.TopicProduceData()
+                                .setName("test")
+                                .setPartitionData(Collections.singletonList(
+                                        new ProduceRequestData.PartitionProduceData()
+                                                .setIndex(0)
+                                                .setRecords(builder.build())))).iterator()))
+                .setAcks((short) 1)
+                .setTimeoutMs(5000));
         assertThrowsInvalidRecordExceptionForAllVersions(requestBuilder);
     }
 
@@ -154,9 +196,16 @@ public class ProduceRequestTest {
                 TimestampType.CREATE_TIME, 0L);
         builder.append(10L, null, "a".getBytes());
 
-        Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
-        produceData.put(new TopicPartition("test", 0), builder.build());
-        ProduceRequest.Builder requestBuilder = ProduceRequest.Builder.forCurrentMagic((short) 1, 5000, produceData);
+        ProduceRequest.Builder requestBuilder = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+                .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
+                        new ProduceRequestData.TopicProduceData()
+                                .setName("test")
+                                .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
+                                        .setIndex(0)
+                                        .setRecords(builder.build()))))
+                        .iterator()))
+                .setAcks((short) 1)
+                .setTimeoutMs(5000));
         assertThrowsInvalidRecordExceptionForAllVersions(requestBuilder);
     }
 
@@ -167,17 +216,25 @@ public class ProduceRequestTest {
             TimestampType.CREATE_TIME, 0L);
         builder.append(10L, null, "a".getBytes());
 
-        Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
-        produceData.put(new TopicPartition("test", 0), builder.build());
-
+        ProduceRequestData produceData = new ProduceRequestData()
+                .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
+                    new ProduceRequestData.TopicProduceData()
+                        .setName("test")
+                        .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
+                            .setIndex(0)
+                            .setRecords(builder.build()))))
+                    .iterator()))
+                .setAcks((short) 1)
+                .setTimeoutMs(1000);
         // Can't create ProduceRequest instance with version within [3, 7)
         for (short version = 3; version < 7; version++) {
-            ProduceRequest.Builder requestBuilder = new ProduceRequest.Builder(version, version, (short) 1, 5000, produceData, null);
+
+            ProduceRequest.Builder requestBuilder = new ProduceRequest.Builder(version, version, produceData);
             assertThrowsInvalidRecordExceptionForAllVersions(requestBuilder);
         }
 
         // Works fine with current version (>= 7)
-        ProduceRequest.Builder.forCurrentMagic((short) 1, 5000, produceData);
+        ProduceRequest.forCurrentMagic(produceData);
     }
 
     @Test
@@ -192,16 +249,19 @@ public class ProduceRequestTest {
         final MemoryRecords txnRecords = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId,
                 producerEpoch, sequence, new SimpleRecord("bar".getBytes()));
 
-        final Map<TopicPartition, MemoryRecords> recordsByPartition = new LinkedHashMap<>();
-        recordsByPartition.put(new TopicPartition("foo", 0), txnRecords);
-        recordsByPartition.put(new TopicPartition("foo", 1), nonTxnRecords);
-
-        final ProduceRequest.Builder builder = ProduceRequest.Builder.forMagic(RecordVersion.current().value, (short) -1, 5000,
-                recordsByPartition, transactionalId);
-
+        ProduceRequest.Builder builder = ProduceRequest.forMagic(RecordBatch.CURRENT_MAGIC_VALUE,
+                new ProduceRequestData()
+                        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Arrays.asList(
+                                new ProduceRequestData.TopicProduceData().setName("foo").setPartitionData(Collections.singletonList(
+                                        new ProduceRequestData.PartitionProduceData().setIndex(0).setRecords(txnRecords))),
+                                new ProduceRequestData.TopicProduceData().setName("foo").setPartitionData(Collections.singletonList(
+                                        new ProduceRequestData.PartitionProduceData().setIndex(1).setRecords(nonTxnRecords))))
+                                .iterator()))
+                        .setAcks((short) -1)
+                        .setTimeoutMs(5000));
         final ProduceRequest request = builder.build();
-        assertTrue(request.hasTransactionalRecords());
-        assertTrue(request.hasIdempotentRecords());
+        assertTrue(RequestUtils.hasTransactionalRecords(request));
+        assertTrue(RequestUtils.hasIdempotentRecords(request));
     }
 
     @Test
@@ -215,16 +275,20 @@ public class ProduceRequestTest {
         final MemoryRecords txnRecords = MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId,
                 producerEpoch, sequence, new SimpleRecord("bar".getBytes()));
 
-        final Map<TopicPartition, MemoryRecords> recordsByPartition = new LinkedHashMap<>();
-        recordsByPartition.put(new TopicPartition("foo", 0), txnRecords);
-        recordsByPartition.put(new TopicPartition("foo", 1), nonTxnRecords);
-
-        final ProduceRequest.Builder builder = ProduceRequest.Builder.forMagic(RecordVersion.current().value, (short) -1, 5000,
-                recordsByPartition, null);
+        ProduceRequest.Builder builder = ProduceRequest.forMagic(RecordVersion.current().value,
+                new ProduceRequestData()
+                        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Arrays.asList(
+                                new ProduceRequestData.TopicProduceData().setName("foo").setPartitionData(Collections.singletonList(
+                                        new ProduceRequestData.PartitionProduceData().setIndex(0).setRecords(txnRecords))),
+                                new ProduceRequestData.TopicProduceData().setName("foo").setPartitionData(Collections.singletonList(
+                                        new ProduceRequestData.PartitionProduceData().setIndex(1).setRecords(nonTxnRecords))))
+                                .iterator()))
+                        .setAcks((short) -1)
+                        .setTimeoutMs(5000));
 
         final ProduceRequest request = builder.build();
-        assertFalse(request.hasTransactionalRecords());
-        assertTrue(request.hasIdempotentRecords());
+        assertFalse(RequestUtils.hasTransactionalRecords(request));
+        assertTrue(RequestUtils.hasIdempotentRecords(request));
     }
 
     private void assertThrowsInvalidRecordExceptionForAllVersions(ProduceRequest.Builder builder) {
@@ -235,7 +299,7 @@ public class ProduceRequestTest {
 
     private void assertThrowsInvalidRecordException(ProduceRequest.Builder builder, short version) {
         try {
-            builder.build(version).toStruct();
+            builder.build(version).serialize();
             fail("Builder did not raise " + InvalidRecordException.class.getName() + " as expected");
         } catch (RuntimeException e) {
             assertTrue("Unexpected exception type " + e.getClass().getName(),
@@ -244,8 +308,15 @@ public class ProduceRequestTest {
     }
 
     private ProduceRequest createNonIdempotentNonTransactionalRecords() {
-        final MemoryRecords memoryRecords = MemoryRecords.withRecords(CompressionType.NONE, simpleRecord);
-        return ProduceRequest.Builder.forCurrentMagic((short) -1, 10,
-                Collections.singletonMap(new TopicPartition("topic", 1), memoryRecords)).build();
+        return ProduceRequest.forCurrentMagic(new ProduceRequestData()
+                .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
+                        new ProduceRequestData.TopicProduceData()
+                                .setName("topic")
+                                .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
+                                        .setIndex(1)
+                                        .setRecords(MemoryRecords.withRecords(CompressionType.NONE, simpleRecord)))))
+                        .iterator()))
+                .setAcks((short) -1)
+                .setTimeoutMs(10)).build();
     }
 }

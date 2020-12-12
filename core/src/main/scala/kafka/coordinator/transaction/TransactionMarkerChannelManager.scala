@@ -20,10 +20,12 @@ package kafka.coordinator.transaction
 import java.util
 import java.util.concurrent.{BlockingQueue, ConcurrentHashMap, LinkedBlockingQueue}
 
+import kafka.api.KAFKA_2_8_IV0
 import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.{KafkaConfig, MetadataCache}
 import kafka.utils.{CoreUtils, Logging}
+import kafka.utils.Implicits._
 import org.apache.kafka.clients._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
@@ -115,7 +117,7 @@ class TxnMarkerQueue(@volatile var destination: Node) {
   }
 
   def forEachTxnTopicPartition[B](f:(Int, BlockingQueue[TxnIdAndMarkerEntry]) => B): Unit =
-    markersPerTxnTopicPartition.foreach { case (partition, queue) =>
+    markersPerTxnTopicPartition.forKeyValue { (partition, queue) =>
       if (!queue.isEmpty) f(partition, queue)
     }
 
@@ -144,6 +146,10 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
   private val transactionsWithPendingMarkers = new ConcurrentHashMap[String, PendingCompleteTxn]
 
   override val requestTimeoutMs: Int = config.requestTimeoutMs
+
+  val writeTxnMarkersRequestVersion: Short =
+    if (config.interBrokerProtocolVersion >= KAFKA_2_8_IV0) 1
+    else 0
 
   newGauge("UnknownDestinationQueueSize", () => markersQueueForUnknownBroker.totalNumMarkers)
   newGauge("LogAppendRetryQueueSize", () => txnLogAppendRetryQueue.size)
@@ -212,7 +218,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
     }.filter { case (_, entries) => !entries.isEmpty }.map { case (node, entries) =>
       val markersToSend = entries.asScala.map(_.txnMarkerEntry).asJava
       val requestCompletionHandler = new TransactionMarkerRequestCompletionHandler(node.id, txnStateManager, this, entries)
-      RequestAndCompletionHandler(node, new WriteTxnMarkersRequest.Builder(markersToSend), requestCompletionHandler)
+      RequestAndCompletionHandler(node, new WriteTxnMarkersRequest.Builder(writeTxnMarkersRequestVersion, markersToSend), requestCompletionHandler)
     }
   }
 

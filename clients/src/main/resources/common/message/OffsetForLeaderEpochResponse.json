@@ -18,25 +18,30 @@
   "type": "response",
   "name": "OffsetForLeaderEpochResponse",
   // Version 1 added the leader epoch to the response.
+  //
   // Version 2 added the throttle time.
-  "validVersions": "0-3",
-  "flexibleVersions": "none",
+  //
+  // Version 3 is the same as version 2.
+  //
+  // Version 4 enables flexible versions.
+  "validVersions": "0-4",
+  "flexibleVersions": "4+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "2+", "ignorable": true,
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
     { "name": "Topics", "type": "[]OffsetForLeaderTopicResult", "versions": "0+",
       "about": "Each topic we fetched offsets for.", "fields": [
-      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
-        "about": "The topic name." },
-      { "name": "Partitions", "type": "[]OffsetForLeaderPartitionResult", "versions": "0+",
+      { "name": "Topic", "type": "string", "versions": "0+", "entityType": "topicName",
+        "mapKey": true, "about": "The topic name." },
+      { "name": "Partitions", "type": "[]EpochEndOffset", "versions": "0+",
         "about": "Each partition in the topic we fetched offsets for.", "fields": [
         { "name": "ErrorCode", "type": "int16", "versions": "0+",
           "about": "The error code 0, or if there was no error." },
-        { "name": "PartitionIndex", "type": "int32", "versions": "0+",
+        { "name": "Partition", "type": "int32", "versions": "0+",
           "about": "The partition index." },
         { "name": "LeaderEpoch", "type": "int32", "versions": "1+", "default": "-1", "ignorable": true,
           "about": "The leader epoch of the partition." },
-        { "name": "EndOffset", "type": "int64", "versions": "0+",
+        { "name": "EndOffset", "type": "int64", "versions": "0+", "default": "-1",
           "about": "The end offset of the epoch." }
       ]}
     ]}

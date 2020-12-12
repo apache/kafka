@@ -585,7 +585,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
         }
         private def verifyHandlerThread(): Unit = {
           val threadName = Thread.currentThread.getName
-          assertTrue(s"Unexpected thread + $threadName", threadName.startsWith(zooKeeperClient.expiryScheduler.threadNamePrefix))
+          assertTrue(s"Unexpected thread + $threadName", threadName.startsWith(zooKeeperClient.reinitializeScheduler.threadNamePrefix))
         }
       })
 
@@ -625,7 +625,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
       zooKeeperClient.close()
       responseExecutor.shutdownNow()
     }
-    assertFalse("Expiry executor not shutdown", zooKeeperClient.expiryScheduler.isStarted)
+    assertFalse("Expiry executor not shutdown", zooKeeperClient.reinitializeScheduler.isStarted)
   }
 
   @Test
@@ -633,9 +633,9 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
     val semaphore = new Semaphore(0)
     val closeExecutor = Executors.newSingleThreadExecutor
     try {
-      zooKeeperClient.expiryScheduler.schedule("test", () => semaphore.acquireUninterruptibly(),
+      zooKeeperClient.reinitializeScheduler.schedule("test", () => semaphore.acquireUninterruptibly(),
         delay = 0, period = -1, TimeUnit.SECONDS)
-      zooKeeperClient.scheduleSessionExpiryHandler()
+      zooKeeperClient.scheduleReinitialize("session-expired", "Session expired.", delayMs = 0L)
       val closeFuture = closeExecutor.submit(new Runnable {
         override def run(): Unit = {
           zooKeeperClient.close()
@@ -645,10 +645,29 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
       assertTrue(zooKeeperClient.currentZooKeeper.getState.isAlive) // Client should be closed after expiry handler
       semaphore.release()
       closeFuture.get(10, TimeUnit.SECONDS)
-      assertFalse("Expiry executor not shutdown", zooKeeperClient.expiryScheduler.isStarted)
+      assertFalse("Expiry executor not shutdown", zooKeeperClient.reinitializeScheduler.isStarted)
     } finally {
       closeExecutor.shutdownNow()
     }
+  }
+
+  @Test
+  def testReinitializeAfterAuthFailure(): Unit = {
+    val sessionInitializedCountDownLatch = new CountDownLatch(1)
+    val changeHandler = new StateChangeHandler {
+      override val name = this.getClass.getName
+      override def beforeInitializingSession(): Unit = {
+        sessionInitializedCountDownLatch.countDown()
+      }
+    }
+
+    zooKeeperClient.close()
+    zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Int.MaxValue, time,
+      "testMetricGroup", "testMetricType")
+    zooKeeperClient.registerStateChangeHandler(changeHandler)
+
+    zooKeeperClient.ZooKeeperClientWatcher.process(new WatchedEvent(EventType.None, KeeperState.AuthFailed, null))
+    assertTrue("Failed to receive session initializing notification", sessionInitializedCountDownLatch.await(5, TimeUnit.SECONDS))
   }
 
   def isExpectedMetricName(metricName: MetricName, name: String): Boolean =

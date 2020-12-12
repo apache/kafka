@@ -288,17 +288,17 @@ public class ClientState {
             final Long endOffsetSum = taskEntry.getValue();
             final Long offsetSum = taskOffsetSums.getOrDefault(task, 0L);
 
-            if (endOffsetSum < offsetSum) {
+            if (offsetSum == Task.LATEST_OFFSET) {
+                taskLagTotals.put(task, Task.LATEST_OFFSET);
+            } else if (offsetSum == UNKNOWN_OFFSET_SUM) {
+                taskLagTotals.put(task, UNKNOWN_OFFSET_SUM);
+            } else if (endOffsetSum < offsetSum) {
                 LOG.warn("Task " + task + " had endOffsetSum=" + endOffsetSum + " smaller than offsetSum=" +
                              offsetSum + " on member " + uuid + ". This probably means the task is corrupted," +
                              " which in turn indicates that it will need to restore from scratch if it gets assigned." +
                              " The assignor will de-prioritize returning this task to this member in the hopes that" +
                              " some other member may be able to re-use its state.");
                 taskLagTotals.put(task, endOffsetSum);
-            } else if (offsetSum == Task.LATEST_OFFSET) {
-                taskLagTotals.put(task, Task.LATEST_OFFSET);
-            } else if (offsetSum == UNKNOWN_OFFSET_SUM) {
-                taskLagTotals.put(task, UNKNOWN_OFFSET_SUM);
             } else {
                 taskLagTotals.put(task, endOffsetSum - offsetSum);
             }

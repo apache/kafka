@@ -20,7 +20,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.StoreBuilder;
 
-public class StateStoreNode<S extends StateStore> extends StreamsGraphNode {
+public class StateStoreNode<S extends StateStore> extends GraphNode {
 
     protected final StoreBuilder<S> storeBuilder;
 
