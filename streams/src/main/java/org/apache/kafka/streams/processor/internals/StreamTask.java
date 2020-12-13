@@ -1116,7 +1116,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return partitionGroup.streamTime();
     }
 
-    public long currentStreamTimeMs() {
+    public long currentSystemTimeMs() {
         return time.milliseconds(); 
     }
 

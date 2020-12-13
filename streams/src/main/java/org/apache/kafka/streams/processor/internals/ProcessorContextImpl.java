@@ -339,7 +339,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
     @Override
     public long currentSystemTimeMs() {
-        return streamTask.currentStreamTimeMs();
+        return streamTask.currentSystemTimeMs();
     }
 
     @Override
