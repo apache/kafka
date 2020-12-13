@@ -160,4 +160,14 @@ public final class StoreToProcessorContextAdapter implements ProcessorContext {
     public Map<String, Object> appConfigsWithPrefix(final String prefix) {
         return delegate.appConfigsWithPrefix(prefix);
     }
+
+    @Override
+    public long currentSystemTimeMs() {
+        throw new UnsupportedOperationException("this method is not supported in StoreToProcessorContextAdapter");
+    }
+
+    @Override
+    public long currentStreamTimeMs() {
+        throw new UnsupportedOperationException("this method is not supported in StoreToProcessorContextAdapter");
+    }
 }
