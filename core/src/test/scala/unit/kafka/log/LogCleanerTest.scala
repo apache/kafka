@@ -599,12 +599,12 @@ class LogCleanerTest {
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     val appendFirstTransaction = appendTransactionalAsLeader(log, producerId, producerEpoch,
-      origin = AppendOrigin.Replication)
+      origin = AppendOrigin.Coordinator)
     appendFirstTransaction(Seq(1))
     log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Coordinator)
 
     val appendSecondTransaction = appendTransactionalAsLeader(log, producerId, producerEpoch,
-      origin = AppendOrigin.Replication)
+      origin = AppendOrigin.Coordinator)
     appendSecondTransaction(Seq(2))
     log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Coordinator)
 
