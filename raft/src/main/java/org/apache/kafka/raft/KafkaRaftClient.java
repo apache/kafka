@@ -1477,6 +1477,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     ) {
         try {
             int epoch = state.epoch();
+            batch.data.batches().forEach(recordBatch -> recordBatch.setPartitionLeaderEpoch(epoch));
             LogAppendInfo info = appendAsLeader(batch.data);
             OffsetAndEpoch offsetAndEpoch = new OffsetAndEpoch(info.lastOffset, epoch);
             CompletableFuture<Long> future = appendPurgatory.await(

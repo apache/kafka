@@ -1050,7 +1050,8 @@ class Log(@volatile private var _dir: File,
                      leaderEpoch: Int,
                      origin: AppendOrigin = AppendOrigin.Client,
                      interBrokerProtocolVersion: ApiVersion = ApiVersion.latestVersion): LogAppendInfo = {
-    append(records, origin, interBrokerProtocolVersion, assignOffsets = true, leaderEpoch, ignoreRecordSize = false)
+    val assignOffsets = if (origin == AppendOrigin.Replication) false else true
+    append(records, origin, interBrokerProtocolVersion, assignOffsets, leaderEpoch, ignoreRecordSize = false)
   }
 
   /**

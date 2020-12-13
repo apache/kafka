@@ -68,7 +68,7 @@ class KafkaMetadataLog(
 
     val appendInfo = log.appendAsLeader(records.asInstanceOf[MemoryRecords],
       leaderEpoch = epoch,
-      origin = AppendOrigin.Coordinator)
+      origin = AppendOrigin.Replication)
     new LogAppendInfo(appendInfo.firstOffset.getOrElse {
       throw new KafkaException("Append failed unexpectedly")
     }, appendInfo.lastOffset)
