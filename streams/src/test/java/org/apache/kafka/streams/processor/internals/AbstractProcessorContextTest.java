@@ -179,6 +179,10 @@ public class AbstractProcessorContextTest {
             equalTo("user-supplied-value"));
     }
 
+    @Test(expected = UnsupportedOperationException.class)
+    public void shouldThrowOnCurrentStreamTime() {
+        context.currentStreamTimeMs();
+    }
 
     private static class TestProcessorContext extends AbstractProcessorContext {
         static Properties config;

@@ -2097,6 +2097,12 @@ public class StreamTaskTest {
         task.maybeInitTaskTimeoutOrThrow(Duration.ofMinutes(5).plus(Duration.ofMillis(1L)).toMillis(), null);
     }
 
+    @Test
+    public void shouldMatchSystemTime() {
+        task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
+        assertEquals(time.milliseconds(), task.currentSystemTimeMs());
+    }
+
     private List<MetricName> getTaskMetrics() {
         return metrics.metrics().keySet().stream().filter(m -> m.tags().containsKey("task-id")).collect(Collectors.toList());
     }

@@ -16,9 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
 import org.easymock.MockType;
@@ -27,36 +26,14 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 @RunWith(EasyMockRunner.class)
-public class ForwardingDisabledProcessorContextTest {
+public class StoreToProcessorContextAdapterTest {
     @Mock(MockType.NICE)
-    private ProcessorContext delegate;
-    private ForwardingDisabledProcessorContext context;
+    private StateStoreContext delegate;
+    private ProcessorContext context;
 
     @Before
     public void setUp() {
-        context = new ForwardingDisabledProcessorContext(delegate);
-    }
-
-    @Test(expected = StreamsException.class)
-    public void shouldThrowOnForward() {
-        context.forward("key", "value");
-    }
-
-    @Test(expected = StreamsException.class)
-    public void shouldThrowOnForwardWithTo() {
-        context.forward("key", "value", To.all());
-    }
-
-    @SuppressWarnings("deprecation") // need to test deprecated code until removed
-    @Test(expected = StreamsException.class)
-    public void shouldThrowOnForwardWithChildIndex() {
-        context.forward("key", "value", 1);
-    }
-
-    @SuppressWarnings("deprecation") // need to test deprecated code until removed
-    @Test(expected = StreamsException.class)
-    public void shouldThrowOnForwardWithChildName() {
-        context.forward("key", "value", "child1");
+        context = StoreToProcessorContextAdapter.adapt(delegate);
     }
 
     @Test(expected = UnsupportedOperationException.class)
