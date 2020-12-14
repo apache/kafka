@@ -26,6 +26,11 @@ import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.record.UnalignedRecords;
+import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.SimpleRecord;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.ByteBufferChannel;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.Exit;
@@ -457,6 +462,36 @@ public class TestUtils {
 
     public static ByteBuffer toBuffer(UnalignedRecords records) {
         return toBuffer(records.toSend());
+    }
+
+    public static String getString(ByteBuffer buffer, int size) {
+        byte[] readData = new byte[size];
+        buffer.get(readData);
+        return Utils.utf8(readData);
+    }
+
+    public static MemoryRecords getRecords(ByteBuffer buffer, int size) {
+        int initialPosition = buffer.position();
+        int initialLimit = buffer.limit();
+        int recordsLimit = initialPosition + size;
+
+        buffer.limit(recordsLimit);
+        MemoryRecords records = MemoryRecords.readableRecords(buffer.slice());
+
+        buffer.position(recordsLimit);
+        buffer.limit(initialLimit);
+        return records;
+    }
+
+    public static MemoryRecords createRecords(ByteBuffer buffer, String value) {
+        MemoryRecordsBuilder recordsBuilder = MemoryRecords.builder(
+                buffer,
+                CompressionType.NONE,
+                TimestampType.CREATE_TIME,
+                0L
+        );
+        recordsBuilder.append(new SimpleRecord(Utils.utf8(value)));
+        return recordsBuilder.build();
     }
 
     public static Set<TopicPartition> generateRandomTopicPartitions(int numTopic, int numPartitionPerTopic) {

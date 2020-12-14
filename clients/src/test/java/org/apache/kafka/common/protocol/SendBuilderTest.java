@@ -54,7 +54,7 @@ public class SendBuilderTest {
         ByteBuffer buffer = TestUtils.toBuffer(send);
         assertEquals(8 + data.length, buffer.remaining());
         assertEquals(5, buffer.getInt());
-        assertEquals("bar", getString(buffer, data.length));
+        assertEquals("bar", TestUtils.getString(buffer, data.length));
         assertEquals(15, buffer.getInt());
     }
 
@@ -77,13 +77,13 @@ public class SendBuilderTest {
 
         Send send = builder.build();
         ByteBuffer readBuffer = TestUtils.toBuffer(send);
-        assertEquals("yolo", getString(readBuffer, 4));
+        assertEquals("yolo", TestUtils.getString(readBuffer, 4));
     }
 
     @Test
     public void testZeroCopyRecords() {
         ByteBuffer buffer = ByteBuffer.allocate(128);
-        MemoryRecords records = createRecords(buffer, "foo");
+        MemoryRecords records = TestUtils.createRecords(buffer, "foo");
 
         SendBuilder builder = new SendBuilder(8);
         builder.writeInt(5);
@@ -93,11 +93,11 @@ public class SendBuilderTest {
 
         // Overwrite the original buffer in order to prove the data was not copied
         buffer.rewind();
-        MemoryRecords overwrittenRecords = createRecords(buffer, "bar");
+        MemoryRecords overwrittenRecords = TestUtils.createRecords(buffer, "bar");
 
         ByteBuffer readBuffer = TestUtils.toBuffer(send);
         assertEquals(5, readBuffer.getInt());
-        assertEquals(overwrittenRecords, getRecords(readBuffer, records.sizeInBytes()));
+        assertEquals(overwrittenRecords, TestUtils.getRecords(readBuffer, records.sizeInBytes()));
         assertEquals(15, readBuffer.getInt());
     }
 
