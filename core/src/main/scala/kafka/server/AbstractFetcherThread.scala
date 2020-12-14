@@ -32,6 +32,7 @@ import kafka.utils.CoreUtils.inLock
 import org.apache.kafka.common.protocol.Errors
 
 import scala.collection.{Map, Set, mutable}
+import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
@@ -272,10 +273,8 @@ abstract class AbstractFetcherThread(name: String,
             fetchOffsets.put(tp, offsetTruncationState)
 
         case Errors.FENCED_LEADER_EPOCH =>
-          val currentLeaderEpoch = latestEpochsForPartitions.get(tp) match {
-            case Some(p) => RequestUtils.getLeaderEpoch(p.currentLeaderEpoch)
-            case None => Optional.empty[Integer]()
-          }
+          val currentLeaderEpoch = latestEpochsForPartitions.get(tp)
+            .map(epochEndOffset => Int.box(epochEndOffset.currentLeaderEpoch)).asJava
           if (onPartitionFenced(tp, currentLeaderEpoch))
             partitionsWithError += tp
 
