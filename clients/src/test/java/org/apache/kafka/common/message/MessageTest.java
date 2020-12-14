@@ -54,8 +54,6 @@ import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
-import org.apache.kafka.common.utils.Utils;
-import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
@@ -879,52 +877,6 @@ public final class MessageTest {
         }
     }
 
-    /**
-     * Test that the JSON request files match the schemas accessible through the ApiKey class.
-     */
-    @Test
-    public void testRequestSchemas() {
-        for (ApiKeys apiKey : ApiKeys.values()) {
-            Schema[] manualSchemas = apiKey.requestSchemas;
-            Schema[] generatedSchemas = ApiMessageType.fromApiKey(apiKey.id).requestSchemas();
-            Assert.assertEquals("Mismatching request SCHEMAS lengths " +
-                "for api key " + apiKey, manualSchemas.length, generatedSchemas.length);
-            for (int v = 0; v < manualSchemas.length; v++) {
-                try {
-                    if (generatedSchemas[v] != null) {
-                        compareTypes(manualSchemas[v], generatedSchemas[v]);
-                    }
-                } catch (Exception e) {
-                    throw new RuntimeException("Failed to compare request schemas " +
-                        "for version " + v + " of " + apiKey, e);
-                }
-            }
-        }
-    }
-
-    /**
-     * Test that the JSON response files match the schemas accessible through the ApiKey class.
-     */
-    @Test
-    public void testResponseSchemas() {
-        for (ApiKeys apiKey : ApiKeys.values()) {
-            Schema[] manualSchemas = apiKey.responseSchemas;
-            Schema[] generatedSchemas = ApiMessageType.fromApiKey(apiKey.id).responseSchemas();
-            Assert.assertEquals("Mismatching response SCHEMAS lengths " +
-                "for api key " + apiKey, manualSchemas.length, generatedSchemas.length);
-            for (int v = 0; v < manualSchemas.length; v++) {
-                try {
-                    if (generatedSchemas[v] != null) {
-                        compareTypes(manualSchemas[v], generatedSchemas[v]);
-                    }
-                } catch (Exception e) {
-                    throw new RuntimeException("Failed to compare response schemas " +
-                        "for version " + v + " of " + apiKey, e);
-                }
-            }
-        }
-    }
-
     private static class NamedType {
         final String name;
         final Type type;
@@ -949,40 +901,6 @@ public final class MessageTest {
         @Override
         public String toString() {
             return name + "[" + type + "]";
-        }
-    }
-
-    private static void compareTypes(Schema schemaA, Schema schemaB) {
-        compareTypes(new NamedType("schemaA", schemaA),
-                     new NamedType("schemaB", schemaB));
-    }
-
-    private static void compareTypes(NamedType typeA, NamedType typeB) {
-        List<NamedType> listA = flatten(typeA);
-        List<NamedType> listB = flatten(typeB);
-        if (listA.size() != listB.size()) {
-            throw new RuntimeException("Can't match up structures: typeA has " +
-                Utils.join(listA, ", ") + ", but typeB has " +
-                Utils.join(listB, ", "));
-        }
-        for (int i = 0; i < listA.size(); i++) {
-            NamedType entryA = listA.get(i);
-            NamedType entryB = listB.get(i);
-            if (!entryA.hasSimilarType(entryB)) {
-                throw new RuntimeException("Type " + entryA + " in schema A " +
-                    "does not match type " + entryB + " in schema B.");
-            }
-            if (entryA.type.isNullable() != entryB.type.isNullable()) {
-                throw new RuntimeException(String.format(
-                    "Type %s in Schema A is %s, but type %s in " +
-                        "Schema B is %s",
-                    entryA, entryA.type.isNullable() ? "nullable" : "non-nullable",
-                    entryB, entryB.type.isNullable() ? "nullable" : "non-nullable"));
-            }
-            if (entryA.type.isArray()) {
-                compareTypes(new NamedType(entryA.name, entryA.type.arrayElementType().get()),
-                             new NamedType(entryB.name, entryB.type.arrayElementType().get()));
-            }
         }
     }
 

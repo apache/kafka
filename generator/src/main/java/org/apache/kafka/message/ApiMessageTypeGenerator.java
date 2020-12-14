@@ -169,7 +169,7 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
     }
 
     private void generateInstanceVariables() {
-        buffer.printf("private final String name;%n");
+        buffer.printf("public final String name;%n");
         buffer.printf("private final short apiKey;%n");
         buffer.printf("private final Schema[] requestSchemas;%n");
         buffer.printf("private final Schema[] responseSchemas;%n");
