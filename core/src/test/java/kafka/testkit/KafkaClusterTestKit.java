@@ -17,13 +17,17 @@
 
 package kafka.testkit;
 
+import kafka.raft.RaftManager;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaConfig$;
 import kafka.server.Kip500Controller;
 import kafka.server.MetaProperties;
 import kafka.tools.StorageTool;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
@@ -154,7 +158,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         properties,
                         config,
                         metaLogManager,
-                        OptionConverters.toScala(Optional.empty()),
+                        new MockRaftManager(),
                         time,
                         new Metrics(),
                         OptionConverters.toScala(Optional.of(threadNamePrefix)),
@@ -185,6 +189,16 @@ public class KafkaClusterTestKit implements AutoCloseable {
             }
             return new KafkaClusterTestKit(executorService, nodes, controllers,
                 connectFutureManager, baseDirectory);
+        }
+    }
+
+    static class MockRaftManager implements RaftManager {
+        @Override
+        public CompletableFuture<ApiMessage> handleRequest(RequestHeader header, ApiMessage data) {
+            CompletableFuture<ApiMessage> future = new CompletableFuture<>();
+            future.completeExceptionally(
+                new UnsupportedVersionException("API " + header.apiKey() + " is not available"));
+            return future;
         }
     }
 

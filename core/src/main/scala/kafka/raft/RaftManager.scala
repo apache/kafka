@@ -22,7 +22,7 @@ import java.util.Random
 import java.util.concurrent.CompletableFuture
 
 import kafka.log.{Log, LogConfig, LogManager}
-import kafka.raft.RaftManager.RaftIoThread
+import kafka.raft.KafkaRaftManager.RaftIoThread
 import kafka.server.KafkaServer.ControllerRole
 import kafka.server.{BrokerTopicStats, KafkaBroker, KafkaConfig, LogDirFailureChannel, MetaProperties}
 import kafka.utils.timer.SystemTimer
@@ -41,7 +41,7 @@ import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, QuorumState,
 
 import scala.jdk.CollectionConverters._
 
-object RaftManager {
+object KafkaRaftManager {
   class RaftIoThread(
     client: KafkaRaftClient[_]
   ) extends ShutdownableThread(
@@ -80,13 +80,18 @@ object RaftManager {
   }
 }
 
-class RaftManager(
+trait RaftManager {
+  def handleRequest(header: RequestHeader,
+                    data: ApiMessage): CompletableFuture[ApiMessage]
+}
+
+class KafkaRaftManager(
   metaProperties: MetaProperties,
   metadataPartition: TopicPartition,
   config: KafkaConfig,
   time: Time,
   metrics: Metrics
-) extends Logging {
+) extends RaftManager with Logging {
 
   private val raftConfig = new RaftConfig(config.originals)
   private val nodeId = if (config.processRoles.contains(ControllerRole)) {
@@ -140,7 +145,7 @@ class RaftManager(
     metaLogShim.register(listener)
   }
 
-  def handleRequest(
+  override def handleRequest(
     header: RequestHeader,
     request: ApiMessage
   ): CompletableFuture[ApiMessage] = {
@@ -201,7 +206,7 @@ class RaftManager(
   private def createDataDir(): File = {
     val baseLogDir = config.metadataLogDir
     val logDirName = Log.logDirName(metadataPartition)
-    RaftManager.createLogDirectory(new File(baseLogDir), logDirName)
+    KafkaRaftManager.createLogDirectory(new File(baseLogDir), logDirName)
   }
 
   private def buildMetadataLog(): KafkaMetadataLog = {

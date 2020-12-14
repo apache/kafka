@@ -45,6 +45,7 @@
 
   <subpackage name="testkit">
     <allow pkg="kafka.metrics"/>
+    <allow pkg="kafka.raft"/>
     <allow pkg="kafka.server"/>
     <allow pkg="kafka.tools"/>
     <allow pkg="org.apache.kafka.test"/>

@@ -23,7 +23,7 @@ import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.acl.AclOperation.{CLUSTER_ACTION, DESCRIBE}
-import org.apache.kafka.common.errors.{ApiException, UnsupportedVersionException}
+import org.apache.kafka.common.errors.ApiException
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.message.ApiVersionsResponseData.{ApiVersionsResponseKey, FinalizedFeatureKey, SupportedFeatureKey}
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseBroker
@@ -55,7 +55,7 @@ class ControllerApis(val requestChannel: RequestChannel,
                      val time: Time,
                      val supportedFeatures: Map[String, VersionRange],
                      val controller: Controller,
-                     val raftManager: Option[RaftManager],
+                     val raftManager: RaftManager,
                      val config: KafkaConfig,
                      val metaProperties: MetaProperties,
                      val controllerNodes: Seq[Node]) extends ApiRequestHandler with Logging {
@@ -63,6 +63,7 @@ class ControllerApis(val requestChannel: RequestChannel,
   val apisUtils = new ApisUtils(requestChannel, authorizer, quotas, time)
 
   var supportedApiKeys = Set(
+    ApiKeys.FETCH,
     ApiKeys.METADATA,
     //ApiKeys.SASL_HANDSHAKE
     ApiKeys.API_VERSIONS,
@@ -88,35 +89,28 @@ class ControllerApis(val requestChannel: RequestChannel,
     //ApiKeys.DESCRIBE_USER_SCRAM_CREDENTIALS
     //ApiKeys.ALTER_USER_SCRAM_CREDENTIALS
     //ApiKeys.UPDATE_FEATURES
+    ApiKeys.VOTE,
+    ApiKeys.BEGIN_QUORUM_EPOCH,
+    ApiKeys.END_QUORUM_EPOCH,
+    ApiKeys.DESCRIBE_QUORUM,
     ApiKeys.ALTER_ISR,
     ApiKeys.BROKER_REGISTRATION,
-    ApiKeys.BROKER_HEARTBEAT
+    ApiKeys.BROKER_HEARTBEAT,
   )
-
-  if (raftManager.isDefined) {
-    supportedApiKeys ++= Set(
-      ApiKeys.FETCH,
-      ApiKeys.VOTE,
-      ApiKeys.BEGIN_QUORUM_EPOCH,
-      ApiKeys.END_QUORUM_EPOCH,
-      ApiKeys.DESCRIBE_QUORUM,
-    )
-  }
 
   override def handle(request: RequestChannel.Request): Unit = {
     try {
       request.header.apiKey match {
         case ApiKeys.FETCH => handleFetch(request)
-        case ApiKeys.BEGIN_QUORUM_EPOCH => handleBeginQuorumEpoch(request)
-        case ApiKeys.END_QUORUM_EPOCH => handleEndQuorumEpoch(request)
-        case ApiKeys.VOTE => handleVote(request)
-        case ApiKeys.DESCRIBE_QUORUM => handleDescribeQuorum(request)
         case ApiKeys.METADATA => handleMetadataRequest(request)
         case ApiKeys.API_VERSIONS => handleApiVersionsRequest(request)
+        case ApiKeys.VOTE => handleVote(request)
+        case ApiKeys.BEGIN_QUORUM_EPOCH => handleBeginQuorumEpoch(request)
+        case ApiKeys.END_QUORUM_EPOCH => handleEndQuorumEpoch(request)
+        case ApiKeys.DESCRIBE_QUORUM => handleDescribeQuorum(request)
         case ApiKeys.ALTER_ISR => handleAlterIsrRequest(request)
         case ApiKeys.BROKER_HEARTBEAT => handleBrokerHeartBeatRequest(request)
         case ApiKeys.BROKER_REGISTRATION => handleBrokerRegistration(request)
-          // TODO other APIs
         case _ => throw new ApiException(s"Unsupported ApiKey ${request.context.header.apiKey()}")
       }
     } catch {
@@ -125,50 +119,44 @@ class ControllerApis(val requestChannel: RequestChannel,
     }
   }
 
-  private def handleVote(request: RequestChannel.Request): Unit = {
-    apisUtils.authorizeClusterOperation(request, CLUSTER_ACTION)
-    handleRaftRequest(request, response => new VoteResponse(response.asInstanceOf[VoteResponseData]))
-  }
-
-  private def handleBeginQuorumEpoch(request: RequestChannel.Request): Unit = {
-    apisUtils.authorizeClusterOperation(request, CLUSTER_ACTION)
-    handleRaftRequest(request, response => new BeginQuorumEpochResponse(response.asInstanceOf[BeginQuorumEpochResponseData]))
-  }
-
-  private def handleEndQuorumEpoch(request: RequestChannel.Request): Unit = {
-    apisUtils.authorizeClusterOperation(request, CLUSTER_ACTION)
-    handleRaftRequest(request, response => new EndQuorumEpochResponse(response.asInstanceOf[EndQuorumEpochResponseData]))
-  }
-
   private def handleFetch(request: RequestChannel.Request): Unit = {
     apisUtils.authorizeClusterOperation(request, CLUSTER_ACTION)
     handleRaftRequest(request, response => new FetchResponse[BaseRecords](response.asInstanceOf[FetchResponseData]))
   }
 
-  private def handleDescribeQuorum(request: RequestChannel.Request): Unit = {
-    apisUtils.authorizeClusterOperation(request, DESCRIBE)
-    handleRaftRequest(request, response => new DescribeQuorumResponse(response.asInstanceOf[DescribeQuorumResponseData]))
-  }
-
-  private def handleRaftRequest(
-    request: RequestChannel.Request,
-    buildResponse: ApiMessage => AbstractResponse
-  ): Unit = {
-    val raftManager = this.raftManager.getOrElse(
-      throw new UnsupportedVersionException(s"Api ${request.header.apiKey} is not available")
-    )
-
-    val requestBody = request.body[AbstractRequest]
-    val future = raftManager.handleRequest(request.header, requestBody.data)
-
-    future.whenComplete((responseData, exception) => {
-      val response = if (exception != null) {
-        requestBody.getErrorResponse(exception)
-      } else {
-        buildResponse(responseData)
+  def handleMetadataRequest(request: RequestChannel.Request): Unit = {
+    val metadataRequest = request.body[MetadataRequest]
+    def createResponseCallback(requestThrottleMs: Int): MetadataResponse = {
+      val metadataResponseData = new MetadataResponseData()
+      metadataResponseData.setThrottleTimeMs(requestThrottleMs)
+      controllerNodes.foreach { node =>
+        metadataResponseData.brokers().add(new MetadataResponseBroker()
+          .setHost(node.host)
+          .setNodeId(node.id)
+          .setPort(node.port)
+          .setRack(node.rack))
       }
-      apisUtils.sendResponseExemptThrottle(request, response)
-    })
+      metadataResponseData.setClusterId(metaProperties.clusterId.toString)
+      if (controller.curClaimEpoch() > 0) {
+        metadataResponseData.setControllerId(config.controllerId)
+      } else {
+        metadataResponseData.setControllerId(MetadataResponse.NO_CONTROLLER_ID)
+      }
+      val clusterAuthorizedOperations = if (metadataRequest.data.includeClusterAuthorizedOperations) {
+        if (apisUtils.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME)) {
+          apisUtils.authorizedOperations(request, Resource.CLUSTER)
+        } else {
+          0
+        }
+      } else {
+        Int.MinValue
+      }
+      // TODO: fill in information about the metadata topic
+      metadataResponseData.setClusterAuthorizedOperations(clusterAuthorizedOperations)
+      new MetadataResponse(metadataResponseData, request.header.apiVersion)
+    }
+    apisUtils.sendResponseMaybeThrottle(request,
+      requestThrottleMs => createResponseCallback(requestThrottleMs))
   }
 
   def handleApiVersionsRequest(request: RequestChannel.Request): Unit = {
@@ -218,39 +206,24 @@ class ControllerApis(val requestChannel: RequestChannel,
     }
   }
 
-  def handleMetadataRequest(request: RequestChannel.Request): Unit = {
-    val metadataRequest = request.body[MetadataRequest]
-    def createResponseCallback(requestThrottleMs: Int): MetadataResponse = {
-      val metadataResponseData = new MetadataResponseData()
-      metadataResponseData.setThrottleTimeMs(requestThrottleMs)
-      controllerNodes.foreach { node =>
-        metadataResponseData.brokers().add(new MetadataResponseBroker()
-          .setHost(node.host)
-          .setNodeId(node.id)
-          .setPort(node.port)
-          .setRack(node.rack))
-      }
-      metadataResponseData.setClusterId(metaProperties.clusterId.toString)
-      if (controller.curClaimEpoch() > 0) {
-        metadataResponseData.setControllerId(config.controllerId)
-      } else {
-        metadataResponseData.setControllerId(MetadataResponse.NO_CONTROLLER_ID)
-      }
-      val clusterAuthorizedOperations = if (metadataRequest.data.includeClusterAuthorizedOperations) {
-        if (apisUtils.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME)) {
-          apisUtils.authorizedOperations(request, Resource.CLUSTER)
-        } else {
-          0
-        }
-      } else {
-        Int.MinValue
-      }
-      // TODO: fill in information about the metadata topic
-      metadataResponseData.setClusterAuthorizedOperations(clusterAuthorizedOperations)
-      new MetadataResponse(metadataResponseData, request.header.apiVersion)
-    }
-    apisUtils.sendResponseMaybeThrottle(request,
-      requestThrottleMs => createResponseCallback(requestThrottleMs))
+  private def handleVote(request: RequestChannel.Request): Unit = {
+    apisUtils.authorizeClusterOperation(request, CLUSTER_ACTION)
+    handleRaftRequest(request, response => new VoteResponse(response.asInstanceOf[VoteResponseData]))
+  }
+
+  private def handleBeginQuorumEpoch(request: RequestChannel.Request): Unit = {
+    apisUtils.authorizeClusterOperation(request, CLUSTER_ACTION)
+    handleRaftRequest(request, response => new BeginQuorumEpochResponse(response.asInstanceOf[BeginQuorumEpochResponseData]))
+  }
+
+  private def handleEndQuorumEpoch(request: RequestChannel.Request): Unit = {
+    apisUtils.authorizeClusterOperation(request, CLUSTER_ACTION)
+    handleRaftRequest(request, response => new EndQuorumEpochResponse(response.asInstanceOf[EndQuorumEpochResponseData]))
+  }
+
+  private def handleDescribeQuorum(request: RequestChannel.Request): Unit = {
+    apisUtils.authorizeClusterOperation(request, DESCRIBE)
+    handleRaftRequest(request, response => new DescribeQuorumResponse(response.asInstanceOf[DescribeQuorumResponseData]))
   }
 
   def handleAlterIsrRequest(request: RequestChannel.Request): Unit = {
@@ -274,6 +247,31 @@ class ControllerApis(val requestChannel: RequestChannel,
         alterIsrRequest.data().brokerEpoch(),
         isrsToAlter.asJava)
     }
+  }
+
+  def handleBrokerHeartBeatRequest(request: RequestChannel.Request): Unit = {
+    val heartbeatRequest = request.body[BrokerHeartbeatRequest]
+    apisUtils.authorizeClusterOperation(request, CLUSTER_ACTION)
+
+    controller.processBrokerHeartbeat(heartbeatRequest.data).handle[Unit]((reply, e) => {
+      def createResponseCallback(requestThrottleMs: Int,
+                                 reply: HeartbeatReply,
+                                 e: Throwable): BrokerHeartbeatResponse = {
+        if (e != null) {
+          new BrokerHeartbeatResponse(new BrokerHeartbeatResponseData().
+            setThrottleTimeMs(requestThrottleMs).
+            setErrorCode(Errors.forException(e).code()))
+        } else {
+          new BrokerHeartbeatResponse(new BrokerHeartbeatResponseData().
+            setThrottleTimeMs(requestThrottleMs).
+            setErrorCode(Errors.NONE.code()).
+            setIsCaughtUp(reply.isCaughtUp).
+            setIsFenced(reply.isFenced))
+        }
+      }
+      apisUtils.sendResponseMaybeThrottle(request,
+        requestThrottleMs => createResponseCallback(requestThrottleMs, reply, e))
+    })
   }
 
   def handleBrokerRegistration(request: RequestChannel.Request): Unit = {
@@ -300,28 +298,18 @@ class ControllerApis(val requestChannel: RequestChannel,
     })
   }
 
-  def handleBrokerHeartBeatRequest(request: RequestChannel.Request): Unit = {
-    val heartbeatRequest = request.body[BrokerHeartbeatRequest]
-    apisUtils.authorizeClusterOperation(request, CLUSTER_ACTION)
+  private def handleRaftRequest(request: RequestChannel.Request,
+                                buildResponse: ApiMessage => AbstractResponse): Unit = {
+    val requestBody = request.body[AbstractRequest]
+    val future = raftManager.handleRequest(request.header, requestBody.data)
 
-    controller.processBrokerHeartbeat(heartbeatRequest.data).handle[Unit]((reply, e) => {
-      def createResponseCallback(requestThrottleMs: Int,
-                                 reply: HeartbeatReply,
-                                 e: Throwable): BrokerHeartbeatResponse = {
-        if (e != null) {
-          new BrokerHeartbeatResponse(new BrokerHeartbeatResponseData().
-            setThrottleTimeMs(requestThrottleMs).
-            setErrorCode(Errors.forException(e).code()))
-        } else {
-          new BrokerHeartbeatResponse(new BrokerHeartbeatResponseData().
-            setThrottleTimeMs(requestThrottleMs).
-            setErrorCode(Errors.NONE.code()).
-            setIsCaughtUp(reply.isCaughtUp).
-            setIsFenced(reply.isFenced))
-        }
+    future.whenComplete((responseData, exception) => {
+      val response = if (exception != null) {
+        requestBody.getErrorResponse(exception)
+      } else {
+        buildResponse(responseData)
       }
-      apisUtils.sendResponseMaybeThrottle(request,
-        requestThrottleMs => createResponseCallback(requestThrottleMs, reply, e))
+      apisUtils.sendResponseExemptThrottle(request, response)
     })
   }
 }

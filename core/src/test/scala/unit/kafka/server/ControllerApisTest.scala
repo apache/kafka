@@ -73,7 +73,7 @@ class ControllerApisTest {
       time,
       supportedFeatures,
       controller,
-      Some(raftManager),
+      raftManager,
       new KafkaConfig(new Properties()),
 
       // FIXME: Would make more sense to set controllerId here

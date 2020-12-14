@@ -21,7 +21,7 @@ import java.util
 import java.util.concurrent.CompletableFuture
 
 import kafka.metrics.{KafkaMetricsReporter, KafkaYammerMetrics}
-import kafka.raft.RaftManager
+import kafka.raft.KafkaRaftManager
 import kafka.server.KafkaServer.{BrokerRole, ControllerRole}
 import kafka.utils.{Logging, Mx4jLoader}
 import org.apache.kafka.common.TopicPartition
@@ -108,7 +108,7 @@ class Kip500Server(
     kafkaMetricsReporters ++ metrics.reporters.asScala)
 
   private val metadataPartition = new TopicPartition("__cluster_metadata", 0)
-  private val raftManager = new RaftManager(metaProps, metadataPartition, config, time, metrics)
+  private val raftManager = new KafkaRaftManager(metaProps, metadataPartition, config, time, metrics)
 
   val broker: Option[Kip500Broker] = if (roles.contains(BrokerRole)) {
     Some(new Kip500Broker(
@@ -129,7 +129,7 @@ class Kip500Server(
       metaProps,
       config,
       raftManager.metaLogManager,
-      Some(raftManager),
+      raftManager,
       time,
       metrics,
       threadNamePrefix,

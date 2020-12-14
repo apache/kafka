@@ -53,7 +53,7 @@ class Kip500Controller(
   val metaProperties: MetaProperties,
   val config: KafkaConfig,
   val metaLogManager: MetaLogManager,
-  val raftManager: Option[RaftManager],
+  val raftManager: RaftManager,
   val time: Time,
   val metrics: Metrics,
   val threadNamePrefix: Option[String],
