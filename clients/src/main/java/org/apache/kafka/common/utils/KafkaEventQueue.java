@@ -34,10 +34,8 @@ import java.util.function.Supplier;
 public final class KafkaEventQueue implements EventQueue {
     /**
      * A context object that wraps events.
-     *
-     * @param <T>       The type parameter of the wrapped event.
      */
-    private static class EventContext<T> {
+    private static class EventContext {
         /**
          * The caller-supplied event.
          */
@@ -78,7 +76,6 @@ public final class KafkaEventQueue implements EventQueue {
         /**
          * Insert a new node in the circularly linked list after this node.
          */
-        @SuppressWarnings("unchecked")
         void insertAfter(EventContext other) {
             this.next.prev = other;
             other.next = this.next;
@@ -89,7 +86,6 @@ public final class KafkaEventQueue implements EventQueue {
         /**
          * Insert a new node in the circularly linked list before this node.
          */
-        @SuppressWarnings("unchecked")
         void insertBefore(EventContext other) {
             this.prev.next = other;
             other.prev = this.prev;
@@ -367,7 +363,7 @@ public final class KafkaEventQueue implements EventQueue {
                         Event event) {
         lock.lock();
         try {
-            EventContext eventContext = new EventContext<>(event, insertionType, tag);
+            EventContext eventContext = new EventContext(event, insertionType, tag);
             if (closingTimeNs != Long.MAX_VALUE) {
                 eventContext.completeWithException(closedExceptionSupplier.get());
             } else {

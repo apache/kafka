@@ -18,13 +18,15 @@
 package kafka.tools
 
 import kafka.network.RequestChannel
-import kafka.raft.KafkaNetworkChannel
 import kafka.server.ApiRequestHandler
 import kafka.utils.Logging
 import org.apache.kafka.common.internals.FatalExitError
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse}
+import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, EndQuorumEpochResponseData, FetchResponseData, VoteResponseData}
+import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
+import org.apache.kafka.common.record.BaseRecords
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, BeginQuorumEpochResponse, EndQuorumEpochResponse, FetchResponse, VoteResponse}
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.raft.{KafkaRaftClient, RaftRequest}
 
 import scala.jdk.CollectionConverters._
 
@@ -32,7 +34,7 @@ import scala.jdk.CollectionConverters._
  * Simple request handler implementation for use by [[TestRaftServer]].
  */
 class TestRaftRequestHandler(
-  networkChannel: KafkaNetworkChannel,
+  raftClient: KafkaRaftClient[_],
   requestChannel: RequestChannel,
   time: Time,
 ) extends ApiRequestHandler with Logging {
@@ -42,13 +44,10 @@ class TestRaftRequestHandler(
       trace(s"Handling request:${request.requestDesc(true)} from connection ${request.context.connectionId};" +
         s"securityProtocol:${request.context.securityProtocol},principal:${request.context.principal}")
       request.header.apiKey match {
-        case ApiKeys.VOTE
-             | ApiKeys.BEGIN_QUORUM_EPOCH
-             | ApiKeys.END_QUORUM_EPOCH
-             | ApiKeys.FETCH =>
-          val requestBody = request.body[AbstractRequest]
-          networkChannel.postInboundRequest(requestBody, response =>
-            sendResponse(request, Some(response)))
+        case ApiKeys.VOTE => handleVote(request)
+        case ApiKeys.BEGIN_QUORUM_EPOCH => handleBeginQuorumEpoch(request)
+        case ApiKeys.END_QUORUM_EPOCH => handleEndQuorumEpoch(request)
+        case ApiKeys.FETCH => handleFetch(request)
 
         case _ => throw new IllegalArgumentException(s"Unsupported api key: ${request.header.apiKey}")
       }
@@ -60,6 +59,44 @@ class TestRaftRequestHandler(
       if (request.apiLocalCompleteTimeNanos < 0)
         request.apiLocalCompleteTimeNanos = time.nanoseconds
     }
+  }
+
+  private def handleVote(request: RequestChannel.Request): Unit = {
+    handle(request, response => new VoteResponse(response.asInstanceOf[VoteResponseData]))
+  }
+
+  private def handleBeginQuorumEpoch(request: RequestChannel.Request): Unit = {
+    handle(request, response => new BeginQuorumEpochResponse(response.asInstanceOf[BeginQuorumEpochResponseData]))
+  }
+
+  private def handleEndQuorumEpoch(request: RequestChannel.Request): Unit = {
+    handle(request, response => new EndQuorumEpochResponse(response.asInstanceOf[EndQuorumEpochResponseData]))
+  }
+
+  private def handleFetch(request: RequestChannel.Request): Unit = {
+    handle(request, response => new FetchResponse[BaseRecords](response.asInstanceOf[FetchResponseData]))
+  }
+
+  private def handle(
+    request: RequestChannel.Request,
+    buildResponse: ApiMessage => AbstractResponse
+  ): Unit = {
+    val requestBody = request.body[AbstractRequest]
+    val inboundRequest = new RaftRequest.Inbound(
+      request.header.correlationId,
+      requestBody.data
+    )
+
+    inboundRequest.completion.whenComplete((response, exception) => {
+      val res = if (exception != null) {
+        requestBody.getErrorResponse(exception)
+      } else {
+        buildResponse(response.data)
+      }
+      sendResponse(request, Some(res))
+    })
+
+    raftClient.handle(inboundRequest)
   }
 
   private def handleError(request: RequestChannel.Request, err: Throwable): Unit = {

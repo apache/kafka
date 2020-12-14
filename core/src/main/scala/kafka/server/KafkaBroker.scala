@@ -81,9 +81,32 @@ object KafkaBroker {
   val metricsPrefix: String = "kafka.server"
   private val KAFKA_CLUSTER_ID: String = "kafka.cluster.id"
   private val KAFKA_BROKER_ID: String = "kafka.broker.id"
+  private val KAFKA_CONTROLLER_ID: String = "kafka.controller.id"
 
-  private[server] def createKafkaMetricsContext(clusterId: String,
-                                                config: KafkaConfig) : KafkaMetricsContext = {
+  private[server] def createKafkaMetricsContext(
+    metaProperties: MetaProperties,
+    config: KafkaConfig
+  ): KafkaMetricsContext = {
+    val contextLabels = new util.HashMap[String, Object]
+    contextLabels.put(KAFKA_CLUSTER_ID, metaProperties.clusterId)
+
+    metaProperties.brokerId.foreach { brokerId =>
+      contextLabels.put(KAFKA_BROKER_ID, brokerId.toString)
+    }
+
+    metaProperties.controllerId.foreach { controllerId =>
+      contextLabels.put(KAFKA_CONTROLLER_ID, controllerId.toString)
+    }
+
+    contextLabels.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX))
+    val metricsContext = new KafkaMetricsContext(metricsPrefix, contextLabels)
+    metricsContext
+  }
+
+  private[server] def createKafkaMetricsContext(
+    clusterId: String,
+    config: KafkaConfig
+  ): KafkaMetricsContext = {
     val contextLabels = new util.HashMap[String, Object]
     contextLabels.put(KAFKA_CLUSTER_ID, clusterId)
     contextLabels.put(KAFKA_BROKER_ID, config.brokerId.toString)

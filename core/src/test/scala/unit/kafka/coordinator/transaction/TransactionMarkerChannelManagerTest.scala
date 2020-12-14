@@ -156,7 +156,7 @@ class TransactionMarkerChannelManagerTest {
 
   @Test
   def shouldGenerateEmptyMapWhenNoRequestsOutstanding(): Unit = {
-    assertTrue(channelManager.generateRequests()._1.isEmpty)
+    assertTrue(channelManager.drainQueuedTransactionMarkers().isEmpty)
   }
 
   @Test
@@ -194,12 +194,12 @@ class TransactionMarkerChannelManagerTest {
     val expectedBroker2Request = new WriteTxnMarkersRequest.Builder(ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
       asList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, asList(partition2)))).build()
 
-    val requests: Map[Node, WriteTxnMarkersRequest] = channelManager.generateRequests()._1.map { handler =>
+    val requests: Map[Node, WriteTxnMarkersRequest] = channelManager.drainQueuedTransactionMarkers().map { handler =>
       (handler.destination, handler.request.asInstanceOf[WriteTxnMarkersRequest.Builder].build())
     }.toMap
 
     assertEquals(Map(broker1 -> expectedBroker1Request, broker2 -> expectedBroker2Request), requests)
-    assertTrue(channelManager.generateRequests()._1.isEmpty)
+    assertTrue(channelManager.drainQueuedTransactionMarkers().isEmpty)
   }
 
   @Test
@@ -270,13 +270,13 @@ class TransactionMarkerChannelManagerTest {
     val expectedBroker2Request = new WriteTxnMarkersRequest.Builder(ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
       asList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, txnResult, asList(partition2)))).build()
 
-    val firstDrainedRequests: Map[Node, WriteTxnMarkersRequest] = channelManager.generateRequests()._1.map { handler =>
+    val firstDrainedRequests: Map[Node, WriteTxnMarkersRequest] = channelManager.drainQueuedTransactionMarkers().map { handler =>
       (handler.destination, handler.request.asInstanceOf[WriteTxnMarkersRequest.Builder].build())
     }.toMap
 
     assertEquals(Map(broker2 -> expectedBroker2Request), firstDrainedRequests)
 
-    val secondDrainedRequests: Map[Node, WriteTxnMarkersRequest] = channelManager.generateRequests()._1.map { handler =>
+    val secondDrainedRequests: Map[Node, WriteTxnMarkersRequest] = channelManager.drainQueuedTransactionMarkers().map { handler =>
       (handler.destination, handler.request.asInstanceOf[WriteTxnMarkersRequest.Builder].build())
     }.toMap
 
@@ -354,7 +354,7 @@ class TransactionMarkerChannelManagerTest {
 
     channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata2, txnTransitionMetadata2)
 
-    val requestAndHandlers: Iterable[RequestAndCompletionHandler] = channelManager.generateRequests()._1
+    val requestAndHandlers: Iterable[RequestAndCompletionHandler] = channelManager.drainQueuedTransactionMarkers()
 
     val response = new WriteTxnMarkersResponse(createPidErrorMap(Errors.NONE))
     for (requestAndHandler <- requestAndHandlers) {
@@ -401,7 +401,7 @@ class TransactionMarkerChannelManagerTest {
 
     channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata2, txnTransitionMetadata2)
 
-    val requestAndHandlers: Iterable[RequestAndCompletionHandler] = channelManager.generateRequests()._1
+    val requestAndHandlers: Iterable[RequestAndCompletionHandler] = channelManager.drainQueuedTransactionMarkers()
 
     val response = new WriteTxnMarkersResponse(createPidErrorMap(Errors.NONE))
     for (requestAndHandler <- requestAndHandlers) {
@@ -450,7 +450,7 @@ class TransactionMarkerChannelManagerTest {
 
     channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult, txnMetadata2, txnTransitionMetadata2)
 
-    val requestAndHandlers: Iterable[RequestAndCompletionHandler] = channelManager.generateRequests()._1
+    val requestAndHandlers: Iterable[RequestAndCompletionHandler] = channelManager.drainQueuedTransactionMarkers()
 
     val response = new WriteTxnMarkersResponse(createPidErrorMap(Errors.NONE))
     for (requestAndHandler <- requestAndHandlers) {
@@ -459,7 +459,7 @@ class TransactionMarkerChannelManagerTest {
     }
 
     // call this again so that append log will be retried
-    channelManager.generateRequests()
+    channelManager.drainQueuedTransactionMarkers()
 
     EasyMock.verify(txnStateManager)
 

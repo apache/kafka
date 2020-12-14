@@ -219,7 +219,7 @@ public class OffsetFetchResponse extends AbstractResponse {
     }
 
     @Override
-    protected OffsetFetchResponseData data() {
+    public OffsetFetchResponseData data() {
         return data;
     }
 

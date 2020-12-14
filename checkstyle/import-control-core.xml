@@ -48,6 +48,7 @@
     <allow pkg="kafka.server"/>
     <allow pkg="kafka.tools"/>
     <allow pkg="org.apache.kafka.test"/>
+    <allow pkg="org.apache.kafka.metalog" />
   </subpackage>
 
   <subpackage name="tools">

@@ -21,91 +21,190 @@ import java.io._
 import java.nio.file.{Files, NoSuchFileException}
 import java.util.Properties
 
+import kafka.common.InconsistentBrokerMetadataException
+import kafka.server.KafkaServer.{BrokerRole, ControllerRole, ProcessRole}
+import kafka.server.RawMetaProperties._
 import kafka.utils._
-import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
 
-object LegacyMetaProperties {
-  def apply(properties: Properties): LegacyMetaProperties = {
-    MetaProperties.verifyVersion(properties, 0)
-    val brokerId = MetaProperties.getRequiredIntProperty(properties, "broker.id")
-    val clusterId = Option(properties.getProperty("cluster.id"))
-    new LegacyMetaProperties(brokerId, clusterId)
-  }
+import scala.collection.mutable
+
+object RawMetaProperties {
+  val ClusterIdKey = "cluster.id"
+  val BrokerIdKey = "broker.id"
+  val ControllerIdKey = "controller.id"
+  val VersionKey = "version"
 }
 
-object MetaProperties {
-  def apply(properties: Properties): MetaProperties = {
-    MetaProperties.verifyVersion(properties, 1)
-    val clusterId = getRequiredUuidProperty(properties, "cluster.id")
-    new MetaProperties(clusterId)
+case class RawMetaProperties(props: Properties = new Properties()) {
+
+  def clusterId: Option[String] = {
+    Option(props.getProperty(ClusterIdKey))
   }
 
-  def version(properties: Properties): Int = {
-    getRequiredIntProperty(properties, "version")
+  def clusterId_=(id: String): Unit = {
+    props.setProperty(ClusterIdKey, id)
   }
 
-  def verifyVersion(properties: Properties, expectedVersion: Int): Unit = {
-    val version = getRequiredIntProperty(properties, "version")
+  def brokerId: Option[Int] = {
+    intValue(BrokerIdKey)
+  }
+
+  def brokerId_=(id: Int): Unit = {
+    props.setProperty(BrokerIdKey, id.toString)
+  }
+
+  def controllerId: Option[Int] = {
+    intValue(ControllerIdKey)
+  }
+
+  def controllerId_=(id: Int): Unit = {
+    props.setProperty(ControllerIdKey, id.toString)
+  }
+
+  def version: Int = {
+    intValue(VersionKey).getOrElse(0)
+  }
+
+  def version_=(ver: Int): Unit = {
+    props.setProperty(VersionKey, ver.toString)
+  }
+
+  def requireVersion(expectedVersion: Int): Unit = {
     if (version != expectedVersion) {
       throw new RuntimeException(s"Expected version $expectedVersion, but got "+
         s"version $version")
     }
   }
 
-  def getRequiredStringProperty(properties: Properties, key: String): String = {
-    Option(properties.getProperty(key)) match {
-      case None => throw new RuntimeException(s"Failed to find required property $key.")
-      case Some(value) => value
-    }
-  }
-
-  def getRequiredUuidProperty(properties: Properties, key: String): Uuid = {
-    val value = getRequiredStringProperty(properties, key)
+  private def intValue(key: String): Option[Int] = {
     try {
-      Uuid.fromString(value)
-    } catch {
-      case e: Throwable => throw new RuntimeException(s"Failed to parse $key property " +
-        s"as a UUID: ${e.getMessage}")
-    }
-  }
-
-  def getRequiredIntProperty(properties: Properties, key: String): Int = {
-    val value = getRequiredStringProperty(properties, key)
-    try {
-      Integer.parseInt(value)
+      Option(props.getProperty(key)).map(Integer.parseInt)
     } catch {
       case e: Throwable => throw new RuntimeException(s"Failed to parse $key property " +
         s"as an int: ${e.getMessage}")
     }
   }
+
 }
 
-case class LegacyMetaProperties(brokerId: Int,
-                                clusterId: Option[String]) {
-  def toProperties(): Properties = {
-    val properties = new Properties()
-    properties.setProperty("version", 0.toString)
-    properties.setProperty("broker.id", brokerId.toString)
-    clusterId.foreach(properties.setProperty("cluster.id", _))
-    properties
+object MetaProperties {
+  def parse(
+    properties: RawMetaProperties,
+    processRoles: Set[ProcessRole]
+  ): MetaProperties = {
+    properties.requireVersion(expectedVersion = 1)
+    val clusterId = requireClusterId(properties)
+
+    if (processRoles.contains(BrokerRole)) {
+      require(BrokerIdKey, properties.brokerId)
+    }
+
+    if (processRoles.contains(ControllerRole)) {
+      require(ControllerIdKey, properties.controllerId)
+    }
+
+    new MetaProperties(clusterId, properties.brokerId, properties.controllerId)
+  }
+
+  def require[T](key: String, value: Option[T]): T = {
+    value.getOrElse(throw new RuntimeException(s"Failed to find required property $key."))
+  }
+
+  def requireClusterId(properties: RawMetaProperties): Uuid = {
+    val value = require(ClusterIdKey, properties.clusterId)
+    try {
+      Uuid.fromString(value)
+    } catch {
+      case e: Throwable => throw new RuntimeException(s"Failed to parse $ClusterIdKey property " +
+        s"as a UUID: ${e.getMessage}")
+    }
+  }
+}
+
+case class LegacyMetaProperties(
+  clusterId: String,
+  brokerId: Int
+) {
+  def toProperties: Properties = {
+    val properties = new RawMetaProperties()
+    properties.version = 0
+    properties.clusterId = clusterId
+    properties.brokerId = brokerId
+    properties.props
+  }
+
+  override def toString: String = {
+    s"LegacyMetaProperties(brokerId=$brokerId, clusterId=$clusterId)"
+  }
+}
+
+case class MetaProperties(
+  clusterId: Uuid,
+  brokerId: Option[Int] = None,
+  controllerId: Option[Int] = None
+) {
+  def toProperties: Properties = {
+    val properties = new RawMetaProperties()
+    properties.version = 1
+    properties.clusterId = clusterId.toString
+    brokerId.foreach(properties.brokerId = _)
+    controllerId.foreach(properties.controllerId = _)
+    properties.props
   }
 
   override def toString: String  = {
-    s"LegacyMetaProperties(brokerId=$brokerId, clusterId=${clusterId.map(_.toString).getOrElse("None")})"
+    s"MetaProperties(clusterId=$clusterId" +
+      s", brokerId=${brokerId.getOrElse("none")}" +
+      s", controllerId=${controllerId.getOrElse("none")}" +
+      ")"
   }
 }
 
-case class MetaProperties(clusterId: Uuid) {
-  def toProperties(): Properties = {
-    val properties = new Properties()
-    properties.setProperty("version", 1.toString)
-    properties.setProperty("cluster.id", clusterId.toString)
-    properties
-  }
+object BrokerMetadataCheckpoint extends Logging {
+  def getBrokerMetadataAndOfflineDirs(
+    logDirs: collection.Seq[String]
+  ): (RawMetaProperties, collection.Seq[String]) = {
+    require(logDirs.nonEmpty, "Must have at least one log dir to read meta.properties")
 
-  override def toString: String  = {
-    s"MetaProperties(clusterId=$clusterId)"
+    val brokerMetadataMap = mutable.HashMap[String, Properties]()
+    val offlineDirs = mutable.ArrayBuffer.empty[String]
+
+    for (logDir <- logDirs) {
+      val brokerCheckpointFile = new File(logDir + File.separator + "meta.properties")
+      val brokerCheckpoint = new BrokerMetadataCheckpoint(brokerCheckpointFile)
+
+      try {
+        brokerCheckpoint.read().foreach(properties => {
+          brokerMetadataMap += logDir -> properties
+        })
+      } catch {
+        case e: IOException =>
+          offlineDirs += logDir
+          error(s"Fail to read $brokerCheckpointFile", e)
+      }
+    }
+
+    if (brokerMetadataMap.isEmpty) {
+      (new RawMetaProperties(), offlineDirs)
+    } else {
+      val numDistinctMetaProperties = brokerMetadataMap.values.toSet.size
+      if (numDistinctMetaProperties > 1) {
+        val builder = new StringBuilder
+
+        for ((logDir, brokerMetadata) <- brokerMetadataMap)
+          builder ++= s"- $logDir -> $brokerMetadata\n"
+
+        throw new InconsistentBrokerMetadataException(
+          s"BrokerMetadata is not consistent across log.dirs. This could happen if multiple brokers shared a log directory (log.dirs) " +
+            s"or partial data was manually copied from another broker. Found:\n${builder.toString()}"
+        )
+      }
+
+      val rawProps = new RawMetaProperties(brokerMetadataMap.head._2)
+      (rawProps, offlineDirs)
+    }
   }
 }
 
@@ -115,7 +214,7 @@ case class MetaProperties(clusterId: Uuid) {
 class BrokerMetadataCheckpoint(val file: File) extends Logging {
   private val lock = new Object()
 
-  def write(properties: Properties) = {
+  def write(properties: Properties): Unit = {
     lock synchronized {
       try {
         val temp = new File(file.getAbsolutePath + ".tmp")

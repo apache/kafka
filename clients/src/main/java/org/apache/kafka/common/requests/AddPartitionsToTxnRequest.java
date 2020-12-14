@@ -112,7 +112,7 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
     }
 
     @Override
-    protected AddPartitionsToTxnRequestData data() {
+    public AddPartitionsToTxnRequestData data() {
         return data;
     }
 

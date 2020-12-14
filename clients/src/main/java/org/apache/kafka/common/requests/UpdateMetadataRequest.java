@@ -201,7 +201,7 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
     }
 
     @Override
-    protected UpdateMetadataRequestData data() {
+    public UpdateMetadataRequestData data() {
         return data;
     }
 

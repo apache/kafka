@@ -19,16 +19,15 @@ package kafka.raft
 import java.net.InetSocketAddress
 import java.util
 import java.util.Collections
-import java.util.concurrent.atomic.AtomicReference
 
 import org.apache.kafka.clients.MockClient.MockMetadataUpdater
 import org.apache.kafka.clients.{ApiVersion, MockClient, NodeApiVersions}
 import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, EndQuorumEpochResponseData, FetchResponseData, VoteResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
-import org.apache.kafka.common.requests.{AbstractResponse, BeginQuorumEpochRequest, EndQuorumEpochRequest, VoteRequest, VoteResponse}
+import org.apache.kafka.common.requests.{AbstractResponse, BeginQuorumEpochRequest, BeginQuorumEpochResponse, EndQuorumEpochRequest, EndQuorumEpochResponse, FetchResponse, VoteRequest, VoteResponse}
 import org.apache.kafka.common.utils.{MockTime, Time}
 import org.apache.kafka.common.{Node, TopicPartition}
-import org.apache.kafka.raft.{RaftRequest, RaftResponse, RaftUtil}
+import org.apache.kafka.raft.{RaftRequest, RaftUtil}
 import org.junit.Assert._
 import org.junit.{Before, Test}
 
@@ -38,13 +37,11 @@ class KafkaNetworkChannelTest {
   import KafkaNetworkChannelTest._
 
   private val clusterId = "clusterId"
-  private val clientId = "clientId"
-  private val retryBackoffMs = 100
   private val requestTimeoutMs = 30000
   private val time = new MockTime()
   private val client = new MockClient(time, new StubMetadataUpdater)
   private val topicPartition = new TopicPartition("topic", 0)
-  private val channel = new KafkaNetworkChannel(time, client, clientId, retryBackoffMs, requestTimeoutMs)
+  private val channel = new KafkaNetworkChannel(time, client, requestTimeoutMs)
 
   @Before
   def setupSupportedApis(): Unit = {
@@ -74,7 +71,7 @@ class KafkaNetworkChannelTest {
     channel.updateEndpoint(destinationId, new InetSocketAddress(destinationNode.host, destinationNode.port))
 
     for (apiKey <- RaftApis) {
-      val response = KafkaNetworkChannel.buildResponse(buildTestErrorResponse(apiKey, Errors.INVALID_REQUEST))
+      val response = buildResponse(buildTestErrorResponse(apiKey, Errors.INVALID_REQUEST))
       client.prepareResponseFrom(response, destinationNode, true)
       sendAndAssertErrorResponse(apiKey, destinationId, Errors.BROKER_NOT_AVAILABLE)
     }
@@ -109,30 +106,9 @@ class KafkaNetworkChannelTest {
 
     for (apiKey <- RaftApis) {
       val expectedError = Errors.INVALID_REQUEST
-      val response = KafkaNetworkChannel.buildResponse(buildTestErrorResponse(apiKey, expectedError))
+      val response = buildResponse(buildTestErrorResponse(apiKey, expectedError))
       client.prepareResponseFrom(response, destinationNode)
       sendAndAssertErrorResponse(apiKey, destinationId, expectedError)
-    }
-  }
-
-  @Test
-  def testReceiveAndSendInboundRequest(): Unit = {
-    for (apiKey <- RaftApis) {
-      val request = KafkaNetworkChannel.buildRequest(buildTestRequest(apiKey)).build()
-      val responseRef = new AtomicReference[AbstractResponse]()
-
-      channel.postInboundRequest(request, responseRef.set)
-      val inbound = channel.receive(1000).asScala
-      assertEquals(1, inbound.size)
-
-      val inboundRequest = inbound.head.asInstanceOf[RaftRequest.Inbound]
-      val errorResponse = buildTestErrorResponse(apiKey, Errors.INVALID_REQUEST)
-      val outboundResponse = new RaftResponse.Outbound(inboundRequest.correlationId, errorResponse)
-      channel.send(outboundResponse)
-      channel.receive(1000)
-
-      assertNotNull(responseRef.get)
-      assertEquals(Errors.INVALID_REQUEST, extractError(KafkaNetworkChannel.responseData(responseRef.get)))
     }
   }
 
@@ -140,15 +116,15 @@ class KafkaNetworkChannelTest {
                                          destinationId: Int,
                                          error: Errors): Unit = {
     val correlationId = channel.newCorrelationId()
-    val createdTimeMs = time.milliseconds()
     val apiRequest = buildTestRequest(apiKey)
-    val request = new RaftRequest.Outbound(correlationId, apiRequest, destinationId, createdTimeMs)
+    val request = new RaftRequest.Outbound(correlationId, apiRequest, destinationId)
 
     channel.send(request)
-    val responses = channel.receive(1000).asScala
-    assertEquals(1, responses.size)
+    channel.pollOnce()
 
-    val response = responses.head.asInstanceOf[RaftResponse.Inbound]
+    assertTrue(request.completion.isDone)
+
+    val response = request.completion.get()
     assertEquals(destinationId, response.sourceId)
     assertEquals(correlationId, response.correlationId)
     assertEquals(apiKey, ApiKeys.forId(response.data.apiKey))
@@ -214,6 +190,22 @@ class KafkaNetworkChannelTest {
       case res: VoteResponseData => res.errorCode
     }
     Errors.forCode(code)
+  }
+
+
+  def buildResponse(responseData: ApiMessage): AbstractResponse = {
+    responseData match {
+      case voteResponse: VoteResponseData =>
+        new VoteResponse(voteResponse)
+      case beginEpochResponse: BeginQuorumEpochResponseData =>
+        new BeginQuorumEpochResponse(beginEpochResponse)
+      case endEpochResponse: EndQuorumEpochResponseData =>
+        new EndQuorumEpochResponse(endEpochResponse)
+      case fetchResponse: FetchResponseData =>
+        new FetchResponse(fetchResponse)
+      case _ =>
+        throw new IllegalArgumentException(s"Unexpected type for responseData: $responseData")
+    }
   }
 
 }

@@ -83,7 +83,7 @@ public class VoteResponse extends AbstractResponse {
     }
 
     @Override
-    protected VoteResponseData data() {
+    public VoteResponseData data() {
         return data;
     }
 

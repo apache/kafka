@@ -71,7 +71,7 @@ public class DescribeClientQuotasResponse extends AbstractResponse {
     }
 
     @Override
-    protected DescribeClientQuotasResponseData data() {
+    public DescribeClientQuotasResponseData data() {
         return data;
     }
 

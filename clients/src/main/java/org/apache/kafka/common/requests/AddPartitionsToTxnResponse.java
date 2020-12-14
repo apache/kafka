@@ -117,7 +117,7 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
     }
 
     @Override
-    protected AddPartitionsToTxnResponseData data() {
+    public AddPartitionsToTxnResponseData data() {
         return data;
     }
 

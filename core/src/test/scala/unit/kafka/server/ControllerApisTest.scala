@@ -21,6 +21,7 @@ import java.net.InetAddress
 import java.util.Properties
 
 import kafka.network.RequestChannel
+import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.{ClientQuotaManager, ClientRequestQuotaManager, ControllerApis, ControllerMutationQuotaManager, KafkaConfig, MetaProperties, ReplicationQuotaManager}
 import kafka.utils.MockTime
@@ -41,7 +42,7 @@ import org.scalatest.Matchers.intercept
 
 class ControllerApisTest {
   // Mocks
-  private val brokerID = 1
+  private val brokerId = 1
   private val brokerRack = "Rack1"
   private val clientID = "Client1"
   private val requestChannelMetrics: RequestChannel.Metrics = EasyMock.createNiceMock(classOf[RequestChannel.Metrics])
@@ -51,6 +52,7 @@ class ControllerApisTest {
   private val clientRequestQuotaManager: ClientRequestQuotaManager = EasyMock.createNiceMock(classOf[ClientRequestQuotaManager])
   private val clientControllerQuotaManager: ControllerMutationQuotaManager = EasyMock.createNiceMock(classOf[ControllerMutationQuotaManager])
   private val replicaQuotaManager: ReplicationQuotaManager = EasyMock.createNiceMock(classOf[ReplicationQuotaManager])
+  private val raftManager: RaftManager = EasyMock.createNiceMock(classOf[RaftManager])
   private val quotas = QuotaManagers(
     clientQuotaManager,
     clientQuotaManager,
@@ -71,8 +73,11 @@ class ControllerApisTest {
       time,
       supportedFeatures,
       controller,
+      Some(raftManager),
       new KafkaConfig(new Properties()),
-      new MetaProperties(Uuid.fromString("JgxuGe9URy-E-ceaL04lEw")),
+
+      // FIXME: Would make more sense to set controllerId here
+      MetaProperties(Uuid.fromString("JgxuGe9URy-E-ceaL04lEw"), brokerId = Some(brokerId)),
       Seq.empty
     )
   }
@@ -102,7 +107,7 @@ class ControllerApisTest {
   def testBrokerRegistration(): Unit = {
     val brokerRegistrationRequest = new BrokerRegistrationRequest.Builder(
       new BrokerRegistrationRequestData()
-        .setBrokerId(brokerID)
+        .setBrokerId(brokerId)
         .setRack(brokerRack)
     ).build()
 

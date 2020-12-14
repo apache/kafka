@@ -78,7 +78,7 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
     }
 
     @Override
-    protected TxnOffsetCommitResponseData data() {
+    public TxnOffsetCommitResponseData data() {
         return data;
     }
 

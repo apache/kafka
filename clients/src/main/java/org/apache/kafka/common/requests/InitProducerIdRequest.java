@@ -73,7 +73,7 @@ public class InitProducerIdRequest extends AbstractRequest {
     }
 
     @Override
-    protected InitProducerIdRequestData data() {
+    public InitProducerIdRequestData data() {
         return data;
     }
 }

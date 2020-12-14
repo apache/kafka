@@ -168,7 +168,7 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
     }
 
     @Override
-    protected TxnOffsetCommitRequestData data() {
+    public TxnOffsetCommitRequestData data() {
         return data;
     }
 

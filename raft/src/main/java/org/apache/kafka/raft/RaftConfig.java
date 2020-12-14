@@ -17,17 +17,20 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
 
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
@@ -35,7 +38,7 @@ import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 public class RaftConfig extends AbstractConfig {
     private static final ConfigDef CONFIG;
 
-    private static final String QUORUM_PREFIX = "quorum.";
+    private static final String QUORUM_PREFIX = "controller.quorum.";
 
     public static final String QUORUM_VOTERS_CONFIG = QUORUM_PREFIX + "voters";
     private static final String QUORUM_VOTERS_DOC = "Map of id/endpoint information for " +
@@ -105,7 +108,7 @@ public class RaftConfig extends AbstractConfig {
                 QUORUM_VOTERS_DOC)
             .define(QUORUM_ELECTION_TIMEOUT_MS_CONFIG,
                 ConfigDef.Type.INT,
-                5000,
+                500,
                 atLeast(0L),
                 ConfigDef.Importance.HIGH,
                 QUORUM_ELECTION_TIMEOUT_MS_DOC)
@@ -185,6 +188,10 @@ public class RaftConfig extends AbstractConfig {
         return parseVoterConnections(getList(QUORUM_VOTERS_CONFIG));
     }
 
+    public List<Node> quorumVoterNodes() {
+        return parseVoterNodes(getList(QUORUM_VOTERS_CONFIG));
+    }
+
     private static Integer parseVoterId(String idString) {
         try {
             return Integer.parseInt(idString);
@@ -194,7 +201,12 @@ public class RaftConfig extends AbstractConfig {
     }
 
     private static Map<Integer, InetSocketAddress> parseVoterConnections(List<String> voterEntries) {
-        Map<Integer, InetSocketAddress> voterMap = new HashMap<>();
+        return parseVoterNodes(voterEntries).stream()
+        .collect(Collectors.toMap(Node::id, node -> new InetSocketAddress(node.host(), node.port())));
+    }
+
+    private static List<Node> parseVoterNodes(List<String> voterEntries) {
+        Map<Integer, Node> voterMap = new HashMap<>(voterEntries.size());
 
         for (String voterMapEntry : voterEntries) {
             String[] idAndAddress = voterMapEntry.split("@");
@@ -218,10 +230,16 @@ public class RaftConfig extends AbstractConfig {
                     + ". Each entry should be in the form `{id}@{host}:{port}`.");
             }
 
-            voterMap.put(voterId, new InetSocketAddress(host, port));
+
+            if (voterMap.containsKey(voterId)) {
+                throw new ConfigException("Found duplicate id " + voterId
+                    + " contained in the configuration " + QUORUM_VOTERS_CONFIG + ".");
+            }
+
+            voterMap.put(voterId, new Node(voterId, host, port));
         }
 
-        return voterMap;
+        return new ArrayList<>(voterMap.values());
 
     }
 

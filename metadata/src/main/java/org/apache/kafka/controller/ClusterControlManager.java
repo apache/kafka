@@ -177,7 +177,7 @@ public class ClusterControlManager {
      * Process an incoming broker registration request.
      */
     public ControllerResult<RegistrationReply> registerBroker(
-            BrokerRegistrationRequestData request, long writeOffset,
+            BrokerRegistrationRequestData request, long brokerEpoch,
             FeatureManager.FinalizedFeaturesAndEpoch finalizedFeaturesAndEpoch) {
         int brokerId = request.brokerId();
         BrokerRegistration existing = brokerRegistrations.get(brokerId);
@@ -187,7 +187,7 @@ public class ClusterControlManager {
         }
         RegisterBrokerRecord record = new RegisterBrokerRecord().setBrokerId(brokerId).
             setIncarnationId(request.incarnationId()).
-            setBrokerEpoch(writeOffset);
+            setBrokerEpoch(brokerEpoch);
         for (BrokerRegistrationRequestData.Listener listener : request.listeners()) {
             record.endPoints().add(new RegisterBrokerRecord.BrokerEndpoint().
                 setHost(listener.host()).
@@ -210,7 +210,7 @@ public class ClusterControlManager {
         }
         return new ControllerResult<>(
             Collections.singletonList(new ApiMessageAndVersion(record, (short) 0)),
-            new RegistrationReply(writeOffset));
+                new RegistrationReply(brokerEpoch));
     }
 
     public ControllerResult<HeartbeatReply> processBrokerHeartbeat(BrokerHeartbeatRequestData request,

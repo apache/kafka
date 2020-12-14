@@ -17,41 +17,29 @@
 
 package kafka.server
 
-import java.io.File
-import java.util.concurrent.locks.ReentrantLock
 import java.util
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.locks.ReentrantLock
 
 import kafka.log.LogConfig
-import kafka.metrics.{KafkaMetricsGroup, KafkaMetricsReporter, KafkaYammerMetrics, LinuxIoMetricsCollector}
+import kafka.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
 import kafka.network.SocketServer
+import kafka.raft.RaftManager
 import kafka.security.CredentialProvider
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.metrics.{JmxReporter, Metrics, MetricsReporter}
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
-import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time}
+import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, Endpoint}
 import org.apache.kafka.controller.{Controller, QuorumController}
 import org.apache.kafka.metadata.VersionRange
-import org.apache.kafka.metalog.LocalLogManager
+import org.apache.kafka.metalog.MetaLogManager
 import org.apache.kafka.server.authorizer.{Authorizer, AuthorizerServerInfo}
 
 import scala.jdk.CollectionConverters._
-
-object Kip500Controller {
-  def readMetaProperties(config: KafkaConfig): MetaProperties = {
-    val file = new File(config.metadataLogDir, "meta.properties")
-    val checkpoint = new BrokerMetadataCheckpoint(file)
-    val properties = checkpoint.read()
-    if (properties.isEmpty) {
-      throw new RuntimeException(s"Unable to read ${config.metadataLogDir}")
-    }
-    MetaProperties(properties.get)
-  }
-}
 
 private[kafka] case class ControllerAuthorizerInfo(clusterResource: ClusterResource,
                                                    brokerId: Int,
@@ -61,24 +49,24 @@ private[kafka] case class ControllerAuthorizerInfo(clusterResource: ClusterResou
 /**
  * A KIP-500 Kafka controller.
  */
-class Kip500Controller(val config: KafkaConfig,
-                       val time: Time, 
-                       val threadNamePrefix: Option[String],
-                       val kafkaMetricsReporters: Seq[KafkaMetricsReporter],
-                       val controllerConnectFuture: CompletableFuture[String])
-                          extends Logging with KafkaMetricsGroup {
-  import Kip500Controller._
-  import kafka.server.KafkaServerManager._
+class Kip500Controller(
+  val metaProperties: MetaProperties,
+  val config: KafkaConfig,
+  val metaLogManager: MetaLogManager,
+  val raftManager: Option[RaftManager],
+  val time: Time,
+  val metrics: Metrics,
+  val threadNamePrefix: Option[String],
+  val controllerConnectFuture: CompletableFuture[String]
+) extends Logging with KafkaMetricsGroup {
+  import kafka.server.KafkaServer._
 
   val lock = new ReentrantLock()
   val awaitShutdownCond = lock.newCondition()
-  var status: ProcessStatus = KafkaServerManager.SHUTDOWN
+  var status: ProcessStatus = SHUTDOWN
 
-  var metaProperties: MetaProperties = null
   var linuxIoMetricsCollector: LinuxIoMetricsCollector = null
   var authorizer: Option[Authorizer] = null
-  var metrics: Metrics = null
-  var logManager: LocalLogManager = null
   var tokenCache: DelegationTokenCache = null
   var credentialProvider: CredentialProvider = null
   var socketServer: SocketServer = null
@@ -101,15 +89,16 @@ class Kip500Controller(val config: KafkaConfig,
     true
   }
 
+  def clusterId: String = metaProperties.clusterId.toString
+
   def startup(): Unit = {
     if (!maybeChangeStatus(SHUTDOWN, STARTING)) return
     try {
+      info("Starting controller")
+
       maybeChangeStatus(STARTING, STARTED)
       // TODO: initialize the log dir(s)
       this.logIdent = new LogContext(s"[Kip500Controller id=${config.controllerId}] ").logPrefix()
-      metaProperties = readMetaProperties(config)
-      val clusterId = metaProperties.clusterId.toString
-      info(s"starting with clusterId = ${metaProperties.clusterId}")
 
       newGauge("ClusterId", () => clusterId)
       newGauge("yammer-metrics-count", () =>  KafkaYammerMetrics.defaultRegistry.allMetrics.size)
@@ -139,20 +128,6 @@ class Kip500Controller(val config: KafkaConfig,
             ep => ep -> CompletableFuture.completedFuture[Void](null)
           }.toMap
       }
-      val jmxReporter = new JmxReporter()
-      jmxReporter.configure(config.originals)
-      val metricConfig = KafkaBroker.metricConfig(config)
-      val metricsContext = KafkaBroker.createKafkaMetricsContext(clusterId, config)
-      val reporters = new util.ArrayList[MetricsReporter]
-      reporters.add(jmxReporter)
-      metrics = new Metrics(metricConfig, reporters, time, true, metricsContext)
-      AppInfoParser.registerAppInfo(KafkaBroker.metricsPrefix,
-        config.controllerId.toString, metrics, time.milliseconds())
-      KafkaBroker.notifyClusterListeners(clusterId,
-        kafkaMetricsReporters ++ metrics.reporters.asScala)
-
-      logManager = new LocalLogManager(new LogContext(),
-        config.controllerId, config.metadataLogDir, "")
 
       tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
       credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
@@ -162,19 +137,19 @@ class Kip500Controller(val config: KafkaConfig,
         credentialProvider,
         Some(config.controllerId),
         Some(new LogContext(s"[SocketServer controllerId=${config.controllerId}] ")),
-        false)
+        allowDisabledApis = true)
       socketServer.startup(false, None, config.controllerListeners)
-      socketServerFirstBoundPortFuture.complete(new Integer(socketServer.boundPort(
-        config.controllerListeners.head.listenerName)))
+      socketServerFirstBoundPortFuture.complete(socketServer.boundPort(
+        config.controllerListeners.head.listenerName))
 
       val configDefs = Map(ConfigResource.Type.BROKER -> KafkaConfig.configDef,
-        ConfigResource.Type.TOPIC -> LogConfig.configDefCopy).toMap.asJava
+        ConfigResource.Type.TOPIC -> LogConfig.configDefCopy).asJava
       val threadNamePrefixAsString = threadNamePrefix.getOrElse("")
       controller = new QuorumController.Builder(config.controllerId).
         setTime(time).
         setConfigDefs(configDefs).
         setThreadNamePrefix(threadNamePrefixAsString).
-        setLogManager(logManager).
+        setLogManager(metaLogManager).
         build()
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
       val controllerNodes =
@@ -185,6 +160,7 @@ class Kip500Controller(val config: KafkaConfig,
         time,
         supportedFeatures,
         controller,
+        raftManager,
         config,
         metaProperties,
         controllerNodes.toSeq)

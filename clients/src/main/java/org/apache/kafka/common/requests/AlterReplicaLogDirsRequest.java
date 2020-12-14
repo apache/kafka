@@ -61,7 +61,7 @@ public class AlterReplicaLogDirsRequest extends AbstractRequest {
     }
 
     @Override
-    protected AlterReplicaLogDirsRequestData data() {
+    public AlterReplicaLogDirsRequestData data() {
         return data;
     }
 

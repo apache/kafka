@@ -57,7 +57,7 @@ public class AddOffsetsToTxnResponse extends AbstractResponse {
     }
 
     @Override
-    protected AddOffsetsToTxnResponseData data() {
+    public AddOffsetsToTxnResponseData data() {
         return data;
     }
 

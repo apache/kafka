@@ -18,21 +18,23 @@
 package kafka.server
 
 import kafka.network.RequestChannel
+import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
+import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.acl.AclOperation.{CLUSTER_ACTION, DESCRIBE}
-import org.apache.kafka.common.errors.ApiException
+import org.apache.kafka.common.errors.{ApiException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.message.ApiVersionsResponseData.{ApiVersionsResponseKey, FinalizedFeatureKey, SupportedFeatureKey}
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseBroker
-import org.apache.kafka.common.message.{ApiVersionsResponseData, BrokerHeartbeatResponseData, BrokerRegistrationResponseData, MetadataResponseData}
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.message.{ApiVersionsResponseData, BeginQuorumEpochResponseData, BrokerHeartbeatResponseData, BrokerRegistrationResponseData, DescribeQuorumResponseData, EndQuorumEpochResponseData, FetchResponseData, MetadataResponseData, VoteResponseData}
+import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
+import org.apache.kafka.common.record.BaseRecords
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.Resource
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType.CLUSTER
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.controller.ClusterControlManager.{HeartbeatReply, RegistrationReply}
 import org.apache.kafka.controller.{Controller, LeaderAndIsr}
 import org.apache.kafka.metadata.{FeatureManager, VersionRange}
@@ -53,13 +55,14 @@ class ControllerApis(val requestChannel: RequestChannel,
                      val time: Time,
                      val supportedFeatures: Map[String, VersionRange],
                      val controller: Controller,
+                     val raftManager: Option[RaftManager],
                      val config: KafkaConfig,
                      val metaProperties: MetaProperties,
                      val controllerNodes: Seq[Node]) extends ApiRequestHandler with Logging {
 
   val apisUtils = new ApisUtils(requestChannel, authorizer, quotas, time)
 
-  val supportedApiKeys = Set(
+  var supportedApiKeys = Set(
     ApiKeys.METADATA,
     //ApiKeys.SASL_HANDSHAKE
     ApiKeys.API_VERSIONS,
@@ -84,19 +87,30 @@ class ControllerApis(val requestChannel: RequestChannel,
     //ApiKeys.ALTER_CLIENT_QUOTAS
     //ApiKeys.DESCRIBE_USER_SCRAM_CREDENTIALS
     //ApiKeys.ALTER_USER_SCRAM_CREDENTIALS
-    //ApiKeys.VOTE
-    //ApiKeys.BEGIN_QUORUM_EPOCH
-    //ApiKeys.END_QUORUM_EPOCH
-    //ApiKeys.DESCRIBE_QUORUM
-    ApiKeys.ALTER_ISR,
     //ApiKeys.UPDATE_FEATURES
+    ApiKeys.ALTER_ISR,
     ApiKeys.BROKER_REGISTRATION,
     ApiKeys.BROKER_HEARTBEAT
   )
 
+  if (raftManager.isDefined) {
+    supportedApiKeys ++= Set(
+      ApiKeys.FETCH,
+      ApiKeys.VOTE,
+      ApiKeys.BEGIN_QUORUM_EPOCH,
+      ApiKeys.END_QUORUM_EPOCH,
+      ApiKeys.DESCRIBE_QUORUM,
+    )
+  }
+
   override def handle(request: RequestChannel.Request): Unit = {
     try {
       request.header.apiKey match {
+        case ApiKeys.FETCH => handleFetch(request)
+        case ApiKeys.BEGIN_QUORUM_EPOCH => handleBeginQuorumEpoch(request)
+        case ApiKeys.END_QUORUM_EPOCH => handleEndQuorumEpoch(request)
+        case ApiKeys.VOTE => handleVote(request)
+        case ApiKeys.DESCRIBE_QUORUM => handleDescribeQuorum(request)
         case ApiKeys.METADATA => handleMetadataRequest(request)
         case ApiKeys.API_VERSIONS => handleApiVersionsRequest(request)
         case ApiKeys.ALTER_ISR => handleAlterIsrRequest(request)
@@ -108,9 +122,53 @@ class ControllerApis(val requestChannel: RequestChannel,
     } catch {
       case e: FatalExitError => throw e
       case e: Throwable => apisUtils.handleError(request, e)
-    } finally {
-
     }
+  }
+
+  private def handleVote(request: RequestChannel.Request): Unit = {
+    apisUtils.authorizeClusterOperation(request, CLUSTER_ACTION)
+    handleRaftRequest(request, response => new VoteResponse(response.asInstanceOf[VoteResponseData]))
+  }
+
+  private def handleBeginQuorumEpoch(request: RequestChannel.Request): Unit = {
+    apisUtils.authorizeClusterOperation(request, CLUSTER_ACTION)
+    handleRaftRequest(request, response => new BeginQuorumEpochResponse(response.asInstanceOf[BeginQuorumEpochResponseData]))
+  }
+
+  private def handleEndQuorumEpoch(request: RequestChannel.Request): Unit = {
+    apisUtils.authorizeClusterOperation(request, CLUSTER_ACTION)
+    handleRaftRequest(request, response => new EndQuorumEpochResponse(response.asInstanceOf[EndQuorumEpochResponseData]))
+  }
+
+  private def handleFetch(request: RequestChannel.Request): Unit = {
+    apisUtils.authorizeClusterOperation(request, CLUSTER_ACTION)
+    handleRaftRequest(request, response => new FetchResponse[BaseRecords](response.asInstanceOf[FetchResponseData]))
+  }
+
+  private def handleDescribeQuorum(request: RequestChannel.Request): Unit = {
+    apisUtils.authorizeClusterOperation(request, DESCRIBE)
+    handleRaftRequest(request, response => new DescribeQuorumResponse(response.asInstanceOf[DescribeQuorumResponseData]))
+  }
+
+  private def handleRaftRequest(
+    request: RequestChannel.Request,
+    buildResponse: ApiMessage => AbstractResponse
+  ): Unit = {
+    val raftManager = this.raftManager.getOrElse(
+      throw new UnsupportedVersionException(s"Api ${request.header.apiKey} is not available")
+    )
+
+    val requestBody = request.body[AbstractRequest]
+    val future = raftManager.handleRequest(request.header, requestBody.data)
+
+    future.whenComplete((responseData, exception) => {
+      val response = if (exception != null) {
+        requestBody.getErrorResponse(exception)
+      } else {
+        buildResponse(responseData)
+      }
+      apisUtils.sendResponseExemptThrottle(request, response)
+    })
   }
 
   def handleApiVersionsRequest(request: RequestChannel.Request): Unit = {
@@ -165,11 +223,12 @@ class ControllerApis(val requestChannel: RequestChannel,
     def createResponseCallback(requestThrottleMs: Int): MetadataResponse = {
       val metadataResponseData = new MetadataResponseData()
       metadataResponseData.setThrottleTimeMs(requestThrottleMs)
-      controllerNodes.foreach {
-        node =>
-          metadataResponseData.brokers().add(
-            new MetadataResponseBroker().setHost(node.host()).
-              setNodeId(node.id()).setPort(node.port()).setRack(node.rack()))
+      controllerNodes.foreach { node =>
+        metadataResponseData.brokers().add(new MetadataResponseBroker()
+          .setHost(node.host)
+          .setNodeId(node.id)
+          .setPort(node.port)
+          .setRack(node.rack))
       }
       metadataResponseData.setClusterId(metaProperties.clusterId.toString)
       if (controller.curClaimEpoch() > 0) {

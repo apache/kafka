@@ -24,6 +24,8 @@ import java.util.concurrent.CompletableFuture;
 
 public interface RaftClient<T> {
 
+    LeaderAndEpoch leaderAndEpoch();
+
     interface Listener<T> {
         /**
          * Callback which is invoked for all records committed to the log.
@@ -56,8 +58,10 @@ public interface RaftClient<T> {
         /**
          * Invoked after a leader has stepped down. This callback may or may not
          * fire before the next leader has been elected.
+         *
+         * @param epoch the epoch that the leader is resigning from
          */
-        default void handleResign() {}
+        default void handleResign(int epoch) {}
     }
 
     /**

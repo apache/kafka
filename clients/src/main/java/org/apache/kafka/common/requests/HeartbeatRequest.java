@@ -72,7 +72,7 @@ public class HeartbeatRequest extends AbstractRequest {
     }
 
     @Override
-    protected HeartbeatRequestData data() {
+    public HeartbeatRequestData data() {
         return data;
     }
 }

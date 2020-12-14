@@ -24,7 +24,8 @@ import java.util.List;
 /**
  * The MetaLogManager handles storing metadata and electing leaders.
  */
-public interface MetaLogManager extends AutoCloseable {
+public interface MetaLogManager {
+
     /**
      * Start this meta log manager.
      * The manager must be ready to accept incoming calls after this function returns.
@@ -65,25 +66,14 @@ public interface MetaLogManager extends AutoCloseable {
     void renounce(long epoch);
 
     /**
-     * Begin shutting down, but don't block.  You must still call close to clean up all
-     * resources.
-     */
-    void beginShutdown();
-
-    /**
      * Returns the current leader.  The active node may change immediately after this
      * function is called, of course.
      */
     MetaLogLeader leader();
 
     /**
-     * Blocks until we have shut down and freed all resources.  It is not necessary to
-     * call beginShutdown before calling this function.
-     */
-    void close() throws InterruptedException;
-
-    /**
      * Returns the node id.
      */
     int nodeId();
+
 }

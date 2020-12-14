@@ -20,8 +20,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.Random;
 import java.util.Set;
 
@@ -103,7 +103,7 @@ public class RequestManager {
         private State state = State.READY;
         private long lastSendTimeMs = 0L;
         private long lastFailTimeMs = 0L;
-        private Optional<Long> inFlightCorrelationId = Optional.empty();
+        private OptionalLong inFlightCorrelationId = OptionalLong.empty();
 
         public ConnectionState(long id) {
             this.id = id;
@@ -160,28 +160,32 @@ public class RequestManager {
             }
         }
 
+        boolean isResponseExpected(long correlationId) {
+            return inFlightCorrelationId.isPresent() && inFlightCorrelationId.getAsLong() == correlationId;
+        }
+
         void onResponseError(long correlationId, long timeMs) {
             inFlightCorrelationId.ifPresent(inflightRequestId -> {
                 if (inflightRequestId == correlationId) {
                     lastFailTimeMs = timeMs;
                     state = State.BACKING_OFF;
-                    inFlightCorrelationId = Optional.empty();
+                    inFlightCorrelationId = OptionalLong.empty();
                 }
             });
         }
 
-        void onResponseReceived(long correlationId, long timeMs) {
+        void onResponseReceived(long correlationId) {
             inFlightCorrelationId.ifPresent(inflightRequestId -> {
                 if (inflightRequestId == correlationId) {
                     state = State.READY;
-                    inFlightCorrelationId = Optional.empty();
+                    inFlightCorrelationId = OptionalLong.empty();
                 }
             });
         }
 
         void onRequestSent(long correlationId, long timeMs) {
             lastSendTimeMs = timeMs;
-            inFlightCorrelationId = Optional.of(correlationId);
+            inFlightCorrelationId = OptionalLong.of(correlationId);
             state = State.AWAITING_REQUEST;
         }
 
@@ -192,7 +196,7 @@ public class RequestManager {
          */
         void reset() {
             state = State.READY;
-            inFlightCorrelationId = Optional.empty();
+            inFlightCorrelationId = OptionalLong.empty();
         }
 
         @Override

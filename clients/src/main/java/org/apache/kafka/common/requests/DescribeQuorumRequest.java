@@ -72,7 +72,7 @@ public class DescribeQuorumRequest extends AbstractRequest {
     }
 
     @Override
-    protected DescribeQuorumRequestData data() {
+    public DescribeQuorumRequestData data() {
         return data;
     }
 

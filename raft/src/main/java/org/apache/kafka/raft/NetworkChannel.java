@@ -18,11 +18,10 @@ package org.apache.kafka.raft;
 
 import java.io.Closeable;
 import java.net.InetSocketAddress;
-import java.util.List;
 
 /**
  * A simple network interface with few assumptions. We do not assume ordering
- * of requests or even that every request will receive a response.
+ * of requests or even that every outbound request will receive a response.
  */
 public interface NetworkChannel extends Closeable {
 
@@ -37,21 +36,7 @@ public interface NetworkChannel extends Closeable {
      * or a response to a request that was received through {@link #receive(long)}
      * (i.e. an instance of {@link org.apache.kafka.raft.RaftResponse.Outbound}).
      */
-    void send(RaftMessage message);
-
-    /**
-     * Receive inbound messages. These could contain either inbound requests
-     * (i.e. instances of {@link org.apache.kafka.raft.RaftRequest.Inbound})
-     * or responses to outbound requests sent through {@link #send(RaftMessage)}
-     * (i.e. instances of {@link org.apache.kafka.raft.RaftResponse.Inbound}).
-     */
-    List<RaftMessage> receive(long timeoutMs);
-
-    /**
-     * Wakeup the channel if it is blocking in {@link #receive(long)}. This will cause
-     * the call to immediately return with whatever messages are available.
-     */
-    void wakeup();
+    void send(RaftRequest.Outbound request);
 
     /**
      * Update connection information for the given id.

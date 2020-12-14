@@ -26,6 +26,7 @@ import kafka.coordinator.group.OffsetConfig
 import kafka.coordinator.transaction.{TransactionLog, TransactionStateManager}
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, ZStdCompressionCodec}
 import kafka.security.authorizer.AuthorizerUtils
+import kafka.server.KafkaServer.{BrokerRole, ControllerRole, ProcessRole}
 import kafka.utils.CoreUtils
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.CommonClientConfigs
@@ -358,7 +359,7 @@ object KafkaConfig {
   val ConnectionSetupTimeoutMaxMsProp = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG
   val EnableMetadataQuorumProp = "enable.metadata.quorum"
   val ProcessRolesProp = "process.roles"
-  val ControllerConnectProp = "controller.connect"
+  val ControllerConnectProp = "controller.quorum.voters"
   val RegistrationHeartbeatIntervalMsProp = "registration.heartbeat.interval.ms"
   val RegistrationLeaseTimeoutMsProp = "registration.lease.timeout.ms"
   val MetadataLogDirProp = "metadata.log.dir"
@@ -1050,7 +1051,7 @@ object KafkaConfig {
       .define(RequestTimeoutMsProp, INT, Defaults.RequestTimeoutMs, HIGH, RequestTimeoutMsDoc)
       .define(ConnectionSetupTimeoutMsProp, LONG, Defaults.ConnectionSetupTimeoutMs, MEDIUM, ConnectionSetupTimeoutMsDoc)
       .define(ConnectionSetupTimeoutMaxMsProp, LONG, Defaults.ConnectionSetupTimeoutMaxMs, MEDIUM, ConnectionSetupTimeoutMaxMsDoc)
-      .define(ProcessRolesProp, LIST, Collections.emptyList(), HIGH, ProcessRolesDoc)
+      .define(ProcessRolesProp, LIST, Collections.emptyList(), ValidList.in("broker", "controller"), HIGH, ProcessRolesDoc)
       .define(ControllerConnectProp, STRING, null, HIGH, ControllerConnectDoc)
       .define(RegistrationHeartbeatIntervalMsProp, INT, Defaults.RegistrationHeartbeatIntervalMs, MEDIUM, RegistrationHeartbeatIntervalMsDoc)
       .define(RegistrationLeaseTimeoutMsProp, INT, Defaults.RegistrationLeaseTimeoutMs, MEDIUM, RegistrationLeaseTimeoutMsDoc)
@@ -1513,10 +1514,19 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   val requestTimeoutMs = getInt(KafkaConfig.RequestTimeoutMsProp)
   val connectionSetupTimeoutMs = getLong(KafkaConfig.ConnectionSetupTimeoutMsProp)
   val connectionSetupTimeoutMaxMs = getLong(KafkaConfig.ConnectionSetupTimeoutMaxMsProp)
-  val processRoles = getList(KafkaConfig.ProcessRolesProp)
+  val processRoles = parseProcessRoles()
   val controllerConnect = getString(KafkaConfig.ControllerConnectProp)
   val registrationHeartbeatIntervalMs = getInt(KafkaConfig.RegistrationHeartbeatIntervalMsProp)
   val registrationLeaseTimeoutMs = getInt(KafkaConfig.RegistrationLeaseTimeoutMsProp)
+
+  private def parseProcessRoles(): List[ProcessRole] = {
+    getList(KafkaConfig.ProcessRolesProp).asScala.map {
+      case "broker" => BrokerRole
+      case "controller" => ControllerRole
+      case role => throw new ConfigException(s"Unknown process role $role")
+    }.toList
+  }
+
   def metadataLogDir: String = {
     Option(getString(KafkaConfig.MetadataLogDirProp)) match {
       case Some(dir) => dir
@@ -1935,14 +1945,11 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
         require(brokerId >= 0, "broker.id must be equal or greater than 0")
       }
     } else {
-      processRoles.asScala.foreach(role => if (!(role.equals("broker") || role.equals("controller"))) {
-        throw new ConfigException(s"Unknown process role ${role}")
-      })
       if (controlPlaneListenerName.isDefined) {
         throw new ConfigException(s"${KafkaConfig.ControlPlaneListenerNameProp} is not compatible with kip-500 mode.")
       }
-      val isBroker = processRoles.contains("broker")
-      val isController = processRoles.contains("controller")
+      val isBroker = processRoles.contains(BrokerRole)
+      val isController = processRoles.contains(ControllerRole)
       if (isBroker) {
         require(brokerId >= 0, "broker.id must be equal or greater than 0")
       }

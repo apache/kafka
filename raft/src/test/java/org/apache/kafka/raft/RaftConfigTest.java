@@ -66,6 +66,7 @@ public class RaftConfigTest {
         assertInvalidQuorumVoters("1@kafka1:9092,2@");
         assertInvalidQuorumVoters("1@kafka1:9092,2@blah");
         assertInvalidQuorumVoters("1@kafka1:9092,2@blah,");
+        assertInvalidQuorumVoters("1@kafka1:9092:1@kafka2:9092");
     }
 
     private void assertInvalidQuorumVoters(String value) {

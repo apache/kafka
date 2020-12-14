@@ -55,7 +55,7 @@ public class EndQuorumEpochRequest extends AbstractRequest {
     }
 
     @Override
-    protected EndQuorumEpochRequestData data() {
+    public EndQuorumEpochRequestData data() {
         return data;
     }
 

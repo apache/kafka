@@ -48,8 +48,8 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
 import static java.nio.file.StandardOpenOption.CREATE;
-import static java.nio.file.StandardOpenOption.WRITE;
 import static java.nio.file.StandardOpenOption.READ;
+import static java.nio.file.StandardOpenOption.WRITE;
 
 /**
  * The LocalLogManager has a test log that relies on a single local directory.  Each
@@ -72,7 +72,7 @@ import static java.nio.file.StandardOpenOption.READ;
  * are added to the log file.  The ScribeThread will pause this thread when the scribe
  * is active, since its services are not needed at that point.
  */
-public final class LocalLogManager implements MetaLogManager {
+public final class LocalLogManager implements MetaLogManager, AutoCloseable {
     /**
      * The global registry of locks on a particular path.
      */
@@ -776,8 +776,6 @@ public final class LocalLogManager implements MetaLogManager {
         } finally {
             managerLock.unlock();
         }
-        this.leadershipClaimerThread.start();
-        this.watcherThread.start();
     }
 
     @Override
@@ -806,7 +804,6 @@ public final class LocalLogManager implements MetaLogManager {
         leadershipClaimerThread.renounce(epoch);
     }
 
-    @Override
     public void beginShutdown() {
         leadershipClaimerThread.beginShutdown();
         watcherThread.beginShutdown();

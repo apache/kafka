@@ -34,14 +34,17 @@ object KafkaServerStartable {
   }
 }
 
-class KafkaServerStartable(val staticServerConfig: KafkaConfig, reporters: Seq[KafkaMetricsReporter], threadNamePrefix: Option[String] = None) extends Logging {
-  private val serverManager = KafkaServerManager(staticServerConfig, Time.SYSTEM,
-    threadNamePrefix, reporters)
+class KafkaServerStartable(
+  val staticServerConfig: KafkaConfig,
+  reporters: Seq[KafkaMetricsReporter],
+  threadNamePrefix: Option[String] = None
+) extends Logging {
+  private val server = KafkaServer(staticServerConfig, Time.SYSTEM, threadNamePrefix, reporters)
 
   def this(serverConfig: KafkaConfig) = this(serverConfig, Seq.empty)
 
   def startup(): Unit = {
-    try serverManager.startup()
+    try server.startup()
     catch {
       case _: Throwable =>
         // KafkaServerStartable.startup() calls shutdown() in case of exceptions, so we invoke `exit` to set the status code
@@ -51,8 +54,9 @@ class KafkaServerStartable(val staticServerConfig: KafkaConfig, reporters: Seq[K
   }
 
   def shutdown(): Unit = {
-    try serverManager.shutdown()
-    catch {
+    try {
+      server.shutdown()
+    } catch {
       case _: Throwable =>
         fatal("Halting Kafka.")
         // Calling exit() can lead to deadlock as exit() can be called multiple times. Force exit.
@@ -60,7 +64,7 @@ class KafkaServerStartable(val staticServerConfig: KafkaConfig, reporters: Seq[K
     }
   }
 
-  def awaitShutdown(): Unit = serverManager.awaitShutdown()
+  def awaitShutdown(): Unit = server.awaitShutdown()
 }
 
 

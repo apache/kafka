@@ -71,7 +71,7 @@ public class StopReplicaResponse extends AbstractResponse {
     }
 
     @Override
-    protected StopReplicaResponseData data() {
+    public StopReplicaResponseData data() {
         return data;
     }
 

@@ -219,7 +219,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
   def forgeBrokerMetadata(logDir: String, brokerId: Int, clusterId: String): Unit = {
     val checkpoint = new BrokerMetadataCheckpoint(
       new File(logDir + File.separator + brokerMetaPropsFile))
-    checkpoint.write(LegacyMetaProperties(brokerId, Option(clusterId)).toProperties())
+    checkpoint.write(LegacyMetaProperties(clusterId, brokerId).toProperties)
   }
 
   def verifyBrokerMetadata(logDirs: Seq[String], clusterId: String): Boolean = {
@@ -228,8 +228,8 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
         new File(logDir + File.separator + brokerMetaPropsFile)).read()
       brokerMetadataOpt match {
         case Some(properties) =>
-          val brokerMetadata = LegacyMetaProperties(properties)
-          if (brokerMetadata.clusterId.isDefined && brokerMetadata.clusterId.get != clusterId) return false
+          val brokerMetadata = RawMetaProperties(properties)
+          if (brokerMetadata.clusterId.exists(_ != clusterId)) return false
         case _ => return false
       }
     }

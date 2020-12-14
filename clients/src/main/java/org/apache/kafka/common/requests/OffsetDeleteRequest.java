@@ -71,7 +71,7 @@ public class OffsetDeleteRequest extends AbstractRequest {
     }
 
     @Override
-    protected OffsetDeleteRequestData data() {
+    public OffsetDeleteRequestData data() {
         return data;
     }
 }

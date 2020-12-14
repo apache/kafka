@@ -142,7 +142,7 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
     }
 
     @Override
-    protected WriteTxnMarkersRequestData data() {
+    public WriteTxnMarkersRequestData data() {
         return data;
     }
 

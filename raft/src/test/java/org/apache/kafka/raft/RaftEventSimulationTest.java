@@ -19,8 +19,8 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.protocol.Readable;
+import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.protocol.types.Type;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -62,9 +62,9 @@ public class RaftEventSimulationTest {
     private static final TopicPartition METADATA_PARTITION = new TopicPartition("__cluster_metadata", 0);
     private static final int ELECTION_TIMEOUT_MS = 1000;
     private static final int ELECTION_JITTER_MS = 100;
-    private static final int FETCH_TIMEOUT_MS = 5000;
+    private static final int FETCH_TIMEOUT_MS = 3000;
     private static final int RETRY_BACKOFF_MS = 50;
-    private static final int REQUEST_TIMEOUT_MS = 500;
+    private static final int REQUEST_TIMEOUT_MS = 3000;
     private static final int FETCH_MAX_WAIT_MS = 100;
     private static final int LINGER_MS = 0;
 
@@ -115,7 +115,7 @@ public class RaftEventSimulationTest {
 
     @Test
     public void testElectionAfterLeaderFailureQuorumSizeThreeAndTwoObservers() {
-        testElectionAfterLeaderFailure(new QuorumConfig(3, 2));
+        testElectionAfterLeaderFailure(new QuorumConfig(3, 1));
     }
 
     @Test
@@ -748,6 +748,7 @@ public class RaftEventSimulationTest {
             LogContext logContext = new LogContext("[Node " + nodeId + "] ");
             PersistentState persistentState = nodes.get(nodeId);
             MockNetworkChannel channel = new MockNetworkChannel(correlationIdCounter);
+            MockMessageQueue messageQueue = new MockMessageQueue();
             QuorumState quorum = new QuorumState(nodeId, voters(), ELECTION_TIMEOUT_MS,
                 FETCH_TIMEOUT_MS, persistentState.store, time, logContext, random);
             Metrics metrics = new Metrics(time);
@@ -766,6 +767,7 @@ public class RaftEventSimulationTest {
             KafkaRaftClient<Integer> client = new KafkaRaftClient<>(
                 serde,
                 channel,
+                messageQueue,
                 persistentState.log,
                 quorum,
                 memoryPool,
@@ -781,8 +783,16 @@ public class RaftEventSimulationTest {
                 logContext,
                 random
             );
-            RaftNode node = new RaftNode(nodeId, client, persistentState.log, channel,
-                    persistentState.store, quorum, logContext);
+            RaftNode node = new RaftNode(
+                nodeId,
+                client,
+                persistentState.log,
+                channel,
+                messageQueue,
+                persistentState.store,
+                quorum,
+                logContext
+            );
             node.initialize();
             running.put(nodeId, node);
         }
@@ -793,22 +803,27 @@ public class RaftEventSimulationTest {
         final KafkaRaftClient<Integer> client;
         final MockLog log;
         final MockNetworkChannel channel;
+        final MockMessageQueue messageQueue;
         final MockQuorumStateStore store;
         final QuorumState quorum;
         final LogContext logContext;
         final ReplicatedCounter counter;
 
-        private RaftNode(int nodeId,
-                         KafkaRaftClient<Integer> client,
-                         MockLog log,
-                         MockNetworkChannel channel,
-                         MockQuorumStateStore store,
-                         QuorumState quorum,
-                         LogContext logContext) {
+        private RaftNode(
+            int nodeId,
+            KafkaRaftClient<Integer> client,
+            MockLog log,
+            MockNetworkChannel channel,
+            MockMessageQueue messageQueue,
+            MockQuorumStateStore store,
+            QuorumState quorum,
+            LogContext logContext
+        ) {
             this.nodeId = nodeId;
             this.client = client;
             this.log = log;
             this.channel = channel;
+            this.messageQueue = messageQueue;
             this.store = store;
             this.quorum = quorum;
             this.logContext = logContext;
@@ -826,9 +841,11 @@ public class RaftEventSimulationTest {
 
         void poll() {
             try {
-                client.poll();
-            } catch (IOException e) {
-                throw new RuntimeException(e);
+                do {
+                    client.poll();
+                } while (client.isRunning() && !messageQueue.isEmpty());
+            } catch (Exception e) {
+                throw new RuntimeException("Uncaught exception during poll of node " + nodeId, e);
             }
         }
     }
@@ -1025,7 +1042,7 @@ public class RaftEventSimulationTest {
             return (int) Type.INT32.read(value);
         }
 
-        private void assertCommittedData(int nodeId, KafkaRaftClient manager, MockLog log) {
+        private void assertCommittedData(int nodeId, KafkaRaftClient<Integer> manager, MockLog log) {
             OptionalLong highWatermark = manager.highWatermark();
             if (!highWatermark.isPresent()) {
                 // We cannot do validation if the current high watermark is unknown
@@ -1070,18 +1087,26 @@ public class RaftEventSimulationTest {
         }
 
         void deliver(int senderId, RaftRequest.Outbound outbound) {
+            if (!filters.get(senderId).acceptOutbound(outbound))
+                return;
+
             int correlationId = outbound.correlationId();
             int destinationId = outbound.destinationId();
-            RaftRequest.Inbound inbound = new RaftRequest.Inbound(correlationId, outbound.data(),
-                cluster.time.milliseconds());
+            RaftRequest.Inbound inbound = new RaftRequest.Inbound(correlationId, outbound.data());
 
             if (!filters.get(destinationId).acceptInbound(inbound))
                 return;
 
             cluster.nodeIfRunning(destinationId).ifPresent(node -> {
-                MockNetworkChannel destChannel = node.channel;
                 inflight.put(correlationId, new InflightRequest(correlationId, senderId, destinationId));
-                destChannel.mockReceive(inbound);
+
+                inbound.completion.whenComplete((response, exception) -> {
+                    if (response != null && filters.get(destinationId).acceptOutbound(response)) {
+                        deliver(destinationId, response);
+                    }
+                });
+
+                node.client.handle(inbound);
             });
         }
 
@@ -1089,6 +1114,7 @@ public class RaftEventSimulationTest {
             int correlationId = outbound.correlationId();
             RaftResponse.Inbound inbound = new RaftResponse.Inbound(correlationId, outbound.data(), senderId);
             InflightRequest inflightRequest = inflight.remove(correlationId);
+
             if (!filters.get(inflightRequest.sourceId).acceptInbound(inbound))
                 return;
 
@@ -1097,24 +1123,8 @@ public class RaftEventSimulationTest {
             });
         }
 
-        void deliver(int senderId, RaftMessage message) {
-            if (!filters.get(senderId).acceptOutbound(message)) {
-                return;
-            } else if (message instanceof RaftRequest.Outbound) {
-                deliver(senderId, (RaftRequest.Outbound) message);
-            } else if (message instanceof RaftResponse.Outbound) {
-                deliver(senderId, (RaftResponse.Outbound) message);
-            } else {
-                throw new AssertionError("Illegal message type sent by node " + message);
-            }
-        }
-
         void filter(int nodeId, NetworkFilter filter) {
             filters.put(nodeId, filter);
-        }
-
-        void deliverRandom() {
-            cluster.forRandomRunning(this::deliverTo);
         }
 
         void deliverTo(RaftNode node) {

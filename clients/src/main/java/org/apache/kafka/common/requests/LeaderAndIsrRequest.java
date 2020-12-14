@@ -166,7 +166,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
         return Collections.unmodifiableList(data.liveLeaders());
     }
 
-    protected LeaderAndIsrRequestData data() {
+    public LeaderAndIsrRequestData data() {
         return data;
     }
 

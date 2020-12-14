@@ -122,7 +122,7 @@ public class LeaveGroupResponse extends AbstractResponse {
     }
 
     @Override
-    protected LeaveGroupResponseData data() {
+    public LeaveGroupResponseData data() {
         return data;
     }
 

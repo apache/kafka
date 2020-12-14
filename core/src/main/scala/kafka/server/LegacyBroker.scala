@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReferenc
 
 import kafka.api.{KAFKA_0_9_0, KAFKA_2_2_IV0, KAFKA_2_4_IV1}
 import kafka.cluster.Broker
-import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException, InconsistentBrokerMetadataException, InconsistentClusterIdException}
+import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException, InconsistentClusterIdException}
 import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
@@ -50,8 +50,8 @@ import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.zookeeper.client.ZKClientConfig
 
+import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
-import scala.collection.{Map, Seq, mutable}
 
 object LegacyBroker {
   def zkClientConfigFromKafkaConfig(config: KafkaConfig, forceZkSslClientEnable: Boolean = false) =
@@ -194,16 +194,17 @@ class LegacyBroker(val config: KafkaConfig,
         info(s"Cluster ID = ${_clusterId}")
 
         /* load metadata */
-        val (preloadedBrokerMetadataCheckpoint, initialOfflineDirs) = getBrokerMetadataAndOfflineDirs
+        val (preloadedMetaProperties, initialOfflineDirs) =
+          BrokerMetadataCheckpoint.getBrokerMetadataAndOfflineDirs(config.logDirs)
 
         /* check cluster id */
-        if (preloadedBrokerMetadataCheckpoint.clusterId.isDefined && preloadedBrokerMetadataCheckpoint.clusterId.get != _clusterId)
+        if (preloadedMetaProperties.clusterId.exists(_ != _clusterId))
           throw new InconsistentClusterIdException(
-            s"The Cluster ID ${_clusterId} doesn't match stored clusterId ${preloadedBrokerMetadataCheckpoint.clusterId} in meta.properties. " +
+            s"The Cluster ID ${_clusterId} doesn't match stored clusterId ${preloadedMetaProperties.clusterId} in meta.properties. " +
             s"The broker is trying to join the wrong cluster. Configured zookeeper.connect may be wrong.")
 
         /* generate brokerId */
-        config.brokerId = getOrGenerateBrokerId(preloadedBrokerMetadataCheckpoint)
+        config.brokerId = getOrGenerateBrokerId(preloadedMetaProperties)
         logContext = new LogContext(s"[KafkaBroker id=${config.brokerId}] ")
         this.logIdent = logContext.logPrefix
 
@@ -239,6 +240,7 @@ class LegacyBroker(val config: KafkaConfig,
 
         /* start log manager */
         brokerState.set(BrokerState.RECOVERY)
+        logManager = LogManager(config, initialOfflineDirs, kafkaScheduler, time, brokerTopicStats, logDirFailureChannel)
         logManager.startup()
         brokerState.set(BrokerState.RUNNING)
 
@@ -271,7 +273,7 @@ class LegacyBroker(val config: KafkaConfig,
         val brokerEpoch = zkClient.registerBroker(brokerInfo)
 
         // Now that the broker is successfully registered, checkpoint its metadata
-        checkpointBrokerMetadata(LegacyMetaProperties(config.brokerId, Some(_clusterId)))
+        checkpointBrokerMetadata(LegacyMetaProperties(_clusterId, config.brokerId))
 
         /* start token manager */
         tokenManager = new DelegationTokenManager(config, tokenCache, time , zkClient)
@@ -716,58 +718,14 @@ class LegacyBroker(val config: KafkaConfig,
   def boundPort(listenerName: ListenerName): Int = socketServer.boundPort(listenerName)
 
   /**
-   * Reads the BrokerMetadata. If the BrokerMetadata doesn't match in all the log.dirs, InconsistentBrokerMetadataException is
-   * thrown.
-   *
-   * The log directories whose meta.properties can not be accessed due to IOException will be returned to the caller
-   *
-   * @return A 2-tuple containing the brokerMetadata and a sequence of offline log directories.
-   */
-  private def getBrokerMetadataAndOfflineDirs: (LegacyMetaProperties, Seq[String]) = {
-    val brokerMetadataMap = mutable.HashMap[String, LegacyMetaProperties]()
-    val brokerMetadataSet = mutable.HashSet[LegacyMetaProperties]()
-    val offlineDirs = mutable.ArrayBuffer.empty[String]
-
-    for (logDir <- config.logDirs) {
-      try {
-        brokerMetadataCheckpoints(logDir).read().foreach(properties => {
-          val brokerMetadata = LegacyMetaProperties(properties)
-          brokerMetadataMap += (logDir -> brokerMetadata)
-          brokerMetadataSet += brokerMetadata
-        })
-      } catch {
-        case e: IOException =>
-          offlineDirs += logDir
-          error(s"Fail to read $brokerMetaPropsFile under log directory $logDir", e)
-      }
-    }
-
-    if (brokerMetadataSet.size > 1) {
-      val builder = new StringBuilder
-
-      for ((logDir, brokerMetadata) <- brokerMetadataMap)
-        builder ++= s"- $logDir -> $brokerMetadata\n"
-
-      throw new InconsistentBrokerMetadataException(
-        s"BrokerMetadata is not consistent across log.dirs. This could happen if multiple brokers shared a log directory (log.dirs) " +
-        s"or partial data was manually copied from another broker. Found:\n${builder.toString()}"
-      )
-    } else if (brokerMetadataSet.size == 1)
-      (brokerMetadataSet.last, offlineDirs)
-    else
-      (LegacyMetaProperties(-1, None), offlineDirs)
-  }
-
-
-  /**
    * Checkpoint the BrokerMetadata to all the online log.dirs
    *
    * @param brokerMetadata
    */
-  private def checkpointBrokerMetadata(brokerMetadata: LegacyMetaProperties) = {
+  private def checkpointBrokerMetadata(brokerMetadata: LegacyMetaProperties): Unit = {
     for (logDir <- config.logDirs if logManager.isLogDirOnline(new File(logDir).getAbsolutePath)) {
       val checkpoint = brokerMetadataCheckpoints(logDir)
-      checkpoint.write(brokerMetadata.toProperties())
+      checkpoint.write(brokerMetadata.toProperties)
     }
   }
 
@@ -781,18 +739,18 @@ class LegacyBroker(val config: KafkaConfig,
    *
    * @return The brokerId.
    */
-  private def getOrGenerateBrokerId(brokerMetadata: LegacyMetaProperties): Int = {
+  private def getOrGenerateBrokerId(brokerMetadata: RawMetaProperties): Int = {
     val brokerId = config.brokerId
 
-    if (brokerId >= 0 && brokerMetadata.brokerId >= 0 && brokerMetadata.brokerId != brokerId)
+    if (brokerId >= 0 && brokerMetadata.brokerId.exists(_ != brokerId))
       throw new InconsistentBrokerIdException(
         s"Configured broker.id $brokerId doesn't match stored broker.id ${brokerMetadata.brokerId} in meta.properties. " +
         s"If you moved your data, make sure your configured broker.id matches. " +
         s"If you intend to create a new broker, you should remove all data in your data directories (log.dirs).")
-    else if (brokerMetadata.brokerId < 0 && brokerId < 0 && config.brokerIdGenerationEnable) // generate a new brokerId from Zookeeper
+    else if (brokerMetadata.brokerId.isDefined)
+      brokerMetadata.brokerId.get
+    else if (brokerId < 0 && config.brokerIdGenerationEnable) // generate a new brokerId from Zookeeper
       generateBrokerId
-    else if (brokerMetadata.brokerId >= 0) // pick broker.id from meta.properties
-      brokerMetadata.brokerId
     else
       brokerId
   }

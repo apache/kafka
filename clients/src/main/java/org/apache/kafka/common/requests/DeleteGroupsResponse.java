@@ -47,7 +47,7 @@ public class DeleteGroupsResponse extends AbstractResponse {
     }
 
     @Override
-    protected DeleteGroupsResponseData data() {
+    public DeleteGroupsResponseData data() {
         return data;
     }
 

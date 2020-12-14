@@ -127,11 +127,14 @@ class TxnMarkerQueue(@volatile var destination: Node) {
   def totalNumMarkers(txnTopicPartition: Int): Int = markersPerTxnTopicPartition.get(txnTopicPartition).fold(0)(_.size)
 }
 
-class TransactionMarkerChannelManager(config: KafkaConfig,
-                                      metadataCache: MetadataCache,
-                                      networkClient: NetworkClient,
-                                      txnStateManager: TransactionStateManager,
-                                      time: Time) extends InterBrokerSendThread("TxnMarkerSenderThread-" + config.brokerId, networkClient, time) with Logging with KafkaMetricsGroup {
+class TransactionMarkerChannelManager(
+  config: KafkaConfig,
+  metadataCache: MetadataCache,
+  networkClient: NetworkClient,
+  txnStateManager: TransactionStateManager,
+  time: Time
+) extends InterBrokerSendThread("TxnMarkerSenderThread-" + config.brokerId, networkClient, config.requestTimeoutMs, time)
+  with Logging with KafkaMetricsGroup {
 
   this.logIdent = "[Transaction Marker Channel Manager " + config.brokerId + "]: "
 
@@ -145,8 +148,6 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
 
   private val transactionsWithPendingMarkers = new ConcurrentHashMap[String, PendingCompleteTxn]
 
-  override val requestTimeoutMs: Int = config.requestTimeoutMs
-
   val writeTxnMarkersRequestVersion: Short =
     if (config.interBrokerProtocolVersion >= KAFKA_2_8_IV0) 1
     else 0
@@ -154,7 +155,10 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
   newGauge("UnknownDestinationQueueSize", () => markersQueueForUnknownBroker.totalNumMarkers)
   newGauge("LogAppendRetryQueueSize", () => txnLogAppendRetryQueue.size)
 
-  override def generateRequests() = (drainQueuedTransactionMarkers(), Long.MaxValue)
+  override def doWork(): Unit = {
+    drainQueuedTransactionMarkers().foreach(super.sendRequest)
+    super.doWork()
+  }
 
   override def shutdown(): Unit = {
     super.shutdown()

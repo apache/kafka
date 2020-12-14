@@ -23,8 +23,9 @@ import java.nio.file.Files
 import java.util
 import java.util.Properties
 
-import kafka.server.KafkaConfig
+import kafka.server.{KafkaConfig, MetaProperties}
 import kafka.utils.TestUtils
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -163,14 +164,15 @@ Found problem:
     val tempDir = TestUtils.tempDir()
     val clusterId = "26c36907-4158-4a35-919d-6534229f5241"
     try {
+      val metaProperties = MetaProperties(clusterId = Uuid.fromString(clusterId), brokerId = None, controllerId = None)
       val stream = new ByteArrayOutputStream()
       assertEquals(0, StorageTool.
-        formatCommand(new PrintStream(stream), Seq(tempDir.toString), clusterId, false))
+        formatCommand(new PrintStream(stream), Seq(tempDir.toString), metaProperties, false))
       assertEquals("Formatting %s%n".format(tempDir), stream.toString())
 
       try {
         assertEquals(1, StorageTool.
-          formatCommand(new PrintStream(new ByteArrayOutputStream()), Seq(tempDir.toString), clusterId, false))
+          formatCommand(new PrintStream(new ByteArrayOutputStream()), Seq(tempDir.toString), metaProperties, false))
       } catch {
         case e: TerseFailure => assertEquals(s"Log directory ${tempDir} is already " +
           "formatted. Use --ignore-formatted to ignore this directory and format the " +
@@ -179,7 +181,7 @@ Found problem:
 
       try {
         assertEquals(1, StorageTool.
-          formatCommand(new PrintStream(new ByteArrayOutputStream()), Seq(tempDir.toString), clusterId, true))
+          formatCommand(new PrintStream(new ByteArrayOutputStream()), Seq(tempDir.toString), metaProperties, true))
       } catch {
         case e: TerseFailure => assertEquals("All of the log directories are already " +
           "formatted.", e.getMessage)
@@ -194,8 +196,9 @@ Found problem:
     val tempDir = TestUtils.tempDir()
     val clusterId = "invalid"
     try {
+      val metaProperties = MetaProperties(clusterId = Uuid.fromString(clusterId), brokerId = None, controllerId = None)
       assertEquals(1, StorageTool.
-        formatCommand(new PrintStream(new ByteArrayOutputStream()), Seq(tempDir.toString), clusterId, false))
+        formatCommand(new PrintStream(new ByteArrayOutputStream()), Seq(tempDir.toString), metaProperties, false))
     } catch {
       case e: TerseFailure =>
         assertEquals("Cluster ID string invalid does not appear to be a valid UUID: " +

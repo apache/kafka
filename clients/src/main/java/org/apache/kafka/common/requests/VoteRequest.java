@@ -55,7 +55,7 @@ public class VoteRequest extends AbstractRequest {
     }
 
     @Override
-    protected VoteRequestData data() {
+    public VoteRequestData data() {
         return data;
     }
 

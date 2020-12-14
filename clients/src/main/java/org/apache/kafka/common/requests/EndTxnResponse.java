@@ -61,7 +61,7 @@ public class EndTxnResponse extends AbstractResponse {
     }
 
     @Override
-    protected EndTxnResponseData data() {
+    public EndTxnResponseData data() {
         return data;
     }
 

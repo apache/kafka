@@ -95,6 +95,8 @@ class TestRaftServer(
     val metadataLog = buildMetadataLog(logDir)
     val networkChannel = buildNetworkChannel(raftConfig, logContext)
 
+    networkChannel.start()
+
     val raftClient = buildRaftClient(
       raftConfig,
       metadataLog,
@@ -114,7 +116,7 @@ class TestRaftServer(
     raftClient.initialize()
 
     val requestHandler = new TestRaftRequestHandler(
-      networkChannel,
+      raftClient,
       socketServer.dataPlaneRequestChannel,
       time
     )
@@ -163,9 +165,7 @@ class TestRaftServer(
   private def buildNetworkChannel(raftConfig: RaftConfig,
                                   logContext: LogContext): KafkaNetworkChannel = {
     val netClient = buildNetworkClient(raftConfig, logContext)
-    val clientId = s"Raft-${config.brokerId}"
-    new KafkaNetworkChannel(time, netClient, clientId,
-      raftConfig.retryBackoffMs, raftConfig.requestTimeoutMs)
+    new KafkaNetworkChannel(time, netClient, raftConfig.requestTimeoutMs)
   }
 
   private def buildMetadataLog(logDir: File): KafkaMetadataLog = {
@@ -218,6 +218,7 @@ class TestRaftServer(
     val expirationTimer = new SystemTimer("raft-expiration-executor")
     val expirationService = new TimingWheelExpirationService(expirationTimer)
     val serde = new ByteArraySerde
+    val metrics = new Metrics()
 
     new KafkaRaftClient(
       raftConfig,
@@ -226,6 +227,7 @@ class TestRaftServer(
       metadataLog,
       quorumState,
       time,
+      metrics,
       expirationService,
       logContext
     )
@@ -312,7 +314,7 @@ class TestRaftServer(
       eventQueue.offer(HandleClaim(epoch))
     }
 
-    override def handleResign(): Unit = {
+    override def handleResign(epoch: Int): Unit = {
       eventQueue.offer(HandleResign)
     }
 

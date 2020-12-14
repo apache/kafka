@@ -61,4 +61,9 @@ public class BrokerRegistrationResponse extends AbstractResponse {
     public boolean shouldClientThrottle(short version) {
         return true;
     }
+
+    @Override
+    public String toString() {
+        return data.toString();
+    }
 }

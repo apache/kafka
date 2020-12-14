@@ -27,8 +27,6 @@ import org.apache.kafka.common.requests.AbstractRequest
 import org.easymock.EasyMock
 import org.junit.{Assert, Test}
 
-import scala.collection.mutable
-
 class InterBrokerSendThreadTest {
   private val time = new MockTime()
   private val networkClient: NetworkClient = EasyMock.createMock(classOf[NetworkClient])
@@ -37,10 +35,7 @@ class InterBrokerSendThreadTest {
 
   @Test
   def shouldNotSendAnythingWhenNoRequests(): Unit = {
-    val sendThread = new InterBrokerSendThread("name", networkClient, time) {
-      override val requestTimeoutMs: Int = InterBrokerSendThreadTest.this.requestTimeoutMs
-      override def generateRequests() = (mutable.Iterable.empty, Long.MaxValue)
-    }
+    val sendThread = new InterBrokerSendThread("name", networkClient, requestTimeoutMs, time)
 
     // poll is always called but there should be no further invocations on NetworkClient
     EasyMock.expect(networkClient.poll(EasyMock.anyLong(), EasyMock.anyLong()))
@@ -59,12 +54,11 @@ class InterBrokerSendThreadTest {
     val request = new StubRequestBuilder()
     val node = new Node(1, "", 8080)
     val handler = RequestAndCompletionHandler(node, request, completionHandler)
-    val sendThread = new InterBrokerSendThread("name", networkClient, time) {
-      override val requestTimeoutMs: Int = InterBrokerSendThreadTest.this.requestTimeoutMs
-      override def generateRequests() = (List[RequestAndCompletionHandler](handler), Long.MaxValue)
-    }
+    val sendThread = new InterBrokerSendThread("name", networkClient, requestTimeoutMs, time)
 
     val clientRequest = new ClientRequest("dest", request, 0, "1", 0, true, requestTimeoutMs, handler.handler)
+
+    EasyMock.expect(networkClient.wakeup())
 
     EasyMock.expect(networkClient.newClientRequest(
       EasyMock.eq("1"),
@@ -85,6 +79,7 @@ class InterBrokerSendThreadTest {
 
     EasyMock.replay(networkClient)
 
+    sendThread.sendRequest(handler)
     sendThread.doWork()
 
     EasyMock.verify(networkClient)
@@ -95,21 +90,20 @@ class InterBrokerSendThreadTest {
   def shouldCallCompletionHandlerWithDisconnectedResponseWhenNodeNotReady(): Unit = {
     val request = new StubRequestBuilder
     val node = new Node(1, "", 8080)
-    val requestAndCompletionHandler = RequestAndCompletionHandler(node, request, completionHandler)
-    val sendThread = new InterBrokerSendThread("name", networkClient, time) {
-      override val requestTimeoutMs: Int = InterBrokerSendThreadTest.this.requestTimeoutMs
-      override def generateRequests() = (List[RequestAndCompletionHandler](requestAndCompletionHandler), Long.MaxValue)
-    }
+    val handler = RequestAndCompletionHandler(node, request, completionHandler)
+    val sendThread = new InterBrokerSendThread("name", networkClient, requestTimeoutMs, time)
 
-    val clientRequest = new ClientRequest("dest", request, 0, "1", 0, true, requestTimeoutMs, requestAndCompletionHandler.handler)
+    val clientRequest = new ClientRequest("dest", request, 0, "1", 0, true, requestTimeoutMs, handler.handler)
+
+    EasyMock.expect(networkClient.wakeup())
 
     EasyMock.expect(networkClient.newClientRequest(
       EasyMock.eq("1"),
-      EasyMock.same(requestAndCompletionHandler.request),
+      EasyMock.same(handler.request),
       EasyMock.anyLong(),
       EasyMock.eq(true),
       EasyMock.eq(requestTimeoutMs),
-      EasyMock.same(requestAndCompletionHandler.handler)))
+      EasyMock.same(handler.handler)))
       .andReturn(clientRequest)
 
     EasyMock.expect(networkClient.ready(node, time.milliseconds()))
@@ -129,6 +123,7 @@ class InterBrokerSendThreadTest {
 
     EasyMock.replay(networkClient)
 
+    sendThread.sendRequest(handler)
     sendThread.doWork()
 
     EasyMock.verify(networkClient)
@@ -140,10 +135,7 @@ class InterBrokerSendThreadTest {
     val request = new StubRequestBuilder()
     val node = new Node(1, "", 8080)
     val handler = RequestAndCompletionHandler(node, request, completionHandler)
-    val sendThread = new InterBrokerSendThread("name", networkClient, time) {
-      override val requestTimeoutMs: Int = InterBrokerSendThreadTest.this.requestTimeoutMs
-      override def generateRequests() = (List[RequestAndCompletionHandler](handler), Long.MaxValue)
-    }
+    val sendThread = new InterBrokerSendThread("name", networkClient, requestTimeoutMs, time)
 
     val clientRequest = new ClientRequest("dest",
       request,
@@ -154,6 +146,8 @@ class InterBrokerSendThreadTest {
       requestTimeoutMs,
       handler.handler)
     time.sleep(1500)
+
+    EasyMock.expect(networkClient.wakeup())
 
     EasyMock.expect(networkClient.newClientRequest(
       EasyMock.eq("1"),
@@ -180,6 +174,7 @@ class InterBrokerSendThreadTest {
 
     EasyMock.replay(networkClient)
 
+    sendThread.sendRequest(handler)
     sendThread.doWork()
 
     EasyMock.verify(networkClient)

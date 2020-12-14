@@ -186,8 +186,8 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
         new File(logDir + File.separator + brokerMetaPropsFile)).read()
       brokerMetadataOpt match {
         case Some(properties) =>
-          val brokerMetadata = LegacyMetaProperties(properties)
-          if (brokerMetadata.brokerId != brokerId) return false
+          val brokerMetadata = RawMetaProperties(properties)
+          if (brokerMetadata.brokerId.exists(_ != brokerId)) return false
         case _ => return false
       }
     }

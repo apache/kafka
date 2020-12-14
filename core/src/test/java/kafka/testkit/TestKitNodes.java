@@ -17,18 +17,19 @@
 
 package kafka.testkit;
 
+import org.apache.kafka.common.Uuid;
+
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
-import java.util.UUID;
 
 public class TestKitNodes {
     public static class Builder {
-        private UUID clusterId = null;
+        private Uuid clusterId = null;
         private final NavigableMap<Integer, ControllerNode> controllerNodes = new TreeMap<>();
 
-        public Builder setClusterId(UUID clusterId) {
+        public Builder setClusterId(Uuid clusterId) {
             this.clusterId = clusterId;
             return this;
         }
@@ -74,21 +75,21 @@ public class TestKitNodes {
 
         public TestKitNodes build() {
             if (clusterId == null) {
-                clusterId = UUID.randomUUID();
+                clusterId = Uuid.randomUuid();
             }
             return new TestKitNodes(clusterId, controllerNodes);
         }
     }
 
-    private final UUID clusterId;
+    private final Uuid clusterId;
     private final NavigableMap<Integer, ControllerNode> controllerNodes;
 
-    private TestKitNodes(UUID clusterId, NavigableMap<Integer, ControllerNode> controllerNodes) {
+    private TestKitNodes(Uuid clusterId, NavigableMap<Integer, ControllerNode> controllerNodes) {
         this.clusterId = clusterId;
         this.controllerNodes = controllerNodes;
     }
 
-    public UUID clusterId() {
+    public Uuid clusterId() {
         return clusterId;
     }
 
