@@ -776,6 +776,8 @@ public final class LocalLogManager implements MetaLogManager, AutoCloseable {
         } finally {
             managerLock.unlock();
         }
+        this.leadershipClaimerThread.start();
+        this.watcherThread.start();
     }
 
     @Override
