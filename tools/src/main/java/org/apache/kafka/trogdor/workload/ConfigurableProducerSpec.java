@@ -77,7 +77,6 @@ import java.util.Optional;
  *         "type": "gaussianTimestampRandom",
  *         "messageSizeAverage": 512,
  *         "messageSizeDeviation": 100,
- *         "timestampBytes": 8,
  *         "messagesUntilSizeChange": 100
  *     },
  *     "producerConf": {
@@ -102,8 +101,8 @@ import java.util.Optional;
  *   * Ran on `trogdor-agent-0` for 1 hour starting at 2020-12-02 22:51:37.662 GMT
  *   * Produced with acks=all to Partition 5 of `topic0` on kafka server `some.example.kafka.server:9091`.
  *   * The average batch had 16 messages, with a standard deviation of 4 messages.
- *   * The message had a 8-bit constant key, with an average value of 512 bytes and a standard deviation of 100 bytes.
- *   * The messages had millisecond timestamps embedded in the first 8-bytes of the value.
+ *   * The messages had 8-byte constant keys with an average size of 512 bytes and a standard deviation of 100 bytes.
+ *   * The messages had millisecond timestamps embedded in the first several bytes of the value.
  *   * The average throughput was 500 messages/second, with a window of 100ms and a deviation of 50 messages/second.
  */
 

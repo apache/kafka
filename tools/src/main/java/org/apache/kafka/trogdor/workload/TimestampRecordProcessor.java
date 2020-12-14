@@ -39,7 +39,6 @@ import java.nio.ByteOrder;
  * Example spec:
  * {
  *    "type": "timestampRandom",
- *    "timestampBytes": 8,
  *    "histogramMaxMs": 10000,
  *    "histogramMinMs": 0,
  *    "histogramStepMs": 1
@@ -49,7 +48,6 @@ import java.nio.ByteOrder;
  */
 
 public class TimestampRecordProcessor implements RecordProcessor {
-    private final int timestampBytes;
     private final int histogramMaxMs;
     private final int histogramMinMs;
     private final int histogramStepMs;
@@ -61,22 +59,15 @@ public class TimestampRecordProcessor implements RecordProcessor {
     final static float[] PERCENTILES = {0.5f, 0.95f, 0.99f};
 
     @JsonCreator
-    public TimestampRecordProcessor(@JsonProperty("timestampBytes") int timestampBytes,
-                                    @JsonProperty("histogramMaxMs") int histogramMaxMs,
+    public TimestampRecordProcessor(@JsonProperty("histogramMaxMs") int histogramMaxMs,
                                     @JsonProperty("histogramMinMs") int histogramMinMs,
                                     @JsonProperty("histogramStepMs") int histogramStepMs) {
-        this.timestampBytes = timestampBytes;
         this.histogramMaxMs = histogramMaxMs;
         this.histogramMinMs = histogramMinMs;
         this.histogramStepMs = histogramStepMs;
         this.histogram = new Histogram((histogramMaxMs - histogramMinMs) / histogramStepMs);
-        buffer = ByteBuffer.allocate(timestampBytes);
+        buffer = ByteBuffer.allocate(Long.BYTES);
         buffer.order(ByteOrder.LITTLE_ENDIAN);
-    }
-
-    @JsonProperty
-    public int timestampBytes() {
-        return timestampBytes;
     }
 
     @JsonProperty
@@ -105,7 +96,7 @@ public class TimestampRecordProcessor implements RecordProcessor {
         for (ConsumerRecord<byte[], byte[]> record : consumerRecords) {
             try {
                 buffer.clear();
-                buffer.put(record.value(), 0, timestampBytes);
+                buffer.put(record.value(), 0, Long.BYTES);
                 buffer.rewind();
                 putHistogram(curTime - buffer.getLong());
             } catch (RuntimeException e) {

@@ -38,22 +38,19 @@ import java.nio.ByteBuffer;
  * of a system.
  *
  * `size` - The size in bytes of each message.
- * `timestampBytes` - The amount of bytes to use for the timestamp.  Usually 8.
  * `seed` - Used to initialize Random() to remove some non-determinism.
  *
  * Here is an example spec:
  *
  * {
  *    "type": "timestampRandom",
- *    "size": 512,
- *    "timestampBytes": 8
+ *    "size": 512
  * }
  *
- * This will generate a 512-byte random message with the first 8 bytes encoded with the timestamp.
+ * This will generate a 512-byte random message with the first several bytes encoded with the timestamp.
  */
 public class TimestampRandomPayloadGenerator implements PayloadGenerator {
     private final int size;
-    private final int timestampBytes;
     private final long seed;
 
     private final byte[] randomBytes;
@@ -63,20 +60,15 @@ public class TimestampRandomPayloadGenerator implements PayloadGenerator {
 
     @JsonCreator
     public TimestampRandomPayloadGenerator(@JsonProperty("size") int size,
-                                           @JsonProperty("timestampBytes") int timestampBytes,
                                            @JsonProperty("seed") long seed) {
         this.size = size;
         this.seed = seed;
-        this.timestampBytes = timestampBytes;
-        if (size < timestampBytes) {
-            throw new RuntimeException("The size of the payload must be greater than or equal to " + timestampBytes + ".");
-        }
-        if (timestampBytes < Long.BYTES) {
-            throw new RuntimeException("The size of the timestamp must be greater than or equal to " + Long.BYTES + ".");
+        if (size < Long.BYTES) {
+            throw new RuntimeException("The size of the payload must be greater than or equal to " + Long.BYTES + ".");
         }
         random.setSeed(seed);
-        this.randomBytes = new byte[size - timestampBytes];
-        buffer = ByteBuffer.allocate(timestampBytes);
+        this.randomBytes = new byte[size - Long.BYTES];
+        buffer = ByteBuffer.allocate(Long.BYTES);
         buffer.order(ByteOrder.LITTLE_ENDIAN);
     }
 
@@ -90,11 +82,6 @@ public class TimestampRandomPayloadGenerator implements PayloadGenerator {
         return seed;
     }
 
-    @JsonProperty
-    public int timestampBytes() {
-        return timestampBytes;
-    }
-
     @Override
     public synchronized byte[] generate(long position) {
         // Generate out of order to prevent inclusion of random number generation in latency numbers.
@@ -102,14 +89,14 @@ public class TimestampRandomPayloadGenerator implements PayloadGenerator {
         if (randomBytes.length > 0) {
             random.setSeed(seed + position);
             random.nextBytes(randomBytes);
-            System.arraycopy(randomBytes, 0, result, timestampBytes, randomBytes.length);
+            System.arraycopy(randomBytes, 0, result, Long.BYTES, randomBytes.length);
         }
 
         // Do the timestamp generation as the very last task.
         buffer.clear();
         buffer.putLong(Time.SYSTEM.milliseconds());
         buffer.rewind();
-        System.arraycopy(buffer.array(), 0, result, 0, timestampBytes);
+        System.arraycopy(buffer.array(), 0, result, 0, Long.BYTES);
         return result;
     }
 }

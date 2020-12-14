@@ -34,7 +34,6 @@ import java.util.Random;
  *
  * `messageSizeAverage` - The average size in bytes of each message.
  * `messageSizeDeviation` - The standard deviation to use when calculating message size.
- * `timestampBytes` - The amount of bytes to use for the timestamp.  Usually 8.
  * `messagesUntilSizeChange` - The number of messages to keep at the same size.
  * `seed` - Used to initialize Random() to remove some non-determinism.
  *
@@ -44,13 +43,12 @@ import java.util.Random;
  *    "type": "gaussianTimestampRandom",
  *    "messageSizeAverage": 512,
  *    "messageSizeDeviation": 100,
- *    "timestampBytes": 8,
  *    "messagesUntilSizeChange": 100
  * }
  *
- * This will generate messages on a gaussian distribution with an average size each 512-bytes and the first 8 bytes
- * encoded with the timestamp.  The message sizes will have a standard deviation of 100 bytes, and the size will only
- * change every 100 messages.  The distribution of messages will be as follows:
+ * This will generate messages on a gaussian distribution with an average size each 512-bytes. The message sizes will
+ * have a standard deviation of 100 bytes, and the size will only change every 100 messages.  The distribution of
+ * messages will be as follows:
  *
  *    The average size of the messages are 512 bytes.
  *    ~68% of the messages are between 412 and 612 bytes
@@ -61,7 +59,6 @@ import java.util.Random;
 public class GaussianTimestampRandomPayloadGenerator implements PayloadGenerator {
     private final int messageSizeAverage;
     private final int messageSizeDeviation;
-    private final int timestampBytes;
     private final int messagesUntilSizeChange;
     private final long seed;
 
@@ -74,18 +71,13 @@ public class GaussianTimestampRandomPayloadGenerator implements PayloadGenerator
     @JsonCreator
     public GaussianTimestampRandomPayloadGenerator(@JsonProperty("messageSizeAverage") int messageSizeAverage,
                                                    @JsonProperty("messageSizeDeviation") int messageSizeDeviation,
-                                                   @JsonProperty("timestampBytes") int timestampBytes,
                                                    @JsonProperty("messagesUntilSizeChange") int messagesUntilSizeChange,
                                                    @JsonProperty("seed") long seed) {
         this.messageSizeAverage = messageSizeAverage;
         this.messageSizeDeviation = messageSizeDeviation;
         this.seed = seed;
-        this.timestampBytes = timestampBytes;
         this.messagesUntilSizeChange = messagesUntilSizeChange;
-        if (timestampBytes < Long.BYTES) {
-            throw new RuntimeException("The size of the timestamp must be greater than or equal to " + Long.BYTES + ".");
-        }
-        buffer = ByteBuffer.allocate(timestampBytes);
+        buffer = ByteBuffer.allocate(Long.BYTES);
         buffer.order(ByteOrder.LITTLE_ENDIAN);
     }
 
@@ -97,11 +89,6 @@ public class GaussianTimestampRandomPayloadGenerator implements PayloadGenerator
     @JsonProperty
     public long messageSizeDeviation() {
         return messageSizeDeviation;
-    }
-
-    @JsonProperty
-    public int timestampBytes() {
-        return timestampBytes;
     }
 
     @JsonProperty
@@ -117,7 +104,7 @@ public class GaussianTimestampRandomPayloadGenerator implements PayloadGenerator
         // Calculate the next message size based on a gaussian distribution.
         if ((messageSize == 0) || (messageTracker >= messagesUntilSizeChange)) {
             messageTracker = 0;
-            messageSize = Math.max((int) (random.nextGaussian() * messageSizeDeviation) + messageSizeAverage, timestampBytes);
+            messageSize = Math.max((int) (random.nextGaussian() * messageSizeDeviation) + messageSizeAverage, Long.BYTES);
         }
         messageTracker += 1;
 
@@ -129,7 +116,7 @@ public class GaussianTimestampRandomPayloadGenerator implements PayloadGenerator
         buffer.clear();
         buffer.putLong(Time.SYSTEM.milliseconds());
         buffer.rewind();
-        System.arraycopy(buffer.array(), 0, result, 0, timestampBytes);
+        System.arraycopy(buffer.array(), 0, result, 0, Long.BYTES);
         return result;
     }
 }
