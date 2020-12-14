@@ -145,7 +145,7 @@ class Kip500Broker(
     try {
       info("Starting broker")
 
-      logContext = new LogContext(s"[KafkaBroker id=${config.brokerId}] ")
+      logContext = new LogContext(s"[KIP-500 KafkaServer id=${config.brokerId}] ")
       this.logIdent = logContext.logPrefix
 
       // initialize dynamic broker configs from static config. Any updates will be
