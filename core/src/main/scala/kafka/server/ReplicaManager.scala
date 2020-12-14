@@ -111,7 +111,7 @@ case class LogReadResult(info: FetchDataInfo,
     case Some(e) => Errors.forException(e)
   }
 
-  def toFetchPartitionData( isReassignmentFetch : Boolean) : FetchPartitionData = FetchPartitionData (
+  def toFetchPartitionData(isReassignmentFetch: Boolean): FetchPartitionData = FetchPartitionData(
     this.error,
     this.highWatermark,
     this.leaderLogStartOffset,
