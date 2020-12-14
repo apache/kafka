@@ -29,6 +29,7 @@ import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.mutable
+import scala.jdk.CollectionConverters._
 
 object RawMetaProperties {
   val ClusterIdKey = "cluster.id"
@@ -87,6 +88,11 @@ case class RawMetaProperties(props: Properties = new Properties()) {
     }
   }
 
+  override def toString(): String = {
+    "{" + props.keySet().asScala.toList.asInstanceOf[List[String]].sorted.map {
+      key => key + "=" + props.get(key)
+    }.mkString(", ") + "}"
+  }
 }
 
 object MetaProperties {

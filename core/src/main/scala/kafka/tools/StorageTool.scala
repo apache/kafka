@@ -81,7 +81,7 @@ object StorageTool extends Logging {
         case "format" =>
           val directories = configToLogDirectories(config.get)
           val clusterId = namespace.getString("cluster_id")
-          val metaProperties = buildMetaProps(clusterId, config.get)
+          val metaProperties = buildMetadataProperties(clusterId, config.get)
           val ignoreFormatted = namespace.getBoolean("ignore_formatted")
           if (!configToKip500Mode(config.get)) {
             throw new TerseFailure("The kafka configuration file appears to be for " +
@@ -176,7 +176,7 @@ object StorageTool extends Logging {
       }
 
       prevMetadata.foreach { prev =>
-        stream.println(s"Found metadata: ${prev.props}")
+        stream.println(s"Found metadata: ${prev}")
         stream.println("")
       }
 
@@ -192,7 +192,7 @@ object StorageTool extends Logging {
     }
   }
 
-  private def buildMetaProps(
+  def buildMetadataProperties(
     clusterIdStr: String,
     config: KafkaConfig
   ): MetaProperties = {
