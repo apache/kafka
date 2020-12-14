@@ -254,6 +254,10 @@ class AlterIsrManagerTest {
     EasyMock.expect(brokerToController.sendRequest(EasyMock.anyObject(), EasyMock.capture(callbackCapture), EasyMock.eq(requestTimeout))).once()
     EasyMock.replay(brokerToController)
 
+    // Need to re-enqueue again to trigger the thread to be scheduled
+    alterIsrManager.clearPending(tp2)
+    alterIsrManager.enqueue(AlterIsrItem(tp2, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}))
+
     time.sleep(100)
     scheduler.tick()
     EasyMock.verify(brokerToController)

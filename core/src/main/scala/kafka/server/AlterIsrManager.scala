@@ -19,7 +19,6 @@ package kafka.server
 import java.util
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
-
 import kafka.api.LeaderAndIsr
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.{Logging, Scheduler}
@@ -62,12 +61,19 @@ class AlterIsrManagerImpl(val controllerChannelManager: BrokerToControllerChanne
 
   private val lastIsrPropagationMs = new AtomicLong(0)
 
-  override def start(): Unit = {
-    scheduler.schedule("send-alter-isr", propagateIsrChanges, 50, 50, TimeUnit.MILLISECONDS)
-  }
+  override def start(): Unit = { }
 
   override def enqueue(alterIsrItem: AlterIsrItem): Boolean = {
-    unsentIsrUpdates.putIfAbsent(alterIsrItem.topicPartition, alterIsrItem) == null
+    if (unsentIsrUpdates.putIfAbsent(alterIsrItem.topicPartition, alterIsrItem) == null) {
+      if (inflightRequest.compareAndSet(false, true)) {
+        // optimistically set the inflight flag even though we haven't sent the request yet
+        scheduler.schedule("send-alter-isr", propagateIsrChanges, 50, -1, TimeUnit.MILLISECONDS)
+      }
+      true
+    } else {
+      false
+    }
+
   }
 
   override def clearPending(topicPartition: TopicPartition): Unit = {
@@ -75,7 +81,8 @@ class AlterIsrManagerImpl(val controllerChannelManager: BrokerToControllerChanne
   }
 
   private def propagateIsrChanges(): Unit = {
-    if (!unsentIsrUpdates.isEmpty && inflightRequest.compareAndSet(false, true)) {
+    // Updates could have been cleared by new LeaderAndIsr, so check again
+    if (!unsentIsrUpdates.isEmpty) {
       // Copy current unsent ISRs but don't remove from the map
       val inflightAlterIsrItems = new ListBuffer[AlterIsrItem]()
       unsentIsrUpdates.values().forEach(item => inflightAlterIsrItems.append(item))
@@ -83,6 +90,9 @@ class AlterIsrManagerImpl(val controllerChannelManager: BrokerToControllerChanne
       val now = time.milliseconds()
       lastIsrPropagationMs.set(now)
       sendRequest(inflightAlterIsrItems.toSeq)
+    } else {
+      // Never sent a request, so clear the flag
+      inflightRequest.set(false)
     }
   }
 
