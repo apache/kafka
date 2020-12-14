@@ -401,8 +401,9 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
             buffer.decrementIndent();
             buffer.printf("} else {%n");
             buffer.incrementIndent();
-            buffer.printf("%s;%n", target.assignmentStatement(
-                String.format("new IntNode(%s.sizeInBytes())", target.sourceVariable())));
+            buffer.printf("_node.set(\"%sSizeInBytes\", new IntNode(%s.sizeInBytes()));%n",
+                    target.field().camelCaseName(),
+                    target.sourceVariable());
             buffer.decrementIndent();
             buffer.printf("}%n");
         } else if (target.field().type().isArray()) {

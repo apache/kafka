@@ -20,8 +20,9 @@ package kafka.network
 import java.net.InetAddress
 import java.nio.ByteBuffer
 
-import com.fasterxml.jackson.databind.node.{DoubleNode, LongNode, ObjectNode, TextNode}
+import com.fasterxml.jackson.databind.node.{BooleanNode, DoubleNode, JsonNodeFactory, LongNode, ObjectNode, TextNode}
 import kafka.network
+import kafka.network.RequestConvertToJson.requestHeaderNode
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.network.{ClientInformation, ListenerName, NetworkSend}
@@ -86,10 +87,52 @@ class RequestConvertToJsonTest {
   }
 
   @Test
+  def testRequestHeaderNode(): Unit = {
+    val alterIsrRequest = new AlterIsrRequest(new AlterIsrRequestData(), 0)
+    val req = request(alterIsrRequest)
+    val header = req.header
+
+    val expectedNode = RequestHeaderDataJsonConverter.write(header.data, header.headerVersion, false).asInstanceOf[ObjectNode]
+    expectedNode.set("requestApiKeyName", new TextNode(header.apiKey.toString))
+
+    val actualNode = RequestConvertToJson.requestHeaderNode(header)
+
+    assertEquals(expectedNode, actualNode);
+  }
+
+  @Test
+  def testClientInfoNode(): Unit = {
+    val clientInfo = new ClientInformation("name", "1")
+
+    val expectedNode = new ObjectNode(JsonNodeFactory.instance)
+    expectedNode.set("softwareName", new TextNode(clientInfo.softwareName))
+    expectedNode.set("softwareVersion", new TextNode(clientInfo.softwareVersion))
+
+    val actualNode = RequestConvertToJson.clientInfoNode(clientInfo)
+
+    assertEquals(expectedNode, actualNode)
+  }
+
+  @Test
+  def testRequestDesc(): Unit = {
+    val alterIsrRequest = new AlterIsrRequest(new AlterIsrRequestData(), 0)
+    val req = request(alterIsrRequest)
+
+    val expectedNode = new ObjectNode(JsonNodeFactory.instance)
+    expectedNode.set("isForwarded", if (req.isForwarded) BooleanNode.TRUE else BooleanNode.FALSE)
+    expectedNode.set("requestHeader", requestHeaderNode(req.header))
+    expectedNode.set("request", req.requestLog.getOrElse(new TextNode("")))
+
+    val actualNode = RequestConvertToJson.requestDesc(req.header, req.requestLog, req.isForwarded)
+
+    assertEquals(expectedNode, actualNode)
+  }
+
+  @Test
   def testRequestDescMetrics(): Unit = {
-    val rwq = new AlterIsrRequest(new AlterIsrRequestData(), 0)
-    val req = request(rwq)
-    val send = new NetworkSend(req.context.connectionId, rwq.toSend(req.header))
+    val alterIsrRequest = new AlterIsrRequest(new AlterIsrRequestData(), 0)
+    val req = request(alterIsrRequest)
+    val send = new NetworkSend(req.context.connectionId, alterIsrRequest.toSend(req.header))
     val headerLog = RequestConvertToJson.requestHeaderNode(req.header)
     val res = new RequestChannel.SendResponse(req, send, Some(headerLog), None)
 

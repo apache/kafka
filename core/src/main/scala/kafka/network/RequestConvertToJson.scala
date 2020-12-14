@@ -163,15 +163,6 @@ object RequestConvertToJson {
     node
   }
 
-  def requestContextNode(context: RequestContext): JsonNode = {
-    val node = new ObjectNode(JsonNodeFactory.instance)
-    node.set("connection", new TextNode(context.connectionId))
-    node.set("securityProtocol", new TextNode(context.securityProtocol.toString))
-    node.set("listener", new TextNode(context.listenerName.value))
-    node.set("clientInformation", clientInfoNode(context.clientInformation))
-    node
-  }
-
   def requestDesc(header: RequestHeader, requestNode: Option[JsonNode], isForwarded: Boolean): JsonNode = {
     val node = new ObjectNode(JsonNodeFactory.instance)
     node.set("isForwarded", if (isForwarded) BooleanNode.TRUE else BooleanNode.FALSE)

@@ -133,7 +133,7 @@ object RequestChannel extends Logging {
 
     def responseNode(response: AbstractResponse): Option[JsonNode] = {
       if (RequestChannel.isRequestLoggingEnabled)
-        Some(RequestConvertToJson.response(response, context.apiVersion()))
+        Some(RequestConvertToJson.response(response, context.apiVersion))
       else
         None
     }
@@ -208,7 +208,7 @@ object RequestChannel extends Logging {
       }
     }
 
-    trace(s"Processor $processor received request: ${RequestConvertToJson.requestDesc(header, requestLog, isForwarded)}")
+    trace(s"Processor $processor received request: ${requestDesc(true)}")
 
     def requestThreadTimeNanos: Long = {
       if (apiLocalCompleteTimeNanos == -1L) apiLocalCompleteTimeNanos = Time.SYSTEM.nanoseconds
