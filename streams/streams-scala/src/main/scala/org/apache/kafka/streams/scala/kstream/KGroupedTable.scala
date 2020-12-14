@@ -95,9 +95,9 @@ class KGroupedTable[K, V](inner: KGroupedTableJ[K, V]) {
    *         latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.KGroupedTable#reduce`
    */
-  def reduce(adder: (V, V) => V,
-             subtractor: (V, V) => V,
-             named: Named)(implicit materialized: Materialized[K, V, ByteArrayKeyValueStore]): KTable[K, V] =
+  def reduce(adder: (V, V) => V, subtractor: (V, V) => V, named: Named)(
+    implicit materialized: Materialized[K, V, ByteArrayKeyValueStore]
+  ): KTable[K, V] =
     new KTable(inner.reduce(adder.asReducer, subtractor.asReducer, named, materialized))
 
   /**
@@ -136,6 +136,10 @@ class KGroupedTable[K, V](inner: KGroupedTableJ[K, V]) {
     implicit materialized: Materialized[K, VR, ByteArrayKeyValueStore]
   ): KTable[K, VR] =
     new KTable(
-      inner.aggregate((() => initializer).asInitializer, adder.asAggregator, subtractor.asAggregator, named, materialized)
+      inner.aggregate((() => initializer).asInitializer,
+                      adder.asAggregator,
+                      subtractor.asAggregator,
+                      named,
+                      materialized)
     )
 }

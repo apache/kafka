@@ -381,11 +381,15 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
       .filter((_, value) => value != "value2", Named.as("my-name"))
       .to(sinkTopic)
 
-    val filterNode =    builder
+    val filterNode = builder
       .build()
       .describe()
-      .subtopologies().asScala.head
-      .nodes().asScala.toList(1)
+      .subtopologies()
+      .asScala
+      .head
+      .nodes()
+      .asScala
+      .toList(1)
 
     filterNode.name() shouldBe "my-name"
   }

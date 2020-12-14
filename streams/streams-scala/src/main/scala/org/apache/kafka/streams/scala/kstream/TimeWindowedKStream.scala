@@ -100,7 +100,9 @@ class TimeWindowedKStream[K, V](val inner: TimeWindowedKStreamJ[K, V]) {
    *         represent the latest (rolling) count (i.e., number of records) for each key
    * @see `org.apache.kafka.streams.kstream.TimeWindowedKStream#count`
    */
-  def count(named: Named)(implicit materialized: Materialized[K, Long, ByteArrayWindowStore]): KTable[Windowed[K], Long] = {
+  def count(
+    named: Named
+  )(implicit materialized: Materialized[K, Long, ByteArrayWindowStore]): KTable[Windowed[K], Long] = {
     val javaCountTable: KTableJ[Windowed[K], java.lang.Long] =
       inner.count(named, materialized.asInstanceOf[Materialized[K, java.lang.Long, ByteArrayWindowStore]])
     val tableImpl = javaCountTable.asInstanceOf[KTableImpl[Windowed[K], ByteArrayWindowStore, java.lang.Long]]

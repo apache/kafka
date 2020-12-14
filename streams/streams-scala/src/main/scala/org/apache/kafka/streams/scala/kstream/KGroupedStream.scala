@@ -113,7 +113,8 @@ class KGroupedStream[K, V](val inner: KGroupedStreamJ[K, V]) {
    *         latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.KGroupedStream#reduce`
    */
-  def reduce(reducer: (V, V) => V, named: Named)(implicit materialized: Materialized[K, V, ByteArrayKeyValueStore]): KTable[K, V] =
+  def reduce(reducer: (V, V) => V,
+             named: Named)(implicit materialized: Materialized[K, V, ByteArrayKeyValueStore]): KTable[K, V] =
     new KTable(inner.reduce(reducer.asReducer, materialized))
 
   /**

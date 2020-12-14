@@ -89,7 +89,9 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * @return a [[KTable]] that contains only those records that satisfy the given predicate
    * @see `org.apache.kafka.streams.kstream.KTable#filter`
    */
-  def filter(predicate: (K, V) => Boolean, named: Named, materialized: Materialized[K, V, ByteArrayKeyValueStore]): KTable[K, V] =
+  def filter(predicate: (K, V) => Boolean,
+             named: Named,
+             materialized: Materialized[K, V, ByteArrayKeyValueStore]): KTable[K, V] =
     new KTable(inner.filter(predicate.asPredicate, named, materialized))
 
   /**
@@ -139,7 +141,9 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * @return a [[KTable]] that contains only those records that do <em>not</em> satisfy the given predicate
    * @see `org.apache.kafka.streams.kstream.KTable#filterNot`
    */
-  def filterNot(predicate: (K, V) => Boolean, named: Named, materialized: Materialized[K, V, ByteArrayKeyValueStore]): KTable[K, V] =
+  def filterNot(predicate: (K, V) => Boolean,
+                named: Named,
+                materialized: Materialized[K, V, ByteArrayKeyValueStore]): KTable[K, V] =
     new KTable(inner.filterNot(predicate.asPredicate, named, materialized))
 
   /**
@@ -197,7 +201,9 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * @return a [[KTable]] that contains records with unmodified key and new values (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KTable#mapValues`
    */
-  def mapValues[VR](mapper: V => VR, named: Named, materialized: Materialized[K, VR, ByteArrayKeyValueStore]): KTable[K, VR] =
+  def mapValues[VR](mapper: V => VR,
+                    named: Named,
+                    materialized: Materialized[K, VR, ByteArrayKeyValueStore]): KTable[K, VR] =
     new KTable(inner.mapValues[VR](mapper.asValueMapper, named, materialized))
 
   /**
@@ -242,7 +248,6 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
   def mapValues[VR](mapper: (K, V) => VR, materialized: Materialized[K, VR, ByteArrayKeyValueStore]): KTable[K, VR] =
     new KTable(inner.mapValues[VR](mapper.asValueMapperWithKey))
 
-
   /**
    * Create a new [[KTable]] by transforming the value of each record in this [[KTable]] into a new value
    * (with possible new type) in the new [[KTable]].
@@ -256,7 +261,9 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * @return a [[KTable]] that contains records with unmodified key and new values (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KTable#mapValues`
    */
-  def mapValues[VR](mapper: (K, V) => VR, named: Named, materialized: Materialized[K, VR, ByteArrayKeyValueStore]): KTable[K, VR] =
+  def mapValues[VR](mapper: (K, V) => VR,
+                    named: Named,
+                    materialized: Materialized[K, VR, ByteArrayKeyValueStore]): KTable[K, VR] =
     new KTable(inner.mapValues[VR](mapper.asValueMapperWithKey, named, materialized))
 
   /**
