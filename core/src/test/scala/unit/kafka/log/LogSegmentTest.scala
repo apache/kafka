@@ -501,7 +501,7 @@ class LogSegmentTest {
       LogConfig.SegmentJitterMsProp -> 0
     ).asJava)
 
-    val seg = LogSegment.open(tempDir, baseOffset = 40, logConfig, Time.SYSTEM, fileAlreadyExists = false,
+    val seg = LogSegment.open(tempDir, baseOffset = 40, logConfig, Time.SYSTEM,
       initFileSize = 512 * 1024 * 1024, preallocate = true)
 
     val ms = records(50, "hello", "there")

@@ -535,7 +535,7 @@ class Log(@volatile private var _dir: File,
   /** The name of this log */
   def name  = dir.getName()
 
-  def recordVersion: RecordVersion = config.messageFormatVersion.recordVersion
+  private def recordVersion: RecordVersion = config.messageFormatVersion.recordVersion
 
   private def initializeLeaderEpochCache(): Unit = lock synchronized {
     val leaderEpochFile = LeaderEpochCheckpointFile.newFile(dir)
@@ -870,7 +870,6 @@ class Log(@volatile private var _dir: File,
                                    reloadFromCleanShutdown: Boolean,
                                    producerStateManager: ProducerStateManager): Unit = lock synchronized {
     checkIfMemoryMappedBufferClosed()
-    val messageFormatVersion = config.messageFormatVersion.recordVersion.value
     val segments = logSegments
     val offsetsToSnapshot =
       if (segments.nonEmpty) {
@@ -879,7 +878,7 @@ class Log(@volatile private var _dir: File,
       } else {
         Seq(Some(lastOffset))
       }
-    info(s"Loading producer state till offset $lastOffset with message format version $messageFormatVersion")
+    info(s"Loading producer state till offset $lastOffset with message format version ${recordVersion.value}")
 
     // We want to avoid unnecessary scanning of the log to build the producer state when the broker is being
     // upgraded. The basic idea is to use the absence of producer snapshot files to detect the upgrade case,
@@ -893,7 +892,7 @@ class Log(@volatile private var _dir: File,
     // offset (see below). The next time the log is reloaded, we will load producer state using this snapshot
     // (or later snapshots). Otherwise, if there is no snapshot file, then we have to rebuild producer state
     // from the first segment.
-    if (messageFormatVersion < RecordBatch.MAGIC_VALUE_V2 ||
+    if (recordVersion.value < RecordBatch.MAGIC_VALUE_V2 ||
         (producerStateManager.latestSnapshotOffset.isEmpty && reloadFromCleanShutdown)) {
       // To avoid an expensive scan through all of the segments, we take empty snapshots from the start of the
       // last two segments and the last offset. This should avoid the full scan in the case that the log needs
@@ -1945,7 +1944,6 @@ class Log(@volatile private var _dir: File,
           baseOffset = newOffset,
           config,
           time = time,
-          fileAlreadyExists = false,
           initFileSize = initFileSize,
           preallocate = config.preallocate)
         addSegment(segment)
