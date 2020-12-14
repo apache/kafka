@@ -53,9 +53,6 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
         LocalLogManagerTestEnv testEnv = new LocalLogManagerTestEnv(numManagers);
         try {
             for (LocalLogManager logManager : testEnv.logManagers) {
-                logManager.initialize();
-            }
-            for (LocalLogManager logManager : testEnv.logManagers) {
                 logManager.register(new MockMetaLogManagerListener());
             }
         } catch (Exception e) {
@@ -76,6 +73,9 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
                     dir.getAbsolutePath(),
                     String.format("LocalLogManager-%d_", nodeId),
                     50));
+            }
+            for (LocalLogManager logManager : newLogManagers) {
+                logManager.initialize();
             }
         } catch (Throwable t) {
             for (LocalLogManager logManager : newLogManagers) {
