@@ -21,7 +21,7 @@ package org.apache.kafka.streams.scala.kstream
 import java.time.Duration.ofSeconds
 import java.time.Instant
 
-import org.apache.kafka.streams.KeyValue
+import org.apache.kafka.streams.{KeyValue, TopologyDescription}
 import org.apache.kafka.streams.kstream.{
   JoinWindows,
   Named,
@@ -39,8 +39,6 @@ import org.apache.kafka.streams.scala.utils.TestDriver
 import org.junit.runner.RunWith
 import org.scalatest.{FlatSpec, Matchers}
 import org.scalatestplus.junit.JUnitRunner
-
-import scala.jdk.CollectionConverters.CollectionHasAsScala
 
 @RunWith(classOf[JUnitRunner])
 class KStreamTest extends FlatSpec with Matchers with TestDriver {
@@ -219,8 +217,10 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
   "transform a KStream" should "transform correctly records" in {
     class TestTransformer extends Transformer[String, String, KeyValue[String, String]] {
       override def init(context: ProcessorContext): Unit = {}
+
       override def transform(key: String, value: String): KeyValue[String, String] =
         new KeyValue(s"$key-transformed", s"$value-transformed")
+
       override def close(): Unit = {}
     }
     val builder = new StreamsBuilder()
@@ -251,8 +251,10 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
   "flatTransform a KStream" should "flatTransform correctly records" in {
     class TestTransformer extends Transformer[String, String, Iterable[KeyValue[String, String]]] {
       override def init(context: ProcessorContext): Unit = {}
+
       override def transform(key: String, value: String): Iterable[KeyValue[String, String]] =
         Array(new KeyValue(s"$key-transformed", s"$value-transformed"))
+
       override def close(): Unit = {}
     }
     val builder = new StreamsBuilder()
@@ -283,8 +285,10 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
   "flatTransformValues a KStream" should "correctly flatTransform values in records" in {
     class TestTransformer extends ValueTransformer[String, Iterable[String]] {
       override def init(context: ProcessorContext): Unit = {}
+
       override def transform(value: String): Iterable[String] =
         Array(s"$value-transformed")
+
       override def close(): Unit = {}
     }
     val builder = new StreamsBuilder()
@@ -316,8 +320,10 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
   "flatTransformValues with key in a KStream" should "correctly flatTransformValues in records" in {
     class TestTransformer extends ValueTransformerWithKey[String, String, Iterable[String]] {
       override def init(context: ProcessorContext): Unit = {}
+
       override def transform(key: String, value: String): Iterable[String] =
         Array(s"$value-transformed-$key")
+
       override def close(): Unit = {}
     }
     val builder = new StreamsBuilder()
@@ -381,16 +387,9 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
       .filter((_, value) => value != "value2", Named.as("my-name"))
       .to(sinkTopic)
 
-    val filterNode = builder
-      .build()
-      .describe()
-      .subtopologies()
-      .asScala
-      .head
-      .nodes()
-      .asScala
-      .toList(1)
+    import scala.jdk.CollectionConverters._
 
+    val filterNode = builder.build().describe().subtopologies().asScala.toList(0).nodes().asScala.toList(1)
     filterNode.name() shouldBe "my-name"
   }
 }
