@@ -917,11 +917,10 @@ public class NetworkClient implements KafkaClient {
         NodeApiVersions nodeVersionInfo = new NodeApiVersions(apiVersionsResponse.data.apiKeys());
         apiVersions.update(node, nodeVersionInfo);
         this.connectionStates.ready(node);
-        log.debug("Recorded API versions for node {}: {}", node, nodeVersionInfo);
-        log.debug("Node {} has finalizedFeaturesEpoch: {}, finalizedFeatures: {}, supportedFeatures: {}", node,
-                apiVersionsResponse.data.finalizedFeaturesEpoch(),
-                apiVersionsResponse.data.finalizedFeatures(),
-                apiVersionsResponse.data.supportedFeatures());
+        log.debug("Node {} has finalized features epoch: {}, finalized features: {}, supported features: {}, API versions: {}.",
+                node,
+                apiVersionsResponse.data.finalizedFeaturesEpoch(), apiVersionsResponse.data.finalizedFeatures(),
+                apiVersionsResponse.data.supportedFeatures(), nodeVersionInfo);
     }
 
     /**
