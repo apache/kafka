@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.ValueJoiner;
@@ -139,7 +140,7 @@ public abstract class AbstractStream<K, V> {
         };
     }
 
-    // for testing only
+    @VisibleForTesting
     public Serde<K> keySerde() {
         return keySerde;
     }

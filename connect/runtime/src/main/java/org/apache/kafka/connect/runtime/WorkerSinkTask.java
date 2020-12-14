@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -329,7 +330,7 @@ class WorkerSinkTask extends WorkerTask {
         deliverMessages();
     }
 
-    // Visible for testing
+    @VisibleForTesting
     boolean isCommitting() {
         return committing;
     }
@@ -666,7 +667,7 @@ class WorkerSinkTask extends WorkerTask {
         return sinkTaskMetricsGroup;
     }
 
-    // Visible for testing
+    @VisibleForTesting
     long getNextCommit() {
         return nextCommit;
     }

@@ -29,6 +29,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -316,7 +317,7 @@ public class StreamsProducer {
         producer.close();
     }
 
-    // for testing only
+    @VisibleForTesting
     Producer<byte[], byte[]> kafkaProducer() {
         return producer;
     }

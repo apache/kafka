@@ -24,6 +24,7 @@ import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.errors.InvalidPidMappingException;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.RetriableException;
@@ -492,12 +493,12 @@ public class TransactionManager {
         }
     }
 
-    // visible for testing
+    @VisibleForTesting
     synchronized boolean isPartitionAdded(TopicPartition partition) {
         return partitionsInTransaction.contains(partition);
     }
 
-    // visible for testing
+    @VisibleForTesting
     synchronized boolean isPartitionPendingAdd(TopicPartition partition) {
         return newPartitionsInTransaction.contains(partition) || pendingPartitionsInTransaction.contains(partition);
     }
@@ -939,22 +940,22 @@ public class TransactionManager {
         return inFlightRequestCorrelationId != NO_INFLIGHT_REQUEST_CORRELATION_ID;
     }
 
-    // visible for testing.
+    @VisibleForTesting
     boolean hasFatalError() {
         return currentState == State.FATAL_ERROR;
     }
 
-    // visible for testing.
+    @VisibleForTesting
     boolean hasAbortableError() {
         return currentState == State.ABORTABLE_ERROR;
     }
 
-    // visible for testing
+    @VisibleForTesting
     synchronized boolean transactionContainsPartition(TopicPartition topicPartition) {
         return partitionsInTransaction.contains(topicPartition);
     }
 
-    // visible for testing
+    @VisibleForTesting
     synchronized boolean hasPendingOffsetCommits() {
         return !pendingTxnOffsetCommits.isEmpty();
     }
@@ -963,7 +964,7 @@ public class TransactionManager {
         return !pendingRequests.isEmpty();
     }
 
-    // visible for testing
+    @VisibleForTesting
     synchronized boolean hasOngoingTransaction() {
         // transactions are considered ongoing once started until completion or a fatal error
         return currentState == State.IN_TRANSACTION || isCompleting() || hasAbortableError();
@@ -1038,7 +1039,7 @@ public class TransactionManager {
         return error.exception() instanceof RetriableException;
     }
 
-    // visible for testing
+    @VisibleForTesting
     synchronized boolean isReady() {
         return isTransactional() && currentState == State.READY;
     }
@@ -1188,7 +1189,7 @@ public class TransactionManager {
         return pendingResult;
     }
 
-    // package-private for testing
+    @VisibleForTesting
     boolean canBumpEpoch() {
         if (!isTransactional()) {
             return true;

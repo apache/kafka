@@ -31,6 +31,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -677,14 +678,13 @@ public final class RecordAccumulator {
 
     /**
      * Are there any threads currently waiting on a flush?
-     *
-     * package private for test
      */
+    @VisibleForTesting
     boolean flushInProgress() {
         return flushesInProgress.get() > 0;
     }
 
-    /* Visible for testing */
+    @VisibleForTesting
     Map<TopicPartition, Deque<ProducerBatch>> batches() {
         return Collections.unmodifiableMap(batches);
     }

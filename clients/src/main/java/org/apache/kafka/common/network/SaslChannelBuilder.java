@@ -17,6 +17,7 @@
 package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
@@ -239,7 +240,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
         if (sslFactory != null) sslFactory.close();
     }
 
-    // Visible to override for testing
+    @VisibleForTesting
     protected TransportLayer buildTransportLayer(String id, SelectionKey key, SocketChannel socketChannel,
                                                  ChannelMetadataRegistry metadataRegistry) throws IOException {
         if (this.securityProtocol == SecurityProtocol.SASL_SSL) {
@@ -252,7 +253,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
         }
     }
 
-    // Visible to override for testing
+    @VisibleForTesting
     protected SaslServerAuthenticator buildServerAuthenticator(Map<String, ?> configs,
                                                                Map<String, AuthenticateCallbackHandler> callbackHandlers,
                                                                String id,
@@ -265,7 +266,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                 connectionsMaxReauthMsByMechanism, metadataRegistry, time);
     }
 
-    // Visible to override for testing
+    @VisibleForTesting
     protected SaslClientAuthenticator buildClientAuthenticator(Map<String, ?> configs,
                                                                AuthenticateCallbackHandler callbackHandler,
                                                                String id,
@@ -276,7 +277,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                 serverHost, clientSaslMechanism, handshakeRequestEnable, transportLayer, time, logContext);
     }
 
-    // Package private for testing
+    @VisibleForTesting
     Map<String, LoginManager> loginManagers() {
         return loginManagers;
     }
@@ -382,12 +383,12 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
         }
     }
 
-    // Visibility to override for testing
+    @VisibleForTesting
     protected GSSManager gssManager() {
         return GSSManager.getInstance();
     }
 
-    // Visibility for testing
+    @VisibleForTesting
     protected Subject subject(String saslMechanism) {
         return subjects.get(saslMechanism);
     }

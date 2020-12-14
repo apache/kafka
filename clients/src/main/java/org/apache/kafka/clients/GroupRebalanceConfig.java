@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 
@@ -81,7 +82,7 @@ public class GroupRebalanceConfig {
         }
     }
 
-    // For testing purpose.
+    @VisibleForTesting
     public GroupRebalanceConfig(final int sessionTimeoutMs,
                                 final int rebalanceTimeoutMs,
                                 final int heartbeatIntervalMs,

@@ -20,6 +20,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -311,7 +312,7 @@ public class NetworkClient implements KafkaClient {
         return false;
     }
 
-    // Visible for testing
+    @VisibleForTesting
     boolean canConnect(Node node, long now) {
         return connectionStates.canConnect(node.idString(), now);
     }
@@ -384,7 +385,7 @@ public class NetworkClient implements KafkaClient {
     }
 
     // Return the remaining throttling delay in milliseconds if throttling is in progress. Return 0, otherwise.
-    // This is for testing.
+    @VisibleForTesting
     public long throttleDelayMs(Node node, long now) {
         return connectionStates.throttleDelayMs(node.idString(), now);
     }
@@ -459,7 +460,7 @@ public class NetworkClient implements KafkaClient {
         doSend(request, false, now);
     }
 
-    // package-private for testing
+    @VisibleForTesting
     void sendInternalMetadataRequest(MetadataRequest.Builder builder, String nodeConnectionId, long now) {
         ClientRequest clientRequest = newClientRequest(nodeConnectionId, builder, now, true);
         doSend(clientRequest, true, now);
@@ -1181,7 +1182,7 @@ public class NetworkClient implements KafkaClient {
         return newClientRequest(nodeId, requestBuilder, createdTimeMs, expectResponse, defaultRequestTimeoutMs, null);
     }
 
-    // visible for testing
+    @VisibleForTesting
     int nextCorrelationId() {
         if (SaslClientAuthenticator.isReserved(correlation)) {
             // the numeric overflow is fine as negative values is acceptable

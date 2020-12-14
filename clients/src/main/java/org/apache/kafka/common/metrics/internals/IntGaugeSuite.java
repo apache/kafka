@@ -17,6 +17,7 @@
 package org.apache.kafka.common.metrics.internals;
 
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.MetricValueProvider;
@@ -276,15 +277,15 @@ public final class IntGaugeSuite<K> implements AutoCloseable {
         return maxEntries;
     }
 
-    // Visible for testing only.
+    @VisibleForTesting
     Metrics metrics() {
         return metrics;
     }
 
     /**
      * Return a map from keys to current reference counts.
-     * Visible for testing only.
      */
+    @VisibleForTesting
     synchronized Map<K, Integer> values() {
         HashMap<K, Integer> values = new HashMap<>();
         for (Map.Entry<K, StoredIntGauge> entry : gauges.entrySet()) {

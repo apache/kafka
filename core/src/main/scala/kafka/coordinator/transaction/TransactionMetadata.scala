@@ -20,6 +20,7 @@ import java.util.concurrent.locks.ReentrantLock
 
 import kafka.utils.{CoreUtils, Logging, nonthreadsafe}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.annotation.VisibleForTesting
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 
@@ -203,7 +204,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
     topicPartitions -= topicPartition
   }
 
-  // this is visible for test only
+  @VisibleForTesting
   def prepareNoTransit(): TxnTransitMetadata = {
     // do not call transitTo as it will set the pending state, a follow-up call to abort the transaction will set its pending state
     TxnTransitMetadata(producerId, lastProducerId, producerEpoch, lastProducerEpoch, txnTimeoutMs, state, topicPartitions.toSet,

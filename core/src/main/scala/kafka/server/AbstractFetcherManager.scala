@@ -22,6 +22,7 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.Implicits._
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.annotation.VisibleForTesting
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.{Map, Set, mutable}
@@ -29,7 +30,7 @@ import scala.collection.{Map, Set, mutable}
 abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: String, clientId: String, numFetchers: Int)
   extends Logging with KafkaMetricsGroup {
   // map of (source broker_id, fetcher_id per source broker) => fetcher.
-  // package private for test
+  @VisibleForTesting
   private[server] val fetcherThreadMap = new mutable.HashMap[BrokerIdAndFetcherId, T]
   private val lock = new Object
   private var numFetchersPerBroker = numFetchers
@@ -89,7 +90,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
     }
   }
 
-  // Visible for testing
+  @VisibleForTesting
   private[server] def getFetcher(topicPartition: TopicPartition): Option[T] = {
     lock synchronized {
       fetcherThreadMap.values.find { fetcherThread =>
@@ -98,7 +99,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
     }
   }
 
-  // Visibility for testing
+  @VisibleForTesting
   private[server] def getFetcherId(topicPartition: TopicPartition): Int = {
     lock synchronized {
       Utils.abs(31 * topicPartition.topic.hashCode() + topicPartition.partition) % numFetchersPerBroker

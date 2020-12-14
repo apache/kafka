@@ -25,6 +25,7 @@ import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricsContext;
@@ -242,7 +243,7 @@ public class WorkerGroupMember {
             log.debug("The Connect group member has stopped.");
     }
 
-    // Visible for testing
+    @VisibleForTesting
     Metrics metrics() {
         return this.metrics;
     }

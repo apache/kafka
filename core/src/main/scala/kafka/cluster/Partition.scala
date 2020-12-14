@@ -30,6 +30,7 @@ import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import kafka.zookeeper.ZooKeeperClientException
+import org.apache.kafka.common.annotation.VisibleForTesting
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
@@ -372,7 +373,7 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  // Visible for testing
+  @VisibleForTesting
   private[cluster] def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints): Log = {
     def fetchLogConfig: LogConfig = {
       val props = stateStore.fetchTopicConfig()
@@ -470,7 +471,7 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  // Visible for testing -- Used by unit tests to set log for this partition
+  @VisibleForTesting
   def setLog(log: Log, isFutureLog: Boolean): Unit = {
     if (isFutureLog)
       futureLog = Some(log)
@@ -746,8 +747,6 @@ class Partition(val topicPartition: TopicPartition,
    * It creates a new Replica object for any new remote broker. The isr parameter is
    * expected to be a subset of the assignment parameter.
    *
-   * Note: public visibility for tests.
-   *
    * @param assignment An ordered sequence of all the broker ids that were assigned to this
    *                   topic partition
    * @param isr The set of broker ids that are known to be insync with the leader
@@ -756,6 +755,7 @@ class Partition(val topicPartition: TopicPartition,
    * @param removingReplicas An ordered sequence of all broker ids that will be removed from
     *                         the assignment
    */
+  @VisibleForTesting
   def updateAssignmentAndIsr(assignment: Seq[Int],
                              isr: Set[Int],
                              addingReplicas: Seq[Int],

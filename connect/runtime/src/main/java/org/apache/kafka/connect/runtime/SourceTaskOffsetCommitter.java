@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.LoggingContext;
@@ -51,7 +52,7 @@ class SourceTaskOffsetCommitter {
     private final ScheduledExecutorService commitExecutorService;
     private final ConcurrentMap<ConnectorTaskId, ScheduledFuture<?>> committers;
 
-    // visible for testing
+    @VisibleForTesting
     SourceTaskOffsetCommitter(WorkerConfig config,
                               ScheduledExecutorService commitExecutorService,
                               ConcurrentMap<ConnectorTaskId, ScheduledFuture<?>> committers) {

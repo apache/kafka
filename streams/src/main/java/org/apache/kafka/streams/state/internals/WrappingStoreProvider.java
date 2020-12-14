@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.state.QueryableStoreType;
@@ -37,7 +38,7 @@ public class WrappingStoreProvider implements StateStoreProvider {
         this.storeQueryParameters = storeQueryParameters;
     }
 
-    //visible for testing
+    @VisibleForTesting
     public void setStoreQueryParameters(final StoreQueryParameters storeQueryParameters) {
         this.storeQueryParameters = storeQueryParameters;
     }

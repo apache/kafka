@@ -39,6 +39,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
@@ -226,9 +227,9 @@ public class Fetcher<K, V> implements Closeable {
 
     /**
      * Return whether we have any completed fetches pending return to the user. This method is thread-safe. Has
-     * visibility for testing.
      * @return true if there are completed fetches, false otherwise
      */
+    @VisibleForTesting
     protected boolean hasCompletedFetches() {
         return !completedFetches.isEmpty();
     }
@@ -722,7 +723,7 @@ public class Fetcher<K, V> implements Closeable {
         return emptyList();
     }
 
-    // Visible for testing
+    @VisibleForTesting
     void resetOffsetIfNeeded(TopicPartition partition, OffsetResetStrategy requestedResetStrategy, ListOffsetData offsetData) {
         FetchPosition position = new FetchPosition(
             offsetData.offset,
@@ -1437,7 +1438,7 @@ public class Fetcher<K, V> implements Closeable {
         clearBufferedDataForUnassignedPartitions(currentTopicPartitions);
     }
 
-    // Visible for testing
+    @VisibleForTesting
     protected FetchSessionHandler sessionHandler(int node) {
         return sessionHandlers.get(node);
     }

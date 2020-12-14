@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
@@ -84,7 +85,7 @@ public class TimeWindowedSerializer<T> implements WindowedSerializer<T> {
         return inner.serialize(topic, data.key());
     }
 
-    // Only for testing
+    @VisibleForTesting
     Serializer<T> innerSerializer() {
         return inner;
     }

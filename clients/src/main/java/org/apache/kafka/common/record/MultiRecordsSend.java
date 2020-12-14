@@ -18,6 +18,7 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.network.Send;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -72,7 +73,7 @@ public class MultiRecordsSend implements Send {
         return current == null;
     }
 
-    // Visible for testing
+    @VisibleForTesting
     int numResidentSends() {
         int count = 0;
         if (current != null)

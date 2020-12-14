@@ -29,6 +29,7 @@ import scala.collection.Seq
 import scala.collection.immutable.ListMap
 import scala.jdk.CollectionConverters._
 import joptsimple.OptionSpec
+import org.apache.kafka.common.annotation.VisibleForTesting
 
 import scala.concurrent.ExecutionException
 
@@ -86,12 +87,12 @@ class FeatureApis(private var opts: FeatureCommandOptions) {
   private val deleteOp = pad("[Delete]")
   private val downgradeOp = pad("[Downgrade]")
 
-  // For testing only.
+  @VisibleForTesting
   private[admin] def setSupportedFeatures(newFeatures: Features[SupportedVersionRange]): Unit = {
     supportedFeatures = newFeatures
   }
 
-  // For testing only.
+  @VisibleForTesting
   private[admin] def setOptions(newOpts: FeatureCommandOptions): Unit = {
     adminClient.close()
     adminClient = FeatureApis.createAdminClient(newOpts)

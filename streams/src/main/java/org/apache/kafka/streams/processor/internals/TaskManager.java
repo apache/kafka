@@ -27,6 +27,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -1014,7 +1015,7 @@ public class TaskManager {
         return tasks.values().stream().filter(t -> !t.isActive());
     }
 
-    // For testing only.
+    @VisibleForTesting
     int commitAll() {
         return commit(new HashSet<>(tasks.values()));
     }

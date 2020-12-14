@@ -23,6 +23,7 @@ import kafka.server.checkpoints.LeaderEpochCheckpoint
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.annotation.VisibleForTesting
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 
 import scala.collection.{Seq, mutable}
@@ -285,7 +286,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
     }
   }
 
-  // Visible for testing
+  @VisibleForTesting
   def epochEntries: Seq[EpochEntry] = epochs.values.asScala.toSeq
 
   private def flush(): Unit = {

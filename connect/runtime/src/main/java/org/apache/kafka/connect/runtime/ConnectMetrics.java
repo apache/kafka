@@ -19,6 +19,7 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
@@ -283,7 +284,7 @@ public class ConnectMetrics {
             return metrics.metricInstance(template, groupId.tags());
         }
 
-        // for testing only
+        @VisibleForTesting
         MetricName metricName(String name) {
             return metrics.metricName(name, groupId.groupName(), "", groupId.tags());
         }

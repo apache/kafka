@@ -18,6 +18,7 @@
 package kafka.server
 
 import kafka.utils.Logging
+import org.apache.kafka.common.annotation.VisibleForTesting
 import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
 import org.apache.kafka.common.feature.Features._
 
@@ -30,7 +31,7 @@ import scala.jdk.CollectionConverters._
  * of testing.
  */
 class BrokerFeatures private (@volatile var supportedFeatures: Features[SupportedVersionRange]) {
-  // For testing only.
+  @VisibleForTesting
   def setSupportedFeatures(newFeatures: Features[SupportedVersionRange]): Unit = {
     supportedFeatures = newFeatures
   }

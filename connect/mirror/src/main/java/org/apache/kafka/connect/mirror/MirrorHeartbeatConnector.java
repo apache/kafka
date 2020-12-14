@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.common.config.ConfigDef;
@@ -35,7 +36,7 @@ public class MirrorHeartbeatConnector extends SourceConnector {
         // nop
     }
 
-    // visible for testing
+    @VisibleForTesting
     MirrorHeartbeatConnector(MirrorConnectorConfig config) {
         this.config = config;
     }

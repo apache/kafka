@@ -17,6 +17,7 @@
 package org.apache.kafka.common.security.ssl;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.config.SslClientAuth;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
@@ -178,7 +179,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
         this.sslContext = null;
     }
 
-    //For Test only
+    @VisibleForTesting
     public SSLContext sslContext() {
         return this.sslContext;
     }
@@ -269,7 +270,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
         }
     }
 
-    // Visibility to override for testing
+    @VisibleForTesting
     protected SecurityStore createKeystore(String type, String path, Password password, Password keyPassword, Password privateKey, Password certificateChain) {
         if (privateKey != null) {
             if (!PEM_TYPE.equals(type))
@@ -330,7 +331,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
         boolean modified();
     }
 
-    // package access for testing
+    @VisibleForTesting
     static class FileBasedStore implements SecurityStore {
         private final String type;
         protected final String path;

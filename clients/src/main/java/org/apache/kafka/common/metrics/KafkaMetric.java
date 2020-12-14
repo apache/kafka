@@ -18,6 +18,7 @@ package org.apache.kafka.common.metrics;
 
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.utils.Time;
 
 public final class KafkaMetric implements Metric {
@@ -28,7 +29,7 @@ public final class KafkaMetric implements Metric {
     private final MetricValueProvider<?> metricValueProvider;
     private MetricConfig config;
 
-    // public for testing
+    @VisibleForTesting
     public KafkaMetric(Object lock, MetricName metricName, MetricValueProvider<?> valueProvider,
             MetricConfig config, Time time) {
         this.metricName = metricName;

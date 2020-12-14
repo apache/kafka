@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.ProduceResponseData;
@@ -77,7 +78,7 @@ public class ProduceRequest extends AbstractRequest {
             return build(version, true);
         }
 
-        // Visible for testing only
+        @VisibleForTesting
         public ProduceRequest buildUnsafe(short version) {
             return build(version, false);
         }
@@ -127,7 +128,7 @@ public class ProduceRequest extends AbstractRequest {
         this.transactionalId = data.transactionalId();
     }
 
-    // visible for testing
+    @VisibleForTesting
     Map<TopicPartition, Integer> partitionSizes() {
         if (partitionSizes == null) {
             // this method may be called by different thread (see the comment on data)

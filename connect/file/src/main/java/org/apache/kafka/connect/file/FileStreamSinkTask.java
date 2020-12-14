@@ -18,6 +18,7 @@ package org.apache.kafka.connect.file;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
@@ -45,7 +46,7 @@ public class FileStreamSinkTask extends SinkTask {
     public FileStreamSinkTask() {
     }
 
-    // for testing
+    @VisibleForTesting
     public FileStreamSinkTask(PrintStream outputStream) {
         filename = null;
         this.outputStream = outputStream;

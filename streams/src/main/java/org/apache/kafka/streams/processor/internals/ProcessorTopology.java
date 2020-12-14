@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.streams.processor.StateStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -244,7 +245,7 @@ public class ProcessorTopology {
         return sb.toString();
     }
 
-    // for testing only
+    @VisibleForTesting
     public Set<String> processorConnectedStateStores(final String processorName) {
         for (final ProcessorNode<?, ?, ?, ?> node : processorNodes) {
             if (node.name().equals(processorName)) {

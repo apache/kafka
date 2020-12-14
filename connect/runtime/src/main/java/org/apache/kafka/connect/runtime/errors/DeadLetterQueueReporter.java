@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.record.RecordBatch;
@@ -103,7 +104,7 @@ public class DeadLetterQueueReporter implements ErrorReporter {
      *
      * @param kafkaProducer a Kafka Producer to produce the original consumed records.
      */
-    // Visible for testing
+    @VisibleForTesting
     DeadLetterQueueReporter(KafkaProducer<byte[], byte[]> kafkaProducer, SinkConnectorConfig connConfig,
                             ConnectorTaskId id, ErrorHandlingMetrics errorHandlingMetrics) {
         Objects.requireNonNull(kafkaProducer);
@@ -157,7 +158,7 @@ public class DeadLetterQueueReporter implements ErrorReporter {
         });
     }
 
-    // Visible for testing
+    @VisibleForTesting
     void populateContextHeaders(ProducerRecord<byte[], byte[]> producerRecord, ProcessingContext context) {
         Headers headers = producerRecord.headers();
         if (context.consumerRecord() != null) {

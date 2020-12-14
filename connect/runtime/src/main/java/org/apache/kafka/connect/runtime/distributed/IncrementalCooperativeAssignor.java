@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.distributed;
 
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.ConnectorsAndTasks;
@@ -62,7 +63,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
     private ConnectorsAndTasks previousAssignment;
     private ConnectorsAndTasks previousRevocation;
     private boolean canRevoke;
-    // visible for testing
+    @VisibleForTesting
     protected final Set<String> candidateWorkersForReassignment;
     protected long scheduledRebalance;
     protected int delay;
@@ -418,7 +419,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         return toRevoke;
     }
 
-    // visible for testing
+    @VisibleForTesting
     protected void handleLostAssignments(ConnectorsAndTasks lostAssignments,
                                          ConnectorsAndTasks newSubmissions,
                                          List<WorkerLoad> completeWorkerAssignment,

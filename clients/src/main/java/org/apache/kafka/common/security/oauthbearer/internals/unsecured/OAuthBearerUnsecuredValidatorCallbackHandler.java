@@ -25,6 +25,7 @@ import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.AppConfigurationEntry;
 
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerExtensionsValidatorCallback;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
@@ -89,11 +90,11 @@ public class OAuthBearerUnsecuredValidatorCallbackHandler implements Authenticat
     private boolean configured = false;
 
     /**
-     * For testing
      *
      * @param time
      *            the mandatory time to set
      */
+    @VisibleForTesting
     void time(Time time) {
         this.time = Objects.requireNonNull(time);
     }

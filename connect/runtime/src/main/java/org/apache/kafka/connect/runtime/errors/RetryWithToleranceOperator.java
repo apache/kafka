@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime.errors;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -184,7 +185,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
      * @param <V> The return type of the result of the operation.
      * @return the result of the operation
      */
-    // Visible for testing
+    @VisibleForTesting
     protected <V> V execAndHandleError(Operation<V> operation, Class<? extends Exception> tolerated) {
         try {
             V result = execAndRetry(operation);
@@ -211,7 +212,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
         }
     }
 
-    // Visible for testing
+    @VisibleForTesting
     void markAsFailed() {
         errorHandlingMetrics.recordErrorTimestamp();
         totalFailures++;
@@ -229,12 +230,12 @@ public class RetryWithToleranceOperator implements AutoCloseable {
         }
     }
 
-    // Visible for testing
+    @VisibleForTesting
     boolean checkRetry(long startTime) {
         return (time.milliseconds() - startTime) < errorRetryTimeout;
     }
 
-    // Visible for testing
+    @VisibleForTesting
     void backoff(int attempt, long deadline) {
         int numRetry = attempt - 1;
         long delay = RETRIES_DELAY_MIN_MS << numRetry;

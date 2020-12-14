@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
@@ -76,7 +77,7 @@ public class SessionWindowedDeserializer<T> implements Deserializer<Windowed<T>>
         }
     }
 
-    // Only for testing
+    @VisibleForTesting
     Deserializer<T> innerDeserializer() {
         return inner;
     }

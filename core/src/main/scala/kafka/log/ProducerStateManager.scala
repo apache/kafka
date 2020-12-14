@@ -25,6 +25,7 @@ import java.util.concurrent.ConcurrentSkipListMap
 import kafka.log.Log.offsetFromFile
 import kafka.server.LogOffsetMetadata
 import kafka.utils.{Logging, nonthreadsafe, threadsafe}
+import org.apache.kafka.common.annotation.VisibleForTesting
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.protocol.types._
@@ -454,14 +455,10 @@ object ProducerStateManager {
 
   private def isSnapshotFile(file: File): Boolean = file.getName.endsWith(Log.ProducerSnapshotFileSuffix)
 
-  // visible for testing
-  private[log] def listSnapshotFiles(dir: File): Seq[SnapshotFile] = {
-    if (dir.exists && dir.isDirectory) {
-      Option(dir.listFiles).map { files =>
-        files.filter(f => f.isFile && isSnapshotFile(f)).map(SnapshotFile(_)).toSeq
-      }.getOrElse(Seq.empty)
-    } else Seq.empty
-  }
+  @VisibleForTesting
+  private[log] def listSnapshotFiles(dir: File) = if (dir.exists && dir.isDirectory) Option(dir.listFiles).map { files =>
+      files.filter(f => f.isFile && isSnapshotFile(f)).map(SnapshotFile(_)).toSeq
+    }.getOrElse(Seq.empty) else Seq.empty
 }
 
 /**
@@ -625,7 +622,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
     }
   }
 
-  // visible for testing
+  @VisibleForTesting
   private[log] def loadProducerEntry(entry: ProducerStateEntry): Unit = {
     val producerId = entry.producerId
     producers.put(producerId, entry)

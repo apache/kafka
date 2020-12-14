@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.metrics.Sensor;
 
 import java.util.Collections;
@@ -87,7 +88,7 @@ public class PartitionGroup {
         streamTime = RecordQueue.UNKNOWN;
     }
 
-    // visible for testing
+    @VisibleForTesting
     long partitionTimestamp(final TopicPartition partition) {
         final RecordQueue queue = partitionQueues.get(partition);
         if (queue == null) {

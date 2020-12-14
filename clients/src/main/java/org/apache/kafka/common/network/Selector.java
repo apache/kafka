@@ -18,6 +18,7 @@ package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
@@ -505,7 +506,7 @@ public class Selector implements Selectable, AutoCloseable {
      * @param isImmediatelyConnected true if running over a set of keys for just-connected sockets
      * @param currentTimeNanos time at which set of keys was determined
      */
-    // package-private for testing
+    @VisibleForTesting
     void pollSelectionKeys(Set<SelectionKey> selectionKeys,
                            boolean isImmediatelyConnected,
                            long currentTimeNanos) {
@@ -638,7 +639,7 @@ public class Selector implements Selectable, AutoCloseable {
         }
     }
 
-    // package-private for testing
+    @VisibleForTesting
     void write(KafkaChannel channel) throws IOException {
         String nodeId = channel.id();
         long bytesSent = channel.write();
@@ -769,7 +770,7 @@ public class Selector implements Selectable, AutoCloseable {
             unmute(channel);
     }
 
-    // package-private for testing
+    @VisibleForTesting
     void completeDelayedChannelClose(long currentTimeNanos) {
         if (delayedClosingChannels == null)
             return;
@@ -1050,7 +1051,7 @@ public class Selector implements Selectable, AutoCloseable {
         sensors.recordCompletedReceive(channel.id(), networkReceive.size(), currentTimeMs);
     }
 
-    // only for testing
+    @VisibleForTesting
     public Set<SelectionKey> keys() {
         return new HashSet<>(nioSelector.keys());
     }
@@ -1453,17 +1454,17 @@ public class Selector implements Selectable, AutoCloseable {
         }
     }
 
-    //package-private for testing
+    @VisibleForTesting
     boolean isOutOfMemory() {
         return outOfMemory;
     }
 
-    //package-private for testing
+    @VisibleForTesting
     boolean isMadeReadProgressLastPoll() {
         return madeReadProgressLastPoll;
     }
 
-    // package-private for testing
+    @VisibleForTesting
     Map<?, ?> delayedClosingChannels() {
         return delayedClosingChannels;
     }

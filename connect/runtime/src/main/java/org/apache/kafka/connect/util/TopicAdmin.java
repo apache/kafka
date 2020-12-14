@@ -26,6 +26,7 @@ import org.apache.kafka.clients.admin.DescribeTopicsOptions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
@@ -216,12 +217,12 @@ public class TopicAdmin implements AutoCloseable {
         this(adminConfig, Admin.create(adminConfig));
     }
 
-    // visible for testing
+    @VisibleForTesting
     TopicAdmin(Map<String, Object> adminConfig, Admin adminClient) {
         this(adminConfig, adminClient, true);
     }
 
-    // visible for testing
+    @VisibleForTesting
     TopicAdmin(Map<String, Object> adminConfig, Admin adminClient, boolean logCreation) {
         this.admin = adminClient;
         this.adminConfig = adminConfig != null ? adminConfig : Collections.<String, Object>emptyMap();

@@ -20,6 +20,8 @@ import java.util.HashSet;
 import java.util.Set;
 
 import java.util.stream.Collectors;
+
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
@@ -406,7 +408,7 @@ final class ClusterConnectionStates {
     /**
      * Get the id set of nodes which are in CONNECTING state
      */
-    // package private for testing only
+    @VisibleForTesting
     Set<String> connectingNodes() {
         return this.connectingNodes;
     }

@@ -53,6 +53,7 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ApiException;
@@ -1435,7 +1436,7 @@ public class KafkaAdminClient extends AdminClient {
         return groupId == null;
     }
 
-    // for testing
+    @VisibleForTesting
     int numPendingCalls() {
         return runnable.pendingCalls.size();
     }

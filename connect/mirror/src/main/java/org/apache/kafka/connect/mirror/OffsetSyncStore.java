@@ -19,6 +19,7 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Utils;
@@ -41,7 +42,7 @@ class OffsetSyncStore implements AutoCloseable {
         consumer.assign(Collections.singleton(offsetSyncTopicPartition));
     }
 
-    // for testing
+    @VisibleForTesting
     OffsetSyncStore(KafkaConsumer<byte[], byte[]> consumer, TopicPartition offsetSyncTopicPartition) {
         this.consumer = consumer;
         this.offsetSyncTopicPartition = offsetSyncTopicPartition;

@@ -36,6 +36,7 @@ import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile, Of
 import kafka.utils._
 import kafka.utils.Implicits._
 import kafka.zk.KafkaZkClient
+import org.apache.kafka.common.annotation.VisibleForTesting
 import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicPartition}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
@@ -43,8 +44,8 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrParti
 import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsPartitionResult
 import org.apache.kafka.common.message.{DescribeLogDirsResponseData, FetchResponseData, LeaderAndIsrResponseData}
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError
-import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetForLeaderTopic}
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{OffsetForLeaderTopicResult, EpochEndOffset}
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{EpochEndOffset, OffsetForLeaderTopicResult}
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
@@ -268,11 +269,11 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  // Visible for testing
+  @VisibleForTesting
   private[server] val replicaSelectorOpt: Option[ReplicaSelector] = createReplicaSelector()
 
   newGauge("LeaderCount", () => leaderPartitionsIterator.size)
-  // Visible for testing
+  @VisibleForTesting
   private[kafka] val partitionCount = newGauge("PartitionCount", () => allPartitions.size)
   newGauge("OfflineReplicaCount", () => offlinePartitionCount)
   newGauge("UnderReplicatedPartitions", () => underReplicatedPartitionCount)
@@ -513,7 +514,7 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  // Visible for testing
+  @VisibleForTesting
   def createPartition(topicPartition: TopicPartition): Partition = {
     val partition = Partition(topicPartition, time, this)
     allPartitions.put(topicPartition, HostedPartition.Online(partition))

@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import java.util.ArrayList;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.utils.FixedOrderMap;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -216,7 +217,7 @@ public class ProcessorStateManager implements StateManager {
         return globalStores.get(name);
     }
 
-    // package-private for test only
+    @VisibleForTesting
     void initializeStoreOffsetsFromCheckpoint(final boolean storeDirIsEmpty) {
         try {
             final Map<TopicPartition, Long> loadedCheckpoints = checkpointFile.read();

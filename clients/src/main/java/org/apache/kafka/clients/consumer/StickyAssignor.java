@@ -25,6 +25,7 @@ import java.util.Optional;
 import java.util.Set;
 import org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
@@ -222,7 +223,7 @@ public class StickyAssignor extends AbstractStickyAssignor {
         return deserializeTopicPartitionAssignment(userData);
     }
 
-    // visible for testing
+    @VisibleForTesting
     static ByteBuffer serializeTopicPartitionAssignment(MemberData memberData) {
         Struct struct = new Struct(STICKY_ASSIGNOR_USER_DATA_V1);
         List<Struct> topicAssignments = new ArrayList<>();

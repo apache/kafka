@@ -17,6 +17,7 @@
 package org.apache.kafka.common.security.authenticator;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -557,12 +558,12 @@ public class SaslServerAuthenticator implements Authenticator {
         }
     }
 
-    // Visible to override for testing
+    @VisibleForTesting
     protected ApiVersionsResponse apiVersionsResponse() {
         return ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE;
     }
 
-    // Visible to override for testing
+    @VisibleForTesting
     protected void enableKafkaSaslAuthenticateHeaders(boolean flag) {
         this.enableKafkaSaslAuthenticateHeaders = flag;
     }

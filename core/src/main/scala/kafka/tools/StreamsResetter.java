@@ -35,6 +35,7 @@ import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
@@ -412,7 +413,7 @@ public class StreamsResetter {
         return topicNotFound;
     }
 
-    // visible for testing
+    @VisibleForTesting
     public void maybeSeekToEnd(final String groupId,
                                final Consumer<byte[], byte[]> client,
                                final Set<TopicPartition> intermediateTopicPartitions) {
@@ -464,7 +465,7 @@ public class StreamsResetter {
         }
     }
 
-    // visible for testing
+    @VisibleForTesting
     public void resetOffsetsFromResetPlan(final Consumer<byte[], byte[]> client,
                                           final Set<TopicPartition> inputTopicPartitions,
                                           final Map<TopicPartition, Long> topicPartitionsAndOffset) {
@@ -507,7 +508,7 @@ public class StreamsResetter {
         }
     }
 
-    // visible for testing
+    @VisibleForTesting
     public void shiftOffsetsBy(final Consumer<byte[], byte[]> client,
                                final Set<TopicPartition> inputTopicPartitions,
                                final long shiftBy) {
@@ -529,7 +530,7 @@ public class StreamsResetter {
         }
     }
 
-    // visible for testing
+    @VisibleForTesting
     public void resetOffsetsTo(final Consumer<byte[], byte[]> client,
                                final Set<TopicPartition> inputTopicPartitions,
                                final Long offset) {
@@ -622,7 +623,7 @@ public class StreamsResetter {
         System.out.println("Done.");
     }
 
-    // visible for testing
+    @VisibleForTesting
     public void doDelete(final List<String> topicsToDelete,
                          final Admin adminClient) {
         boolean hasDeleteErrors = false;
@@ -652,7 +653,7 @@ public class StreamsResetter {
                && matchesInternalTopicFormat(topicName);
     }
 
-    // visible for testing
+    @VisibleForTesting
     public boolean matchesInternalTopicFormat(final String topicName) {
         return topicName.endsWith("-changelog") || topicName.endsWith("-repartition")
                || topicName.endsWith("-subscription-registration-topic")

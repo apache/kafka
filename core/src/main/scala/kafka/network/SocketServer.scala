@@ -25,6 +25,7 @@ import java.util
 import java.util.Optional
 import java.util.concurrent._
 import java.util.concurrent.atomic._
+
 import kafka.cluster.{BrokerEndPoint, EndPoint}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.network.ConnectionQuotas._
@@ -35,13 +36,14 @@ import kafka.security.CredentialProvider
 import kafka.server.{BrokerReconfigurable, DynamicConfig, KafkaConfig}
 import kafka.utils._
 import kafka.utils.Implicits._
+import org.apache.kafka.common.annotation.VisibleForTesting
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.memory.{MemoryPool, SimpleMemoryPool}
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.stats.{Avg, CumulativeSum, Meter, Rate}
 import org.apache.kafka.common.network.KafkaChannel.ChannelMuteEvent
-import org.apache.kafka.common.network.{ChannelBuilder, ChannelBuilders, ClientInformation, NetworkSend, KafkaChannel, ListenerName, ListenerReconfigurable, Selectable, Send, Selector => KSelector}
+import org.apache.kafka.common.network.{ChannelBuilder, ChannelBuilders, ClientInformation, KafkaChannel, ListenerName, ListenerReconfigurable, NetworkSend, Selectable, Send, Selector => KSelector}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ApiVersionsRequest, EnvelopeRequest, EnvelopeResponse, RequestContext, RequestHeader}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
@@ -411,34 +413,32 @@ class SocketServer(val config: KafkaConfig,
     }
   }
 
-  // `protected` for test usage
+  @VisibleForTesting
   protected[network] def newProcessor(id: Int, requestChannel: RequestChannel, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
-                                      securityProtocol: SecurityProtocol, memoryPool: MemoryPool, isPrivilegedListener: Boolean): Processor = {
-    new Processor(id,
-      time,
-      config.socketRequestMaxBytes,
-      requestChannel,
-      connectionQuotas,
-      config.connectionsMaxIdleMs,
-      config.failedAuthenticationDelayMs,
-      listenerName,
-      securityProtocol,
-      config,
-      metrics,
-      credentialProvider,
-      memoryPool,
-      logContext,
-      isPrivilegedListener = isPrivilegedListener,
-      allowDisabledApis = allowDisabledApis
-    )
-  }
+                                      securityProtocol: SecurityProtocol, memoryPool: MemoryPool, isPrivilegedListener: Boolean) = new Processor(id,
+                                        time,
+                                        config.socketRequestMaxBytes,
+                                        requestChannel,
+                                        connectionQuotas,
+                                        config.connectionsMaxIdleMs,
+                                        config.failedAuthenticationDelayMs,
+                                        listenerName,
+                                        securityProtocol,
+                                        config,
+                                        metrics,
+                                        credentialProvider,
+                                        memoryPool,
+                                        logContext,
+                                        isPrivilegedListener = isPrivilegedListener,
+                                        allowDisabledApis = allowDisabledApis
+                                      )
 
-  // For test usage
-  private[network] def connectionCount(address: InetAddress): Int =
+  @VisibleForTesting
+  private[network] def connectionCount(address: InetAddress) =
     Option(connectionQuotas).fold(0)(_.get(address))
 
-  // For test usage
-  private[network] def dataPlaneProcessor(index: Int): Processor = dataPlaneProcessors.get(index)
+  @VisibleForTesting
+  private[network] def dataPlaneProcessor(index: Int) = dataPlaneProcessors.get(index)
 
 }
 
@@ -838,7 +838,7 @@ private[kafka] class Processor(val id: Int,
       credentialProvider.tokenCache,
       time,
       logContext))
-  // Visible to override for testing
+  @VisibleForTesting
   protected[network] def createSelector(channelBuilder: ChannelBuilder): KSelector = {
     channelBuilder match {
       case reconfigurable: Reconfigurable => config.addReconfigurable(reconfigurable)
@@ -950,7 +950,7 @@ private[kafka] class Processor(val id: Int,
     }
   }
 
-  // `protected` for test usage
+  @VisibleForTesting
   protected[network] def sendResponse(response: RequestChannel.Response, responseSend: Send): Unit = {
     val connectionId = response.request.context.connectionId
     trace(s"Socket server received response to send to $connectionId, registering for write and sending data: $response")
@@ -1251,7 +1251,7 @@ private[kafka] class Processor(val id: Int,
     removeMetric(IdlePercentMetricName, Map(NetworkProcessorMetricTag -> id.toString))
   }
 
-  // 'protected` to allow override for testing
+  @VisibleForTesting
   protected[network] def connectionId(socket: Socket): String = {
     val localHost = socket.getLocalAddress.getHostAddress
     val localPort = socket.getLocalPort
@@ -1276,10 +1276,10 @@ private[kafka] class Processor(val id: Int,
 
   private[network] def responseQueueSize = responseQueue.size
 
-  // Only for testing
+  @VisibleForTesting
   private[network] def inflightResponseCount: Int = inflightResponses.size
 
-  // Visible for testing
+  @VisibleForTesting
   // Only methods that are safe to call on a disconnected channel should be invoked on 'openOrClosingChannel'.
   private[network] def openOrClosingChannel(connectionId: String): Option[KafkaChannel] =
     Option(selector.channel(connectionId)).orElse(Option(selector.closingChannel(connectionId)))
@@ -1294,8 +1294,8 @@ private[kafka] class Processor(val id: Int,
     openOrClosingChannel(connectionId).foreach(c => selector.unmute(c.id))
   }
 
-  /* For test usage */
-  private[network] def channel(connectionId: String): Option[KafkaChannel] =
+  @VisibleForTesting
+  private[network] def channel(connectionId: String) =
     Option(selector.channel(connectionId))
 
   /**
@@ -1459,7 +1459,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
     }
   }
 
-  // Visible for testing
+  @VisibleForTesting
   def connectionRateForIp(ip: InetAddress): Int = {
     connectionRatePerIp.getOrDefault(ip, defaultConnectionRatePerIp)
   }

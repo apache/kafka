@@ -36,6 +36,7 @@ import javax.net.ssl.SSLPeerUnverifiedException;
 import javax.net.ssl.SSLProtocolException;
 import javax.net.ssl.SSLSession;
 
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.errors.SslAuthenticationException;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.ByteUtils;
@@ -107,7 +108,7 @@ public class SslTransportLayer implements TransportLayer {
         this.log = logContext.logger(getClass());
     }
 
-    // Visible for testing
+    @VisibleForTesting
     protected void startHandshake() throws IOException {
         if (state != State.NOT_INITIALIZED)
             throw new IllegalStateException("startHandshake() can only be called once, state " + state);
@@ -219,20 +220,20 @@ public class SslTransportLayer implements TransportLayer {
 
     /**
      * Reads available bytes from socket channel to `netReadBuffer`.
-     * Visible for testing.
      * @return  number of bytes read
      */
+    @VisibleForTesting
     protected int readFromSocketChannel() throws IOException {
         return socketChannel.read(netReadBuffer);
     }
 
     /**
     * Flushes the buffer to the network, non blocking.
-    * Visible for testing.
     * @param buf ByteBuffer
     * @return boolean true if the buffer has been emptied out, false otherwise
     * @throws IOException
     */
+    @VisibleForTesting
     protected boolean flush(ByteBuffer buf) throws IOException {
         int remaining = buf.remaining();
         if (remaining > 0) {
@@ -854,7 +855,7 @@ public class SslTransportLayer implements TransportLayer {
         return netReadBuffer;
     }
 
-    // Visibility for testing
+    @VisibleForTesting
     protected ByteBuffer appReadBuffer() {
         return appReadBuffer;
     }

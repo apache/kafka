@@ -17,6 +17,8 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import java.util.TreeMap;
+
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
@@ -284,7 +286,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         }
     }
 
-    // use this method for testing only
+    @VisibleForTesting
     public void buildAndOptimizeTopology() {
         buildAndOptimizeTopology(null);
     }

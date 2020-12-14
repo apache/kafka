@@ -26,6 +26,7 @@ import kafka.common._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.{BrokerReconfigurable, KafkaConfig, LogDirFailureChannel}
 import kafka.utils._
+import org.apache.kafka.common.annotation.VisibleForTesting
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.errors.{CorruptRecordException, KafkaStorageException}
@@ -277,10 +278,10 @@ class LogCleaner(initialConfig: CleanerConfig,
     cleanerManager.pauseCleaningForNonCompactedPartitions()
   }
 
-  // Only for testing
+  @VisibleForTesting
   private[kafka] def currentConfig: CleanerConfig = config
 
-  // Only for testing
+  @VisibleForTesting
   private[log] def cleanerCount: Int = cleaners.size
 
   /**

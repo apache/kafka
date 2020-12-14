@@ -30,6 +30,7 @@ import kafka.utils._
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata}
+import org.apache.kafka.common.annotation.VisibleForTesting
 import org.apache.kafka.common.errors.{TimeoutException, WakeupException}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
@@ -290,7 +291,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     }
   }
 
-  // Visible for testing
+  @VisibleForTesting
   private[tools] class ConsumerWrapper(private[tools] val consumer: Consumer[Array[Byte], Array[Byte]],
                                        customRebalanceListener: Option[ConsumerRebalanceListener],
                                        whitelistOpt: Option[String]) {
@@ -298,7 +299,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     var recordIter: java.util.Iterator[ConsumerRecord[Array[Byte], Array[Byte]]] = null
 
     // We manually maintain the consumed offsets for historical reasons and it could be simplified
-    // Visible for testing
+    @VisibleForTesting
     private[tools] val offsets = new HashMap[TopicPartition, Long]()
 
     def init(): Unit = {
@@ -426,7 +427,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     }
   }
 
-  // package-private for tests
+  @VisibleForTesting
   private[tools] class NoRecordsException extends RuntimeException
 
   class MirrorMakerOptions(args: Array[String]) extends CommandDefaultOptions(args) {

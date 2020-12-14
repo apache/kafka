@@ -25,6 +25,7 @@ import kafka.log._
 import kafka.serializer.Decoder
 import kafka.utils._
 import kafka.utils.Implicits._
+import org.apache.kafka.common.annotation.VisibleForTesting
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
 
@@ -34,7 +35,7 @@ import scala.collection.mutable.ArrayBuffer
 
 object DumpLogSegments {
 
-  // visible for testing
+  @VisibleForTesting
   private[tools] val RecordIndent = "|"
 
   def main(args: Array[String]): Unit = {
@@ -112,7 +113,7 @@ object DumpLogSegments {
   }
 
   /* print out the contents of the index */
-  // Visible for testing
+  @VisibleForTesting
   private[tools] def dumpIndex(file: File,
                                indexSanityOnly: Boolean,
                                verifyOnly: Boolean,
@@ -149,7 +150,7 @@ object DumpLogSegments {
     }
   }
 
-  // Visible for testing
+  @VisibleForTesting
   private[tools] def dumpTimeIndex(file: File,
                                    indexSanityOnly: Boolean,
                                    verifyOnly: Boolean,

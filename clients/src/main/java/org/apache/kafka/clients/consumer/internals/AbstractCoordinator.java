@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
@@ -223,13 +224,12 @@ public abstract class AbstractCoordinator implements Closeable {
     protected void onLeavePrepare() {}
 
     /**
-     * Visible for testing.
-     *
      * Ensure that the coordinator is ready to receive requests.
      *
      * @param timer Timer bounding how long this method can block
      * @return true If coordinator discovery and initial connection succeeded, false otherwise
      */
+    @VisibleForTesting
     protected synchronized boolean ensureCoordinatorReady(final Timer timer) {
         if (!coordinatorUnknown())
             return true;
@@ -400,12 +400,11 @@ public abstract class AbstractCoordinator implements Closeable {
      *  * PREPARING_REBALANCE: not yet received join-group response before timeout, heartbeat disabled
      *  * COMPLETING_REBALANCE: not yet received sync-group response before timeout, hearbeat enabled
      *
-     * Visible for testing.
-     *
      * @param timer Timer bounding how long this method can block
      * @throws KafkaException if the callback throws exception
      * @return true iff the operation succeeded
      */
+    @VisibleForTesting
     boolean joinGroupIfNeeded(final Timer timer) {
         while (rejoinNeededOrPending()) {
             if (!ensureCoordinatorReady(timer)) {
@@ -528,10 +527,9 @@ public abstract class AbstractCoordinator implements Closeable {
      * JoinGroup and SyncGroup, delegating to {@link #performAssignment(String, String, List)} if
      * elected leader by the coordinator.
      *
-     * NOTE: This is visible only for testing
-     *
      * @return A request future which wraps the assignment returned from the group leader
      */
+    @VisibleForTesting
     RequestFuture<ByteBuffer> sendJoinGroupRequest() {
         if (coordinatorUnknown())
             return RequestFuture.coordinatorNotAvailable();
@@ -1063,7 +1061,7 @@ public abstract class AbstractCoordinator implements Closeable {
         }
     }
 
-    // visible for testing
+    @VisibleForTesting
     synchronized RequestFuture<Void> sendHeartbeatRequest() {
         log.debug("Sending Heartbeat request with generation {} and member id {} to coordinator {}",
             generation.generationId, generation.memberId, coordinator);
@@ -1480,7 +1478,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
     }
 
-    // For testing only below
+    @VisibleForTesting
     final Heartbeat heartbeat() {
         return heartbeat;
     }

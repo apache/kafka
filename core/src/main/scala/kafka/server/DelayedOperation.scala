@@ -25,6 +25,7 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.CoreUtils.inLock
 import kafka.utils._
 import kafka.utils.timer._
+import org.apache.kafka.common.annotation.VisibleForTesting
 
 import scala.collection._
 import scala.collection.mutable.ListBuffer
@@ -50,7 +51,7 @@ abstract class DelayedOperation(override val delayMs: Long,
   extends TimerTask with Logging {
 
   private val completed = new AtomicBoolean(false)
-  // Visible for testing
+  @VisibleForTesting
   private[server] val lock: Lock = lockOpt.getOrElse(new ReentrantLock)
 
   /*

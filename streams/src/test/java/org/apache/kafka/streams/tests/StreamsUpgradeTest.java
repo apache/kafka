@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.Exit;
@@ -297,7 +298,7 @@ public class StreamsUpgradeTest {
         private final Set<TaskId> standbyTasks;
         private final String userEndPoint;
 
-        // for testing only; don't apply version checks
+        @VisibleForTesting
         FutureSubscriptionInfo(final int version,
                                final UUID processId,
                                final Set<TaskId> activeTasks,

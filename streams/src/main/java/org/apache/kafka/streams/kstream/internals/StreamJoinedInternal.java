@@ -17,13 +17,14 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 
 public class StreamJoinedInternal<K, V1, V2> extends StreamJoined<K, V1, V2> {
 
-    //Needs to be public for testing
+    @VisibleForTesting
     public StreamJoinedInternal(final StreamJoined<K, V1, V2> streamJoined) {
         super(streamJoined);
     }

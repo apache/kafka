@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime.errors;
 
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
@@ -68,7 +69,7 @@ public class LogReporter implements ErrorReporter {
         return COMPLETED;
     }
 
-    // Visible for testing
+    @VisibleForTesting
     String message(ProcessingContext context) {
         return String.format("Error encountered in task %s. %s", String.valueOf(id),
                 context.toString(connConfig.includeRecordDetailsInErrorLog()));

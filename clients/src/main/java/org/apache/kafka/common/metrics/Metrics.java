@@ -18,6 +18,7 @@ package org.apache.kafka.common.metrics;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.metrics.internals.MetricsUtils;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.Time;
@@ -595,8 +596,8 @@ public class Metrics implements Closeable {
 
     /**
      * This iterates over every Sensor and triggers a removeSensor if it has expired
-     * Package private for testing
      */
+    @VisibleForTesting
     class ExpireSensorTask implements Runnable {
         @Override
         public void run() {
@@ -618,7 +619,7 @@ public class Metrics implements Closeable {
         }
     }
 
-    /* For testing use only. */
+    @VisibleForTesting
     Map<Sensor, List<Sensor>> childrenSensors() {
         return Collections.unmodifiableMap(childrenSensors);
     }

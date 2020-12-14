@@ -17,6 +17,8 @@
 
 package org.apache.kafka.common.utils;
 
+import org.apache.kafka.common.annotation.VisibleForTesting;
+
 import java.util.AbstractCollection;
 import java.util.AbstractSequentialList;
 import java.util.AbstractSet;
@@ -643,7 +645,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
         return this.valuesList().hashCode();
     }
 
-    // Visible for testing
+    @VisibleForTesting
     final int numSlots() {
         return elements.length;
     }

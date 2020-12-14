@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.common.config.ConfigDef;
@@ -83,13 +84,13 @@ public class MirrorSourceConnector extends SourceConnector {
         // nop
     }
 
-    // visible for testing
+    @VisibleForTesting
     MirrorSourceConnector(List<TopicPartition> knownSourceTopicPartitions, MirrorConnectorConfig config) {
         this.knownSourceTopicPartitions = knownSourceTopicPartitions;
         this.config = config;
     }
 
-    // visible for testing
+    @VisibleForTesting
     MirrorSourceConnector(SourceAndTarget sourceAndTarget, ReplicationPolicy replicationPolicy,
             TopicFilter topicFilter, ConfigPropertyFilter configPropertyFilter) {
         this.sourceAndTarget = sourceAndTarget;
@@ -186,7 +187,7 @@ public class MirrorSourceConnector extends SourceConnector {
         return "1";
     }
 
-    // visible for testing
+    @VisibleForTesting
     List<TopicPartition> findSourceTopicPartitions()
             throws InterruptedException, ExecutionException {
         Set<String> topics = listTopics(sourceAdminClient).stream()
@@ -197,7 +198,7 @@ public class MirrorSourceConnector extends SourceConnector {
             .collect(Collectors.toList());
     }
 
-    // visible for testing
+    @VisibleForTesting
     List<TopicPartition> findTargetTopicPartitions()
             throws InterruptedException, ExecutionException {
         Set<String> topics = listTopics(targetAdminClient).stream()
@@ -209,7 +210,7 @@ public class MirrorSourceConnector extends SourceConnector {
                 .collect(Collectors.toList());
     }
 
-    // visible for testing
+    @VisibleForTesting
     void refreshTopicPartitions()
             throws InterruptedException, ExecutionException {
 
@@ -305,7 +306,7 @@ public class MirrorSourceConnector extends SourceConnector {
         MirrorUtils.createSinglePartitionCompactedTopic(config.offsetSyncsTopic(), config.offsetSyncsTopicReplicationFactor(), config.sourceAdminConfig());
     }
 
-    // visible for testing
+    @VisibleForTesting
     void computeAndCreateTopicPartitions()
             throws InterruptedException, ExecutionException {
         Map<String, Long> partitionCounts = knownSourceTopicPartitions.stream()
@@ -322,7 +323,7 @@ public class MirrorSourceConnector extends SourceConnector {
         createTopicPartitions(partitionCounts, newTopics, newPartitions);
     }
 
-    // visible for testing
+    @VisibleForTesting
     void createTopicPartitions(Map<String, Long> partitionCounts, List<NewTopic> newTopics,
             Map<String, NewPartitions> newPartitions) {
         targetAdminClient.createTopics(newTopics, new CreateTopicsOptions()).values().forEach((k, v) -> v.whenComplete((x, e) -> {

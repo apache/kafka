@@ -18,6 +18,7 @@ package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ConsumerGroupListing;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Task;
@@ -55,7 +56,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
         // nop
     }
 
-    // visible for testing
+    @VisibleForTesting
     MirrorCheckpointConnector(List<String> knownConsumerGroups, MirrorConnectorConfig config) {
         this.knownConsumerGroups = knownConsumerGroups;
         this.config = config;

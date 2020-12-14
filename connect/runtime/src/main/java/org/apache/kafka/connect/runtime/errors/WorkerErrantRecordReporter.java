@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime.errors;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.header.Header;
@@ -47,7 +48,7 @@ public class WorkerErrantRecordReporter implements ErrantRecordReporter {
     private final Converter valueConverter;
     private final HeaderConverter headerConverter;
 
-    // Visible for testing
+    @VisibleForTesting
     protected final LinkedList<Future<Void>> futures;
 
     public WorkerErrantRecordReporter(

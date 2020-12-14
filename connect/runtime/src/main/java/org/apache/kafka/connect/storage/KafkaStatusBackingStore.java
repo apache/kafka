@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.RetriableException;
@@ -124,7 +125,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
 
     private final Time time;
     private final Converter converter;
-    //visible for testing
+    @VisibleForTesting
     protected final Table<String, Integer, CacheEntry<TaskStatus>> tasks;
     protected final Map<String, CacheEntry<ConnectorStatus>> connectors;
     protected final ConcurrentMap<String, ConcurrentMap<String, TopicStatus>> topics;
@@ -141,7 +142,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         this.topics = new ConcurrentHashMap<>();
     }
 
-    // visible for testing
+    @VisibleForTesting
     KafkaStatusBackingStore(Time time, Converter converter, String statusTopic, KafkaBasedLog<String, byte[]> kafkaLog) {
         this(time, converter);
         this.kafkaLog = kafkaLog;
@@ -488,7 +489,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         return converter.fromConnectData(statusTopic, STATUS_SCHEMA_V0, struct);
     }
 
-    //visible for testing
+    @VisibleForTesting
     protected byte[] serializeTopicStatus(TopicStatus status) {
         if (status == null) {
             // This should send a tombstone record that will represent delete
@@ -617,7 +618,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
                 .put(topic, status);
     }
 
-    // visible for testing
+    @VisibleForTesting
     void read(ConsumerRecord<String, byte[]> record) {
         String key = record.key();
         if (key.startsWith(CONNECTOR_STATUS_PREFIX)) {

@@ -18,6 +18,7 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -80,12 +81,12 @@ public class ProducerMetadata extends Metadata {
         }
     }
 
-    // Visible for testing
+    @VisibleForTesting
     synchronized Set<String> topics() {
         return topics.keySet();
     }
 
-    // Visible for testing
+    @VisibleForTesting
     synchronized Set<String> newTopics() {
         return newTopics;
     }

@@ -19,6 +19,7 @@ package org.apache.kafka.common.security.authenticator;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
@@ -209,7 +210,7 @@ public class SaslClientAuthenticator implements Authenticator {
         }
     }
 
-    // visible for testing
+    @VisibleForTesting
     SaslClient createSaslClient() {
         try {
             return Subject.doAs(subject, (PrivilegedExceptionAction<SaslClient>) () -> {
@@ -362,7 +363,7 @@ public class SaslClientAuthenticator implements Authenticator {
         return reauthInfo.reauthenticationLatencyMs();
     }
 
-    // visible for testing
+    @VisibleForTesting
     int nextCorrelationId() {
         if (!isReserved(correlationId))
             correlationId = MIN_RESERVED_CORRELATION_ID;
@@ -382,13 +383,13 @@ public class SaslClientAuthenticator implements Authenticator {
         return currentRequestHeader;
     }
 
-    // Visible to override for testing
+    @VisibleForTesting
     protected SaslHandshakeRequest createSaslHandshakeRequest(short version) {
         return new SaslHandshakeRequest.Builder(
                 new SaslHandshakeRequestData().setMechanism(mechanism)).build(version);
     }
 
-    // Visible to override for testing
+    @VisibleForTesting
     protected void setSaslAuthenticateAndHandshakeVersions(ApiVersionsResponse apiVersionsResponse) {
         ApiVersionsResponseKey authenticateVersion = apiVersionsResponse.apiVersion(ApiKeys.SASL_AUTHENTICATE.id);
         if (authenticateVersion != null) {

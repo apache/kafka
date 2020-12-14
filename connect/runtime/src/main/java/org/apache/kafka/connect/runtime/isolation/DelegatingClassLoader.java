@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
+import org.apache.kafka.common.annotation.VisibleForTesting;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.Connector;
@@ -481,7 +482,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         }
     }
 
-    //Visible for testing
+    @VisibleForTesting
     static boolean serviceLoaderManifestForPlugin(String name) {
         return PLUGIN_MANIFEST_FILES.contains(name);
     }
