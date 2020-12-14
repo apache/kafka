@@ -193,19 +193,16 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
                                                               Map<String, Object> consumerProps,
                                                               Callback<ConsumerRecord<String, byte[]>> consumedCallback,
                                                               final NewTopic topicDescription, final Map<String, Object> adminProps) {
-        Runnable createTopics = new Runnable() {
-            @Override
-            public void run() {
-                log.debug("Creating admin client to manage Connect internal status topic");
-                try (TopicAdmin admin = new TopicAdmin(adminProps)) {
-                    // Create the topic if it doesn't exist
-                    Set<String> newTopics = admin.createTopics(topicDescription);
-                    if (!newTopics.contains(topic)) {
-                        // It already existed, so check that the topic cleanup policy is compact only and not delete
-                        log.debug("Using admin client to check cleanup policy of '{}' topic is '{}'", topic, TopicConfig.CLEANUP_POLICY_COMPACT);
-                        admin.verifyTopicCleanupPolicyOnlyCompact(topic,
-                                DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG, "connector and task statuses");
-                    }
+        Runnable createTopics = () -> {
+            log.debug("Creating admin client to manage Connect internal status topic");
+            try (TopicAdmin admin = new TopicAdmin(adminProps)) {
+                // Create the topic if it doesn't exist
+                Set<String> newTopics = admin.createTopics(topicDescription);
+                if (!newTopics.contains(topic)) {
+                    // It already existed, so check that the topic cleanup policy is compact only and not delete
+                    log.debug("Using admin client to check cleanup policy of '{}' topic is '{}'", topic, TopicConfig.CLEANUP_POLICY_COMPACT);
+                    admin.verifyTopicCleanupPolicyOnlyCompact(topic,
+                            DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG, "connector and task statuses");
                 }
             }
         };
