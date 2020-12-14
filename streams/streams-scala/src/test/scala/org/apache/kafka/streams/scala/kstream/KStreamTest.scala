@@ -21,7 +21,7 @@ package org.apache.kafka.streams.scala.kstream
 import java.time.Duration.ofSeconds
 import java.time.Instant
 
-import org.apache.kafka.streams.{KeyValue, TopologyDescription}
+import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.streams.kstream.{
   JoinWindows,
   Named,
