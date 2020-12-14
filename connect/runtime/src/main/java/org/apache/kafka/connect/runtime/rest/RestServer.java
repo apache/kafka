@@ -133,7 +133,7 @@ public class RestServer {
             }
         }
 
-        jettyServer.setConnectors(connectors.toArray(new Connector[connectors.size()]));
+        jettyServer.setConnectors(connectors.toArray(new Connector[0]));
 
         if (adminListeners != null && !adminListeners.isEmpty()) {
             for (String adminListener : adminListeners) {

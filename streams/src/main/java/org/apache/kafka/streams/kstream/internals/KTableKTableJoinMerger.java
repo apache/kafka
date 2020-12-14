@@ -70,7 +70,7 @@ public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, 
                     final Set<String> stores = new HashSet<>(storeNames1.length + storeNames2.length);
                     Collections.addAll(stores, storeNames1);
                     Collections.addAll(stores, storeNames2);
-                    return stores.toArray(new String[stores.size()]);
+                    return stores.toArray(new String[0]);
                 }
             };
         }
