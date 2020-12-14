@@ -17,6 +17,7 @@
 package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.raft.RaftMessage;
 import org.apache.kafka.raft.RaftMessageQueue;
 
@@ -26,28 +27,39 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class BlockingMessageQueue implements RaftMessageQueue {
-    private final BlockingQueue<RaftEvent> queue = new LinkedBlockingQueue<>();
+    private static final RaftMessage WAKEUP_MESSAGE = new RaftMessage() {
+        @Override
+        public int correlationId() {
+            return 0;
+        }
+
+        @Override
+        public ApiMessage data() {
+            return null;
+        }
+    };
+
+    private final BlockingQueue<RaftMessage> queue = new LinkedBlockingQueue<>();
     private final AtomicInteger size = new AtomicInteger(0);
 
     @Override
     public RaftMessage poll(long timeoutMs) {
         try {
-            RaftEvent event = queue.poll(timeoutMs, TimeUnit.MILLISECONDS);
-            if (event instanceof MessageReceived) {
-                size.decrementAndGet();
-                return ((MessageReceived) event).message;
-            } else {
+            RaftMessage message = queue.poll(timeoutMs, TimeUnit.MILLISECONDS);
+            if (message == null || message == WAKEUP_MESSAGE) {
                 return null;
+            } else {
+                size.decrementAndGet();
+                return message;
             }
         } catch (InterruptedException e) {
             throw new InterruptException(e);
         }
-
     }
 
     @Override
     public void offer(RaftMessage message) {
-        queue.add(new MessageReceived(message));
+        queue.add(message);
         size.incrementAndGet();
     }
 
@@ -58,21 +70,7 @@ public class BlockingMessageQueue implements RaftMessageQueue {
 
     @Override
     public void wakeup() {
-        queue.add(Wakeup.INSTANCE);
-    }
-
-    public interface RaftEvent {
-    }
-
-    static final class MessageReceived implements RaftEvent {
-        private final RaftMessage message;
-        private MessageReceived(RaftMessage message) {
-            this.message = message;
-        }
-    }
-
-    static final class Wakeup implements RaftEvent {
-        public static final Wakeup INSTANCE = new Wakeup();
+        queue.add(WAKEUP_MESSAGE);
     }
 
 }
