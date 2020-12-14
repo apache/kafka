@@ -113,6 +113,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             ControllerConnectFutureManager connectFutureManager =
                 new ControllerConnectFutureManager(nodes.controllerNodes().size());
             File baseDirectory = null;
+            LocalLogManager metaLogManager = null;
             try {
                 baseDirectory = TestUtils.tempDirectory();
                 executorService = Executors.newFixedThreadPool(4,
@@ -142,12 +143,13 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     String threadNamePrefix = String.format("controller%d_", node.id());
                     LogContext logContext = new LogContext("[Controller id=" + node.id() + "] ");
 
-                    LocalLogManager metaLogManager = new LocalLogManager(
+                    metaLogManager = new LocalLogManager(
                         logContext,
                         node.id(),
                         config.metadataLogDir(),
                         threadNamePrefix
                     );
+                    metaLogManager.initialize();
                     MetaProperties properties = MetaProperties.apply(
                         nodes.clusterId(),
                         OptionConverters.toScala(Optional.empty()),
@@ -180,6 +182,9 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 }
                 for (Kip500Controller controller : controllers.values()) {
                     controller.shutdown();
+                }
+                if (metaLogManager != null) {
+                    metaLogManager.close();
                 }
                 connectFutureManager.close();
                 if (baseDirectory != null) {
