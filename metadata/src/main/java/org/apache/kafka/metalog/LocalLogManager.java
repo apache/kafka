@@ -371,7 +371,7 @@ public final class LocalLogManager implements MetaLogManager, AutoCloseable {
                 if (leader.epoch() != epoch) {
                     return Long.MAX_VALUE;
                 }
-                long returnOffset = nextWriteOffset;
+                long returnOffset = nextWriteOffset + batch.size() - 1;
                 toWrite.add(batch);
                 nextWriteOffset += batch.size();
                 wakeCond.signal();
