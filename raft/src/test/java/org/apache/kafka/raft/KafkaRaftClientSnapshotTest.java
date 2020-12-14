@@ -1360,7 +1360,8 @@ final public class KafkaRaftClientSnapshotTest {
     private static SnapshotWriter<String> snapshotWriter(RaftClientTestContext context, RawSnapshotWriter snapshot) {
         return new SnapshotWriter<>(
             snapshot,
-            4 * 1024,
+            1024,
+            1024,
             MemoryPool.NONE,
             context.time,
             CompressionType.NONE,

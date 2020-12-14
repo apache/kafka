@@ -476,6 +476,7 @@ public class KafkaRaftClientTest {
             .thenReturn(buffer);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withMaxUnflushedBytes(KafkaRaftClient.MAX_BATCH_SIZE_BYTES)
             .withAppendLingerMs(lingerMs)
             .withMemoryPool(memoryPool)
             .build();
@@ -505,6 +506,7 @@ public class KafkaRaftClientTest {
             .thenReturn(buffer);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withMaxUnflushedBytes(KafkaRaftClient.MAX_BATCH_SIZE_BYTES)
             .withAppendLingerMs(lingerMs)
             .withMemoryPool(memoryPool)
             .build();
@@ -535,6 +537,7 @@ public class KafkaRaftClientTest {
             .thenReturn(buffer);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withMaxUnflushedBytes(KafkaRaftClient.MAX_BATCH_SIZE_BYTES)
             .withAppendLingerMs(lingerMs)
             .withMemoryPool(memoryPool)
             .build();
@@ -612,6 +615,38 @@ public class KafkaRaftClientTest {
         assertEquals(OptionalLong.of(lingerMs), context.messageQueue.lastPollTimeoutMs());
 
         context.time.sleep(lingerMs);
+        assertEquals(2L, context.client.scheduleAppend(epoch, singletonList("b")));
+        assertTrue(context.messageQueue.wakeupRequested());
+
+        context.client.poll();
+        assertEquals(3L, context.log.endOffset().offset);
+    }
+
+    @Test
+    public void testChannelWokenUpIfMinFlushSizeReachedDuringAppend() throws Exception {
+        // This test verifies that the client will get woken up immediately
+        // if the minimum flush bytes has exceeded during an append
+
+        int localId = 0;
+        int otherNodeId = 1;
+        int maxUnflushedBytes = 120;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withMaxUnflushedBytes(maxUnflushedBytes)
+            .build();
+
+        context.becomeLeader();
+        assertEquals(OptionalInt.of(localId), context.currentLeader());
+        assertEquals(1L, context.log.endOffset().offset);
+
+        int epoch = context.currentEpoch();
+        assertEquals(1L, context.client.scheduleAppend(epoch, singletonList("a")));
+        assertTrue(context.messageQueue.wakeupRequested());
+
+        context.client.poll();
+        assertFalse(context.messageQueue.wakeupRequested());
+
         assertEquals(2L, context.client.scheduleAppend(epoch, singletonList("b")));
         assertTrue(context.messageQueue.wakeupRequested());
 

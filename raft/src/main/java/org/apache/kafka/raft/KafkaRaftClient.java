@@ -414,6 +414,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             quorum.epoch(),
             log.endOffset().offset,
             raftConfig.appendLingerMs(),
+            raftConfig.maxUnflushedBytes(),
             MAX_BATCH_SIZE_BYTES,
             memoryPool,
             time,
@@ -2247,6 +2248,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     public SnapshotWriter<T> createSnapshot(OffsetAndEpoch snapshotId) throws IOException {
         return new SnapshotWriter<>(
             log.createSnapshot(snapshotId),
+            raftConfig.maxUnflushedBytes(),
             MAX_BATCH_SIZE_BYTES,
             memoryPool,
             time,
