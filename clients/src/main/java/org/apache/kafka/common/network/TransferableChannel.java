@@ -22,7 +22,9 @@ import java.nio.channels.GatheringByteChannel;
 
 /**
  * Extends GatheringByteChannel with the minimal set of methods required by the Send interface. Supporting TLS and
- * efficient zero copy transfers are the main reasons for the additional methods. (see SslTransportLayer)
+ * efficient zero copy transfers are the main reasons for the additional methods.
+ * 
+ * @see SslTransportLayer
  */
 public interface TransferableChannel extends GatheringByteChannel {
 
