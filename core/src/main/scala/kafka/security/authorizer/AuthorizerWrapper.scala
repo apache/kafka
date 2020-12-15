@@ -22,7 +22,7 @@ import java.util.concurrent.{CompletableFuture, CompletionStage}
 import java.{lang, util}
 
 import kafka.network.RequestChannel.Session
-import kafka.security.auth.{Acl, Operation, PermissionType, Read, Resource, Topic, ResourceType => ResourceTypeLegacy}
+import kafka.security.auth.{Acl, Operation, PermissionType, Read, Resource, SimpleAclAuthorizer, Topic, ResourceType => ResourceTypeLegacy}
 import kafka.security.authorizer.AuthorizerWrapper._
 import org.apache.kafka.common.Endpoint
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
@@ -87,9 +87,7 @@ class AuthorizerWrapper(private[kafka] val baseAuthorizer: kafka.security.auth.A
     baseAuthorizer.configure(configs)
     shouldAllowEveryoneIfNoAclIsFound = (configs.asScala.get(
         AclAuthorizer.AllowEveryoneIfNoAclIsFoundProp).exists(_.toString.toBoolean)
-      && baseAuthorizer.authorize(
-        new Session(KafkaPrincipal.ANONYMOUS, InetAddress.getByName("1.2.3.4")),
-        Read, new Resource(Topic, "hi", PatternType.LITERAL)))
+      && baseAuthorizer.isInstanceOf[SimpleAclAuthorizer])
   }
 
   override def start(serverInfo: AuthorizerServerInfo): util.Map[Endpoint, _ <: CompletionStage[Void]] = {
