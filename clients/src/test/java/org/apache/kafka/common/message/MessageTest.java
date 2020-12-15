@@ -48,9 +48,7 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
-import org.apache.kafka.common.protocol.types.BoundField;
 import org.apache.kafka.common.protocol.types.RawTaggedField;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
@@ -902,25 +900,6 @@ public final class MessageTest {
         public String toString() {
             return name + "[" + type + "]";
         }
-    }
-
-    /**
-     * We want to remove Schema nodes from the hierarchy before doing
-     * our comparison.  The reason is because Schema nodes don't change what
-     * is written to the wire.  Schema(STRING, Schema(INT, SHORT)) is equivalent to
-     * Schema(STRING, INT, SHORT).  This function translates schema nodes into their
-     * component types.
-     */
-    private static List<NamedType> flatten(NamedType type) {
-        if (!(type.type instanceof Schema)) {
-            return singletonList(type);
-        }
-        Schema schema = (Schema) type.type;
-        ArrayList<NamedType> results = new ArrayList<>();
-        for (BoundField field : schema.fields()) {
-            results.addAll(flatten(new NamedType(field.def.name, field.def.type)));
-        }
-        return results;
     }
 
     @Test
