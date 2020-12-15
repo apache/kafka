@@ -49,12 +49,12 @@ import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
-import org.apache.kafka.common.message.ListOffsetResponseData;
-import org.apache.kafka.common.message.ListOffsetResponseData.ListOffsetTopicResponse;
-import org.apache.kafka.common.message.ListOffsetResponseData.ListOffsetPartitionResponse;
+import org.apache.kafka.common.message.ListOffsetsResponseData;
+import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse;
+import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.SyncGroupResponseData;
-import org.apache.kafka.common.message.ListOffsetRequestData.ListOffsetPartition;
+import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.Selectable;
@@ -73,8 +73,8 @@ import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.JoinGroupResponse;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
-import org.apache.kafka.common.requests.ListOffsetRequest;
-import org.apache.kafka.common.requests.ListOffsetResponse;
+import org.apache.kafka.common.requests.ListOffsetsRequest;
+import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
@@ -601,19 +601,19 @@ public class KafkaConsumerTest {
         consumer.seekToBeginning(singleton(tp1));
 
         client.prepareResponse(body -> {
-            ListOffsetRequest request = (ListOffsetRequest) body;
-            List<ListOffsetPartition> partitions = request.topics().stream().flatMap(t -> {
+            ListOffsetsRequest request = (ListOffsetsRequest) body;
+            List<ListOffsetsPartition> partitions = request.topics().stream().flatMap(t -> {
                 if (t.name().equals(topic))
                     return Stream.of(t.partitions());
                 else
                     return Stream.empty();
             }).flatMap(List::stream).collect(Collectors.toList());
-            ListOffsetPartition expectedTp0 = new ListOffsetPartition()
+            ListOffsetsPartition expectedTp0 = new ListOffsetsPartition()
                     .setPartitionIndex(tp0.partition())
-                    .setTimestamp(ListOffsetRequest.LATEST_TIMESTAMP);
-            ListOffsetPartition expectedTp1 = new ListOffsetPartition()
+                    .setTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP);
+            ListOffsetsPartition expectedTp1 = new ListOffsetsPartition()
                     .setPartitionIndex(tp1.partition())
-                    .setTimestamp(ListOffsetRequest.EARLIEST_TIMESTAMP);
+                    .setTimestamp(ListOffsetsRequest.EARLIEST_TIMESTAMP);
             return partitions.contains(expectedTp0) && partitions.contains(expectedTp1);
         }, listOffsetsResponse(Collections.singletonMap(tp0, 50L), Collections.singletonMap(tp1, Errors.NOT_LEADER_OR_FOLLOWER)));
         client.prepareResponse(
@@ -2200,35 +2200,35 @@ public class KafkaConsumerTest {
         return new OffsetFetchResponse(Errors.NONE, partitionData);
     }
 
-    private ListOffsetResponse listOffsetsResponse(Map<TopicPartition, Long> offsets) {
+    private ListOffsetsResponse listOffsetsResponse(Map<TopicPartition, Long> offsets) {
         return listOffsetsResponse(offsets, Collections.emptyMap());
     }
 
-    private ListOffsetResponse listOffsetsResponse(Map<TopicPartition, Long> partitionOffsets,
-                                                   Map<TopicPartition, Errors> partitionErrors) {
-        Map<String, ListOffsetTopicResponse> responses = new HashMap<>();
+    private ListOffsetsResponse listOffsetsResponse(Map<TopicPartition, Long> partitionOffsets,
+                                                    Map<TopicPartition, Errors> partitionErrors) {
+        Map<String, ListOffsetsTopicResponse> responses = new HashMap<>();
         for (Map.Entry<TopicPartition, Long> partitionOffset : partitionOffsets.entrySet()) {
             TopicPartition tp = partitionOffset.getKey();
-            ListOffsetTopicResponse topic = responses.computeIfAbsent(tp.topic(), k -> new ListOffsetTopicResponse().setName(tp.topic()));
-            topic.partitions().add(new ListOffsetPartitionResponse()
+            ListOffsetsTopicResponse topic = responses.computeIfAbsent(tp.topic(), k -> new ListOffsetsTopicResponse().setName(tp.topic()));
+            topic.partitions().add(new ListOffsetsPartitionResponse()
                     .setPartitionIndex(tp.partition())
                     .setErrorCode(Errors.NONE.code())
-                    .setTimestamp(ListOffsetResponse.UNKNOWN_TIMESTAMP)
+                    .setTimestamp(ListOffsetsResponse.UNKNOWN_TIMESTAMP)
                     .setOffset(partitionOffset.getValue()));
         }
 
         for (Map.Entry<TopicPartition, Errors> partitionError : partitionErrors.entrySet()) {
             TopicPartition tp = partitionError.getKey();
-            ListOffsetTopicResponse topic = responses.computeIfAbsent(tp.topic(), k -> new ListOffsetTopicResponse().setName(tp.topic()));
-            topic.partitions().add(new ListOffsetPartitionResponse()
+            ListOffsetsTopicResponse topic = responses.computeIfAbsent(tp.topic(), k -> new ListOffsetsTopicResponse().setName(tp.topic()));
+            topic.partitions().add(new ListOffsetsPartitionResponse()
                     .setPartitionIndex(tp.partition())
                     .setErrorCode(partitionError.getValue().code())
-                    .setTimestamp(ListOffsetResponse.UNKNOWN_TIMESTAMP)
-                    .setOffset(ListOffsetResponse.UNKNOWN_OFFSET));
+                    .setTimestamp(ListOffsetsResponse.UNKNOWN_TIMESTAMP)
+                    .setOffset(ListOffsetsResponse.UNKNOWN_OFFSET));
         }
-        ListOffsetResponseData data = new ListOffsetResponseData()
+        ListOffsetsResponseData data = new ListOffsetsResponseData()
                 .setTopics(new ArrayList<>(responses.values()));
-        return new ListOffsetResponse(data);
+        return new ListOffsetsResponse(data);
     }
 
     private FetchResponse<MemoryRecords> fetchResponse(Map<TopicPartition, FetchInfo> fetches) {

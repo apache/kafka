@@ -28,10 +28,10 @@ import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroupMember;
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
-import org.apache.kafka.common.message.ListOffsetRequestData.ListOffsetPartition;
-import org.apache.kafka.common.message.ListOffsetRequestData.ListOffsetTopic;
-import org.apache.kafka.common.message.ListOffsetResponseData.ListOffsetPartitionResponse;
-import org.apache.kafka.common.message.ListOffsetResponseData.ListOffsetTopicResponse;
+import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition;
+import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsTopic;
+import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse;
+import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse;
 import org.apache.kafka.common.message.OffsetCommitRequestData.OffsetCommitRequestPartition;
 import org.apache.kafka.common.message.OffsetCommitRequestData.OffsetCommitRequestTopic;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponsePartition;
@@ -168,12 +168,12 @@ public final class MessageTest {
 
     @Test
     public void testListOffsetsRequestVersions() throws Exception {
-        List<ListOffsetTopic> v = Collections.singletonList(new ListOffsetTopic()
+        List<ListOffsetsTopic> v = Collections.singletonList(new ListOffsetsTopic()
                 .setName("topic")
-                .setPartitions(Collections.singletonList(new ListOffsetPartition()
+                .setPartitions(Collections.singletonList(new ListOffsetsPartition()
                         .setPartitionIndex(0)
                         .setTimestamp(123L))));
-        Supplier<ListOffsetRequestData> newRequest = () -> new ListOffsetRequestData()
+        Supplier<ListOffsetsRequestData> newRequest = () -> new ListOffsetsRequestData()
                 .setTopics(v)
                 .setReplicaId(0);
         testAllMessageRoundTrips(newRequest.get());
@@ -182,17 +182,17 @@ public final class MessageTest {
 
     @Test
     public void testListOffsetsResponseVersions() throws Exception {
-        ListOffsetPartitionResponse partition = new ListOffsetPartitionResponse()
+        ListOffsetsPartitionResponse partition = new ListOffsetsPartitionResponse()
                 .setErrorCode(Errors.NONE.code())
                 .setPartitionIndex(0)
                 .setOldStyleOffsets(Collections.singletonList(321L));
-        List<ListOffsetTopicResponse> topics = Collections.singletonList(new ListOffsetTopicResponse()
+        List<ListOffsetsTopicResponse> topics = Collections.singletonList(new ListOffsetsTopicResponse()
                 .setName("topic")
                 .setPartitions(Collections.singletonList(partition)));
-        Supplier<ListOffsetResponseData> response = () -> new ListOffsetResponseData()
+        Supplier<ListOffsetsResponseData> response = () -> new ListOffsetsResponseData()
                 .setTopics(topics);
         for (short version = 0; version <= ApiKeys.LIST_OFFSETS.latestVersion(); version++) {
-            ListOffsetResponseData responseData = response.get();
+            ListOffsetsResponseData responseData = response.get();
             if (version > 0) {
                 responseData.topics().get(0).partitions().get(0)
                     .setOldStyleOffsets(Collections.emptyList())

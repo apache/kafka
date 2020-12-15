@@ -38,7 +38,7 @@ import static org.apache.kafka.common.protocol.types.Type.RECORDS;
 public enum ApiKeys {
     PRODUCE(ApiMessageType.PRODUCE),
     FETCH(ApiMessageType.FETCH),
-    LIST_OFFSETS(ApiMessageType.LIST_OFFSET),
+    LIST_OFFSETS(ApiMessageType.LIST_OFFSETS),
     METADATA(ApiMessageType.METADATA),
     LEADER_AND_ISR(ApiMessageType.LEADER_AND_ISR, true),
     STOP_REPLICA(ApiMessageType.STOP_REPLICA, true),
@@ -111,10 +111,10 @@ public enum ApiKeys {
         MAX_API_KEY = maxKey;
     }
 
-    /** the permanent and immutable id of an API--this can't change ever */
+    /** the permanent and immutable id of an API - this can't change ever */
     public final short id;
 
-    /** an english description of the api--this is for debugging and can change */
+    /** An english description of the api - used for debugging and metric names, it can potentially be changed via a KIP */
     public final String name;
 
     /** indicates if this is a ClusterAction request used only by brokers */

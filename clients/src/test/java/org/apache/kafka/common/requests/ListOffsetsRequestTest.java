@@ -27,65 +27,65 @@ import java.util.Map;
 
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.message.ListOffsetRequestData;
-import org.apache.kafka.common.message.ListOffsetRequestData.ListOffsetPartition;
-import org.apache.kafka.common.message.ListOffsetRequestData.ListOffsetTopic;
-import org.apache.kafka.common.message.ListOffsetResponseData;
-import org.apache.kafka.common.message.ListOffsetResponseData.ListOffsetPartitionResponse;
-import org.apache.kafka.common.message.ListOffsetResponseData.ListOffsetTopicResponse;
+import org.apache.kafka.common.message.ListOffsetsRequestData;
+import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition;
+import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsTopic;
+import org.apache.kafka.common.message.ListOffsetsResponseData;
+import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse;
+import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.MessageUtil;
 import org.junit.Test;
 
-public class ListOffsetRequestTest {
+public class ListOffsetsRequestTest {
 
     @Test
     public void testDuplicatePartitions() {
-        List<ListOffsetTopic> topics = Collections.singletonList(
-                new ListOffsetTopic()
+        List<ListOffsetsTopic> topics = Collections.singletonList(
+                new ListOffsetsTopic()
                     .setName("topic")
                     .setPartitions(Arrays.asList(
-                            new ListOffsetPartition()
+                            new ListOffsetsPartition()
                                 .setPartitionIndex(0),
-                            new ListOffsetPartition()
+                            new ListOffsetsPartition()
                                 .setPartitionIndex(0))));
-        ListOffsetRequestData data = new ListOffsetRequestData()
+        ListOffsetsRequestData data = new ListOffsetsRequestData()
                 .setTopics(topics)
                 .setReplicaId(-1);
-        ListOffsetRequest request = ListOffsetRequest.parse(MessageUtil.toByteBuffer(data, (short) 0), (short) 0);
+        ListOffsetsRequest request = ListOffsetsRequest.parse(MessageUtil.toByteBuffer(data, (short) 0), (short) 0);
         assertEquals(Collections.singleton(new TopicPartition("topic", 0)), request.duplicatePartitions());
     }
 
     @Test
     public void testGetErrorResponse() {
         for (short version = 1; version <= ApiKeys.LIST_OFFSETS.latestVersion(); version++) {
-            List<ListOffsetTopic> topics = Arrays.asList(
-                    new ListOffsetTopic()
+            List<ListOffsetsTopic> topics = Arrays.asList(
+                    new ListOffsetsTopic()
                         .setName("topic")
                         .setPartitions(Collections.singletonList(
-                                new ListOffsetPartition()
+                                new ListOffsetsPartition()
                                     .setPartitionIndex(0))));
-            ListOffsetRequest request = ListOffsetRequest.Builder
+            ListOffsetsRequest request = ListOffsetsRequest.Builder
                     .forConsumer(true, IsolationLevel.READ_COMMITTED)
                     .setTargetTimes(topics)
                     .build(version);
-            ListOffsetResponse response = (ListOffsetResponse) request.getErrorResponse(0, Errors.NOT_LEADER_OR_FOLLOWER.exception());
+            ListOffsetsResponse response = (ListOffsetsResponse) request.getErrorResponse(0, Errors.NOT_LEADER_OR_FOLLOWER.exception());
     
-            List<ListOffsetTopicResponse> v = Collections.singletonList(
-                    new ListOffsetTopicResponse()
+            List<ListOffsetsTopicResponse> v = Collections.singletonList(
+                    new ListOffsetsTopicResponse()
                         .setName("topic")
                         .setPartitions(Collections.singletonList(
-                                new ListOffsetPartitionResponse()
+                                new ListOffsetsPartitionResponse()
                                     .setErrorCode(Errors.NOT_LEADER_OR_FOLLOWER.code())
-                                    .setLeaderEpoch(ListOffsetResponse.UNKNOWN_EPOCH)
-                                    .setOffset(ListOffsetResponse.UNKNOWN_OFFSET)
+                                    .setLeaderEpoch(ListOffsetsResponse.UNKNOWN_EPOCH)
+                                    .setOffset(ListOffsetsResponse.UNKNOWN_OFFSET)
                                     .setPartitionIndex(0)
-                                    .setTimestamp(ListOffsetResponse.UNKNOWN_TIMESTAMP))));
-            ListOffsetResponseData data = new ListOffsetResponseData()
+                                    .setTimestamp(ListOffsetsResponse.UNKNOWN_TIMESTAMP))));
+            ListOffsetsResponseData data = new ListOffsetsResponseData()
                     .setThrottleTimeMs(0)
                     .setTopics(v);
-            ListOffsetResponse expectedResponse = new ListOffsetResponse(data);
+            ListOffsetsResponse expectedResponse = new ListOffsetsResponse(data);
             assertEquals(expectedResponse.data().topics(), response.data().topics());
             assertEquals(expectedResponse.throttleTimeMs(), response.throttleTimeMs());
         }
@@ -93,52 +93,52 @@ public class ListOffsetRequestTest {
 
     @Test
     public void testGetErrorResponseV0() {
-        List<ListOffsetTopic> topics = Arrays.asList(
-                new ListOffsetTopic()
+        List<ListOffsetsTopic> topics = Arrays.asList(
+                new ListOffsetsTopic()
                     .setName("topic")
                     .setPartitions(Collections.singletonList(
-                            new ListOffsetPartition()
+                            new ListOffsetsPartition()
                                 .setPartitionIndex(0))));
-        ListOffsetRequest request = ListOffsetRequest.Builder
+        ListOffsetsRequest request = ListOffsetsRequest.Builder
                 .forConsumer(true, IsolationLevel.READ_UNCOMMITTED)
                 .setTargetTimes(topics)
                 .build((short) 0);
-        ListOffsetResponse response = (ListOffsetResponse) request.getErrorResponse(0, Errors.NOT_LEADER_OR_FOLLOWER.exception());
+        ListOffsetsResponse response = (ListOffsetsResponse) request.getErrorResponse(0, Errors.NOT_LEADER_OR_FOLLOWER.exception());
 
-        List<ListOffsetTopicResponse> v = Collections.singletonList(
-                new ListOffsetTopicResponse()
+        List<ListOffsetsTopicResponse> v = Collections.singletonList(
+                new ListOffsetsTopicResponse()
                     .setName("topic")
                     .setPartitions(Collections.singletonList(
-                            new ListOffsetPartitionResponse()
+                            new ListOffsetsPartitionResponse()
                                 .setErrorCode(Errors.NOT_LEADER_OR_FOLLOWER.code())
                                 .setOldStyleOffsets(Collections.emptyList())
                                 .setPartitionIndex(0))));
-        ListOffsetResponseData data = new ListOffsetResponseData()
+        ListOffsetsResponseData data = new ListOffsetsResponseData()
                 .setThrottleTimeMs(0)
                 .setTopics(v);
-        ListOffsetResponse expectedResponse = new ListOffsetResponse(data);
+        ListOffsetsResponse expectedResponse = new ListOffsetsResponse(data);
         assertEquals(expectedResponse.data().topics(), response.data().topics());
         assertEquals(expectedResponse.throttleTimeMs(), response.throttleTimeMs());
     }
 
     @Test
-    public void testToListOffsetTopics() {
-        ListOffsetPartition lop0 = new ListOffsetPartition()
+    public void testToListOffsetsTopics() {
+        ListOffsetsPartition lop0 = new ListOffsetsPartition()
                 .setPartitionIndex(0)
                 .setCurrentLeaderEpoch(1)
                 .setMaxNumOffsets(2)
                 .setTimestamp(123L);
-        ListOffsetPartition lop1 = new ListOffsetPartition()
+        ListOffsetsPartition lop1 = new ListOffsetsPartition()
                 .setPartitionIndex(1)
                 .setCurrentLeaderEpoch(3)
                 .setMaxNumOffsets(4)
                 .setTimestamp(567L);
-        Map<TopicPartition, ListOffsetPartition> timestampsToSearch = new HashMap<>();
+        Map<TopicPartition, ListOffsetsPartition> timestampsToSearch = new HashMap<>();
         timestampsToSearch.put(new TopicPartition("topic", 0), lop0);
         timestampsToSearch.put(new TopicPartition("topic", 1), lop1);
-        List<ListOffsetTopic> listOffsetTopics = ListOffsetRequest.toListOffsetTopics(timestampsToSearch);
+        List<ListOffsetsTopic> listOffsetTopics = ListOffsetsRequest.toListOffsetsTopics(timestampsToSearch);
         assertEquals(1, listOffsetTopics.size());
-        ListOffsetTopic topic = listOffsetTopics.get(0);
+        ListOffsetsTopic topic = listOffsetTopics.get(0);
         assertEquals("topic", topic.name());
         assertEquals(2, topic.partitions().size());
         assertTrue(topic.partitions().contains(lop0));

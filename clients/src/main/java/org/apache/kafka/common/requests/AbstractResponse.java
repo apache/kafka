@@ -119,7 +119,7 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
             case FETCH:
                 return FetchResponse.parse(responseBuffer, version);
             case LIST_OFFSETS:
-                return ListOffsetResponse.parse(responseBuffer, version);
+                return ListOffsetsResponse.parse(responseBuffer, version);
             case METADATA:
                 return MetadataResponse.parse(responseBuffer, version);
             case OFFSET_COMMIT:

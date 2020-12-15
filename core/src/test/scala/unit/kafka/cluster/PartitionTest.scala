@@ -19,7 +19,6 @@ package kafka.cluster
 import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.{CountDownLatch, Semaphore}
-
 import com.yammer.metrics.core.Metric
 import kafka.api.{ApiVersion, LeaderAndIsr}
 import kafka.common.UnexpectedAppendOffsetException
@@ -34,8 +33,8 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrParti
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
+import org.apache.kafka.common.requests.ListOffsetsRequest
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
-import org.apache.kafka.common.requests.ListOffsetRequest
 import org.apache.kafka.common.utils.SystemTime
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.junit.Assert._
@@ -529,7 +528,7 @@ class PartitionTest extends AbstractPartitionTest {
     val leaderEpoch = 5
     val partition = setupPartitionWithMocks(leaderEpoch, isLeader = true)
 
-    val timestampAndOffsetOpt = partition.fetchOffsetForTimestamp(ListOffsetRequest.LATEST_TIMESTAMP,
+    val timestampAndOffsetOpt = partition.fetchOffsetForTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP,
       isolationLevel = None,
       currentLeaderEpoch = Optional.empty(),
       fetchOnlyFromLeader = true)
@@ -621,14 +620,14 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(2, partition.localLogOrException.highWatermark)
 
     // Get the LEO
-    fetchOffsetsForTimestamp(ListOffsetRequest.LATEST_TIMESTAMP, None) match {
+    fetchOffsetsForTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP, None) match {
       case Right(Some(offsetAndTimestamp)) => assertEquals(5, offsetAndTimestamp.offset)
       case Right(None) => fail("Should have seen some offsets")
       case Left(e) => fail("Should not have seen an error")
     }
 
     // Get the HW
-    fetchOffsetsForTimestamp(ListOffsetRequest.LATEST_TIMESTAMP, Some(IsolationLevel.READ_UNCOMMITTED)) match {
+    fetchOffsetsForTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP, Some(IsolationLevel.READ_UNCOMMITTED)) match {
       case Right(Some(offsetAndTimestamp)) => assertEquals(2, offsetAndTimestamp.offset)
       case Right(None) => fail("Should have seen some offsets")
       case Left(e) => fail("Should not have seen an error")
@@ -662,7 +661,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertTrue(partition.makeLeader(newLeaderState, offsetCheckpoints))
 
     // Try to get offsets as a client
-    fetchOffsetsForTimestamp(ListOffsetRequest.LATEST_TIMESTAMP, Some(IsolationLevel.READ_UNCOMMITTED)) match {
+    fetchOffsetsForTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP, Some(IsolationLevel.READ_UNCOMMITTED)) match {
       case Right(Some(offsetAndTimestamp)) => fail("Should have failed with OffsetNotAvailable")
       case Right(None) => fail("Should have seen an error")
       case Left(e: OffsetNotAvailableException) => // ok
@@ -670,14 +669,14 @@ class PartitionTest extends AbstractPartitionTest {
     }
 
     // If request is not from a client, we skip the check
-    fetchOffsetsForTimestamp(ListOffsetRequest.LATEST_TIMESTAMP, None) match {
+    fetchOffsetsForTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP, None) match {
       case Right(Some(offsetAndTimestamp)) => assertEquals(5, offsetAndTimestamp.offset)
       case Right(None) => fail("Should have seen some offsets")
       case Left(e: ApiException) => fail(s"Got ApiException $e")
     }
 
     // If we request the earliest timestamp, we skip the check
-    fetchOffsetsForTimestamp(ListOffsetRequest.EARLIEST_TIMESTAMP, Some(IsolationLevel.READ_UNCOMMITTED)) match {
+    fetchOffsetsForTimestamp(ListOffsetsRequest.EARLIEST_TIMESTAMP, Some(IsolationLevel.READ_UNCOMMITTED)) match {
       case Right(Some(offsetAndTimestamp)) => assertEquals(0, offsetAndTimestamp.offset)
       case Right(None) => fail("Should have seen some offsets")
       case Left(e: ApiException) => fail(s"Got ApiException $e")
@@ -709,7 +708,7 @@ class PartitionTest extends AbstractPartitionTest {
     updateFollowerFetchState(follower2, LogOffsetMetadata(5))
 
     // Error goes away
-    fetchOffsetsForTimestamp(ListOffsetRequest.LATEST_TIMESTAMP, Some(IsolationLevel.READ_UNCOMMITTED)) match {
+    fetchOffsetsForTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP, Some(IsolationLevel.READ_UNCOMMITTED)) match {
       case Right(Some(offsetAndTimestamp)) => assertEquals(5, offsetAndTimestamp.offset)
       case Right(None) => fail("Should have seen some offsets")
       case Left(e: ApiException) => fail(s"Got ApiException $e")
@@ -834,7 +833,7 @@ class PartitionTest extends AbstractPartitionTest {
     partition.appendRecordsToLeader(records, origin = AppendOrigin.Client, requiredAcks = 0)
 
     def fetchLatestOffset(isolationLevel: Option[IsolationLevel]): TimestampAndOffset = {
-      val res = partition.fetchOffsetForTimestamp(ListOffsetRequest.LATEST_TIMESTAMP,
+      val res = partition.fetchOffsetForTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP,
         isolationLevel = isolationLevel,
         currentLeaderEpoch = Optional.empty(),
         fetchOnlyFromLeader = true)
@@ -843,7 +842,7 @@ class PartitionTest extends AbstractPartitionTest {
     }
 
     def fetchEarliestOffset(isolationLevel: Option[IsolationLevel]): TimestampAndOffset = {
-      val res = partition.fetchOffsetForTimestamp(ListOffsetRequest.EARLIEST_TIMESTAMP,
+      val res = partition.fetchOffsetForTimestamp(ListOffsetsRequest.EARLIEST_TIMESTAMP,
         isolationLevel = isolationLevel,
         currentLeaderEpoch = Optional.empty(),
         fetchOnlyFromLeader = true)
