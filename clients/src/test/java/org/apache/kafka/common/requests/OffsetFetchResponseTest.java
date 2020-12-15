@@ -41,7 +41,7 @@ import static org.junit.Assert.assertTrue;
 
 public class OffsetFetchResponseTest {
 
-    private static final String ERROR_CODE = "error code";
+    private static final String ERROR_CODE = "error_code";
 
     private final int throttleTimeMs = 10;
     private final int offset = 100;
