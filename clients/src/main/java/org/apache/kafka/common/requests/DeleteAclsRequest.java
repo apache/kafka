@@ -100,7 +100,7 @@ public class DeleteAclsRequest extends AbstractRequest {
     }
 
     @Override
-    protected DeleteAclsRequestData data() {
+    public DeleteAclsRequestData data() {
         return data;
     }
 

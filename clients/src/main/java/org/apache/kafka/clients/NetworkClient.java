@@ -893,10 +893,10 @@ public class NetworkClient implements KafkaClient {
     private void handleApiVersionsResponse(List<ClientResponse> responses,
                                            InFlightRequest req, long now, ApiVersionsResponse apiVersionsResponse) {
         final String node = req.destination;
-        if (apiVersionsResponse.data.errorCode() != Errors.NONE.code()) {
-            if (req.request.version() == 0 || apiVersionsResponse.data.errorCode() != Errors.UNSUPPORTED_VERSION.code()) {
+        if (apiVersionsResponse.data().errorCode() != Errors.NONE.code()) {
+            if (req.request.version() == 0 || apiVersionsResponse.data().errorCode() != Errors.UNSUPPORTED_VERSION.code()) {
                 log.warn("Received error {} from node {} when making an ApiVersionsRequest with correlation id {}. Disconnecting.",
-                        Errors.forCode(apiVersionsResponse.data.errorCode()), node, req.header.correlationId());
+                        Errors.forCode(apiVersionsResponse.data().errorCode()), node, req.header.correlationId());
                 this.selector.close(node);
                 processDisconnection(responses, node, now, ChannelState.LOCAL_CLOSE);
             } else {
@@ -904,8 +904,8 @@ public class NetworkClient implements KafkaClient {
                 // the ApiVersionsRequest when an UNSUPPORTED_VERSION error is returned.
                 // If not provided, the client falls back to version 0.
                 short maxApiVersion = 0;
-                if (apiVersionsResponse.data.apiKeys().size() > 0) {
-                    ApiVersionsResponseKey apiVersion = apiVersionsResponse.data.apiKeys().find(ApiKeys.API_VERSIONS.id);
+                if (apiVersionsResponse.data().apiKeys().size() > 0) {
+                    ApiVersionsResponseKey apiVersion = apiVersionsResponse.data().apiKeys().find(ApiKeys.API_VERSIONS.id);
                     if (apiVersion != null) {
                         maxApiVersion = apiVersion.maxVersion();
                     }
@@ -914,7 +914,7 @@ public class NetworkClient implements KafkaClient {
             }
             return;
         }
-        NodeApiVersions nodeVersionInfo = new NodeApiVersions(apiVersionsResponse.data.apiKeys());
+        NodeApiVersions nodeVersionInfo = new NodeApiVersions(apiVersionsResponse.data().apiKeys());
         apiVersions.update(node, nodeVersionInfo);
         this.connectionStates.ready(node);
         log.debug("Recorded API versions for node {}: {}", node, nodeVersionInfo);

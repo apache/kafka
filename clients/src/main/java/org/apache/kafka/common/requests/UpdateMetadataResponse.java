@@ -52,7 +52,7 @@ public class UpdateMetadataResponse extends AbstractResponse {
     }
 
     @Override
-    protected UpdateMetadataResponseData data() {
+    public UpdateMetadataResponseData data() {
         return data;
     }
 

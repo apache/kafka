@@ -102,7 +102,7 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
         return SendBuilder.buildRequestSend(header, data());
     }
 
-    protected abstract Message data();
+    public abstract Message data();
 
     // Visible for testing
     public final ByteBuffer serialize() {

@@ -3451,12 +3451,12 @@ public class KafkaAdminClient extends AdminClient {
                 }
 
                 // If the error is an error at the group level, the future is failed with it
-                final Errors groupError = Errors.forCode(response.data.errorCode());
+                final Errors groupError = Errors.forCode(response.data().errorCode());
                 if (handleGroupRequestError(groupError, context.future()))
                     return;
 
                 final Map<TopicPartition, Errors> partitions = new HashMap<>();
-                response.data.topics().forEach(topic -> topic.partitions().forEach(partition -> partitions.put(
+                response.data().topics().forEach(topic -> topic.partitions().forEach(partition -> partitions.put(
                     new TopicPartition(topic.name(), partition.partitionIndex()),
                     Errors.forCode(partition.errorCode())))
                 );
@@ -4359,10 +4359,10 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             void handleResponse(AbstractResponse response) {
                 final ApiVersionsResponse apiVersionsResponse = (ApiVersionsResponse) response;
-                if (apiVersionsResponse.data.errorCode() == Errors.NONE.code()) {
+                if (apiVersionsResponse.data().errorCode() == Errors.NONE.code()) {
                     future.complete(createFeatureMetadata(apiVersionsResponse));
                 } else {
-                    future.completeExceptionally(Errors.forCode(apiVersionsResponse.data.errorCode()).exception());
+                    future.completeExceptionally(Errors.forCode(apiVersionsResponse.data().errorCode()).exception());
                 }
             }
 

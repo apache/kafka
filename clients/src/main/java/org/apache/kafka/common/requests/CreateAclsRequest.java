@@ -70,7 +70,7 @@ public class CreateAclsRequest extends AbstractRequest {
     }
 
     @Override
-    protected CreateAclsRequestData data() {
+    public CreateAclsRequestData data() {
         return data;
     }
 
