@@ -44,7 +44,7 @@ public class DescribeGroupsResponse extends AbstractResponse {
      * AUTHORIZATION_FAILED (29)
      */
 
-    private DescribeGroupsResponseData data;
+    private final DescribeGroupsResponseData data;
 
     public DescribeGroupsResponse(DescribeGroupsResponseData data) {
         super(ApiKeys.DESCRIBE_GROUPS);
@@ -105,6 +105,7 @@ public class DescribeGroupsResponse extends AbstractResponse {
         return  groupMetadata;
     }
 
+    @Override
     public DescribeGroupsResponseData data() {
         return data;
     }

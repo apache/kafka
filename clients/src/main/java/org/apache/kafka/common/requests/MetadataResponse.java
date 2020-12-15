@@ -74,7 +74,7 @@ public class MetadataResponse extends AbstractResponse {
     }
 
     @Override
-    protected MetadataResponseData data() {
+    public MetadataResponseData data() {
         return data;
     }
 

@@ -25,8 +25,9 @@ import java.nio.charset.StandardCharsets
 import java.util
 import java.util.concurrent.{CompletableFuture, ConcurrentLinkedQueue, Executors, TimeUnit}
 import java.util.{Properties, Random}
-import com.yammer.metrics.core.{Gauge, Meter}
 
+import com.fasterxml.jackson.databind.node.{JsonNodeFactory, ObjectNode, TextNode}
+import com.yammer.metrics.core.{Gauge, Meter}
 import javax.net.ssl._
 import kafka.metrics.KafkaYammerMetrics
 import kafka.security.CredentialProvider
@@ -140,7 +141,8 @@ class SocketServerTest {
   def processRequest(channel: RequestChannel, request: RequestChannel.Request): Unit = {
     val byteBuffer = RequestTestUtils.serializeRequestWithHeader(request.header, request.body[AbstractRequest])
     val send = new NetworkSend(request.context.connectionId, ByteBufferSend.sizePrefixed(byteBuffer))
-    channel.sendResponse(new RequestChannel.SendResponse(request, send, Some(request.header.toString), None))
+    val headerLog = RequestConvertToJson.requestHeaderNode(request.header)
+    channel.sendResponse(new RequestChannel.SendResponse(request, send, Some(headerLog), None))
   }
 
   def processRequestNoOpResponse(channel: RequestChannel, request: RequestChannel.Request): Unit = {
@@ -676,9 +678,10 @@ class SocketServerTest {
       server.dataPlaneRequestChannel.sendResponse(response)
     }
     val throttledChannel = new ThrottledChannel(request, new MockTime(), 100, channelThrottlingCallback)
+    val headerLog = RequestConvertToJson.requestHeaderNode(request.header)
     val response =
       if (!noOpResponse)
-        new RequestChannel.SendResponse(request, send, Some(request.header.toString), None)
+        new RequestChannel.SendResponse(request, send, Some(headerLog), None)
       else
         new RequestChannel.NoOpResponse(request)
     server.dataPlaneRequestChannel.sendResponse(response)
@@ -858,36 +861,49 @@ class SocketServerTest {
 
   @Test
   def testConnectionRatePerIp(): Unit = {
+    val defaultTimeoutMs = 2000
     val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
     overrideProps.remove(KafkaConfig.MaxConnectionsPerIpProp)
     overrideProps.put(KafkaConfig.NumQuotaSamplesProp, String.valueOf(2))
     val connectionRate = 5
     val time = new MockTime()
     val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), new Metrics(), time, credentialProvider)
+    // update the connection rate to 5
     overrideServer.connectionQuotas.updateIpConnectionRateQuota(None, Some(connectionRate))
     try {
       overrideServer.startup()
-      // make the maximum allowable number of connections
-      (0 until connectionRate).map(_ => connect(overrideServer))
-      // now try one more (should get throttled)
-      var conn = connect(overrideServer)
+      // make the (maximum allowable number + 1) of connections
+      (0 to connectionRate).map(_ => connect(overrideServer))
+
       val acceptors = overrideServer.dataPlaneAcceptors.asScala.values
-      TestUtils.waitUntilTrue(() => acceptors.exists(_.throttledSockets.nonEmpty),
-        "timeout waiting for connection to get throttled",
-        1000)
+      // waiting for 5 connections got accepted and 1 connection got throttled
+      TestUtils.waitUntilTrue(
+        () => acceptors.foldLeft(0)((accumulator, acceptor) => accumulator + acceptor.throttledSockets.size) == 1,
+        "timeout waiting for 1 connection to get throttled",
+        defaultTimeoutMs)
+
+      // now try one more, so that we can make sure this connection will get throttled
+      var conn = connect(overrideServer)
+      // there should be total 2 connection got throttled now
+      TestUtils.waitUntilTrue(
+        () => acceptors.foldLeft(0)((accumulator, acceptor) => accumulator + acceptor.throttledSockets.size) == 2,
+        "timeout waiting for 2 connection to get throttled",
+        defaultTimeoutMs)
       // advance time to unthrottle connections
-      time.sleep(2000)
+      time.sleep(defaultTimeoutMs)
       acceptors.foreach(_.wakeup())
+      // make sure there are no connection got throttled now(and the throttled connections should be closed)
       TestUtils.waitUntilTrue(() => acceptors.forall(_.throttledSockets.isEmpty),
         "timeout waiting for connection to be unthrottled",
-        1000)
+        defaultTimeoutMs)
+      // verify the connection is closed now
       verifyRemoteConnectionClosed(conn)
 
       // new connection should succeed after previous connection closed, and previous samples have been expired
       conn = connect(overrideServer)
       val serializedBytes = producerRequestBytes()
       sendRequest(conn, serializedBytes)
-      val request = overrideServer.dataPlaneRequestChannel.receiveRequest(2000)
+      val request = overrideServer.dataPlaneRequestChannel.receiveRequest(defaultTimeoutMs)
       assertNotNull(request)
     } finally {
       shutdownServerAndMetrics(overrideServer)
@@ -1093,7 +1109,9 @@ class SocketServerTest {
       val requestMetrics = channel.metrics(request.header.apiKey.name)
       def totalTimeHistCount(): Long = requestMetrics.totalTimeHist.count
       val send = new NetworkSend(request.context.connectionId, ByteBufferSend.sizePrefixed(ByteBuffer.allocate(responseBufferSize)))
-      channel.sendResponse(new RequestChannel.SendResponse(request, send, Some("someResponse"), None))
+      val headerLog = new ObjectNode(JsonNodeFactory.instance)
+      headerLog.set("response", new TextNode("someResponse"))
+      channel.sendResponse(new RequestChannel.SendResponse(request, send, Some(headerLog), None))
 
       val expectedTotalTimeCount = totalTimeHistCount() + 1
       TestUtils.waitUntilTrue(() => totalTimeHistCount() == expectedTotalTimeCount,

@@ -58,7 +58,7 @@ public class SaslHandshakeResponse extends AbstractResponse {
     }
 
     @Override
-    protected SaslHandshakeResponseData data() {
+    public SaslHandshakeResponseData data() {
         return data;
     }
 

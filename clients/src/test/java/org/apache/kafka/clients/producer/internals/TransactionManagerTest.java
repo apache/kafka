@@ -839,8 +839,8 @@ public class TransactionManagerTest {
 
         client.prepareUnsupportedVersionResponse(body -> {
             InitProducerIdRequest initProducerIdRequest = (InitProducerIdRequest) body;
-            assertEquals(initProducerIdRequest.data.transactionalId(), transactionalId);
-            assertEquals(initProducerIdRequest.data.transactionTimeoutMs(), transactionTimeoutMs);
+            assertEquals(initProducerIdRequest.data().transactionalId(), transactionalId);
+            assertEquals(initProducerIdRequest.data().transactionTimeoutMs(), transactionTimeoutMs);
             return true;
         });
 
@@ -890,11 +890,11 @@ public class TransactionManagerTest {
 
         client.prepareResponse(request -> {
             TxnOffsetCommitRequest txnOffsetCommitRequest = (TxnOffsetCommitRequest) request;
-            assertEquals(consumerGroupId, txnOffsetCommitRequest.data.groupId());
-            assertEquals(producerId, txnOffsetCommitRequest.data.producerId());
-            assertEquals(epoch, txnOffsetCommitRequest.data.producerEpoch());
-            return txnOffsetCommitRequest.data.groupInstanceId().equals(groupInstanceId)
-                && !txnOffsetCommitRequest.data.memberId().equals(memberId);
+            assertEquals(consumerGroupId, txnOffsetCommitRequest.data().groupId());
+            assertEquals(producerId, txnOffsetCommitRequest.data().producerId());
+            assertEquals(epoch, txnOffsetCommitRequest.data().producerEpoch());
+            return txnOffsetCommitRequest.data().groupInstanceId().equals(groupInstanceId)
+                && !txnOffsetCommitRequest.data().memberId().equals(memberId);
         }, new TxnOffsetCommitResponse(0, singletonMap(tp, Errors.FENCED_INSTANCE_ID)));
 
         runUntil(transactionManager::hasError);
@@ -924,10 +924,10 @@ public class TransactionManagerTest {
 
         client.prepareResponse(request -> {
             TxnOffsetCommitRequest txnOffsetCommitRequest = (TxnOffsetCommitRequest) request;
-            assertEquals(consumerGroupId, txnOffsetCommitRequest.data.groupId());
-            assertEquals(producerId, txnOffsetCommitRequest.data.producerId());
-            assertEquals(epoch, txnOffsetCommitRequest.data.producerEpoch());
-            return !txnOffsetCommitRequest.data.memberId().equals(memberId);
+            assertEquals(consumerGroupId, txnOffsetCommitRequest.data().groupId());
+            assertEquals(producerId, txnOffsetCommitRequest.data().producerId());
+            assertEquals(epoch, txnOffsetCommitRequest.data().producerEpoch());
+            return !txnOffsetCommitRequest.data().memberId().equals(memberId);
         }, new TxnOffsetCommitResponse(0, singletonMap(tp, Errors.UNKNOWN_MEMBER_ID)));
 
         runUntil(transactionManager::hasError);
@@ -959,10 +959,10 @@ public class TransactionManagerTest {
         prepareTxnOffsetCommitResponse(consumerGroupId, producerId, epoch, singletonMap(tp, Errors.ILLEGAL_GENERATION));
         client.prepareResponse(request -> {
             TxnOffsetCommitRequest txnOffsetCommitRequest = (TxnOffsetCommitRequest) request;
-            assertEquals(consumerGroupId, txnOffsetCommitRequest.data.groupId());
-            assertEquals(producerId, txnOffsetCommitRequest.data.producerId());
-            assertEquals(epoch, txnOffsetCommitRequest.data.producerEpoch());
-            return txnOffsetCommitRequest.data.generationId() != generationId;
+            assertEquals(consumerGroupId, txnOffsetCommitRequest.data().groupId());
+            assertEquals(producerId, txnOffsetCommitRequest.data().producerId());
+            assertEquals(epoch, txnOffsetCommitRequest.data().producerEpoch());
+            return txnOffsetCommitRequest.data().generationId() != generationId;
         }, new TxnOffsetCommitResponse(0, singletonMap(tp, Errors.ILLEGAL_GENERATION)));
 
         runUntil(transactionManager::hasError);
@@ -3332,8 +3332,8 @@ public class TransactionManagerTest {
                 .setThrottleTimeMs(0);
         client.prepareResponse(body -> {
             InitProducerIdRequest initProducerIdRequest = (InitProducerIdRequest) body;
-            assertEquals(transactionalId, initProducerIdRequest.data.transactionalId());
-            assertEquals(transactionTimeoutMs, initProducerIdRequest.data.transactionTimeoutMs());
+            assertEquals(transactionalId, initProducerIdRequest.data().transactionalId());
+            assertEquals(transactionTimeoutMs, initProducerIdRequest.data().transactionTimeoutMs());
             return true;
         }, new InitProducerIdResponse(responseData), shouldDisconnect);
     }
@@ -3396,10 +3396,10 @@ public class TransactionManagerTest {
                                                                   final short epoch, final long producerId) {
         return body -> {
             AddPartitionsToTxnRequest addPartitionsToTxnRequest = (AddPartitionsToTxnRequest) body;
-            assertEquals(producerId, addPartitionsToTxnRequest.data.producerId());
-            assertEquals(epoch, addPartitionsToTxnRequest.data.producerEpoch());
+            assertEquals(producerId, addPartitionsToTxnRequest.data().producerId());
+            assertEquals(epoch, addPartitionsToTxnRequest.data().producerEpoch());
             assertEquals(singletonList(topicPartition), addPartitionsToTxnRequest.partitions());
-            assertEquals(transactionalId, addPartitionsToTxnRequest.data.transactionalId());
+            assertEquals(transactionalId, addPartitionsToTxnRequest.data().transactionalId());
             return true;
         };
     }
@@ -3430,9 +3430,9 @@ public class TransactionManagerTest {
     private MockClient.RequestMatcher endTxnMatcher(final TransactionResult result, final long producerId, final short epoch) {
         return body -> {
             EndTxnRequest endTxnRequest = (EndTxnRequest) body;
-            assertEquals(transactionalId, endTxnRequest.data.transactionalId());
-            assertEquals(producerId, endTxnRequest.data.producerId());
-            assertEquals(epoch, endTxnRequest.data.producerEpoch());
+            assertEquals(transactionalId, endTxnRequest.data().transactionalId());
+            assertEquals(producerId, endTxnRequest.data().producerId());
+            assertEquals(epoch, endTxnRequest.data().producerEpoch());
             assertEquals(result, endTxnRequest.result());
             return true;
         };
@@ -3444,10 +3444,10 @@ public class TransactionManagerTest {
                                                 final short producerEpoch) {
         client.prepareResponse(body -> {
             AddOffsetsToTxnRequest addOffsetsToTxnRequest = (AddOffsetsToTxnRequest) body;
-            assertEquals(consumerGroupId, addOffsetsToTxnRequest.data.groupId());
-            assertEquals(transactionalId, addOffsetsToTxnRequest.data.transactionalId());
-            assertEquals(producerId, addOffsetsToTxnRequest.data.producerId());
-            assertEquals(producerEpoch, addOffsetsToTxnRequest.data.producerEpoch());
+            assertEquals(consumerGroupId, addOffsetsToTxnRequest.data().groupId());
+            assertEquals(transactionalId, addOffsetsToTxnRequest.data().transactionalId());
+            assertEquals(producerId, addOffsetsToTxnRequest.data().producerId());
+            assertEquals(producerEpoch, addOffsetsToTxnRequest.data().producerEpoch());
             return true;
         }, new AddOffsetsToTxnResponse(
             new AddOffsetsToTxnResponseData()
@@ -3461,9 +3461,9 @@ public class TransactionManagerTest {
                                                 Map<TopicPartition, Errors> txnOffsetCommitResponse) {
         client.prepareResponse(request -> {
             TxnOffsetCommitRequest txnOffsetCommitRequest = (TxnOffsetCommitRequest) request;
-            assertEquals(consumerGroupId, txnOffsetCommitRequest.data.groupId());
-            assertEquals(producerId, txnOffsetCommitRequest.data.producerId());
-            assertEquals(producerEpoch, txnOffsetCommitRequest.data.producerEpoch());
+            assertEquals(consumerGroupId, txnOffsetCommitRequest.data().groupId());
+            assertEquals(producerId, txnOffsetCommitRequest.data().producerId());
+            assertEquals(producerEpoch, txnOffsetCommitRequest.data().producerEpoch());
             return true;
         }, new TxnOffsetCommitResponse(0, txnOffsetCommitResponse));
     }
@@ -3477,12 +3477,12 @@ public class TransactionManagerTest {
                                                 Map<TopicPartition, Errors> txnOffsetCommitResponse) {
         client.prepareResponse(request -> {
             TxnOffsetCommitRequest txnOffsetCommitRequest = (TxnOffsetCommitRequest) request;
-            assertEquals(consumerGroupId, txnOffsetCommitRequest.data.groupId());
-            assertEquals(producerId, txnOffsetCommitRequest.data.producerId());
-            assertEquals(producerEpoch, txnOffsetCommitRequest.data.producerEpoch());
-            assertEquals(groupInstanceId, txnOffsetCommitRequest.data.groupInstanceId());
-            assertEquals(memberId, txnOffsetCommitRequest.data.memberId());
-            assertEquals(generationId, txnOffsetCommitRequest.data.generationId());
+            assertEquals(consumerGroupId, txnOffsetCommitRequest.data().groupId());
+            assertEquals(producerId, txnOffsetCommitRequest.data().producerId());
+            assertEquals(producerEpoch, txnOffsetCommitRequest.data().producerEpoch());
+            assertEquals(groupInstanceId, txnOffsetCommitRequest.data().groupInstanceId());
+            assertEquals(memberId, txnOffsetCommitRequest.data().memberId());
+            assertEquals(generationId, txnOffsetCommitRequest.data().generationId());
             return true;
         }, new TxnOffsetCommitResponse(0, txnOffsetCommitResponse));
     }
@@ -3506,7 +3506,7 @@ public class TransactionManagerTest {
                 .setThrottleTimeMs(0);
         client.prepareResponse(body -> {
             InitProducerIdRequest initProducerIdRequest = (InitProducerIdRequest) body;
-            assertNull(initProducerIdRequest.data.transactionalId());
+            assertNull(initProducerIdRequest.data().transactionalId());
             return true;
         }, new InitProducerIdResponse(responseData), false);
 

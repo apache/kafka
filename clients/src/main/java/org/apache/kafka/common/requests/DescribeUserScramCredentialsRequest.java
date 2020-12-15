@@ -44,7 +44,7 @@ public class DescribeUserScramCredentialsRequest extends AbstractRequest {
         }
     }
 
-    private DescribeUserScramCredentialsRequestData data;
+    private final DescribeUserScramCredentialsRequestData data;
     private final short version;
 
     private DescribeUserScramCredentialsRequest(DescribeUserScramCredentialsRequestData data, short version) {
@@ -58,6 +58,7 @@ public class DescribeUserScramCredentialsRequest extends AbstractRequest {
                 new ByteBufferAccessor(buffer), version), version);
     }
 
+    @Override
     public DescribeUserScramCredentialsRequestData data() {
         return data;
     }

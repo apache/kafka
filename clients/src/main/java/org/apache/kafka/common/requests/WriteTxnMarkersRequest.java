@@ -134,7 +134,7 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
         }
     }
 
-    public final WriteTxnMarkersRequestData data;
+    private final WriteTxnMarkersRequestData data;
 
     private WriteTxnMarkersRequest(WriteTxnMarkersRequestData data, short version) {
         super(ApiKeys.WRITE_TXN_MARKERS, version);
@@ -142,7 +142,7 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
     }
 
     @Override
-    protected WriteTxnMarkersRequestData data() {
+    public WriteTxnMarkersRequestData data() {
         return data;
     }
 

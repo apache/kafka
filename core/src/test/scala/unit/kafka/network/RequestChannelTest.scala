@@ -18,10 +18,12 @@
 package kafka.network
 
 
+import java.io.IOException
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.util.Collections
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import kafka.network
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.config.types.Password
@@ -52,7 +54,7 @@ class RequestChannelTest {
       val loggableAlterConfigs = alterConfigs.loggableRequest.asInstanceOf[AlterConfigsRequest]
       val loggedConfig = loggableAlterConfigs.configs.get(resource)
       assertEquals(expectedValues, toMap(loggedConfig))
-      val alterConfigsDesc = alterConfigs.requestDesc(details = true)
+      val alterConfigsDesc = RequestConvertToJson.requestDesc(alterConfigs.header, alterConfigs.requestLog, alterConfigs.isForwarded).toString
       assertFalse(s"Sensitive config logged $alterConfigsDesc", alterConfigsDesc.contains(sensitiveValue))
     }
 
@@ -116,7 +118,7 @@ class RequestChannelTest {
       val loggableAlterConfigs = alterConfigs.loggableRequest.asInstanceOf[IncrementalAlterConfigsRequest]
       val loggedConfig = loggableAlterConfigs.data.resources.find(resource.`type`.id, resource.name).configs
       assertEquals(expectedValues, toMap(loggedConfig))
-      val alterConfigsDesc = alterConfigs.requestDesc(details = true)
+      val alterConfigsDesc = RequestConvertToJson.requestDesc(alterConfigs.header, alterConfigs.requestLog, alterConfigs.isForwarded).toString
       assertFalse(s"Sensitive config logged $alterConfigsDesc", alterConfigsDesc.contains(sensitiveValue))
     }
 
@@ -162,6 +164,29 @@ class RequestChannelTest {
   def testNonAlterRequestsNotTransformed(): Unit = {
     val metadataRequest = request(new MetadataRequest.Builder(List("topic").asJava, true).build())
     assertSame(metadataRequest.body[MetadataRequest], metadataRequest.loggableRequest)
+  }
+
+  @Test
+  def testJsonRequests(): Unit = {
+    val sensitiveValue = "secret"
+    val resource = new ConfigResource(ConfigResource.Type.BROKER, "1")
+    val keystorePassword = new ConfigEntry(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, sensitiveValue)
+    val entries = Seq(keystorePassword)
+
+    val alterConfigs = request(new AlterConfigsRequest.Builder(Collections.singletonMap(resource,
+      new Config(entries.asJavaCollection)), true).build())
+
+    assertTrue(isValidJson(RequestConvertToJson.request(alterConfigs.loggableRequest).toString))
+  }
+
+  private def isValidJson(str: String): Boolean = {
+    try {
+      val mapper = new ObjectMapper
+      mapper.readTree(str)
+      true
+    } catch {
+      case _: IOException => false
+    }
   }
 
   def request(req: AbstractRequest): RequestChannel.Request = {
