@@ -44,6 +44,7 @@ import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.JoinGroupResponse;
 import org.apache.kafka.common.requests.LeaveGroupRequest;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
+import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -128,7 +129,7 @@ public class AbstractCoordinatorTest {
                                                         HEARTBEAT_INTERVAL_MS);
         metrics = new Metrics(mockTime);
 
-        mockClient.updateMetadata(TestUtils.metadataUpdateWith(1, emptyMap()));
+        mockClient.updateMetadata(RequestTestUtils.metadataUpdateWith(1, emptyMap()));
         this.node = metadata.fetch().nodes().get(0);
         this.coordinatorNode = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
 
@@ -446,8 +447,8 @@ public class AbstractCoordinatorTest {
             coordinator.resetGenerationOnLeaveGroup();
 
             SyncGroupRequest syncGroupRequest = (SyncGroupRequest) body;
-            return syncGroupRequest.data.protocolType().equals(PROTOCOL_TYPE)
-                       && syncGroupRequest.data.protocolName().equals(PROTOCOL_NAME);
+            return syncGroupRequest.data().protocolType().equals(PROTOCOL_TYPE)
+                       && syncGroupRequest.data().protocolName().equals(PROTOCOL_NAME);
         }, syncGroupResponse(Errors.NONE, PROTOCOL_TYPE, wrongProtocolName));
 
         // let the retry to complete successfully to break out of the while loop
@@ -466,8 +467,8 @@ public class AbstractCoordinatorTest {
             }
 
             SyncGroupRequest syncGroupRequest = (SyncGroupRequest) body;
-            return syncGroupRequest.data.protocolType().equals(PROTOCOL_TYPE)
-                    && syncGroupRequest.data.protocolName().equals(PROTOCOL_NAME);
+            return syncGroupRequest.data().protocolType().equals(PROTOCOL_TYPE)
+                    && syncGroupRequest.data().protocolName().equals(PROTOCOL_NAME);
         }, syncGroupResponse(Errors.NONE, PROTOCOL_TYPE, PROTOCOL_NAME));
 
         // No exception shall be thrown as the generation is reset.
@@ -496,8 +497,8 @@ public class AbstractCoordinatorTest {
                 return false;
             }
             SyncGroupRequest syncGroupRequest = (SyncGroupRequest) body;
-            return syncGroupRequest.data.protocolType().equals(PROTOCOL_TYPE)
-                && syncGroupRequest.data.protocolName().equals(PROTOCOL_NAME);
+            return syncGroupRequest.data().protocolType().equals(PROTOCOL_TYPE)
+                && syncGroupRequest.data().protocolName().equals(PROTOCOL_NAME);
         }, syncGroupResponse(Errors.NONE, syncGroupResponseProtocolType, syncGroupResponseProtocolName));
 
         return coordinator.joinGroupIfNeeded(mockTime.timer(5000L));

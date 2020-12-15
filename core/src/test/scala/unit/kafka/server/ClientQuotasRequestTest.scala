@@ -17,6 +17,8 @@
 
 package kafka.server
 
+import java.net.InetAddress
+
 import org.apache.kafka.clients.admin.{ScramCredentialInfo, ScramMechanism, UserScramCredentialUpsertion}
 import org.apache.kafka.common.errors.{InvalidRequestException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.KafkaFutureImpl
@@ -33,6 +35,7 @@ class ClientQuotasRequestTest extends BaseRequestTest {
   private val ConsumerByteRateProp = DynamicConfig.Client.ConsumerByteRateOverrideProp
   private val ProducerByteRateProp = DynamicConfig.Client.ProducerByteRateOverrideProp
   private val RequestPercentageProp = DynamicConfig.Client.RequestPercentageOverrideProp
+  private val IpConnectionRateProp = DynamicConfig.Ip.IpConnectionRateOverrideProp
 
   override val brokerCount = 1
 
@@ -187,6 +190,59 @@ class ClientQuotasRequestTest extends BaseRequestTest {
     ))
   }
 
+  @Test
+  def testAlterIpQuotasRequest(): Unit = {
+    val knownHost = "1.2.3.4"
+    val unknownHost = "2.3.4.5"
+    val entity = toIpEntity(Some(knownHost))
+    val defaultEntity = toIpEntity(Some(null))
+    val entityFilter = ClientQuotaFilterComponent.ofEntity(ClientQuotaEntity.IP, knownHost)
+    val defaultEntityFilter = ClientQuotaFilterComponent.ofDefaultEntity(ClientQuotaEntity.IP)
+    val allIpEntityFilter = ClientQuotaFilterComponent.ofEntityType(ClientQuotaEntity.IP)
+
+    def verifyIpQuotas(entityFilter: ClientQuotaFilterComponent, expectedMatches: Map[ClientQuotaEntity, Double]): Unit = {
+      val result = describeClientQuotas(ClientQuotaFilter.containsOnly(List(entityFilter).asJava))
+      assertEquals(expectedMatches.keySet, result.asScala.keySet)
+      result.asScala.foreach { case (entity, props) =>
+        assertEquals(Set(IpConnectionRateProp), props.asScala.keySet)
+        assertEquals(expectedMatches(entity), props.get(IpConnectionRateProp))
+        val entityName = entity.entries.get(ClientQuotaEntity.IP)
+        // ClientQuotaEntity with null name maps to default entity
+        val entityIp = if (entityName == null)
+          InetAddress.getByName(unknownHost)
+        else
+          InetAddress.getByName(entityName)
+        assertEquals(expectedMatches(entity), servers.head.socketServer.connectionQuotas.connectionRateForIp(entityIp), 0.01)
+      }
+    }
+
+    // Expect an empty configuration.
+    verifyIpQuotas(allIpEntityFilter, Map.empty)
+
+    // Add a configuration entry.
+    alterEntityQuotas(entity, Map(IpConnectionRateProp -> Some(100.0)), validateOnly = false)
+    verifyIpQuotas(entityFilter, Map(entity -> 100.0))
+
+    // update existing entry
+    alterEntityQuotas(entity, Map(IpConnectionRateProp -> Some(150.0)), validateOnly = false)
+    verifyIpQuotas(entityFilter, Map(entity -> 150.0))
+
+    // update default value
+    alterEntityQuotas(defaultEntity, Map(IpConnectionRateProp -> Some(200.0)), validateOnly = false)
+    verifyIpQuotas(defaultEntityFilter, Map(defaultEntity -> 200.0))
+
+    // describe all IP quotas
+    verifyIpQuotas(allIpEntityFilter, Map(entity -> 150.0, defaultEntity -> 200.0))
+
+    // remove entry
+    alterEntityQuotas(entity, Map(IpConnectionRateProp -> None), validateOnly = false)
+    verifyIpQuotas(entityFilter, Map.empty)
+
+    // remove default value
+    alterEntityQuotas(defaultEntity, Map(IpConnectionRateProp -> None), validateOnly = false)
+    verifyIpQuotas(allIpEntityFilter, Map.empty)
+  }
+
   @Test(expected = classOf[InvalidRequestException])
   def testAlterClientQuotasBadUser(): Unit = {
     val entity = new ClientQuotaEntity(Map((ClientQuotaEntity.USER -> "")).asJava)
@@ -223,8 +279,47 @@ class ClientQuotasRequestTest extends BaseRequestTest {
     alterEntityQuotas(entity, Map((ProducerByteRateProp -> Some(10000.5))), validateOnly = true)
   }
 
+  private def expectInvalidRequestWithMessage(runnable: => Unit, expectedMessage: String): Unit = {
+    val exception = assertThrows(classOf[InvalidRequestException], () => runnable)
+    assertTrue(s"Expected message $exception to contain $expectedMessage", exception.getMessage.contains(expectedMessage))
+  }
+
+  @Test
+  def testAlterClientQuotasInvalidEntityCombination(): Unit = {
+    val userAndIpEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.USER -> "user", ClientQuotaEntity.IP -> "1.2.3.4").asJava)
+    val clientAndIpEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.CLIENT_ID -> "client", ClientQuotaEntity.IP -> "1.2.3.4").asJava)
+    val expectedExceptionMessage = "Invalid quota entity combination"
+    expectInvalidRequestWithMessage(alterEntityQuotas(userAndIpEntity, Map(RequestPercentageProp -> Some(12.34)),
+      validateOnly = true), expectedExceptionMessage)
+    expectInvalidRequestWithMessage(alterEntityQuotas(clientAndIpEntity, Map(RequestPercentageProp -> Some(12.34)),
+      validateOnly = true), expectedExceptionMessage)
+  }
+
+  @Test
+  def testAlterClientQuotasBadIp(): Unit = {
+    val invalidHostPatternEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.IP -> "abc-123").asJava)
+    val unresolvableHostEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.IP -> "ip").asJava)
+    val expectedExceptionMessage = "not a valid IP"
+    expectInvalidRequestWithMessage(alterEntityQuotas(invalidHostPatternEntity, Map(IpConnectionRateProp -> Some(50.0)),
+      validateOnly = true), expectedExceptionMessage)
+    expectInvalidRequestWithMessage(alterEntityQuotas(unresolvableHostEntity, Map(IpConnectionRateProp -> Some(50.0)),
+      validateOnly = true), expectedExceptionMessage)
+  }
+
+  @Test
+  def testDescribeClientQuotasInvalidFilterCombination(): Unit = {
+    val ipFilterComponent = ClientQuotaFilterComponent.ofEntityType(ClientQuotaEntity.IP)
+    val userFilterComponent = ClientQuotaFilterComponent.ofEntityType(ClientQuotaEntity.USER)
+    val clientIdFilterComponent = ClientQuotaFilterComponent.ofEntityType(ClientQuotaEntity.CLIENT_ID)
+    val expectedExceptionMessage = "Invalid entity filter component combination"
+    expectInvalidRequestWithMessage(describeClientQuotas(ClientQuotaFilter.contains(List(ipFilterComponent, userFilterComponent).asJava)),
+      expectedExceptionMessage)
+    expectInvalidRequestWithMessage(describeClientQuotas(ClientQuotaFilter.contains(List(ipFilterComponent, clientIdFilterComponent).asJava)),
+      expectedExceptionMessage)
+  }
+
   // Entities to be matched against.
-  private val matchEntities = List(
+  private val matchUserClientEntities = List(
     (Some("user-1"), Some("client-id-1"), 50.50),
     (Some("user-2"), Some("client-id-1"), 51.51),
     (Some("user-3"), Some("client-id-2"), 52.52),
@@ -236,16 +331,22 @@ class ClientQuotasRequestTest extends BaseRequestTest {
     (Some("user-3"), None, 58.58),
     (Some(null), None, 59.59),
     (None, Some("client-id-2"), 60.60)
-  ).map { case (u, c, v) => (toEntity(u, c), v) }
+  ).map { case (u, c, v) => (toClientEntity(u, c), v) }
+
+  private val matchIpEntities = List(
+    (Some("1.2.3.4"), 10.0),
+    (Some("2.3.4.5"), 20.0)
+  ).map { case (ip, quota) => (toIpEntity(ip), quota)}
 
   private def setupDescribeClientQuotasMatchTest() = {
-    val result = alterClientQuotas(matchEntities.map { case (e, v) =>
-      (e -> Map((RequestPercentageProp, Some(v))))
-    }.toMap, validateOnly = false)
-    matchEntities.foreach(e => result.get(e._1).get.get(10, TimeUnit.SECONDS))
-
-    // Allow time for watch callbacks to be triggered.
-    Thread.sleep(500)
+    val userClientQuotas = matchUserClientEntities.map { case (e, v) =>
+      e -> Map((RequestPercentageProp, Some(v)))
+    }.toMap
+    val ipQuotas = matchIpEntities.map { case (e, v) =>
+      e -> Map((IpConnectionRateProp, Some(v)))
+    }.toMap
+    val result = alterClientQuotas(userClientQuotas ++ ipQuotas, validateOnly = false)
+    (matchUserClientEntities ++ matchIpEntities).foreach(e => result(e._1).get(10, TimeUnit.SECONDS))
   }
 
   @Test
@@ -263,7 +364,7 @@ class ClientQuotasRequestTest extends BaseRequestTest {
     }
 
     // Test exact matches.
-    matchEntities.foreach { case (e, v) =>
+    matchUserClientEntities.foreach { case (e, v) =>
       val result = matchEntity(e)
       assertEquals(1, result.size)
       assertTrue(result.get(e) != null)
@@ -299,19 +400,30 @@ class ClientQuotasRequestTest extends BaseRequestTest {
 
     def testMatchEntities(filter: ClientQuotaFilter, expectedMatchSize: Int, partition: ClientQuotaEntity => Boolean): Unit = {
       val result = describeClientQuotas(filter)
-      val (expectedMatches, expectedNonMatches) = matchEntities.partition(e => partition(e._1))
+      val (expectedMatches, _) = (matchUserClientEntities ++ matchIpEntities).partition(e => partition(e._1))
       assertEquals(expectedMatchSize, expectedMatches.size)  // for test verification
       assertEquals(expectedMatchSize, result.size)
       val expectedMatchesMap = expectedMatches.toMap
-      matchEntities.foreach { case (entity, expectedValue) =>
+      matchUserClientEntities.foreach { case (entity, expectedValue) =>
         if (expectedMatchesMap.contains(entity)) {
           val config = result.get(entity)
-          assertTrue(config != null)
+          assertNotNull(config)
           val value = config.get(RequestPercentageProp)
-          assertTrue(value != null)
+          assertNotNull(value)
           assertEquals(expectedValue, value, 1e-6)
         } else {
-          assertTrue(result.get(entity) == null)
+          assertNull(result.get(entity))
+        }
+      }
+      matchIpEntities.foreach { case (entity, expectedValue) =>
+        if (expectedMatchesMap.contains(entity)) {
+          val config = result.get(entity)
+          assertNotNull(config)
+          val value = config.get(IpConnectionRateProp)
+          assertNotNull(value)
+          assertEquals(expectedValue, value, 1e-6)
+        } else {
+          assertNull(result.get(entity))
         }
       }
     }
@@ -376,8 +488,14 @@ class ClientQuotasRequestTest extends BaseRequestTest {
       entity => entity.entries.containsKey(ClientQuotaEntity.CLIENT_ID)
     )
 
+    // Match against all entities with IP type in an open-ended match.
+    testMatchEntities(
+      ClientQuotaFilter.contains(List(ClientQuotaFilterComponent.ofEntityType(ClientQuotaEntity.IP)).asJava), 2,
+      entity => entity.entries.containsKey(ClientQuotaEntity.IP)
+    )
+
     // Match open-ended empty filter list. This should match all entities.
-    testMatchEntities(ClientQuotaFilter.contains(List.empty.asJava), 11, entity => true)
+    testMatchEntities(ClientQuotaFilter.contains(List.empty.asJava), 13, entity => true)
 
     // Match close-ended empty filter list. This should match no entities.
     testMatchEntities(ClientQuotaFilter.containsOnly(List.empty.asJava), 0, entity => false)
@@ -386,11 +504,7 @@ class ClientQuotasRequestTest extends BaseRequestTest {
   @Test
   def testClientQuotasUnsupportedEntityTypes(): Unit = {
     val entity = new ClientQuotaEntity(Map(("other" -> "name")).asJava)
-    try {
-      verifyDescribeEntityQuotas(entity, Map())
-    } catch {
-      case e: ExecutionException => assertTrue(e.getCause.isInstanceOf[UnsupportedVersionException])
-    }
+    assertThrows(classOf[UnsupportedVersionException], () => verifyDescribeEntityQuotas(entity, Map.empty))
   }
 
   @Test
@@ -422,7 +536,11 @@ class ClientQuotasRequestTest extends BaseRequestTest {
   }
 
   private def verifyDescribeEntityQuotas(entity: ClientQuotaEntity, quotas: Map[String, Double]) = {
-    val components = entity.entries.asScala.map(e => ClientQuotaFilterComponent.ofEntity(e._1, e._2))
+    val components = entity.entries.asScala.map { case (entityType, entityName) =>
+      Option(entityName).map{ name => ClientQuotaFilterComponent.ofEntity(entityType, name)}
+        .getOrElse(ClientQuotaFilterComponent.ofDefaultEntity(entityType)
+      )
+    }
     val describe = describeClientQuotas(ClientQuotaFilter.containsOnly(components.toList.asJava))
     if (quotas.isEmpty) {
       assertEquals(0, describe.size)
@@ -439,13 +557,17 @@ class ClientQuotasRequestTest extends BaseRequestTest {
     }
   }
 
-  private def toEntity(user: Option[String], clientId: Option[String]) =
+  private def toClientEntity(user: Option[String], clientId: Option[String]) =
     new ClientQuotaEntity((user.map((ClientQuotaEntity.USER -> _)) ++ clientId.map((ClientQuotaEntity.CLIENT_ID -> _))).toMap.asJava)
+
+  private def toIpEntity(ip: Option[String]) = new ClientQuotaEntity(ip.map(ClientQuotaEntity.IP -> _).toMap.asJava)
 
   private def describeClientQuotas(filter: ClientQuotaFilter) = {
     val result = new KafkaFutureImpl[java.util.Map[ClientQuotaEntity, java.util.Map[String, java.lang.Double]]]
     sendDescribeClientQuotasRequest(filter).complete(result)
-    result.get
+    try result.get catch {
+      case e: ExecutionException => throw e.getCause
+    }
   }
 
   private def sendDescribeClientQuotasRequest(filter: ClientQuotaFilter): DescribeClientQuotasResponse = {

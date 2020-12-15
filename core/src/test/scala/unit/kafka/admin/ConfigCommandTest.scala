@@ -133,6 +133,16 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     testArgumentParse("broker-loggers", zkConfig = false)
   }
 
+  @Test
+  def shouldParseArgumentsForIpEntityType(): Unit = {
+    testArgumentParse("ips", zkConfig = false)
+  }
+
+  @Test
+  def shouldParseArgumentsForIpEntityTypeUsingZookeeper(): Unit = {
+    testArgumentParse("ips", zkConfig = true)
+  }
+
   def testArgumentParse(entityType: String, zkConfig: Boolean): Unit = {
     val shortFlag: String = s"--${entityType.dropRight(1)}"
 
@@ -296,6 +306,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
     testExpectedEntityTypeNames(List(ConfigType.Topic), List("A"), "--entity-type", "topics", "--entity-name", "A")
     testExpectedEntityTypeNames(List(ConfigType.Broker), List("0"), "--entity-name", "0", "--entity-type", "brokers")
+    testExpectedEntityTypeNames(List(ConfigType.Ip), List("1.2.3.4"), "--entity-name", "1.2.3.4", "--entity-type", "ips")
     testExpectedEntityTypeNames(List(ConfigType.User, ConfigType.Client), List("A", ""),
       "--entity-type", "users", "--entity-type", "clients", "--entity-name", "A", "--entity-default")
     testExpectedEntityTypeNames(List(ConfigType.User, ConfigType.Client), List("", "B"),
@@ -303,6 +314,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
     testExpectedEntityTypeNames(List(ConfigType.Topic), List("A"), "--topic", "A")
     testExpectedEntityTypeNames(List(ConfigType.Broker), List("0"), "--broker", "0")
+    testExpectedEntityTypeNames(List(ConfigType.Ip), List("1.2.3.4"), "--ip", "1.2.3.4")
     testExpectedEntityTypeNames(List(ConfigType.Client, ConfigType.User), List("B", "A"), "--client", "B", "--user", "A")
     testExpectedEntityTypeNames(List(ConfigType.Client, ConfigType.User), List("B", ""), "--client", "B", "--user-defaults")
     testExpectedEntityTypeNames(List(ConfigType.Client, ConfigType.User), List("A"),
@@ -311,6 +323,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     testExpectedEntityTypeNames(List(ConfigType.Topic), List.empty, "--entity-type", "topics")
     testExpectedEntityTypeNames(List(ConfigType.User), List.empty, "--entity-type", "users")
     testExpectedEntityTypeNames(List(ConfigType.Broker), List.empty, "--entity-type", "brokers")
+    testExpectedEntityTypeNames(List(ConfigType.Ip), List.empty, "--entity-type", "ips")
   }
 
   @Test
@@ -379,6 +392,34 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     createOpts.checkArgs()
   }
 
+  @Test(expected = classOf[IllegalArgumentException])
+  def shouldFailIfInvalidHost(): Unit = {
+    val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
+      "--entity-name", "A,B", "--entity-type", "ips", "--describe"))
+    createOpts.checkArgs()
+  }
+
+  @Test(expected = classOf[IllegalArgumentException])
+  def shouldFailIfInvalidHostUsingZookeeper(): Unit = {
+    val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
+      "--entity-name", "A,B", "--entity-type", "ips", "--describe"))
+    createOpts.checkArgs()
+  }
+
+  @Test(expected = classOf[IllegalArgumentException])
+  def shouldFailIfUnresolvableHost(): Unit = {
+    val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
+      "--entity-name", "admin", "--entity-type", "ips", "--describe"))
+    createOpts.checkArgs()
+  }
+
+  @Test(expected = classOf[IllegalArgumentException])
+  def shouldFailIfUnresolvableHostUsingZookeeper(): Unit = {
+    val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
+      "--entity-name", "admin", "--entity-type", "ips", "--describe"))
+    createOpts.checkArgs()
+  }
+
   @Test
   def shouldAddClientConfigUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
@@ -398,38 +439,116 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     ConfigCommand.alterConfigWithZk(null, createOpts, new TestAdminZkClient(zkClient))
   }
 
-  def testShouldAddClientConfig(user: Option[String], clientId: Option[String]): Unit = {
-    def toValues(entityName: Option[String], entityType: String, command: String):
-        (Array[String], Option[String], Option[ClientQuotaFilterComponent]) = {
-      entityName match {
-        case Some(null) =>
-          (Array("--entity-type", command, "--entity-default"), Some(null),
-            Some(ClientQuotaFilterComponent.ofDefaultEntity(entityType)))
-        case Some(name) =>
-          (Array("--entity-type", command, "--entity-name", name), Some(name),
-            Some(ClientQuotaFilterComponent.ofEntity(entityType, name)))
-        case None => (Array.empty, None, None)
+  @Test
+  def shouldAddIpConfigsUsingZookeeper(): Unit = {
+    val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
+      "--entity-name", "1.2.3.4",
+      "--entity-type", "ips",
+      "--alter",
+      "--add-config", "a=b,c=d"))
+
+    class TestAdminZkClient(zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {
+      override def changeIpConfig(ip: String, configChange: Properties): Unit = {
+        assertEquals("1.2.3.4", ip)
+        assertEquals("b", configChange.get("a"))
+        assertEquals("d", configChange.get("c"))
       }
     }
-    val (userArgs, userEntity, userComponent) = toValues(user, ClientQuotaEntity.USER, "users")
-    val (clientIdArgs, clientIdEntity, clientIdComponent) = toValues(clientId, ClientQuotaEntity.CLIENT_ID, "clients")
 
+    ConfigCommand.alterConfigWithZk(null, createOpts, new TestAdminZkClient(zkClient))
+  }
+
+  private def toValues(entityName: Option[String], entityType: String): (Array[String], Map[String, String]) = {
+    val command = entityType match {
+      case ClientQuotaEntity.USER => "users"
+      case ClientQuotaEntity.CLIENT_ID => "clients"
+      case ClientQuotaEntity.IP => "ips"
+    }
+    entityName match {
+      case Some(null) =>
+        (Array("--entity-type", command, "--entity-default"), Map(entityType -> null))
+      case Some(name) =>
+        (Array("--entity-type", command, "--entity-name", name), Map(entityType -> name))
+      case None => (Array.empty, Map.empty)
+    }
+  }
+
+  private def verifyAlterCommandFails(expectedErrorMessage: String, alterOpts: Seq[String]): Unit = {
+    val mockAdminClient: Admin = EasyMock.createStrictMock(classOf[Admin])
+    val opts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
+      "--alter") ++ alterOpts)
+    val e = intercept[IllegalArgumentException] {
+      ConfigCommand.alterConfig(mockAdminClient, opts)
+    }
+    assertTrue(s"Unexpected exception: $e", e.getMessage.contains(expectedErrorMessage))
+  }
+
+  @Test
+  def shouldNotAlterNonQuotaIpConfigsUsingBootstrapServer(): Unit = {
+    // when using --bootstrap-server, it should be illegal to alter anything that is not a connection quota
+    // for ip entities
+    val ipEntityOpts = List("--entity-type", "ips", "--entity-name", "127.0.0.1")
+    val invalidProp = "some_config"
+    verifyAlterCommandFails(invalidProp, ipEntityOpts ++ List("--add-config", "connection_creation_rate=10000,some_config=10"))
+    verifyAlterCommandFails(invalidProp, ipEntityOpts ++ List("--add-config", "some_config=10"))
+    verifyAlterCommandFails(invalidProp, ipEntityOpts ++ List("--delete-config", "connection_creation_rate=10000,some_config=10"))
+    verifyAlterCommandFails(invalidProp, ipEntityOpts ++ List("--delete-config", "some_config=10"))
+  }
+
+  private def verifyDescribeQuotas(describeArgs: List[String], expectedFilter: ClientQuotaFilter): Unit = {
+    val describeOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
+      "--describe") ++ describeArgs)
+    val describeFuture = new KafkaFutureImpl[util.Map[ClientQuotaEntity, util.Map[String, java.lang.Double]]]
+    describeFuture.complete(Map.empty[ClientQuotaEntity, util.Map[String, java.lang.Double]].asJava)
+    val describeResult: DescribeClientQuotasResult = EasyMock.createNiceMock(classOf[DescribeClientQuotasResult])
+    EasyMock.expect(describeResult.entities()).andReturn(describeFuture)
+
+    var describedConfigs = false
+    val node = new Node(1, "localhost", 9092)
+    val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node) {
+      override def describeClientQuotas(filter: ClientQuotaFilter, options: DescribeClientQuotasOptions): DescribeClientQuotasResult = {
+        assertTrue(filter.strict)
+        assertEquals(expectedFilter.components().asScala.toSet, filter.components.asScala.toSet)
+        describedConfigs = true
+        describeResult
+      }
+    }
+    EasyMock.replay(describeResult)
+    ConfigCommand.describeConfig(mockAdminClient, describeOpts)
+    assertTrue(describedConfigs)
+  }
+
+  @Test
+  def testDescribeIpConfigs(): Unit = {
+    val entityType = ClientQuotaEntity.IP
+    val knownHost = "1.2.3.4"
+    val defaultIpFilter = ClientQuotaFilter.containsOnly(List(ClientQuotaFilterComponent.ofDefaultEntity(entityType)).asJava)
+    val singleIpFilter = ClientQuotaFilter.containsOnly(List(ClientQuotaFilterComponent.ofEntity(entityType, knownHost)).asJava)
+    val allIpsFilter = ClientQuotaFilter.containsOnly(List(ClientQuotaFilterComponent.ofEntityType(entityType)).asJava)
+    verifyDescribeQuotas(List("--entity-default", "--entity-type", "ips"), defaultIpFilter)
+    verifyDescribeQuotas(List("--ip-defaults"), defaultIpFilter)
+    verifyDescribeQuotas(List("--entity-type", "ips", "--entity-name", knownHost), singleIpFilter)
+    verifyDescribeQuotas(List("--ip", knownHost), singleIpFilter)
+    verifyDescribeQuotas(List("--entity-type", "ips"), allIpsFilter)
+  }
+
+  def verifyAlterQuotas(alterOpts: Seq[String], expectedAlterEntity: ClientQuotaEntity,
+                        expectedProps: Map[String, java.lang.Double], expectedAlterOps: Set[ClientQuotaAlteration.Op]): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
-      "--alter",
-      "--add-config", "consumer_byte_rate=20000,producer_byte_rate=10000",
-      "--delete-config", "request_percentage") ++ userArgs ++ clientIdArgs)
-
-    // Explicitly populate a HashMap to ensure nulls are recorded properly.
-    val entityMap = new java.util.HashMap[String, String]
-    userEntity.foreach(u => entityMap.put(ClientQuotaEntity.USER, u))
-    clientIdEntity.foreach(c => entityMap.put(ClientQuotaEntity.CLIENT_ID, c))
-    val entity = new ClientQuotaEntity(entityMap)
+      "--alter") ++ alterOpts)
 
     var describedConfigs = false
     val describeFuture = new KafkaFutureImpl[util.Map[ClientQuotaEntity, util.Map[String, java.lang.Double]]]
-    describeFuture.complete(Map((entity -> Map(("request_percentage" -> Double.box(50.0))).asJava)).asJava)
+    describeFuture.complete(Map(expectedAlterEntity -> expectedProps.asJava).asJava)
     val describeResult: DescribeClientQuotasResult = EasyMock.createNiceMock(classOf[DescribeClientQuotasResult])
     EasyMock.expect(describeResult.entities()).andReturn(describeFuture)
+
+    val expectedFilterComponents = expectedAlterEntity.entries.asScala.map { case (entityType, entityName) =>
+      if (entityName == null)
+        ClientQuotaFilterComponent.ofDefaultEntity(entityType)
+      else
+        ClientQuotaFilterComponent.ofEntity(entityType, entityName)
+    }.toSet
 
     var alteredConfigs = false
     val alterFuture = new KafkaFutureImpl[Void]
@@ -441,9 +560,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node) {
       override def describeClientQuotas(filter: ClientQuotaFilter, options: DescribeClientQuotasOptions): DescribeClientQuotasResult = {
         assertTrue(filter.strict)
-        val components = filter.components.asScala.toSeq
-        userComponent.foreach(c => assertTrue(components.contains(c)))
-        clientIdComponent.foreach(c => assertTrue(components.contains(c)))
+        assertEquals(expectedFilterComponents, filter.components().asScala.toSet)
         describedConfigs = true
         describeResult
       }
@@ -452,15 +569,9 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
         assertFalse(options.validateOnly)
         assertEquals(1, entries.size)
         val alteration = entries.asScala.head
-        assertEquals(entity, alteration.entity)
+        assertEquals(expectedAlterEntity, alteration.entity)
         val ops = alteration.ops.asScala
-        assertEquals(3, ops.size)
-        val expectedOps = Set(
-          new ClientQuotaAlteration.Op("consumer_byte_rate", Double.box(20000)),
-          new ClientQuotaAlteration.Op("producer_byte_rate", Double.box(10000)),
-          new ClientQuotaAlteration.Op("request_percentage", null)
-        )
-        assertEquals(expectedOps, ops.toSet)
+        assertEquals(expectedAlterOps, ops.toSet)
         alteredConfigs = true
         alterResult
       }
@@ -469,160 +580,144 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     ConfigCommand.alterConfig(mockAdminClient, createOpts)
     assertTrue(describedConfigs)
     assertTrue(alteredConfigs)
-    EasyMock.reset(alterResult, describeResult)
   }
 
+  @Test
+  def testAlterIpConfig(): Unit = {
+    val (singleIpArgs, singleIpEntry) = toValues(Some("1.2.3.4"), ClientQuotaEntity.IP)
+    val singleIpEntity = new ClientQuotaEntity(singleIpEntry.asJava)
+    val (defaultIpArgs, defaultIpEntry) = toValues(Some(null), ClientQuotaEntity.IP)
+    val defaultIpEntity = new ClientQuotaEntity(defaultIpEntry.asJava)
+
+    val deleteArgs = List("--delete-config", "connection_creation_rate")
+    val deleteAlterationOps = Set(new ClientQuotaAlteration.Op("connection_creation_rate", null))
+    val propsToDelete = Map("connection_creation_rate" -> Double.box(50.0))
+
+    val addArgs = List("--add-config", "connection_creation_rate=100")
+    val addAlterationOps = Set(new ClientQuotaAlteration.Op("connection_creation_rate", 100.0))
+
+    verifyAlterQuotas(singleIpArgs ++ deleteArgs, singleIpEntity, propsToDelete, deleteAlterationOps)
+    verifyAlterQuotas(singleIpArgs ++ addArgs, singleIpEntity, Map.empty, addAlterationOps)
+    verifyAlterQuotas(defaultIpArgs ++ deleteArgs, defaultIpEntity, propsToDelete, deleteAlterationOps)
+    verifyAlterQuotas(defaultIpArgs ++ addArgs, defaultIpEntity, Map.empty, addAlterationOps)
+  }
 
   @Test
   def shouldAddClientConfig(): Unit = {
-    testShouldAddClientConfig(Some("test-user-1"), Some("test-client-1"))
-    testShouldAddClientConfig(Some("test-user-2"), Some(null))
-    testShouldAddClientConfig(Some("test-user-3"), None)
-    testShouldAddClientConfig(Some(null), Some("test-client-2"))
-    testShouldAddClientConfig(Some(null), Some(null))
-    testShouldAddClientConfig(Some(null), None)
-    testShouldAddClientConfig(None, Some("test-client-3"))
-    testShouldAddClientConfig(None, Some(null))
+    val alterArgs = List("--add-config", "consumer_byte_rate=20000,producer_byte_rate=10000",
+      "--delete-config", "request_percentage")
+    val propsToDelete = Map("request_percentage" -> Double.box(50.0))
+
+    val alterationOps = Set(
+      new ClientQuotaAlteration.Op("consumer_byte_rate", Double.box(20000)),
+      new ClientQuotaAlteration.Op("producer_byte_rate", Double.box(10000)),
+      new ClientQuotaAlteration.Op("request_percentage", null)
+    )
+
+    def verifyAlterUserClientQuotas(userOpt: Option[String], clientOpt: Option[String]): Unit = {
+      val (userArgs, userEntry) = toValues(userOpt, ClientQuotaEntity.USER)
+      val (clientArgs, clientEntry) = toValues(clientOpt, ClientQuotaEntity.CLIENT_ID)
+
+      val commandArgs = alterArgs ++ userArgs ++ clientArgs
+      val clientQuotaEntity = new ClientQuotaEntity((userEntry ++ clientEntry).asJava)
+      verifyAlterQuotas(commandArgs, clientQuotaEntity, propsToDelete, alterationOps)
+    }
+    verifyAlterUserClientQuotas(Some("test-user-1"), Some("test-client-1"))
+    verifyAlterUserClientQuotas(Some("test-user-2"), Some(null))
+    verifyAlterUserClientQuotas(Some("test-user-3"), None)
+    verifyAlterUserClientQuotas(Some(null), Some("test-client-2"))
+    verifyAlterUserClientQuotas(Some(null), Some(null))
+    verifyAlterUserClientQuotas(Some(null), None)
+    verifyAlterUserClientQuotas(None, Some("test-client-3"))
+    verifyAlterUserClientQuotas(None, Some(null))
   }
+
+  private val userEntityOpts = List("--entity-type", "users", "--entity-name", "admin")
+  private val clientEntityOpts = List("--entity-type", "clients", "--entity-name", "admin")
+  private val addScramOpts = List("--add-config", "SCRAM-SHA-256=[iterations=8192,password=foo-secret]")
+  private val deleteScramOpts = List("--delete-config", "SCRAM-SHA-256")
 
   @Test
   def shouldNotAlterNonQuotaNonScramUserOrClientConfigUsingBootstrapServer(): Unit = {
     // when using --bootstrap-server, it should be illegal to alter anything that is not a quota and not a SCRAM credential
     // for both user and client entities
-    val node = new Node(1, "localhost", 9092)
-    val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node)
-
-    def verifyCommand(entityType: String, alterOpts: String*): Unit = {
-      val opts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
-        "--entity-type", entityType, "--entity-name", "admin",
-        "--alter") ++ alterOpts)
-      val e = intercept[IllegalArgumentException] {
-        ConfigCommand.alterConfig(mockAdminClient, opts)
-      }
-      assertTrue(s"Unexpected exception: $e", e.getMessage.contains("some_config"))
-    }
-
-    verifyCommand("users", "--add-config", "consumer_byte_rate=20000,producer_byte_rate=10000,some_config=10")
-    verifyCommand("users", "--add-config", "SCRAM-SHA-256=[iterations=8192,password=foo-secret],some_config=10")
-    verifyCommand("clients", "--add-config", "some_config=10")
-    verifyCommand("users", "--delete-config", "consumer_byte_rate,some_config")
-    verifyCommand("users", "--delete-config", "SCRAM-SHA-256,some_config")
-    verifyCommand("clients", "--delete-config", "some_config")
+    val invalidProp = "some_config"
+    verifyAlterCommandFails(invalidProp, userEntityOpts ++
+      List("-add-config", "consumer_byte_rate=20000,producer_byte_rate=10000,some_config=10"))
+    verifyAlterCommandFails(invalidProp, userEntityOpts ++
+      List("--add-config", "consumer_byte_rate=20000,producer_byte_rate=10000,some_config=10"))
+    verifyAlterCommandFails(invalidProp, clientEntityOpts ++ List("--add-config", "some_config=10"))
+    verifyAlterCommandFails(invalidProp, userEntityOpts ++ List("--delete-config", "consumer_byte_rate,some_config"))
+    verifyAlterCommandFails(invalidProp, userEntityOpts ++ List("--delete-config", "SCRAM-SHA-256,some_config"))
+    verifyAlterCommandFails(invalidProp, clientEntityOpts ++ List("--delete-config", "some_config"))
   }
 
   @Test
   def shouldNotAlterScramClientConfigUsingBootstrapServer(): Unit = {
     // when using --bootstrap-server, it should be illegal to alter SCRAM credentials for client entities
-    val node = new Node(1, "localhost", 9092)
-    val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node)
-
-    def verifyCommand(entityType: String, alterOpts: String*): Unit = {
-      val opts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
-        "--entity-type", entityType, "--entity-name", "admin",
-        "--alter") ++ alterOpts)
-      val e = intercept[IllegalArgumentException] {
-        ConfigCommand.alterConfig(mockAdminClient, opts)
-      }
-      assertTrue(s"Unexpected exception: $e", e.getMessage.contains("SCRAM-SHA-256"))
-    }
-
-    verifyCommand("clients", "--add-config", "SCRAM-SHA-256=[iterations=8192,password=foo-secret]")
-    verifyCommand("clients", "--delete-config", "SCRAM-SHA-256")
+    verifyAlterCommandFails("SCRAM-SHA-256", clientEntityOpts ++ addScramOpts)
+    verifyAlterCommandFails("SCRAM-SHA-256", clientEntityOpts ++ deleteScramOpts)
   }
 
   @Test
   def shouldNotCreateUserScramCredentialConfigWithUnderMinimumIterationsUsingBootstrapServer(): Unit = {
     // when using --bootstrap-server, it should be illegal to create a SCRAM credential for a user
     // with an iterations value less than the minimum
-    val node = new Node(1, "localhost", 9092)
-    val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node)
-
-    def verifyCommand(entityType: String, alterOpts: String*): Unit = {
-      val opts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
-        "--entity-type", entityType, "--entity-name", "admin",
-        "--alter") ++ alterOpts)
-      val e = intercept[IllegalArgumentException] {
-        ConfigCommand.alterConfig(mockAdminClient, opts)
-      }
-      assertTrue(s"Unexpected exception: $e", e.getMessage.contains("SCRAM-SHA-256"))
-    }
-
-    verifyCommand("users", "--add-config", "SCRAM-SHA-256=[iterations=100,password=foo-secret]")
+    verifyAlterCommandFails("SCRAM-SHA-256", userEntityOpts ++ List("--add-config", "SCRAM-SHA-256=[iterations=100,password=foo-secret]"))
   }
 
   @Test
   def shouldNotAlterUserScramCredentialAndClientQuotaConfigsSimultaneouslyUsingBootstrapServer(): Unit = {
     // when using --bootstrap-server, it should be illegal to alter both SCRAM credentials and quotas for user entities
-    val node = new Node(1, "localhost", 9092)
-    val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node)
+    val expectedErrorMessage = "SCRAM-SHA-256"
+    val secondUserEntityOpts = List("--entity-type", "users", "--entity-name", "admin1")
+    val addQuotaOpts = List("--add-config", "consumer_byte_rate=20000")
+    val deleteQuotaOpts = List("--delete-config", "consumer_byte_rate")
 
-    def verifyCommand(alterOpts: String*): Unit = {
-      val opts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092", "--alter") ++ alterOpts)
-      val e = intercept[IllegalArgumentException] {
-        ConfigCommand.alterConfig(mockAdminClient, opts)
-      }
-      assertTrue(s"Unexpected exception: $e", e.getMessage.contains("SCRAM-SHA-256"))
-    }
+    verifyAlterCommandFails(expectedErrorMessage, userEntityOpts ++ addScramOpts ++ userEntityOpts ++ deleteQuotaOpts)
+    verifyAlterCommandFails(expectedErrorMessage, userEntityOpts ++ addScramOpts ++ secondUserEntityOpts ++ deleteQuotaOpts)
+    verifyAlterCommandFails(expectedErrorMessage, userEntityOpts ++ deleteScramOpts ++ userEntityOpts ++ addQuotaOpts)
+    verifyAlterCommandFails(expectedErrorMessage, userEntityOpts ++ deleteScramOpts ++ secondUserEntityOpts ++ addQuotaOpts)
 
-    verifyCommand("--entity-type", "users", "--entity-name", "admin", "--add-config", "SCRAM-SHA-256=[iterations=8192,password=foo-secret]",
-      "--entity-type", "users", "--entity-name", "admin", "--delete-config", "consumer_byte_rate")
-    verifyCommand("--entity-type", "users", "--entity-name", "admin", "--add-config", "SCRAM-SHA-256=[iterations=8192,password=foo-secret]",
-      "--entity-type", "users", "--entity-name", "admin1", "--delete-config", "consumer_byte_rate")
-    verifyCommand("--entity-type", "users", "--entity-name", "admin", "--delete-config", "SCRAM-SHA-256",
-      "--entity-type", "users", "--entity-name", "admin", "--add-config", "consumer_byte_rate=20000")
-    verifyCommand("--entity-type", "users", "--entity-name", "admin", "--delete-config", "SCRAM-SHA-256",
-      "--entity-type", "users", "--entity-name", "admin1", "--add-config", "consumer_byte_rate=20000")
-
-    verifyCommand("--entity-type", "clients", "--entity-name", "admin", "--delete-config", "consumer_byte_rate",
-      "--entity-type", "users", "--entity-name", "admin", "--add-config", "SCRAM-SHA-256=[iterations=8192,password=foo-secret]")
-    verifyCommand( "--entity-type", "clients", "--entity-name", "admin1", "--delete-config", "consumer_byte_rate",
-      "--entity-type", "users", "--entity-name", "admin", "--add-config", "SCRAM-SHA-256=[iterations=8192,password=foo-secret]")
-    verifyCommand("--entity-type", "clients", "--entity-name", "admin", "--add-config", "consumer_byte_rate=20000",
-      "--entity-type", "users", "--entity-name", "admin", "--delete-config", "SCRAM-SHA-256")
-    verifyCommand("--entity-type", "users", "--entity-name", "admin1", "--add-config", "consumer_byte_rate=20000",
-      "--entity-type", "users", "--entity-name", "admin", "--delete-config", "SCRAM-SHA-256")
+    // change order of quota/SCRAM commands, verify alter still fails
+    verifyAlterCommandFails(expectedErrorMessage, userEntityOpts ++ deleteQuotaOpts ++ userEntityOpts ++ addScramOpts)
+    verifyAlterCommandFails(expectedErrorMessage, secondUserEntityOpts ++ deleteQuotaOpts ++ userEntityOpts ++ addScramOpts)
+    verifyAlterCommandFails(expectedErrorMessage, userEntityOpts ++ addQuotaOpts ++ userEntityOpts ++ deleteScramOpts)
+    verifyAlterCommandFails(expectedErrorMessage, secondUserEntityOpts ++ addQuotaOpts ++ userEntityOpts ++ deleteScramOpts)
   }
 
   @Test
   def shouldNotDescribeUserScramCredentialsWithEntityDefaultUsingBootstrapServer(): Unit = {
-    // User SCRAM credentials should not be described when specifying
-    // --describe --entity-type users --entity-default (or --user-defaults) with --bootstrap-server
-    val describeFuture = new KafkaFutureImpl[util.Map[ClientQuotaEntity, util.Map[String, java.lang.Double]]]
-    describeFuture.complete(Map((new ClientQuotaEntity(Map("" -> "").asJava) -> Map(("request_percentage" -> Double.box(50.0))).asJava)).asJava)
-    val describeClientQuotasResult: DescribeClientQuotasResult = EasyMock.createNiceMock(classOf[DescribeClientQuotasResult])
-    EasyMock.expect(describeClientQuotasResult.entities()).andReturn(describeFuture).times(2)
-    EasyMock.replay(describeClientQuotasResult)
-
-    val node = new Node(1, "localhost", 9092)
-    val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node) {
-      override def describeClientQuotas(filter: ClientQuotaFilter, options: DescribeClientQuotasOptions):  DescribeClientQuotasResult = {
-        describeClientQuotasResult
-      }
-      override def describeUserScramCredentials(users: util.List[String], options: DescribeUserScramCredentialsOptions): DescribeUserScramCredentialsResult = {
-        throw new IllegalStateException("Incorrectly described SCRAM credentials when specifying --entity-default with --bootstrap-server")
-      }
-    }
-
-    def verifyCommand(expectedMessage: String, alterOrDescribeOpt: String, requestOpts: String*): Unit = {
-      val opts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
-        alterOrDescribeOpt) ++ requestOpts)
-      if (alterOrDescribeOpt.equals("--describe"))
-        ConfigCommand.describeConfig(mockAdminClient, opts) // fails if describeUserScramCredentials() is invoked
-      else {
-        val e = intercept[IllegalArgumentException] {
-          ConfigCommand.alterConfig(mockAdminClient, opts)
+    def verifyUserScramCredentialsNotDescribed(requestOpts: List[String]): Unit = {
+      // User SCRAM credentials should not be described when specifying
+      // --describe --entity-type users --entity-default (or --user-defaults) with --bootstrap-server
+      val describeFuture = new KafkaFutureImpl[util.Map[ClientQuotaEntity, util.Map[String, java.lang.Double]]]
+      describeFuture.complete(Map((new ClientQuotaEntity(Map("" -> "").asJava) -> Map(("request_percentage" -> Double.box(50.0))).asJava)).asJava)
+      val describeClientQuotasResult: DescribeClientQuotasResult = EasyMock.createNiceMock(classOf[DescribeClientQuotasResult])
+      EasyMock.expect(describeClientQuotasResult.entities()).andReturn(describeFuture)
+      EasyMock.replay(describeClientQuotasResult)
+      val node = new Node(1, "localhost", 9092)
+      val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node) {
+        override def describeClientQuotas(filter: ClientQuotaFilter, options: DescribeClientQuotasOptions):  DescribeClientQuotasResult = {
+          describeClientQuotasResult
         }
-        assertTrue(s"Unexpected exception: $e", e.getMessage.contains(expectedMessage))
+        override def describeUserScramCredentials(users: util.List[String], options: DescribeUserScramCredentialsOptions): DescribeUserScramCredentialsResult = {
+          throw new IllegalStateException("Incorrectly described SCRAM credentials when specifying --entity-default with --bootstrap-server")
+        }
       }
+      val opts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092", "--describe") ++ requestOpts)
+      ConfigCommand.describeConfig(mockAdminClient, opts) // fails if describeUserScramCredentials() is invoked
     }
 
     val expectedMsg = "The use of --entity-default or --user-defaults is not allowed with User SCRAM Credentials using --bootstrap-server."
-    verifyCommand(expectedMsg, "--alter", "--entity-type", "users", "--entity-default", "--add-config", "SCRAM-SHA-256=[iterations=8192,password=foo-secret]")
-    verifyCommand(expectedMsg, "--alter", "--entity-type", "users", "--entity-default", "--delete-config", "SCRAM-SHA-256")
-    verifyCommand(expectedMsg, "--describe", "--entity-type", "users", "--entity-default")
-    verifyCommand(expectedMsg, "--alter", "--user-defaults", "--add-config", "SCRAM-SHA-256=[iterations=8192,password=foo-secret]")
-    verifyCommand(expectedMsg, "--alter", "--user-defaults", "--delete-config", "SCRAM-SHA-256")
-    verifyCommand(expectedMsg, "--describe", "--user-defaults")
+    val defaultUserOpt = List("--user-defaults")
+    val verboseDefaultUserOpts = List("--entity-type", "users", "--entity-default")
+    verifyAlterCommandFails(expectedMsg, verboseDefaultUserOpts ++ addScramOpts)
+    verifyAlterCommandFails(expectedMsg, verboseDefaultUserOpts ++ deleteScramOpts)
+    verifyUserScramCredentialsNotDescribed(verboseDefaultUserOpts)
+    verifyAlterCommandFails(expectedMsg, defaultUserOpt ++ addScramOpts)
+    verifyAlterCommandFails(expectedMsg, defaultUserOpt ++ deleteScramOpts)
+    verifyUserScramCredentialsNotDescribed(defaultUserOpt)
   }
 
   @Test

@@ -21,12 +21,9 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.ProduceResponseData;
-import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.SendBuilder;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.RecordBatch;
@@ -130,11 +127,6 @@ public class ProduceRequest extends AbstractRequest {
         this.transactionalId = data.transactionalId();
     }
 
-    @Override
-    public Send toSend(String destination, RequestHeader header) {
-        return SendBuilder.buildRequestSend(destination, header, dataOrException());
-    }
-
     // visible for testing
     Map<TopicPartition, Integer> partitionSizes() {
         if (partitionSizes == null) {
@@ -158,20 +150,13 @@ public class ProduceRequest extends AbstractRequest {
     /**
      * @return data or IllegalStateException if the data is removed (to prevent unnecessary memory retention).
      */
-    public ProduceRequestData dataOrException() {
+    @Override
+    public ProduceRequestData data() {
         // Store it in a local variable to protect against concurrent updates
         ProduceRequestData tmp = data;
         if (tmp == null)
             throw new IllegalStateException("The partition records are no longer available because clearPartitionRecords() has been invoked.");
         return tmp;
-    }
-
-    /**
-     * Visible for testing.
-     */
-    @Override
-    public Struct toStruct() {
-        return dataOrException().toStruct(version());
     }
 
     @Override
@@ -194,7 +179,7 @@ public class ProduceRequest extends AbstractRequest {
     public ProduceResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         /* In case the producer doesn't actually want any response */
         if (acks == 0) return null;
-        Errors error = Errors.forException(e);
+        ApiError apiError = ApiError.fromThrowable(e);
         ProduceResponseData data = new ProduceResponseData().setThrottleTimeMs(throttleTimeMs);
         partitionSizes().forEach((tp, ignored) -> {
             ProduceResponseData.TopicProduceResponse tpr = data.responses().find(tp.topic());
@@ -208,8 +193,8 @@ public class ProduceRequest extends AbstractRequest {
                     .setBaseOffset(INVALID_OFFSET)
                     .setLogAppendTimeMs(RecordBatch.NO_TIMESTAMP)
                     .setLogStartOffset(INVALID_OFFSET)
-                    .setErrorMessage(e.getMessage())
-                    .setErrorCode(error.code()));
+                    .setErrorMessage(apiError.message())
+                    .setErrorCode(apiError.error().code()));
         });
         return new ProduceResponse(data);
     }

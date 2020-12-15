@@ -173,7 +173,7 @@ public class ReplicaFetcherThreadBenchmark {
                 }
 
                 @Override
-                public RecordsSend<? extends BaseRecords> toSend(String destination) {
+                public RecordsSend<? extends BaseRecords> toSend() {
                     return null;
                 }
             };

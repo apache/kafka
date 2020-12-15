@@ -271,7 +271,7 @@ class RequestSendThread(val controllerId: Int,
         val response = clientResponse.responseBody
 
         stateChangeLogger.withControllerEpoch(controllerContext.epoch).trace(s"Received response " +
-          s"${response.toString(requestHeader.apiVersion)} for request $api with correlation id " +
+          s"$response for request $api with correlation id " +
           s"${requestHeader.correlationId} sent to broker $brokerNode")
 
         if (callback != null) {

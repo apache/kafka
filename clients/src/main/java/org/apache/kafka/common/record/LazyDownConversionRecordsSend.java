@@ -39,8 +39,8 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
     private RecordsSend convertedRecordsWriter;
     private Iterator<ConvertedRecords<?>> convertedRecordsIterator;
 
-    public LazyDownConversionRecordsSend(String destination, LazyDownConversionRecords records) {
-        super(destination, records, records.sizeInBytes());
+    public LazyDownConversionRecordsSend(LazyDownConversionRecords records) {
+        super(records, records.sizeInBytes());
         convertedRecordsWriter = null;
         recordConversionStats = new RecordConversionStats();
         convertedRecordsIterator = records().iterator(MAX_READ_SIZE);
@@ -90,7 +90,7 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
                 convertedRecords = buildOverflowBatch(remaining);
             }
 
-            convertedRecordsWriter = new DefaultRecordsSend(destination(), convertedRecords, Math.min(convertedRecords.sizeInBytes(), remaining));
+            convertedRecordsWriter = new DefaultRecordsSend(convertedRecords, Math.min(convertedRecords.sizeInBytes(), remaining));
         }
         return convertedRecordsWriter.writeTo(channel);
     }

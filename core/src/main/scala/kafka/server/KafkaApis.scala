@@ -24,7 +24,6 @@ import java.util
 import java.util.{Collections, Optional}
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
-
 import kafka.admin.{AdminUtils, RackAwareMode}
 import kafka.api.ElectLeadersRequestOps
 import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0, KAFKA_2_3_IV0}
@@ -51,7 +50,7 @@ import org.apache.kafka.common.internals.{FatalExitError, Topic}
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult
-import org.apache.kafka.common.message.{AddOffsetsToTxnResponseData, AlterConfigsResponseData, AlterPartitionReassignmentsResponseData, AlterReplicaLogDirsResponseData, CreateAclsResponseData, CreatePartitionsResponseData, CreateTopicsResponseData, DeleteAclsResponseData, DeleteGroupsResponseData, DeleteRecordsResponseData, DeleteTopicsResponseData, DescribeAclsResponseData, DescribeConfigsResponseData, DescribeGroupsResponseData, DescribeLogDirsResponseData, EndTxnResponseData, ExpireDelegationTokenResponseData, FindCoordinatorResponseData, HeartbeatResponseData, InitProducerIdResponseData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsResponseData, ListOffsetResponseData, ListPartitionReassignmentsResponseData, MetadataResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteResponseData, RenewDelegationTokenResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData, StopReplicaResponseData, SyncGroupResponseData, UpdateMetadataResponseData}
+import org.apache.kafka.common.message.{AddOffsetsToTxnResponseData, AlterClientQuotasResponseData, AlterConfigsResponseData, AlterPartitionReassignmentsResponseData, AlterReplicaLogDirsResponseData, CreateAclsResponseData, CreatePartitionsResponseData, CreateTopicsResponseData, DeleteAclsResponseData, DeleteGroupsResponseData, DeleteRecordsResponseData, DeleteTopicsResponseData, DescribeAclsResponseData, DescribeClientQuotasResponseData, DescribeConfigsResponseData, DescribeGroupsResponseData, DescribeLogDirsResponseData, EndTxnResponseData, ExpireDelegationTokenResponseData, FindCoordinatorResponseData, HeartbeatResponseData, InitProducerIdResponseData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsResponseData, ListOffsetResponseData, ListPartitionReassignmentsResponseData, MetadataResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteResponseData, RenewDelegationTokenResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData, StopReplicaResponseData, SyncGroupResponseData, UpdateMetadataResponseData}
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicResult, CreatableTopicResultCollection}
 import org.apache.kafka.common.message.DeleteGroupsResponseData.{DeletableGroupResult, DeletableGroupResultCollection}
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.{ReassignablePartitionResponse, ReassignableTopicResponse}
@@ -63,9 +62,9 @@ import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionR
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse
 import org.apache.kafka.common.message.ListOffsetRequestData.ListOffsetPartition
 import org.apache.kafka.common.message.ListOffsetResponseData.{ListOffsetPartitionResponse, ListOffsetTopicResponse}
-import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetForLeaderTopic}
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{OffsetForLeaderTopicResult, OffsetForLeaderTopicResultCollection, EpochEndOffset}
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{EpochEndOffset, OffsetForLeaderTopicResult, OffsetForLeaderTopicResultCollection}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ListenerName, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -187,76 +186,76 @@ class KafkaApis(val requestChannel: RequestChannel,
       trace(s"Handling request:${request.requestDesc(true)} from connection ${request.context.connectionId};" +
         s"securityProtocol:${request.context.securityProtocol},principal:${request.context.principal}")
 
-      request.envelope.foreach { envelope =>
-        if (maybeHandleInvalidEnvelope(envelope, request.header.apiKey)) {
-          return
-        }
+      val handled = request.envelope.exists { envelope =>
+        maybeHandleInvalidEnvelope(envelope, request.header.apiKey)
       }
 
-      request.header.apiKey match {
-        case ApiKeys.PRODUCE => handleProduceRequest(request)
-        case ApiKeys.FETCH => handleFetchRequest(request)
-        case ApiKeys.LIST_OFFSETS => handleListOffsetRequest(request)
-        case ApiKeys.METADATA => handleTopicMetadataRequest(request)
-        case ApiKeys.LEADER_AND_ISR => handleLeaderAndIsrRequest(request)
-        case ApiKeys.STOP_REPLICA => handleStopReplicaRequest(request)
-        case ApiKeys.UPDATE_METADATA => handleUpdateMetadataRequest(request)
-        case ApiKeys.CONTROLLED_SHUTDOWN => handleControlledShutdownRequest(request)
-        case ApiKeys.OFFSET_COMMIT => handleOffsetCommitRequest(request)
-        case ApiKeys.OFFSET_FETCH => handleOffsetFetchRequest(request)
-        case ApiKeys.FIND_COORDINATOR => handleFindCoordinatorRequest(request)
-        case ApiKeys.JOIN_GROUP => handleJoinGroupRequest(request)
-        case ApiKeys.HEARTBEAT => handleHeartbeatRequest(request)
-        case ApiKeys.LEAVE_GROUP => handleLeaveGroupRequest(request)
-        case ApiKeys.SYNC_GROUP => handleSyncGroupRequest(request)
-        case ApiKeys.DESCRIBE_GROUPS => handleDescribeGroupRequest(request)
-        case ApiKeys.LIST_GROUPS => handleListGroupsRequest(request)
-        case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
-        case ApiKeys.API_VERSIONS => handleApiVersionsRequest(request)
-        case ApiKeys.CREATE_TOPICS => maybeForward(request, handleCreateTopicsRequest)
-        case ApiKeys.DELETE_TOPICS => maybeForward(request, handleDeleteTopicsRequest)
-        case ApiKeys.DELETE_RECORDS => handleDeleteRecordsRequest(request)
-        case ApiKeys.INIT_PRODUCER_ID => handleInitProducerIdRequest(request)
-        case ApiKeys.OFFSET_FOR_LEADER_EPOCH => handleOffsetForLeaderEpochRequest(request)
-        case ApiKeys.ADD_PARTITIONS_TO_TXN => handleAddPartitionToTxnRequest(request)
-        case ApiKeys.ADD_OFFSETS_TO_TXN => handleAddOffsetsToTxnRequest(request)
-        case ApiKeys.END_TXN => handleEndTxnRequest(request)
-        case ApiKeys.WRITE_TXN_MARKERS => handleWriteTxnMarkersRequest(request)
-        case ApiKeys.TXN_OFFSET_COMMIT => handleTxnOffsetCommitRequest(request)
-        case ApiKeys.DESCRIBE_ACLS => handleDescribeAcls(request)
-        case ApiKeys.CREATE_ACLS => maybeForward(request, handleCreateAcls)
-        case ApiKeys.DELETE_ACLS => maybeForward(request, handleDeleteAcls)
-        case ApiKeys.ALTER_CONFIGS => maybeForward(request, handleAlterConfigsRequest)
-        case ApiKeys.DESCRIBE_CONFIGS => handleDescribeConfigsRequest(request)
-        case ApiKeys.ALTER_REPLICA_LOG_DIRS => handleAlterReplicaLogDirsRequest(request)
-        case ApiKeys.DESCRIBE_LOG_DIRS => handleDescribeLogDirsRequest(request)
-        case ApiKeys.SASL_AUTHENTICATE => handleSaslAuthenticateRequest(request)
-        case ApiKeys.CREATE_PARTITIONS => maybeForward(request, handleCreatePartitionsRequest)
-        case ApiKeys.CREATE_DELEGATION_TOKEN => maybeForward(request, handleCreateTokenRequest)
-        case ApiKeys.RENEW_DELEGATION_TOKEN => maybeForward(request, handleRenewTokenRequest)
-        case ApiKeys.EXPIRE_DELEGATION_TOKEN => maybeForward(request, handleExpireTokenRequest)
-        case ApiKeys.DESCRIBE_DELEGATION_TOKEN => handleDescribeTokensRequest(request)
-        case ApiKeys.DELETE_GROUPS => handleDeleteGroupsRequest(request)
-        case ApiKeys.ELECT_LEADERS => handleElectReplicaLeader(request)
-        case ApiKeys.INCREMENTAL_ALTER_CONFIGS => maybeForward(request, handleIncrementalAlterConfigsRequest)
-        case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => maybeForward(request, handleAlterPartitionReassignmentsRequest)
-        case ApiKeys.LIST_PARTITION_REASSIGNMENTS => handleListPartitionReassignmentsRequest(request)
-        case ApiKeys.OFFSET_DELETE => handleOffsetDeleteRequest(request)
-        case ApiKeys.DESCRIBE_CLIENT_QUOTAS => handleDescribeClientQuotasRequest(request)
-        case ApiKeys.ALTER_CLIENT_QUOTAS => maybeForward(request, handleAlterClientQuotasRequest)
-        case ApiKeys.DESCRIBE_USER_SCRAM_CREDENTIALS => handleDescribeUserScramCredentialsRequest(request)
-        case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS => maybeForward(request, handleAlterUserScramCredentialsRequest)
-        case ApiKeys.ALTER_ISR => handleAlterIsrRequest(request)
-        case ApiKeys.UPDATE_FEATURES => maybeForward(request, handleUpdateFeatures)
-        case ApiKeys.ENVELOPE => throw new IllegalStateException(
-          "Envelope request should not be handled directly in top level API")
+      if (!handled) {
+        request.header.apiKey match {
+          case ApiKeys.PRODUCE => handleProduceRequest(request)
+          case ApiKeys.FETCH => handleFetchRequest(request)
+          case ApiKeys.LIST_OFFSETS => handleListOffsetRequest(request)
+          case ApiKeys.METADATA => handleTopicMetadataRequest(request)
+          case ApiKeys.LEADER_AND_ISR => handleLeaderAndIsrRequest(request)
+          case ApiKeys.STOP_REPLICA => handleStopReplicaRequest(request)
+          case ApiKeys.UPDATE_METADATA => handleUpdateMetadataRequest(request)
+          case ApiKeys.CONTROLLED_SHUTDOWN => handleControlledShutdownRequest(request)
+          case ApiKeys.OFFSET_COMMIT => handleOffsetCommitRequest(request)
+          case ApiKeys.OFFSET_FETCH => handleOffsetFetchRequest(request)
+          case ApiKeys.FIND_COORDINATOR => handleFindCoordinatorRequest(request)
+          case ApiKeys.JOIN_GROUP => handleJoinGroupRequest(request)
+          case ApiKeys.HEARTBEAT => handleHeartbeatRequest(request)
+          case ApiKeys.LEAVE_GROUP => handleLeaveGroupRequest(request)
+          case ApiKeys.SYNC_GROUP => handleSyncGroupRequest(request)
+          case ApiKeys.DESCRIBE_GROUPS => handleDescribeGroupRequest(request)
+          case ApiKeys.LIST_GROUPS => handleListGroupsRequest(request)
+          case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
+          case ApiKeys.API_VERSIONS => handleApiVersionsRequest(request)
+          case ApiKeys.CREATE_TOPICS => maybeForward(request, handleCreateTopicsRequest)
+          case ApiKeys.DELETE_TOPICS => maybeForward(request, handleDeleteTopicsRequest)
+          case ApiKeys.DELETE_RECORDS => handleDeleteRecordsRequest(request)
+          case ApiKeys.INIT_PRODUCER_ID => handleInitProducerIdRequest(request)
+          case ApiKeys.OFFSET_FOR_LEADER_EPOCH => handleOffsetForLeaderEpochRequest(request)
+          case ApiKeys.ADD_PARTITIONS_TO_TXN => handleAddPartitionToTxnRequest(request)
+          case ApiKeys.ADD_OFFSETS_TO_TXN => handleAddOffsetsToTxnRequest(request)
+          case ApiKeys.END_TXN => handleEndTxnRequest(request)
+          case ApiKeys.WRITE_TXN_MARKERS => handleWriteTxnMarkersRequest(request)
+          case ApiKeys.TXN_OFFSET_COMMIT => handleTxnOffsetCommitRequest(request)
+          case ApiKeys.DESCRIBE_ACLS => handleDescribeAcls(request)
+          case ApiKeys.CREATE_ACLS => maybeForward(request, handleCreateAcls)
+          case ApiKeys.DELETE_ACLS => maybeForward(request, handleDeleteAcls)
+          case ApiKeys.ALTER_CONFIGS => maybeForward(request, handleAlterConfigsRequest)
+          case ApiKeys.DESCRIBE_CONFIGS => handleDescribeConfigsRequest(request)
+          case ApiKeys.ALTER_REPLICA_LOG_DIRS => handleAlterReplicaLogDirsRequest(request)
+          case ApiKeys.DESCRIBE_LOG_DIRS => handleDescribeLogDirsRequest(request)
+          case ApiKeys.SASL_AUTHENTICATE => handleSaslAuthenticateRequest(request)
+          case ApiKeys.CREATE_PARTITIONS => maybeForward(request, handleCreatePartitionsRequest)
+          case ApiKeys.CREATE_DELEGATION_TOKEN => maybeForward(request, handleCreateTokenRequest)
+          case ApiKeys.RENEW_DELEGATION_TOKEN => maybeForward(request, handleRenewTokenRequest)
+          case ApiKeys.EXPIRE_DELEGATION_TOKEN => maybeForward(request, handleExpireTokenRequest)
+          case ApiKeys.DESCRIBE_DELEGATION_TOKEN => handleDescribeTokensRequest(request)
+          case ApiKeys.DELETE_GROUPS => handleDeleteGroupsRequest(request)
+          case ApiKeys.ELECT_LEADERS => handleElectReplicaLeader(request)
+          case ApiKeys.INCREMENTAL_ALTER_CONFIGS => maybeForward(request, handleIncrementalAlterConfigsRequest)
+          case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => maybeForward(request, handleAlterPartitionReassignmentsRequest)
+          case ApiKeys.LIST_PARTITION_REASSIGNMENTS => handleListPartitionReassignmentsRequest(request)
+          case ApiKeys.OFFSET_DELETE => handleOffsetDeleteRequest(request)
+          case ApiKeys.DESCRIBE_CLIENT_QUOTAS => handleDescribeClientQuotasRequest(request)
+          case ApiKeys.ALTER_CLIENT_QUOTAS => maybeForward(request, handleAlterClientQuotasRequest)
+          case ApiKeys.DESCRIBE_USER_SCRAM_CREDENTIALS => handleDescribeUserScramCredentialsRequest(request)
+          case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS => maybeForward(request, handleAlterUserScramCredentialsRequest)
+          case ApiKeys.ALTER_ISR => handleAlterIsrRequest(request)
+          case ApiKeys.UPDATE_FEATURES => maybeForward(request, handleUpdateFeatures)
+          case ApiKeys.ENVELOPE => throw new IllegalStateException(
+            "Envelope request should not be handled directly in top level API")
 
-        // Until we are ready to integrate the Raft layer, these APIs are treated as
-        // unexpected and we just close the connection.
-        case ApiKeys.VOTE => closeConnection(request, util.Collections.emptyMap())
-        case ApiKeys.BEGIN_QUORUM_EPOCH => closeConnection(request, util.Collections.emptyMap())
-        case ApiKeys.END_QUORUM_EPOCH => closeConnection(request, util.Collections.emptyMap())
-        case ApiKeys.DESCRIBE_QUORUM => closeConnection(request, util.Collections.emptyMap())
+          // Until we are ready to integrate the Raft layer, these APIs are treated as
+          // unexpected and we just close the connection.
+          case ApiKeys.VOTE => closeConnection(request, util.Collections.emptyMap())
+          case ApiKeys.BEGIN_QUORUM_EPOCH => closeConnection(request, util.Collections.emptyMap())
+          case ApiKeys.END_QUORUM_EPOCH => closeConnection(request, util.Collections.emptyMap())
+          case ApiKeys.DESCRIBE_QUORUM => closeConnection(request, util.Collections.emptyMap())
+        }
       }
     } catch {
       case e: FatalExitError => throw e
@@ -569,7 +568,7 @@ class KafkaApis(val requestChannel: RequestChannel,
    */
   def handleProduceRequest(request: RequestChannel.Request): Unit = {
     val produceRequest = request.body[ProduceRequest]
-    val numBytesAppended = request.header.toStruct.sizeOf + request.sizeOfBodyInBytes
+    val requestSize = request.sizeInBytes
 
     val (hasIdempotentRecords, hasTransactionalRecords) = {
       val flags = RequestUtils.flags(produceRequest)
@@ -595,9 +594,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     val authorizedRequestInfo = mutable.Map[TopicPartition, MemoryRecords]()
     // cache the result to avoid redundant authorization calls
     val authorizedTopics = filterByAuthorized(request.context, WRITE, TOPIC,
-      produceRequest.dataOrException().topicData().asScala)(_.name())
+      produceRequest.data().topicData().asScala)(_.name())
 
-    produceRequest.dataOrException.topicData.forEach(topic => topic.partitionData.forEach { partition =>
+    produceRequest.data.topicData.forEach(topic => topic.partitionData.forEach { partition =>
       val topicPartition = new TopicPartition(topic.name, partition.index)
       // This caller assumes the type is MemoryRecords and that is true on current serialization
       // We cast the type to avoid causing big change to code base.
@@ -641,7 +640,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // have been violated. If both quotas have been violated, use the max throttle time between the two quotas. Note
       // that the request quota is not enforced if acks == 0.
       val timeMs = time.milliseconds()
-      val bandwidthThrottleTimeMs = quotas.produce.maybeRecordAndGetThrottleTimeMs(request, numBytesAppended, timeMs)
+      val bandwidthThrottleTimeMs = quotas.produce.maybeRecordAndGetThrottleTimeMs(request, requestSize, timeMs)
       val requestThrottleTimeMs =
         if (produceRequest.acks == 0) 0
         else quotas.request.maybeRecordAndGetThrottleTimeMs(request, timeMs)
@@ -1237,28 +1236,37 @@ class KafkaApis(val requestChannel: RequestChannel,
     topicMetadata.headOption.getOrElse(createInternalTopic(topic))
   }
 
-  private def getTopicMetadata(allowAutoTopicCreation: Boolean, topics: Set[String], listenerName: ListenerName,
+  private def getTopicMetadata(allowAutoTopicCreation: Boolean, isFetchAllMetadata: Boolean,
+                               topics: Set[String], listenerName: ListenerName,
                                errorUnavailableEndpoints: Boolean,
                                errorUnavailableListeners: Boolean): Seq[MetadataResponseTopic] = {
     val topicResponses = metadataCache.getTopicMetadata(topics, listenerName,
         errorUnavailableEndpoints, errorUnavailableListeners)
+
     if (topics.isEmpty || topicResponses.size == topics.size) {
       topicResponses
     } else {
       val nonExistentTopics = topics.diff(topicResponses.map(_.name).toSet)
-      val responsesForNonExistentTopics = nonExistentTopics.map { topic =>
+      val responsesForNonExistentTopics = nonExistentTopics.flatMap { topic =>
         if (isInternal(topic)) {
           val topicMetadata = createInternalTopic(topic)
-          if (topicMetadata.errorCode == Errors.COORDINATOR_NOT_AVAILABLE.code)
-            metadataResponseTopic(Errors.INVALID_REPLICATION_FACTOR, topic, true, util.Collections.emptyList())
-          else
-            topicMetadata
+          Some(
+            if (topicMetadata.errorCode == Errors.COORDINATOR_NOT_AVAILABLE.code)
+              metadataResponseTopic(Errors.INVALID_REPLICATION_FACTOR, topic, true, util.Collections.emptyList())
+            else
+              topicMetadata
+          )
+        } else if (isFetchAllMetadata) {
+          // A metadata request for all topics should never result in topic auto creation, but a topic may be deleted
+          // in between the creation of the topics parameter and topicResponses, so make sure to return None for this case.
+          None
         } else if (allowAutoTopicCreation && config.autoCreateTopicsEnable) {
-          createTopic(topic, config.numPartitions, config.defaultReplicationFactor)
+          Some(createTopic(topic, config.numPartitions, config.defaultReplicationFactor))
         } else {
-          metadataResponseTopic(Errors.UNKNOWN_TOPIC_OR_PARTITION, topic, false, util.Collections.emptyList())
+          Some(metadataResponseTopic(Errors.UNKNOWN_TOPIC_OR_PARTITION, topic, false, util.Collections.emptyList()))
         }
       }
+
       topicResponses ++ responsesForNonExistentTopics
     }
   }
@@ -1314,9 +1322,16 @@ class KafkaApis(val requestChannel: RequestChannel,
     val topicMetadata =
       if (authorizedTopics.isEmpty)
         Seq.empty[MetadataResponseTopic]
-      else
-        getTopicMetadata(metadataRequest.allowAutoTopicCreation, authorizedTopics, request.context.listenerName,
-          errorUnavailableEndpoints, errorUnavailableListeners)
+      else {
+        getTopicMetadata(
+          metadataRequest.allowAutoTopicCreation,
+          metadataRequest.isAllTopics,
+          authorizedTopics,
+          request.context.listenerName,
+          errorUnavailableEndpoints,
+          errorUnavailableListeners
+        )
+      }
 
     var clusterAuthorizedOperations = Int.MinValue
     if (request.header.apiVersion >= 8) {
@@ -1345,11 +1360,12 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     sendResponseMaybeThrottle(request, requestThrottleMs =>
        MetadataResponse.prepareResponse(
+         requestVersion,
          requestThrottleMs,
-         completeTopicMetadata.asJava,
          brokers.flatMap(_.getNode(request.context.listenerName)).asJava,
          clusterId,
          metadataCache.getControllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID),
+         completeTopicMetadata.asJava,
          clusterAuthorizedOperations
       ))
   }
@@ -2506,7 +2522,8 @@ class KafkaApis(val requestChannel: RequestChannel,
           new DescribeAclsResponse(new DescribeAclsResponseData()
             .setErrorCode(Errors.SECURITY_DISABLED.code)
             .setErrorMessage("No Authorizer is configured on the broker")
-            .setThrottleTimeMs(requestThrottleMs)))
+            .setThrottleTimeMs(requestThrottleMs),
+          describeAclsRequest.version))
       case Some(auth) =>
         val filter = describeAclsRequest.filter
         val returnedAcls = new util.HashSet[AclBinding]()
@@ -2514,7 +2531,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         sendResponseMaybeThrottle(request, requestThrottleMs =>
           new DescribeAclsResponse(new DescribeAclsResponseData()
             .setThrottleTimeMs(requestThrottleMs)
-            .setResources(DescribeAclsResponse.aclsResources(returnedAcls))))
+            .setResources(DescribeAclsResponse.aclsResources(returnedAcls)),
+          describeAclsRequest.version))
     }
   }
 
@@ -2585,9 +2603,11 @@ class KafkaApis(val requestChannel: RequestChannel,
         def sendResponseCallback(): Unit = {
           val filterResults = deleteResults.map(_.get).map(DeleteAclsResponse.filterResult).asJava
           sendResponseMaybeThrottle(request, requestThrottleMs =>
-            new DeleteAclsResponse(new DeleteAclsResponseData()
-              .setThrottleTimeMs(requestThrottleMs)
-              .setFilterResults(filterResults)))
+            new DeleteAclsResponse(
+              new DeleteAclsResponseData()
+                .setThrottleTimeMs(requestThrottleMs)
+                .setFilterResults(filterResults),
+              deleteAclsRequest.version))
         }
         alterAclsPurgatory.tryCompleteElseWatch(config.connectionsMaxIdleMs, deleteResults, sendResponseCallback)
     }
@@ -3125,11 +3145,30 @@ class KafkaApis(val requestChannel: RequestChannel,
     val describeClientQuotasRequest = request.body[DescribeClientQuotasRequest]
 
     if (authorize(request.context, DESCRIBE_CONFIGS, CLUSTER, CLUSTER_NAME)) {
-      val result = adminManager.describeClientQuotas(describeClientQuotasRequest.filter).map { case (quotaEntity, quotaConfigs) =>
-        quotaEntity -> quotaConfigs.map { case (key, value) => key -> Double.box(value) }.asJava
-      }.asJava
+      val result = adminManager.describeClientQuotas(describeClientQuotasRequest.filter)
+
+      val entriesData = result.iterator.map { case (quotaEntity, quotaValues) =>
+        val entityData = quotaEntity.entries.asScala.iterator.map { case (entityType, entityName) =>
+          new DescribeClientQuotasResponseData.EntityData()
+            .setEntityType(entityType)
+            .setEntityName(entityName)
+        }.toBuffer
+
+        val valueData = quotaValues.iterator.map { case (key, value) =>
+          new DescribeClientQuotasResponseData.ValueData()
+            .setKey(key)
+            .setValue(value)
+        }.toBuffer
+
+        new DescribeClientQuotasResponseData.EntryData()
+          .setEntity(entityData.asJava)
+          .setValues(valueData.asJava)
+      }.toBuffer
+
       sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new DescribeClientQuotasResponse(result, requestThrottleMs))
+        new DescribeClientQuotasResponse(new DescribeClientQuotasResponseData()
+          .setThrottleTimeMs(requestThrottleMs)
+          .setEntries(entriesData.asJava)))
     } else {
       sendResponseMaybeThrottle(request, requestThrottleMs =>
         describeClientQuotasRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
@@ -3140,10 +3179,26 @@ class KafkaApis(val requestChannel: RequestChannel,
     val alterClientQuotasRequest = request.body[AlterClientQuotasRequest]
 
     if (authorize(request.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)) {
-      val result = adminManager.alterClientQuotas(alterClientQuotasRequest.entries().asScala.toSeq,
-        alterClientQuotasRequest.validateOnly()).asJava
+      val result = adminManager.alterClientQuotas(alterClientQuotasRequest.entries.asScala,
+        alterClientQuotasRequest.validateOnly)
+
+      val entriesData = result.iterator.map { case (quotaEntity, apiError) =>
+        val entityData = quotaEntity.entries.asScala.iterator.map { case (key, value) =>
+          new AlterClientQuotasResponseData.EntityData()
+            .setEntityType(key)
+            .setEntityName(value)
+        }.toBuffer
+
+        new AlterClientQuotasResponseData.EntryData()
+          .setErrorCode(apiError.error.code)
+          .setErrorMessage(apiError.message)
+          .setEntity(entityData.asJava)
+      }.toBuffer
+
       sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new AlterClientQuotasResponse(result, requestThrottleMs))
+        new AlterClientQuotasResponse(new AlterClientQuotasResponseData()
+          .setThrottleTimeMs(requestThrottleMs)
+          .setEntries(entriesData.asJava)))
     } else {
       sendResponseMaybeThrottle(request, requestThrottleMs =>
         alterClientQuotasRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
@@ -3183,20 +3238,15 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleAlterIsrRequest(request: RequestChannel.Request): Unit = {
     val alterIsrRequest = request.body[AlterIsrRequest]
+    authorizeClusterOperation(request, CLUSTER_ACTION)
 
-    if (!authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
-      sendResponseMaybeThrottle(request, requestThrottleMs =>
-        alterIsrRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
-    } else if (!controller.isActive) {
-      sendResponseMaybeThrottle(request, requestThrottleMs =>
-        alterIsrRequest.getErrorResponse(requestThrottleMs, Errors.NOT_CONTROLLER.exception()))
-    } else {
-      controller.alterIsrs(alterIsrRequest.data,
-        alterIsrResp => sendResponseMaybeThrottle(request, requestThrottleMs =>
-          new AlterIsrResponse(alterIsrResp.setThrottleTimeMs(requestThrottleMs))
-        )
+    if (!controller.isActive)
+      sendResponseExemptThrottle(request, alterIsrRequest.getErrorResponse(
+        AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.NOT_CONTROLLER.exception))
+    else
+      controller.alterIsrs(alterIsrRequest.data, alterIsrResp =>
+        sendResponseExemptThrottle(request, new AlterIsrResponse(alterIsrResp))
       )
-    }
   }
 
   def handleUpdateFeatures(request: RequestChannel.Request): Unit = {
@@ -3458,7 +3508,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         new RequestChannel.SendResponse(
           request,
           request.buildResponseSend(response),
-          request.responseString(response),
+          request.responseNode(response),
           onComplete
         )
       case None =>

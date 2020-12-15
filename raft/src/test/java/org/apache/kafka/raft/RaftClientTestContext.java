@@ -78,7 +78,7 @@ import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-final class RaftClientTestContext {
+public final class RaftClientTestContext {
     private static final StringSerde STRING_SERDE = new StringSerde();
 
     final TopicPartition metadataPartition = Builder.METADATA_PARTITION;
@@ -90,10 +90,11 @@ final class RaftClientTestContext {
     final int retryBackoffMs = Builder.RETRY_BACKOFF_MS;
 
     private final QuorumStateStore quorumStateStore;
+    private final QuorumState quorum;
     final int localId;
-    final KafkaRaftClient<String> client;
+    public final KafkaRaftClient<String> client;
     final Metrics metrics;
-    final MockLog log;
+    public final MockLog log;
     final MockNetworkChannel channel;
     final MockTime time;
     final MockListener listener;
@@ -124,7 +125,7 @@ final class RaftClientTestContext {
         private int appendLingerMs = DEFAULT_APPEND_LINGER_MS;
         private MemoryPool memoryPool = MemoryPool.NONE;
 
-        Builder(int localId, Set<Integer> voters) {
+        public Builder(int localId, Set<Integer> voters) {
             this.voters = voters;
             this.localId = localId;
         }
@@ -175,7 +176,7 @@ final class RaftClientTestContext {
             return this;
         }
 
-        RaftClientTestContext build() throws IOException {
+        public RaftClientTestContext build() throws IOException {
             Metrics metrics = new Metrics(time);
             MockNetworkChannel channel = new MockNetworkChannel();
             LogContext logContext = new LogContext();
@@ -219,6 +220,7 @@ final class RaftClientTestContext {
                 channel,
                 time,
                 quorumStateStore,
+                quorum,
                 voters,
                 metrics,
                 listener
@@ -233,6 +235,7 @@ final class RaftClientTestContext {
         MockNetworkChannel channel,
         MockTime time,
         QuorumStateStore quorumStateStore,
+        QuorumState quorum,
         Set<Integer> voters,
         Metrics metrics,
         MockListener listener
@@ -243,6 +246,7 @@ final class RaftClientTestContext {
         this.channel = channel;
         this.time = time;
         this.quorumStateStore = quorumStateStore;
+        this.quorum = quorum;
         this.voters = voters;
         this.metrics = metrics;
         this.listener = listener;
@@ -366,6 +370,11 @@ final class RaftClientTestContext {
         assertEquals(ElectionState.withUnknownLeader(epoch, voters), quorumStateStore.readElectionState());
     }
 
+    void assertResignedLeader(int epoch, int leaderId) throws IOException {
+        assertTrue(quorum.isResigned());
+        assertEquals(ElectionState.withElectedLeader(epoch, leaderId, voters), quorumStateStore.readElectionState());
+    }
+
     int assertSentDescribeQuorumResponse(int leaderId,
                                                  int leaderEpoch,
                                                  long highWatermark,
@@ -391,9 +400,9 @@ final class RaftClientTestContext {
         return raftMessage.correlationId();
     }
 
-    int assertSentVoteRequest(int epoch, int lastEpoch, long lastEpochOffset) {
+    int assertSentVoteRequest(int epoch, int lastEpoch, long lastEpochOffset, int numVoteReceivers) {
         List<RaftRequest.Outbound> voteRequests = collectVoteRequests(epoch, lastEpoch, lastEpochOffset);
-        assertEquals(1, voteRequests.size());
+        assertEquals(numVoteReceivers, voteRequests.size());
         return voteRequests.iterator().next().correlationId();
     }
 
@@ -448,9 +457,9 @@ final class RaftClientTestContext {
         channel.mockReceive(new RaftResponse.Inbound(correlationId, response, sourceId));
     }
 
-    int assertSentBeginQuorumEpochRequest(int epoch) {
+    int assertSentBeginQuorumEpochRequest(int epoch, int numBeginEpochRequests) {
         List<RaftRequest.Outbound> requests = collectBeginEpochRequests(epoch);
-        assertEquals(1, requests.size());
+        assertEquals(numBeginEpochRequests, requests.size());
         return requests.get(0).correlationId;
     }
 
@@ -723,6 +732,7 @@ final class RaftClientTestContext {
     static void verifyLeaderChangeMessage(
         int leaderId,
         List<Integer> voters,
+        List<Integer> grantingVoters,
         ByteBuffer recordKey,
         ByteBuffer recordValue
     ) {
@@ -732,6 +742,8 @@ final class RaftClientTestContext {
         assertEquals(leaderId, leaderChangeMessage.leaderId());
         assertEquals(voters.stream().map(voterId -> new Voter().setVoterId(voterId)).collect(Collectors.toList()),
             leaderChangeMessage.voters());
+        assertEquals(grantingVoters.stream().map(voterId -> new Voter().setVoterId(voterId)).collect(Collectors.toSet()),
+            new HashSet<>(leaderChangeMessage.grantingVoters()));
     }
 
     void assertFetchRequestData(

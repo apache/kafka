@@ -27,22 +27,15 @@ import java.nio.channels.GatheringByteChannel;
 public abstract class RecordsSend<T extends BaseRecords> implements Send {
     private static final ByteBuffer EMPTY_BYTE_BUFFER = ByteBuffer.allocate(0);
 
-    private final String destination;
     private final T records;
     private final int maxBytesToWrite;
     private int remaining;
     private boolean pending = false;
 
-    protected RecordsSend(String destination, T records, int maxBytesToWrite) {
-        this.destination = destination;
+    protected RecordsSend(T records, int maxBytesToWrite) {
         this.records = records;
         this.maxBytesToWrite = maxBytesToWrite;
         this.remaining = maxBytesToWrite;
-    }
-
-    @Override
-    public String destination() {
-        return destination;
     }
 
     @Override

@@ -46,7 +46,7 @@ import scala.jdk.CollectionConverters._
 import scala.collection._
 
 /**
- * This script can be used to change configs for topics/clients/users/brokers dynamically
+ * This script can be used to change configs for topics/clients/users/brokers/ips dynamically
  * An entity described or altered by the command may be one of:
  * <ul>
  *     <li> topic: --topic <topic> OR --entity-type topics --entity-name <topic>
@@ -56,11 +56,12 @@ import scala.collection._
  *                          --entity-type users --entity-name <user-principal> --entity-type clients --entity-name <client-id>
  *     <li> broker: --broker <broker-id> OR --entity-type brokers --entity-name <broker-id>
  *     <li> broker-logger: --broker-logger <broker-id> OR --entity-type broker-loggers --entity-name <broker-id>
+ *     <li> ip: --ip <ip> OR --entity-type ips --entity-name <ip>
  * </ul>
- * --entity-type <users|clients|brokers> --entity-default may be specified in place of --entity-type <users|clients|brokers> --entity-name <entityName>
- * when describing or altering default configuration for users, clients, or brokers, respectively.
- * Alternatively, --user-defaults, --client-defaults, or --broker-defaults may be specified in place of
- * --entity-type <users|clients|brokers> --entity-default, respectively.
+ * --entity-type <users|clients|brokers|ips> --entity-default may be specified in place of --entity-type <users|clients|brokers|ips> --entity-name <entityName>
+ * when describing or altering default configuration for users, clients, brokers, or ips, respectively.
+ * Alternatively, --user-defaults, --client-defaults, --broker-defaults, or --ip-defaults may be specified in place of
+ * --entity-type <users|clients|brokers|ips> --entity-default, respectively.
  */
 object ConfigCommand extends Config {
 
@@ -84,7 +85,7 @@ object ConfigCommand extends Config {
     try {
       val opts = new ConfigCommandOptions(args)
 
-      CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to manipulate and describe entity config for a topic, client, user or broker")
+      CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to manipulate and describe entity config for a topic, client, user, broker or ip")
 
       opts.checkArgs()
 
@@ -401,7 +402,11 @@ object ConfigCommand extends Config {
             throw new IllegalStateException(s"Altering user SCRAM credentials should never occur for more zero or multiple users: $entityNames")
           alterUserScramCredentialConfigs(adminClient, entityNames.head, scramConfigsToAddMap, scramConfigsToDelete)
         }
-
+      case ConfigType.Ip =>
+        val unknownConfigs = (configsToBeAdded.keys ++ configsToBeDeleted).filterNot(key => DynamicConfig.Ip.names.contains(key))
+        if (unknownConfigs.nonEmpty)
+          throw new IllegalArgumentException(s"Only connection quota configs can be added for '${ConfigType.Ip}' using --bootstrap-server. Unexpected config names: ${unknownConfigs.mkString(",")}")
+        alterQuotaConfigs(adminClient, entityTypes, entityNames, configsToBeAddedMap, configsToBeDeleted)
       case _ => throw new IllegalArgumentException(s"Unsupported entity type: $entityTypeHead")
     }
 
@@ -443,12 +448,11 @@ object ConfigCommand extends Config {
     if (invalidConfigs.nonEmpty)
       throw new InvalidConfigurationException(s"Invalid config(s): ${invalidConfigs.mkString(",")}")
 
-    val alterEntityTypes = entityTypes.map { entType =>
-      entType match {
-        case ConfigType.User => ClientQuotaEntity.USER
-        case ConfigType.Client => ClientQuotaEntity.CLIENT_ID
-        case _ => throw new IllegalArgumentException(s"Unexpected entity type: ${entType}")
-      }
+    val alterEntityTypes = entityTypes.map {
+      case ConfigType.User => ClientQuotaEntity.USER
+      case ConfigType.Client => ClientQuotaEntity.CLIENT_ID
+      case ConfigType.Ip => ClientQuotaEntity.IP
+      case entType => throw new IllegalArgumentException(s"Unexpected entity type: $entType")
     }
     val alterEntityNames = entityNames.map(en => if (en.nonEmpty) en else null)
 
@@ -461,7 +465,7 @@ object ConfigCommand extends Config {
     val alterOps = (configsToBeAddedMap.map { case (key, value) =>
       val doubleValue = try value.toDouble catch {
         case _: NumberFormatException =>
-          throw new IllegalArgumentException(s"Cannot parse quota configuration value for ${key}: ${value}")
+          throw new IllegalArgumentException(s"Cannot parse quota configuration value for $key: $value")
       }
       new ClientQuotaAlteration.Op(key, doubleValue)
     } ++ configsToBeDeleted.map(key => new ClientQuotaAlteration.Op(key, null))).asJavaCollection
@@ -480,6 +484,8 @@ object ConfigCommand extends Config {
         describeResourceConfig(adminClient, entityTypes.head, entityNames.headOption, describeAll)
       case ConfigType.User | ConfigType.Client =>
         describeClientQuotaAndUserScramCredentialConfigs(adminClient, entityTypes, entityNames)
+      case ConfigType.Ip =>
+        describeQuotaConfigs(adminClient, entityTypes, entityNames)
       case entityType => throw new IllegalArgumentException(s"Invalid entity type: $entityType")
     }
   }
@@ -551,7 +557,7 @@ object ConfigCommand extends Config {
       }).toSeq
   }
 
-  private def describeClientQuotaAndUserScramCredentialConfigs(adminClient: Admin, entityTypes: List[String], entityNames: List[String]) = {
+  private def describeQuotaConfigs(adminClient: Admin, entityTypes: List[String], entityNames: List[String]) = {
     val quotaConfigs = getAllClientQuotasConfigs(adminClient, entityTypes, entityNames)
     quotaConfigs.forKeyValue { (entity, entries) =>
       val entityEntries = entity.entries.asScala
@@ -561,15 +567,22 @@ object ConfigCommand extends Config {
           val typeStr = entityType match {
             case ClientQuotaEntity.USER => "user-principal"
             case ClientQuotaEntity.CLIENT_ID => "client-id"
+            case ClientQuotaEntity.IP => "ip"
           }
-          if (name != null) s"${typeStr} '${name}'"
-          else s"the default ${typeStr}"
+          if (name != null) s"$typeStr '$name'"
+          else s"the default $typeStr"
         }
 
-      val entityStr = (entitySubstr(ClientQuotaEntity.USER) ++ entitySubstr(ClientQuotaEntity.CLIENT_ID)).mkString(", ")
+      val entityStr = (entitySubstr(ClientQuotaEntity.USER) ++
+                       entitySubstr(ClientQuotaEntity.CLIENT_ID) ++
+                       entitySubstr(ClientQuotaEntity.IP)).mkString(", ")
       val entriesStr = entries.asScala.map(e => s"${e._1}=${e._2}").mkString(", ")
-      println(s"Quota configs for ${entityStr} are ${entriesStr}")
+      println(s"Quota configs for $entityStr are $entriesStr")
     }
+  }
+
+  private def describeClientQuotaAndUserScramCredentialConfigs(adminClient: Admin, entityTypes: List[String], entityNames: List[String]) = {
+    describeQuotaConfigs(adminClient, entityTypes, entityNames)
     // we describe user SCRAM credentials only when we are not describing client information
     // and we are not given either --entity-default or --user-defaults
     if (!entityTypes.contains(ConfigType.Client) && !entityNames.contains("")) {
@@ -597,6 +610,7 @@ object ConfigCommand extends Config {
       val entityType = entityTypeOpt match {
         case Some(ConfigType.User) => ClientQuotaEntity.USER
         case Some(ConfigType.Client) => ClientQuotaEntity.CLIENT_ID
+        case Some(ConfigType.Ip) => ClientQuotaEntity.IP
         case Some(_) => throw new IllegalArgumentException(s"Unexpected entity type ${entityTypeOpt.get}")
         case None => throw new IllegalArgumentException("More entity names specified than entity types")
       }
@@ -735,13 +749,13 @@ object ConfigCommand extends Config {
     val describeOpt = parser.accepts("describe", "List configs for the given entity.")
     val allOpt = parser.accepts("all", "List all configs for the given topic, broker, or broker-logger entity (includes static configuration when the entity type is brokers)")
 
-    val entityType = parser.accepts("entity-type", "Type of entity (topics/clients/users/brokers/broker-loggers)")
+    val entityType = parser.accepts("entity-type", "Type of entity (topics/clients/users/brokers/broker-loggers/ips)")
             .withRequiredArg
             .ofType(classOf[String])
-    val entityName = parser.accepts("entity-name", "Name of entity (topic name/client id/user principal name/broker id)")
+    val entityName = parser.accepts("entity-name", "Name of entity (topic name/client id/user principal name/broker id/ip)")
             .withRequiredArg
             .ofType(classOf[String])
-    val entityDefault = parser.accepts("entity-default", "Default entity name for clients/users/brokers (applies to corresponding entity type in command line)")
+    val entityDefault = parser.accepts("entity-default", "Default entity name for clients/users/brokers/ips (applies to corresponding entity type in command line)")
 
     val nl = System.getProperty("line.separator")
     val addConfig = parser.accepts("add-config", "Key Value pairs of configs to add. Square brackets can be used to group values which contain commas: 'k1=v1,k2=[v1,v2,v2],k3=v3'. The following is a list of valid configurations: " +
@@ -749,6 +763,7 @@ object ConfigCommand extends Config {
             "For entity-type '" + ConfigType.Broker + "': " + DynamicConfig.Broker.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
             "For entity-type '" + ConfigType.User + "': " + DynamicConfig.User.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
             "For entity-type '" + ConfigType.Client + "': " + DynamicConfig.Client.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
+            "For entity-type '" + ConfigType.Ip + "': " + DynamicConfig.Ip.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
             s"Entity types '${ConfigType.User}' and '${ConfigType.Client}' may be specified together to update config for clients of a specific user.")
             .withRequiredArg
             .ofType(classOf[String])
@@ -778,6 +793,10 @@ object ConfigCommand extends Config {
     val brokerLogger = parser.accepts("broker-logger", "The broker's ID for its logger config.")
       .withRequiredArg
       .ofType(classOf[String])
+    val ipDefaults = parser.accepts("ip-defaults", "The config defaults for all IPs.")
+    val ip = parser.accepts("ip", "The IP address.")
+      .withRequiredArg
+      .ofType(classOf[String])
     val zkTlsConfigFile = parser.accepts("zk-tls-config-file",
       "Identifies the file where ZooKeeper client TLS connectivity properties are defined.  Any properties other than " +
         KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.toList.sorted.mkString(", ") + " are ignored.")
@@ -788,11 +807,13 @@ object ConfigCommand extends Config {
       (client, ConfigType.Client),
       (user, ConfigType.User),
       (broker, ConfigType.Broker),
-      (brokerLogger, BrokerLoggerConfigType))
+      (brokerLogger, BrokerLoggerConfigType),
+      (ip, ConfigType.Ip))
 
     private val entityDefaultsFlags = List((clientDefaults, ConfigType.Client),
       (userDefaults, ConfigType.User),
-      (brokerDefaults, ConfigType.Broker))
+      (brokerDefaults, ConfigType.Broker),
+      (ipDefaults, ConfigType.Ip))
 
     private[admin] def entityTypes: List[String] = {
       options.valuesOf(entityType).asScala.toList ++
@@ -864,13 +885,23 @@ object ConfigCommand extends Config {
         }
       }
 
+      if (hasEntityName && entityTypeVals.contains(ConfigType.Ip)) {
+        Seq(entityName, ip).filter(options.has(_)).map(options.valueOf(_)).foreach { ipEntity =>
+          if (!DynamicConfig.Ip.isValidIpEntity(ipEntity))
+            throw new IllegalArgumentException(s"The entity name for ${entityTypeVals.head} must be a valid IP or resolvable host, but it is: $ipEntity")
+        }
+      }
+
       if (options.has(describeOpt) && entityTypeVals.contains(BrokerLoggerConfigType) && !hasEntityName)
         throw new IllegalArgumentException(s"an entity name must be specified with --describe of ${entityTypeVals.mkString(",")}")
 
       if (options.has(alterOpt)) {
-        if (entityTypeVals.contains(ConfigType.User) || entityTypeVals.contains(ConfigType.Client) || entityTypeVals.contains(ConfigType.Broker)) {
+        if (entityTypeVals.contains(ConfigType.User) ||
+            entityTypeVals.contains(ConfigType.Client) ||
+            entityTypeVals.contains(ConfigType.Broker) ||
+            entityTypeVals.contains(ConfigType.Ip)) {
           if (!hasEntityName && !hasEntityDefault)
-            throw new IllegalArgumentException("an entity-name or default entity must be specified with --alter of users, clients or brokers")
+            throw new IllegalArgumentException("an entity-name or default entity must be specified with --alter of users, clients, brokers or ips")
         } else if (!hasEntityName)
           throw new IllegalArgumentException(s"an entity name must be specified with --alter of ${entityTypeVals.mkString(",")}")
 

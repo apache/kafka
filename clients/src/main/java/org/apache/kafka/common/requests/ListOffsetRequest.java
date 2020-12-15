@@ -34,8 +34,8 @@ import org.apache.kafka.common.message.ListOffsetResponseData;
 import org.apache.kafka.common.message.ListOffsetResponseData.ListOffsetPartitionResponse;
 import org.apache.kafka.common.message.ListOffsetResponseData.ListOffsetTopicResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 public class ListOffsetRequest extends AbstractRequest {
     public static final long EARLIEST_TIMESTAMP = -2L;
@@ -80,7 +80,7 @@ public class ListOffsetRequest extends AbstractRequest {
 
         @Override
         public ListOffsetRequest build(short version) {
-            return new ListOffsetRequest(version, data);
+            return new ListOffsetRequest(data, version);
         }
 
         @Override
@@ -92,15 +92,9 @@ public class ListOffsetRequest extends AbstractRequest {
     /**
      * Private constructor with a specified version.
      */
-    private ListOffsetRequest(short version, ListOffsetRequestData data) {
+    private ListOffsetRequest(ListOffsetRequestData data, short version) {
         super(ApiKeys.LIST_OFFSETS, version);
         this.data = data;
-        this.duplicatePartitions = Collections.emptySet();
-    }
-
-    public ListOffsetRequest(Struct struct, short version) {
-        super(ApiKeys.LIST_OFFSETS, version);
-        data = new ListOffsetRequestData(struct, version);
         duplicatePartitions = new HashSet<>();
         Set<TopicPartition> partitions = new HashSet<>();
         for (ListOffsetTopic topic : data.topics()) {
@@ -143,6 +137,7 @@ public class ListOffsetRequest extends AbstractRequest {
         return new ListOffsetResponse(responseData);
     }
 
+    @Override
     public ListOffsetRequestData data() {
         return data;
     }
@@ -164,12 +159,7 @@ public class ListOffsetRequest extends AbstractRequest {
     }
 
     public static ListOffsetRequest parse(ByteBuffer buffer, short version) {
-        return new ListOffsetRequest(ApiKeys.LIST_OFFSETS.parseRequest(version, buffer), version);
-    }
-
-    @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
+        return new ListOffsetRequest(new ListOffsetRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
     public static List<ListOffsetTopic> toListOffsetTopics(Map<TopicPartition, ListOffsetPartition> timestampsToSearch) {

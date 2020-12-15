@@ -26,30 +26,22 @@ import java.nio.channels.GatheringByteChannel;
  */
 public class ByteBufferSend implements Send {
 
-    private final String destination;
     private final long size;
     protected final ByteBuffer[] buffers;
     private long remaining;
     private boolean pending = false;
 
-    public ByteBufferSend(String destination, ByteBuffer... buffers) {
-        this.destination = destination;
+    public ByteBufferSend(ByteBuffer... buffers) {
         this.buffers = buffers;
         for (ByteBuffer buffer : buffers)
             remaining += buffer.remaining();
         this.size = remaining;
     }
 
-    public ByteBufferSend(String destination, ByteBuffer[] buffers, long size) {
-        this.destination = destination;
+    public ByteBufferSend(ByteBuffer[] buffers, long size) {
         this.buffers = buffers;
         this.size = size;
         this.remaining = size;
-    }
-
-    @Override
-    public String destination() {
-        return destination;
     }
 
     @Override
@@ -79,10 +71,15 @@ public class ByteBufferSend implements Send {
     @Override
     public String toString() {
         return "ByteBufferSend(" +
-            "destination='" + destination + "'" +
             ", size=" + size +
             ", remaining=" + remaining +
             ", pending=" + pending +
             ')';
+    }
+
+    public static ByteBufferSend sizePrefixed(ByteBuffer buffer) {
+        ByteBuffer sizeBuffer = ByteBuffer.allocate(4);
+        sizeBuffer.putInt(0, buffer.remaining());
+        return new ByteBufferSend(sizeBuffer, buffer);
     }
 }

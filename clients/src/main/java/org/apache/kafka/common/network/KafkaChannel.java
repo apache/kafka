@@ -124,7 +124,7 @@ public class KafkaChannel implements AutoCloseable {
     private final MemoryPool memoryPool;
     private final ChannelMetadataRegistry metadataRegistry;
     private NetworkReceive receive;
-    private Send send;
+    private NetworkSend send;
     // Track connection and mute state of channels to enable outstanding requests on channels to be
     // processed after the channel is disconnected.
     private boolean disconnected;
@@ -376,18 +376,18 @@ public class KafkaChannel implements AutoCloseable {
         return socket.getInetAddress().toString();
     }
 
-    public void setSend(Send send) {
+    public void setSend(NetworkSend send) {
         if (this.send != null)
             throw new IllegalStateException("Attempt to begin a send operation with prior send operation still in progress, connection id is " + id);
         this.send = send;
         this.transportLayer.addInterestOps(SelectionKey.OP_WRITE);
     }
 
-    public Send maybeCompleteSend() {
+    public NetworkSend maybeCompleteSend() {
         if (send != null && send.completed()) {
             midWrite = false;
             transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
-            Send result = send;
+            NetworkSend result = send;
             send = null;
             return result;
         }
