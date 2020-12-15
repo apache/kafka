@@ -26,6 +26,12 @@ import scala.collection._
   */
 case class DeleteTopicMetadata(topic: String, error: Errors)
 
+object DeleteTopicMetadata {
+  def apply(topic: String, throwable: Throwable): DeleteTopicMetadata = {
+    DeleteTopicMetadata(topic, Errors.forException(throwable))
+  }
+}
+
 /**
   * A delayed delete topics operation that can be created by the admin manager and watched
   * in the topic purgatory

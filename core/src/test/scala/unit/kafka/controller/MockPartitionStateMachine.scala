@@ -85,7 +85,7 @@ class MockPartitionStateMachine(controllerContext: ControllerContext,
     val validLeaderAndIsrs = mutable.Buffer.empty[(TopicPartition, LeaderAndIsr)]
 
     for (partition <- partitions) {
-      val leaderIsrAndControllerEpoch = controllerContext.partitionLeadershipInfo(partition)
+      val leaderIsrAndControllerEpoch = controllerContext.partitionLeadershipInfo(partition).get
       if (leaderIsrAndControllerEpoch.controllerEpoch > controllerContext.epoch) {
         val failMsg = s"Aborted leader election for partition $partition since the LeaderAndIsr path was " +
           s"already written by another controller. This probably means that the current controller went through " +
@@ -118,7 +118,7 @@ class MockPartitionStateMachine(controllerContext: ControllerContext,
           Left(new StateChangeFailedException(failMsg))
         case Some(leaderAndIsr) =>
           val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerContext.epoch)
-          controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
+          controllerContext.putPartitionLeadershipInfo(partition, leaderIsrAndControllerEpoch)
           Right(leaderAndIsr)
       }
 

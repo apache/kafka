@@ -30,6 +30,8 @@ import org.apache.kafka.common.protocol.ApiKeys
 import org.junit.Assert.{assertEquals, assertFalse, assertNotNull, assertTrue}
 import org.junit.Test
 
+import scala.jdk.CollectionConverters._
+
 class BrokerApiVersionsCommandTest extends KafkaServerTestHarness {
 
   def generateConfigs: Seq[KafkaConfig] = TestUtils.createBrokerConfigs(1, zkConnect).map(KafkaConfig.fromProps)
@@ -42,22 +44,29 @@ class BrokerApiVersionsCommandTest extends KafkaServerTestHarness {
     val content = new String(byteArrayOutputStream.toByteArray, StandardCharsets.UTF_8)
     val lineIter = content.split("\n").iterator
     assertTrue(lineIter.hasNext)
-    assertEquals(s"$brokerList (id: 0 rack: null) -> (", lineIter.next)
+    assertEquals(s"$brokerList (id: 0 rack: null) -> (", lineIter.next())
     val nodeApiVersions = NodeApiVersions.create
-    for (apiKey <- ApiKeys.values) {
+    val enabledApis = ApiKeys.enabledApis.asScala
+    for (apiKey <- enabledApis) {
       val apiVersion = nodeApiVersions.apiVersion(apiKey)
       assertNotNull(apiVersion)
+
       val versionRangeStr =
         if (apiVersion.minVersion == apiVersion.maxVersion) apiVersion.minVersion.toString
         else s"${apiVersion.minVersion} to ${apiVersion.maxVersion}"
-      val terminator = if (apiKey == ApiKeys.values.last) "" else ","
       val usableVersion = nodeApiVersions.latestUsableVersion(apiKey)
-      val line = s"\t${apiKey.name}(${apiKey.id}): $versionRangeStr [usable: $usableVersion]$terminator"
+      // Admin client should not see ENVELOPE supported versions as its a broker-internal API.
+      val usableVersionInfo = if (apiKey == ApiKeys.ENVELOPE) "UNSUPPORTED" else
+        s"$versionRangeStr [usable: $usableVersion]"
+
+      val terminator = if (apiKey == enabledApis.last) "" else ","
+
+      val line = s"\t${apiKey.name}(${apiKey.id}): $usableVersionInfo$terminator"
       assertTrue(lineIter.hasNext)
-      assertEquals(line, lineIter.next)
+      assertEquals(line, lineIter.next())
     }
     assertTrue(lineIter.hasNext)
-    assertEquals(")", lineIter.next)
+    assertEquals(")", lineIter.next())
     assertFalse(lineIter.hasNext)
   }
 }

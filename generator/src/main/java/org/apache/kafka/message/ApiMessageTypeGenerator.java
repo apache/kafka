@@ -23,7 +23,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 
-public final class ApiMessageTypeGenerator {
+public final class ApiMessageTypeGenerator implements TypeClassGenerator {
     private final HeaderGenerator headerGenerator;
     private final CodeBuffer buffer;
     private final TreeMap<Short, ApiData> apis;
@@ -73,10 +73,12 @@ public final class ApiMessageTypeGenerator {
         this.buffer = new CodeBuffer();
     }
 
-    public boolean hasRegisteredTypes() {
-        return !apis.isEmpty();
+    @Override
+    public String outputName() {
+        return MessageGenerator.API_MESSAGE_TYPE_JAVA;
     }
 
+    @Override
     public void registerMessageType(MessageSpec spec) {
         switch (spec.type()) {
             case REQUEST: {
@@ -113,7 +115,13 @@ public final class ApiMessageTypeGenerator {
         }
     }
 
-    public void generate() {
+    @Override
+    public void generateAndWrite(BufferedWriter writer) throws IOException {
+        generate();
+        write(writer);
+    }
+
+    private void generate() {
         buffer.printf("public enum ApiMessageType {%n");
         buffer.incrementIndent();
         generateEnumValues();
@@ -319,7 +327,7 @@ public final class ApiMessageTypeGenerator {
         buffer.printf("}%n");
     }
 
-    public void write(BufferedWriter writer) throws IOException {
+    private void write(BufferedWriter writer) throws IOException {
         headerGenerator.buffer().write(writer);
         buffer.write(writer);
     }

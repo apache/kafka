@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -83,6 +84,20 @@ public class ExtendedAssignment extends ConnectProtocol.Assignment {
         this.revokedTaskIds = Objects.requireNonNull(revokedTaskIds,
                 "Revoked task IDs may be empty but not null");
         this.delay = delay;
+    }
+
+    public static ExtendedAssignment duplicate(ExtendedAssignment assignment) {
+        return new ExtendedAssignment(
+                assignment.version(),
+                assignment.error(),
+                assignment.leader(),
+                assignment.leaderUrl(),
+                assignment.offset(),
+                new LinkedHashSet<>(assignment.connectors()),
+                new LinkedHashSet<>(assignment.tasks()),
+                new LinkedHashSet<>(assignment.revokedConnectors()),
+                new LinkedHashSet<>(assignment.revokedTasks()),
+                assignment.delay());
     }
 
     /**

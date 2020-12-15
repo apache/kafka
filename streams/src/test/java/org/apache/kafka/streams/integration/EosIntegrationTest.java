@@ -213,7 +213,8 @@ public class EosIntegrationTest {
         final KStream<Long, Long> input = builder.stream(inputTopic);
         KStream<Long, Long> output = input;
         if (throughTopic != null) {
-            output = input.through(throughTopic);
+            input.to(throughTopic);
+            output = builder.stream(throughTopic);
         }
         output.to(outputTopic);
 
@@ -646,6 +647,7 @@ public class EosIntegrationTest {
         return data;
     }
 
+    @SuppressWarnings("deprecation") //the threads should no longer fail one thread one at a time
     private KafkaStreams getKafkaStreams(final String dummyHostName,
                                          final boolean withState,
                                          final String appDir,

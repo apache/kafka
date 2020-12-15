@@ -19,8 +19,6 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
 
 import java.util.Collection;
@@ -32,34 +30,22 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-
 public class ApiVersionsResponseTest {
 
     @Test
-    public void shouldCreateApiResponseOnlyWithKeysSupportedByMagicValue() {
-        final ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(10, RecordBatch.MAGIC_VALUE_V1);
-        verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1);
-        assertEquals(10, response.throttleTimeMs());
-    }
-
-    @Test
     public void shouldCreateApiResponseThatHasAllApiKeysSupportedByBroker() {
-        assertEquals(apiKeysInResponse(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE), Utils.mkSet(ApiKeys.values()));
-    }
-
-    @Test
-    public void shouldReturnAllKeysWhenMagicIsCurrentValueAndThrottleMsIsDefaultThrottle() {
-        ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, RecordBatch.CURRENT_MAGIC_VALUE);
-        assertEquals(Utils.mkSet(ApiKeys.values()), apiKeysInResponse(response));
-        assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs());
+        assertEquals(apiKeysInResponse(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE), new HashSet<>(ApiKeys.enabledApis()));
+        assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.supportedFeatures().isEmpty());
+        assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.finalizedFeatures().isEmpty());
+        assertEquals(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH, ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.finalizedFeaturesEpoch());
     }
 
     @Test
     public void shouldHaveCorrectDefaultApiVersionsResponse() {
         Collection<ApiVersionsResponseKey> apiVersions = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.apiKeys();
-        assertEquals("API versions for all API keys must be maintained.", apiVersions.size(), ApiKeys.values().length);
+        assertEquals("API versions for all API keys must be maintained.", apiVersions.size(), ApiKeys.enabledApis().size());
 
-        for (ApiKeys key : ApiKeys.values()) {
+        for (ApiKeys key : ApiKeys.enabledApis()) {
             ApiVersionsResponseKey version = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.apiVersion(key.id);
             assertNotNull("Could not find ApiVersion for API " + key.name, version);
             assertEquals("Incorrect min version for Api " + key.name, version.minVersion(), key.oldestVersion());
@@ -77,13 +63,12 @@ public class ApiVersionsResponseTest {
                 assertNotNull("Response version " + i + " for API " + version.apiKey() + " must not be null", key.responseSchemas[i]);
             }
         }
+
+        assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.supportedFeatures().isEmpty());
+        assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.finalizedFeatures().isEmpty());
+        assertEquals(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH, ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.finalizedFeaturesEpoch());
     }
-    
-    private void verifyApiKeysForMagic(final ApiVersionsResponse response, final byte maxMagic) {
-        for (final ApiVersionsResponseKey version : response.data.apiKeys()) {
-            assertTrue(ApiKeys.forId(version.apiKey()).minRequiredInterBrokerMagic <= maxMagic);
-        }
-    }
+
 
     private Set<ApiKeys> apiKeysInResponse(final ApiVersionsResponse apiVersions) {
         final Set<ApiKeys> apiKeys = new HashSet<>();
@@ -92,6 +77,4 @@ public class ApiVersionsResponseTest {
         }
         return apiKeys;
     }
-
-
 }

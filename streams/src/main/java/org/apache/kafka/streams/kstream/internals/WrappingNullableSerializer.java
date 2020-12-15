@@ -18,6 +18,6 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serializer;
 
-public interface WrappingNullableSerializer<Outer, Inner> extends Serializer<Outer> {
-    void setIfUnset(final Serializer<Inner> defaultSerializer);
+public interface WrappingNullableSerializer<Outer, InnerK, InnerV> extends Serializer<Outer> {
+    void setIfUnset(final Serializer<InnerK> defaultKeySerializer, final Serializer<InnerV> defaultValueSerializer);
 }

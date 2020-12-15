@@ -84,14 +84,23 @@ class KafkaTest {
     val propertiesFile = prepareDefaultConfig()
     val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "ssl.keystore.password=keystore_password",
                                                                                     "--override", "ssl.key.password=key_password",
-                                                                                    "--override", "ssl.truststore.password=truststore_password")))
+                                                                                    "--override", "ssl.truststore.password=truststore_password",
+                                                                                    "--override", "ssl.keystore.certificate.chain=certificate_chain",
+                                                                                    "--override", "ssl.keystore.key=private_key",
+                                                                                    "--override", "ssl.truststore.certificates=truststore_certificates")))
     assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslKeyPasswordProp).toString)
     assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslKeystorePasswordProp).toString)
     assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslTruststorePasswordProp).toString)
+    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslKeystoreKeyProp).toString)
+    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslKeystoreCertificateChainProp).toString)
+    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslTruststoreCertificatesProp).toString)
 
     assertEquals("key_password", config.getPassword(KafkaConfig.SslKeyPasswordProp).value)
     assertEquals("keystore_password", config.getPassword(KafkaConfig.SslKeystorePasswordProp).value)
     assertEquals("truststore_password", config.getPassword(KafkaConfig.SslTruststorePasswordProp).value)
+    assertEquals("private_key", config.getPassword(KafkaConfig.SslKeystoreKeyProp).value)
+    assertEquals("certificate_chain", config.getPassword(KafkaConfig.SslKeystoreCertificateChainProp).value)
+    assertEquals("truststore_certificates", config.getPassword(KafkaConfig.SslTruststoreCertificatesProp).value)
   }
 
   @Test

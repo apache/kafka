@@ -281,15 +281,27 @@ class NamedCache {
     }
 
     synchronized Iterator<Bytes> keyRange(final Bytes from, final Bytes to) {
-        return keySetIterator(cache.navigableKeySet().subSet(from, true, to, true));
+        return keySetIterator(cache.navigableKeySet().subSet(from, true, to, true), true);
     }
 
-    private Iterator<Bytes> keySetIterator(final Set<Bytes> keySet) {
-        return new TreeSet<>(keySet).iterator();
+    synchronized Iterator<Bytes> reverseKeyRange(final Bytes from, final Bytes to) {
+        return keySetIterator(cache.navigableKeySet().subSet(from, true, to, true), false);
+    }
+
+    private Iterator<Bytes> keySetIterator(final Set<Bytes> keySet, final boolean forward) {
+        if (forward) {
+            return new TreeSet<>(keySet).iterator();
+        } else {
+            return new TreeSet<>(keySet).descendingIterator();
+        }
     }
 
     synchronized Iterator<Bytes> allKeys() {
-        return keySetIterator(cache.navigableKeySet());
+        return keySetIterator(cache.navigableKeySet(), true);
+    }
+
+    synchronized Iterator<Bytes> reverseAllKeys() {
+        return keySetIterator(cache.navigableKeySet(), false);
     }
 
     synchronized LRUCacheEntry first() {

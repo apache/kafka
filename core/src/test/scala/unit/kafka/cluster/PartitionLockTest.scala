@@ -36,6 +36,7 @@ import org.mockito.ArgumentMatchers
 import org.mockito.Mockito.{mock, when}
 
 import scala.jdk.CollectionConverters._
+import scala.concurrent.duration._
 
 /**
  * Verifies that slow appends to log don't block request threads processing replica fetch requests.
@@ -114,6 +115,56 @@ class PartitionLockTest extends Logging {
     concurrentProduceFetchWithWriteLock()
     active.set(false)
     future.get(15, TimeUnit.SECONDS)
+  }
+
+  /**
+   * Concurrently calling updateAssignmentAndIsr should always ensure that non-lock access
+   * to the inner remoteReplicaMap (accessed by getReplica) cannot see an intermediate state
+   * where replicas present both in the old and new assignment are missing
+   */
+  @Test
+  def testGetReplicaWithUpdateAssignmentAndIsr(): Unit = {
+    val active = new AtomicBoolean(true)
+    val replicaToCheck = 3
+    val firstReplicaSet = Seq[Integer](3, 4, 5).asJava
+    val secondReplicaSet = Seq[Integer](1, 2, 3).asJava
+    def partitionState(replicas: java.util.List[Integer]) = new LeaderAndIsrPartitionState()
+      .setControllerEpoch(1)
+      .setLeader(replicas.get(0))
+      .setLeaderEpoch(1)
+      .setIsr(replicas)
+      .setZkVersion(1)
+      .setReplicas(replicas)
+      .setIsNew(true)
+    val offsetCheckpoints: OffsetCheckpoints = mock(classOf[OffsetCheckpoints])
+    // Update replica set synchronously first to avoid race conditions
+    partition.makeLeader(partitionState(secondReplicaSet), offsetCheckpoints)
+    assertTrue(s"Expected replica $replicaToCheck to be defined", partition.getReplica(replicaToCheck).isDefined)
+
+    val future = executorService.submit((() => {
+      var i = 0
+      // Flip assignment between two replica sets
+      while (active.get) {
+        val replicas = if (i % 2 == 0) {
+          firstReplicaSet
+        } else {
+          secondReplicaSet
+        }
+
+        partition.makeLeader(partitionState(replicas), offsetCheckpoints)
+
+        i += 1
+        Thread.sleep(1) // just to avoid tight loop
+      }
+    }): Runnable)
+
+    val deadline = 1.seconds.fromNow
+    while (deadline.hasTimeLeft()) {
+      assertTrue(s"Expected replica $replicaToCheck to be defined", partition.getReplica(replicaToCheck).isDefined)
+    }
+    active.set(false)
+    future.get(5, TimeUnit.SECONDS)
+    assertTrue(s"Expected replica $replicaToCheck to be defined", partition.getReplica(replicaToCheck).isDefined)
   }
 
   /**
@@ -198,9 +249,11 @@ class PartitionLockTest extends Logging {
     val brokerId = 0
     val topicPartition = new TopicPartition("test-topic", 0)
     val stateStore: PartitionStateStore = mock(classOf[PartitionStateStore])
+    val isrChangeListener: IsrChangeListener = mock(classOf[IsrChangeListener])
     val delayedOperations: DelayedOperations = mock(classOf[DelayedOperations])
     val metadataCache: MetadataCache = mock(classOf[MetadataCache])
     val offsetCheckpoints: OffsetCheckpoints = mock(classOf[OffsetCheckpoints])
+    val alterIsrManager: AlterIsrManager = mock(classOf[AlterIsrManager])
 
     logManager.startup()
     val partition = new Partition(topicPartition,
@@ -209,9 +262,11 @@ class PartitionLockTest extends Logging {
       localBrokerId = brokerId,
       mockTime,
       stateStore,
+      isrChangeListener,
       delayedOperations,
       metadataCache,
-      logManager) {
+      logManager,
+      alterIsrManager) {
 
       override def shrinkIsr(newIsr: Set[Int]): Unit = {
         shrinkIsrSemaphore.acquire()
@@ -234,6 +289,8 @@ class PartitionLockTest extends Logging {
       .thenReturn(Some(2))
     when(stateStore.expandIsr(ArgumentMatchers.anyInt, ArgumentMatchers.any[LeaderAndIsr]))
       .thenReturn(Some(2))
+    when(alterIsrManager.enqueue(ArgumentMatchers.any[AlterIsrItem]))
+      .thenReturn(true)
 
     partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints)
 
@@ -284,8 +341,7 @@ class PartitionLockTest extends Logging {
         followerFetchOffsetMetadata = LogOffsetMetadata(recordBatch.lastOffset + 1),
         followerStartOffset = 0L,
         followerFetchTimeMs = mockTime.milliseconds(),
-        leaderEndOffset = partition.localLogOrException.logEndOffset,
-        lastSentHighwatermark = partition.localLogOrException.highWatermark)
+        leaderEndOffset = partition.localLogOrException.logEndOffset)
     }
   }
 

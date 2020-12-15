@@ -211,7 +211,7 @@ class TransactionCoordinator(brokerId: Int,
       Left(Errors.CONCURRENT_TRANSACTIONS)
     }
     else if (!expectedProducerIdAndEpoch.forall(isValidProducerId)) {
-      Left(Errors.INVALID_PRODUCER_EPOCH)
+      Left(Errors.PRODUCER_FENCED)
     } else {
       // caller should have synchronized on txnMetadata already
       txnMetadata.state match {
@@ -278,7 +278,7 @@ class TransactionCoordinator(brokerId: Int,
             if (txnMetadata.producerId != producerId) {
               Left(Errors.INVALID_PRODUCER_ID_MAPPING)
             } else if (txnMetadata.producerEpoch != producerEpoch) {
-              Left(Errors.INVALID_PRODUCER_EPOCH)
+              Left(Errors.PRODUCER_FENCED)
             } else if (txnMetadata.pendingTransitionInProgress) {
               // return a retriable exception to let the client backoff and retry
               Left(Errors.CONCURRENT_TRANSACTIONS)
@@ -311,6 +311,7 @@ class TransactionCoordinator(brokerId: Int,
    * @param coordinatorEpoch The partition coordinator (or leader) epoch from the received LeaderAndIsr request
    */
   def onElection(txnTopicPartitionId: Int, coordinatorEpoch: Int): Unit = {
+    info(s"Elected as the txn coordinator for partition $txnTopicPartitionId at epoch $coordinatorEpoch")
     // The operations performed during immigration must be resilient to any previous errors we saw or partial state we
     // left off during the unloading phase. Ensure we remove all associated state for this partition before we continue
     // loading it.
@@ -329,6 +330,7 @@ class TransactionCoordinator(brokerId: Int,
    *                         are resigning after receiving a StopReplica request from the controller
    */
   def onResignation(txnTopicPartitionId: Int, coordinatorEpoch: Option[Int]): Unit = {
+    info(s"Resigned as the txn coordinator for partition $txnTopicPartitionId at epoch $coordinatorEpoch")
     coordinatorEpoch match {
       case Some(epoch) =>
         txnManager.removeTransactionsForTxnTopicPartition(txnTopicPartitionId, epoch)
@@ -365,6 +367,7 @@ class TransactionCoordinator(brokerId: Int,
                              txnMarkerResult: TransactionResult,
                              isFromClient: Boolean,
                              responseCallback: EndTxnCallback): Unit = {
+    var isEpochFence = false
     if (transactionalId == null || transactionalId.isEmpty)
       responseCallback(Errors.INVALID_REQUEST)
     else {
@@ -381,7 +384,7 @@ class TransactionCoordinator(brokerId: Int,
               Left(Errors.INVALID_PRODUCER_ID_MAPPING)
             // Strict equality is enforced on the client side requests, as they shouldn't bump the producer epoch.
             else if ((isFromClient && producerEpoch != txnMetadata.producerEpoch) || producerEpoch < txnMetadata.producerEpoch)
-              Left(Errors.INVALID_PRODUCER_EPOCH)
+              Left(Errors.PRODUCER_FENCED)
             else if (txnMetadata.pendingTransitionInProgress && txnMetadata.pendingState.get != PrepareEpochFence)
               Left(Errors.CONCURRENT_TRANSACTIONS)
             else txnMetadata.state match {
@@ -394,9 +397,10 @@ class TransactionCoordinator(brokerId: Int,
                 if (nextState == PrepareAbort && txnMetadata.pendingState.contains(PrepareEpochFence)) {
                   // We should clear the pending state to make way for the transition to PrepareAbort and also bump
                   // the epoch in the transaction metadata we are about to append.
+                  isEpochFence = true
                   txnMetadata.pendingState = None
-                  txnMetadata.lastProducerEpoch = txnMetadata.producerEpoch
                   txnMetadata.producerEpoch = producerEpoch
+                  txnMetadata.lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH
                 }
 
                 Right(coordinatorEpoch, txnMetadata.prepareAbortOrCommit(nextState, time.milliseconds()))
@@ -454,7 +458,7 @@ class TransactionCoordinator(brokerId: Int,
                       if (txnMetadata.producerId != producerId)
                         Left(Errors.INVALID_PRODUCER_ID_MAPPING)
                       else if (txnMetadata.producerEpoch != producerEpoch)
-                        Left(Errors.INVALID_PRODUCER_EPOCH)
+                        Left(Errors.PRODUCER_FENCED)
                       else if (txnMetadata.pendingTransitionInProgress)
                         Left(Errors.CONCURRENT_TRANSACTIONS)
                       else txnMetadata.state match {
@@ -501,6 +505,22 @@ class TransactionCoordinator(brokerId: Int,
               info(s"Aborting sending of transaction markers and returning $error error to client for $transactionalId's EndTransaction request of $txnMarkerResult, " +
                 s"since appending $newMetadata to transaction log with coordinator epoch $coordinatorEpoch failed")
 
+              if (isEpochFence) {
+                txnManager.getTransactionState(transactionalId).foreach {
+                  case None =>
+                    warn(s"The coordinator still owns the transaction partition for $transactionalId, but there is " +
+                      s"no metadata in the cache; this is not expected")
+
+                  case Some(epochAndMetadata) =>
+                    if (epochAndMetadata.coordinatorEpoch == coordinatorEpoch) {
+                      // This was attempted epoch fence that failed, so mark this state on the metadata
+                      epochAndMetadata.transactionMetadata.hasFailedEpochFence = true
+                      warn(s"The coordinator failed to write an epoch fence transition for producer $transactionalId to the transaction log " +
+                        s"with error $error. The epoch was increased to ${newMetadata.producerEpoch} but not returned to the client")
+                    }
+                }
+              }
+
               responseCallback(error)
             }
           }
@@ -521,7 +541,7 @@ class TransactionCoordinator(brokerId: Int,
           s"${txnIdAndPidEpoch.transactionalId} due to timeout")
 
       case error@(Errors.INVALID_PRODUCER_ID_MAPPING |
-                  Errors.INVALID_PRODUCER_EPOCH |
+                  Errors.PRODUCER_FENCED |
                   Errors.CONCURRENT_TRANSACTIONS) =>
         debug(s"Rollback of ongoing transaction for transactionalId ${txnIdAndPidEpoch.transactionalId} " +
           s"has been cancelled due to error $error")

@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 
 /**
@@ -42,9 +43,15 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
         this.wrapped = wrapped;
     }
 
+    @Deprecated
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
+        wrapped.init(context, root);
+    }
+
+    @Override
+    public void init(final StateStoreContext context, final StateStore root) {
         wrapped.init(context, root);
     }
 
@@ -56,6 +63,13 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
             return ((CachedStateStore<K, V>) wrapped).setFlushListener(listener, sendOldValues);
         }
         return false;
+    }
+
+    @Override
+    public void flushCache() {
+        if (wrapped instanceof CachedStateStore) {
+            ((CachedStateStore) wrapped).flushCache();
+        }
     }
 
     @Override

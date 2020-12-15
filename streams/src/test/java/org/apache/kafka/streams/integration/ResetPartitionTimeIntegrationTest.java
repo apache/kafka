@@ -45,11 +45,11 @@ import org.junit.runners.Parameterized;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 
-import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
@@ -104,10 +104,9 @@ public class ResetPartitionTimeIntegrationTest {
         cleanStateBeforeTest(CLUSTER, 2, input, outputRaw);
 
         final StreamsBuilder builder = new StreamsBuilder();
-        builder.stream(
-                input,
-                Consumed.with(STRING_SERDE, STRING_SERDE))
-               .to(outputRaw);
+        builder
+            .stream(input, Consumed.with(STRING_SERDE, STRING_SERDE))
+            .to(outputRaw);
 
         final Properties streamsConfig = new Properties();
         streamsConfig.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MaxTimestampExtractor.class);
@@ -123,13 +122,13 @@ public class ResetPartitionTimeIntegrationTest {
             // start sending some records to have partition time committed 
             produceSynchronouslyToPartitionZero(
                 input,
-                asList(
+                Collections.singletonList(
                     new KeyValueTimestamp<>("k3", "v3", 5000)
                 )
             );
             verifyOutput(
                 outputRaw,
-                asList(
+                Collections.singletonList(
                     new KeyValueTimestamp<>("k3", "v3", 5000)
                 )
             );
@@ -144,13 +143,13 @@ public class ResetPartitionTimeIntegrationTest {
             // resend some records and retrieve the last committed timestamp
             produceSynchronouslyToPartitionZero(
                 input,
-                asList(
+                Collections.singletonList(
                     new KeyValueTimestamp<>("k5", "v5", 4999)
                 )
             );
             verifyOutput(
                 outputRaw,
-                asList(
+                Collections.singletonList(
                     new KeyValueTimestamp<>("k5", "v5", 4999)
                 )
             );

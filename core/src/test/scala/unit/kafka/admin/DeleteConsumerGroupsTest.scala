@@ -107,7 +107,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
     val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
-      service.listGroups().contains(group) && service.collectGroupState(group).state == "Stable"
+      service.listConsumerGroups().contains(group) && service.collectGroupState(group).state == "Stable"
     }, "The group did not initialize as expected.")
 
     executor.shutdown()
@@ -137,7 +137,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
     val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
-      service.listGroups().toSet == groups.keySet &&
+      service.listConsumerGroups().toSet == groups.keySet &&
         groups.keySet.forall(groupId => service.collectGroupState(groupId).state == "Stable")
     }, "The group did not initialize as expected.")
 
@@ -169,7 +169,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
     val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
-      service.listGroups().contains(group) && service.collectGroupState(group).state == "Stable"
+      service.listConsumerGroups().contains(group) && service.collectGroupState(group).state == "Stable"
     }, "The group did not initialize as expected.")
 
     executor.shutdown()
@@ -194,7 +194,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
     val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
-      service.listGroups().contains(group) && service.collectGroupState(group).state == "Stable"
+      service.listConsumerGroups().contains(group) && service.collectGroupState(group).state == "Stable"
     }, "The group did not initialize as expected.")
 
     executor.shutdown()
@@ -221,7 +221,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
     val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
-      service.listGroups().contains(group) && service.collectGroupState(group).state == "Stable"
+      service.listConsumerGroups().contains(group) && service.collectGroupState(group).state == "Stable"
     }, "The group did not initialize as expected.")
 
     executor.shutdown()

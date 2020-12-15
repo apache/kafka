@@ -37,24 +37,26 @@
   //
   // Version 10 indicates that the response data can use the ZStd compression
   // algorithm, as described in KIP-110.
+  // Version 12 adds support for flexible versions, epoch detection through the `TruncationOffset` field,
+  // and leader discovery through the `CurrentLeader` field
   //
-  "validVersions": "0-11",
-  "flexibleVersions": "none",
+  "validVersions": "0-12",
+  "flexibleVersions": "12+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
-    { "name": "ErrorCode", "type": "int16", "versions": "7+", "ignorable": false,
+    { "name": "ErrorCode", "type": "int16", "versions": "7+", "ignorable": true,
       "about": "The top level response error code." },
     { "name": "SessionId", "type": "int32", "versions": "7+", "default": "0", "ignorable": false,
       "about": "The fetch session ID, or 0 if this is not part of a fetch session." },
-    { "name": "Topics", "type": "[]FetchableTopicResponse", "versions": "0+",
+    { "name": "Responses", "type": "[]FetchableTopicResponse", "versions": "0+",
       "about": "The response topics.", "fields": [
-      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
+      { "name": "Topic", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The topic name." },
-      { "name": "Partitions", "type": "[]FetchablePartitionResponse", "versions": "0+",
+      { "name": "PartitionResponses", "type": "[]FetchablePartitionResponse", "versions": "0+",
         "about": "The topic partitions.", "fields": [
-        { "name": "PartitionIndex", "type": "int32", "versions": "0+",
-          "about": "The partiiton index." },
+        { "name": "Partition", "type": "int32", "versions": "0+",
+          "about": "The partition index." },
         { "name": "ErrorCode", "type": "int16", "versions": "0+",
           "about": "The error code, or 0 if there was no fetch error." },
         { "name": "HighWatermark", "type": "int64", "versions": "0+",
@@ -63,17 +65,29 @@
           "about": "The last stable offset (or LSO) of the partition. This is the last offset such that the state of all transactional records prior to this offset have been decided (ABORTED or COMMITTED)" },
         { "name": "LogStartOffset", "type": "int64", "versions": "5+", "default": "-1", "ignorable": true,
           "about": "The current log start offset." },
-        { "name": "Aborted", "type": "[]AbortedTransaction", "versions": "4+", "nullableVersions": "4+", "ignorable": false,
+        { "name": "DivergingEpoch", "type": "EpochEndOffset", "versions": "12+", "taggedVersions": "12+", "tag": 0,
+          "about": "In case divergence is detected based on the `LastFetchedEpoch` and `FetchOffset` in the request, this field indicates the largest epoch and its end offset such that subsequent records are known to diverge",
+          "fields": [
+            { "name": "Epoch", "type": "int32", "versions": "12+", "default": "-1" },
+            { "name": "EndOffset", "type": "int64", "versions": "12+", "default": "-1" }
+        ]},
+        { "name": "CurrentLeader", "type": "LeaderIdAndEpoch",
+          "versions": "12+", "taggedVersions": "12+", "tag": 1, "fields": [
+          { "name": "LeaderId", "type": "int32", "versions": "12+", "default": "-1",
+            "about": "The ID of the current leader or -1 if the leader is unknown."},
+          { "name": "LeaderEpoch", "type": "int32", "versions": "12+", "default": "-1",
+            "about": "The latest known leader epoch"}
+        ]},
+        { "name": "AbortedTransactions", "type": "[]AbortedTransaction", "versions": "4+", "nullableVersions": "4+", "ignorable": true,
           "about": "The aborted transactions.",  "fields": [
           { "name": "ProducerId", "type": "int64", "versions": "4+", "entityType": "producerId",
             "about": "The producer id associated with the aborted transaction." },
           { "name": "FirstOffset", "type": "int64", "versions": "4+",
             "about": "The first offset in the aborted transaction." }
         ]},
-        { "name": "PreferredReadReplica", "type": "int32", "versions": "11+", "ignorable": true,
+        { "name": "PreferredReadReplica", "type": "int32", "versions": "11+", "default": "-1", "ignorable": false,
           "about": "The preferred read replica for the consumer to use on its next fetch request"},
-        { "name": "Records", "type": "bytes", "versions": "0+", "nullableVersions": "0+",
-          "about": "The record data." }
+        { "name": "RecordSet", "type": "records", "versions": "0+", "nullableVersions": "0+", "about": "The record data."}
       ]}
     ]}
   ]

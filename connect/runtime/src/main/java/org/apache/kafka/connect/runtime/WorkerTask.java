@@ -144,15 +144,16 @@ abstract class WorkerTask implements Runnable {
         }
     }
 
+    /**
+     * Remove all metrics published by this task.
+     */
+    public void removeMetrics() {
+        taskMetricsGroup.close();
+    }
+
     protected abstract void execute();
 
     protected abstract void close();
-
-    /**
-     * Method called when this worker task has been completely closed, and when the subclass should clean up
-     * all resources.
-     */
-    protected abstract void releaseResources();
 
     protected boolean isStopping() {
         return stopping;
@@ -183,8 +184,7 @@ abstract class WorkerTask implements Runnable {
 
             execute();
         } catch (Throwable t) {
-            log.error("{} Task threw an uncaught and unrecoverable exception", this, t);
-            log.error("{} Task is being killed and will not recover until manually restarted", this);
+            log.error("{} Task threw an uncaught and unrecoverable exception. Task is being killed and will not recover until manually restarted", this, t);
             throw t;
         } finally {
             doClose();
@@ -239,17 +239,9 @@ abstract class WorkerTask implements Runnable {
                 if (t instanceof Error)
                     throw (Error) t;
             } finally {
-                try {
-                    Thread.currentThread().setName(savedName);
-                    Plugins.compareAndSwapLoaders(savedLoader);
-                    shutdownLatch.countDown();
-                } finally {
-                    try {
-                        releaseResources();
-                    } finally {
-                        taskMetricsGroup.close();
-                    }
-                }
+                Thread.currentThread().setName(savedName);
+                Plugins.compareAndSwapLoaders(savedLoader);
+                shutdownLatch.countDown();
             }
         }
     }
@@ -306,7 +298,7 @@ abstract class WorkerTask implements Runnable {
      * @param duration the length of time in milliseconds for the commit attempt to complete
      */
     protected void recordCommitSuccess(long duration) {
-        taskMetricsGroup.recordCommit(duration, true, null);
+        taskMetricsGroup.recordCommit(duration, null);
     }
 
     /**
@@ -316,7 +308,7 @@ abstract class WorkerTask implements Runnable {
      * @param error the unexpected error that occurred; may be null in the case of timeouts or interruptions
      */
     protected void recordCommitFailure(long duration, Throwable error) {
-        taskMetricsGroup.recordCommit(duration, false, error);
+        taskMetricsGroup.recordCommit(duration, error);
     }
 
     /**
@@ -393,8 +385,8 @@ abstract class WorkerTask implements Runnable {
             metricGroup.close();
         }
 
-        void recordCommit(long duration, boolean success, Throwable error) {
-            if (success) {
+        void recordCommit(long duration, Throwable error) {
+            if (error == null) {
                 commitTime.record(duration);
                 commitAttempts.record(1.0d);
             } else {
@@ -434,6 +426,12 @@ abstract class WorkerTask implements Runnable {
         public void onShutdown(ConnectorTaskId id) {
             taskStateTimer.changeState(State.UNASSIGNED, time.milliseconds());
             delegateListener.onShutdown(id);
+        }
+
+        @Override
+        public void onDeletion(ConnectorTaskId id) {
+            taskStateTimer.changeState(State.DESTROYED, time.milliseconds());
+            delegateListener.onDeletion(id);
         }
 
         public void recordState(TargetState state) {

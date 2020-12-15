@@ -84,6 +84,10 @@ public class Connect {
         }
     }
 
+    public boolean isRunning() {
+        return herder.isRunning();
+    }
+
     // Visible for testing
     public URI restUrl() {
         return rest.serverUrl();

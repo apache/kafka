@@ -19,8 +19,8 @@ package org.apache.kafka.streams.scala.kstream
 import java.time.Duration
 
 import org.apache.kafka.streams.kstream.internals.StreamJoinedInternal
-import org.apache.kafka.streams.scala.Serdes
-import org.apache.kafka.streams.scala.Serdes._
+import org.apache.kafka.streams.scala.serialization.Serdes
+import org.apache.kafka.streams.scala.serialization.Serdes._
 import org.apache.kafka.streams.state.Stores
 import org.junit.runner.RunWith
 import org.scalatest.{FlatSpec, Matchers}
@@ -33,9 +33,9 @@ class StreamJoinedTest extends FlatSpec with Matchers {
     val streamJoined: StreamJoined[String, String, Long] = StreamJoined.`with`[String, String, Long]
 
     val streamJoinedInternal = new StreamJoinedInternal[String, String, Long](streamJoined)
-    streamJoinedInternal.keySerde().getClass shouldBe Serdes.String.getClass
-    streamJoinedInternal.valueSerde().getClass shouldBe Serdes.String.getClass
-    streamJoinedInternal.otherValueSerde().getClass shouldBe Serdes.Long.getClass
+    streamJoinedInternal.keySerde().getClass shouldBe Serdes.stringSerde.getClass
+    streamJoinedInternal.valueSerde().getClass shouldBe Serdes.stringSerde.getClass
+    streamJoinedInternal.otherValueSerde().getClass shouldBe Serdes.longSerde.getClass
   }
 
   "Create a StreamJoined" should "create a StreamJoined with Serdes and Store Suppliers" in {
@@ -48,9 +48,9 @@ class StreamJoinedTest extends FlatSpec with Matchers {
       StreamJoined.`with`[String, String, Long](storeSupplier, otherStoreSupplier)
 
     val streamJoinedInternal = new StreamJoinedInternal[String, String, Long](streamJoined)
-    streamJoinedInternal.keySerde().getClass shouldBe Serdes.String.getClass
-    streamJoinedInternal.valueSerde().getClass shouldBe Serdes.String.getClass
-    streamJoinedInternal.otherValueSerde().getClass shouldBe Serdes.Long.getClass
+    streamJoinedInternal.keySerde().getClass shouldBe Serdes.stringSerde.getClass
+    streamJoinedInternal.valueSerde().getClass shouldBe Serdes.stringSerde.getClass
+    streamJoinedInternal.otherValueSerde().getClass shouldBe Serdes.longSerde.getClass
     streamJoinedInternal.otherStoreSupplier().equals(otherStoreSupplier)
     streamJoinedInternal.thisStoreSupplier().equals(storeSupplier)
   }
@@ -59,9 +59,9 @@ class StreamJoinedTest extends FlatSpec with Matchers {
     val streamJoined: StreamJoined[String, String, Long] = StreamJoined.as[String, String, Long]("myStoreName")
 
     val streamJoinedInternal = new StreamJoinedInternal[String, String, Long](streamJoined)
-    streamJoinedInternal.keySerde().getClass shouldBe Serdes.String.getClass
-    streamJoinedInternal.valueSerde().getClass shouldBe Serdes.String.getClass
-    streamJoinedInternal.otherValueSerde().getClass shouldBe Serdes.Long.getClass
+    streamJoinedInternal.keySerde().getClass shouldBe Serdes.stringSerde.getClass
+    streamJoinedInternal.valueSerde().getClass shouldBe Serdes.stringSerde.getClass
+    streamJoinedInternal.otherValueSerde().getClass shouldBe Serdes.longSerde.getClass
     streamJoinedInternal.storeName().equals("myStoreName")
   }
 

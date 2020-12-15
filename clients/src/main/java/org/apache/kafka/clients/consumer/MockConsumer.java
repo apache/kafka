@@ -65,6 +65,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     private KafkaException pollException;
     private KafkaException offsetsException;
     private AtomicBoolean wakeup;
+    private Duration lastPollTimeout;
     private boolean closed;
     private boolean shouldRebalance;
 
@@ -157,12 +158,14 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     @Deprecated
     @Override
     public synchronized ConsumerRecords<K, V> poll(long timeout) {
-        return poll(Duration.ZERO);
+        return poll(Duration.ofMillis(timeout));
     }
 
     @Override
     public synchronized ConsumerRecords<K, V> poll(final Duration timeout) {
         ensureNotClosed();
+
+        lastPollTimeout = timeout;
 
         // Synchronize around the entire execution so new tasks to be triggered on subsequent poll calls can be added in
         // the callback
@@ -554,6 +557,10 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     public void resetShouldRebalance() {
         shouldRebalance = false;
+    }
+
+    public Duration lastPollTimeout() {
+        return lastPollTimeout;
     }
 
     @Override

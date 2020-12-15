@@ -16,13 +16,19 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -33,9 +39,11 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -43,6 +51,8 @@ import java.util.List;
 import java.util.function.Consumer;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.streams.processor.internals.ProcessorContextImpl.BYTEARRAY_VALUE_SERIALIZER;
+import static org.apache.kafka.streams.processor.internals.ProcessorContextImpl.BYTES_KEY_SERIALIZER;
 import static org.easymock.EasyMock.anyLong;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.anyString;
@@ -50,17 +60,28 @@ import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
+import static org.easymock.EasyMock.verify;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class ProcessorContextImplTest {
     private ProcessorContextImpl context;
 
+    private final StreamsConfig streamsConfig = streamsConfigMock();
+
+    private RecordCollector recordCollector = mock(RecordCollector.class);
+
     private static final String KEY = "key";
+    private static final Bytes KEY_BYTES = Bytes.wrap(KEY.getBytes());
     private static final long VALUE = 42L;
+    private static final byte[] VALUE_BYTES = String.valueOf(VALUE).getBytes();
+    private static final long TIMESTAMP = 21L;
     private static final ValueAndTimestamp<Long> VALUE_AND_TIMESTAMP = ValueAndTimestamp.make(42L, 21L);
     private static final String STORE_NAME = "underlying-store";
+    private static final String REGISTERED_STORE_NAME = "registered-store";
+    private static final TopicPartition CHANGELOG_PARTITION = new TopicPartition("store-changelog", 1);
 
     private boolean flushExecuted;
     private boolean putExecuted;
@@ -99,13 +120,8 @@ public class ProcessorContextImplTest {
             timestampedIters.add(i, mock(KeyValueIterator.class));
         }
 
-        final StreamsConfig streamsConfig = mock(StreamsConfig.class);
-        expect(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)).andReturn("add-id");
-        expect(streamsConfig.defaultValueSerde()).andReturn(Serdes.ByteArray());
-        expect(streamsConfig.defaultKeySerde()).andReturn(Serdes.ByteArray());
-        replay(streamsConfig);
-
         final ProcessorStateManager stateManager = mock(ProcessorStateManager.class);
+        expect(stateManager.taskType()).andStubReturn(TaskType.ACTIVE);
 
         expect(stateManager.getGlobalStore("GlobalKeyValueStore")).andReturn(keyValueStoreMock());
         expect(stateManager.getGlobalStore("GlobalTimestampedKeyValueStore")).andReturn(timestampedKeyValueStoreMock());
@@ -118,26 +134,50 @@ public class ProcessorContextImplTest {
         expect(stateManager.getStore("LocalWindowStore")).andReturn(windowStoreMock());
         expect(stateManager.getStore("LocalTimestampedWindowStore")).andReturn(timestampedWindowStoreMock());
         expect(stateManager.getStore("LocalSessionStore")).andReturn(sessionStoreMock());
+        expect(stateManager.registeredChangelogPartitionFor(REGISTERED_STORE_NAME)).andStubReturn(CHANGELOG_PARTITION);
 
         replay(stateManager);
 
         context = new ProcessorContextImpl(
             mock(TaskId.class),
-            mock(StreamTask.class),
             streamsConfig,
-            mock(RecordCollector.class),
             stateManager,
             mock(StreamsMetricsImpl.class),
             mock(ThreadCache.class)
         );
 
-        context.setCurrentNode(new ProcessorNode<String, Long>("fake", null,
-            new HashSet<>(asList(
-                "LocalKeyValueStore",
-                "LocalTimestampedKeyValueStore",
-                "LocalWindowStore",
-                "LocalTimestampedWindowStore",
-                "LocalSessionStore"))));
+        final StreamTask task = mock(StreamTask.class);
+        ((InternalProcessorContext) context).transitionToActive(task, null, null);
+        EasyMock.expect(task.recordCollector()).andStubReturn(recordCollector);
+
+        context.setCurrentNode(
+            new ProcessorNode<>(
+                "fake",
+                (org.apache.kafka.streams.processor.api.Processor<String, Long, Object, Object>) null,
+                new HashSet<>(
+                    asList(
+                        "LocalKeyValueStore",
+                        "LocalTimestampedKeyValueStore",
+                        "LocalWindowStore",
+                        "LocalTimestampedWindowStore",
+                        "LocalSessionStore"
+                    )
+                )
+            )
+        );
+    }
+
+    private ProcessorContextImpl getStandbyContext() {
+        final ProcessorStateManager stateManager = EasyMock.createNiceMock(ProcessorStateManager.class);
+        expect(stateManager.taskType()).andStubReturn(TaskType.STANDBY);
+        replay(stateManager);
+        return new ProcessorContextImpl(
+            mock(TaskId.class),
+            streamsConfig,
+            stateManager,
+            mock(StreamsMetricsImpl.class),
+            mock(ThreadCache.class)
+        );
     }
 
     @Test
@@ -347,6 +387,174 @@ public class ProcessorContextImplTest {
         });
     }
 
+    @Test
+    public void shouldNotSendRecordHeadersToChangelogTopic() {
+        recordCollector.send(
+            CHANGELOG_PARTITION.topic(),
+            KEY_BYTES,
+            VALUE_BYTES,
+            null,
+            CHANGELOG_PARTITION.partition(),
+            TIMESTAMP,
+            BYTES_KEY_SERIALIZER,
+            BYTEARRAY_VALUE_SERIALIZER
+        );
+
+        final StreamTask task = EasyMock.createNiceMock(StreamTask.class);
+
+        replay(recordCollector, task);
+        context.transitionToActive(task, recordCollector, null);
+        context.logChange(REGISTERED_STORE_NAME, KEY_BYTES, VALUE_BYTES, TIMESTAMP);
+
+        verify(recordCollector);
+    }
+
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionOnLogChange() {
+        context = getStandbyContext();
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> context.logChange("Store", Bytes.wrap("k".getBytes()), null, 0L)
+        );
+    }
+
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionOnGetStateStore() {
+        context = getStandbyContext();
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> context.getStateStore("store")
+        );
+    }
+
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionOnForward() {
+        context = getStandbyContext();
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> context.forward("key", "value")
+        );
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionOnForwardWithChildIndex() {
+        context = getStandbyContext();
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> context.forward("key", "value", 0)
+        );
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionOnForwardWithChildName() {
+        context = getStandbyContext();
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> context.forward("key", "value", "child-name")
+        );
+    }
+
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionOnForwardWithTo() {
+        context = getStandbyContext();
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> context.forward("key", "value", To.child("child-name"))
+        );
+    }
+
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionOnCommit() {
+        context = getStandbyContext();
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> context.commit()
+        );
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionOnScheduleWithInterval() {
+        context = getStandbyContext();
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> context.schedule(100L, PunctuationType.STREAM_TIME, t -> { })
+        );
+    }
+
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionOnSchedule() {
+        context = getStandbyContext();
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> context.schedule(Duration.ofMillis(100L), PunctuationType.STREAM_TIME, t -> { })
+        );
+    }
+
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionOnTopic() {
+        context = getStandbyContext();
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> context.topic()
+        );
+    }
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionOnPartition() {
+        context = getStandbyContext();
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> context.partition()
+        );
+    }
+
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionOnOffset() {
+        context = getStandbyContext();
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> context.offset()
+        );
+    }
+
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionOnTimestamp() {
+        context = getStandbyContext();
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> context.timestamp()
+        );
+    }
+
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionOnCurrentNode() {
+        context = getStandbyContext();
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> context.currentNode()
+        );
+    }
+
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionOnSetRecordContext() {
+        context = getStandbyContext();
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> context.setRecordContext(mock(ProcessorRecordContext.class))
+        );
+    }
+
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionOnRecordContext() {
+        context = getStandbyContext();
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> context.recordContext()
+        );
+    }
+
     @SuppressWarnings("unchecked")
     private KeyValueStore<String, Long> keyValueStoreMock() {
         final KeyValueStore<String, Long> keyValueStoreMock = mock(KeyValueStore.class);
@@ -511,6 +719,15 @@ public class ProcessorContextImplTest {
         return sessionStore;
     }
 
+    private StreamsConfig streamsConfigMock() {
+        final StreamsConfig streamsConfig = mock(StreamsConfig.class);
+        expect(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)).andStubReturn("add-id");
+        expect(streamsConfig.defaultValueSerde()).andStubReturn(Serdes.ByteArray());
+        expect(streamsConfig.defaultKeySerde()).andStubReturn(Serdes.ByteArray());
+        replay(streamsConfig);
+        return streamsConfig;
+    }
+
     private void initStateStoreMock(final StateStore stateStore) {
         expect(stateStore.name()).andReturn(STORE_NAME);
         expect(stateStore.persistent()).andReturn(true);
@@ -551,7 +768,7 @@ public class ProcessorContextImplTest {
         assertTrue(store.persistent());
         assertTrue(store.isOpen());
 
-        checkThrowsUnsupportedOperation(() -> store.init(null, null), "init()");
+        checkThrowsUnsupportedOperation(() -> store.init((StateStoreContext) null, null), "init()");
         checkThrowsUnsupportedOperation(store::close, "close()");
     }
 

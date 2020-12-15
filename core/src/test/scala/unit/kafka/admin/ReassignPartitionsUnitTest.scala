@@ -390,7 +390,7 @@ class ReassignPartitionsUnitTest {
 
   @Test
   def testMoveMap(): Unit = {
-    val moveMap = calculateMoveMap(Map(
+    val moveMap = calculateProposedMoveMap(Map(
       new TopicPartition("foo", 0) -> new PartitionReassignment(
         Arrays.asList(1,2,3),Arrays.asList(4),Arrays.asList(3)),
       new TopicPartition("foo", 1) -> new PartitionReassignment(
@@ -529,18 +529,36 @@ class ReassignPartitionsUnitTest {
   }
 
   @Test
-  def testModifyBrokerThrottles(): Unit = {
+  def testModifyBrokerInterBrokerThrottle(): Unit = {
     val adminClient = new MockAdminClient.Builder().numBrokers(4).build()
     try {
-      modifyBrokerThrottles(adminClient, Set(0, 1, 2), 1000, Set(0, 1, 2), 2000)
-      modifyBrokerThrottles(adminClient, Set(0, 3), 100, Set(0, 3), -1)
+      modifyInterBrokerThrottle(adminClient, Set(0, 1, 2), 1000)
+      modifyInterBrokerThrottle(adminClient, Set(0, 3), 100)
       val brokers = Seq(0, 1, 2, 3).map(
         id => new ConfigResource(ConfigResource.Type.BROKER, id.toString))
       val results = adminClient.describeConfigs(brokers.asJava).all().get()
-      verifyBrokerThrottleResults(results.get(brokers(0)), 100, 2000)
-      verifyBrokerThrottleResults(results.get(brokers(1)), 1000, 2000)
-      verifyBrokerThrottleResults(results.get(brokers(2)), 1000, 2000)
+      verifyBrokerThrottleResults(results.get(brokers(0)), 100, -1)
+      verifyBrokerThrottleResults(results.get(brokers(1)), 1000, -1)
+      verifyBrokerThrottleResults(results.get(brokers(2)), 1000, -1)
       verifyBrokerThrottleResults(results.get(brokers(3)), 100, -1)
+    } finally {
+      adminClient.close()
+    }
+  }
+
+  @Test
+  def testModifyLogDirThrottle(): Unit = {
+    val adminClient = new MockAdminClient.Builder().numBrokers(4).build()
+    try {
+      modifyLogDirThrottle(adminClient, Set(0, 1, 2), 2000)
+      modifyLogDirThrottle(adminClient, Set(0, 3), -1)
+      val brokers = Seq(0, 1, 2, 3).map(
+        id => new ConfigResource(ConfigResource.Type.BROKER, id.toString))
+      val results = adminClient.describeConfigs(brokers.asJava).all().get()
+      verifyBrokerThrottleResults(results.get(brokers(0)), -1, 2000)
+      verifyBrokerThrottleResults(results.get(brokers(1)), -1, 2000)
+      verifyBrokerThrottleResults(results.get(brokers(2)), -1, 2000)
+      verifyBrokerThrottleResults(results.get(brokers(3)), -1, -1)
     } finally {
       adminClient.close()
     }

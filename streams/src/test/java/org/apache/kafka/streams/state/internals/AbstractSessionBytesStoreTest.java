@@ -30,6 +30,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -98,7 +99,7 @@ public abstract class AbstractSessionBytesStoreTest {
                 new MockStreamsMetrics(new Metrics())));
         context.setTime(1L);
 
-        sessionStore.init(context, sessionStore);
+        sessionStore.init((StateStoreContext) context, sessionStore);
     }
 
     @After
@@ -134,6 +135,31 @@ public abstract class AbstractSessionBytesStoreTest {
     }
 
     @Test
+    public void shouldPutAndBackwardFindSessionsInRange() {
+        final String key = "a";
+        final Windowed<String> a1 = new Windowed<>(key, new SessionWindow(10, 10L));
+        final Windowed<String> a2 = new Windowed<>(key, new SessionWindow(500L, 1000L));
+        sessionStore.put(a1, 1L);
+        sessionStore.put(a2, 2L);
+        sessionStore.put(new Windowed<>(key, new SessionWindow(1500L, 2000L)), 1L);
+        sessionStore.put(new Windowed<>(key, new SessionWindow(2500L, 3000L)), 2L);
+
+        final List<KeyValue<Windowed<String>, Long>> expected =
+            asList(KeyValue.pair(a1, 1L), KeyValue.pair(a2, 2L));
+
+        try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.backwardFindSessions(key, 0, 1000L)) {
+            assertEquals(new HashSet<>(expected), toSet(values));
+        }
+
+        final List<KeyValue<Windowed<String>, Long>> expected2 =
+            Collections.singletonList(KeyValue.pair(a2, 2L));
+
+        try (final KeyValueIterator<Windowed<String>, Long> values2 = sessionStore.backwardFindSessions(key, 400L, 600L)) {
+            assertEquals(new HashSet<>(expected2), toSet(values2));
+        }
+    }
+
+    @Test
     public void shouldFetchAllSessionsWithSameRecordKey() {
         final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
             KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L),
@@ -149,6 +175,27 @@ public abstract class AbstractSessionBytesStoreTest {
         sessionStore.put(new Windowed<>("aa", new SessionWindow(0, 0)), 5L);
 
         try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.fetch("a")) {
+            assertEquals(new HashSet<>(expected), toSet(values));
+        }
+    }
+
+    @Test
+    public void shouldBackwardFetchAllSessionsWithSameRecordKey() {
+        final List<KeyValue<Windowed<String>, Long>> expected = asList(
+            KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L),
+            KeyValue.pair(new Windowed<>("a", new SessionWindow(10, 10)), 2L),
+            KeyValue.pair(new Windowed<>("a", new SessionWindow(100, 100)), 3L),
+            KeyValue.pair(new Windowed<>("a", new SessionWindow(1000, 1000)), 4L)
+        );
+
+        for (final KeyValue<Windowed<String>, Long> kv : expected) {
+            sessionStore.put(kv.key, kv.value);
+        }
+
+        // add one that shouldn't appear in the results
+        sessionStore.put(new Windowed<>("aa", new SessionWindow(0, 0)), 5L);
+
+        try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.backwardFetch("a")) {
             assertEquals(new HashSet<>(expected), toSet(values));
         }
     }
@@ -171,6 +218,29 @@ public abstract class AbstractSessionBytesStoreTest {
         sessionStore.put(new Windowed<>("bbb", new SessionWindow(2500, 3000)), 6L);
 
         try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.fetch("aa", "bb")) {
+            assertEquals(new HashSet<>(expected), toSet(values));
+        }
+    }
+
+    @Test
+    public void shouldBackwardFetchAllSessionsWithinKeyRange() {
+        final List<KeyValue<Windowed<String>, Long>> expected = asList(
+            KeyValue.pair(new Windowed<>("aa", new SessionWindow(10, 10)), 2L),
+            KeyValue.pair(new Windowed<>("b", new SessionWindow(1000, 1000)), 4L),
+
+            KeyValue.pair(new Windowed<>("aaa", new SessionWindow(100, 100)), 3L),
+            KeyValue.pair(new Windowed<>("bb", new SessionWindow(1500, 2000)), 5L)
+        );
+
+        for (final KeyValue<Windowed<String>, Long> kv : expected) {
+            sessionStore.put(kv.key, kv.value);
+        }
+
+        // add some that shouldn't appear in the results
+        sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
+        sessionStore.put(new Windowed<>("bbb", new SessionWindow(2500, 3000)), 6L);
+
+        try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.backwardFetch("aa", "bb")) {
             assertEquals(new HashSet<>(expected), toSet(values));
         }
     }
@@ -203,6 +273,22 @@ public abstract class AbstractSessionBytesStoreTest {
             KeyValue.pair(new Windowed<>(key, new SessionWindow(1000L, 1000L)), 2L));
 
         try (final KeyValueIterator<Windowed<String>, Long> results = sessionStore.findSessions(key, -1, 1000L)) {
+            assertEquals(new HashSet<>(expected), toSet(results));
+        }
+    }
+
+    @Test
+    public void shouldBackwardFindValuesWithinMergingSessionWindowRange() {
+        final String key = "a";
+        sessionStore.put(new Windowed<>(key, new SessionWindow(0L, 0L)), 1L);
+        sessionStore.put(new Windowed<>(key, new SessionWindow(1000L, 1000L)), 2L);
+
+        final List<KeyValue<Windowed<String>, Long>> expected = asList(
+            KeyValue.pair(new Windowed<>(key, new SessionWindow(0L, 0L)), 1L),
+            KeyValue.pair(new Windowed<>(key, new SessionWindow(1000L, 1000L)), 2L)
+        );
+
+        try (final KeyValueIterator<Windowed<String>, Long> results = sessionStore.backwardFindSessions(key, -1, 1000L)) {
             assertEquals(new HashSet<>(expected), toSet(results));
         }
     }
@@ -261,9 +347,30 @@ public abstract class AbstractSessionBytesStoreTest {
     }
 
     @Test
+    public void shouldBackwardFindSessionsToMerge() {
+        final Windowed<String> session1 = new Windowed<>("a", new SessionWindow(0, 100));
+        final Windowed<String> session2 = new Windowed<>("a", new SessionWindow(101, 200));
+        final Windowed<String> session3 = new Windowed<>("a", new SessionWindow(201, 300));
+        final Windowed<String> session4 = new Windowed<>("a", new SessionWindow(301, 400));
+        final Windowed<String> session5 = new Windowed<>("a", new SessionWindow(401, 500));
+        sessionStore.put(session1, 1L);
+        sessionStore.put(session2, 2L);
+        sessionStore.put(session3, 3L);
+        sessionStore.put(session4, 4L);
+        sessionStore.put(session5, 5L);
+
+        final List<KeyValue<Windowed<String>, Long>> expected =
+            asList(KeyValue.pair(session2, 2L), KeyValue.pair(session3, 3L));
+
+        try (final KeyValueIterator<Windowed<String>, Long> results = sessionStore.backwardFindSessions("a", 150, 300)) {
+            assertEquals(new HashSet<>(expected), toSet(results));
+        }
+    }
+
+    @Test
     public void shouldFetchExactKeys() {
         sessionStore = buildSessionStore(0x7a00000000000000L, Serdes.String(), Serdes.Long());
-        sessionStore.init(context, sessionStore);
+        sessionStore.init((StateStoreContext) context, sessionStore);
 
         sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
         sessionStore.put(new Windowed<>("aa", new SessionWindow(0, 10)), 2L);
@@ -273,25 +380,62 @@ public abstract class AbstractSessionBytesStoreTest {
             new SessionWindow(0x7a00000000000000L - 2, 0x7a00000000000000L - 1)), 5L);
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
-            sessionStore.findSessions("a", 0, Long.MAX_VALUE)
+                 sessionStore.findSessions("a", 0, Long.MAX_VALUE)
         ) {
             assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(1L, 3L, 5L))));
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
-            sessionStore.findSessions("aa", 0, Long.MAX_VALUE)
+                 sessionStore.findSessions("aa", 0, Long.MAX_VALUE)
         ) {
             assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(2L, 4L))));
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
-            sessionStore.findSessions("a", "aa", 0, Long.MAX_VALUE)
+                 sessionStore.findSessions("a", "aa", 0, Long.MAX_VALUE)
         ) {
             assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(1L, 2L, 3L, 4L, 5L))));
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
-            sessionStore.findSessions("a", "aa", 10, 0)
+                 sessionStore.findSessions("a", "aa", 10, 0)
+        ) {
+            assertThat(valuesToSet(iterator), equalTo(new HashSet<>(Collections.singletonList(2L))));
+        }
+    }
+
+    @Test
+    public void shouldBackwardFetchExactKeys() {
+        sessionStore = buildSessionStore(0x7a00000000000000L, Serdes.String(), Serdes.Long());
+        sessionStore.init((StateStoreContext) context, sessionStore);
+
+        sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
+        sessionStore.put(new Windowed<>("aa", new SessionWindow(0, 10)), 2L);
+        sessionStore.put(new Windowed<>("a", new SessionWindow(10, 20)), 3L);
+        sessionStore.put(new Windowed<>("aa", new SessionWindow(10, 20)), 4L);
+        sessionStore.put(new Windowed<>("a",
+            new SessionWindow(0x7a00000000000000L - 2, 0x7a00000000000000L - 1)), 5L);
+
+        try (final KeyValueIterator<Windowed<String>, Long> iterator =
+                 sessionStore.backwardFindSessions("a", 0, Long.MAX_VALUE)
+        ) {
+            assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(1L, 3L, 5L))));
+        }
+
+        try (final KeyValueIterator<Windowed<String>, Long> iterator =
+                 sessionStore.backwardFindSessions("aa", 0, Long.MAX_VALUE)
+        ) {
+            assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(2L, 4L))));
+        }
+
+        try (final KeyValueIterator<Windowed<String>, Long> iterator =
+                 sessionStore.backwardFindSessions("a", "aa", 0, Long.MAX_VALUE)
+        ) {
+            assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(1L, 2L, 3L, 4L, 5L))));
+        }
+
+        try (final KeyValueIterator<Windowed<String>, Long> iterator =
+                 sessionStore.backwardFindSessions("a", "aa", 10, 0)
         ) {
             assertThat(valuesToSet(iterator), equalTo(new HashSet<>(Collections.singletonList(2L))));
         }
@@ -302,11 +446,11 @@ public abstract class AbstractSessionBytesStoreTest {
         final SessionStore<Bytes, String> sessionStore =
             buildSessionStore(RETENTION_PERIOD, Serdes.Bytes(), Serdes.String());
 
-        sessionStore.init(context, sessionStore);
+        sessionStore.init((StateStoreContext) context, sessionStore);
 
-        final Bytes key1 = Bytes.wrap(new byte[]{0});
-        final Bytes key2 = Bytes.wrap(new byte[]{0, 0});
-        final Bytes key3 = Bytes.wrap(new byte[]{0, 0, 0});
+        final Bytes key1 = Bytes.wrap(new byte[] {0});
+        final Bytes key2 = Bytes.wrap(new byte[] {0, 0});
+        final Bytes key3 = Bytes.wrap(new byte[] {0, 0, 0});
 
         sessionStore.put(new Windowed<>(key1, new SessionWindow(1, 100)), "1");
         sessionStore.put(new Windowed<>(key2, new SessionWindow(2, 100)), "2");
@@ -327,6 +471,35 @@ public abstract class AbstractSessionBytesStoreTest {
     }
 
     @Test
+    public void shouldBackwardFetchAndIterateOverExactBinaryKeys() {
+        final SessionStore<Bytes, String> sessionStore =
+            buildSessionStore(RETENTION_PERIOD, Serdes.Bytes(), Serdes.String());
+
+        sessionStore.init((StateStoreContext) context, sessionStore);
+
+        final Bytes key1 = Bytes.wrap(new byte[] {0});
+        final Bytes key2 = Bytes.wrap(new byte[] {0, 0});
+        final Bytes key3 = Bytes.wrap(new byte[] {0, 0, 0});
+
+        sessionStore.put(new Windowed<>(key1, new SessionWindow(1, 100)), "1");
+        sessionStore.put(new Windowed<>(key2, new SessionWindow(2, 100)), "2");
+        sessionStore.put(new Windowed<>(key3, new SessionWindow(3, 100)), "3");
+        sessionStore.put(new Windowed<>(key1, new SessionWindow(4, 100)), "4");
+        sessionStore.put(new Windowed<>(key2, new SessionWindow(5, 100)), "5");
+        sessionStore.put(new Windowed<>(key3, new SessionWindow(6, 100)), "6");
+        sessionStore.put(new Windowed<>(key1, new SessionWindow(7, 100)), "7");
+        sessionStore.put(new Windowed<>(key2, new SessionWindow(8, 100)), "8");
+        sessionStore.put(new Windowed<>(key3, new SessionWindow(9, 100)), "9");
+
+        final Set<String> expectedKey1 = new HashSet<>(asList("1", "4", "7"));
+        assertThat(valuesToSet(sessionStore.backwardFindSessions(key1, 0L, Long.MAX_VALUE)), equalTo(expectedKey1));
+        final Set<String> expectedKey2 = new HashSet<>(asList("2", "5", "8"));
+        assertThat(valuesToSet(sessionStore.backwardFindSessions(key2, 0L, Long.MAX_VALUE)), equalTo(expectedKey2));
+        final Set<String> expectedKey3 = new HashSet<>(asList("3", "6", "9"));
+        assertThat(valuesToSet(sessionStore.backwardFindSessions(key3, 0L, Long.MAX_VALUE)), equalTo(expectedKey3));
+    }
+
+    @Test
     public void testIteratorPeek() {
         sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
         sessionStore.put(new Windowed<>("aa", new SessionWindow(0, 10)), 2L);
@@ -336,6 +509,21 @@ public abstract class AbstractSessionBytesStoreTest {
         final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.findSessions("a", 0L, 20);
 
         assertEquals(iterator.peekNextKey(), new Windowed<>("a", new SessionWindow(0L, 0L)));
+        assertEquals(iterator.peekNextKey(), iterator.next().key);
+        assertEquals(iterator.peekNextKey(), iterator.next().key);
+        assertFalse(iterator.hasNext());
+    }
+
+    @Test
+    public void testIteratorPeekBackward() {
+        sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
+        sessionStore.put(new Windowed<>("aa", new SessionWindow(0, 10)), 2L);
+        sessionStore.put(new Windowed<>("a", new SessionWindow(10, 20)), 3L);
+        sessionStore.put(new Windowed<>("aa", new SessionWindow(10, 20)), 4L);
+
+        final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.backwardFindSessions("a", 0L, 20);
+
+        assertEquals(iterator.peekNextKey(), new Windowed<>("a", new SessionWindow(10L, 20L)));
         assertEquals(iterator.peekNextKey(), iterator.next().key);
         assertEquals(iterator.peekNextKey(), iterator.next().key);
         assertFalse(iterator.hasNext());
@@ -427,7 +615,7 @@ public abstract class AbstractSessionBytesStoreTest {
         final Time time = new SystemTime();
         context.setTime(1L);
         context.setSystemTimeMs(time.milliseconds());
-        sessionStore.init(context, sessionStore);
+        sessionStore.init((StateStoreContext) context, sessionStore);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
             // Advance stream time by inserting record with large enough timestamp that records with timestamp 0 are expired
@@ -554,7 +742,8 @@ public abstract class AbstractSessionBytesStoreTest {
             assertThat(
                 messages,
                 hasItem("Returning empty iterator for fetch with invalid key range: from > to." +
-                    " This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
+                    " This may be due to range arguments set in the wrong order, " +
+                    "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
                     " Note that the built-in numerical serdes do not follow this for negative numbers")
             );
         }

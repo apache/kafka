@@ -95,6 +95,9 @@ public class ConsumerNetworkClient implements Closeable {
         this.requestTimeoutMs = requestTimeoutMs;
     }
 
+    public int defaultRequestTimeoutMs() {
+        return requestTimeoutMs;
+    }
 
     /**
      * Send a request with the default timeout. See {@link #send(Node, AbstractRequest.Builder, int)}.
@@ -124,7 +127,7 @@ public class ConsumerNetworkClient implements Closeable {
         long now = time.milliseconds();
         RequestFutureCompletionHandler completionHandler = new RequestFutureCompletionHandler();
         ClientRequest clientRequest = client.newClientRequest(node.idString(), requestBuilder, now, true,
-                requestTimeoutMs, completionHandler);
+            requestTimeoutMs, completionHandler);
         unsent.put(node, clientRequest);
 
         // wakeup the client in case it is blocking in poll so that we can send the queued request

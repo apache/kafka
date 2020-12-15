@@ -72,6 +72,8 @@ public class MirrorMakerConfig extends AbstractConfig {
 
     static final String SOURCE_CLUSTER_PREFIX = "source.cluster.";
     static final String TARGET_CLUSTER_PREFIX = "target.cluster.";
+    static final String SOURCE_PREFIX = "source.";
+    static final String TARGET_PREFIX = "target.";
 
     private final Plugins plugins;
    
@@ -181,9 +183,16 @@ public class MirrorMakerConfig extends AbstractConfig {
         props.keySet().retainAll(MirrorConnectorConfig.CONNECTOR_CONFIG_DEF.names());
         
         props.putAll(stringsWithPrefix(CONFIG_PROVIDERS_CONFIG));
-        
-        props.putAll(withPrefix(SOURCE_CLUSTER_PREFIX, clusterProps(sourceAndTarget.source())));
-        props.putAll(withPrefix(TARGET_CLUSTER_PREFIX, clusterProps(sourceAndTarget.target())));
+
+        Map<String, String> sourceClusterProps = clusterProps(sourceAndTarget.source());
+        // attrs non prefixed with producer|consumer|admin
+        props.putAll(clusterConfigsWithPrefix(SOURCE_CLUSTER_PREFIX, sourceClusterProps));
+        // attrs prefixed with producer|consumer|admin
+        props.putAll(clientConfigsWithPrefix(SOURCE_PREFIX, sourceClusterProps));
+
+        Map<String, String> targetClusterProps = clusterProps(sourceAndTarget.target());
+        props.putAll(clusterConfigsWithPrefix(TARGET_CLUSTER_PREFIX, targetClusterProps));
+        props.putAll(clientConfigsWithPrefix(TARGET_PREFIX, targetClusterProps));
 
         props.putIfAbsent(NAME, connectorClass.getSimpleName());
         props.putIfAbsent(CONNECTOR_CLASS, connectorClass.getName());
@@ -245,10 +254,17 @@ public class MirrorMakerConfig extends AbstractConfig {
         Map<String, String> strings = originalsStrings();
         strings.keySet().removeIf(x -> !x.startsWith(prefix));
         return strings;
-    } 
+    }
 
-    static Map<String, String> withPrefix(String prefix, Map<String, String> props) {
+    static Map<String, String> clusterConfigsWithPrefix(String prefix, Map<String, String> props) {
         return props.entrySet().stream()
-            .collect(Collectors.toMap(x -> prefix + x.getKey(), x -> x.getValue()));
+                .filter(x -> !x.getKey().matches("(^consumer.*|^producer.*|^admin.*)"))
+                .collect(Collectors.toMap(x -> prefix + x.getKey(), x -> x.getValue()));
+    }
+
+    static Map<String, String> clientConfigsWithPrefix(String prefix, Map<String, String> props) {
+        return props.entrySet().stream()
+                .filter(x -> x.getKey().matches("(^consumer.*|^producer.*|^admin.*)"))
+                .collect(Collectors.toMap(x -> prefix + x.getKey(), x -> x.getValue()));
     }
 }

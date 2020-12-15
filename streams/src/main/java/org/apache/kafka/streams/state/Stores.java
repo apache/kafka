@@ -150,6 +150,7 @@ public final class Stores {
      * @param maxCacheSize  maximum number of items in the LRU (cannot be negative)
      * @return an instance of a {@link KeyValueBytesStoreSupplier} that can be used to build
      * an LRU Map based store
+     * @throws IllegalArgumentException if {@code maxCacheSize} is negative
      */
     public static KeyValueBytesStoreSupplier lruMap(final String name, final int maxCacheSize) {
         Objects.requireNonNull(name, "name cannot be null");
@@ -231,6 +232,7 @@ public final class Stores {
      *                              caching and means that null values will be ignored.
      * @return an instance of {@link WindowBytesStoreSupplier}
      * @throws IllegalArgumentException if {@code retentionPeriod} or {@code windowSize} can't be represented as {@code long milliseconds}
+     * @throws IllegalArgumentException if {@code retentionPeriod} is smaller than {@code windowSize}
      */
     public static WindowBytesStoreSupplier persistentWindowStore(final String name,
                                                                  final Duration retentionPeriod,
@@ -257,6 +259,7 @@ public final class Stores {
      *                              caching and means that null values will be ignored.
      * @return an instance of {@link WindowBytesStoreSupplier}
      * @throws IllegalArgumentException if {@code retentionPeriod} or {@code windowSize} can't be represented as {@code long milliseconds}
+     * @throws IllegalArgumentException if {@code retentionPeriod} is smaller than {@code windowSize}
      */
     public static WindowBytesStoreSupplier persistentTimestampedWindowStore(final String name,
                                                                             final Duration retentionPeriod,
@@ -328,6 +331,7 @@ public final class Stores {
      *                              caching and means that null values will be ignored.
      * @return an instance of {@link WindowBytesStoreSupplier}
      * @throws IllegalArgumentException if {@code retentionPeriod} or {@code windowSize} can't be represented as {@code long milliseconds}
+     * @throws IllegalArgumentException if {@code retentionPeriod} is smaller than {@code windowSize}
      */
     public static WindowBytesStoreSupplier inMemoryWindowStore(final String name,
                                                                final Duration retentionPeriod,
@@ -481,7 +485,7 @@ public final class Stores {
      * <p>
      * The provided supplier should <strong>not</strong> be a supplier for
      * {@link WindowStore WindowStores}. For this case, passed in timestamps will be dropped and not stored in the
-     * windows-store. On read, no valid timestamp but a dummy timestamp will be returned.
+     * window-store. On read, no valid timestamp but a dummy timestamp will be returned.
      *
      * @param supplier      a {@link WindowBytesStoreSupplier} (cannot be {@code null})
      * @param keySerde      the key serde to use

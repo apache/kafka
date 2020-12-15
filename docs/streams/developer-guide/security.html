@@ -70,6 +70,17 @@
                 the ACL set so that the application has the permissions to create, read and write
                 <a class="reference internal" href="manage-topics.html#streams-developer-guide-topics-internal"><span class="std std-ref">internal topics</span></a>.</p>
 
+                <p>To avoid providing this permission to your application, you can create the required internal topics manually.
+                    If the internal topics exist, Kafka Streams will not try to recreate them.
+                    Note, that the internal repartition and changelog topics must be created with the correct number of partitions&mdash;otherwise, Kafka Streams will fail on startup.
+                The topics must be created with the same number of partitions as your input topic, or if there are multiple topics, the maximum number of partitions across all input topics.
+                    Additionally, changelog topics <emph>must</emph> be created with log compaction enabled&mdash;otherwise, your application might lose data.
+                    For changelog topics for windowed KTables, apply "delete,compact" and set the retention time based on the corresponding store retention time. To avoid premature deletion,
+                    add a delta to the store retention time. By default, Kafka Streams adds 24 hours to the store retention time.
+                    You can find out more about the names of the required internal topics via <code>Topology#describe()</code>.
+                All internal topics follow the naming pattern <code>&lt;application.id&gt;-&lt;operatorName&gt;-&lt;suffix&gt;</code> where the <code>suffix</code> is either <code>repartition</code> or <code>changelog</code>.
+                    Note, that there is no guarantee about this naming pattern in future releases&mdash;it's not part of the public API.</p>
+
             <p>Since all internal topics as well as the embedded consumer group name are prefixed with the <a class="reference internal" href="/{{version}}/documentation/streams/developer-guide/config-streams.html#required-configuration-parameters"><span class="std std-ref">application id</span></a>,
                 it is recommended to use ACLs on prefixed resource pattern
                 to configure control lists to allow client to manage all topics and consumer groups started with this prefix
@@ -87,15 +98,14 @@
                 then you must also include these SSL certificates in the correct locations within the Docker image.</p>
             <p>The snippet below shows the settings to enable client authentication and SSL encryption for data-in-transit between your
                 Kafka Streams application and the Kafka cluster it is reading and writing from:</p>
-            <div class="highlight-bash"><div class="highlight"><pre><span></span><span class="c1"># Essential security settings to enable client authentication and SSL encryption</span>
+            <div class="highlight-bash"><div class="highlight"><pre><code><span></span><span class="c1"># Essential security settings to enable client authentication and SSL encryption</span>
 bootstrap.servers<span class="o">=</span>kafka.example.com:9093
 security.protocol<span class="o">=</span>SSL
 ssl.truststore.location<span class="o">=</span>/etc/security/tls/kafka.client.truststore.jks
 ssl.truststore.password<span class="o">=</span>test1234
 ssl.keystore.location<span class="o">=</span>/etc/security/tls/kafka.client.keystore.jks
 ssl.keystore.password<span class="o">=</span>test1234
-ssl.key.password<span class="o">=</span>test1234
-</pre></div>
+ssl.key.password<span class="o">=</span>test1234</code></pre></div>
             </div>
             <p>Configure these settings in the application for your <code class="docutils literal"><span class="pre">Properties</span></code> instance. These settings will encrypt any
                 data-in-transit that is being read from or written to Kafka, and your application will authenticate itself against the
@@ -116,20 +126,18 @@ ssl.key.password<span class="o">=</span>test1234
 <span class="n">settings</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">SslConfigs</span><span class="o">.</span><span class="na">SSL_TRUSTSTORE_PASSWORD_CONFIG</span><span class="o">,</span> <span class="s">&quot;test1234&quot;</span><span class="o">);</span>
 <span class="n">settings</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">SslConfigs</span><span class="o">.</span><span class="na">SSL_KEYSTORE_LOCATION_CONFIG</span><span class="o">,</span> <span class="s">&quot;/etc/security/tls/kafka.client.keystore.jks&quot;</span><span class="o">);</span>
 <span class="n">settings</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">SslConfigs</span><span class="o">.</span><span class="na">SSL_KEYSTORE_PASSWORD_CONFIG</span><span class="o">,</span> <span class="s">&quot;test1234&quot;</span><span class="o">);</span>
-<span class="n">settings</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">SslConfigs</span><span class="o">.</span><span class="na">SSL_KEY_PASSWORD_CONFIG</span><span class="o">,</span> <span class="s">&quot;test1234&quot;</span><span class="o">);</span>
-</pre></div>
+<span class="n">settings</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">SslConfigs</span><span class="o">.</span><span class="na">SSL_KEY_PASSWORD_CONFIG</span><span class="o">,</span> <span class="s">&quot;test1234&quot;</span><span class="o">);</span></code></pre></div>
             </div>
             <p>If you incorrectly configure a security setting in your application, it will fail at runtime, typically right after you
                 start it.  For example, if you enter an incorrect password for the <code class="docutils literal"><span class="pre">ssl.keystore.password</span></code> setting, an error message
                 similar to this would be logged and then the application would terminate:</p>
-            <div class="highlight-bash"><div class="highlight"><pre><span></span><span class="c1"># Misconfigured ssl.keystore.password</span>
+            <div class="highlight-bash"><div class="highlight"><pre><code><span></span><span class="c1"># Misconfigured ssl.keystore.password</span>
 Exception in thread <span class="s2">&quot;main&quot;</span> org.apache.kafka.common.KafkaException: Failed to construct kafka producer
 <span class="o">[</span>...snip...<span class="o">]</span>
 Caused by: org.apache.kafka.common.KafkaException: org.apache.kafka.common.KafkaException:
    java.io.IOException: Keystore was tampered with, or password was incorrect
 <span class="o">[</span>...snip...<span class="o">]</span>
-Caused by: java.security.UnrecoverableKeyException: Password verification failed
-</pre></div>
+Caused by: java.security.UnrecoverableKeyException: Password verification failed</code></pre></div>
             </div>
             <p>Monitor your Kafka Streams application log files for such error messages to spot any misconfigured applications quickly.</p>
 </div>
@@ -146,10 +154,10 @@ Caused by: java.security.UnrecoverableKeyException: Password verification failed
 
                 <!--#include virtual="../../../includes/_header.htm" -->
                 <!--#include virtual="../../../includes/_top.htm" -->
-                    <div class="content documentation documentation--current">
+                    <div class="content documentation ">
                     <!--#include virtual="../../../includes/_nav.htm" -->
                     <div class="right">
-                    <!--#include virtual="../../../includes/_docs_banner.htm" -->
+                    <!--//#include virtual="../../../includes/_docs_banner.htm" -->
                     <ul class="breadcrumbs">
                     <li><a href="/documentation">Documentation</a></li>
                     <li><a href="/documentation/streams">Kafka Streams</a></li>

@@ -127,7 +127,7 @@ public class MirrorMakerConfigTest {
             "topics", "topic-1",
             "groups", "group-2",
             "replication.policy.separator", "__",
-            "config.properties.blacklist", "property-3",
+            "config.properties.exclude", "property-3",
             "metric.reporters", "FakeMetricsReporter",
             "topic.filter.class", DefaultTopicFilter.class.getName(),
             "xxx", "yyy"));
@@ -137,12 +137,12 @@ public class MirrorMakerConfigTest {
         MirrorConnectorConfig connectorConfig = new MirrorConnectorConfig(connectorProps);
         assertEquals("Connector properties like tasks.max should be passed through to underlying Connectors.",
             100, (int) connectorConfig.getInt("tasks.max"));
-        assertEquals("Topics whitelist should be passed through to underlying Connectors.",
+        assertEquals("Topics include should be passed through to underlying Connectors.",
             Arrays.asList("topic-1"), connectorConfig.getList("topics"));
-        assertEquals("Groups whitelist should be passed through to underlying Connectors.",
+        assertEquals("Groups include should be passed through to underlying Connectors.",
             Arrays.asList("group-2"), connectorConfig.getList("groups"));
-        assertEquals("Config properties blacklist should be passed through to underlying Connectors.",
-            Arrays.asList("property-3"), connectorConfig.getList("config.properties.blacklist"));
+        assertEquals("Config properties exclude should be passed through to underlying Connectors.",
+            Arrays.asList("property-3"), connectorConfig.getList("config.properties.exclude"));
         assertEquals("Metrics reporters should be passed through to underlying Connectors.",
             Arrays.asList("FakeMetricsReporter"), connectorConfig.getList("metric.reporters"));
         assertEquals("Filters should be passed through to underlying Connectors.",
@@ -154,11 +154,58 @@ public class MirrorMakerConfigTest {
     }
 
     @Test
+    public void testConfigBackwardsCompatibility() {
+        MirrorMakerConfig mirrorConfig = new MirrorMakerConfig(makeProps(
+            "clusters", "a, b",
+            "groups.blacklist", "group-7",
+            "topics.blacklist", "topic3",
+            "config.properties.blacklist", "property-3",
+            "topic.filter.class", DefaultTopicFilter.class.getName()));
+        SourceAndTarget sourceAndTarget = new SourceAndTarget("source", "target");
+        Map<String, String> connectorProps = mirrorConfig.connectorBaseConfig(sourceAndTarget,
+                                                                              MirrorSourceConnector.class);
+        MirrorConnectorConfig connectorConfig = new MirrorConnectorConfig(connectorProps);
+        DefaultTopicFilter.TopicFilterConfig filterConfig =
+            new DefaultTopicFilter.TopicFilterConfig(connectorProps);
+
+        assertEquals("Topics exclude should be backwards compatible.",
+                     Arrays.asList("topic3"), filterConfig.getList("topics.exclude"));
+
+        assertEquals("Groups exclude should be backwards compatible.",
+                     Arrays.asList("group-7"), connectorConfig.getList("groups.exclude"));
+
+        assertEquals("Config properties exclude should be backwards compatible.",
+                     Arrays.asList("property-3"), connectorConfig.getList("config.properties.exclude"));
+
+    }
+
+    @Test
+    public void testConfigBackwardsCompatibilitySourceTarget() {
+        MirrorMakerConfig mirrorConfig = new MirrorMakerConfig(makeProps(
+            "clusters", "a, b",
+            "source->target.topics.blacklist", "topic3",
+            "source->target.groups.blacklist", "group-7",
+            "topic.filter.class", DefaultTopicFilter.class.getName()));
+        SourceAndTarget sourceAndTarget = new SourceAndTarget("source", "target");
+        Map<String, String> connectorProps = mirrorConfig.connectorBaseConfig(sourceAndTarget,
+                                                                              MirrorSourceConnector.class);
+        MirrorConnectorConfig connectorConfig = new MirrorConnectorConfig(connectorProps);
+        DefaultTopicFilter.TopicFilterConfig filterConfig =
+            new DefaultTopicFilter.TopicFilterConfig(connectorProps);
+
+        assertEquals("Topics exclude should be backwards compatible.",
+                     Arrays.asList("topic3"), filterConfig.getList("topics.exclude"));
+
+        assertEquals("Groups exclude should be backwards compatible.",
+                     Arrays.asList("group-7"), connectorConfig.getList("groups.exclude"));
+    }
+
+    @Test
     public void testIncludesTopicFilterProperties() {
         MirrorMakerConfig mirrorConfig = new MirrorMakerConfig(makeProps(
             "clusters", "a, b",
             "source->target.topics", "topic1, topic2",
-            "source->target.topics.blacklist", "topic3"));
+            "source->target.topics.exclude", "topic3"));
         SourceAndTarget sourceAndTarget = new SourceAndTarget("source", "target");
         Map<String, String> connectorProps = mirrorConfig.connectorBaseConfig(sourceAndTarget,
             MirrorSourceConnector.class);
@@ -166,8 +213,8 @@ public class MirrorMakerConfigTest {
             new DefaultTopicFilter.TopicFilterConfig(connectorProps);
         assertEquals("source->target.topics should be passed through to TopicFilters.",
             Arrays.asList("topic1", "topic2"), filterConfig.getList("topics"));
-        assertEquals("source->target.topics.blacklist should be passed through to TopicFilters.",
-            Arrays.asList("topic3"), filterConfig.getList("topics.blacklist"));
+        assertEquals("source->target.topics.exclude should be passed through to TopicFilters.",
+            Arrays.asList("topic3"), filterConfig.getList("topics.exclude"));
     }
 
     @Test

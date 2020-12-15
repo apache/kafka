@@ -72,9 +72,9 @@ public class KStreamBranchTest {
         }
 
         final List<MockProcessor<Integer, String>> processors = supplier.capturedProcessors(3);
-        assertEquals(3, processors.get(0).processed.size());
-        assertEquals(1, processors.get(1).processed.size());
-        assertEquals(2, processors.get(2).processed.size());
+        assertEquals(3, processors.get(0).processed().size());
+        assertEquals(1, processors.get(1).processed().size());
+        assertEquals(2, processors.get(2).processed().size());
     }
 
     @SuppressWarnings("unchecked")

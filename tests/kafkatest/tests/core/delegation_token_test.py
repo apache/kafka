@@ -39,7 +39,7 @@ class DelegationTokenTest(Test):
                                   server_prop_overides=[
                                       [config_property.DELEGATION_TOKEN_MAX_LIFETIME_MS, "604800000"],
                                       [config_property.DELEGATION_TOKEN_EXPIRY_TIME_MS, "86400000"],
-                                      [config_property.DELEGATION_TOKEN_MASTER_KEY, "test12345"],
+                                      [config_property.DELEGATION_TOKEN_SECRET_KEY, "test12345"],
                                       [config_property.SASL_ENABLED_MECHANISMS, "GSSAPI,SCRAM-SHA-256"]
                                   ])
         self.jaas_deleg_conf_path = "/tmp/jaas_deleg.conf"

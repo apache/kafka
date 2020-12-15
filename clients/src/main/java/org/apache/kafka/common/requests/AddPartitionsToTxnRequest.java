@@ -21,8 +21,8 @@ import org.apache.kafka.common.message.AddPartitionsToTxnRequestData;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopic;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopicCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -103,11 +103,6 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public AddPartitionsToTxnRequest(Struct struct, short version) {
-        super(ApiKeys.ADD_PARTITIONS_TO_TXN, version);
-        this.data = new AddPartitionsToTxnRequestData(struct, version);
-    }
-
     public List<TopicPartition> partitions() {
         if (cachedPartitions != null) {
             return cachedPartitions;
@@ -117,8 +112,8 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
     }
 
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
+    protected AddPartitionsToTxnRequestData data() {
+        return data;
     }
 
     @Override
@@ -131,6 +126,6 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
     }
 
     public static AddPartitionsToTxnRequest parse(ByteBuffer buffer, short version) {
-        return new AddPartitionsToTxnRequest(ApiKeys.ADD_PARTITIONS_TO_TXN.parseRequest(version, buffer), version);
+        return new AddPartitionsToTxnRequest(new AddPartitionsToTxnRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 }

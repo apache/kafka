@@ -106,7 +106,7 @@ public final class MessageSpec {
         return flexibleVersions.toString();
     }
 
-    public String generatedClassName() {
+    public String dataClassName() {
         switch (type) {
             case HEADER:
             case REQUEST:

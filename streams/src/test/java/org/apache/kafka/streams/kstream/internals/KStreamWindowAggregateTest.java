@@ -140,7 +140,7 @@ public class KStreamWindowAggregateTest {
                 new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(5, 15)),  "0+2+2+2+2+3",  13)
 
                 ),
-            supplier.theCapturedProcessor().processed
+            supplier.theCapturedProcessor().processed()
         );
     }
 

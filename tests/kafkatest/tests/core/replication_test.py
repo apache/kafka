@@ -125,10 +125,10 @@ class ReplicationTest(EndToEndTest):
             broker_type="leader",
             security_protocol="SASL_SSL", client_sasl_mechanism="SCRAM-SHA-256", interbroker_sasl_mechanism="SCRAM-SHA-512")
     @matrix(failure_mode=["clean_shutdown", "hard_shutdown", "clean_bounce", "hard_bounce"],
-            security_protocol=["PLAINTEXT"], broker_type=["leader"], compression_type=["gzip"])
+            security_protocol=["PLAINTEXT"], broker_type=["leader"], compression_type=["gzip"], tls_version=["TLSv1.2", "TLSv1.3"])
     def test_replication_with_broker_failure(self, failure_mode, security_protocol, broker_type,
                                              client_sasl_mechanism="GSSAPI", interbroker_sasl_mechanism="GSSAPI",
-                                             compression_type=None, enable_idempotence=False):
+                                             compression_type=None, enable_idempotence=False, tls_version=None):
         """Replication tests.
         These tests verify that replication provides simple durability guarantees by checking that data acked by
         brokers is still available for consumption in the face of various failure scenarios.
@@ -149,7 +149,8 @@ class ReplicationTest(EndToEndTest):
                           security_protocol=security_protocol,
                           interbroker_security_protocol=security_protocol,
                           client_sasl_mechanism=client_sasl_mechanism,
-                          interbroker_sasl_mechanism=interbroker_sasl_mechanism)
+                          interbroker_sasl_mechanism=interbroker_sasl_mechanism,
+                          tls_version=tls_version)
         self.kafka.start()
 
         compression_types = None if not compression_type else [compression_type]

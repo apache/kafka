@@ -18,8 +18,12 @@
   "type": "response",
   "name": "CreatePartitionsResponse",
   // Starting in version 1, on quota violation, brokers send out responses before throttling.
+  //
   // Version 2 adds flexible version support
-  "validVersions": "0-2",
+  //
+  // Version 3 is identical to version 2 but may return a THROTTLING_QUOTA_EXCEEDED error
+  // in the response if the partitions creation is throttled (KIP-599).
+  "validVersions": "0-3",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",

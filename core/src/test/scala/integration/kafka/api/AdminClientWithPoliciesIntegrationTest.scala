@@ -49,7 +49,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
 
   @Before
   override def setUp(): Unit = {
-    super.setUp
+    super.setUp()
     TestUtils.waitUntilBrokerMetadataIsPropagated(servers)
   }
 

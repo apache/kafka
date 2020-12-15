@@ -64,6 +64,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
 
     private boolean rejoinRequested;
     private volatile ConnectProtocolCompatibility currentConnectProtocol;
+    private volatile int lastCompletedGenerationId;
     private final ConnectAssignor eagerAssignor;
     private final ConnectAssignor incrementalAssignor;
     private final int coordinatorDiscoveryTimeoutMs;
@@ -100,6 +101,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         this.eagerAssignor = new EagerAssignor(logContext);
         this.currentConnectProtocol = protocolCompatibility;
         this.coordinatorDiscoveryTimeoutMs = config.heartbeatIntervalMs;
+        this.lastCompletedGenerationId = Generation.NO_GENERATION.generationId;
     }
 
     @Override
@@ -207,6 +209,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
             log.debug("Augmented new assignment: {}", newAssignment);
         }
         assignmentSnapshot = newAssignment;
+        lastCompletedGenerationId = generation;
         listener.onAssigned(newAssignment, generation);
     }
 
@@ -254,6 +257,20 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
      */
     public int generationId() {
         return super.generation().generationId;
+    }
+
+    /**
+     * Return id that corresponds to the group generation that was active when the last join was successful
+     *
+     * @return the generation ID of the last group that was joined successfully by this member or -1 if no generation
+     * was stable at that point
+     */
+    public int lastCompletedGenerationId() {
+        return lastCompletedGenerationId;
+    }
+
+    public void revokeAssignment(ExtendedAssignment assignment) {
+        listener.onRevoked(assignment.leader(), assignment.connectors(), assignment.tasks());
     }
 
     private boolean isLeader() {

@@ -25,6 +25,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
+import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
@@ -58,7 +59,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 @RunWith(PowerMockRunner.class)
-@PrepareForTest(KafkaOffsetBackingStore.class)
+@PrepareForTest({KafkaOffsetBackingStore.class, ConnectUtils.class})
 @PowerMockIgnore({"javax.management.*", "javax.crypto.*"})
 @SuppressWarnings({"unchecked", "deprecation"})
 public class KafkaOffsetBackingStoreTest {
@@ -119,10 +120,14 @@ public class KafkaOffsetBackingStoreTest {
         expectConfigure();
         expectStart(Collections.emptyList());
         expectStop();
+        expectClusterId();
 
         PowerMock.replayAll();
 
-        store.configure(DEFAULT_DISTRIBUTED_CONFIG);
+        Map<String, String> settings = new HashMap<>(DEFAULT_PROPS);
+        settings.put("offset.storage.min.insync.replicas", "3");
+        settings.put("offset.storage.max.message.bytes", "1001");
+        store.configure(new DistributedConfig(settings));
         assertEquals(TOPIC, capturedTopic.getValue());
         assertEquals("org.apache.kafka.common.serialization.ByteArraySerializer", capturedProducerProps.getValue().get(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG));
         assertEquals("org.apache.kafka.common.serialization.ByteArraySerializer", capturedProducerProps.getValue().get(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG));
@@ -149,6 +154,7 @@ public class KafkaOffsetBackingStoreTest {
                 new ConsumerRecord<>(TOPIC, 1, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP1_KEY.array(), TP1_VALUE_NEW.array())
         ));
         expectStop();
+        expectClusterId();
 
         PowerMock.replayAll();
 
@@ -211,6 +217,7 @@ public class KafkaOffsetBackingStoreTest {
             }
         });
 
+        expectClusterId();
         PowerMock.replayAll();
 
         store.configure(DEFAULT_DISTRIBUTED_CONFIG);
@@ -281,6 +288,7 @@ public class KafkaOffsetBackingStoreTest {
         });
 
         expectStop();
+        expectClusterId();
 
         PowerMock.replayAll();
 
@@ -333,6 +341,8 @@ public class KafkaOffsetBackingStoreTest {
         Capture<org.apache.kafka.clients.producer.Callback> callback2 = EasyMock.newCapture();
         storeLog.send(EasyMock.aryEq(TP2_KEY.array()), EasyMock.aryEq(TP2_VALUE.array()), EasyMock.capture(callback2));
         PowerMock.expectLastCall();
+
+        expectClusterId();
 
         PowerMock.replayAll();
 
@@ -399,6 +409,11 @@ public class KafkaOffsetBackingStoreTest {
     private void expectStop() {
         storeLog.stop();
         PowerMock.expectLastCall();
+    }
+
+    private void expectClusterId() {
+        PowerMock.mockStaticPartial(ConnectUtils.class, "lookupKafkaClusterId");
+        EasyMock.expect(ConnectUtils.lookupKafkaClusterId(EasyMock.anyObject())).andReturn("test-cluster").anyTimes();
     }
 
     private static ByteBuffer buffer(String v) {

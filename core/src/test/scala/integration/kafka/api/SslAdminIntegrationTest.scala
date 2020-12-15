@@ -214,7 +214,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     val testSemaphore = new Semaphore(0)
     SslAdminIntegrationTest.semaphore = Some(testSemaphore)
 
-    client = Admin.create(createConfig())
+    client = Admin.create(createConfig)
     val results = client.createAcls(List(acl2, acl3).asJava).values
     assertEquals(Set(acl2, acl3), results.keySet().asScala)
     assertFalse(results.values.asScala.exists(_.isDone))
@@ -237,7 +237,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
   }
 
   private def createAdminClient: Admin = {
-    val config = createConfig()
+    val config = createConfig
     config.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "40000")
     val client = Admin.create(config)
     adminClients += client

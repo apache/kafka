@@ -19,8 +19,8 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.LeaderAndIsrResponseData;
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
@@ -38,11 +38,8 @@ public class LeaderAndIsrResponse extends AbstractResponse {
     private final LeaderAndIsrResponseData data;
 
     public LeaderAndIsrResponse(LeaderAndIsrResponseData data) {
+        super(ApiKeys.LEADER_AND_ISR);
         this.data = data;
-    }
-
-    public LeaderAndIsrResponse(Struct struct, short version) {
-        this.data = new LeaderAndIsrResponseData(struct, version);
     }
 
     public List<LeaderAndIsrPartitionError> partitions() {
@@ -58,17 +55,25 @@ public class LeaderAndIsrResponse extends AbstractResponse {
         Errors error = error();
         if (error != Errors.NONE)
             // Minor optimization since the top-level error applies to all partitions
-            return Collections.singletonMap(error, data.partitionErrors().size());
-        return errorCounts(data.partitionErrors().stream().map(l -> Errors.forCode(l.errorCode())));
-    }
-
-    public static LeaderAndIsrResponse parse(ByteBuffer buffer, short version) {
-        return new LeaderAndIsrResponse(ApiKeys.LEADER_AND_ISR.parseResponse(version, buffer), version);
+            return Collections.singletonMap(error, data.partitionErrors().size() + 1);
+        Map<Errors, Integer> errors = errorCounts(data.partitionErrors().stream().map(l -> Errors.forCode(l.errorCode())));
+        // Top level error
+        updateErrorCounts(errors, Errors.NONE);
+        return errors;
     }
 
     @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
+    public int throttleTimeMs() {
+        return DEFAULT_THROTTLE_TIME;
+    }
+
+    public static LeaderAndIsrResponse parse(ByteBuffer buffer, short version) {
+        return new LeaderAndIsrResponse(new LeaderAndIsrResponseData(new ByteBufferAccessor(buffer), version));
+    }
+
+    @Override
+    protected LeaderAndIsrResponseData data() {
+        return data;
     }
 
     @Override

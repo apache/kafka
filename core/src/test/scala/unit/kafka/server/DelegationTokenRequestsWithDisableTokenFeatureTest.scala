@@ -44,7 +44,7 @@ class DelegationTokenRequestsWithDisableTokenFeatureTest extends BaseRequestTest
     super.setUp()
   }
 
-  def createAdminConfig():util.Map[String, Object] = {
+  def createAdminConfig: util.Map[String, Object] = {
     val config = new util.HashMap[String, Object]
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     val securityProps: util.Map[Object, Object] =

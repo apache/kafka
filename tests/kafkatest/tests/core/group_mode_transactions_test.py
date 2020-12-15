@@ -50,7 +50,14 @@ class GroupModeTransactionsTest(Test):
         self.num_copiers = 3
         self.num_seed_messages = 100000
         self.transaction_size = 750
-        self.transaction_timeout = 10000
+        # The transaction timeout should be lower than the progress timeout, but at
+        # least as high as the request timeout (which is 30s by default). When the
+        # client is hard-bounced, progress may depend on the previous transaction
+        # being aborted. When the broker is hard-bounced, we may have to wait as
+        # long as the request timeout to get a `Produce` response and we do not
+        # want the coordinator timing out the transaction.
+        self.transaction_timeout = 40000
+        self.progress_timeout_sec = 60
         self.consumer_group = "grouped-transactions-test-consumer-group"
 
         self.zk = ZookeeperService(test_context, num_nodes=1)
@@ -120,9 +127,9 @@ class GroupModeTransactionsTest(Test):
         for _ in range(3):
             for copier in copiers:
                 wait_until(lambda: copier.progress_percent() >= 20.0,
-                           timeout_sec=timeout_sec,
+                           timeout_sec=self.progress_timeout_sec,
                            err_msg="%s : Message copier didn't make enough progress in %ds. Current progress: %s" \
-                                   % (copier.transactional_id, timeout_sec, str(copier.progress_percent())))
+                                   % (copier.transactional_id, self.progress_timeout_sec, str(copier.progress_percent())))
                 self.logger.info("%s - progress: %s" % (copier.transactional_id,
                                                         str(copier.progress_percent())))
                 copier.restart(clean_shutdown)
@@ -146,8 +153,9 @@ class GroupModeTransactionsTest(Test):
         """
         try:
             splitted_msg = msg.split('\t')
-            tuple = [int(splitted_msg[0]), int(splitted_msg[1])]
-            return tuple
+            value = int(splitted_msg[1])
+            partition = int(splitted_msg[0].split(":")[1])
+            return [value, partition]
 
         except ValueError:
             raise Exception("Unexpected message format (expected a tab separated [value, partition] tuple). Message: %s" % (msg))

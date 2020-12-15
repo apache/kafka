@@ -20,20 +20,20 @@ package kafka.network
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.util.concurrent._
-
 import com.typesafe.scalalogging.Logger
 import com.yammer.metrics.core.Meter
 import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.KafkaConfig
 import kafka.utils.{Logging, NotNothing, Pool}
+import kafka.utils.Implicits._
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData._
 import org.apache.kafka.common.network.Send
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors, ObjectSerializationCache}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Sanitizer, Time}
@@ -59,11 +59,11 @@ object RequestChannel extends Logging {
     val sanitizedUser: String = Sanitizer.sanitize(principal.getName)
   }
 
-  class Metrics {
+  class Metrics(allowDisabledApis: Boolean = false) {
 
     private val metricsMap = mutable.Map[String, RequestMetrics]()
 
-    (ApiKeys.values.toSeq.map(_.name) ++
+    (ApiKeys.values.toSeq.filter(_.isEnabled || allowDisabledApis).map(_.name) ++
         Seq(RequestMetrics.consumerFetchMetricName, RequestMetrics.followFetchMetricName)).foreach { name =>
       metricsMap.put(name, new RequestMetrics(name))
     }
@@ -79,8 +79,9 @@ object RequestChannel extends Logging {
                 val context: RequestContext,
                 val startTimeNanos: Long,
                 memoryPool: MemoryPool,
-                @volatile private var buffer: ByteBuffer,
-                metrics: RequestChannel.Metrics) extends BaseRequest {
+                @volatile var buffer: ByteBuffer,
+                metrics: RequestChannel.Metrics,
+                val envelope: Option[RequestChannel.Request] = None) extends BaseRequest {
     // These need to be volatile because the readers are in the network thread and the writers are in the request
     // handler threads or the purgatory threads
     @volatile var requestDequeueTimeNanos = -1L
@@ -93,10 +94,14 @@ object RequestChannel extends Logging {
     @volatile var recordNetworkThreadTimeCallback: Option[Long => Unit] = None
 
     val session = Session(context.principal, context.clientAddress)
+
     private val bodyAndSize: RequestAndSize = context.parseRequest(buffer)
 
     def header: RequestHeader = context.header
+
     def sizeOfBodyInBytes: Int = bodyAndSize.size
+
+    def sizeInBytes: Int = header.size(new ObjectSerializationCache) + sizeOfBodyInBytes
 
     //most request types are parsed entirely into objects at this point. for those we can release the underlying buffer.
     //some (like produce, or any time the schema contains fields of types BYTES or NULLABLE_BYTES) retain a reference
@@ -105,7 +110,41 @@ object RequestChannel extends Logging {
       releaseBuffer()
     }
 
-    def requestDesc(details: Boolean): String = s"$header -- ${loggableRequest.toString(details)}"
+    def isForwarded: Boolean = envelope.isDefined
+
+    def buildResponseSend(abstractResponse: AbstractResponse): Send = {
+      envelope match {
+        case Some(request) =>
+          val responseBytes = context.buildResponseEnvelopePayload(abstractResponse)
+          val envelopeResponse = new EnvelopeResponse(responseBytes, Errors.NONE)
+          request.context.buildResponseSend(envelopeResponse)
+        case None =>
+          context.buildResponseSend(abstractResponse)
+      }
+    }
+
+    def responseString(response: AbstractResponse): Option[String] = {
+      if (RequestChannel.isRequestLoggingEnabled)
+        Some(response.toString)
+      else
+        None
+    }
+
+    def headerForLoggingOrThrottling(): RequestHeader = {
+      envelope match {
+        case Some(request) =>
+          request.context.header
+        case None =>
+          context.header
+      }
+    }
+
+    def requestDesc(details: Boolean): String = {
+      val forwardDescription = envelope.map { request =>
+        s"Forwarded request: ${request.context} "
+      }.getOrElse("")
+      s"$forwardDescription$header -- ${loggableRequest.toString(details)}"
+    }
 
     def body[T <: AbstractRequest](implicit classTag: ClassTag[T], @nowarn("cat=unused") nn: NotNothing[T]): T = {
       bodyAndSize.request match {
@@ -240,6 +279,7 @@ object RequestChannel extends Logging {
           .append(",principal:").append(session.principal)
           .append(",listener:").append(context.listenerName.value)
           .append(",clientInformation:").append(context.clientInformation)
+          .append(",forwarded:").append(isForwarded)
         if (temporaryMemoryBytes > 0)
           builder.append(",temporaryMemoryBytes:").append(temporaryMemoryBytes)
         if (messageConversionsTimeMs > 0)
@@ -249,9 +289,14 @@ object RequestChannel extends Logging {
     }
 
     def releaseBuffer(): Unit = {
-      if (buffer != null) {
-        memoryPool.release(buffer)
-        buffer = null
+      envelope match {
+        case Some(request) =>
+          request.releaseBuffer()
+        case None =>
+          if (buffer != null) {
+            memoryPool.release(buffer)
+            buffer = null
+          }
       }
     }
 
@@ -260,11 +305,12 @@ object RequestChannel extends Logging {
       s"session=$session, " +
       s"listenerName=${context.listenerName}, " +
       s"securityProtocol=${context.securityProtocol}, " +
-      s"buffer=$buffer)"
+      s"buffer=$buffer, " +
+      s"envelope=$envelope)"
 
   }
 
-  abstract class Response(val request: Request) {
+  sealed abstract class Response(val request: Request) {
 
     def processor: Int = request.processor
 
@@ -309,9 +355,12 @@ object RequestChannel extends Logging {
   }
 }
 
-class RequestChannel(val queueSize: Int, val metricNamePrefix : String, time: Time) extends KafkaMetricsGroup {
+class RequestChannel(val queueSize: Int,
+                     val metricNamePrefix: String,
+                     time: Time,
+                     allowDisabledApis: Boolean = false) extends KafkaMetricsGroup {
   import RequestChannel._
-  val metrics = new RequestChannel.Metrics
+  val metrics = new RequestChannel.Metrics(allowDisabledApis)
   private val requestQueue = new ArrayBlockingQueue[BaseRequest](queueSize)
   private val processors = new ConcurrentHashMap[Int, Processor]()
   val requestQueueSizeMetricName = metricNamePrefix.concat(RequestQueueSizeMetric)
@@ -347,7 +396,7 @@ class RequestChannel(val queueSize: Int, val metricNamePrefix : String, time: Ti
   def sendResponse(response: RequestChannel.Response): Unit = {
 
     if (isTraceEnabled) {
-      val requestHeader = response.request.header
+      val requestHeader = response.request.headerForLoggingOrThrottling()
       val message = response match {
         case sendResponse: SendResponse =>
           s"Sending ${requestHeader.apiKey} response to client ${requestHeader.clientId} of ${sendResponse.responseSend.size} bytes."
@@ -392,7 +441,7 @@ class RequestChannel(val queueSize: Int, val metricNamePrefix : String, time: Ti
     requestQueue.take()
 
   def updateErrorMetrics(apiKey: ApiKeys, errors: collection.Map[Errors, Integer]): Unit = {
-    errors.foreach { case (error, count) =>
+    errors.forKeyValue { (error, count) =>
       metrics(apiKey.name).markErrorMeter(error, count)
     }
   }

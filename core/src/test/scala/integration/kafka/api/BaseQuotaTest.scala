@@ -23,12 +23,15 @@ import kafka.api.QuotaTestClients._
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server.{ClientQuotaManager, ClientQuotaManagerConfig, DynamicConfig, KafkaConfig, KafkaServer, QuotaType}
 import kafka.utils.TestUtils
+import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.common.{Metric, MetricName, TopicPartition}
 import org.apache.kafka.common.metrics.{KafkaMetric, Quota}
 import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.common.quota.ClientQuotaAlteration
+import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.Assert._
 import org.junit.{Before, Test}
@@ -181,6 +184,8 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
 }
 
 object QuotaTestClients {
+  val DefaultEntity: String = null
+
   def metricValue(metric: Metric): Double = metric.metricValue().asInstanceOf[Double]
 }
 
@@ -189,7 +194,8 @@ abstract class QuotaTestClients(topic: String,
                                 producerClientId: String,
                                 consumerClientId: String,
                                 val producer: KafkaProducer[Array[Byte], Array[Byte]],
-                                val consumer: KafkaConsumer[Array[Byte], Array[Byte]]) {
+                                val consumer: KafkaConsumer[Array[Byte], Array[Byte]],
+                                val adminClient: Admin) {
 
   def overrideQuotas(producerQuota: Long, consumerQuota: Long, requestQuota: Double): Unit
   def removeQuotaOverrides(): Unit
@@ -224,7 +230,7 @@ abstract class QuotaTestClients(topic: String,
       numConsumed += consumer.poll(Duration.ofMillis(100L)).count
       val metric = throttleMetric(QuotaType.Fetch, consumerClientId)
       throttled = metric != null && metricValue(metric) > 0
-    }  while (numConsumed < maxRecords && !throttled && System.currentTimeMillis < startMs + timeoutMs)
+    } while (numConsumed < maxRecords && !throttled && System.currentTimeMillis < startMs + timeoutMs)
 
     // If throttled, wait for the records from the last fetch to be received
     if (throttled && numConsumed < maxRecords && waitForRequestCompletion) {
@@ -335,12 +341,30 @@ abstract class QuotaTestClients(topic: String,
       assertEquals("Should not have been throttled", 0.0, metricValue(maxMetric), 0.0)
   }
 
-  def quotaProperties(producerQuota: Long, consumerQuota: Long, requestQuota: Double): Properties = {
-    val props = new Properties()
-    props.put(DynamicConfig.Client.ProducerByteRateOverrideProp, producerQuota.toString)
-    props.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, consumerQuota.toString)
-    props.put(DynamicConfig.Client.RequestPercentageOverrideProp, requestQuota.toString)
-    props
+  def clientQuotaEntity(user: Option[String], clientId: Option[String]): ClientQuotaEntity = {
+    var entries = Map.empty[String, String]
+    user.foreach(user => entries = entries ++ Map(ClientQuotaEntity.USER -> user))
+    clientId.foreach(clientId => entries = entries ++ Map(ClientQuotaEntity.CLIENT_ID -> clientId))
+    new ClientQuotaEntity(entries.asJava)
+  }
+
+  // None is translated to `null` which remove the quota
+  def clientQuotaAlteration(quotaEntity: ClientQuotaEntity,
+                            producerQuota: Option[Long],
+                            consumerQuota: Option[Long],
+                            requestQuota: Option[Double]): ClientQuotaAlteration = {
+    var ops = Seq.empty[ClientQuotaAlteration.Op]
+    def addOp(key: String, value: Option[Double]): Unit = {
+      ops = ops ++ Seq(new ClientQuotaAlteration.Op(key, value.map(Double.box).orNull))
+    }
+    addOp(DynamicConfig.Client.ProducerByteRateOverrideProp, producerQuota.map(_.toDouble))
+    addOp(DynamicConfig.Client.ConsumerByteRateOverrideProp, consumerQuota.map(_.toDouble))
+    addOp(DynamicConfig.Client.RequestPercentageOverrideProp, requestQuota)
+    new ClientQuotaAlteration(quotaEntity, ops.asJava)
+  }
+
+  def alterClientQuotas(quotaAlterations: ClientQuotaAlteration *): Unit = {
+    adminClient.alterClientQuotas(quotaAlterations.asJava).all().get()
   }
 
   def waitForQuotaUpdate(producerQuota: Long, consumerQuota: Long, requestQuota: Double, server: KafkaServer = leaderNode): Unit = {

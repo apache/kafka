@@ -21,8 +21,8 @@ import org.apache.kafka.common.message.WriteTxnMarkersRequestData;
 import org.apache.kafka.common.message.WriteTxnMarkersRequestData.WritableTxnMarker;
 import org.apache.kafka.common.message.WriteTxnMarkersRequestData.WritableTxnMarkerTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -105,8 +105,8 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
 
         public final WriteTxnMarkersRequestData data;
 
-        public Builder(final List<TxnMarkerEntry> markers) {
-            super(ApiKeys.WRITE_TXN_MARKERS);
+        public Builder(short version, final List<TxnMarkerEntry> markers) {
+            super(ApiKeys.WRITE_TXN_MARKERS, version);
             List<WritableTxnMarker> dataMarkers = new ArrayList<>();
             for (TxnMarkerEntry marker : markers) {
                 final Map<String, WritableTxnMarkerTopic> topicMap = new HashMap<>();
@@ -141,14 +141,9 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public WriteTxnMarkersRequest(Struct struct, short version) {
-        super(ApiKeys.WRITE_TXN_MARKERS, version);
-        this.data = new WriteTxnMarkersRequestData(struct, version);
-    }
-
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
+    protected WriteTxnMarkersRequestData data() {
+        return data;
     }
 
     @Override
@@ -190,7 +185,7 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
     }
 
     public static WriteTxnMarkersRequest parse(ByteBuffer buffer, short version) {
-        return new WriteTxnMarkersRequest(ApiKeys.WRITE_TXN_MARKERS.parseRequest(version, buffer), version);
+        return new WriteTxnMarkersRequest(new WriteTxnMarkersRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
     @Override

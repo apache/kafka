@@ -89,7 +89,7 @@ class MockScheduler(val time: Time) extends Scheduler {
   private def poll(predicate: MockTask => Boolean): Option[MockTask] = {
     this synchronized {
       if (tasks.nonEmpty && predicate.apply(tasks.head))
-        Some(tasks.dequeue)
+        Some(tasks.dequeue())
       else
         None
     }

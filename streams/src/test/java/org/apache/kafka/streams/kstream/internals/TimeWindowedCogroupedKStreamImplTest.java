@@ -63,8 +63,7 @@ public class TimeWindowedCogroupedKStreamImplTest {
     private CogroupedKStream<String, String> cogroupedStream;
     private TimeWindowedCogroupedKStream<String, String> windowedCogroupedStream;
 
-    private final Properties props = StreamsTestUtils
-        .getStreamsConfig(Serdes.String(), Serdes.String());
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
     @Before
     public void setup() {

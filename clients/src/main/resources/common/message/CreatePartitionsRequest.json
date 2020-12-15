@@ -18,13 +18,17 @@
   "type": "request",
   "name": "CreatePartitionsRequest",
   // Version 1 is the same as version 0.
+  //
   // Version 2 adds flexible version support
-  "validVersions": "0-2",
+  //
+  // Version 3 is identical to version 2 but may return a THROTTLING_QUOTA_EXCEEDED error
+  // in the response if the partitions creation is throttled (KIP-599).
+  "validVersions": "0-3",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "Topics", "type": "[]CreatePartitionsTopic", "versions": "0+",
       "about": "Each topic that we want to create new partitions inside.",  "fields": [
-      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
+      { "name": "Name", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName",
         "about": "The topic name." },
       { "name": "Count", "type": "int32", "versions": "0+",
         "about": "The new partition count." },

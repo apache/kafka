@@ -82,8 +82,7 @@
         processing topology:</p>
       <div class="highlight-java"><div class="highlight"><pre><span></span><span class="c1">// Enable record cache of size 10 MB.</span>
 <span class="n">Properties</span> <span class="n">props</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Properties</span><span class="o">();</span>
-<span class="n">props</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="na">CACHE_MAX_BYTES_BUFFERING_CONFIG</span><span class="o">,</span> <span class="mi">10</span> <span class="o">*</span> <span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024L</span><span class="o">);</span>
-</pre></div>
+<span class="n">props</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="na">CACHE_MAX_BYTES_BUFFERING_CONFIG</span><span class="o">,</span> <span class="mi">10</span> <span class="o">*</span> <span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024L</span><span class="o">);</span></code></pre></div>
       </div>
       <p>This parameter controls the number of bytes allocated for caching. Specifically, for a processor topology instance with
         <code class="docutils literal"><span class="pre">T</span></code> threads and <code class="docutils literal"><span class="pre">C</span></code> bytes allocated for caching, each thread will have an even <code class="docutils literal"><span class="pre">C/T</span></code> bytes to construct its own
@@ -107,8 +106,7 @@
           <blockquote>
             <div><div class="highlight-java"><div class="highlight"><pre><span></span><span class="c1">// Disable record cache</span>
 <span class="n">Properties</span> <span class="n">props</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Properties</span><span class="o">();</span>
-<span class="n">props</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="na">CACHE_MAX_BYTES_BUFFERING_CONFIG</span><span class="o">,</span> <span class="mi">0</span><span class="o">);</span>
-</pre></div>
+<span class="n">props</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="na">CACHE_MAX_BYTES_BUFFERING_CONFIG</span><span class="o">,</span> <span class="mi">0</span><span class="o">);</span></code></pre></div>
             </div>
               <p>Turning off caching might result in high write traffic for the underlying RocksDB store.
                 With default settings caching is enabled within Kafka Streams but RocksDB caching is disabled.
@@ -123,8 +121,7 @@
 <span class="c1">// Enable record cache of size 10 MB.</span>
 <span class="n">props</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="na">CACHE_MAX_BYTES_BUFFERING_CONFIG</span><span class="o">,</span> <span class="mi">10</span> <span class="o">*</span> <span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024L</span><span class="o">);</span>
 <span class="c1">// Set commit interval to 1 second.</span>
-<span class="n">props</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="na">COMMIT_INTERVAL_MS_CONFIG</span><span class="o">,</span> <span class="mi">1000</span><span class="o">);</span>
-</pre></div>
+<span class="n">props</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="na">COMMIT_INTERVAL_MS_CONFIG</span><span class="o">,</span> <span class="mi">1000</span><span class="o">);</span></code></pre></div>
             </div>
             </div></blockquote>
         </li>
@@ -159,13 +156,12 @@
       <p>Following from the example first shown in section <a class="reference internal" href="processor-api.html#streams-developer-guide-state-store"><span class="std std-ref">State Stores</span></a>, to disable caching, you can
         add the <code class="docutils literal"><span class="pre">withCachingDisabled</span></code> call (note that caches are enabled by default, however there is an explicit <code class="docutils literal"><span class="pre">withCachingEnabled</span></code>
         call).</p>
-      <div class="highlight-java"><div class="highlight"><pre><span></span><span class="n">StoreBuilder</span> <span class="n">countStoreBuilder</span> <span class="o">=</span>
+      <div class="highlight-java"><div class="highlight"><pre><code><span></span><span class="n">StoreBuilder</span> <span class="n">countStoreBuilder</span> <span class="o">=</span>
   <span class="n">Stores</span><span class="o">.</span><span class="na">keyValueStoreBuilder</span><span class="o">(</span>
     <span class="n">Stores</span><span class="o">.</span><span class="na">persistentKeyValueStore</span><span class="o">(</span><span class="s">&quot;Counts&quot;</span><span class="o">),</span>
     <span class="n">Serdes</span><span class="o">.</span><span class="na">String</span><span class="o">(),</span>
     <span class="n">Serdes</span><span class="o">.</span><span class="na">Long</span><span class="o">())</span>
-  <span class="o">.</span><span class="na">withCachingEnabled</span><span class="o">()</span>
-</pre></div>
+  <span class="o">.</span><span class="na">withCachingEnabled</span><span class="o">()</span></code></pre></div>
       </div>
     </div>
     <div class="section" id="rocksdb">
@@ -206,7 +202,10 @@
        <span class="o">}</span>
     <span class="o">}</span>
       </div>
-        <sup id="fn1">1. INDEX_FILTER_BLOCK_RATIO can be used to set a fraction of the block cache to set aside for "high priority" (aka index and filter) blocks, preventing them from being evicted by data blocks. See the full signature of the <a class="reference external" href="https://github.com/facebook/rocksdb/blob/master/java/src/main/java/org/rocksdb/LRUCache.java#L72">LRUCache constructor</a>. </sup>
+        <sup id="fn1">1. INDEX_FILTER_BLOCK_RATIO can be used to set a fraction of the block cache to set aside for "high priority" (aka index and filter) blocks, preventing them from being evicted by data blocks. See the full signature of the <a class="reference external" href="https://github.com/facebook/rocksdb/blob/master/java/src/main/java/org/rocksdb/LRUCache.java#L72">LRUCache constructor</a>.
+          NOTE: the boolean parameter in the cache constructor lets you control whether the cache should enforce a strict memory limit by failing the read or iteration in the rare cases where it might go larger than its capacity. Due to a
+          <a class="reference external" href="https://github.com/facebook/rocksdb/issues/6247">bug in RocksDB</a>, this option cannot be used
+          if the write buffer memory is also counted against the cache. If you set this to true, you should NOT pass the cache in to the <code>WriteBufferManager</code> and just control the write buffer and cache memory separately.</sup>
         <br>
         <sup id="fn2">2. This must be set in order for INDEX_FILTER_BLOCK_RATIO to take effect (see footnote 1) as described in the <a class="reference external" href="https://github.com/facebook/rocksdb/wiki/Block-Cache#caching-index-and-filter-blocks">RocksDB docs</a></sup>
         <br>
@@ -250,10 +249,10 @@
 
 <!--#include virtual="../../../includes/_header.htm" -->
 <!--#include virtual="../../../includes/_top.htm" -->
-<div class="content documentation documentation--current">
+<div class="content documentation ">
   <!--#include virtual="../../../includes/_nav.htm" -->
   <div class="right">
-    <!--#include virtual="../../../includes/_docs_banner.htm" -->
+    <!--//#include virtual="../../../includes/_docs_banner.htm" -->
     <ul class="breadcrumbs">
       <li><a href="/documentation">Documentation</a></li>
       <li><a href="/documentation/streams">Kafka Streams</a></li>

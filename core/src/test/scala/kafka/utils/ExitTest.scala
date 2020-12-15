@@ -89,7 +89,7 @@ class ExitTest {
       array(1) = array(1).asInstanceOf[Int] + 1
     }
     try {
-      Exit.addShutdownHook(name, sideEffect) // by-name parameter, only invoked due to above shutdownHookAdder
+      Exit.addShutdownHook(name, sideEffect()) // by-name parameter, only invoked due to above shutdownHookAdder
       assertEquals(1, array(1))
       assertEquals(name * array(1).asInstanceOf[Int], array(0).toString)
       Exit.addShutdownHook(name, array(1) = array(1).asInstanceOf[Int] + 1) // by-name parameter, only invoked due to above shutdownHookAdder
@@ -109,7 +109,7 @@ class ExitTest {
       // mutate the first element
       array(0) = array(0) + name
     }
-    Exit.addShutdownHook(name, sideEffect) // by-name parameter, not invoked
+    Exit.addShutdownHook(name, sideEffect()) // by-name parameter, not invoked
     // make sure the first element wasn't mutated
     assertEquals(name, array(0))
     Exit.addShutdownHook(name, sideEffect()) // by-name parameter, not invoked

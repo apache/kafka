@@ -38,5 +38,4 @@ public class ApiVersionsTest {
         apiVersions.remove("1");
         assertEquals(RecordBatch.CURRENT_MAGIC_VALUE, apiVersions.maxUsableProduceMagic());
     }
-
 }

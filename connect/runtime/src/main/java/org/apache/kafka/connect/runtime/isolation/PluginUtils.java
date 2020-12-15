@@ -44,7 +44,7 @@ public class PluginUtils {
     private static final Logger log = LoggerFactory.getLogger(PluginUtils.class);
 
     // Be specific about javax packages and exclude those existing in Java SE and Java EE libraries.
-    private static final Pattern BLACKLIST = Pattern.compile("^(?:"
+    private static final Pattern EXCLUDE = Pattern.compile("^(?:"
             + "java"
             + "|javax\\.accessibility"
             + "|javax\\.activation"
@@ -125,10 +125,10 @@ public class PluginUtils {
 
     // If the base interface or class that will be used to identify Connect plugins resides within
     // the same java package as the plugins that need to be loaded in isolation (and thus are
-    // added to the WHITELIST), then this base interface or class needs to be excluded in the
+    // added to the INCLUDE pattern), then this base interface or class needs to be excluded in the
     // regular expression pattern
-    private static final Pattern WHITELIST = Pattern.compile("^org\\.apache\\.kafka\\.(?:connect\\.(?:"
-            + "transforms\\.(?!Transformation$).*"
+    private static final Pattern INCLUDE = Pattern.compile("^org\\.apache\\.kafka\\.(?:connect\\.(?:"
+            + "transforms\\.(?!Transformation|predicates\\.Predicate$).*"
             + "|json\\..*"
             + "|file\\..*"
             + "|mirror\\..*"
@@ -137,7 +137,7 @@ public class PluginUtils {
             + "|storage\\.StringConverter"
             + "|storage\\.SimpleHeaderConverter"
             + "|rest\\.basic\\.auth\\.extension\\.BasicAuthSecurityRestExtension"
-            + "|connector\\.policy\\.(?!ConnectorClientConfigOverridePolicy$).*"
+            + "|connector\\.policy\\.(?!ConnectorClientConfig(?:OverridePolicy|Request(?:\\$ClientType)?)$).*"
             + ")"
             + "|common\\.config\\.provider\\.(?!ConfigProvider$).*"
             + ")$");
@@ -158,7 +158,7 @@ public class PluginUtils {
      * @return true if this class should be loaded in isolation, false otherwise.
      */
     public static boolean shouldLoadInIsolation(String name) {
-        return !(BLACKLIST.matcher(name).matches() && !WHITELIST.matcher(name).matches());
+        return !(EXCLUDE.matcher(name).matches() && !INCLUDE.matcher(name).matches());
     }
 
     /**

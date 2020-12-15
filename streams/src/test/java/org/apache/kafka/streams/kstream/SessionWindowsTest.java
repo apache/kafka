@@ -22,6 +22,7 @@ import static java.time.Duration.ofMillis;
 import static org.apache.kafka.streams.EqualityCheck.verifyEquality;
 import static org.apache.kafka.streams.EqualityCheck.verifyInEquality;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
 @SuppressWarnings("deprecation")
@@ -52,14 +53,14 @@ public class SessionWindowsTest {
         }
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void windowSizeMustNotBeNegative() {
-        SessionWindows.with(ofMillis(-1));
+        assertThrows(IllegalArgumentException.class, () -> SessionWindows.with(ofMillis(-1)));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void windowSizeMustNotBeZero() {
-        SessionWindows.with(ofMillis(0));
+        assertThrows(IllegalArgumentException.class, () -> SessionWindows.with(ofMillis(0)));
     }
 
     @SuppressWarnings("deprecation") // specifically testing deprecated apis

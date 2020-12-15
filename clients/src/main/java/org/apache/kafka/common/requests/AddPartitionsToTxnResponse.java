@@ -23,8 +23,8 @@ import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartiti
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnTopicResult;
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnTopicResultCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -38,7 +38,8 @@ import java.util.Map;
  *   - {@link Errors#COORDINATOR_LOAD_IN_PROGRESS}
  *   - {@link Errors#INVALID_TXN_STATE}
  *   - {@link Errors#INVALID_PRODUCER_ID_MAPPING}
- *   - {@link Errors#INVALID_PRODUCER_EPOCH}
+ *   - {@link Errors#INVALID_PRODUCER_EPOCH} // for version <=1
+ *   - {@link Errors#PRODUCER_FENCED}
  *   - {@link Errors#TOPIC_AUTHORIZATION_FAILED}
  *   - {@link Errors#TRANSACTIONAL_ID_AUTHORIZATION_FAILED}
  *   - {@link Errors#UNKNOWN_TOPIC_OR_PARTITION}
@@ -49,11 +50,13 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
 
     private Map<TopicPartition, Errors> cachedErrorsMap = null;
 
-    public AddPartitionsToTxnResponse(Struct struct, short version) {
-        this.data = new AddPartitionsToTxnResponseData(struct, version);
+    public AddPartitionsToTxnResponse(AddPartitionsToTxnResponseData data) {
+        super(ApiKeys.ADD_PARTITIONS_TO_TXN);
+        this.data = data;
     }
 
     public AddPartitionsToTxnResponse(int throttleTimeMs, Map<TopicPartition, Errors> errors) {
+        super(ApiKeys.ADD_PARTITIONS_TO_TXN);
 
         Map<String, AddPartitionsToTxnPartitionResultCollection> resultMap = new HashMap<>();
 
@@ -114,12 +117,12 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
     }
 
     @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
+    protected AddPartitionsToTxnResponseData data() {
+        return data;
     }
 
     public static AddPartitionsToTxnResponse parse(ByteBuffer buffer, short version) {
-        return new AddPartitionsToTxnResponse(ApiKeys.ADD_PARTITIONS_TO_TXN.parseResponse(version, buffer), version);
+        return new AddPartitionsToTxnResponse(new AddPartitionsToTxnResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

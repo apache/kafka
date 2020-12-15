@@ -26,7 +26,6 @@ import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataP
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.MessageTestUtil;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
@@ -157,7 +156,7 @@ public class UpdateMetadataRequestTest {
             assertEquals(2, request.controllerEpoch());
             assertEquals(3, request.brokerEpoch());
 
-            ByteBuffer byteBuffer = MessageTestUtil.messageToByteBuffer(request.data(), request.version());
+            ByteBuffer byteBuffer = request.serialize();
             UpdateMetadataRequest deserializedRequest = new UpdateMetadataRequest(new UpdateMetadataRequestData(
                     new ByteBufferAccessor(byteBuffer), version), version);
 
@@ -185,9 +184,13 @@ public class UpdateMetadataRequestTest {
 
             assertEquals(new HashSet<>(partitionStates), iterableToSet(deserializedRequest.partitionStates()));
             assertEquals(liveBrokers, deserializedRequest.liveBrokers());
-            assertEquals(1, request.controllerId());
-            assertEquals(2, request.controllerEpoch());
-            assertEquals(3, request.brokerEpoch());
+            assertEquals(1, deserializedRequest.controllerId());
+            assertEquals(2, deserializedRequest.controllerEpoch());
+            // Broker epoch is only supported from version 5
+            if (version >= 5)
+                assertEquals(3, deserializedRequest.brokerEpoch());
+            else
+                assertEquals(-1, deserializedRequest.brokerEpoch());
         }
     }
 
@@ -203,8 +206,7 @@ public class UpdateMetadataRequestTest {
         UpdateMetadataRequest.Builder builder = new UpdateMetadataRequest.Builder((short) 5, 0, 0, 0,
                 partitionStates, Collections.emptyList());
 
-        assertTrue(MessageTestUtil.messageSize(builder.build((short) 5).data(), (short) 5) <
-            MessageTestUtil.messageSize(builder.build((short) 4).data(), (short) 4));
+        assertTrue(builder.build((short) 5).sizeInBytes() <  builder.build((short) 4).sizeInBytes());
     }
 
     private <T> Set<T> iterableToSet(Iterable<T> iterable) {

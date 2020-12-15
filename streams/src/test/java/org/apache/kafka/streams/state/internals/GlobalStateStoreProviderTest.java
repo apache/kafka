@@ -17,15 +17,19 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
@@ -42,7 +46,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.mock;
+import static org.easymock.EasyMock.niceMock;
 import static org.easymock.EasyMock.replay;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
@@ -88,18 +92,34 @@ public class GlobalStateStoreProviderTest {
                     false),
                 Serdes.String(),
                 Serdes.String()).build());
+        stores.put(
+            "s-store",
+            Stores.sessionStoreBuilder(
+                Stores.inMemorySessionStore(
+                    "s-store",
+                    Duration.ofMillis(10L)),
+                Serdes.String(),
+                Serdes.String()).build());
 
-        final ProcessorContextImpl mockContext = mock(ProcessorContextImpl.class);
-        expect(mockContext.applicationId()).andReturn("appId").anyTimes();
+        final ProcessorContextImpl mockContext = niceMock(ProcessorContextImpl.class);
+        expect(mockContext.applicationId()).andStubReturn("appId");
         expect(mockContext.metrics())
-            .andReturn(new StreamsMetricsImpl(new Metrics(), "threadName", StreamsConfig.METRICS_LATEST))
-            .anyTimes();
-        expect(mockContext.taskId()).andReturn(new TaskId(0, 0)).anyTimes();
-        expect(mockContext.recordCollector()).andReturn(null).anyTimes();
+            .andStubReturn(
+                new StreamsMetricsImpl(new Metrics(), "threadName", StreamsConfig.METRICS_LATEST, new MockTime())
+            );
+        expect(mockContext.taskId()).andStubReturn(new TaskId(0, 0));
+        expect(mockContext.recordCollector()).andStubReturn(null);
+        expectSerdes(mockContext);
         replay(mockContext);
         for (final StateStore store : stores.values()) {
-            store.init(mockContext, null);
+            store.init((StateStoreContext) mockContext, null);
         }
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static void expectSerdes(final ProcessorContextImpl context) {
+        expect(context.keySerde()).andStubReturn((Serde) Serdes.String());
+        expect(context.valueSerde()).andStubReturn((Serde) Serdes.Long());
     }
 
     @Test
@@ -173,6 +193,26 @@ public class GlobalStateStoreProviderTest {
     }
 
     @Test
+    public void shouldReturnWindowStore() {
+        final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
+        final List<ReadOnlyWindowStore<String, String>> stores =
+                provider.stores("w-store", QueryableStoreTypes.windowStore());
+        assertEquals(1, stores.size());
+        for (final ReadOnlyWindowStore<String, String> store : stores) {
+            assertThat(store, instanceOf(ReadOnlyWindowStore.class));
+            assertThat(store, not(instanceOf(TimestampedWindowStore.class)));
+        }
+    }
+
+    @Test
+    public void shouldNotReturnWindowStoreAsTimestampedStore() {
+        final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
+        final List<ReadOnlyWindowStore<String, ValueAndTimestamp<String>>> stores =
+                provider.stores("w-store", QueryableStoreTypes.timestampedWindowStore());
+        assertEquals(0, stores.size());
+    }
+
+    @Test
     public void shouldReturnTimestampedWindowStoreAsWindowStore() {
         final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
         final List<ReadOnlyWindowStore<String, ValueAndTimestamp<String>>> stores =
@@ -181,6 +221,17 @@ public class GlobalStateStoreProviderTest {
         for (final ReadOnlyWindowStore<String, ValueAndTimestamp<String>> store : stores) {
             assertThat(store, instanceOf(ReadOnlyWindowStore.class));
             assertThat(store, not(instanceOf(TimestampedWindowStore.class)));
+        }
+    }
+
+    @Test
+    public void shouldReturnSessionStore() {
+        final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
+        final List<ReadOnlySessionStore<String, String>> stores =
+                provider.stores("s-store", QueryableStoreTypes.sessionStore());
+        assertEquals(1, stores.size());
+        for (final ReadOnlySessionStore<String, String> store : stores) {
+            assertThat(store, instanceOf(ReadOnlySessionStore.class));
         }
     }
 }

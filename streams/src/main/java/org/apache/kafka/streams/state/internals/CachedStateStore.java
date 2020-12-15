@@ -25,4 +25,11 @@ public interface CachedStateStore<K, V> {
      */
     boolean setFlushListener(final CacheFlushListener<K, V> listener,
                              final boolean sendOldValues);
+
+    /**
+     * Flush only the cache but not the underlying state stores
+     *
+     * TODO: this is a hacky workaround for now, should be removed when we decouple caching with emitting
+     */
+    void flushCache();
 }

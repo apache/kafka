@@ -17,24 +17,23 @@
 
 package org.apache.kafka.trogdor.basic;
 
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.trogdor.common.Platform;
 
-import org.junit.Rule;
-import org.junit.rules.Timeout;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import org.junit.jupiter.api.Timeout;
 
-import static org.junit.Assert.assertEquals;
-
+@Timeout(value = 120000, unit = MILLISECONDS)
 public class BasicPlatformTest {
-    @Rule
-    final public Timeout globalTimeout = Timeout.millis(120000);
 
     @Test
     public void testCreateBasicPlatform() throws Exception {

@@ -86,8 +86,8 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     producer.send(new ProducerRecord(topic, 0, null, msg)).get
 
     //The message should have epoch 0 stamped onto it in both leader and follower
-    assertEquals(0, latestRecord(leader).partitionLeaderEpoch())
-    assertEquals(0, latestRecord(follower).partitionLeaderEpoch())
+    assertEquals(0, latestRecord(leader).partitionLeaderEpoch)
+    assertEquals(0, latestRecord(follower).partitionLeaderEpoch)
 
     //Both leader and follower should have recorded Epoch 0 at Offset 0
     assertEquals(Buffer(EpochEntry(0, 0)), epochCache(leader).epochEntries)
@@ -452,16 +452,16 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     TestUtils.createProducer(getBrokerListStrFromServers(brokers), acks = -1)
   }
 
-  private def leader(): KafkaServer = {
+  private def leader: KafkaServer = {
     assertEquals(2, brokers.size)
     val leaderId = zkClient.getLeaderForPartition(new TopicPartition(topic, 0)).get
-    brokers.filter(_.config.brokerId == leaderId)(0)
+    brokers.filter(_.config.brokerId == leaderId).head
   }
 
-  private def follower(): KafkaServer = {
+  private def follower: KafkaServer = {
     assertEquals(2, brokers.size)
     val leader = zkClient.getLeaderForPartition(new TopicPartition(topic, 0)).get
-    brokers.filter(_.config.brokerId != leader)(0)
+    brokers.filter(_.config.brokerId != leader).head
   }
 
   private def createBroker(id: Int, enableUncleanLeaderElection: Boolean = false): KafkaServer = {

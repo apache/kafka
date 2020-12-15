@@ -221,6 +221,37 @@ class OffsetValidationTest(VerifiableConsumerTest):
                 "Current position %d greater than the total number of consumed records %d" % \
                 (consumer.current_position(partition), consumer.total_consumed())
 
+    @cluster(num_nodes=7)
+    @matrix(bounce_mode=["all", "rolling"])
+    def test_static_consumer_persisted_after_rejoin(self, bounce_mode):
+        """
+        Verify that the updated member.id(updated_member_id) caused by static member rejoin would be persisted. If not,
+        after the brokers rolling bounce, the migrated group coordinator would load the stale persisted member.id and
+        fence subsequent static member rejoin with updated_member_id.
+
+        - Start a producer which continues producing new messages throughout the test.
+        - Start up a static consumer and wait until it's up
+        - Restart the consumer and wait until it up, its member.id is supposed to be updated and persisted.
+        - Rolling bounce all the brokers and verify that the static consumer can still join the group and consumer messages.
+        """
+        producer = self.setup_producer(self.TOPIC)
+        producer.start()
+        self.await_produced_messages(producer)
+        self.session_timeout_sec = 60
+        consumer = self.setup_consumer(self.TOPIC, static_membership=True)
+        consumer.start()
+        self.await_all_members(consumer)
+
+        # bounce the static member to trigger its member.id updated
+        if bounce_mode == "all":
+            self.bounce_all_consumers(consumer, num_bounces=1)
+        else:
+            self.rolling_bounce_consumers(consumer, num_bounces=1)
+
+        # rolling bounce all the brokers to trigger the group coordinator migration and verify updated member.id is persisted
+        # and reloaded successfully
+        self.rolling_bounce_brokers(consumer, num_bounces=1)
+
     @cluster(num_nodes=10)
     @matrix(num_conflict_consumers=[1, 2], fencing_stage=["stable", "all"])
     def test_fencing_static_consumer(self, num_conflict_consumers, fencing_stage):
@@ -254,7 +285,9 @@ class OffsetValidationTest(VerifiableConsumerTest):
             self.await_members(conflict_consumer, num_conflict_consumers)
             self.await_members(consumer, len(consumer.nodes) - num_conflict_consumers)
 
-            assert len(consumer.dead_nodes()) == num_conflict_consumers
+            wait_until(lambda: len(consumer.dead_nodes()) == num_conflict_consumers,
+                       timeout_sec=10,
+                       err_msg="Timed out waiting for the fenced consumers to stop")
         else:
             consumer.start()
             conflict_consumer.start()

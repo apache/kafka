@@ -36,9 +36,8 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.test.IntegrationTest;
-import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
-
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
@@ -122,7 +121,8 @@ public class GlobalThreadShutDownOrderTest {
             storeBuilder,
             globalStoreTopic,
             Consumed.with(Serdes.String(), Serdes.Long()),
-            new MockProcessorSupplier<>());
+            new MockApiProcessorSupplier<>()
+        );
 
         builder
             .stream(streamTopic, stringLongConsumed)

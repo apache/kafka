@@ -19,6 +19,8 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.ConsumerProtocolAssignment;
+import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
@@ -32,13 +34,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
-import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.CONSUMER_PROTOCOL_HEADER_SCHEMA;
-import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.OWNED_PARTITIONS_KEY_NAME;
-import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.TOPICS_KEY_NAME;
-import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.TOPIC_ASSIGNMENT_V0;
-import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.TOPIC_PARTITIONS_KEY_NAME;
-import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.USER_DATA_KEY_NAME;
-import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.VERSION_KEY_NAME;
 import static org.apache.kafka.test.TestUtils.toSet;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -50,6 +45,30 @@ public class ConsumerProtocolTest {
     private final TopicPartition tp1 = new TopicPartition("foo", 1);
     private final TopicPartition tp2 = new TopicPartition("bar", 2);
     private final Optional<String> groupInstanceId = Optional.of("instance.id");
+
+    @Test
+    public void serializeDeserializeSubscriptionAllVersions() {
+        List<TopicPartition> ownedPartitions = Arrays.asList(
+            new TopicPartition("foo", 0),
+            new TopicPartition("bar", 0));
+        Subscription subscription = new Subscription(Arrays.asList("foo", "bar"),
+            ByteBuffer.wrap("hello".getBytes()), ownedPartitions);
+
+        for (short version = ConsumerProtocolSubscription.LOWEST_SUPPORTED_VERSION; version <= ConsumerProtocolSubscription.HIGHEST_SUPPORTED_VERSION; version++) {
+            ByteBuffer buffer = ConsumerProtocol.serializeSubscription(subscription, version);
+            Subscription parsedSubscription = ConsumerProtocol.deserializeSubscription(buffer);
+
+            assertEquals(subscription.topics(), parsedSubscription.topics());
+            assertEquals(subscription.userData(), parsedSubscription.userData());
+            assertFalse(parsedSubscription.groupInstanceId().isPresent());
+
+            if (version >= 1) {
+                assertEquals(toSet(subscription.ownedPartitions()), toSet(parsedSubscription.ownedPartitions()));
+            } else {
+                assertEquals(Collections.emptyList(), parsedSubscription.ownedPartitions());
+            }
+        }
+    }
 
     @Test
     public void serializeDeserializeMetadata() {
@@ -85,7 +104,7 @@ public class ConsumerProtocolTest {
     @Test
     public void deserializeOldSubscriptionVersion() {
         Subscription subscription = new Subscription(Arrays.asList("foo", "bar"), null);
-        ByteBuffer buffer = ConsumerProtocol.serializeSubscriptionV0(subscription);
+        ByteBuffer buffer = ConsumerProtocol.serializeSubscription(subscription, (short) 0);
         Subscription parsedSubscription = ConsumerProtocol.deserializeSubscription(buffer);
         assertEquals(parsedSubscription.topics(), parsedSubscription.topics());
         assertNull(parsedSubscription.userData());
@@ -97,9 +116,8 @@ public class ConsumerProtocolTest {
         Subscription subscription = new Subscription(Arrays.asList("foo", "bar"), null, Collections.singletonList(tp2));
         ByteBuffer buffer = ConsumerProtocol.serializeSubscription(subscription);
         // ignore the version assuming it is the old byte code, as it will blindly deserialize as V0
-        Struct header = CONSUMER_PROTOCOL_HEADER_SCHEMA.read(buffer);
-        header.getShort(VERSION_KEY_NAME);
-        Subscription parsedSubscription = ConsumerProtocol.deserializeSubscriptionV0(buffer);
+        ConsumerProtocol.deserializeVersion(buffer);
+        Subscription parsedSubscription = ConsumerProtocol.deserializeSubscription(buffer, (short) 0);
         assertEquals(subscription.topics(), parsedSubscription.topics());
         assertNull(parsedSubscription.userData());
         assertTrue(parsedSubscription.ownedPartitions().isEmpty());
@@ -112,21 +130,23 @@ public class ConsumerProtocolTest {
         short version = 100;
 
         Schema subscriptionSchemaV100 = new Schema(
-                new Field(TOPICS_KEY_NAME, new ArrayOf(Type.STRING)),
-                new Field(USER_DATA_KEY_NAME, Type.BYTES),
-                new Field(OWNED_PARTITIONS_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT_V0)),
-                new Field("foo", Type.STRING));
+            new Field("topics", new ArrayOf(Type.STRING)),
+            new Field("user_data", Type.NULLABLE_BYTES),
+            new Field("owned_partitions", new ArrayOf(
+                ConsumerProtocolSubscription.TopicPartition.SCHEMA_1)),
+            new Field("foo", Type.STRING));
 
         Struct subscriptionV100 = new Struct(subscriptionSchemaV100);
-        subscriptionV100.set(TOPICS_KEY_NAME, new Object[]{"topic"});
-        subscriptionV100.set(USER_DATA_KEY_NAME, ByteBuffer.wrap(new byte[0]));
-        subscriptionV100.set(OWNED_PARTITIONS_KEY_NAME, new Object[]{new Struct(TOPIC_ASSIGNMENT_V0)
-            .set(ConsumerProtocol.TOPIC_KEY_NAME, tp2.topic())
-            .set(ConsumerProtocol.PARTITIONS_KEY_NAME, new Object[]{tp2.partition()})});
+        subscriptionV100.set("topics", new Object[]{"topic"});
+        subscriptionV100.set("user_data", ByteBuffer.wrap(new byte[0]));
+        subscriptionV100.set("owned_partitions", new Object[]{new Struct(
+            ConsumerProtocolSubscription.TopicPartition.SCHEMA_1)
+            .set("topic", tp2.topic())
+            .set("partitions", new Object[]{tp2.partition()})});
         subscriptionV100.set("foo", "bar");
 
-        Struct headerV100 = new Struct(CONSUMER_PROTOCOL_HEADER_SCHEMA);
-        headerV100.set(VERSION_KEY_NAME, version);
+        Struct headerV100 = new Struct(new Schema(new Field("version", Type.INT16)));
+        headerV100.set("version", version);
 
         ByteBuffer buffer = ByteBuffer.allocate(subscriptionV100.sizeOf() + headerV100.sizeOf());
         headerV100.writeTo(buffer);
@@ -139,6 +159,19 @@ public class ConsumerProtocolTest {
         assertEquals(Collections.singletonList("topic"), subscription.topics());
         assertEquals(Collections.singletonList(tp2), subscription.ownedPartitions());
         assertEquals(groupInstanceId, subscription.groupInstanceId());
+    }
+
+    @Test
+    public void serializeDeserializeAssignmentAllVersions() {
+        List<TopicPartition> partitions = Arrays.asList(tp1, tp2);
+        Assignment assignment = new Assignment(partitions, ByteBuffer.wrap("hello".getBytes()));
+
+        for (short version = ConsumerProtocolAssignment.LOWEST_SUPPORTED_VERSION; version <= ConsumerProtocolAssignment.HIGHEST_SUPPORTED_VERSION; version++) {
+            ByteBuffer buffer = ConsumerProtocol.serializeAssignment(assignment, version);
+            Assignment parsedAssignment = ConsumerProtocol.deserializeAssignment(buffer);
+            assertEquals(toSet(partitions), toSet(parsedAssignment.partitions()));
+            assertEquals(assignment.userData(), parsedAssignment.userData());
+        }
     }
 
     @Test
@@ -165,20 +198,21 @@ public class ConsumerProtocolTest {
         short version = 100;
 
         Schema assignmentSchemaV100 = new Schema(
-                new Field(TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT_V0)),
-                new Field(USER_DATA_KEY_NAME, Type.BYTES),
-                new Field("foo", Type.STRING));
+            new Field("assigned_partitions", new ArrayOf(
+                ConsumerProtocolAssignment.TopicPartition.SCHEMA_0)),
+            new Field("user_data", Type.BYTES),
+            new Field("foo", Type.STRING));
 
         Struct assignmentV100 = new Struct(assignmentSchemaV100);
-        assignmentV100.set(TOPIC_PARTITIONS_KEY_NAME,
-                new Object[]{new Struct(TOPIC_ASSIGNMENT_V0)
-                        .set(ConsumerProtocol.TOPIC_KEY_NAME, tp1.topic())
-                        .set(ConsumerProtocol.PARTITIONS_KEY_NAME, new Object[]{tp1.partition()})});
-        assignmentV100.set(USER_DATA_KEY_NAME, ByteBuffer.wrap(new byte[0]));
+        assignmentV100.set("assigned_partitions",
+            new Object[]{new Struct(ConsumerProtocolAssignment.TopicPartition.SCHEMA_0)
+                .set("topic", tp1.topic())
+                .set("partitions", new Object[]{tp1.partition()})});
+        assignmentV100.set("user_data", ByteBuffer.wrap(new byte[0]));
         assignmentV100.set("foo", "bar");
 
-        Struct headerV100 = new Struct(CONSUMER_PROTOCOL_HEADER_SCHEMA);
-        headerV100.set(VERSION_KEY_NAME, version);
+        Struct headerV100 = new Struct(new Schema(new Field("version", Type.INT16)));
+        headerV100.set("version", version);
 
         ByteBuffer buffer = ByteBuffer.allocate(assignmentV100.sizeOf() + headerV100.sizeOf());
         headerV100.writeTo(buffer);

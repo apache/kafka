@@ -30,7 +30,7 @@ import org.apache.kafka.streams.kstream.SessionWindowedKStream;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.WindowedSerdes;
-import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
+import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -53,10 +53,10 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
                                final Set<String> subTopologySourceNodes,
                                final String name,
                                final Serde<K> keySerde,
-                               final Serde<V> valSerde,
+                               final Serde<V> valueSerde,
                                final GroupedStreamAggregateBuilder<K, V> aggregateBuilder,
-                               final StreamsGraphNode streamsGraphNode) {
-        super(name, keySerde, valSerde, subTopologySourceNodes, streamsGraphNode, builder);
+                               final GraphNode graphNode) {
+        super(name, keySerde, valueSerde, subTopologySourceNodes, graphNode, builder);
         Objects.requireNonNull(windows, "windows can't be null");
         this.windows = windows;
         this.aggregateBuilder = aggregateBuilder;
@@ -124,7 +124,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
 
     @Override
     public KTable<Windowed<K>, V> reduce(final Reducer<V> reducer, final Named named) {
-        return reduce(reducer, named, Materialized.with(keySerde, valSerde));
+        return reduce(reducer, named, Materialized.with(keySerde, valueSerde));
     }
 
     @Override
@@ -147,7 +147,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
             materializedInternal.withKeySerde(keySerde);
         }
         if (materializedInternal.valueSerde() == null) {
-            materializedInternal.withValueSerde(valSerde);
+            materializedInternal.withValueSerde(valueSerde);
         }
 
         final String reduceName = new NamedInternal(named).orElseGenerateWithPrefix(builder, REDUCE_NAME);

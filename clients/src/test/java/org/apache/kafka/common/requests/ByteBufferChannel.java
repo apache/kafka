@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.GatheringByteChannel;
 
@@ -31,24 +30,25 @@ public class ByteBufferChannel implements GatheringByteChannel {
     }
 
     @Override
-    public long write(ByteBuffer[] srcs, int offset, int length) throws IOException {
+    public long write(ByteBuffer[] srcs, int offset, int length) {
         int position = buf.position();
         for (int i = 0; i < length; i++) {
             ByteBuffer src = srcs[i].duplicate();
-            if (i == 0)
-                src.position(offset);
+            if (i == 0) {
+                src.position(src.position() + offset);
+            }
             buf.put(src);
         }
         return buf.position() - position;
     }
 
     @Override
-    public long write(ByteBuffer[] srcs) throws IOException {
+    public long write(ByteBuffer[] srcs) {
         return write(srcs, 0, srcs.length);
     }
 
     @Override
-    public int write(ByteBuffer src) throws IOException {
+    public int write(ByteBuffer src) {
         int position = buf.position();
         buf.put(src);
         return buf.position() - position;
@@ -60,7 +60,7 @@ public class ByteBufferChannel implements GatheringByteChannel {
     }
 
     @Override
-    public void close() throws IOException {
+    public void close() {
         buf.flip();
         closed = true;
     }

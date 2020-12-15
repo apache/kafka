@@ -48,8 +48,8 @@ class OffsetsForLeaderEpochRequestTest extends BaseRequestTest {
     val follower = replicas.find(_ != leader).get
     val nonReplica = servers.map(_.config.brokerId).find(!replicas.contains(_)).get
 
-    assertResponseError(Errors.NOT_LEADER_FOR_PARTITION, follower, request)
-    assertResponseError(Errors.NOT_LEADER_FOR_PARTITION, nonReplica, request)
+    assertResponseError(Errors.NOT_LEADER_OR_FOLLOWER, follower, request)
+    assertResponseError(Errors.NOT_LEADER_OR_FOLLOWER, nonReplica, request)
   }
 
   @Test
@@ -81,17 +81,21 @@ class OffsetsForLeaderEpochRequestTest extends BaseRequestTest {
 
     // Check follower error codes
     val followerId = TestUtils.findFollowerId(topicPartition, servers)
-    assertResponseErrorForEpoch(Errors.NOT_LEADER_FOR_PARTITION, followerId, Optional.empty())
-    assertResponseErrorForEpoch(Errors.NOT_LEADER_FOR_PARTITION, followerId, Optional.of(secondLeaderEpoch))
+    assertResponseErrorForEpoch(Errors.NOT_LEADER_OR_FOLLOWER, followerId, Optional.empty())
+    assertResponseErrorForEpoch(Errors.NOT_LEADER_OR_FOLLOWER, followerId, Optional.of(secondLeaderEpoch))
     assertResponseErrorForEpoch(Errors.UNKNOWN_LEADER_EPOCH, followerId, Optional.of(secondLeaderEpoch + 1))
     assertResponseErrorForEpoch(Errors.FENCED_LEADER_EPOCH, followerId, Optional.of(secondLeaderEpoch - 1))
   }
 
   private def assertResponseError(error: Errors, brokerId: Int, request: OffsetsForLeaderEpochRequest): Unit = {
     val response = sendRequest(brokerId, request)
-    assertEquals(request.epochsByTopicPartition.size, response.responses.size)
-    response.responses.asScala.values.foreach { partitionData =>
-      assertEquals(error, partitionData.error)
+    assertEquals(request.data.topics.size, response.data.topics.size)
+    response.data.topics.asScala.foreach { offsetForLeaderTopic =>
+      assertEquals(request.data.topics.find(offsetForLeaderTopic.topic).partitions.size,
+        offsetForLeaderTopic.partitions.size)
+      offsetForLeaderTopic.partitions.asScala.foreach { offsetForLeaderPartition =>
+        assertEquals(error.code(), offsetForLeaderPartition.errorCode())
+      }
     }
   }
 

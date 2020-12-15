@@ -85,13 +85,13 @@ public class ScramMessagesTest {
         str = String.format("n,,n=test=2Cuser,r=%s", nonce);
         m = createScramMessage(ClientFirstMessage.class, str);
         checkClientFirstMessage(m, "test=2Cuser", nonce, "");
-        assertEquals("test,user", formatter.username(m.saslName()));
+        assertEquals("test,user", ScramFormatter.username(m.saslName()));
 
         // Username containing equals, encoded as =3D
         str = String.format("n,,n=test=3Duser,r=%s", nonce);
         m = createScramMessage(ClientFirstMessage.class, str);
         checkClientFirstMessage(m, "test=3Duser", nonce, "");
-        assertEquals("test=user", formatter.username(m.saslName()));
+        assertEquals("test=user", ScramFormatter.username(m.saslName()));
 
         // Optional authorization id specified
         str = String.format("n,a=testauthzid,n=testuser,r=%s", nonce);

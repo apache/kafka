@@ -18,8 +18,8 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 import java.nio.ByteBuffer;
@@ -30,15 +30,13 @@ public class CreateDelegationTokenResponse extends AbstractResponse {
     private final CreateDelegationTokenResponseData data;
 
     public CreateDelegationTokenResponse(CreateDelegationTokenResponseData data) {
+        super(ApiKeys.CREATE_DELEGATION_TOKEN);
         this.data = data;
     }
 
-    public CreateDelegationTokenResponse(Struct struct, short version) {
-        this.data = new CreateDelegationTokenResponseData(struct, version);
-    }
-
     public static CreateDelegationTokenResponse parse(ByteBuffer buffer, short version) {
-        return new CreateDelegationTokenResponse(ApiKeys.CREATE_DELEGATION_TOKEN.responseSchema(version).read(buffer), version);
+        return new CreateDelegationTokenResponse(
+            new CreateDelegationTokenResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     public static CreateDelegationTokenResponse prepareResponse(int throttleTimeMs,
@@ -73,11 +71,6 @@ public class CreateDelegationTokenResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         return errorCounts(error());
-    }
-
-    @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
     }
 
     @Override

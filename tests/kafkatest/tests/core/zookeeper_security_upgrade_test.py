@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ducktape.mark import matrix, ignore
+from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 
 from kafkatest.services.zookeeper import ZookeeperService
@@ -96,7 +96,9 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
         # set acls
         if self.is_secure:
             self.kafka.authorizer_class_name = KafkaService.ACL_AUTHORIZER
-            self.acls.set_acls(security_protocol, self.kafka, self.topic, self.group)
+            # Force use of direct ZooKeeper access because Kafka is not yet started
+            self.acls.set_acls(security_protocol, self.kafka, self.topic, self.group, force_use_zk_connection=True,
+                               additional_cluster_operations_to_grant=['Create'])
 
         if self.no_sasl:
             self.kafka.start()

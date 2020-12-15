@@ -40,7 +40,7 @@ public abstract class SampledStat implements MeasurableStat {
 
     public SampledStat(double initialValue) {
         this.initialValue = initialValue;
-        this.samples = new ArrayList<Sample>(2);
+        this.samples = new ArrayList<>(2);
     }
 
     @Override

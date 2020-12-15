@@ -47,7 +47,15 @@ class TransactionsTest(Test):
         self.num_output_partitions = 3
         self.num_seed_messages = 100000
         self.transaction_size = 750
-        self.transaction_timeout = 10000
+
+        # The transaction timeout should be lower than the progress timeout, but at
+        # least as high as the request timeout (which is 30s by default). When the
+        # client is hard-bounced, progress may depend on the previous transaction
+        # being aborted. When the broker is hard-bounced, we may have to wait as
+        # long as the request timeout to get a `Produce` response and we do not
+        # want the coordinator timing out the transaction.
+        self.transaction_timeout = 40000
+        self.progress_timeout_sec = 60
         self.consumer_group = "transactions-test-consumer-group"
 
         self.zk = ZookeeperService(test_context, num_nodes=1)
@@ -115,9 +123,9 @@ class TransactionsTest(Test):
         for _ in range(3):
             for copier in copiers:
                 wait_until(lambda: copier.progress_percent() >= 20.0,
-                           timeout_sec=30,
-                           err_msg="%s : Message copier didn't make enough progress in 30s. Current progress: %s" \
-                           % (copier.transactional_id, str(copier.progress_percent())))
+                           timeout_sec=self.progress_timeout_sec,
+                           err_msg="%s : Message copier didn't make enough progress in %ds. Current progress: %s" \
+                           % (copier.transactional_id, self.progress_timeout_sec, str(copier.progress_percent())))
                 self.logger.info("%s - progress: %s" % (copier.transactional_id,
                                                         str(copier.progress_percent())))
                 copier.restart(clean_shutdown)
@@ -240,7 +248,7 @@ class TransactionsTest(Test):
             # We reduce the number of seed messages to copy to account for the fewer output
             # partitions, and thus lower parallelism. This helps keep the test
             # time shorter.
-            self.num_seed_messages = self.num_seed_messages / 3
+            self.num_seed_messages = self.num_seed_messages // 3
             self.num_input_partitions = 1
             self.num_output_partitions = 1
 

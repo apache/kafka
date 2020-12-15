@@ -32,7 +32,7 @@ import org.apache.kafka.streams.kstream.{
 }
 import org.apache.kafka.streams.processor.ProcessorContext
 import org.apache.kafka.streams.scala.ImplicitConversions._
-import org.apache.kafka.streams.scala.Serdes._
+import org.apache.kafka.streams.scala.serialization.Serdes._
 import org.apache.kafka.streams.scala.StreamsBuilder
 import org.apache.kafka.streams.scala.utils.TestDriver
 import org.junit.runner.RunWith
@@ -152,6 +152,36 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
     testOutput.readKeyValue.key shouldBe "value2"
 
     testOutput.isEmpty shouldBe true
+
+    testDriver.close()
+  }
+
+  "repartition" should "repartition a KStream" in {
+    val builder = new StreamsBuilder()
+    val sourceTopic = "source"
+    val repartitionName = "repartition"
+    val sinkTopic = "sink"
+
+    builder.stream[String, String](sourceTopic).repartition(Repartitioned.`with`(repartitionName)).to(sinkTopic)
+
+    val testDriver = createTestDriver(builder)
+    val testInput = testDriver.createInput[String, String](sourceTopic)
+    val testOutput = testDriver.createOutput[String, String](sinkTopic)
+
+    testInput.pipeInput("1", "value1")
+    val kv1 = testOutput.readKeyValue
+    kv1.key shouldBe "1"
+    kv1.value shouldBe "value1"
+
+    testInput.pipeInput("2", "value2")
+    val kv2 = testOutput.readKeyValue
+    kv2.key shouldBe "2"
+    kv2.value shouldBe "value2"
+
+    testOutput.isEmpty shouldBe true
+
+    // appId == "test"
+    testDriver.producedTopicNames() contains "test-" + repartitionName + "-repartition"
 
     testDriver.close()
   }

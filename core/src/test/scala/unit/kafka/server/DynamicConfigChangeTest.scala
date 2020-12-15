@@ -16,20 +16,26 @@
   */
 package kafka.server
 
+import java.net.InetAddress
 import java.nio.charset.StandardCharsets
 import java.util.Properties
+import java.util.concurrent.ExecutionException
 
+import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig._
+import kafka.utils._
 import kafka.server.Constants._
-import org.junit.Assert._
+import kafka.zk.ConfigEntityChangeNotificationZNode
+import org.apache.kafka.clients.CommonClientConfigs
+import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ConfigEntry}
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 import org.apache.kafka.common.metrics.Quota
 import org.easymock.EasyMock
+import org.junit.Assert._
 import org.junit.Test
-import kafka.integration.KafkaServerTestHarness
-import kafka.utils._
-import kafka.admin.AdminOperationException
-import kafka.zk.ConfigEntityChangeNotificationZNode
-import org.apache.kafka.common.TopicPartition
+import org.scalatest.Assertions.assertThrows
 
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
@@ -190,15 +196,98 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   }
 
   @Test
+  def testIpHandlerUnresolvableAddress(): Unit = {
+    val configHandler = new IpConfigHandler(null)
+    val props: Properties = new Properties()
+    props.put(DynamicConfig.Ip.IpConnectionRateOverrideProp, "1")
+
+    assertThrows[IllegalArgumentException]{
+      configHandler.processConfigChanges("illegal-hostname", props)
+    }
+  }
+
+  @Test
+  def testIpQuotaInitialization(): Unit = {
+    val server = servers.head
+    val ipOverrideProps = new Properties()
+    ipOverrideProps.put(DynamicConfig.Ip.IpConnectionRateOverrideProp, "10")
+    val ipDefaultProps = new Properties()
+    ipDefaultProps.put(DynamicConfig.Ip.IpConnectionRateOverrideProp, "20")
+    server.shutdown()
+
+    adminZkClient.changeIpConfig(ConfigEntityName.Default, ipDefaultProps)
+    adminZkClient.changeIpConfig("1.2.3.4", ipOverrideProps)
+
+    // Remove config change znodes to force quota initialization only through loading of ip quotas
+    zkClient.getChildren(ConfigEntityChangeNotificationZNode.path).foreach { p =>
+      zkClient.deletePath(ConfigEntityChangeNotificationZNode.path + "/" + p)
+    }
+    server.startup()
+
+    val connectionQuotas = server.socketServer.connectionQuotas
+    assertEquals(10L, connectionQuotas.connectionRateForIp(InetAddress.getByName("1.2.3.4")))
+    assertEquals(20L, connectionQuotas.connectionRateForIp(InetAddress.getByName("2.4.6.8")))
+  }
+
+  @Test
+  def testIpQuotaConfigChange(): Unit = {
+    val ipOverrideProps = new Properties()
+    ipOverrideProps.put(DynamicConfig.Ip.IpConnectionRateOverrideProp, "10")
+    val ipDefaultProps = new Properties()
+    ipDefaultProps.put(DynamicConfig.Ip.IpConnectionRateOverrideProp, "20")
+
+    val overrideQuotaIp = InetAddress.getByName("1.2.3.4")
+    val defaultQuotaIp = InetAddress.getByName("2.3.4.5")
+    adminZkClient.changeIpConfig(ConfigEntityName.Default, ipDefaultProps)
+    adminZkClient.changeIpConfig(overrideQuotaIp.getHostAddress, ipOverrideProps)
+
+    val connectionQuotas = servers.head.socketServer.connectionQuotas
+
+    def verifyConnectionQuota(ip: InetAddress, expectedQuota: Integer) = {
+      TestUtils.retry(10000) {
+        val quota = connectionQuotas.connectionRateForIp(ip)
+        assertEquals(s"Unexpected quota for IP $ip", expectedQuota, quota)
+      }
+    }
+
+    verifyConnectionQuota(overrideQuotaIp, 10)
+    verifyConnectionQuota(defaultQuotaIp, 20)
+
+    val emptyProps = new Properties()
+    adminZkClient.changeIpConfig(overrideQuotaIp.getHostAddress, emptyProps)
+    verifyConnectionQuota(overrideQuotaIp, 20)
+
+    adminZkClient.changeIpConfig(ConfigEntityName.Default, emptyProps)
+    verifyConnectionQuota(overrideQuotaIp, DynamicConfig.Ip.DefaultConnectionCreationRate)
+  }
+
+  @Test
   def testConfigChangeOnNonExistingTopic(): Unit = {
-    val topic = TestUtils.tempTopic
+    val topic = TestUtils.tempTopic()
     try {
       val logProps = new Properties()
       logProps.put(FlushMessagesProp, 10000: java.lang.Integer)
       adminZkClient.changeTopicConfig(topic, logProps)
-      fail("Should fail with AdminOperationException for topic doesn't exist")
+      fail("Should fail with UnknownTopicOrPartitionException for topic doesn't exist")
     } catch {
-      case _: AdminOperationException => // expected
+      case _: UnknownTopicOrPartitionException => // expected
+    }
+  }
+
+  @Test
+  def testConfigChangeOnNonExistingTopicWithAdminClient(): Unit = {
+    val topic = TestUtils.tempTopic()
+    val admin = createAdminClient()
+    try {
+      val resource = new ConfigResource(ConfigResource.Type.TOPIC, topic)
+      val op = new AlterConfigOp(new ConfigEntry(FlushMessagesProp, "10000"), AlterConfigOp.OpType.SET)
+      admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all.get
+      fail("Should fail with UnknownTopicOrPartitionException for topic doesn't exist")
+    } catch {
+      case e: ExecutionException =>
+        assertTrue(e.getCause.isInstanceOf[UnknownTopicOrPartitionException])
+    } finally {
+      admin.close()
     }
   }
 
@@ -314,4 +403,11 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   def parse(configHandler: TopicConfigHandler, value: String): Seq[Int] = {
     configHandler.parseThrottledPartitions(CoreUtils.propsWith(LeaderReplicationThrottledReplicasProp, value), 102, LeaderReplicationThrottledReplicasProp)
   }
+
+  private def createAdminClient(): Admin = {
+    val props = new Properties()
+    props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    Admin.create(props)
+  }
+
 }

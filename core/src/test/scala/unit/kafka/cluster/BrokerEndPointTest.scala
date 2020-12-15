@@ -21,10 +21,14 @@ import java.nio.charset.StandardCharsets
 
 import kafka.utils.TestUtils
 import kafka.zk.BrokerIdZNode
+import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
+import org.apache.kafka.common.feature.Features._
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert.{assertEquals, assertNotEquals, assertNull}
 import org.junit.Test
+
+import scala.jdk.CollectionConverters._
 
 class BrokerEndPointTest {
 
@@ -147,6 +151,53 @@ class BrokerEndPointTest {
     assertEquals("host1", brokerEndPoint.host)
     assertEquals(9092, brokerEndPoint.port)
     assertEquals(None, broker.rack)
+  }
+
+  @Test
+  def testFromJsonV4WithNoFeatures(): Unit = {
+    val json = """{
+      "version":4,
+      "host":"localhost",
+      "port":9092,
+      "jmx_port":9999,
+      "timestamp":"2233345666",
+      "endpoints":["CLIENT://host1:9092", "REPLICATION://host1:9093"],
+      "listener_security_protocol_map":{"CLIENT":"SSL", "REPLICATION":"PLAINTEXT"},
+      "rack":"dc1"
+    }"""
+    val broker = parseBrokerJson(1, json)
+    assertEquals(1, broker.id)
+    val brokerEndPoint = broker.brokerEndPoint(new ListenerName("CLIENT"))
+    assertEquals("host1", brokerEndPoint.host)
+    assertEquals(9092, brokerEndPoint.port)
+    assertEquals(Some("dc1"), broker.rack)
+    assertEquals(emptySupportedFeatures, broker.features)
+  }
+
+  @Test
+  def testFromJsonV5(): Unit = {
+    val json = """{
+      "version":5,
+      "host":"localhost",
+      "port":9092,
+      "jmx_port":9999,
+      "timestamp":"2233345666",
+      "endpoints":["CLIENT://host1:9092", "REPLICATION://host1:9093"],
+      "listener_security_protocol_map":{"CLIENT":"SSL", "REPLICATION":"PLAINTEXT"},
+      "rack":"dc1",
+      "features": {"feature1": {"min_version": 1, "max_version": 2}, "feature2": {"min_version": 2, "max_version": 4}}
+    }"""
+    val broker = parseBrokerJson(1, json)
+    assertEquals(1, broker.id)
+    val brokerEndPoint = broker.brokerEndPoint(new ListenerName("CLIENT"))
+    assertEquals("host1", brokerEndPoint.host)
+    assertEquals(9092, brokerEndPoint.port)
+    assertEquals(Some("dc1"), broker.rack)
+    assertEquals(Features.supportedFeatures(
+      Map[String, SupportedVersionRange](
+        "feature1" -> new SupportedVersionRange(1, 2),
+        "feature2" -> new SupportedVersionRange(2, 4)).asJava),
+      broker.features)
   }
 
   @Test

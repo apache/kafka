@@ -43,47 +43,53 @@
   //
   // Version 10 indicates that we can use the ZStd compression algorithm, as
   // described in KIP-110.
+  // Version 12 adds flexible versions support as well as epoch validation through
+  // the `LastFetchedEpoch` field
   //
-  "validVersions": "0-11",
-  "flexibleVersions": "none",
+  "validVersions": "0-12",
+  "flexibleVersions": "12+",
   "fields": [
+    { "name": "ClusterId", "type": "string", "versions": "12+", "nullableVersions": "12+", "default": "null", "taggedVersions": "12+", "tag": 0,
+      "about": "The clusterId if known. This is used to validate metadata fetches prior to broker registration." },
     { "name": "ReplicaId", "type": "int32", "versions": "0+",
       "about": "The broker ID of the follower, of -1 if this request is from a consumer." },
-    { "name": "MaxWait", "type": "int32", "versions": "0+",
+    { "name": "MaxWaitMs", "type": "int32", "versions": "0+",
       "about": "The maximum time in milliseconds to wait for the response." },
     { "name": "MinBytes", "type": "int32", "versions": "0+",
       "about": "The minimum bytes to accumulate in the response." },
     { "name": "MaxBytes", "type": "int32", "versions": "3+", "default": "0x7fffffff", "ignorable": true,
       "about": "The maximum bytes to fetch.  See KIP-74 for cases where this limit may not be honored." },
-    { "name": "IsolationLevel", "type": "int8", "versions": "4+", "default": "0", "ignorable": false,
+    { "name": "IsolationLevel", "type": "int8", "versions": "4+", "default": "0", "ignorable": true,
       "about": "This setting controls the visibility of transactional records. Using READ_UNCOMMITTED (isolation_level = 0) makes all records visible. With READ_COMMITTED (isolation_level = 1), non-transactional and COMMITTED transactional records are visible. To be more concrete, READ_COMMITTED returns all data from offsets smaller than the current LSO (last stable offset), and enables the inclusion of the list of aborted transactions in the result, which allows consumers to discard ABORTED transactional records" },
-    { "name": "SessionId", "type": "int32", "versions": "7+", "default": "0", "ignorable": false,
+    { "name": "SessionId", "type": "int32", "versions": "7+", "default": "0", "ignorable": true,
       "about": "The fetch session ID." },
-    { "name": "Epoch", "type": "int32", "versions": "7+", "default": "-1", "ignorable": false,
-      "about": "The epoch of the partition leader as known to the follower replica or a consumer." },
-    { "name": "Topics", "type": "[]FetchableTopic", "versions": "0+",
+    { "name": "SessionEpoch", "type": "int32", "versions": "7+", "default": "-1", "ignorable": true,
+      "about": "The fetch session epoch, which is used for ordering requests in a session." },
+    { "name": "Topics", "type": "[]FetchTopic", "versions": "0+",
       "about": "The topics to fetch.", "fields": [
-      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
+      { "name": "Topic", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The name of the topic to fetch." },
-      { "name": "FetchPartitions", "type": "[]FetchPartition", "versions": "0+",
+      { "name": "Partitions", "type": "[]FetchPartition", "versions": "0+",
         "about": "The partitions to fetch.", "fields": [
-        { "name": "PartitionIndex", "type": "int32", "versions": "0+",
+        { "name": "Partition", "type": "int32", "versions": "0+",
           "about": "The partition index." },
         { "name": "CurrentLeaderEpoch", "type": "int32", "versions": "9+", "default": "-1", "ignorable": true,
           "about": "The current leader epoch of the partition." },
         { "name": "FetchOffset", "type": "int64", "versions": "0+",
           "about": "The message offset." },
-        { "name": "LogStartOffset", "type": "int64", "versions": "5+", "default": "-1", "ignorable": false,
+        { "name": "LastFetchedEpoch", "type": "int32", "versions": "12+", "default": "-1", "ignorable": false,
+          "about": "The epoch of the last fetched record or -1 if there is none"},
+        { "name": "LogStartOffset", "type": "int64", "versions": "5+", "default": "-1", "ignorable": true,
           "about": "The earliest available offset of the follower replica.  The field is only used when the request is sent by the follower."},
-        { "name": "MaxBytes", "type": "int32", "versions": "0+",
+        { "name": "PartitionMaxBytes", "type": "int32", "versions": "0+",
           "about": "The maximum bytes to fetch from this partition.  See KIP-74 for cases where this limit may not be honored." }
       ]}
     ]},
-    { "name": "Forgotten", "type": "[]ForgottenTopic", "versions": "7+", "ignorable": false,
+    { "name": "ForgottenTopicsData", "type": "[]ForgottenTopic", "versions": "7+", "ignorable": false,
       "about": "In an incremental fetch request, the partitions to remove.", "fields": [
-      { "name": "Name", "type": "string", "versions": "7+", "entityType": "topicName",
+      { "name": "Topic", "type": "string", "versions": "7+", "entityType": "topicName",
         "about": "The partition name." },
-      { "name": "ForgottenPartitionIndexes", "type": "[]int32", "versions": "7+",
+      { "name": "Partitions", "type": "[]int32", "versions": "7+",
         "about": "The partitions indexes to forget." }
     ]},
     { "name": "RackId", "type":  "string", "versions": "11+", "default": "", "ignorable": true,

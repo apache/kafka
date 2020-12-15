@@ -272,4 +272,4 @@ public final class Agent {
         }
         agent.waitForShutdown();
     }
-};
+}

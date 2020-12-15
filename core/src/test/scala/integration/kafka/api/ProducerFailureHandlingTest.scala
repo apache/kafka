@@ -161,7 +161,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
    *
    * TODO: other exceptions that can be thrown in ExecutionException:
    *    UnknownTopicOrPartitionException
-   *    NotLeaderForPartitionException
+   *    NotLeaderOrFollowerException
    *    LeaderNotAvailableException
    *    CorruptRecordException
    *    TimeoutException

@@ -23,6 +23,7 @@ package object kstream {
   type Grouped[K, V] = org.apache.kafka.streams.kstream.Grouped[K, V]
   type Consumed[K, V] = org.apache.kafka.streams.kstream.Consumed[K, V]
   type Produced[K, V] = org.apache.kafka.streams.kstream.Produced[K, V]
+  type Repartitioned[K, V] = org.apache.kafka.streams.kstream.Repartitioned[K, V]
   type Joined[K, V, VO] = org.apache.kafka.streams.kstream.Joined[K, V, VO]
   type StreamJoined[K, V, VO] = org.apache.kafka.streams.kstream.StreamJoined[K, V, VO]
 }

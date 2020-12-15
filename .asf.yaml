@@ -24,3 +24,5 @@ notifications:
 jenkins:
   github_whitelist:
     - ConcurrencyPractitioner
+    - ableegoldman
+    - cadonna

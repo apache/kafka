@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.errors;
 
+import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.TaskId;
 
@@ -36,7 +37,12 @@ public class TaskCorruptedException extends StreamsException {
 
     public TaskCorruptedException(final Map<TaskId, Collection<TopicPartition>> taskWithChangelogs) {
         super("Tasks with changelogs " + taskWithChangelogs + " are corrupted and hence needs to be re-initialized");
+        this.taskWithChangelogs = taskWithChangelogs;
+    }
 
+    public TaskCorruptedException(final Map<TaskId, Collection<TopicPartition>> taskWithChangelogs,
+                                  final InvalidOffsetException e) {
+        super("Tasks with changelogs " + taskWithChangelogs + " are corrupted and hence needs to be re-initialized", e);
         this.taskWithChangelogs = taskWithChangelogs;
     }
 

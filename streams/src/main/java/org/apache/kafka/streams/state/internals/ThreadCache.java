@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.CircularIterator;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -35,7 +36,7 @@ import java.util.NoSuchElementException;
  */
 public class ThreadCache {
     private final Logger log;
-    private final long maxCacheSizeBytes;
+    private volatile long maxCacheSizeBytes;
     private final StreamsMetricsImpl metrics;
     private final Map<String, NamedCache> caches = new HashMap<>();
 
@@ -71,12 +72,30 @@ public class ThreadCache {
         return numFlushes;
     }
 
+    public void resize(final long newCacheSizeBytes) {
+        final boolean shrink = newCacheSizeBytes < maxCacheSizeBytes;
+        maxCacheSizeBytes = newCacheSizeBytes;
+        if (shrink) {
+            if (caches.values().isEmpty()) {
+                return;
+            }
+            final CircularIterator<NamedCache> circularIterator = new CircularIterator<>(caches.values());
+            while (sizeBytes() > maxCacheSizeBytes) {
+                final NamedCache cache = circularIterator.next();
+                if (cache.isEmpty()) {
+                    circularIterator.remove();
+                }
+                cache.evict();
+                numEvicts++;
+            }
+        }
+    }
+
     /**
      * The thread cache maintains a set of {@link NamedCache}s whose names are a concatenation of the task ID and the
      * underlying store name. This method creates those names.
      * @param taskIDString Task ID
      * @param underlyingStoreName Underlying store name
-     * @return
      */
     public static String nameSpaceFromTaskIdAndStore(final String taskIDString, final String underlyingStoreName) {
         return taskIDString + "-" + underlyingStoreName;
@@ -84,8 +103,6 @@ public class ThreadCache {
 
     /**
      * Given a cache name of the form taskid-storename, return the task ID.
-     * @param cacheName
-     * @return
      */
     public static String taskIDfromCacheName(final String cacheName) {
         final String[] tokens = cacheName.split("-", 2);
@@ -94,8 +111,6 @@ public class ThreadCache {
 
     /**
      * Given a cache name of the form taskid-storename, return the store name.
-     * @param cacheName
-     * @return
      */
     public static String underlyingStoreNamefromCacheName(final String cacheName) {
         final String[] tokens = cacheName.split("-", 2);
@@ -105,9 +120,6 @@ public class ThreadCache {
 
     /**
      * Add a listener that is called each time an entry is evicted from the cache or an explicit flush is called
-     *
-     * @param namespace
-     * @param listener
      */
     public void addDirtyEntryFlushListener(final String namespace, final DirtyEntryFlushListener listener) {
         final NamedCache cache = getOrCreateCache(namespace);
@@ -180,17 +192,33 @@ public class ThreadCache {
     public MemoryLRUCacheBytesIterator range(final String namespace, final Bytes from, final Bytes to) {
         final NamedCache cache = getCache(namespace);
         if (cache == null) {
-            return new MemoryLRUCacheBytesIterator(Collections.<Bytes>emptyIterator(), new NamedCache(namespace, this.metrics));
+            return new MemoryLRUCacheBytesIterator(Collections.emptyIterator(), new NamedCache(namespace, this.metrics));
         }
         return new MemoryLRUCacheBytesIterator(cache.keyRange(from, to), cache);
+    }
+
+    public MemoryLRUCacheBytesIterator reverseRange(final String namespace, final Bytes from, final Bytes to) {
+        final NamedCache cache = getCache(namespace);
+        if (cache == null) {
+            return new MemoryLRUCacheBytesIterator(Collections.emptyIterator(), new NamedCache(namespace, this.metrics));
+        }
+        return new MemoryLRUCacheBytesIterator(cache.reverseKeyRange(from, to), cache);
     }
 
     public MemoryLRUCacheBytesIterator all(final String namespace) {
         final NamedCache cache = getCache(namespace);
         if (cache == null) {
-            return new MemoryLRUCacheBytesIterator(Collections.<Bytes>emptyIterator(), new NamedCache(namespace, this.metrics));
+            return new MemoryLRUCacheBytesIterator(Collections.emptyIterator(), new NamedCache(namespace, this.metrics));
         }
         return new MemoryLRUCacheBytesIterator(cache.allKeys(), cache);
+    }
+
+    public MemoryLRUCacheBytesIterator reverseAll(final String namespace) {
+        final NamedCache cache = getCache(namespace);
+        if (cache == null) {
+            return new MemoryLRUCacheBytesIterator(Collections.emptyIterator(), new NamedCache(namespace, this.metrics));
+        }
+        return new MemoryLRUCacheBytesIterator(cache.reverseAllKeys(), cache);
     }
 
     public long size() {

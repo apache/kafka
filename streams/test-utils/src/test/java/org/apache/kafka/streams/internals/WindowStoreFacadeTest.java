@@ -19,6 +19,7 @@ package org.apache.kafka.streams.internals;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.easymock.EasyMockRunner;
@@ -47,9 +48,22 @@ public class WindowStoreFacadeTest {
         windowStoreFacade = new WindowStoreFacade<>(mockedWindowTimestampStore);
     }
 
+    @SuppressWarnings("deprecation") // test of deprecated method
+    @Test
+    public void shouldForwardDeprecatedInit() {
+        final ProcessorContext context = mock(ProcessorContext.class);
+        final StateStore store = mock(StateStore.class);
+        mockedWindowTimestampStore.init(context, store);
+        expectLastCall();
+        replay(mockedWindowTimestampStore);
+
+        windowStoreFacade.init(context, store);
+        verify(mockedWindowTimestampStore);
+    }
+
     @Test
     public void shouldForwardInit() {
-        final ProcessorContext context = mock(ProcessorContext.class);
+        final StateStoreContext context = mock(StateStoreContext.class);
         final StateStore store = mock(StateStore.class);
         mockedWindowTimestampStore.init(context, store);
         expectLastCall();

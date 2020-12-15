@@ -24,7 +24,10 @@
   // Starting in version 3, a TOPIC_DELETION_DISABLED error code may be returned.
   //
   // Version 4 is the first flexible version.
-  "validVersions": "0-4",
+  //
+  // Version 5 adds ErrorMessage in the response and may return a THROTTLING_QUOTA_EXCEEDED error
+  // in the response if the topics deletion is throttled (KIP-599).
+  "validVersions": "0-5",
   "flexibleVersions": "4+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,
@@ -34,7 +37,9 @@
       { "name": "Name", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName",
         "about": "The topic name" },
       { "name": "ErrorCode", "type": "int16", "versions": "0+",
-        "about": "The deletion error, or 0 if the deletion succeeded." }
+        "about": "The deletion error, or 0 if the deletion succeeded." },
+      { "name": "ErrorMessage", "type": "string", "versions": "5+", "nullableVersions": "5+", "ignorable": true, "default": "null",
+        "about": "The error message, or null if there was no error." }
     ]}
   ]
 }

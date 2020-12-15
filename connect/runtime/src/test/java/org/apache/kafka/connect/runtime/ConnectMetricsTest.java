@@ -53,7 +53,7 @@ public class ConnectMetricsTest {
 
     @Before
     public void setUp() {
-        metrics = new ConnectMetrics("worker1", new WorkerConfig(WorkerConfig.baseConfigDef(), DEFAULT_WORKER_CONFIG), new MockTime());
+        metrics = new ConnectMetrics("worker1", new WorkerConfig(WorkerConfig.baseConfigDef(), DEFAULT_WORKER_CONFIG), new MockTime(), "cluster-1");
     }
 
     @After
@@ -65,19 +65,6 @@ public class ConnectMetricsTest {
     @Test
     public void testKafkaMetricsNotNull() {
         assertNotNull(metrics.metrics());
-    }
-
-    @Test
-    public void testCreatingTags() {
-        Map<String, String> tags = ConnectMetrics.tags("k1", "v1", "k2", "v2");
-        assertEquals("v1", tags.get("k1"));
-        assertEquals("v2", tags.get("k2"));
-        assertEquals(2, tags.size());
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void testCreatingTagsWithOddNumberOfTags() {
-        ConnectMetrics.tags("k1", "v1", "k2", "v2", "extra");
     }
 
     @Test(expected = IllegalArgumentException.class)

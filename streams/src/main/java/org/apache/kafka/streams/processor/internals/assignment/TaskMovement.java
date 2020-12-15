@@ -18,12 +18,14 @@ package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.streams.processor.TaskId;
 
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Set;
 import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
@@ -54,22 +56,23 @@ final class TaskMovement {
         return caughtUpClients.size();
     }
 
-    /**
-     * @return true if this client is caught-up for this task, or the task has no caught-up clients
-     */
+    private static boolean taskIsNotCaughtUpOnClientAndOtherCaughtUpClientsExist(final TaskId task,
+                                                                                 final UUID client,
+                                                                                 final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients) {
+        return !taskIsCaughtUpOnClientOrNoCaughtUpClientsExist(task, client, tasksToCaughtUpClients);
+    }
+
     private static boolean taskIsCaughtUpOnClientOrNoCaughtUpClientsExist(final TaskId task,
                                                                           final UUID client,
                                                                           final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients) {
-        final Set<UUID> caughtUpClients = tasksToCaughtUpClients.get(task);
-        return caughtUpClients == null || caughtUpClients.contains(client);
+        final Set<UUID> caughtUpClients = requireNonNull(tasksToCaughtUpClients.get(task), "uninitialized set");
+        return caughtUpClients.isEmpty() || caughtUpClients.contains(client);
     }
 
-    /**
-     * @return whether any warmup replicas were assigned
-     */
-    static boolean assignTaskMovements(final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients,
-                                       final Map<UUID, ClientState> clientStates,
-                                       final int maxWarmupReplicas) {
+    static int assignActiveTaskMovements(final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients,
+                                         final Map<UUID, ClientState> clientStates,
+                                         final Map<UUID, Set<TaskId>> warmups,
+                                         final AtomicInteger remainingWarmupReplicas) {
         final BiFunction<UUID, TaskId, Boolean> caughtUpPredicate =
             (client, task) -> taskIsCaughtUpOnClientOrNoCaughtUpClientsExist(task, client, tasksToCaughtUpClients);
 
@@ -89,16 +92,15 @@ final class TaskMovement {
                 // if the desired client is not caught up, and there is another client that _is_ caught up, then
                 // we schedule a movement, so we can move the active task to the caught-up client. We'll try to
                 // assign a warm-up to the desired client so that we can move it later on.
-                if (!taskIsCaughtUpOnClientOrNoCaughtUpClientsExist(task, client, tasksToCaughtUpClients)) {
+                if (taskIsNotCaughtUpOnClientAndOtherCaughtUpClientsExist(task, client, tasksToCaughtUpClients)) {
                     taskMovements.add(new TaskMovement(task, client, tasksToCaughtUpClients.get(task)));
                 }
             }
             caughtUpClientsByTaskLoad.offer(client);
         }
 
-        final boolean movementsNeeded = !taskMovements.isEmpty();
+        final int movementsNeeded = taskMovements.size();
 
-        final AtomicInteger remainingWarmupReplicas = new AtomicInteger(maxWarmupReplicas);
         for (final TaskMovement movement : taskMovements) {
             final UUID standbySourceClient = caughtUpClientsByTaskLoad.poll(
                 movement.task,
@@ -115,7 +117,8 @@ final class TaskMovement {
                     remainingWarmupReplicas,
                     movement.task,
                     clientStates.get(sourceClient),
-                    clientStates.get(movement.destination)
+                    clientStates.get(movement.destination),
+                    warmups.computeIfAbsent(movement.destination, x -> new TreeSet<>())
                 );
                 caughtUpClientsByTaskLoad.offerAll(asList(sourceClient, movement.destination));
             } else {
@@ -132,19 +135,94 @@ final class TaskMovement {
         return movementsNeeded;
     }
 
+    static int assignStandbyTaskMovements(final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients,
+                                          final Map<UUID, ClientState> clientStates,
+                                          final AtomicInteger remainingWarmupReplicas,
+                                          final Map<UUID, Set<TaskId>> warmups) {
+        final BiFunction<UUID, TaskId, Boolean> caughtUpPredicate =
+            (client, task) -> taskIsCaughtUpOnClientOrNoCaughtUpClientsExist(task, client, tasksToCaughtUpClients);
+
+        final ConstrainedPrioritySet caughtUpClientsByTaskLoad = new ConstrainedPrioritySet(
+            caughtUpPredicate,
+            client -> clientStates.get(client).assignedTaskLoad()
+        );
+
+        final Queue<TaskMovement> taskMovements = new PriorityQueue<>(
+            Comparator.comparing(TaskMovement::numCaughtUpClients).thenComparing(TaskMovement::task)
+        );
+
+        for (final Map.Entry<UUID, ClientState> clientStateEntry : clientStates.entrySet()) {
+            final UUID destination = clientStateEntry.getKey();
+            final ClientState state = clientStateEntry.getValue();
+            for (final TaskId task : state.standbyTasks()) {
+                if (warmups.getOrDefault(destination, Collections.emptySet()).contains(task)) {
+                    // this is a warmup, so we won't move it.
+                } else if (taskIsNotCaughtUpOnClientAndOtherCaughtUpClientsExist(task, destination, tasksToCaughtUpClients)) {
+                    // if the desired client is not caught up, and there is another client that _is_ caught up, then
+                    // we schedule a movement, so we can move the active task to the caught-up client. We'll try to
+                    // assign a warm-up to the desired client so that we can move it later on.
+                    taskMovements.add(new TaskMovement(task, destination, tasksToCaughtUpClients.get(task)));
+                }
+            }
+            caughtUpClientsByTaskLoad.offer(destination);
+        }
+
+        int movementsNeeded = 0;
+
+        for (final TaskMovement movement : taskMovements) {
+            final UUID sourceClient = caughtUpClientsByTaskLoad.poll(
+                movement.task,
+                clientId -> !clientStates.get(clientId).hasAssignedTask(movement.task)
+            );
+
+            if (sourceClient == null) {
+                // then there's no caught-up client that doesn't already have a copy of this task, so there's
+                // nowhere to move it.
+            } else {
+                moveStandbyAndTryToWarmUp(
+                    remainingWarmupReplicas,
+                    movement.task,
+                    clientStates.get(sourceClient),
+                    clientStates.get(movement.destination)
+                );
+                caughtUpClientsByTaskLoad.offerAll(asList(sourceClient, movement.destination));
+                movementsNeeded++;
+            }
+        }
+
+        return movementsNeeded;
+    }
+
     private static void moveActiveAndTryToWarmUp(final AtomicInteger remainingWarmupReplicas,
                                                  final TaskId task,
                                                  final ClientState sourceClientState,
-                                                 final ClientState destinationClientState) {
+                                                 final ClientState destinationClientState,
+                                                 final Set<TaskId> warmups) {
         sourceClientState.assignActive(task);
 
         if (remainingWarmupReplicas.getAndDecrement() > 0) {
             destinationClientState.unassignActive(task);
             destinationClientState.assignStandby(task);
+            warmups.add(task);
         } else {
             // we have no more standbys or warmups to hand out, so we have to try and move it
             // to the destination in a follow-on rebalance
             destinationClientState.unassignActive(task);
+        }
+    }
+
+    private static void moveStandbyAndTryToWarmUp(final AtomicInteger remainingWarmupReplicas,
+                                                  final TaskId task,
+                                                  final ClientState sourceClientState,
+                                                  final ClientState destinationClientState) {
+        sourceClientState.assignStandby(task);
+
+        if (remainingWarmupReplicas.getAndDecrement() > 0) {
+            // Then we can leave it also assigned to the destination as a warmup
+        } else {
+            // we have no more warmups to hand out, so we have to try and move it
+            // to the destination in a follow-on rebalance
+            destinationClientState.unassignStandby(task);
         }
     }
 

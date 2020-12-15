@@ -18,13 +18,13 @@ package kafka.cluster
 
 import java.util.Properties
 
-import kafka.log.{Log, LogConfig, LogManager}
+import kafka.log.{ClientRecordDeletion, Log, LogConfig, LogManager}
 import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.utils.Utils
-import org.junit.{After, Before, Test}
 import org.junit.Assert._
+import org.junit.{After, Before, Test}
 
 class ReplicaTest {
 
@@ -122,6 +122,6 @@ class ReplicaTest {
     }
 
     log.updateHighWatermark(25L)
-    log.maybeIncrementLogStartOffset(26L)
+    log.maybeIncrementLogStartOffset(26L, ClientRecordDeletion)
   }
 }

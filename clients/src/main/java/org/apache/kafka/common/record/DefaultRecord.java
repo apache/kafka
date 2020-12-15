@@ -535,7 +535,8 @@ public class DefaultRecord implements Record {
             if (headerKeySize < 0)
                 throw new InvalidRecordException("Invalid negative header key size " + headerKeySize);
 
-            String headerKey = Utils.utf8(buffer, headerKeySize);
+            ByteBuffer headerKeyBuffer = buffer.slice();
+            headerKeyBuffer.limit(headerKeySize);
             buffer.position(buffer.position() + headerKeySize);
 
             ByteBuffer headerValue = null;
@@ -546,7 +547,7 @@ public class DefaultRecord implements Record {
                 buffer.position(buffer.position() + headerValueSize);
             }
 
-            headers[i] = new RecordHeader(headerKey, headerValue);
+            headers[i] = new RecordHeader(headerKeyBuffer, headerValue);
         }
 
         return headers;
@@ -575,17 +576,16 @@ public class DefaultRecord implements Record {
                                          ByteBuffer key,
                                          ByteBuffer value,
                                          Header[] headers) {
-
         int keySize = key == null ? -1 : key.remaining();
         int valueSize = value == null ? -1 : value.remaining();
         return sizeOfBodyInBytes(offsetDelta, timestampDelta, keySize, valueSize, headers);
     }
 
-    private static int sizeOfBodyInBytes(int offsetDelta,
-                                         long timestampDelta,
-                                         int keySize,
-                                         int valueSize,
-                                         Header[] headers) {
+    public static int sizeOfBodyInBytes(int offsetDelta,
+                                        long timestampDelta,
+                                        int keySize,
+                                        int valueSize,
+                                        Header[] headers) {
         int size = 1; // always one byte for attributes
         size += ByteUtils.sizeOfVarint(offsetDelta);
         size += ByteUtils.sizeOfVarlong(timestampDelta);

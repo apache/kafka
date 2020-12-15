@@ -59,6 +59,8 @@ public interface Herder {
 
     void stop();
 
+    boolean isRunning();
+
     /**
      * Get a list of connectors currently running in this cluster. This is a full list of connectors in the cluster gathered
      * from the current configuration. However, note
@@ -177,17 +179,19 @@ public interface Herder {
     /**
      * Validate the provided connector config values against the configuration definition.
      * @param connectorConfig the provided connector config values
+     * @param callback the callback to invoke after validation has completed (successfully or not)
      */
-    ConfigInfos validateConnectorConfig(Map<String, String> connectorConfig);
+    void validateConnectorConfig(Map<String, String> connectorConfig, Callback<ConfigInfos> callback);
 
     /**
      * Validate the provided connector config values against the configuration definition.
      * @param connectorConfig the provided connector config values
+     * @param callback the callback to invoke after validation has completed (successfully or not)
      * @param doLog if true log all the connector configurations at INFO level; if false, no connector configurations are logged.
      *              Note that logging of configuration is not necessary in every endpoint that uses this method.
      */
-    default ConfigInfos validateConnectorConfig(Map<String, String> connectorConfig, boolean doLog) {
-        return validateConnectorConfig(connectorConfig);
+    default void validateConnectorConfig(Map<String, String> connectorConfig, Callback<ConfigInfos> callback, boolean doLog) {
+        validateConnectorConfig(connectorConfig, callback);
     }
 
     /**

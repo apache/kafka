@@ -17,9 +17,14 @@
 
 package org.apache.kafka.connect.rest.basic.auth.extension;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.regex.Pattern;
 import javax.ws.rs.HttpMethod;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.connect.errors.ConnectException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -37,24 +42,39 @@ import javax.ws.rs.container.ContainerRequestFilter;
 import javax.ws.rs.core.Response;
 
 public class JaasBasicAuthFilter implements ContainerRequestFilter {
-    private static final String CONNECT_LOGIN_MODULE = "KafkaConnect";
-    static final String AUTHORIZATION = "Authorization";
+
+    private static final Logger log = LoggerFactory.getLogger(JaasBasicAuthFilter.class);
     private static final Pattern TASK_REQUEST_PATTERN = Pattern.compile("/?connectors/([^/]+)/tasks/?");
+    private static final String CONNECT_LOGIN_MODULE = "KafkaConnect";
+
+    static final String AUTHORIZATION = "Authorization";
+
     @Override
     public void filter(ContainerRequestContext requestContext) throws IOException {
+        if (isInternalTaskConfigRequest(requestContext)) {
+            log.trace("Skipping authentication for internal request");
+            return;
+        }
+
         try {
-            if (!(requestContext.getMethod().equals(HttpMethod.POST) && TASK_REQUEST_PATTERN.matcher(requestContext.getUriInfo().getPath()).matches())) {
-                LoginContext loginContext =
-                    new LoginContext(CONNECT_LOGIN_MODULE, new BasicAuthCallBackHandler(
-                        requestContext.getHeaderString(AUTHORIZATION)));
-                loginContext.login();
-            }
+            log.debug("Authenticating request");
+            LoginContext loginContext =
+                new LoginContext(CONNECT_LOGIN_MODULE, new BasicAuthCallBackHandler(
+                    requestContext.getHeaderString(AUTHORIZATION)));
+            loginContext.login();
         } catch (LoginException | ConfigException e) {
+            // Log at debug here in order to avoid polluting log files whenever someone mistypes their credentials
+            log.debug("Request failed authentication", e);
             requestContext.abortWith(
                 Response.status(Response.Status.UNAUTHORIZED)
                     .entity("User cannot access the resource.")
                     .build());
         }
+    }
+
+    private static boolean isInternalTaskConfigRequest(ContainerRequestContext requestContext) {
+        return requestContext.getMethod().equals(HttpMethod.POST)
+            && TASK_REQUEST_PATTERN.matcher(requestContext.getUriInfo().getPath()).matches();
     }
 
 
@@ -67,36 +87,60 @@ public class JaasBasicAuthFilter implements ContainerRequestFilter {
         private String password;
 
         public BasicAuthCallBackHandler(String credentials) {
-            if (credentials != null) {
-                int space = credentials.indexOf(SPACE);
-                if (space > 0) {
-                    String method = credentials.substring(0, space);
-                    if (BASIC.equalsIgnoreCase(method)) {
-                        credentials = credentials.substring(space + 1);
-                        credentials = new String(Base64.getDecoder().decode(credentials),
-                                                 StandardCharsets.UTF_8);
-                        int i = credentials.indexOf(COLON);
-                        if (i > 0) {
-                            username = credentials.substring(0, i);
-                            password = credentials.substring(i + 1);
-                        }
-                    }
-                }
+            if (credentials == null) {
+                log.trace("No credentials were provided with the request");
+                return;
             }
+
+            int space = credentials.indexOf(SPACE);
+            if (space <= 0) {
+                log.trace("Request credentials were malformed; no space present in value for authorization header");
+                return;
+            }
+
+            String method = credentials.substring(0, space);
+            if (!BASIC.equalsIgnoreCase(method)) {
+                log.trace("Request credentials used {} authentication, but only {} supported; ignoring", method, BASIC);
+                return;
+            }
+
+            credentials = credentials.substring(space + 1);
+            credentials = new String(Base64.getDecoder().decode(credentials),
+                                     StandardCharsets.UTF_8);
+            int i = credentials.indexOf(COLON);
+            if (i <= 0) {
+                log.trace("Request credentials were malformed; no colon present between username and password");
+                return;
+            }
+
+            username = credentials.substring(0, i);
+            password = credentials.substring(i + 1);
         }
 
         @Override
         public void handle(Callback[] callbacks) throws UnsupportedCallbackException {
+            List<Callback> unsupportedCallbacks = new ArrayList<>();
             for (Callback callback : callbacks) {
                 if (callback instanceof NameCallback) {
                     ((NameCallback) callback).setName(username);
                 } else if (callback instanceof PasswordCallback) {
-                    ((PasswordCallback) callback).setPassword(password.toCharArray());
+                    ((PasswordCallback) callback).setPassword(password != null
+                        ? password.toCharArray()
+                        : null
+                    );
                 } else {
-                    throw new UnsupportedCallbackException(callback, "Supports only NameCallback "
-                                                                     + "and PasswordCallback");
+                    unsupportedCallbacks.add(callback);
                 }
             }
+            if (!unsupportedCallbacks.isEmpty())
+                throw new ConnectException(String.format(
+                    "Unsupported callbacks %s; request authentication will fail. "
+                        + "This indicates the Connect worker was configured with a JAAS "
+                        + "LoginModule that is incompatible with the %s, and will need to be "
+                        + "corrected and restarted.",
+                    unsupportedCallbacks,
+                    BasicAuthSecurityRestExtension.class.getSimpleName()
+                ));
         }
     }
 }

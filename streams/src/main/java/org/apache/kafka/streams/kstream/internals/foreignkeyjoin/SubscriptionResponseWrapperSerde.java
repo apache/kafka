@@ -46,7 +46,7 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
     }
 
     private static final class SubscriptionResponseWrapperSerializer<V>
-        implements Serializer<SubscriptionResponseWrapper<V>>, WrappingNullableSerializer<SubscriptionResponseWrapper<V>, V> {
+        implements Serializer<SubscriptionResponseWrapper<V>>, WrappingNullableSerializer<SubscriptionResponseWrapper<V>, Void, V> {
 
         private Serializer<V> serializer;
 
@@ -55,9 +55,9 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
         }
 
         @Override
-        public void setIfUnset(final Serializer<V> defaultSerializer) {
+        public void setIfUnset(final Serializer<Void> defaultKeySerializer, final Serializer<V> defaultValueSerializer) {
             if (serializer == null) {
-                serializer = Objects.requireNonNull(defaultSerializer, "defaultSerializer cannot be null");
+                serializer = Objects.requireNonNull(defaultValueSerializer);
             }
         }
 
@@ -94,7 +94,7 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
     }
 
     private static final class SubscriptionResponseWrapperDeserializer<V>
-        implements Deserializer<SubscriptionResponseWrapper<V>>, WrappingNullableDeserializer<SubscriptionResponseWrapper<V>, V> {
+        implements Deserializer<SubscriptionResponseWrapper<V>>, WrappingNullableDeserializer<SubscriptionResponseWrapper<V>, Void, V> {
 
         private Deserializer<V> deserializer;
 
@@ -103,9 +103,9 @@ public class SubscriptionResponseWrapperSerde<V> implements Serde<SubscriptionRe
         }
 
         @Override
-        public void setIfUnset(final Deserializer<V> defaultDeserializer) {
+        public void setIfUnset(final Deserializer<Void> defaultKeyDeserializer, final Deserializer<V> defaultValueDeserializer) {
             if (deserializer == null) {
-                deserializer = Objects.requireNonNull(defaultDeserializer, "defaultDeserializer cannot be null");
+                deserializer = Objects.requireNonNull(defaultValueDeserializer);
             }
         }
 

@@ -143,8 +143,9 @@ public class StructRegistryTest {
         FieldSpec field2 = testMessageSpec.fields().get(1);
         assertTrue(field2.type().isStruct());
         assertEquals("TestInlineStruct", field2.type().toString());
+        assertEquals("field2", field2.name());
 
-        assertEquals("field2", structRegistry.findStruct(field2).name());
+        assertEquals("TestInlineStruct", structRegistry.findStruct(field2).name());
         assertFalse(structRegistry.isStructArrayWithKeys(field2));
     }
 }

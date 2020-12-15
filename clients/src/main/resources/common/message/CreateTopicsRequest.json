@@ -23,7 +23,10 @@
   //
   // Version 5 is the first flexible version.
   // Version 5 also returns topic configs in the response (KIP-525).
-  "validVersions": "0-5",
+  //
+  // Version 6 is identical to version 5 but may return a THROTTLING_QUOTA_EXCEEDED error
+  // in the response if the topics creation is throttled (KIP-599).
+  "validVersions": "0-6",
   "flexibleVersions": "5+",
   "fields": [
     { "name": "Topics", "type": "[]CreatableTopic", "versions": "0+",

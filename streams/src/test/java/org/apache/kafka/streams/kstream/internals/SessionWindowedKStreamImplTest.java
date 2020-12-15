@@ -89,7 +89,7 @@ public class SessionWindowedKStreamImplTest {
         }
 
         final Map<Windowed<String>, ValueAndTimestamp<Long>> result =
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey;
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey();
 
         assertThat(result.size(), equalTo(3));
         assertThat(
@@ -115,7 +115,7 @@ public class SessionWindowedKStreamImplTest {
         }
 
         final Map<Windowed<String>, ValueAndTimestamp<String>> result =
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey;
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey();
 
         assertThat(result.size(), equalTo(3));
         assertThat(
@@ -143,7 +143,7 @@ public class SessionWindowedKStreamImplTest {
         }
 
         final Map<Windowed<String>, ValueAndTimestamp<String>> result =
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey;
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey();
 
         assertThat(result.size(), equalTo(3));
         assertThat(

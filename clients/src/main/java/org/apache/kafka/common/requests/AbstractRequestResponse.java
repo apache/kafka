@@ -16,5 +16,4 @@
  */
 package org.apache.kafka.common.requests;
 
-public interface AbstractRequestResponse {
-}
+public interface AbstractRequestResponse { }

@@ -16,7 +16,8 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -47,6 +48,9 @@ import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.connect.util.TopicAdmin;
+import org.apache.kafka.connect.util.TopicCreation;
+import org.apache.kafka.connect.util.TopicCreationGroup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -78,12 +82,14 @@ class WorkerSourceTask extends WorkerTask {
     private final Converter valueConverter;
     private final HeaderConverter headerConverter;
     private final TransformationChain<SourceRecord> transformationChain;
-    private KafkaProducer<byte[], byte[]> producer;
+    private final KafkaProducer<byte[], byte[]> producer;
+    private final TopicAdmin admin;
     private final CloseableOffsetStorageReader offsetReader;
     private final OffsetStorageWriter offsetWriter;
     private final SourceTaskMetricsGroup sourceTaskMetricsGroup;
     private final AtomicReference<Exception> producerSendException;
     private final boolean isTopicTrackingEnabled;
+    private final TopicCreation topicCreation;
 
     private List<SourceRecord> toSend;
     private boolean lastSendFailed; // Whether the last send failed *synchronously*, i.e. never made it into the producer's RecordAccumulator
@@ -96,9 +102,7 @@ class WorkerSourceTask extends WorkerTask {
     private CountDownLatch stopRequestedLatch;
 
     private Map<String, String> taskConfig;
-    private boolean finishedStart = false;
-    private boolean startedShutdownBeforeStartCompleted = false;
-    private boolean stopped = false;
+    private boolean started = false;
 
     public WorkerSourceTask(ConnectorTaskId id,
                             SourceTask task,
@@ -109,6 +113,8 @@ class WorkerSourceTask extends WorkerTask {
                             HeaderConverter headerConverter,
                             TransformationChain<SourceRecord> transformationChain,
                             KafkaProducer<byte[], byte[]> producer,
+                            TopicAdmin admin,
+                            Map<String, TopicCreationGroup> topicGroups,
                             CloseableOffsetStorageReader offsetReader,
                             OffsetStorageWriter offsetWriter,
                             WorkerConfig workerConfig,
@@ -130,6 +136,7 @@ class WorkerSourceTask extends WorkerTask {
         this.headerConverter = headerConverter;
         this.transformationChain = transformationChain;
         this.producer = producer;
+        this.admin = admin;
         this.offsetReader = offsetReader;
         this.offsetWriter = offsetWriter;
 
@@ -142,6 +149,7 @@ class WorkerSourceTask extends WorkerTask {
         this.sourceTaskMetricsGroup = new SourceTaskMetricsGroup(id, connectMetrics);
         this.producerSendException = new AtomicReference<>();
         this.isTopicTrackingEnabled = workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
+        this.topicCreation = TopicCreation.newTopicCreation(workerConfig, topicGroups);
     }
 
     @Override
@@ -156,8 +164,12 @@ class WorkerSourceTask extends WorkerTask {
 
     @Override
     protected void close() {
-        if (!shouldPause()) {
-            tryStop();
+        if (started) {
+            try {
+                task.stop();
+            } catch (Throwable t) {
+                log.warn("Could not stop task", t);
+            }
         }
         if (producer != null) {
             try {
@@ -166,17 +178,24 @@ class WorkerSourceTask extends WorkerTask {
                 log.warn("Could not close producer", t);
             }
         }
-        try {
-            transformationChain.close();
-        } catch (Throwable t) {
-            log.warn("Could not close transformation chain", t);
+        if (admin != null) {
+            try {
+                admin.close(Duration.ofSeconds(30));
+            } catch (Throwable t) {
+                log.warn("Failed to close admin client on time", t);
+            }
         }
+        Utils.closeQuietly(transformationChain, "transformation chain");
         Utils.closeQuietly(retryWithToleranceOperator, "retry operator");
     }
 
     @Override
-    protected void releaseResources() {
-        sourceTaskMetricsGroup.close();
+    public void removeMetrics() {
+        try {
+            sourceTaskMetricsGroup.close();
+        } finally {
+            super.removeMetrics();
+        }
     }
 
     @Override
@@ -189,39 +208,21 @@ class WorkerSourceTask extends WorkerTask {
     public void stop() {
         super.stop();
         stopRequestedLatch.countDown();
-        synchronized (this) {
-            if (finishedStart)
-                tryStop();
-            else
-                startedShutdownBeforeStartCompleted = true;
-        }
-    }
-
-    private synchronized void tryStop() {
-        if (!stopped) {
-            try {
-                task.stop();
-                stopped = true;
-            } catch (Throwable t) {
-                log.warn("Could not stop task", t);
-            }
-        }
     }
 
     @Override
     public void execute() {
         try {
+            // If we try to start the task at all by invoking initialize, then count this as
+            // "started" and expect a subsequent call to the task's stop() method
+            // to properly clean up any resources allocated by its initialize() or 
+            // start() methods. If the task throws an exception during stop(),
+            // the worst thing that happens is another exception gets logged for an already-
+            // failed task
+            started = true;
             task.initialize(new WorkerSourceTaskContext(offsetReader, this, configState));
             task.start(taskConfig);
             log.info("{} Source task finished initialization and start", this);
-            synchronized (this) {
-                if (startedShutdownBeforeStartCompleted) {
-                    tryStop();
-                    return;
-                }
-                finishedStart = true;
-            }
-
             while (!isStopping()) {
                 if (shouldPause()) {
                     onPause();
@@ -327,7 +328,7 @@ class WorkerSourceTask extends WorkerTask {
                 continue;
             }
 
-            log.trace("{} Appending record with key {}, value {}", this, record.key(), record.value());
+            log.trace("{} Appending record to the topic {} with key {}, value {}", this, record.topic(), record.key(), record.value());
             // We need this queued first since the callback could happen immediately (even synchronously in some cases).
             // Because of this we need to be careful about handling retries -- we always save the previously attempted
             // record as part of toSend and need to use a flag to track whether we should actually add it to the outstanding
@@ -344,37 +345,41 @@ class WorkerSourceTask extends WorkerTask {
                 }
             }
             try {
+                maybeCreateTopic(record.topic());
                 final String topic = producerRecord.topic();
                 producer.send(
-                        producerRecord,
-                        new Callback() {
-                            @Override
-                            public void onCompletion(RecordMetadata recordMetadata, Exception e) {
-                                if (e != null) {
-                                    log.error("{} failed to send record to {}:", WorkerSourceTask.this, topic, e);
-                                    log.debug("{} Failed record: {}", WorkerSourceTask.this, preTransformRecord);
-                                    producerSendException.compareAndSet(null, e);
-                                } else {
-                                    recordSent(producerRecord);
-                                    counter.completeRecord();
-                                    log.trace("{} Wrote record successfully: topic {} partition {} offset {}",
-                                            WorkerSourceTask.this,
-                                            recordMetadata.topic(), recordMetadata.partition(),
-                                            recordMetadata.offset());
-                                    commitTaskRecord(preTransformRecord, recordMetadata);
-                                    if (isTopicTrackingEnabled) {
-                                        recordActiveTopic(producerRecord.topic());
-                                    }
-                                }
+                    producerRecord,
+                    (recordMetadata, e) -> {
+                        if (e != null) {
+                            log.error("{} failed to send record to {}: ", WorkerSourceTask.this, topic, e);
+                            log.debug("{} Failed record: {}", WorkerSourceTask.this, preTransformRecord);
+                            producerSendException.compareAndSet(null, e);
+                        } else {
+                            recordSent(producerRecord);
+                            counter.completeRecord();
+                            log.trace("{} Wrote record successfully: topic {} partition {} offset {}",
+                                    WorkerSourceTask.this,
+                                    recordMetadata.topic(), recordMetadata.partition(),
+                                    recordMetadata.offset());
+                            commitTaskRecord(preTransformRecord, recordMetadata);
+                            if (isTopicTrackingEnabled) {
+                                recordActiveTopic(producerRecord.topic());
                             }
-                        });
+                        }
+                    });
                 lastSendFailed = false;
-            } catch (org.apache.kafka.common.errors.RetriableException e) {
-                log.warn("{} Failed to send {}, backing off before retrying:", this, producerRecord, e);
+            } catch (RetriableException | org.apache.kafka.common.errors.RetriableException e) {
+                log.warn("{} Failed to send record to topic '{}' and partition '{}'. Backing off before retrying: ",
+                        this, producerRecord.topic(), producerRecord.partition(), e);
                 toSend = toSend.subList(processed, toSend.size());
                 lastSendFailed = true;
                 counter.retryRemaining();
                 return false;
+            } catch (ConnectException e) {
+                log.warn("{} Failed to send record to topic '{}' and partition '{}' due to an unrecoverable exception: ",
+                        this, producerRecord.topic(), producerRecord.partition(), e);
+                log.warn("{} Failed to send {} with unrecoverable exception: ", this, producerRecord, e);
+                throw e;
             } catch (KafkaException e) {
                 throw new ConnectException("Unrecoverable exception trying to send", e);
             }
@@ -382,6 +387,40 @@ class WorkerSourceTask extends WorkerTask {
         }
         toSend = null;
         return true;
+    }
+
+    // Due to transformations that may change the destination topic of a record (such as
+    // RegexRouter) topic creation can not be batched for multiple topics
+    private void maybeCreateTopic(String topic) {
+        if (!topicCreation.isTopicCreationRequired(topic)) {
+            log.trace("Topic creation by the connector is disabled or the topic {} was previously created." +
+                "If auto.create.topics.enable is enabled on the broker, " +
+                "the topic will be created with default settings", topic);
+            return;
+        }
+        log.info("The task will send records to topic '{}' for the first time. Checking "
+                + "whether topic exists", topic);
+        Map<String, TopicDescription> existing = admin.describeTopics(topic);
+        if (!existing.isEmpty()) {
+            log.info("Topic '{}' already exists.", topic);
+            topicCreation.addTopic(topic);
+            return;
+        }
+
+        log.info("Creating topic '{}'", topic);
+        TopicCreationGroup topicGroup = topicCreation.findFirstGroup(topic);
+        log.debug("Topic '{}' matched topic creation group: {}", topic, topicGroup);
+        NewTopic newTopic = topicGroup.newTopic(topic);
+
+        if (admin.createTopic(newTopic)) {
+            topicCreation.addTopic(topic);
+            log.info("Created topic '{}' using creation group {}", newTopic, topicGroup);
+        } else {
+            log.warn("Request to create new topic '{}' failed", topic);
+            throw new ConnectException("Task failed to create new topic " + newTopic + ". Ensure "
+                    + "that the task is authorized to create topics or that the topic exists and "
+                    + "restart the task");
+        }
     }
 
     private RecordHeaders convertHeaderFor(SourceRecord record) {
@@ -423,7 +462,7 @@ class WorkerSourceTask extends WorkerTask {
     public boolean commitOffsets() {
         long commitTimeoutMs = workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
 
-        log.info("{} Committing offsets", this);
+        log.debug("{} Committing offsets", this);
 
         long started = time.milliseconds();
         long timeout = started + commitTimeoutMs;
@@ -479,14 +518,11 @@ class WorkerSourceTask extends WorkerTask {
         }
 
         // Now we can actually flush the offsets to user storage.
-        Future<Void> flushFuture = offsetWriter.doFlush(new org.apache.kafka.connect.util.Callback<Void>() {
-            @Override
-            public void onCompletion(Throwable error, Void result) {
-                if (error != null) {
-                    log.error("{} Failed to flush offsets to storage: ", WorkerSourceTask.this, error);
-                } else {
-                    log.trace("{} Finished flushing offsets to storage", WorkerSourceTask.this);
-                }
+        Future<Void> flushFuture = offsetWriter.doFlush((error, result) -> {
+            if (error != null) {
+                log.error("{} Failed to flush offsets to storage: ", WorkerSourceTask.this, error);
+            } else {
+                log.trace("{} Finished flushing offsets to storage", WorkerSourceTask.this);
             }
         });
         // Very rare case: offsets were unserializable and we finished immediately, unable to store
@@ -522,7 +558,7 @@ class WorkerSourceTask extends WorkerTask {
         finishSuccessfulFlush();
         long durationMillis = time.milliseconds() - started;
         recordCommitSuccess(durationMillis);
-        log.info("{} Finished commitOffsets successfully in {} ms",
+        log.debug("{} Finished commitOffsets successfully in {} ms",
                 this, durationMillis);
 
         commitSourceTask();

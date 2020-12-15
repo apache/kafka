@@ -21,6 +21,7 @@ import org.junit.Test;
 import java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 public class RemoveMembersFromConsumerGroupOptionsTest {
 
@@ -31,5 +32,8 @@ public class RemoveMembersFromConsumerGroupOptionsTest {
 
         assertEquals(Collections.singleton(
             new MemberToRemove("instance-1")), options.members());
+
+        // Construct will fail if illegal empty members provided
+        assertThrows(IllegalArgumentException.class, () -> new RemoveMembersFromConsumerGroupOptions(Collections.emptyList()));
     }
 }

@@ -156,7 +156,7 @@ public class LagFetchIntegrationTest {
             props.put(StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, FallbackPriorTaskAssignor.class.getName());
             props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + i);
             props.put(StreamsConfig.CLIENT_ID_CONFIG, "instance-" + i);
-            props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, optimization);
+            props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, optimization);
             props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
             props.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(stateStoreName + i).getAbsolutePath());
 

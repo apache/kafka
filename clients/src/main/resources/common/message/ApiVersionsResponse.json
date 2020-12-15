@@ -42,6 +42,33 @@
         "about": "The maximum supported version, inclusive." }
     ]},
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,
-      "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." }
+      "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
+    { "name":  "SupportedFeatures", "type": "[]SupportedFeatureKey",
+      "versions":  "3+", "tag": 0, "taggedVersions": "3+",
+      "about": "Features supported by the broker.",
+      "fields":  [
+        { "name": "Name", "type": "string", "versions": "3+", "mapKey": true,
+          "about": "The name of the feature." },
+        { "name": "MinVersion", "type": "int16", "versions": "3+",
+          "about": "The minimum supported version for the feature." },
+        { "name": "MaxVersion", "type": "int16", "versions": "3+",
+          "about": "The maximum supported version for the feature." }
+      ]
+    },
+    { "name": "FinalizedFeaturesEpoch", "type": "int64", "versions": "3+",
+      "tag": 1, "taggedVersions": "3+", "default": "-1", "ignorable": true,
+      "about": "The monotonically increasing epoch for the finalized features information. Valid values are >= 0. A value of -1 is special and represents unknown epoch."},
+    { "name":  "FinalizedFeatures", "type": "[]FinalizedFeatureKey",
+      "versions":  "3+", "tag": 2, "taggedVersions": "3+",
+      "about": "List of cluster-wide finalized features. The information is valid only if FinalizedFeaturesEpoch >= 0.",
+      "fields":  [
+        {"name": "Name", "type": "string", "versions":  "3+", "mapKey": true,
+          "about": "The name of the feature."},
+        {"name":  "MaxVersionLevel", "type": "int16", "versions":  "3+",
+          "about": "The cluster-wide finalized max version level for the feature."},
+        {"name":  "MinVersionLevel", "type": "int16", "versions":  "3+",
+          "about": "The cluster-wide finalized min version level for the feature."}
+      ]
+    }
   ]
 }

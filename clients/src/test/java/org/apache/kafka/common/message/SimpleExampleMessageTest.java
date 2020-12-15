@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.common.message;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.junit.Test;
@@ -26,7 +29,6 @@ import org.junit.Test;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.UUID;
 import java.util.function.Consumer;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -39,7 +41,7 @@ public class SimpleExampleMessageTest {
 
     @Test
     public void shouldStoreField() {
-        final UUID uuid = UUID.randomUUID();
+        final Uuid uuid = Uuid.randomUuid();
         final ByteBuffer buf = ByteBuffer.wrap(new byte[] {1, 2, 3});
 
         final SimpleExampleMessageData out = new SimpleExampleMessageData();
@@ -59,7 +61,7 @@ public class SimpleExampleMessageTest {
     public void shouldThrowIfCannotWriteNonIgnorableField() {
         // processId is not supported in v0 and is not marked as ignorable
 
-        final SimpleExampleMessageData out = new SimpleExampleMessageData().setProcessId(UUID.randomUUID());
+        final SimpleExampleMessageData out = new SimpleExampleMessageData().setProcessId(Uuid.randomUuid());
         assertThrows(UnsupportedVersionException.class, () ->
                 out.write(new ByteBufferAccessor(ByteBuffer.allocate(64)), new ObjectSerializationCache(), (short) 0));
         assertThrows(UnsupportedVersionException.class, () -> out.toStruct((short) 0));
@@ -68,14 +70,14 @@ public class SimpleExampleMessageTest {
     @Test
     public void shouldDefaultField() {
         final SimpleExampleMessageData out = new SimpleExampleMessageData();
-        assertEquals(UUID.fromString("00000000-0000-0000-0000-000000000000"), out.processId());
+        assertEquals(Uuid.fromString("AAAAAAAAAAAAAAAAAAAAAA"), out.processId());
         assertEquals(ByteUtils.EMPTY_BUF, out.zeroCopyByteBuffer());
         assertEquals(ByteUtils.EMPTY_BUF, out.nullableZeroCopyByteBuffer());
     }
 
     @Test
     public void shouldRoundTripFieldThroughStruct() {
-        final UUID uuid = UUID.randomUUID();
+        final Uuid uuid = Uuid.randomUuid();
         final ByteBuffer buf = ByteBuffer.wrap(new byte[] {1, 2, 3});
         final SimpleExampleMessageData out = new SimpleExampleMessageData();
         out.setProcessId(uuid);
@@ -94,7 +96,7 @@ public class SimpleExampleMessageTest {
 
     @Test
     public void shouldRoundTripFieldThroughStructWithNullable() {
-        final UUID uuid = UUID.randomUUID();
+        final Uuid uuid = Uuid.randomUuid();
         final ByteBuffer buf1 = ByteBuffer.wrap(new byte[] {1, 2, 3});
         final ByteBuffer buf2 = ByteBuffer.wrap(new byte[] {4, 5, 6});
         final SimpleExampleMessageData out = new SimpleExampleMessageData();
@@ -116,7 +118,7 @@ public class SimpleExampleMessageTest {
 
     @Test
     public void shouldRoundTripFieldThroughBuffer() {
-        final UUID uuid = UUID.randomUUID();
+        final Uuid uuid = Uuid.randomUuid();
         final ByteBuffer buf = ByteBuffer.wrap(new byte[] {1, 2, 3});
         final SimpleExampleMessageData out = new SimpleExampleMessageData();
         out.setProcessId(uuid);
@@ -139,7 +141,7 @@ public class SimpleExampleMessageTest {
 
     @Test
     public void shouldRoundTripFieldThroughBufferWithNullable() {
-        final UUID uuid = UUID.randomUUID();
+        final Uuid uuid = Uuid.randomUuid();
         final ByteBuffer buf1 = ByteBuffer.wrap(new byte[] {1, 2, 3});
         final ByteBuffer buf2 = ByteBuffer.wrap(new byte[] {4, 5, 6});
         final SimpleExampleMessageData out = new SimpleExampleMessageData();
@@ -165,7 +167,7 @@ public class SimpleExampleMessageTest {
 
     @Test
     public void shouldImplementEqualsAndHashCode() {
-        final UUID uuid = UUID.randomUUID();
+        final Uuid uuid = Uuid.randomUuid();
         final ByteBuffer buf = ByteBuffer.wrap(new byte[] {1, 2, 3});
         final SimpleExampleMessageData a = new SimpleExampleMessageData();
         a.setProcessId(uuid);
@@ -257,13 +259,13 @@ public class SimpleExampleMessageTest {
     public void testTaggedUuid() {
         testRoundTrip(new SimpleExampleMessageData(),
             message -> assertEquals(
-                UUID.fromString("212d5494-4a8b-4fdf-94b3-88b470beb367"),
+                Uuid.fromString("212d54944a8b4fdf94b388b470beb367"),
                 message.taggedUuid()));
 
         testRoundTrip(new SimpleExampleMessageData().
-                setTaggedUuid(UUID.fromString("01234567-89ab-cdef-0123-456789abcdef")),
+                setTaggedUuid(Uuid.fromString("0123456789abcdef0123456789abcdef")),
             message -> assertEquals(
-                UUID.fromString("01234567-89ab-cdef-0123-456789abcdef"),
+                Uuid.fromString("0123456789abcdef0123456789abcdef"),
                 message.taggedUuid()));
     }
 
@@ -297,8 +299,7 @@ public class SimpleExampleMessageTest {
         SimpleExampleMessageData.MyStruct myStruct =
                 new SimpleExampleMessageData.MyStruct().setStructId(10);
         // Check serialization throws exception for unsupported version
-        testRoundTrip(new SimpleExampleMessageData().setMyStruct(myStruct),
-            __ -> { }, (short) 1);
+        testRoundTrip(new SimpleExampleMessageData().setMyStruct(myStruct), (short) 1);
     }
 
     /**
@@ -309,8 +310,8 @@ public class SimpleExampleMessageTest {
     @Test
     public void testMyTaggedStruct() {
         // Verify that we can set and retrieve a nullable struct object.
-        SimpleExampleMessageData.MyTaggedStruct myStruct =
-            new SimpleExampleMessageData.MyTaggedStruct().setStructId("abc");
+        SimpleExampleMessageData.TaggedStruct myStruct =
+            new SimpleExampleMessageData.TaggedStruct().setStructId("abc");
         testRoundTrip(new SimpleExampleMessageData().setMyTaggedStruct(myStruct),
             message -> assertEquals(myStruct, message.myTaggedStruct()), (short) 2);
 
@@ -319,6 +320,54 @@ public class SimpleExampleMessageTest {
             message -> assertEquals("abc", message.myString()), (short) 1);
         testRoundTrip(new SimpleExampleMessageData().setMyString("abc"),
             message -> assertEquals("abc", message.myString()), (short) 2);
+    }
+
+    @Test
+    public void testCommonStruct() {
+        SimpleExampleMessageData message = new SimpleExampleMessageData();
+        message.setMyCommonStruct(new SimpleExampleMessageData.TestCommonStruct()
+            .setFoo(1)
+            .setBar(2));
+        message.setMyOtherCommonStruct(new SimpleExampleMessageData.TestCommonStruct()
+            .setFoo(3)
+            .setBar(4));
+        testRoundTrip(message, (short) 2);
+    }
+
+    private ByteBuffer serialize(SimpleExampleMessageData message, short version) {
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+        int size = message.size(cache, version);
+        ByteBuffer buf = ByteBuffer.allocate(size);
+        message.write(new ByteBufferAccessor(buf), cache, version);
+        buf.flip();
+        assertEquals(size, buf.remaining());
+        return buf;
+    }
+
+    private SimpleExampleMessageData deserialize(ByteBuffer buf, short version) {
+        SimpleExampleMessageData message = new SimpleExampleMessageData();
+        message.read(new ByteBufferAccessor(buf.duplicate()), version);
+        return message;
+    }
+
+    private ByteBuffer serializeThroughStruct(SimpleExampleMessageData message, short version) {
+        Struct struct = message.toStruct(version);
+        int size = struct.sizeOf();
+        ByteBuffer buf = ByteBuffer.allocate(size);
+        struct.writeTo(buf);
+        buf.flip();
+        assertEquals(size, buf.remaining());
+        return buf;
+    }
+
+    private SimpleExampleMessageData deserializeThroughStruct(ByteBuffer buf, short version) {
+        Schema schema = SimpleExampleMessageData.SCHEMAS[version];
+        Struct struct = schema.read(buf);
+        return new SimpleExampleMessageData(struct, version);
+    }
+
+    private void testRoundTrip(SimpleExampleMessageData message, short version) {
+        testRoundTrip(message, m -> { }, version);
     }
 
     private void testRoundTrip(SimpleExampleMessageData message,
@@ -330,17 +379,26 @@ public class SimpleExampleMessageTest {
                                Consumer<SimpleExampleMessageData> validator,
                                short version) {
         validator.accept(message);
-        ObjectSerializationCache cache = new ObjectSerializationCache();
-        int size = message.size(cache, version);
-        ByteBuffer buf = ByteBuffer.allocate(size);
-        message.write(new ByteBufferAccessor(buf), cache, version);
-        buf.flip();
-        assertEquals(size, buf.remaining());
+        ByteBuffer buf = serialize(message, version);
 
-        SimpleExampleMessageData message2 = new SimpleExampleMessageData();
-        message2.read(new ByteBufferAccessor(buf.duplicate()), version);
+        SimpleExampleMessageData message2 = deserialize(buf.duplicate(), version);
         validator.accept(message2);
         assertEquals(message, message2);
         assertEquals(message.hashCode(), message2.hashCode());
+
+        // Check struct serialization as well
+        assertEquals(buf, serializeThroughStruct(message, version));
+        SimpleExampleMessageData messageFromStruct = deserializeThroughStruct(buf.duplicate(), version);
+        validator.accept(messageFromStruct);
+        assertEquals(message, messageFromStruct);
+        assertEquals(message.hashCode(), messageFromStruct.hashCode());
+
+        // Check JSON serialization
+        JsonNode serializedJson = SimpleExampleMessageDataJsonConverter.write(message, version);
+        SimpleExampleMessageData messageFromJson = SimpleExampleMessageDataJsonConverter.read(serializedJson, version);
+        validator.accept(messageFromJson);
+        assertEquals(message, messageFromJson);
+        assertEquals(message.hashCode(), messageFromJson.hashCode());
     }
+
 }

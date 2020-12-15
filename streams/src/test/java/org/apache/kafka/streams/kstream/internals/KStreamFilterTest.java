@@ -58,7 +58,7 @@ public class KStreamFilterTest {
             }
         }
 
-        assertEquals(2, supplier.theCapturedProcessor().processed.size());
+        assertEquals(2, supplier.theCapturedProcessor().processed().size());
     }
 
     @Test
@@ -79,7 +79,7 @@ public class KStreamFilterTest {
             }
         }
 
-        assertEquals(5, supplier.theCapturedProcessor().processed.size());
+        assertEquals(5, supplier.theCapturedProcessor().processed().size());
     }
 
     @Test

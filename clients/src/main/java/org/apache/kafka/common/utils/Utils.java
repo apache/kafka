@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.common.utils;
 
+import java.nio.BufferUnderflowException;
 import java.util.EnumSet;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.ConfigException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,6 +72,9 @@ import java.util.regex.Pattern;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 public final class Utils {
 
@@ -284,6 +289,37 @@ public final class Utils {
     }
 
     /**
+     * Starting from the current position, read an integer indicating the size of the byte array to read,
+     * then read the array. Consumes the buffer: upon returning, the buffer's position is after the array
+     * that is returned.
+     * @param buffer The buffer to read a size-prefixed array from
+     * @return The array
+     */
+    public static byte[] getNullableSizePrefixedArray(final ByteBuffer buffer) {
+        final int size = buffer.getInt();
+        return getNullableArray(buffer, size);
+    }
+
+    /**
+     * Read a byte array of the given size. Consumes the buffer: upon returning, the buffer's position
+     * is after the array that is returned.
+     * @param buffer The buffer to read a size-prefixed array from
+     * @param size The number of bytes to read out of the buffer
+     * @return The array
+     */
+    public static byte[] getNullableArray(final ByteBuffer buffer, final int size) {
+        if (size > buffer.remaining()) {
+            // preemptively throw this when the read is doomed to fail, so we don't have to allocate the array.
+            throw new BufferUnderflowException();
+        }
+        final byte[] oldBytes = size == -1 ? null : new byte[size];
+        if (oldBytes != null) {
+            buffer.get(oldBytes);
+        }
+        return oldBytes;
+    }
+
+    /**
      * Returns a copy of src byte array
      * @param src The byte array to copy
      * @return The copy
@@ -340,6 +376,18 @@ public final class Utils {
      */
     public static <T> Class<? extends T> loadClass(String klass, Class<T> base) throws ClassNotFoundException {
         return Class.forName(klass, true, Utils.getContextOrKafkaClassLoader()).asSubclass(base);
+    }
+
+    /**
+     * Cast {@code klass} to {@code base} and instantiate it.
+     * @param klass The class to instantiate
+     * @param base A know baseclass of klass.
+     * @param <T> the type of the base class
+     * @throws ClassCastException If {@code klass} is not a subclass of {@code base}.
+     * @return the new instance.
+     */
+    public static <T> T newInstance(Class<?> klass, Class<T> base) {
+        return Utils.newInstance(klass.asSubclass(base));
     }
 
     /**
@@ -755,6 +803,20 @@ public final class Utils {
     }
 
     /**
+     * Creates a {@link Properties} from a map
+     *
+     * @param properties A map of properties to add
+     * @return The properties object
+     */
+    public static Properties mkObjectProperties(final Map<String, Object> properties) {
+        final Properties result = new Properties();
+        for (final Map.Entry<String, Object> entry : properties.entrySet()) {
+            result.put(entry.getKey(), entry.getValue());
+        }
+        return result;
+    }
+
+    /**
      * Recursively delete the given file/directory and any subfiles (if any exist)
      *
      * @param rootFile The root file at which to begin deleting
@@ -922,6 +984,16 @@ public final class Utils {
     }
 
     /**
+     * close all closable objects even if one of them throws exception.
+     * @param firstException keeps the first exception
+     * @param name message of closing those objects
+     * @param closeables closable objects
+     */
+    public static void closeAllQuietly(AtomicReference<Throwable> firstException, String name, AutoCloseable... closeables) {
+        for (AutoCloseable closeable : closeables) closeQuietly(closeable, name, firstException);
+    }
+
+    /**
      * A cheap way to deterministically convert a number to a positive value. When the input is
      * positive, the original value is returned. When the input number is negative, the returned
      * positive value is the original value bit AND against 0x7fffffff which is not its absolutely
@@ -1058,6 +1130,10 @@ public final class Utils {
         }
     }
 
+    public static <T> List<T> toList(Iterable<T> iterable) {
+        return toList(iterable.iterator());
+    }
+
     public static <T> List<T> toList(Iterator<T> iterator) {
         List<T> res = new ArrayList<>();
         while (iterator.hasNext())
@@ -1183,5 +1259,69 @@ public final class Utils {
         result.addAll(left);
         result.removeAll(right);
         return result;
+    }
+
+    /**
+     * Convert a properties to map. All keys in properties must be string type. Otherwise, a ConfigException is thrown.
+     * @param properties to be converted
+     * @return a map including all elements in properties
+     */
+    public static Map<String, Object> propsToMap(Properties properties) {
+        Map<String, Object> map = new HashMap<>(properties.size());
+        for (Map.Entry<Object, Object> entry : properties.entrySet()) {
+            if (entry.getKey() instanceof String) {
+                String k = (String) entry.getKey();
+                map.put(k, properties.get(k));
+            } else {
+                throw new ConfigException(entry.getKey().toString(), entry.getValue(), "Key must be a string.");
+            }
+        }
+        return map;
+    }
+
+    /**
+     * Convert timestamp to an epoch value
+     * @param timestamp the timestamp to be converted, the accepted formats are:
+     *                 (1) yyyy-MM-dd'T'HH:mm:ss.SSS, ex: 2020-11-10T16:51:38.198
+     *                 (2) yyyy-MM-dd'T'HH:mm:ss.SSSZ, ex: 2020-11-10T16:51:38.198+0800
+     *                 (3) yyyy-MM-dd'T'HH:mm:ss.SSSX, ex: 2020-11-10T16:51:38.198+08
+     *                 (4) yyyy-MM-dd'T'HH:mm:ss.SSSXX, ex: 2020-11-10T16:51:38.198+0800
+     *                 (5) yyyy-MM-dd'T'HH:mm:ss.SSSXXX, ex: 2020-11-10T16:51:38.198+08:00
+     *
+     * @return epoch value of a given timestamp (i.e. the number of milliseconds since January 1, 1970, 00:00:00 GMT)
+     * @throws ParseException for timestamp that doesn't follow ISO8601 format or the format is not expected
+     */
+    public static long getDateTime(String timestamp) throws ParseException, IllegalArgumentException {
+        if (timestamp == null) {
+            throw new IllegalArgumentException("Error parsing timestamp with null value");
+        }
+
+        final String[] timestampParts = timestamp.split("T");
+        if (timestampParts.length < 2) {
+            throw new ParseException("Error parsing timestamp. It does not contain a 'T' according to ISO8601 format", timestamp.length());
+        }
+
+        final String secondPart = timestampParts[1];
+        if (!(secondPart.contains("+") || secondPart.contains("-") || secondPart.contains("Z"))) {
+            timestamp = timestamp + "Z";
+        }
+
+        SimpleDateFormat simpleDateFormat = new SimpleDateFormat();
+        // strictly parsing the date/time format
+        simpleDateFormat.setLenient(false);
+        try {
+            simpleDateFormat.applyPattern("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
+            final Date date = simpleDateFormat.parse(timestamp);
+            return date.getTime();
+        } catch (final ParseException e) {
+            simpleDateFormat.applyPattern("yyyy-MM-dd'T'HH:mm:ss.SSSX");
+            final Date date = simpleDateFormat.parse(timestamp);
+            return date.getTime();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <S> Iterator<S> covariantCast(Iterator<? extends S> iterator) {
+        return (Iterator<S>) iterator;
     }
 }

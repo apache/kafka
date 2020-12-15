@@ -229,12 +229,17 @@ public class ConnectSchema implements Schema {
                     + " for field: \"" + name + "\"");
 
         boolean foundMatch = false;
-        for (Class<?> expectedClass : expectedClasses) {
-            if (expectedClass.isInstance(value)) {
-                foundMatch = true;
-                break;
+        if (expectedClasses.size() == 1) {
+            foundMatch = expectedClasses.get(0).isInstance(value);
+        } else {
+            for (Class<?> expectedClass : expectedClasses) {
+                if (expectedClass.isInstance(value)) {
+                    foundMatch = true;
+                    break;
+                }
             }
         }
+
         if (!foundMatch)
             throw new DataException("Invalid Java object for schema type " + schema.type()
                     + ": " + value.getClass()

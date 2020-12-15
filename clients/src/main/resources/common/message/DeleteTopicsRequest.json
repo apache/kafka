@@ -20,7 +20,10 @@
   // Versions 0, 1, 2, and 3 are the same.
   //
   // Version 4 is the first flexible version.
-  "validVersions": "0-4",
+  //
+  // Version 5 adds ErrorMessage in the response and may return a THROTTLING_QUOTA_EXCEEDED error
+  // in the response if the topics deletion is throttled (KIP-599).
+  "validVersions": "0-5",
   "flexibleVersions": "4+",
   "fields": [
     { "name": "TopicNames", "type": "[]string", "versions": "0+", "entityType": "topicName",

@@ -17,10 +17,11 @@
   "apiKey": 32,
   "type": "request",
   "name": "DescribeConfigsRequest",
-  // Version 1 adds IncludeSynoyms.
+  // Version 1 adds IncludeSynonyms.
   // Version 2 is the same as version 1.
-  "validVersions": "0-2",
-  "flexibleVersions": "none",
+  // Version 4 enables flexible versions.
+  "validVersions": "0-4",
+  "flexibleVersions": "4+",
   "fields": [
     { "name": "Resources", "type": "[]DescribeConfigsResource", "versions": "0+",
       "about": "The resources whose configurations we want to describe.", "fields": [
@@ -31,7 +32,9 @@
       { "name": "ConfigurationKeys", "type": "[]string", "versions": "0+", "nullableVersions": "0+",
         "about": "The configuration keys to list, or null to list all configuration keys." }
     ]},
-    { "name": "IncludeSynoyms", "type": "bool", "versions": "1+", "default": "false", "ignorable": false,
-      "about": "True if we should include all synonyms." }
+    { "name": "IncludeSynonyms", "type": "bool", "versions": "1+", "default": "false", "ignorable": false,
+      "about": "True if we should include all synonyms." },
+    { "name": "IncludeDocumentation", "type": "bool", "versions": "3+", "default": "false", "ignorable": false,
+      "about": "True if we should include configuration documentation." }
   ]
 }

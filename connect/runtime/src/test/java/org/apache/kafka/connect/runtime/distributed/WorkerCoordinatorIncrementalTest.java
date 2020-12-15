@@ -23,11 +23,11 @@ import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.storage.KafkaConfigBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -136,7 +136,7 @@ public class WorkerCoordinatorIncrementalTest {
         this.time = new MockTime();
         this.metadata = new Metadata(0, Long.MAX_VALUE, loggerFactory, new ClusterResourceListeners());
         this.client = new MockClient(time, metadata);
-        this.client.updateMetadata(TestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)));
+        this.client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)));
         this.node = metadata.fetch().nodes().get(0);
         this.consumerClient = new ConsumerNetworkClient(loggerFactory, client, metadata, time,
                 retryBackoffMs, requestTimeoutMs, heartbeatIntervalMs);
@@ -216,7 +216,7 @@ public class WorkerCoordinatorIncrementalTest {
                 Collections.singletonList(connectorId1), Arrays.asList(taskId1x0, taskId2x0),
                 Collections.emptyList(), Collections.emptyList(), 0);
         ByteBuffer buf = IncrementalCooperativeConnectProtocol.serializeAssignment(assignment);
-        // Using onJoinComplete to register the protocol selection decided by the the broker
+        // Using onJoinComplete to register the protocol selection decided by the broker
         // coordinator as well as an existing previous assignment that the call to metadata will
         // include with v1 but not with v0
         coordinator.onJoinComplete(generationId, memberId, compatibility.protocol(), buf);
@@ -247,7 +247,7 @@ public class WorkerCoordinatorIncrementalTest {
                 Collections.singletonList(connectorId1), Arrays.asList(taskId1x0, taskId2x0),
                 Collections.emptyList(), Collections.emptyList(), 0);
         ByteBuffer buf = IncrementalCooperativeConnectProtocol.serializeAssignment(assignment);
-        // Using onJoinComplete to register the protocol selection decided by the the broker
+        // Using onJoinComplete to register the protocol selection decided by the broker
         // coordinator as well as an existing previous assignment that the call to metadata will
         // include with v1 but not with v0
         coordinator.onJoinComplete(generationId, memberId, EAGER.protocol(), buf);
@@ -511,7 +511,7 @@ public class WorkerCoordinatorIncrementalTest {
 
         result = coordinator.performAssignment(leaderId, compatibility.protocol(), responseMembers);
 
-        // A rebalance after the delay expires re-assigns the lost tasks the the returning member
+        // A rebalance after the delay expires re-assigns the lost tasks to the returning member
         leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
                 Collections.emptyList(), 0,

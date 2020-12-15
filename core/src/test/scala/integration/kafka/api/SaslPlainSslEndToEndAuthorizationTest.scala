@@ -38,16 +38,13 @@ object SaslPlainSslEndToEndAuthorizationTest {
   class TestPrincipalBuilder extends KafkaPrincipalBuilder {
 
     override def build(context: AuthenticationContext): KafkaPrincipal = {
-      context match {
-        case ctx: SaslAuthenticationContext =>
-          ctx.server.getAuthorizationID match {
-            case KafkaPlainAdmin =>
-              new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "admin")
-            case KafkaPlainUser =>
-              new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user")
-            case _ =>
-              KafkaPrincipal.ANONYMOUS
-          }
+      context.asInstanceOf[SaslAuthenticationContext].server.getAuthorizationID match {
+        case KafkaPlainAdmin =>
+          new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "admin")
+        case KafkaPlainUser =>
+          new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user")
+        case _ =>
+          KafkaPrincipal.ANONYMOUS
       }
     }
   }

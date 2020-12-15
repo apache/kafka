@@ -42,9 +42,18 @@ public class CommonClientConfigs {
                                                        + "servers (you may want more than one, though, in case a server is down).";
 
     public static final String CLIENT_DNS_LOOKUP_CONFIG = "client.dns.lookup";
-    public static final String CLIENT_DNS_LOOKUP_DOC = "Controls how the client uses DNS lookups. If set to <code>use_all_dns_ips</code> then, when the lookup returns multiple IP addresses for a hostname,"
-                                                       + " they will all be attempted to connect to before failing the connection. Applies to both bootstrap and advertised servers."
-                                                       + " If the value is <code>resolve_canonical_bootstrap_servers_only</code> each entry will be resolved and expanded into a list of canonical names.";
+    public static final String CLIENT_DNS_LOOKUP_DOC = "Controls how the client uses DNS lookups. "
+                                                       + "If set to <code>use_all_dns_ips</code>, connect to each returned IP "
+                                                       + "address in sequence until a successful connection is established. "
+                                                       + "After a disconnection, the next IP is used. Once all IPs have been "
+                                                       + "used once, the client resolves the IP(s) from the hostname again "
+                                                       + "(both the JVM and the OS cache DNS name lookups, however). "
+                                                       + "If set to <code>resolve_canonical_bootstrap_servers_only</code>, "
+                                                       + "resolve each bootstrap address into a list of canonical names. After "
+                                                       + "the bootstrap phase, this behaves the same as <code>use_all_dns_ips</code>. "
+                                                       + "If set to <code>default</code> (deprecated), attempt to connect to the "
+                                                       + "first IP address returned by the lookup, even if the lookup returns multiple "
+                                                       + "IP addresses.";
 
     public static final String METADATA_MAX_AGE_CONFIG = "metadata.max.age.ms";
     public static final String METADATA_MAX_AGE_DOC = "The period of time in milliseconds after which we force a refresh of metadata even if we haven't seen any partition leadership changes to proactively discover any new brokers or partitions.";
@@ -70,7 +79,8 @@ public class CommonClientConfigs {
     public static final String RECONNECT_BACKOFF_MAX_MS_DOC = "The maximum amount of time in milliseconds to wait when reconnecting to a broker that has repeatedly failed to connect. If provided, the backoff per host will increase exponentially for each consecutive connection failure, up to this maximum. After calculating the backoff increase, 20% random jitter is added to avoid connection storms.";
 
     public static final String RETRIES_CONFIG = "retries";
-    public static final String RETRIES_DOC = "Setting a value greater than zero will cause the client to resend any request that fails with a potentially transient error.";
+    public static final String RETRIES_DOC = "Setting a value greater than zero will cause the client to resend any request that fails with a potentially transient error." +
+        " It is recommended to set the value to either zero or `MAX_VALUE` and use corresponding timeout parameters to control how long a client should retry a request.";
 
     public static final String RETRY_BACKOFF_MS_CONFIG = "retry.backoff.ms";
     public static final String RETRY_BACKOFF_MS_DOC = "The amount of time to wait before attempting to retry a failed request to a given topic partition. This avoids repeatedly sending requests in a tight loop under some failure scenarios.";
@@ -87,10 +97,20 @@ public class CommonClientConfigs {
     public static final String METRIC_REPORTER_CLASSES_CONFIG = "metric.reporters";
     public static final String METRIC_REPORTER_CLASSES_DOC = "A list of classes to use as metrics reporters. Implementing the <code>org.apache.kafka.common.metrics.MetricsReporter</code> interface allows plugging in classes that will be notified of new metric creation. The JmxReporter is always included to register JMX statistics.";
 
+    public static final String METRICS_CONTEXT_PREFIX = "metrics.context.";
+
     public static final String SECURITY_PROTOCOL_CONFIG = "security.protocol";
     public static final String SECURITY_PROTOCOL_DOC = "Protocol used to communicate with brokers. Valid values are: " +
         Utils.join(SecurityProtocol.names(), ", ") + ".";
     public static final String DEFAULT_SECURITY_PROTOCOL = "PLAINTEXT";
+
+    public static final String SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG = "socket.connection.setup.timeout.ms";
+    public static final String SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DOC = "The amount of time the client will wait for the socket connection to be established. If the connection is not built before the timeout elapses, clients will close the socket channel.";
+    public static final Long DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MS = 10 * 1000L;
+
+    public static final String SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG = "socket.connection.setup.timeout.max.ms";
+    public static final String SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC = "The maximum amount of time the client will wait for the socket connection to be established. The connection setup timeout will increase exponentially for each consecutive connection failure up to this maximum. To avoid connection storms, a randomization factor of 0.2 will be applied to the timeout resulting in a random range between 20% below and 20% above the computed value.";
+    public static final Long DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS = 127 * 1000L;
 
     public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = "connections.max.idle.ms";
     public static final String CONNECTIONS_MAX_IDLE_MS_DOC = "Close idle connections after the number of milliseconds specified by this config.";
@@ -164,5 +184,14 @@ public class CommonClientConfigs {
             rval.put(RECONNECT_BACKOFF_MAX_MS_CONFIG, parsedValues.get(RECONNECT_BACKOFF_MS_CONFIG));
         }
         return rval;
+    }
+
+    public static void warnIfDeprecatedDnsLookupValue(AbstractConfig config) {
+        String clientDnsLookupValue = config.getString(CLIENT_DNS_LOOKUP_CONFIG);
+        if (clientDnsLookupValue.equals(ClientDnsLookup.DEFAULT.toString()))
+            log.warn("Configuration '{}' with value '{}' is deprecated and will be removed in " +
+                "future version. Please use '{}' or another non-deprecated value.",
+                CLIENT_DNS_LOOKUP_CONFIG, ClientDnsLookup.DEFAULT,
+                ClientDnsLookup.USE_ALL_DNS_IPS);
     }
 }

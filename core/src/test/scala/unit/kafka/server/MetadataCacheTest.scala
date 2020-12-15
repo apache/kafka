@@ -154,14 +154,18 @@ class MetadataCacheTest {
         .setPort(9092)
         .setSecurityProtocol(securityProtocol.id)
         .setListener(listenerName.value)).asJava))
-    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(brokers, listenerName,
+    val metadataCacheBrokerId = 0
+    // leader is not available. expect LEADER_NOT_AVAILABLE for any metadata version.
+    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(metadataCacheBrokerId, brokers, listenerName,
       leader = 1, Errors.LEADER_NOT_AVAILABLE, errorUnavailableListeners = false)
-    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(brokers, listenerName,
+    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(metadataCacheBrokerId, brokers, listenerName,
       leader = 1, Errors.LEADER_NOT_AVAILABLE, errorUnavailableListeners = true)
   }
 
   @Test
   def getTopicMetadataPartitionListenerNotAvailableOnLeader(): Unit = {
+    // when listener name is not present in the metadata cache for a broker, getTopicMetadata should
+    // return LEADER_NOT_AVAILABLE or LISTENER_NOT_FOUND errors for old and new versions respectively.
     val plaintextListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
     val sslListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.SSL)
     val broker0Endpoints = Seq(
@@ -187,49 +191,24 @@ class MetadataCacheTest {
       new UpdateMetadataBroker()
         .setId(1)
         .setEndpoints(broker1Endpoints.asJava))
-    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(brokers, sslListenerName,
+    val metadataCacheBrokerId = 0
+    // leader available in cache but listener name not present. expect LISTENER_NOT_FOUND error for new metadata version
+    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(metadataCacheBrokerId, brokers, sslListenerName,
       leader = 1, Errors.LISTENER_NOT_FOUND, errorUnavailableListeners = true)
-  }
-
-  @Test
-  def getTopicMetadataPartitionListenerNotAvailableOnLeaderOldMetadataVersion(): Unit = {
-    val plaintextListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
-    val sslListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.SSL)
-    val broker0Endpoints = Seq(
-      new UpdateMetadataEndpoint()
-        .setHost("host0")
-        .setPort(9092)
-        .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
-        .setListener(plaintextListenerName.value),
-      new UpdateMetadataEndpoint()
-        .setHost("host0")
-        .setPort(9093)
-        .setSecurityProtocol(SecurityProtocol.SSL.id)
-        .setListener(sslListenerName.value))
-    val broker1Endpoints = Seq(new UpdateMetadataEndpoint()
-      .setHost("host1")
-      .setPort(9092)
-      .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
-      .setListener(plaintextListenerName.value))
-    val brokers = Seq(
-      new UpdateMetadataBroker()
-        .setId(0)
-        .setEndpoints(broker0Endpoints.asJava),
-      new UpdateMetadataBroker()
-        .setId(1)
-        .setEndpoints(broker1Endpoints.asJava))
-    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(brokers, sslListenerName,
+    // leader available in cache but listener name not present. expect LEADER_NOT_AVAILABLE error for old metadata version
+    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(metadataCacheBrokerId, brokers, sslListenerName,
       leader = 1, Errors.LEADER_NOT_AVAILABLE, errorUnavailableListeners = false)
   }
 
-  private def verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(brokers: Seq[UpdateMetadataBroker],
+  private def verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(metadataCacheBrokerId: Int,
+                                                                       brokers: Seq[UpdateMetadataBroker],
                                                                        listenerName: ListenerName,
                                                                        leader: Int,
                                                                        expectedError: Errors,
                                                                        errorUnavailableListeners: Boolean): Unit = {
     val topic = "topic"
 
-    val cache = new MetadataCache(1)
+    val cache = new MetadataCache(metadataCacheBrokerId)
 
     val zkVersion = 3
     val controllerId = 2

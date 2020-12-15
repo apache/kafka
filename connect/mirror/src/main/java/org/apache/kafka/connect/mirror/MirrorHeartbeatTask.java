@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.data.Schema;
@@ -79,6 +80,6 @@ public class MirrorHeartbeatTask extends SourceTask {
     }
 
     @Override
-    public void commitRecord(SourceRecord record) {
+    public void commitRecord(SourceRecord record, RecordMetadata metadata) {
     }
 }

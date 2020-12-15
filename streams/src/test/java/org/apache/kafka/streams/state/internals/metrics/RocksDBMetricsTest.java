@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals.metrics;
 
+import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
@@ -26,9 +27,11 @@ import org.junit.runner.RunWith;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
+import java.math.BigInteger;
 import java.util.Collections;
 import java.util.Map;
 
+import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.expect;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -44,10 +47,13 @@ import static org.powermock.api.easymock.PowerMock.verifyAll;
 public class RocksDBMetricsTest {
 
     private static final String STATE_LEVEL_GROUP = "stream-state-metrics";
-    private static final String THREAD_ID = "test-thread";
     private static final String TASK_ID = "test-task";
     private static final String STORE_TYPE = "test-store-type";
     private static final String STORE_NAME = "store";
+    private static final RocksDBMetricContext ROCKSDB_METRIC_CONTEXT =
+        new RocksDBMetricContext(TASK_ID, STORE_TYPE, STORE_NAME);
+    private static final Gauge<BigInteger> VALUE_PROVIDER = (config, now) -> BigInteger.valueOf(10);
+
     private final Metrics metrics = new Metrics();
     private final Sensor sensor = metrics.sensor("dummy");
     private final StreamsMetricsImpl streamsMetrics = createStrictMock(StreamsMetricsImpl.class);
@@ -215,6 +221,268 @@ public class RocksDBMetricsTest {
         verifySumSensor(metricNamePrefix, true, description, RocksDBMetrics::numberOfFileErrorsSensor);
     }
 
+    @Test
+    public void shouldAddNumEntriesActiveMemTableMetric() {
+        final String name = "num-entries-active-mem-table";
+        final String description = "Total number of entries in the active memtable";
+        runAndVerifyMutableMetric(
+            name,
+            description,
+            () -> RocksDBMetrics.addNumEntriesActiveMemTableMetric(streamsMetrics, ROCKSDB_METRIC_CONTEXT, VALUE_PROVIDER)
+        );
+    }
+
+    @Test
+    public void shouldAddNumberDeletesActiveTableMetric() {
+        final String name = "num-deletes-active-mem-table";
+        final String description = "Total number of delete entries in the active memtable";
+        runAndVerifyMutableMetric(
+            name,
+            description,
+            () -> RocksDBMetrics.addNumDeletesActiveMemTableMetric(streamsMetrics, ROCKSDB_METRIC_CONTEXT, VALUE_PROVIDER)
+        );
+    }
+
+    @Test
+    public void shouldAddNumEntriesImmutableMemTablesMetric() {
+        final String name = "num-entries-imm-mem-tables";
+        final String description = "Total number of entries in the unflushed immutable memtables";
+        runAndVerifyMutableMetric(
+            name,
+            description,
+            () -> RocksDBMetrics.addNumEntriesImmMemTablesMetric(streamsMetrics, ROCKSDB_METRIC_CONTEXT, VALUE_PROVIDER)
+        );
+    }
+
+    @Test
+    public void shouldAddNumDeletesImmutableMemTablesMetric() {
+        final String name = "num-deletes-imm-mem-tables";
+        final String description = "Total number of delete entries in the unflushed immutable memtables";
+        runAndVerifyMutableMetric(
+            name,
+            description,
+            () -> RocksDBMetrics.addNumDeletesImmMemTablesMetric(streamsMetrics, ROCKSDB_METRIC_CONTEXT, VALUE_PROVIDER)
+        );
+    }
+
+    @Test
+    public void shouldAddNumImmutableMemTablesMetric() {
+        final String name = "num-immutable-mem-table";
+        final String description = "Number of immutable memtables that have not yet been flushed";
+        runAndVerifyMutableMetric(
+            name,
+            description,
+            () -> RocksDBMetrics.addNumImmutableMemTableMetric(streamsMetrics, ROCKSDB_METRIC_CONTEXT, VALUE_PROVIDER)
+        );
+    }
+
+    @Test
+    public void shouldAddCurSizeActiveMemTableMetric() {
+        final String name = "cur-size-active-mem-table";
+        final String description = "Approximate size of active memtable in bytes";
+        runAndVerifyMutableMetric(
+            name,
+            description,
+            () -> RocksDBMetrics.addCurSizeActiveMemTable(streamsMetrics, ROCKSDB_METRIC_CONTEXT, VALUE_PROVIDER)
+        );
+    }
+
+    @Test
+    public void shouldAddCurSizeAllMemTablesMetric() {
+        final String name = "cur-size-all-mem-tables";
+        final String description = "Approximate size of active and unflushed immutable memtable in bytes";
+        runAndVerifyMutableMetric(
+            name,
+            description,
+            () -> RocksDBMetrics.addCurSizeAllMemTables(streamsMetrics, ROCKSDB_METRIC_CONTEXT, VALUE_PROVIDER)
+        );
+    }
+
+    @Test
+    public void shouldAddSizeAllMemTablesMetric() {
+        final String name = "size-all-mem-tables";
+        final String description = "Approximate size of active, unflushed immutable, and pinned immutable memtables in bytes";
+        runAndVerifyMutableMetric(
+            name,
+            description,
+            () -> RocksDBMetrics.addSizeAllMemTables(streamsMetrics, ROCKSDB_METRIC_CONTEXT, VALUE_PROVIDER)
+        );
+    }
+
+    @Test
+    public void shouldAddMemTableFlushPendingMetric() {
+        final String name = "mem-table-flush-pending";
+        final String description = "Reports 1 if a memtable flush is pending, otherwise it reports 0";
+        runAndVerifyMutableMetric(
+            name,
+            description,
+            () -> RocksDBMetrics.addMemTableFlushPending(streamsMetrics, ROCKSDB_METRIC_CONTEXT, VALUE_PROVIDER)
+        );
+    }
+
+    @Test
+    public void shouldAddNumRunningFlushesMetric() {
+        final String name = "num-running-flushes";
+        final String description = "Number of currently running flushes";
+        runAndVerifyMutableMetric(
+            name,
+            description,
+            () -> RocksDBMetrics.addNumRunningFlushesMetric(streamsMetrics, ROCKSDB_METRIC_CONTEXT, VALUE_PROVIDER)
+        );
+    }
+
+    @Test
+    public void shouldAddCompactionPendingMetric() {
+        final String name = "compaction-pending";
+        final String description = "Reports 1 if at least one compaction is pending, otherwise it reports 0";
+        runAndVerifyMutableMetric(
+            name,
+            description,
+            () -> RocksDBMetrics.addCompactionPendingMetric(streamsMetrics, ROCKSDB_METRIC_CONTEXT, VALUE_PROVIDER)
+        );
+    }
+
+    @Test
+    public void shouldAddNumRunningCompactionsMetric() {
+        final String name = "num-running-compactions";
+        final String description = "Number of currently running compactions";
+        runAndVerifyMutableMetric(
+            name,
+            description,
+            () -> RocksDBMetrics.addNumRunningCompactionsMetric(streamsMetrics, ROCKSDB_METRIC_CONTEXT, VALUE_PROVIDER)
+        );
+    }
+
+    @Test
+    public void shouldAddEstimatePendingCompactionBytesMetric() {
+        final String name = "estimate-pending-compaction-bytes";
+        final String description =
+            "Estimated total number of bytes a compaction needs to rewrite on disk to get all levels down to under target size";
+        runAndVerifyMutableMetric(
+            name,
+            description,
+            () -> RocksDBMetrics.addEstimatePendingCompactionBytesMetric(streamsMetrics, ROCKSDB_METRIC_CONTEXT, VALUE_PROVIDER)
+        );
+    }
+
+    @Test
+    public void shouldAddTotalSstFilesSizeMetric() {
+        final String name = "total-sst-files-size";
+        final String description = "Total size in bytes of all SST files";
+        runAndVerifyMutableMetric(
+            name,
+            description,
+            () -> RocksDBMetrics.addTotalSstFilesSizeMetric(streamsMetrics, ROCKSDB_METRIC_CONTEXT, VALUE_PROVIDER)
+        );
+    }
+
+    @Test
+    public void shouldAddLiveSstFilesSizeMetric() {
+        final String name = "live-sst-files-size";
+        final String description = "Total size in bytes of all SST files that belong to the latest LSM tree";
+        runAndVerifyMutableMetric(
+            name,
+            description,
+            () -> RocksDBMetrics.addLiveSstFilesSizeMetric(streamsMetrics, ROCKSDB_METRIC_CONTEXT, VALUE_PROVIDER)
+        );
+    }
+
+    @Test
+    public void shouldAddNumLiveVersionMetric() {
+        final String name = "num-live-versions";
+        final String description = "Number of live versions";
+        runAndVerifyMutableMetric(
+            name,
+            description,
+            () -> RocksDBMetrics.addNumLiveVersionMetric(streamsMetrics, ROCKSDB_METRIC_CONTEXT, VALUE_PROVIDER)
+        );
+    }
+
+    @Test
+    public void shouldAddBlockCacheCapacityMetric() {
+        final String name = "block-cache-capacity";
+        final String description = "Capacity of the block cache in bytes";
+        runAndVerifyMutableMetric(
+            name,
+            description,
+            () -> RocksDBMetrics.addBlockCacheCapacityMetric(streamsMetrics, ROCKSDB_METRIC_CONTEXT, VALUE_PROVIDER)
+        );
+    }
+
+    @Test
+    public void shouldAddBlockCacheUsageMetric() {
+        final String name = "block-cache-usage";
+        final String description = "Memory size of the entries residing in block cache in bytes";
+        runAndVerifyMutableMetric(
+            name,
+            description,
+            () -> RocksDBMetrics.addBlockCacheUsageMetric(streamsMetrics, ROCKSDB_METRIC_CONTEXT, VALUE_PROVIDER)
+        );
+    }
+
+    @Test
+    public void shouldAddBlockCachePinnedUsageMetric() {
+        final String name = "block-cache-pinned-usage";
+        final String description = "Memory size for the entries being pinned in the block cache in bytes";
+        runAndVerifyMutableMetric(
+            name,
+            description,
+            () -> RocksDBMetrics.addBlockCachePinnedUsageMetric(streamsMetrics, ROCKSDB_METRIC_CONTEXT, VALUE_PROVIDER)
+        );
+    }
+
+    @Test
+    public void shouldAddEstimateNumKeysMetric() {
+        final String name = "estimate-num-keys";
+        final String description =
+            "Estimated number of total keys in the active and unflushed immutable memtables and storage";
+        runAndVerifyMutableMetric(
+            name,
+            description,
+            () -> RocksDBMetrics.addEstimateNumKeysMetric(streamsMetrics, ROCKSDB_METRIC_CONTEXT, VALUE_PROVIDER)
+        );
+    }
+
+    @Test
+    public void shouldAddEstimateTableReadersMemMetric() {
+        final String name = "estimate-table-readers-mem";
+        final String description =
+            "Estimated memory in bytes used for reading SST tables, excluding memory used in block cache";
+        runAndVerifyMutableMetric(
+            name,
+            description,
+            () -> RocksDBMetrics.addEstimateTableReadersMemMetric(streamsMetrics, ROCKSDB_METRIC_CONTEXT, VALUE_PROVIDER)
+        );
+    }
+
+    @Test
+    public void shouldAddBackgroundErrorsMetric() {
+        final String name = "background-errors";
+        final String description = "Total number of background errors";
+        runAndVerifyMutableMetric(
+            name,
+            description,
+            () -> RocksDBMetrics.addBackgroundErrorsMetric(streamsMetrics, ROCKSDB_METRIC_CONTEXT, VALUE_PROVIDER)
+        );
+    }
+
+    private void runAndVerifyMutableMetric(final String name, final String description, final Runnable metricAdder) {
+        streamsMetrics.addStoreLevelMutableMetric(
+            eq(TASK_ID),
+            eq(STORE_TYPE),
+            eq(STORE_NAME),
+            eq(name),
+            eq(description),
+            eq(RecordingLevel.INFO),
+            eq(VALUE_PROVIDER)
+        );
+        replay(streamsMetrics);
+
+        metricAdder.run();
+
+        verify(streamsMetrics);
+    }
+
     private void verifyRateAndTotalSensor(final String metricNamePrefix,
                                           final String descriptionOfTotal,
                                           final String descriptionOfRate,
@@ -268,14 +536,12 @@ public class RocksDBMetricsTest {
     private void setupStreamsMetricsMock(final String metricNamePrefix) {
         mockStatic(StreamsMetricsImpl.class);
         expect(streamsMetrics.storeLevelSensor(
-            THREAD_ID,
             TASK_ID,
             STORE_NAME,
             metricNamePrefix,
             RecordingLevel.DEBUG
         )).andReturn(sensor);
         expect(streamsMetrics.storeLevelTagMap(
-            THREAD_ID,
             TASK_ID,
             STORE_TYPE,
             STORE_NAME
@@ -286,8 +552,7 @@ public class RocksDBMetricsTest {
         replayAll();
         replay(StreamsMetricsImpl.class);
 
-        final Sensor sensor =
-            sensorCreator.sensor(streamsMetrics, new RocksDBMetricContext(THREAD_ID, TASK_ID, STORE_TYPE, STORE_NAME));
+        final Sensor sensor = sensorCreator.sensor(streamsMetrics, ROCKSDB_METRIC_CONTEXT);
 
         verifyAll();
         verify(StreamsMetricsImpl.class);
