@@ -718,7 +718,7 @@ class RequestQuotaTest extends BaseRequestTest {
     val exemptTarget = exemptRequestMetricValue + 0.02
     val clientId = apiKey.toString
     val client = Client(clientId, apiKey)
-    val updated = client.runUntil(response => exemptRequestMetricValue > exemptTarget)
+    val updated = client.runUntil(_ => exemptRequestMetricValue > exemptTarget)
 
     assertTrue(s"Exempt-request-time metric not updated: $client", updated)
     assertTrue(s"Client should not have been throttled: $client", throttleTimeMetricValue(clientId).isNaN)
@@ -727,13 +727,13 @@ class RequestQuotaTest extends BaseRequestTest {
   private def checkUnauthorizedRequestThrottle(apiKey: ApiKeys): Unit = {
     val clientId = "unauthorized-" + apiKey.toString
     val client = Client(clientId, apiKey)
-    val throttled = client.runUntil(response => throttleTimeMetricValue(clientId) > 0.0)
+    val throttled = client.runUntil(_ => throttleTimeMetricValue(clientId) > 0.0)
     assertTrue(s"Unauthorized client should have been throttled: $client", throttled)
   }
 }
 
 object RequestQuotaTest {
-  val ClusterActions = ApiKeys.enabledApis.asScala.toSet.filter(apiKey => apiKey.clusterAction)
+  val ClusterActions = ApiKeys.enabledApis.asScala.filter(_.clusterAction).toSet
   val SaslActions = Set(ApiKeys.SASL_HANDSHAKE, ApiKeys.SASL_AUTHENTICATE)
   val ClientActions = ApiKeys.enabledApis.asScala.toSet -- ClusterActions -- SaslActions
 
