@@ -415,7 +415,7 @@ public class MockLog implements ReplicatedLog {
     }
 
     @Override
-    public Optional<OffsetAndEpoch> oldestSnapshotId() {
+    public Optional<OffsetAndEpoch> earliestSnapshotId() {
         return oldestSnapshotId;
     }
 

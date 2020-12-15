@@ -42,15 +42,6 @@ final class KafkaMetadataLog private (
   maxFetchSizeInBytes: Int
 ) extends ReplicatedLog {
 
-  /* The oldest snapshot id is the snapshot at the log start offset. Since the KafkaMetadataLog doesn't
-   * currently delete snapshots, it is possible for the oldest snapshot id to not be the smallest
-   * snapshot id in the snapshotIds set.
-   */
-  private[this] var oldestSnapshotId = snapshotIds
-    .stream()
-    .filter(_.offset == startOffset)
-    .findAny()
-
   override def read(startOffset: Long, readIsolation: Isolation): LogFetchInfo = {
     val isolation = readIsolation match {
       case Isolation.COMMITTED => FetchHighWatermark
@@ -109,7 +100,7 @@ final class KafkaMetadataLog private (
 
   override def lastFetchedEpoch: Int = {
     log.latestEpoch.getOrElse {
-      latestSnapshotId.map[Int] { snapshotId =>
+      latestSnapshotId().map[Int] { snapshotId =>
         val logEndOffset = endOffset().offset
         if (snapshotId.offset == startOffset && snapshotId.offset == logEndOffset) {
           // Return the epoch of the snapshot when the log is empty
@@ -126,12 +117,12 @@ final class KafkaMetadataLog private (
   }
 
   override def endOffsetForEpoch(epoch: Int): OffsetAndEpoch = {
-    (log.endOffsetForEpoch(epoch), oldestSnapshotId.asScala) match {
+    (log.endOffsetForEpoch(epoch), earliestSnapshotId().asScala) match {
       case (Some(offsetAndEpoch), Some(snapshotId)) if (
         offsetAndEpoch.offset == snapshotId.offset &&
         offsetAndEpoch.leaderEpoch == epoch) =>
 
-        // The epoch is smaller thant the smallest epoch on the log. Overide the diverging
+        // The epoch is smaller than the smallest epoch on the log. Override the diverging
         // epoch to the oldest snapshot which should be the snapshot at the log start offset
         new OffsetAndEpoch(snapshotId.offset, snapshotId.epoch)
 
@@ -164,13 +155,14 @@ final class KafkaMetadataLog private (
 
   override def truncateToLatestSnapshot(): Boolean = {
     val latestEpoch = log.latestEpoch.getOrElse(0)
-    latestSnapshotId.asScala match {
+    latestSnapshotId().asScala match {
       case Some(snapshotId) if (snapshotId.epoch > latestEpoch ||
         (snapshotId.epoch == latestEpoch && snapshotId.offset > endOffset().offset)) =>
         // Truncate the log fully if the latest snapshot is greater than the log end offset
 
         log.truncateFullyAndStartAt(snapshotId.offset)
-        oldestSnapshotId = latestSnapshotId
+        // Delete snapshot after truncating
+        removeSnapshotFileBefore(snapshotId)
 
         true
 
@@ -228,7 +220,7 @@ final class KafkaMetadataLog private (
       if (latest.epoch > snapshotId.epoch || latest.offset > snapshotId.offset) {
         // Since snapshots are less than the high-watermark absolute offset comparison is okay.
         throw new IllegalArgumentException(
-          s"Attemting to create a snapshot ($snapshotId) that is not greater than the latest snapshot ($latest)"
+          s"Attempting to create a snapshot ($snapshotId) that is not greater than the latest snapshot ($latest)"
         )
       }
     }
@@ -258,8 +250,13 @@ final class KafkaMetadataLog private (
     }
   }
 
-  override def oldestSnapshotId(): Optional[OffsetAndEpoch] = {
-    oldestSnapshotId
+  override def earliestSnapshotId(): Optional[OffsetAndEpoch] = {
+    try {
+      Optional.of(snapshotIds.first)
+    } catch {
+      case _: NoSuchElementException =>
+        Optional.empty()
+    }
   }
 
   override def onSnapshotFrozen(snapshotId: OffsetAndEpoch): Unit = {
@@ -267,19 +264,30 @@ final class KafkaMetadataLog private (
   }
 
   override def deleteBeforeSnapshot(logStartSnapshotId: OffsetAndEpoch): Boolean = {
-    latestSnapshotId.asScala match {
+    latestSnapshotId().asScala match {
       case Some(snapshotId) if (snapshotIds.contains(logStartSnapshotId) &&
         startOffset < logStartSnapshotId.offset &&
         logStartSnapshotId.offset <= snapshotId.offset &&
         log.maybeIncrementLogStartOffset(logStartSnapshotId.offset, SnapshotGenerated)) =>
-
         log.deleteOldSegments()
-        oldestSnapshotId = Optional.of(logStartSnapshotId)
+
+        // Delete snapshot after increasing LogStartOffset
+        removeSnapshotFileBefore(logStartSnapshotId)
 
         true
 
       case _ => false
     }
+  }
+
+  /**
+   * remove all snapshots whose end offset is less than the giving offset, also delete the corresponding
+   * snapshot files.
+   */
+  private def removeSnapshotFileBefore(logStartSnapshotId: OffsetAndEpoch): Unit = {
+    val expiredSnapshotIds = snapshotIds.headSet(logStartSnapshotId)
+    expiredSnapshotIds.forEach(snapshotId => Snapshots.deleteSnapshotIfExists(log.dir.toPath, snapshotId))
+    expiredSnapshotIds.clear()
   }
 
   override def close(): Unit = {
@@ -336,7 +344,8 @@ object KafkaMetadataLog {
     log: Log
   ): ConcurrentSkipListSet[OffsetAndEpoch] = {
     val snapshotIds = new ConcurrentSkipListSet[OffsetAndEpoch]()
-    // Scan the log directory; deleting partial snapshots and remembering immutable snapshots
+    // Scan the log directory; deleting partial snapshots and older snapshot, only remembering immutable snapshots start
+    // from logStartOffset
     Files
       .walk(log.dir.toPath, 1)
       .map[Optional[SnapshotPath]] { path =>
@@ -348,7 +357,8 @@ object KafkaMetadataLog {
       }
       .forEach { path =>
         path.ifPresent { snapshotPath =>
-          if (snapshotPath.partial) {
+          if (snapshotPath.partial || snapshotPath.snapshotId.offset < log.logStartOffset) {
+            // Delete partial snapshot and older snapshot
             Files.deleteIfExists(snapshotPath.path)
           } else {
             snapshotIds.add(snapshotPath.snapshotId)

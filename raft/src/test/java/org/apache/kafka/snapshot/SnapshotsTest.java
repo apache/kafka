@@ -25,6 +25,8 @@ import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 final public class SnapshotsTest {
 
@@ -39,7 +41,7 @@ final public class SnapshotsTest {
 
         assertEquals(path, snapshotPath.path);
         assertEquals(snapshotId, snapshotPath.snapshotId);
-        assertEquals(false, snapshotPath.partial);
+        assertFalse(snapshotPath.partial);
     }
 
     @Test
@@ -57,7 +59,7 @@ final public class SnapshotsTest {
 
         assertEquals(path, snapshotPath.path);
         assertEquals(snapshotId, snapshotPath.snapshotId);
-        assertEquals(true, snapshotPath.partial);
+        assertTrue(snapshotPath.partial);
     }
 
     @Test
@@ -74,5 +76,24 @@ final public class SnapshotsTest {
         assertEquals(Optional.empty(), Snapshots.parse(root.resolve("leader-epoch-checkpoint")));
         // partition metadata
         assertEquals(Optional.empty(), Snapshots.parse(root.resolve("partition.metadata")));
+    }
+
+    @Test
+    public void testDeleteSnapshot() throws IOException {
+
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(
+            TestUtils.RANDOM.nextInt(Integer.MAX_VALUE),
+            TestUtils.RANDOM.nextInt(Integer.MAX_VALUE)
+        );
+
+        Path logDirPath = TestUtils.tempDirectory().toPath();
+        FileRawSnapshotWriter snapshot = FileRawSnapshotWriter.create(logDirPath, snapshotId, Optional.empty());
+        snapshot.freeze();
+
+        Path snapshotPath = Snapshots.snapshotPath(logDirPath, snapshotId);
+        assertTrue(Files.exists(snapshotPath));
+
+        Snapshots.deleteSnapshotIfExists(logDirPath, snapshot.snapshotId());
+        assertFalse(Files.exists(snapshotPath));
     }
 }

@@ -16,12 +16,13 @@
  */
 package org.apache.kafka.snapshot;
 
+import org.apache.kafka.raft.OffsetAndEpoch;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.NumberFormat;
 import java.util.Optional;
-import org.apache.kafka.raft.OffsetAndEpoch;
 
 public final class Snapshots {
     private static final String SUFFIX =  ".checkpoint";
@@ -92,4 +93,13 @@ public final class Snapshots {
 
         return Optional.of(new SnapshotPath(path, new OffsetAndEpoch(endOffset, epoch), partial));
     }
+
+    /**
+     * Delete this snapshot from the filesystem.
+     */
+    public static boolean deleteSnapshotIfExists(Path logDir, OffsetAndEpoch snapshotId) throws IOException {
+        Path path = snapshotPath(logDir, snapshotId);
+        return Files.deleteIfExists(path);
+    }
+
 }
