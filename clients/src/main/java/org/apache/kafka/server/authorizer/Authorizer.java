@@ -156,14 +156,6 @@ public interface Authorizer extends Configurable, Closeable {
      * Check if the caller is authorized to perform the given ACL operation on at least one
      * resource of the given type.
      *
-     * 1. Filter out all the resource pattern corresponding to the requestContext, AclOperation,
-     *    and ResourceType
-     * 2. If wildcard deny exists, return deny directly
-     * 3. For any literal allowed resource, if there's no dominant literal denied resource, and
-     *    no dominant prefixed denied resource, return allow
-     * 4. For any prefixed allowed resource, if there's no dominant denied resource, return allow
-     * 5. For any other cases, return deny
-     *
      * It is important to override this interface default in implementations because
      * 1. The interface default iterates all AclBindings multiple times, without any indexing,
      *    which is a CPU intense work.
@@ -179,6 +171,8 @@ public interface Authorizer extends Configurable, Closeable {
     default AuthorizationResult authorizeByResourceType(AuthorizableRequestContext requestContext, AclOperation op, ResourceType resourceType) {
         SecurityUtils.authorizeByResourceTypeCheckArgs(op, resourceType);
 
+        // Filter out all the resource pattern corresponding to the RequestContext,
+        // AclOperation, and ResourceType
         ResourcePatternFilter resourceTypeFilter = new ResourcePatternFilter(
             resourceType, null, PatternType.ANY);
         AclBindingFilter aclFilter = new AclBindingFilter(
@@ -217,6 +211,7 @@ public interface Authorizer extends Configurable, Closeable {
             if (binding.entry().permissionType() == AclPermissionType.DENY) {
                 switch (binding.pattern().patternType()) {
                     case LITERAL:
+                        // If wildcard deny exists, return deny directly
                         if (binding.pattern().name().equals(ResourcePattern.WILDCARD_RESOURCE))
                             return AuthorizationResult.DENIED;
                         denyPatterns.get(PatternType.LITERAL).add(binding.pattern().name());
@@ -251,6 +246,10 @@ public interface Authorizer extends Configurable, Closeable {
             return AuthorizationResult.ALLOWED;
         }
 
+        // For any literal allowed, if there's no dominant literal
+        // and prefix denied, return allow.
+        // For any prefix allowed, if there's no dominant prefix
+        // denied, return allow.
         for (Map.Entry<PatternType, Set<String>> entry : allowPatterns.entrySet()) {
             for (String allowStr : entry.getValue()) {
                 if (entry.getKey() == PatternType.LITERAL
