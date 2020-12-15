@@ -17,15 +17,14 @@
 
 package kafka.security.authorizer
 
-import java.net.InetAddress
 import java.util.concurrent.{CompletableFuture, CompletionStage}
 import java.{lang, util}
 
 import kafka.network.RequestChannel.Session
-import kafka.security.auth.{Acl, Operation, PermissionType, Read, Resource, SimpleAclAuthorizer, Topic, ResourceType => ResourceTypeLegacy}
+import kafka.security.auth.{Acl, Operation, PermissionType, Resource, SimpleAclAuthorizer, ResourceType => ResourceTypeLegacy}
 import kafka.security.authorizer.AuthorizerWrapper._
 import org.apache.kafka.common.Endpoint
-import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
+import org.apache.kafka.common.acl._
 import org.apache.kafka.common.errors.{ApiException, InvalidRequestException}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.ApiError
@@ -36,9 +35,9 @@ import org.apache.kafka.common.utils.SecurityUtils.parseKafkaPrincipal
 import org.apache.kafka.server.authorizer.AclDeleteResult.AclBindingDeleteResult
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, AuthorizerServerInfo, _}
 
-import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Seq, immutable, mutable}
+import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
 
 @deprecated("Use kafka.security.authorizer.AclAuthorizer", "Since 2.5")
@@ -203,7 +202,8 @@ class AuthorizerWrapper(private[kafka] val baseAuthorizer: kafka.security.auth.A
                               resourceType: ResourceType): Boolean = {
     val resourceTypeFilter = new ResourcePatternFilter(
       resourceType, Resource.WildCardResource, PatternType.LITERAL)
-    val principal = new KafkaPrincipal(requestContext.principal.getPrincipalType, requestContext.principal.getName)
+    val principal = new KafkaPrincipal(
+      requestContext.principal.getPrincipalType, requestContext.principal.getName).toString
     val host = requestContext.clientAddress().getHostAddress
     val accessControlEntry = new AccessControlEntryFilter(null, null, op, AclPermissionType.DENY)
     val aclFilter = new AclBindingFilter(resourceTypeFilter, accessControlEntry)
@@ -212,10 +212,10 @@ class AuthorizerWrapper(private[kafka] val baseAuthorizer: kafka.security.auth.A
   }
 
   private def principalHostMatch(ace: AccessControlEntry,
-                                 principal: KafkaPrincipal,
+                                 principal: String,
                                  host: String): Boolean = {
     ((ace.host() == AclEntry.WildcardHost || ace.host() == host)
-      && (ace.principal() == AclEntry.WildcardPrincipalString || ace.principal() == principal.toString))
+      && (ace.principal() == AclEntry.WildcardPrincipalString || ace.principal() == principal))
   }
 
 }
