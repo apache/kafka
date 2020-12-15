@@ -363,7 +363,7 @@ public class ConsumerCoordinatorTest {
             });
         }
 
-        coordinator.markCoordinatorUnknown();
+        coordinator.markCoordinatorUnknown("test cause");
         consumerClient.pollNoWakeup();
         coordinator.invokeCompletedOffsetCommitCallbacks();
         assertEquals(numRequests, responses.get());
@@ -409,7 +409,7 @@ public class ConsumerCoordinatorTest {
                     }
                 });
 
-        coordinator.markCoordinatorUnknown();
+        coordinator.markCoordinatorUnknown("test cause");
         consumerClient.pollNoWakeup();
         assertTrue(asyncCallbackInvoked.get());
     }
@@ -2696,7 +2696,7 @@ public class ConsumerCoordinatorTest {
             subscriptions.assignFromUser(Collections.singleton(t1p));
             subscriptions.seek(t1p, 100L);
 
-            coordinator.markCoordinatorUnknown();
+            coordinator.markCoordinatorUnknown("test cause");
             assertTrue(coordinator.coordinatorUnknown());
             client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
             prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.NONE);
