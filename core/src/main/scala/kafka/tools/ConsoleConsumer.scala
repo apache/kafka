@@ -22,19 +22,19 @@ import java.nio.charset.StandardCharsets
 import java.time.Duration
 import java.util.concurrent.CountDownLatch
 import java.util.regex.Pattern
-import java.util.{Collections, Locale, Map, Properties, Random}
+import java.util.{Collections, Locale, Map, Properties}
 
 import com.typesafe.scalalogging.LazyLogging
 import joptsimple._
 import kafka.utils.Implicits._
 import kafka.utils.{Exit, _}
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecord, KafkaConsumer}
-import org.apache.kafka.common.{MessageFormatter, TopicPartition}
 import org.apache.kafka.common.errors.{AuthenticationException, TimeoutException, WakeupException}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.requests.ListOffsetRequest
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, Deserializer}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.{MessageFormatter, TopicPartition}
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
@@ -373,11 +373,6 @@ object ConsoleConsumer extends Logging {
       case Some(group) =>
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, group)
       case None =>
-        consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, s"console-consumer-${new Random().nextInt(100000)}")
-        // By default, avoid unnecessary expansion of the coordinator cache since
-        // the auto-generated group and its offsets is not intended to be used again
-        if (!consumerProps.containsKey(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG))
-          consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
         groupIdPassed = false
     }
 

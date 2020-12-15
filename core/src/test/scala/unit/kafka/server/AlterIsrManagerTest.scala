@@ -204,14 +204,14 @@ class AlterIsrManagerTest {
 
     EasyMock.verify(brokerToController)
 
-    val alterIsrResp = new AlterIsrResponse(new AlterIsrResponseData()
-      .setTopics(Collections.singletonList(
-        new AlterIsrResponseData.TopicData()
-          .setName(tp.topic())
-          .setPartitions(Collections.singletonList(
-            new AlterIsrResponseData.PartitionData()
-              .setPartitionIndex(tp.partition())
-              .setErrorCode(error.code))))))
+    val responseData = new AlterIsrResponseData()
+    responseData.topics.add(new AlterIsrResponseData.TopicData()
+      .setName(tp.topic())
+      .setPartitions(Collections.singletonList(
+        new AlterIsrResponseData.PartitionData()
+          .setPartitionIndex(tp.partition())
+          .setErrorCode(error.code))))
+    val alterIsrResp = new AlterIsrResponse(responseData)
     val resp = new ClientResponse(null, null, "", 0L, 0L,
       false, null, null, alterIsrResp)
     callbackCapture.getValue.onComplete(resp)
@@ -286,14 +286,15 @@ class AlterIsrManagerTest {
     EasyMock.verify(brokerToController)
 
     // Three partitions were sent, but only one returned
-    val alterIsrResp = new AlterIsrResponse(new AlterIsrResponseData()
-      .setTopics(Collections.singletonList(
-        new AlterIsrResponseData.TopicData()
-          .setName(tp0.topic())
-          .setPartitions(Collections.singletonList(
-            new AlterIsrResponseData.PartitionData()
-              .setPartitionIndex(tp0.partition())
-              .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code()))))))
+    val responseData = new AlterIsrResponseData()
+    responseData.topics.add(new AlterIsrResponseData.TopicData()
+      .setName(tp0.topic())
+      .setPartitions(Collections.singletonList(
+        new AlterIsrResponseData.PartitionData()
+          .setPartitionIndex(tp0.partition())
+          .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code()))))
+    val alterIsrResp = new AlterIsrResponse(responseData)
+
     val resp = new ClientResponse(null, null, "", 0L, 0L,
       false, null, null, alterIsrResp)
     callbackCapture.getValue.onComplete(resp)

@@ -2238,7 +2238,6 @@ class KafkaController(val config: KafkaConfig,
         case Right(error) =>
           resp.setErrorCode(error.code)
         case Left(partitionResults) =>
-          resp.setTopics(new util.ArrayList())
           partitionResults
             .groupBy { case (tp, _) => tp.topic }   // Group by topic
             .foreach { case (topic, partitions) =>

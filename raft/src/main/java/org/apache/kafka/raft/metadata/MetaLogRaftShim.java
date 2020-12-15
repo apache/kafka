@@ -118,7 +118,7 @@ public class MetaLogRaftShim implements MetaLogManager {
 
         @Override
         public String toString() {
-            return "ListenerShim" +
+            return "ListenerShim(" +
                 "listener=" + listener +
                 ')';
         }

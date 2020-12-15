@@ -21,20 +21,22 @@ import kafka.network.RequestChannel
 import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
-import org.apache.kafka.common.{Node, TopicPartition}
-import org.apache.kafka.common.acl.AclOperation.{CLUSTER_ACTION, DESCRIBE}
+import org.apache.kafka.common.acl.AclOperation.{CLUSTER_ACTION, CREATE, DESCRIBE}
 import org.apache.kafka.common.errors.ApiException
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.message.ApiVersionsResponseData.{ApiVersionsResponseKey, FinalizedFeatureKey, SupportedFeatureKey}
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection
+import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseBroker
-import org.apache.kafka.common.message.{ApiVersionsResponseData, BeginQuorumEpochResponseData, BrokerHeartbeatResponseData, BrokerRegistrationResponseData, DescribeQuorumResponseData, EndQuorumEpochResponseData, FetchResponseData, MetadataResponseData, VoteResponseData}
+import org.apache.kafka.common.message.{AlterIsrResponseData, ApiVersionsResponseData, BeginQuorumEpochResponseData, BrokerHeartbeatResponseData, BrokerRegistrationResponseData, CreateTopicsResponseData, DescribeQuorumResponseData, EndQuorumEpochResponseData, FetchResponseData, MetadataResponseData, VoteResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.record.BaseRecords
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.Resource
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
-import org.apache.kafka.common.resource.ResourceType.CLUSTER
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.resource.ResourceType.{CLUSTER, TOPIC}
+import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.controller.ClusterControlManager.{HeartbeatReply, RegistrationReply}
 import org.apache.kafka.controller.{Controller, LeaderAndIsr}
 import org.apache.kafka.metadata.{FeatureManager, VersionRange}
@@ -60,14 +62,15 @@ class ControllerApis(val requestChannel: RequestChannel,
                      val metaProperties: MetaProperties,
                      val controllerNodes: Seq[Node]) extends ApiRequestHandler with Logging {
 
-  val apisUtils = new ApisUtils(requestChannel, authorizer, quotas, time)
+  val apisUtils = new ApisUtils(new LogContext(s"[ControllerApis id=${config.controllerId}] "),
+    requestChannel, authorizer, quotas, time)
 
   var supportedApiKeys = Set(
     ApiKeys.FETCH,
     ApiKeys.METADATA,
     //ApiKeys.SASL_HANDSHAKE
     ApiKeys.API_VERSIONS,
-    //ApiKeys.CREATE_TOPICS,
+    ApiKeys.CREATE_TOPICS,
     //ApiKeys.DELETE_TOPICS,
     //ApiKeys.DESCRIBE_ACLS,
     //ApiKeys.CREATE_ACLS,
@@ -98,11 +101,39 @@ class ControllerApis(val requestChannel: RequestChannel,
     ApiKeys.BROKER_HEARTBEAT,
   )
 
+  private def maybeHandleInvalidEnvelope(
+    envelope: RequestChannel.Request,
+    forwardedApiKey: ApiKeys
+  ): Boolean = {
+    def sendEnvelopeError(error: Errors): Unit = {
+      apisUtils.sendErrorResponseMaybeThrottle(envelope, error.exception)
+    }
+
+    if (!apisUtils.authorize(envelope.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
+      // Forwarding request must have CLUSTER_ACTION authorization to reduce the risk of impersonation.
+      sendEnvelopeError(Errors.CLUSTER_AUTHORIZATION_FAILED)
+      true
+    } else if (!forwardedApiKey.forwardable) {
+      sendEnvelopeError(Errors.INVALID_REQUEST)
+      true
+    } else {
+      false
+    }
+  }
+
   override def handle(request: RequestChannel.Request): Unit = {
     try {
+      val handled = request.envelope.exists(envelope => {
+        maybeHandleInvalidEnvelope(envelope, request.header.apiKey)
+      })
+
+      if (handled)
+        return
+
       request.header.apiKey match {
         case ApiKeys.FETCH => handleFetch(request)
         case ApiKeys.METADATA => handleMetadataRequest(request)
+        case ApiKeys.CREATE_TOPICS => handleCreateTopics(request)
         case ApiKeys.API_VERSIONS => handleApiVersionsRequest(request)
         case ApiKeys.VOTE => handleVote(request)
         case ApiKeys.BEGIN_QUORUM_EPOCH => handleBeginQuorumEpoch(request)
@@ -157,6 +188,55 @@ class ControllerApis(val requestChannel: RequestChannel,
     }
     apisUtils.sendResponseMaybeThrottle(request,
       requestThrottleMs => createResponseCallback(requestThrottleMs))
+  }
+
+  def handleCreateTopics(request: RequestChannel.Request): Unit = {
+    val createTopicRequest = request.body[CreateTopicsRequest]
+    val (authorizedCreateRequest, unauthorizedTopics) =
+      if (apisUtils.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME)) {
+        (createTopicRequest.data, Seq.empty)
+      } else {
+        val duplicate = createTopicRequest.data.duplicate()
+        val authorizedTopics = new CreatableTopicCollection()
+        val unauthorizedTopics = mutable.Buffer.empty[String]
+
+        createTopicRequest.data.topics.asScala.foreach { topicData =>
+          if (apisUtils.authorize(request.context, CREATE, TOPIC, topicData.name)) {
+            authorizedTopics.add(topicData)
+          } else {
+            unauthorizedTopics += topicData.name
+          }
+        }
+        (duplicate.setTopics(authorizedTopics), unauthorizedTopics)
+      }
+
+    def sendResponse(response: CreateTopicsResponseData): Unit = {
+      unauthorizedTopics.foreach { topic =>
+        val result = new CreatableTopicResult()
+          .setName(topic)
+          .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+        response.topics.add(result)
+      }
+
+      apisUtils.sendResponseMaybeThrottle(request, throttleTimeMs => {
+        response.setThrottleTimeMs(throttleTimeMs)
+        new CreateTopicsResponse(response)
+      })
+    }
+
+    if (authorizedCreateRequest.topics.isEmpty) {
+      sendResponse(new CreateTopicsResponseData())
+    } else {
+      val future = controller.createTopics(authorizedCreateRequest)
+      future.whenComplete((responseData, exception) => {
+        val response = if (exception != null) {
+          createTopicRequest.getErrorResponse(exception).data
+        } else {
+          responseData
+        }
+        sendResponse(response)
+      })
+    }
   }
 
   def handleApiVersionsRequest(request: RequestChannel.Request): Unit = {
@@ -227,26 +307,54 @@ class ControllerApis(val requestChannel: RequestChannel,
   }
 
   def handleAlterIsrRequest(request: RequestChannel.Request): Unit = {
-    val alterIsrRequest = request.body[AlterIsrRequest]
-    if (!apisUtils.authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
-      val isrsToAlter = mutable.Map[TopicPartition, LeaderAndIsr]()
-      alterIsrRequest.data.topics.forEach { topicReq =>
-        topicReq.partitions.forEach { partitionReq =>
-          val tp = new TopicPartition(topicReq.name, partitionReq.partitionIndex)
-          val newIsr = partitionReq.newIsr()
-          isrsToAlter.put(tp, new LeaderAndIsr(
-            alterIsrRequest.data.brokerId,
-            partitionReq.leaderEpoch,
-            newIsr,
-            partitionReq.currentIsrVersion))
-        }
-      }
+    apisUtils.authorizeClusterOperation(request, CLUSTER_ACTION)
 
-      controller.alterIsr(
-        alterIsrRequest.data().brokerId(),
-        alterIsrRequest.data().brokerEpoch(),
-        isrsToAlter.asJava)
+    val alterIsrRequest = request.body[AlterIsrRequest]
+    val isrsToAlter = mutable.Map[TopicPartition, LeaderAndIsr]()
+    alterIsrRequest.data.topics.forEach { topicReq =>
+      topicReq.partitions.forEach { partitionReq =>
+        val tp = new TopicPartition(topicReq.name, partitionReq.partitionIndex)
+        val newIsr = partitionReq.newIsr()
+        isrsToAlter.put(tp, new LeaderAndIsr(
+          alterIsrRequest.data.brokerId,
+          partitionReq.leaderEpoch,
+          newIsr,
+          partitionReq.currentIsrVersion))
+      }
     }
+
+    val future = controller.alterIsr(
+      alterIsrRequest.data.brokerId,
+      alterIsrRequest.data.brokerEpoch,
+      isrsToAlter.asJava
+    )
+
+    future.whenComplete((responses, exception) => {
+      val response = if (exception != null) {
+        alterIsrRequest.getErrorResponse(exception)
+      } else {
+        val responseData = new AlterIsrResponseData()
+          .setErrorCode(Errors.NONE.code)
+
+        responses.forEach { (topicPartition, error) =>
+          var topicData = responseData.topics.find(topicPartition.topic)
+          if (topicData == null) {
+            topicData = new AlterIsrResponseData.TopicData()
+              .setName(topicPartition.topic)
+            responseData.topics.add(topicData)
+          }
+
+          // TODO: Partition response data expects ISR info
+          val partitionResult = new AlterIsrResponseData.PartitionData()
+            .setPartitionIndex(topicPartition.partition)
+            .setErrorCode(error.code)
+          topicData.partitions.add(partitionResult)
+        }
+
+        new AlterIsrResponse(responseData)
+      }
+      apisUtils.sendResponseExemptThrottle(request, response)
+    })
   }
 
   def handleBrokerHeartBeatRequest(request: RequestChannel.Request): Unit = {

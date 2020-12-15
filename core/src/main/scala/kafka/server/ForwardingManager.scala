@@ -82,6 +82,7 @@ class ForwardingManager(channelManager: BrokerToControllerChannelManager,
       else
         currentTime + retryTimeoutMs
 
+    debug(s"Forwarding request $request to controller")
     channelManager.sendRequest(envelopeRequest, new ForwardingResponseHandler, deadlineMs)
   }
 

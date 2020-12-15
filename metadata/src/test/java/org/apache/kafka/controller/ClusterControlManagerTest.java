@@ -25,6 +25,8 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.HashSet;
 import java.util.List;
@@ -61,13 +63,14 @@ public class ClusterControlManagerTest {
         assertTrue(clusterControl.isUsable(1));
     }
 
-    @Test
-    public void testChooseRandomRegistered() {
+    @ParameterizedTest
+    @ValueSource(ints = {3, 10})
+    public void testChooseRandomRegistered(int numUsableBrokers) {
         MockTime time = new MockTime(0, 0, 0);
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(-1);
         ClusterControlManager clusterControl = new ClusterControlManager(
             new LogContext(), time, snapshotRegistry, 1000, 100);
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < numUsableBrokers; i++) {
             RegisterBrokerRecord brokerRecord =
                 new RegisterBrokerRecord().setBrokerEpoch(100).setBrokerId(i);
             brokerRecord.endPoints().add(new RegisterBrokerRecord.BrokerEndpoint().
@@ -80,7 +83,7 @@ public class ClusterControlManagerTest {
                 new UnfenceBrokerRecord().setId(i).setEpoch(100);
             clusterControl.replay(unfenceBrokerRecord);
         }
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < numUsableBrokers; i++) {
             assertTrue(clusterControl.isUsable(i));
         }
         for (int i = 0; i < 100; i++) {
@@ -89,7 +92,7 @@ public class ClusterControlManagerTest {
             HashSet<Integer> seen = new HashSet<>();
             for (Integer result : results) {
                 assertTrue(result >= 0);
-                assertTrue(result < 10);
+                assertTrue(result < numUsableBrokers);
                 assertTrue(seen.add(result));
             }
         }

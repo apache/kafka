@@ -225,7 +225,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
           info(s"Successfully registered broker ${brokerId} with broker epoch ${_brokerEpoch}")
           scheduleNextCommunication(false)
         } else {
-          error(s"Unable to register broker ${brokerId} because the controller returned " +
+          debug(s"Unable to register broker ${brokerId} because the controller returned " +
             s"error ${errorCode}")
           handleRetryableRegistrationFailure()
         }

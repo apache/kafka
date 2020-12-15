@@ -32,7 +32,9 @@ import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.MetadataRecordType;
+import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
+import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
@@ -468,9 +470,11 @@ public final class QuorumController implements Controller {
                 clusterControl.replay((UnfenceBrokerRecord) message);
                 break;
             case TOPIC_RECORD:
-                throw new RuntimeException("Unhandled record type " + type);
+                replicationControl.replay((TopicRecord) message);
+                break;
             case PARTITION_RECORD:
-                throw new RuntimeException("Unhandled record type " + type);
+                replicationControl.replay((PartitionRecord) message);
+                break;
             case CONFIG_RECORD:
                 configurationControl.replay((ConfigRecord) message);
                 break;

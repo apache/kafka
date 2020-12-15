@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.nio.ByteBuffer;
-import java.util.List;
-import java.util.stream.Collectors;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
@@ -26,6 +23,10 @@ import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
+
+import java.nio.ByteBuffer;
+import java.util.List;
+import java.util.stream.Collectors;
 
 public class CreateTopicsRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<CreateTopicsRequest> {
@@ -82,7 +83,12 @@ public class CreateTopicsRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+    public CreateTopicsResponse getErrorResponse(Throwable e) {
+        return getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, e);
+    }
+
+    @Override
+    public CreateTopicsResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         CreateTopicsResponseData response = new CreateTopicsResponseData();
         if (version() >= 2) {
             response.setThrottleTimeMs(throttleTimeMs);

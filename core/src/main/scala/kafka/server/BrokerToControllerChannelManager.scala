@@ -138,8 +138,8 @@ class BrokerToControllerChannelManager(controllerNodeProvider: ControllerNodePro
         manualMetadataUpdater,
         config.brokerId.toString,
         1,
-        0,
-        0,
+        50,
+        50,
         Selectable.USE_DEFAULT_BUFFER_SIZE,
         Selectable.USE_DEFAULT_BUFFER_SIZE,
         config.requestTimeoutMs,
@@ -280,10 +280,10 @@ class BrokerToControllerRequestThread(networkClient: KafkaClient,
     if (response.authenticationException() != null || response.versionMismatch() != null) {
       request.callback.onComplete(response)
     } else if (response.wasDisconnected()) {
-      info(s"Unable to send control request to node ${controller.id()}: disconnected.")
+      debug(s"Unable to send control request to node ${controller.id()}: disconnected.")
       maybeRetryRequest(request)
     } else if (response.responseBody().errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
-      info(s"Unable to send control request to node ${controller.id()}: received NOT_CONTROLLER response.")
+      debug(s"Unable to send control request to node ${controller.id()}: received NOT_CONTROLLER response.")
       // Disconnect the current connection.  This will trigger exponential backoff behavior so that
       // we don't sit in a tight loop and try to send messages to the ex-controller.
       networkClient.close(controller.idString())

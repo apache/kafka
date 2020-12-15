@@ -96,6 +96,16 @@ public class ReplicationControlManager {
         this.topics = new TimelineHashMap<>(snapshotRegistry, 0);
     }
 
+    public void replay(TopicRecord record) {
+        // TODO: Complete implementation
+        topicsByName.put(record.name(), record.topicId());
+        topics.put(record.topicId(), new TopicControlInfo(snapshotRegistry, record.topicId()));
+    }
+
+    public void replay(PartitionRecord message) {
+        // TODO: Complete implementation
+    }
+
     public ControllerResult<CreateTopicsResponseData>
             createTopics(CreateTopicsRequestData request) {
         Map<String, ApiError> topicErrors = new HashMap<>();
@@ -122,7 +132,7 @@ public class ReplicationControlManager {
             if (topicErrors.containsKey(topic.name())) continue;
             ApiError error = createTopic(topic, records);
             if (error.isFailure()) {
-                topicErrors.put(topic.name(), topicErrors.get(topic.name()));
+                topicErrors.put(topic.name(), error);
             }
         }
 

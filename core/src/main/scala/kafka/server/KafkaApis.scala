@@ -23,6 +23,7 @@ import java.util
 import java.util.{Collections, Optional, Properties}
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+
 import kafka.admin.{AdminUtils, RackAwareMode}
 import kafka.api.ElectLeadersRequestOps
 import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0, KAFKA_2_3_IV0}
@@ -60,9 +61,9 @@ import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionR
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse
 import org.apache.kafka.common.message.ListOffsetRequestData.ListOffsetPartition
 import org.apache.kafka.common.message.ListOffsetResponseData.{ListOffsetPartitionResponse, ListOffsetTopicResponse}
-import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetForLeaderTopic}
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{OffsetForLeaderTopicResult, OffsetForLeaderTopicResultCollection, EpochEndOffset}
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{EpochEndOffset, OffsetForLeaderTopicResult, OffsetForLeaderTopicResultCollection}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ListenerName, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -77,7 +78,7 @@ import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
-import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time}
+import org.apache.kafka.common.utils.{LogContext, ProducerIdAndEpoch, Time}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.message.AlterConfigsResponseData.AlterConfigsResourceResponse
 import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePartition, MetadataResponseTopic}
@@ -121,7 +122,8 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val finalizedFeatureCache: FinalizedFeatureCache,
                 brokerMetadataListener: BrokerMetadataListener) extends ApiRequestHandler with Logging {
 
-  val apisUtils = new ApisUtils(requestChannel, authorizer, quotas, time, Some(groupCoordinator), Some(txnCoordinator))
+  val apisUtils = new ApisUtils(new LogContext(s"[BrokerApis id=${config.brokerId}] "),
+    requestChannel, authorizer, quotas, time, Some(groupCoordinator), Some(txnCoordinator))
 
   type FetchResponseStats = Map[TopicPartition, RecordConversionStats]
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
@@ -162,7 +164,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def isForwardingEnabled(request: RequestChannel.Request): Boolean = {
-    config.metadataQuorumEnabled && request.context.principalSerde.isPresent
+    (config.processRoles.nonEmpty || config.metadataQuorumEnabled) && request.context.principalSerde.isPresent
   }
 
   private def maybeForward(
@@ -1365,13 +1367,22 @@ class KafkaApis(val requestChannel: RequestChannel,
     trace("Sending topic metadata %s and brokers %s for correlation id %d to client %s".format(completeTopicMetadata.mkString(","),
       brokers.mkString(","), request.header.correlationId, request.header.clientId))
 
+    val controllerId = if (config.processRoles.nonEmpty) {
+      // FIXME: When running in KIP-500 mode, we currently use the local brokerId as the controller
+      //  so that the AdminClient will send controller-bound requests to this broker This is a
+      //  temporary workaround until the AdminClient supports the assumption of forwarding.
+      config.brokerId
+    } else {
+      metadataCache.getControllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID)
+    }
+
     apisUtils.sendResponseMaybeThrottle(request, requestThrottleMs =>
        MetadataResponse.prepareResponse(
          requestVersion,
          requestThrottleMs,
          brokers.flatMap(_.getNode(request.context.listenerName)).asJava,
          clusterId,
-         metadataCache.getControllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID),
+         controllerId,
          completeTopicMetadata.asJava,
          clusterAuthorizedOperations
       ))

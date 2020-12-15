@@ -35,7 +35,7 @@ import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, Requ
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType.CLUSTER
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{LogContext, Time, Utils}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 
 import scala.jdk.CollectionConverters._
@@ -43,12 +43,17 @@ import scala.jdk.CollectionConverters._
 /**
  * Helper class for request handlers. Provides common functionality around throttling, authorizations, and error handling
  */
-class ApisUtils(val requestChannel: RequestChannel,
-                val authorizer: Option[Authorizer],
-                val quotas: QuotaManagers,
-                val time: Time,
-                val groupCoordinator: Option[GroupCoordinator] = None,
-                val txnCoordinator: Option[TransactionCoordinator] = None) extends Logging {
+class ApisUtils(
+  val logContext: LogContext,
+  val requestChannel: RequestChannel,
+  val authorizer: Option[Authorizer],
+  val quotas: QuotaManagers,
+  val time: Time,
+  val groupCoordinator: Option[GroupCoordinator] = None,
+  val txnCoordinator: Option[TransactionCoordinator] = None
+) extends Logging {
+
+  this.logIdent = logContext.logPrefix()
 
   // private package for testing
   def authorize(requestContext: RequestContext,
@@ -93,7 +98,8 @@ class ApisUtils(val requestChannel: RequestChannel,
       s"correlationId=${request.header.correlationId}, " +
       s"api=${request.header.apiKey}, " +
       s"version=${request.header.apiVersion}, " +
-      s"body=${request.body[AbstractRequest]}", e)
+      s"body=${request.body[AbstractRequest]}, " +
+      s"envelope=${request.envelope}", e)
     if (mayThrottle)
       sendErrorResponseMaybeThrottle(request, e)
     else

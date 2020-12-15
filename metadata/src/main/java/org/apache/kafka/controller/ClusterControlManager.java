@@ -343,14 +343,15 @@ public class ClusterControlManager {
         List<Integer> choices = new ArrayList<>();
         // TODO: rack-awareness
         List<Integer> indexes = new ArrayList<>();
+        int initialIndex = random.nextInt(usable.size());
         for (int i = 0; i < numBrokers; i++) {
-            indexes.add(random.nextInt(numBrokers - i));
+            indexes.add((initialIndex + i) % usable.size());
         }
         indexes.sort(Integer::compareTo);
         Iterator<Integer> iter = usable.iterator();
         for (int i = 0; choices.size() < indexes.size(); i++) {
             int brokerId = iter.next();
-            if (indexes.get(choices.size()) + choices.size() == i) {
+            if (indexes.get(choices.size()) == i) {
                 choices.add(brokerId);
             }
         }
