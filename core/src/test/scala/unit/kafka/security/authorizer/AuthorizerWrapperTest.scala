@@ -80,7 +80,7 @@ class AuthorizerWrapperTest extends ZooKeeperTestHarness {
 
     resource = new ResourcePattern(TOPIC, "foo-" + UUID.randomUUID(), LITERAL)
     zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkMaxInFlightRequests,
-      Time.SYSTEM, "kafka.test", "AclAuthorizerTest")
+      Time.SYSTEM, "kafka.test", "AuthorizerWrapperTest")
   }
 
   @After

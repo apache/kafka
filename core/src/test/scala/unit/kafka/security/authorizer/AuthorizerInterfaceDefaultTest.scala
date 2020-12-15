@@ -68,7 +68,7 @@ class AuthorizerInterfaceDefaultTest extends ZooKeeperTestHarness {
     authorizers.foreach(a => a.configure(config.originals))
 
     zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkMaxInFlightRequests,
-      Time.SYSTEM, "kafka.test", "AclAuthorizerTest")
+      Time.SYSTEM, "kafka.test", "AuthorizerInterfaceDefaultTest")
   }
 
   @After
