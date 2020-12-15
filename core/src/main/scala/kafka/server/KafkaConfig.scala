@@ -360,6 +360,7 @@ object KafkaConfig {
   val EnableMetadataQuorumProp = "enable.metadata.quorum"
   val ProcessRolesProp = "process.roles"
   val ControllerConnectProp = "controller.quorum.voters"
+  val InitialBrokerRegistrationTimeoutMs = "initial.broker.registration.timeout.ms"
   val RegistrationHeartbeatIntervalMsProp = "registration.heartbeat.interval.ms"
   val RegistrationLeaseTimeoutMsProp = "registration.lease.timeout.ms"
   val MetadataLogDirProp = "metadata.log.dir"
@@ -1053,6 +1054,7 @@ object KafkaConfig {
       .define(ConnectionSetupTimeoutMaxMsProp, LONG, Defaults.ConnectionSetupTimeoutMaxMs, MEDIUM, ConnectionSetupTimeoutMaxMsDoc)
       .define(ProcessRolesProp, LIST, Collections.emptyList(), ValidList.in("broker", "controller"), HIGH, ProcessRolesDoc)
       .define(ControllerConnectProp, STRING, null, HIGH, ControllerConnectDoc)
+      .define(InitialBrokerRegistrationTimeoutMs, INT, Defaults.RegistrationHeartbeatIntervalMs, MEDIUM, RegistrationHeartbeatIntervalMsDoc)
       .define(RegistrationHeartbeatIntervalMsProp, INT, Defaults.RegistrationHeartbeatIntervalMs, MEDIUM, RegistrationHeartbeatIntervalMsDoc)
       .define(RegistrationLeaseTimeoutMsProp, INT, Defaults.RegistrationLeaseTimeoutMs, MEDIUM, RegistrationLeaseTimeoutMsDoc)
       .define(MetadataLogDirProp, STRING, null, HIGH, MetadataLogDirDoc)
@@ -1516,6 +1518,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   val connectionSetupTimeoutMaxMs = getLong(KafkaConfig.ConnectionSetupTimeoutMaxMsProp)
   val processRoles = parseProcessRoles()
   val controllerConnect = getString(KafkaConfig.ControllerConnectProp)
+  val initialRegistrationTimeoutMs = getInt(KafkaConfig.InitialBrokerRegistrationTimeoutMs)
   val registrationHeartbeatIntervalMs = getInt(KafkaConfig.RegistrationHeartbeatIntervalMsProp)
   val registrationLeaseTimeoutMs = getInt(KafkaConfig.RegistrationLeaseTimeoutMsProp)
 
