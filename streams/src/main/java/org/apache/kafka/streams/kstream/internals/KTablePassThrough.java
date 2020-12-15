@@ -41,6 +41,7 @@ public class KTablePassThrough<K, V> implements KTableProcessorSupplier<K, V, V>
 
     @Override
     public boolean enableSendingOldValues(final boolean forceMaterialization) {
+        // We require sending old values for joins and suppression, will always be materialized
         for (final KStreamAggProcessorSupplier parent : parents) {
             parent.enableSendingOldValues();
         }
