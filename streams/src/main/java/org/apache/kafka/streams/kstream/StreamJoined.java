@@ -39,8 +39,8 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
     protected final WindowBytesStoreSupplier otherStoreSupplier;
     protected final String name;
     protected final String storeName;
-    protected boolean loggingEnabled;
-    protected Map<String, String> topicConfig;
+    protected final boolean loggingEnabled;
+    protected final Map<String, String> topicConfig;
 
     protected StreamJoined(final StreamJoined<K, V1, V2> streamJoined) {
         this(streamJoined.keySerde,
