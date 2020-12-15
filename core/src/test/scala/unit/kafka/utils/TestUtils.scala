@@ -1082,8 +1082,6 @@ object TestUtils extends Logging {
       inFlight.set(false);
     }
 
-    override def start(): Unit = { }
-
     def completeIsrUpdate(newZkVersion: Int): Unit = {
       if (inFlight.compareAndSet(true, false)) {
         val item = isrUpdates.head

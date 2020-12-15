@@ -48,21 +48,21 @@ class BrokerToControllerRequestThreadTest {
 
     when(metadataCache.getControllerId).thenReturn(None)
 
+    val retryTimeoutMs = 30000
     val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), metadataCache,
-      config, listenerName, time, "")
+      config, listenerName, time, "", retryTimeoutMs)
 
-    val retryTimeout = 30000
     val completionHandler = new TestRequestCompletionHandler(None)
     val queueItem = BrokerToControllerQueueItem(
+      time.milliseconds(),
       new MetadataRequest.Builder(new MetadataRequestData()),
-      completionHandler,
-      time.milliseconds() + retryTimeout
+      completionHandler
     )
 
     testRequestThread.enqueue(queueItem)
     testRequestThread.doWork()
 
-    time.sleep(retryTimeout)
+    time.sleep(retryTimeoutMs)
     testRequestThread.doWork()
 
     assertTrue(completionHandler.timedOut.get)
@@ -89,14 +89,14 @@ class BrokerToControllerRequestThreadTest {
 
     val expectedResponse = RequestTestUtils.metadataUpdateWith(2, Collections.singletonMap("a", 2))
     val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), metadataCache,
-      config, listenerName, time, "")
+      config, listenerName, time, "", retryTimeoutMs = Long.MaxValue)
     mockClient.prepareResponse(expectedResponse)
 
     val completionHandler = new TestRequestCompletionHandler(Some(expectedResponse))
     val queueItem = BrokerToControllerQueueItem(
+      time.milliseconds(),
       new MetadataRequest.Builder(new MetadataRequestData()),
-      completionHandler,
-      Long.MaxValue
+      completionHandler
     )
 
     testRequestThread.enqueue(queueItem)
@@ -134,13 +134,13 @@ class BrokerToControllerRequestThreadTest {
 
     val expectedResponse = RequestTestUtils.metadataUpdateWith(3, Collections.singletonMap("a", 2))
     val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(),
-      metadataCache, config, listenerName, time, "")
+      metadataCache, config, listenerName, time, "", retryTimeoutMs = Long.MaxValue)
 
     val completionHandler = new TestRequestCompletionHandler(Some(expectedResponse))
     val queueItem = BrokerToControllerQueueItem(
+      time.milliseconds(),
       new MetadataRequest.Builder(new MetadataRequestData()),
       completionHandler,
-      Long.MaxValue
     )
 
     testRequestThread.enqueue(queueItem)
@@ -188,14 +188,14 @@ class BrokerToControllerRequestThreadTest {
       Collections.singletonMap("a", 2))
     val expectedResponse = RequestTestUtils.metadataUpdateWith(3, Collections.singletonMap("a", 2))
     val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), metadataCache,
-      config, listenerName, time, "")
+      config, listenerName, time, "", retryTimeoutMs = Long.MaxValue)
 
     val completionHandler = new TestRequestCompletionHandler(Some(expectedResponse))
     val queueItem = BrokerToControllerQueueItem(
+      time.milliseconds(),
       new MetadataRequest.Builder(new MetadataRequestData()
         .setAllowAutoTopicCreation(true)),
-      completionHandler,
-      Long.MaxValue
+      completionHandler
     )
     testRequestThread.enqueue(queueItem)
     // initialize to the controller
@@ -233,19 +233,19 @@ class BrokerToControllerRequestThreadTest {
     when(metadataCache.getAliveBrokers).thenReturn(Seq(controller))
     when(metadataCache.getAliveBroker(controllerId)).thenReturn(Some(controller))
 
+    val retryTimeoutMs = 30000
     val responseWithNotControllerError = RequestTestUtils.metadataUpdateWith("cluster1", 2,
       Collections.singletonMap("a", Errors.NOT_CONTROLLER),
       Collections.singletonMap("a", 2))
     val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), metadataCache,
-      config, listenerName, time, "")
+      config, listenerName, time, "", retryTimeoutMs)
 
-    val retryTimeout = 30000
     val completionHandler = new TestRequestCompletionHandler()
     val queueItem = BrokerToControllerQueueItem(
+      time.milliseconds(),
       new MetadataRequest.Builder(new MetadataRequestData()
         .setAllowAutoTopicCreation(true)),
-      completionHandler,
-      retryTimeout + time.milliseconds()
+      completionHandler
     )
 
     testRequestThread.enqueue(queueItem)
@@ -253,7 +253,7 @@ class BrokerToControllerRequestThreadTest {
     // initialize to the controller
     testRequestThread.doWork()
 
-    time.sleep(retryTimeout)
+    time.sleep(retryTimeoutMs)
 
     // send and process the request
     mockClient.prepareResponse((body: AbstractRequest) => {
