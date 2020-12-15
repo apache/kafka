@@ -44,7 +44,7 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
 
     private static final Logger log = LoggerFactory.getLogger(TxnOffsetCommitRequest.class);
 
-    public final TxnOffsetCommitRequestData data;
+    private final TxnOffsetCommitRequestData data;
 
     public static class Builder extends AbstractRequest.Builder<TxnOffsetCommitRequest> {
 
@@ -168,7 +168,7 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
     }
 
     @Override
-    protected TxnOffsetCommitRequestData data() {
+    public TxnOffsetCommitRequestData data() {
         return data;
     }
 

@@ -64,6 +64,7 @@ public class CreateDelegationTokenResponse extends AbstractResponse {
         return prepareResponse(throttleTimeMs, error, owner, -1, -1, -1, "", ByteBuffer.wrap(new byte[] {}));
     }
 
+    @Override
     public CreateDelegationTokenResponseData data() {
         return data;
     }

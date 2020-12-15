@@ -17,6 +17,7 @@
 
 package org.apache.kafka.jmh.common;
 
+import kafka.network.RequestConvertToJson;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -124,5 +125,10 @@ public class FetchRequestBenchmark {
         ByteBufferChannel channel = new ByteBufferChannel(send.size());
         send.writeTo(channel);
         return channel.buffer().limit();
+    }
+
+    @Benchmark
+    public String testRequestToJson() {
+        return RequestConvertToJson.request(consumerRequest).toString();
     }
 }

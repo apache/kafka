@@ -63,6 +63,7 @@ public class ListPartitionReassignmentsRequest extends AbstractRequest {
             new ByteBufferAccessor(buffer), version), version);
     }
 
+    @Override
     public ListPartitionReassignmentsRequestData data() {
         return data;
     }

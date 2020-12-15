@@ -81,6 +81,7 @@ public class OffsetCommitResponse extends AbstractResponse {
         this(DEFAULT_THROTTLE_TIME, responseData);
     }
 
+    @Override
     public OffsetCommitResponseData data() {
         return data;
     }

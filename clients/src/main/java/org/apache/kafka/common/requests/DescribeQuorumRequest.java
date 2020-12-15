@@ -49,7 +49,7 @@ public class DescribeQuorumRequest extends AbstractRequest {
         }
     }
 
-    public final DescribeQuorumRequestData data;
+    private final DescribeQuorumRequestData data;
 
     private DescribeQuorumRequest(DescribeQuorumRequestData data, short version) {
         super(ApiKeys.DESCRIBE_QUORUM, version);
@@ -72,7 +72,7 @@ public class DescribeQuorumRequest extends AbstractRequest {
     }
 
     @Override
-    protected DescribeQuorumRequestData data() {
+    public DescribeQuorumRequestData data() {
         return data;
     }
 

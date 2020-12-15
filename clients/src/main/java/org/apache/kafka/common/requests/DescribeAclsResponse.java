@@ -62,7 +62,7 @@ public class DescribeAclsResponse extends AbstractResponse {
     }
 
     @Override
-    protected DescribeAclsResponseData data() {
+    public DescribeAclsResponseData data() {
         return data;
     }
 

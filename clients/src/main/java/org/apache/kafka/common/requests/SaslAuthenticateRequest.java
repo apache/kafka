@@ -60,6 +60,7 @@ public class SaslAuthenticateRequest extends AbstractRequest {
         this.data = data;
     }
 
+    @Override
     public SaslAuthenticateRequestData data() {
         return data;
     }

@@ -38,6 +38,7 @@ public class CreateDelegationTokenRequest extends AbstractRequest {
             version);
     }
 
+    @Override
     public CreateDelegationTokenRequestData data() {
         return data;
     }

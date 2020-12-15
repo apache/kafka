@@ -91,6 +91,7 @@ public class IncrementalAlterConfigsRequest extends AbstractRequest {
             new ByteBufferAccessor(buffer), version), version);
     }
 
+    @Override
     public IncrementalAlterConfigsRequestData data() {
         return data;
     }

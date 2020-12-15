@@ -80,6 +80,7 @@ public class EnvelopeRequest extends AbstractRequest {
         return new EnvelopeRequest(new EnvelopeRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
+    @Override
     public EnvelopeRequestData data() {
         return data;
     }

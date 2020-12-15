@@ -42,7 +42,7 @@ import java.util.Map;
  * - {@link Errors#UNKNOWN_TOPIC_OR_PARTITION}
  */
 public class VoteResponse extends AbstractResponse {
-    public final VoteResponseData data;
+    private final VoteResponseData data;
 
     public VoteResponse(VoteResponseData data) {
         super(ApiKeys.VOTE);
@@ -83,7 +83,7 @@ public class VoteResponse extends AbstractResponse {
     }
 
     @Override
-    protected VoteResponseData data() {
+    public VoteResponseData data() {
         return data;
     }
 

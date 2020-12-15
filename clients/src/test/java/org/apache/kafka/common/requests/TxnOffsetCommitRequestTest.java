@@ -141,9 +141,9 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
             initializeBuilderWithGroupMetadata(true);
             final TxnOffsetCommitRequest request = builderWithGroupMetadata.build(version);
 
-            assertEquals(JoinGroupRequest.UNKNOWN_MEMBER_ID, request.data.memberId());
-            assertEquals(JoinGroupRequest.UNKNOWN_GENERATION_ID, request.data.generationId());
-            assertNull(request.data.groupInstanceId());
+            assertEquals(JoinGroupRequest.UNKNOWN_MEMBER_ID, request.data().memberId());
+            assertEquals(JoinGroupRequest.UNKNOWN_GENERATION_ID, request.data().generationId());
+            assertNull(request.data().groupInstanceId());
         }
     }
 

@@ -106,7 +106,7 @@ public class DescribeClientQuotasRequest extends AbstractRequest {
     }
 
     @Override
-    protected DescribeClientQuotasRequestData data() {
+    public DescribeClientQuotasRequestData data() {
         return data;
     }
 

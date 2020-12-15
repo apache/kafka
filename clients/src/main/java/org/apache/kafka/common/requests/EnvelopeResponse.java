@@ -57,6 +57,7 @@ public class EnvelopeResponse extends AbstractResponse {
         return Errors.forCode(data.errorCode());
     }
 
+    @Override
     public EnvelopeResponseData data() {
         return data;
     }

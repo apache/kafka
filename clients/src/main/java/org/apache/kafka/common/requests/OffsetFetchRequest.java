@@ -38,7 +38,7 @@ public class OffsetFetchRequest extends AbstractRequest {
     private static final Logger log = LoggerFactory.getLogger(OffsetFetchRequest.class);
 
     private static final List<OffsetFetchRequestTopic> ALL_TOPIC_PARTITIONS = null;
-    public final OffsetFetchRequestData data;
+    private final OffsetFetchRequestData data;
 
     public static class Builder extends AbstractRequest.Builder<OffsetFetchRequest> {
 
@@ -175,7 +175,7 @@ public class OffsetFetchRequest extends AbstractRequest {
     }
 
     @Override
-    protected OffsetFetchRequestData data() {
+    public OffsetFetchRequestData data() {
         return data;
     }
 }

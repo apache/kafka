@@ -26,7 +26,7 @@ import java.util.Map;
 
 public class SyncGroupResponse extends AbstractResponse {
 
-    public final SyncGroupResponseData data;
+    private final SyncGroupResponseData data;
 
     public SyncGroupResponse(SyncGroupResponseData data) {
         super(ApiKeys.SYNC_GROUP);
@@ -48,7 +48,7 @@ public class SyncGroupResponse extends AbstractResponse {
     }
 
     @Override
-    protected SyncGroupResponseData data() {
+    public SyncGroupResponseData data() {
         return data;
     }
 

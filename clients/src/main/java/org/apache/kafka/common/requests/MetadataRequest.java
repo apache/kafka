@@ -108,6 +108,7 @@ public class MetadataRequest extends AbstractRequest {
         this.data = data;
     }
 
+    @Override
     public MetadataRequestData data() {
         return data;
     }

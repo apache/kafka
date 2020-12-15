@@ -52,7 +52,7 @@ public class ExpireDelegationTokenResponse extends AbstractResponse {
     }
 
     @Override
-    protected ExpireDelegationTokenResponseData data() {
+    public ExpireDelegationTokenResponseData data() {
         return data;
     }
 

@@ -39,6 +39,7 @@ public class DescribeLogDirsResponse extends AbstractResponse {
         this.data = data;
     }
 
+    @Override
     public DescribeLogDirsResponseData data() {
         return data;
     }

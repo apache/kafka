@@ -39,7 +39,7 @@ import java.util.Map;
  */
 public class DeleteGroupsResponse extends AbstractResponse {
 
-    public final DeleteGroupsResponseData data;
+    private final DeleteGroupsResponseData data;
 
     public DeleteGroupsResponse(DeleteGroupsResponseData data) {
         super(ApiKeys.DELETE_GROUPS);
@@ -47,7 +47,7 @@ public class DeleteGroupsResponse extends AbstractResponse {
     }
 
     @Override
-    protected DeleteGroupsResponseData data() {
+    public DeleteGroupsResponseData data() {
         return data;
     }
 

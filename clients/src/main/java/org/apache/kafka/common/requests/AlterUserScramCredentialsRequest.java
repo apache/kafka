@@ -59,6 +59,7 @@ public class AlterUserScramCredentialsRequest extends AbstractRequest {
         return new AlterUserScramCredentialsRequest(new AlterUserScramCredentialsRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
+    @Override
     public AlterUserScramCredentialsRequestData data() {
         return data;
     }

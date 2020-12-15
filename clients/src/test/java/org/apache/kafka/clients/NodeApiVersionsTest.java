@@ -130,7 +130,7 @@ public class NodeApiVersionsTest {
     @Test
     public void testUsableVersionLatestVersions() {
         List<ApiVersion> versionList = new LinkedList<>();
-        for (ApiVersionsResponseKey apiVersion: ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.apiKeys()) {
+        for (ApiVersionsResponseKey apiVersion: ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().apiKeys()) {
             versionList.add(new ApiVersion(apiVersion));
         }
         // Add an API key that we don't know about.
@@ -148,9 +148,9 @@ public class NodeApiVersionsTest {
     @Test
     public void testConstructionFromApiVersionsResponse() {
         ApiVersionsResponse apiVersionsResponse = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE;
-        NodeApiVersions versions = new NodeApiVersions(apiVersionsResponse.data.apiKeys());
+        NodeApiVersions versions = new NodeApiVersions(apiVersionsResponse.data().apiKeys());
 
-        for (ApiVersionsResponseKey apiVersionKey : apiVersionsResponse.data.apiKeys()) {
+        for (ApiVersionsResponseKey apiVersionKey : apiVersionsResponse.data().apiKeys()) {
             ApiVersion apiVersion = versions.apiVersion(ApiKeys.forId(apiVersionKey.apiKey()));
             assertEquals(apiVersionKey.apiKey(), apiVersion.apiKey);
             assertEquals(apiVersionKey.minVersion(), apiVersion.minVersion);

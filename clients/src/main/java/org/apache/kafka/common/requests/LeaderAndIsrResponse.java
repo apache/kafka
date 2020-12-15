@@ -72,7 +72,7 @@ public class LeaderAndIsrResponse extends AbstractResponse {
     }
 
     @Override
-    protected LeaderAndIsrResponseData data() {
+    public LeaderAndIsrResponseData data() {
         return data;
     }
 

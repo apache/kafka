@@ -52,6 +52,7 @@ public class ElectLeadersResponse extends AbstractResponse {
         data.setReplicaElectionResults(electionResults);
     }
 
+    @Override
     public ElectLeadersResponseData data() {
         return data;
     }

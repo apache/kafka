@@ -26,7 +26,7 @@ import java.nio.ByteBuffer;
 
 public class EndTxnRequest extends AbstractRequest {
 
-    public final EndTxnRequestData data;
+    private final EndTxnRequestData data;
 
     public static class Builder extends AbstractRequest.Builder<EndTxnRequest> {
         public final EndTxnRequestData data;
@@ -60,7 +60,7 @@ public class EndTxnRequest extends AbstractRequest {
     }
 
     @Override
-    protected EndTxnRequestData data() {
+    public EndTxnRequestData data() {
         return data;
     }
 

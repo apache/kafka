@@ -53,7 +53,7 @@ public class SyncGroupRequest extends AbstractRequest {
         }
     }
 
-    public final SyncGroupRequestData data;
+    private final SyncGroupRequestData data;
 
     public SyncGroupRequest(SyncGroupRequestData data, short version) {
         super(ApiKeys.SYNC_GROUP, version);
@@ -92,7 +92,7 @@ public class SyncGroupRequest extends AbstractRequest {
     }
 
     @Override
-    protected SyncGroupRequestData data() {
+    public SyncGroupRequestData data() {
         return data;
     }
 }

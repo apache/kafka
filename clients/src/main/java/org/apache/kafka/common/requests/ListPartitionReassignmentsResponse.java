@@ -38,6 +38,7 @@ public class ListPartitionReassignmentsResponse extends AbstractResponse {
             new ByteBufferAccessor(buffer), version));
     }
 
+    @Override
     public ListPartitionReassignmentsResponseData data() {
         return data;
     }

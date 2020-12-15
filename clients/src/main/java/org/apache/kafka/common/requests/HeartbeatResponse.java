@@ -58,7 +58,7 @@ public class HeartbeatResponse extends AbstractResponse {
     }
 
     @Override
-    protected HeartbeatResponseData data() {
+    public HeartbeatResponseData data() {
         return data;
     }
 

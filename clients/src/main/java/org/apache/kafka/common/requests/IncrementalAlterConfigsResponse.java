@@ -66,6 +66,7 @@ public class IncrementalAlterConfigsResponse extends AbstractResponse {
         this.data = data;
     }
 
+    @Override
     public IncrementalAlterConfigsResponseData data() {
         return data;
     }

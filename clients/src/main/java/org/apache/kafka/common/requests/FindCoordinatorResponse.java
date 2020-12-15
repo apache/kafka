@@ -45,6 +45,7 @@ public class FindCoordinatorResponse extends AbstractResponse {
         this.data = data;
     }
 
+    @Override
     public FindCoordinatorResponseData data() {
         return data;
     }

@@ -51,7 +51,7 @@ public class DeleteAclsResponse extends AbstractResponse {
     }
 
     @Override
-    protected DeleteAclsResponseData data() {
+    public DeleteAclsResponseData data() {
         return data;
     }
 

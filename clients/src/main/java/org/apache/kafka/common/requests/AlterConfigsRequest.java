@@ -112,7 +112,7 @@ public class AlterConfigsRequest extends AbstractRequest {
     }
 
     @Override
-    protected AlterConfigsRequestData data() {
+    public AlterConfigsRequestData data() {
         return data;
     }
 
