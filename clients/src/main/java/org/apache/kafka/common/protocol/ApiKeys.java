@@ -149,33 +149,14 @@ public enum ApiKeys {
         boolean forwardable,
         boolean isEnabled
     ) {
-        short id = messageType.apiKey();
-        if (id < 0)
-            throw new IllegalArgumentException("id must not be negative, id: " + id);
-
-        Schema[] requestSchemas = messageType.requestSchemas();
-        Schema[] responseSchemas = messageType.responseSchemas();
-        String name = messageType.name;
-        if (requestSchemas.length != responseSchemas.length)
-            throw new IllegalStateException(requestSchemas.length + " request versions for api " + name
-                    + " but " + responseSchemas.length + " response versions.");
-
-        for (int i = 0; i < requestSchemas.length; ++i) {
-            if (requestSchemas[i] == null)
-                throw new IllegalStateException("Request schema for api " + name + " for version " + i + " is null");
-            if (responseSchemas[i] == null)
-                throw new IllegalStateException("Response schema for api " + name + " for version " + i + " is null");
-        }
-
         this.messageType = messageType;
-        this.id = id;
-        this.name = name;
+        this.id = messageType.apiKey();
+        this.name = messageType.name;
         this.clusterAction = clusterAction;
         this.minRequiredInterBrokerMagic = minRequiredInterBrokerMagic;
         this.isEnabled = isEnabled;
 
-
-        this.requiresDelayedAllocation = forwardable || shouldRetainsBufferReference(requestSchemas);
+        this.requiresDelayedAllocation = forwardable || shouldRetainsBufferReference(messageType.requestSchemas());
         this.forwardable = forwardable;
     }
 
