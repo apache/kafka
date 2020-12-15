@@ -659,4 +659,18 @@ class ReassignPartitionsUnitTest {
     assertTrue("Expected the string to start with %s, but it was %s".format(prefix, str),
       str.startsWith(prefix))
   }
+
+  @Test
+  def testPropagateInvalidJsonError(): Unit = {
+    val adminClient = new MockAdminClient.Builder().numBrokers(4).build()
+    try {
+      addTopics(adminClient)
+      assertStartsWith("Unexpected character",
+        assertThrows(
+          classOf[AdminOperationException], () => executeAssignment(adminClient, additional = false,
+            "{invalid_json")).getMessage)
+    } finally {
+      adminClient.close()
+    }
+  }
 }
