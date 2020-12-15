@@ -43,7 +43,7 @@ import org.apache.zookeeper.client.ZKClientConfig
 
 import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.{Seq, mutable}
+import scala.collection.{Seq, immutable, mutable}
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Random, Success, Try}
 
@@ -132,8 +132,9 @@ class AclAuthorizer extends Authorizer with Logging {
   @volatile
   private var aclCache = new scala.collection.immutable.TreeMap[ResourcePattern, VersionedAcls]()(new ResourceOrdering)
 
-  private val resourceCache = new scala.collection.mutable.HashMap[ResourceTypeKey,
-    scala.collection.mutable.HashSet[String]]()
+  @volatile
+  private var resourceCache = new scala.collection.immutable.HashMap[ResourceTypeKey,
+    scala.collection.immutable.HashSet[String]]()
 
   private val lock = new Object()
 
@@ -368,8 +369,8 @@ class AclAuthorizer extends Authorizer with Logging {
   }
 
   def matchingResources(principal: String, host: String, op: AclOperation, permission: AclPermissionType,
-                        resourceType: ResourceType, patternType: PatternType): List[mutable.HashSet[String]] = {
-    var matched = List[mutable.HashSet[String]]()
+                        resourceType: ResourceType, patternType: PatternType): List[immutable.HashSet[String]] = {
+    var matched = List[immutable.HashSet[String]]()
     for (p <- Set(principal, AclEntry.WildcardPrincipalString)) {
       for (h <- Set(host, AclEntry.WildcardHost)) {
         for (o <- Set(op, AclOperation.ALL)) {
@@ -402,20 +403,20 @@ class AclAuthorizer extends Authorizer with Logging {
     false
   }
 
-  private def denyAll(denyLiterals: List[mutable.HashSet[String]]): Boolean =
+  private def denyAll(denyLiterals: List[immutable.HashSet[String]]): Boolean =
     denyLiterals.exists(r => r.contains(ResourcePattern.WILDCARD_RESOURCE))
 
 
-  private def allowAny(allowLiterals: List[mutable.Set[String]], allowPrefixes: List[mutable.Set[String]],
-                       denyLiterals: List[mutable.Set[String]], denyPrefixes: List[mutable.Set[String]]): Boolean = {
+  private def allowAny(allowLiterals: List[immutable.Set[String]], allowPrefixes: List[immutable.Set[String]],
+                       denyLiterals: List[immutable.Set[String]], denyPrefixes: List[immutable.Set[String]]): Boolean = {
     (allowPrefixes.exists(prefixes =>
           prefixes.exists(prefix => allowPrefix(prefix, denyPrefixes)))
       || allowLiterals.exists(literals =>
             literals.exists(literal => allowLiteral(literal, denyLiterals, denyPrefixes))))
   }
 
-  private def allowLiteral(literalName: String,
-                           denyLiterals: List[mutable.Set[String]], denyPrefixes: List[mutable.Set[String]]): Boolean = {
+  private def allowLiteral(literalName: String, denyLiterals: List[immutable.Set[String]],
+                           denyPrefixes: List[immutable.Set[String]]): Boolean = {
     literalName match{
       case ResourcePattern.WILDCARD_RESOURCE => true
       case _ => (denyLiterals.forall(denyLiterals => !denyLiterals.contains(literalName))
@@ -424,11 +425,11 @@ class AclAuthorizer extends Authorizer with Logging {
   }
 
   private def allowPrefix(prefixName: String,
-                          denyPrefixes: List[mutable.Set[String]]): Boolean = {
+                          denyPrefixes: List[immutable.Set[String]]): Boolean = {
     !hasDominantPrefixedDeny(prefixName, denyPrefixes)
   }
 
-  private def hasDominantPrefixedDeny(resourceName: String, denyPrefixes: List[mutable.Set[String]]): Boolean = {
+  private def hasDominantPrefixedDeny(resourceName: String, denyPrefixes: List[immutable.Set[String]]): Boolean = {
     val sb = new StringBuilder
     for (ch <- resourceName.toCharArray) {
       sb.append(ch)
@@ -696,17 +697,19 @@ class AclAuthorizer extends Authorizer with Logging {
     acesToAdd.foreach(ace => {
       val resourceIndex = new ResourceTypeKey(ace, resource.resourceType(), resource.patternType())
       resourceCache.get(resourceIndex) match {
-        case Some(resources) => resources.add(resource.name())
-        case None => resourceCache.put(resourceIndex, scala.collection.mutable.HashSet(resource.name()))
+        case Some(resources) => resourceCache += (resourceIndex -> (resources + resource.name()))
+        case None => resourceCache += (resourceIndex -> immutable.HashSet(resource.name()))
       }
     })
     acesToRemove.foreach(ace => {
       val resourceIndex = new ResourceTypeKey(ace, resource.resourceType(), resource.patternType())
       resourceCache.get(resourceIndex) match {
         case Some(resources) =>
-          resources.remove(resource.name())
-          if (resources.isEmpty) {
-            resourceCache.remove(resourceIndex)
+          val newResources = resources - resource.name()
+          if (newResources.isEmpty) {
+            resourceCache -= resourceIndex
+          } else {
+            resourceCache += (resourceIndex -> newResources)
           }
         case None =>
       }
