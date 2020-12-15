@@ -437,20 +437,6 @@ class LogManager(logDirs: Seq[File],
   }
 
   /**
-   * wait all jobs to complete
-   * @param jobs jobs
-   * @return true if all pass. Otherwise, false
-   */
-  private[log] def waitForAllToComplete(jobs: Seq[Future[_]]): Boolean = {
-    jobs.count(future => Try(future.get) match {
-      case Success(_) => false
-      case Failure(e) =>
-        warn(s"There was an error in one of the threads during LogManager shutdown: ${e.getCause}")
-        true
-    }) == 0
-  }
-
-  /**
    * Close all the logs
    */
   def shutdown(): Unit = {
@@ -494,7 +480,8 @@ class LogManager(logDirs: Seq[File],
 
     try {
       jobs.forKeyValue { (dir, dirJobs) =>
-        if (waitForAllToComplete(dirJobs)) {
+        if (waitForAllToComplete(dirJobs,
+          e => warn(s"There was an error in one of the threads during LogManager shutdown: ${e.getCause}"))) {
           val logs = logsInDir(localLogsByDir, dir)
 
           // update the last flush point
@@ -1172,6 +1159,21 @@ class LogManager(logDirs: Seq[File],
 }
 
 object LogManager {
+
+  /**
+   * wait all jobs to complete
+   * @param jobs jobs
+   * @param callback handle the exception caused by Future#get
+   * @return true if all pass. Otherwise, false
+   */
+  private[log] def waitForAllToComplete(jobs: Seq[Future[_]], callback: Throwable => Unit): Boolean = {
+    jobs.count(future => Try(future.get) match {
+      case Success(_) => false
+      case Failure(e) =>
+        callback(e)
+        true
+    }) == 0
+  }
 
   val RecoveryPointCheckpointFile = "recovery-point-offset-checkpoint"
   val LogStartOffsetCheckpointFile = "log-start-offset-checkpoint"

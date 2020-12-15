@@ -693,14 +693,19 @@ class LogManagerTest {
       throw new RuntimeException
     }
 
+    var failureCount = 0
     // all futures should be evaluated
-    assertFalse(logManager.waitForAllToComplete(Seq(success, failure)))
+    assertFalse(LogManager.waitForAllToComplete(Seq(success, failure), _ => failureCount += 1))
     assertEquals(2, invokedCount)
-    assertFalse(logManager.waitForAllToComplete(Seq(failure, success)))
+    assertEquals(1, failureCount)
+    assertFalse(LogManager.waitForAllToComplete(Seq(failure, success), _ => failureCount += 1))
     assertEquals(4, invokedCount)
-    assertTrue(logManager.waitForAllToComplete(Seq(success, success)))
+    assertEquals(2, failureCount)
+    assertTrue(LogManager.waitForAllToComplete(Seq(success, success), _ => failureCount += 1))
     assertEquals(6, invokedCount)
-    assertFalse(logManager.waitForAllToComplete(Seq(failure, failure)))
+    assertEquals(2, failureCount)
+    assertFalse(LogManager.waitForAllToComplete(Seq(failure, failure), _ => failureCount += 1))
     assertEquals(8, invokedCount)
+    assertEquals(4, failureCount)
   }
 }
