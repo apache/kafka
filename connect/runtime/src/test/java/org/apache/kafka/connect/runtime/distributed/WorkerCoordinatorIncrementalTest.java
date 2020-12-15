@@ -20,7 +20,6 @@ import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
-import org.apache.kafka.common.Node;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.RequestTestUtils;
@@ -53,11 +52,9 @@ import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequ
 import static org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
 import static org.apache.kafka.connect.runtime.WorkerTestUtils.assertAssignment;
 import static org.apache.kafka.connect.runtime.WorkerTestUtils.clusterConfigState;
-import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.WorkerState;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.COMPATIBLE;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.EAGER;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.SESSIONED;
-import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V1;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
@@ -72,48 +69,25 @@ import static org.mockito.Mockito.when;
 public class WorkerCoordinatorIncrementalTest {
     @Rule
     public MockitoRule rule = MockitoJUnit.rule();
-
-    private String connectorId1 = "connector1";
-    private String connectorId2 = "connector2";
-    private String connectorId3 = "connector3";
-    private ConnectorTaskId taskId1x0 = new ConnectorTaskId(connectorId1, 0);
-    private ConnectorTaskId taskId1x1 = new ConnectorTaskId(connectorId1, 1);
-    private ConnectorTaskId taskId2x0 = new ConnectorTaskId(connectorId2, 0);
-    private ConnectorTaskId taskId3x0 = new ConnectorTaskId(connectorId3, 0);
-
-    private String groupId = "test-group";
-    private int sessionTimeoutMs = 10;
-    private int rebalanceTimeoutMs = 60;
-    private int heartbeatIntervalMs = 2;
-    private long retryBackoffMs = 100;
-    private int requestTimeoutMs = 1000;
-    private MockTime time;
-    private MockClient client;
-    private Node node;
-    private Metadata metadata;
-    private Metrics metrics;
-    private ConsumerNetworkClient consumerClient;
-    private MockRebalanceListener rebalanceListener;
+    private final String connectorId1 = "connector1";
+    private final String connectorId2 = "connector2";
+    private final ConnectorTaskId taskId1x0 = new ConnectorTaskId(connectorId1, 0);
+    private final ConnectorTaskId taskId2x0 = new ConnectorTaskId(connectorId2, 0);
+    private final MockTime time = new MockTime();
+    private final Metrics metrics = new Metrics(time);
     @Mock
     private KafkaConfigBackingStore configStorage;
-    private GroupRebalanceConfig rebalanceConfig;
     private WorkerCoordinator coordinator;
     private int rebalanceDelay = DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_DEFAULT;
+    private final String leaderId = "worker1";
+    private final String memberId = "worker2";
+    private final String anotherMemberId = "worker3";
+    private final String leaderUrl = expectedUrl(leaderId);
+    private final int generationId = 3;
+    private final long offset = 10L;
+    private int configStorageCalls = 0;
 
-    private String leaderId;
-    private String memberId;
-    private String anotherMemberId;
-    private String leaderUrl;
-    private String memberUrl;
-    private String anotherMemberUrl;
-    private int generationId;
-    private long offset;
-
-    private int configStorageCalls;
-
-    private ClusterConfigState configState1;
-    private ClusterConfigState configState2;
-    private ClusterConfigState configStateSingleTaskConnectors;
+    private ClusterConfigState configState;
 
     // Arguments are:
     // - Protocol type
@@ -132,48 +106,39 @@ public class WorkerCoordinatorIncrementalTest {
     @Before
     public void setup() {
         LogContext loggerFactory = new LogContext();
+        Metadata metadata = new Metadata(0, Long.MAX_VALUE, loggerFactory, new ClusterResourceListeners());
+        MockClient client = new MockClient(time, metadata);
+        client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)));
+        int heartbeatIntervalMs = 2;
+        long retryBackoffMs = 100;
+        ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(loggerFactory, client, metadata, time,
+                retryBackoffMs, 1000, heartbeatIntervalMs);
+        MockRebalanceListener rebalanceListener = new MockRebalanceListener();
 
-        this.time = new MockTime();
-        this.metadata = new Metadata(0, Long.MAX_VALUE, loggerFactory, new ClusterResourceListeners());
-        this.client = new MockClient(time, metadata);
-        this.client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)));
-        this.node = metadata.fetch().nodes().get(0);
-        this.consumerClient = new ConsumerNetworkClient(loggerFactory, client, metadata, time,
-                retryBackoffMs, requestTimeoutMs, heartbeatIntervalMs);
-        this.metrics = new Metrics(time);
-        this.rebalanceListener = new MockRebalanceListener();
+        int rebalanceTimeoutMs = 60;
+        int sessionTimeoutMs = 10;
+        String groupId = "test-group";
+        GroupRebalanceConfig rebalanceConfig = new GroupRebalanceConfig(sessionTimeoutMs,
+                rebalanceTimeoutMs,
+                heartbeatIntervalMs,
+                groupId,
+                Optional.empty(),
+                retryBackoffMs,
+                true);
+        this.coordinator = new WorkerCoordinator(
+                rebalanceConfig,
+                loggerFactory,
+                consumerClient,
+                metrics,
+                "worker" + groupId,
+                time,
+                expectedUrl(leaderId),
+                configStorage,
+                rebalanceListener,
+                compatibility,
+                rebalanceDelay);
 
-        this.leaderId = "worker1";
-        this.memberId = "worker2";
-        this.anotherMemberId = "worker3";
-        this.leaderUrl = expectedUrl(leaderId);
-        this.memberUrl = expectedUrl(memberId);
-        this.anotherMemberUrl = expectedUrl(anotherMemberId);
-        this.generationId = 3;
-        this.offset = 10L;
-
-        this.configStorageCalls = 0;
-
-        this.rebalanceConfig = new GroupRebalanceConfig(sessionTimeoutMs,
-                                                        rebalanceTimeoutMs,
-                                                        heartbeatIntervalMs,
-                                                        groupId,
-                                                        Optional.empty(),
-                                                        retryBackoffMs,
-                                                        true);
-        this.coordinator = new WorkerCoordinator(rebalanceConfig,
-                                                 loggerFactory,
-                                                 consumerClient,
-                                                 metrics,
-                                                 "worker" + groupId,
-                                                 time,
-                                                 expectedUrl(leaderId),
-                                                 configStorage,
-                                                 rebalanceListener,
-                                                 compatibility,
-                                                 rebalanceDelay);
-
-        configState1 = clusterConfigState(offset, 2, 4);
+        configState = clusterConfigState(offset, 2, 4);
     }
 
     @After
@@ -191,7 +156,7 @@ public class WorkerCoordinatorIncrementalTest {
 
     @Test
     public void testMetadata() {
-        when(configStorage.snapshot()).thenReturn(configState1);
+        when(configStorage.snapshot()).thenReturn(configState);
 
         JoinGroupRequestProtocolCollection serialized = coordinator.metadata();
         assertEquals(expectedMetadataSize, serialized.size());
@@ -200,8 +165,7 @@ public class WorkerCoordinatorIncrementalTest {
         assertTrue(protocolIterator.hasNext());
         JoinGroupRequestProtocol defaultMetadata = protocolIterator.next();
         assertEquals(compatibility.protocol(), defaultMetadata.name());
-        WorkerState state = IncrementalCooperativeConnectProtocol
-                .deserializeMetadata(ByteBuffer.wrap(defaultMetadata.metadata()));
+        WorkerState state = WorkerState.of(ByteBuffer.wrap(defaultMetadata.metadata()));
         assertEquals(offset, state.offset());
 
         verify(configStorage, times(1)).snapshot();
@@ -209,13 +173,13 @@ public class WorkerCoordinatorIncrementalTest {
 
     @Test
     public void testMetadataWithExistingAssignment() {
-        when(configStorage.snapshot()).thenReturn(configState1);
+        when(configStorage.snapshot()).thenReturn(configState);
 
         ExtendedAssignment assignment = new ExtendedAssignment(
-                CONNECT_PROTOCOL_V1, ExtendedAssignment.NO_ERROR, leaderId, leaderUrl, configState1.offset(),
+                ConnectProtocolCompatibility.COMPATIBLE.protocolVersion(), ExtendedAssignment.NO_ERROR, leaderId, leaderUrl, configState.offset(),
                 Collections.singletonList(connectorId1), Arrays.asList(taskId1x0, taskId2x0),
                 Collections.emptyList(), Collections.emptyList(), 0);
-        ByteBuffer buf = IncrementalCooperativeConnectProtocol.serializeAssignment(assignment);
+        ByteBuffer buf = ExtendedAssignment.toByteBuffer(assignment);
         // Using onJoinComplete to register the protocol selection decided by the broker
         // coordinator as well as an existing previous assignment that the call to metadata will
         // include with v1 but not with v0
@@ -228,8 +192,7 @@ public class WorkerCoordinatorIncrementalTest {
         assertTrue(protocolIterator.hasNext());
         JoinGroupRequestProtocol selectedMetadata = protocolIterator.next();
         assertEquals(compatibility.protocol(), selectedMetadata.name());
-        ExtendedWorkerState state = IncrementalCooperativeConnectProtocol
-                .deserializeMetadata(ByteBuffer.wrap(selectedMetadata.metadata()));
+        ExtendedWorkerState state = ExtendedWorkerState.of(ByteBuffer.wrap(selectedMetadata.metadata()));
         assertEquals(offset, state.offset());
         assertNotEquals(ExtendedAssignment.empty(), state.assignment());
         assertEquals(Collections.singletonList(connectorId1), state.assignment().connectors());
@@ -240,13 +203,13 @@ public class WorkerCoordinatorIncrementalTest {
 
     @Test
     public void testMetadataWithExistingAssignmentButOlderProtocolSelection() {
-        when(configStorage.snapshot()).thenReturn(configState1);
+        when(configStorage.snapshot()).thenReturn(configState);
 
         ExtendedAssignment assignment = new ExtendedAssignment(
-                CONNECT_PROTOCOL_V1, ExtendedAssignment.NO_ERROR, leaderId, leaderUrl, configState1.offset(),
+                ConnectProtocolCompatibility.COMPATIBLE.protocolVersion(), ExtendedAssignment.NO_ERROR, leaderId, leaderUrl, configState.offset(),
                 Collections.singletonList(connectorId1), Arrays.asList(taskId1x0, taskId2x0),
                 Collections.emptyList(), Collections.emptyList(), 0);
-        ByteBuffer buf = IncrementalCooperativeConnectProtocol.serializeAssignment(assignment);
+        ByteBuffer buf = ExtendedAssignment.toByteBuffer(assignment);
         // Using onJoinComplete to register the protocol selection decided by the broker
         // coordinator as well as an existing previous assignment that the call to metadata will
         // include with v1 but not with v0
@@ -259,8 +222,7 @@ public class WorkerCoordinatorIncrementalTest {
         assertTrue(protocolIterator.hasNext());
         JoinGroupRequestProtocol selectedMetadata = protocolIterator.next();
         assertEquals(compatibility.protocol(), selectedMetadata.name());
-        ExtendedWorkerState state = IncrementalCooperativeConnectProtocol
-                .deserializeMetadata(ByteBuffer.wrap(selectedMetadata.metadata()));
+        ExtendedWorkerState state = ExtendedWorkerState.of(ByteBuffer.wrap(selectedMetadata.metadata()));
         assertEquals(offset, state.offset());
         assertNotEquals(ExtendedAssignment.empty(), state.assignment());
 
@@ -269,7 +231,7 @@ public class WorkerCoordinatorIncrementalTest {
 
     @Test
     public void testTaskAssignmentWhenWorkerJoins() {
-        when(configStorage.snapshot()).thenReturn(configState1);
+        when(configStorage.snapshot()).thenReturn(configState);
 
         coordinator.metadata();
         ++configStorageCalls;
@@ -325,7 +287,7 @@ public class WorkerCoordinatorIncrementalTest {
 
     @Test
     public void testTaskAssignmentWhenWorkerLeavesPermanently() {
-        when(configStorage.snapshot()).thenReturn(configState1);
+        when(configStorage.snapshot()).thenReturn(configState);
 
         // First assignment distributes configured connectors and tasks
         coordinator.metadata();
@@ -360,7 +322,7 @@ public class WorkerCoordinatorIncrementalTest {
         coordinator.metadata();
         ++configStorageCalls;
 
-        // Mark everyone as in sync with configState1
+        // Mark everyone as in sync with configState
         responseMembers = new ArrayList<>();
         addJoinGroupResponseMember(responseMembers, leaderId, offset, leaderAssignment);
         addJoinGroupResponseMember(responseMembers, memberId, offset, memberAssignment);
@@ -423,7 +385,7 @@ public class WorkerCoordinatorIncrementalTest {
 
     @Test
     public void testTaskAssignmentWhenWorkerBounces() {
-        when(configStorage.snapshot()).thenReturn(configState1);
+        when(configStorage.snapshot()).thenReturn(configState);
 
         // First assignment distributes configured connectors and tasks
         coordinator.metadata();
@@ -563,7 +525,7 @@ public class WorkerCoordinatorIncrementalTest {
 
     private static ExtendedAssignment deserializeAssignment(Map<String, ByteBuffer> assignment,
                                                            String member) {
-        return IncrementalCooperativeConnectProtocol.deserializeAssignment(assignment.get(member));
+        return ExtendedAssignment.of(assignment.get(member));
     }
 
     private void addJoinGroupResponseMember(List<JoinGroupResponseMember> responseMembers,
@@ -573,7 +535,7 @@ public class WorkerCoordinatorIncrementalTest {
         responseMembers.add(new JoinGroupResponseMember()
                 .setMemberId(member)
                 .setMetadata(
-                    IncrementalCooperativeConnectProtocol.serializeMetadata(
+                        ExtendedWorkerState.toByteBuffer(
                         new ExtendedWorkerState(expectedUrl(member), offset, assignment),
                         compatibility != COMPATIBLE
                     ).array()

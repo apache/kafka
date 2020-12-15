@@ -58,3 +58,4 @@ jmh-benchmarks/src/main/generated
 streams/src/generated
 raft/src/generated
 core/src/generated
+connect/runtime/src/generated

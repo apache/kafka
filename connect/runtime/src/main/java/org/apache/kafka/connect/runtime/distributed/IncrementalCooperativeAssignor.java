@@ -42,9 +42,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
-import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.Assignment;
-import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V1;
-import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V2;
 import static org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.LeaderState;
 
 /**
@@ -60,7 +57,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
     private final Time time;
     private final int maxDelay;
     private ConnectorsAndTasks previousAssignment;
-    private ConnectorsAndTasks previousRevocation;
+    private final ConnectorsAndTasks previousRevocation;
     private boolean canRevoke;
     // visible for testing
     protected final Set<String> candidateWorkersForReassignment;
@@ -93,7 +90,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         for (JoinGroupResponseMember member : allMemberMetadata) {
             memberConfigs.put(
                     member.memberId(),
-                    IncrementalCooperativeConnectProtocol.deserializeMetadata(ByteBuffer.wrap(member.metadata())));
+                    ExtendedWorkerState.of(ByteBuffer.wrap(member.metadata())));
         }
         log.debug("Member configs: {}", memberConfigs);
 
@@ -105,9 +102,9 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                   maxOffset, coordinator.configSnapshot().offset());
 
         short protocolVersion = memberConfigs.values().stream()
-            .allMatch(state -> state.assignment().version() == CONNECT_PROTOCOL_V2)
-                ? CONNECT_PROTOCOL_V2
-                : CONNECT_PROTOCOL_V1;
+            .allMatch(state -> state.assignment().version() == ConnectProtocolCompatibility.SESSIONED.protocolVersion())
+                ? ConnectProtocolCompatibility.SESSIONED.protocolVersion()
+                : ConnectProtocolCompatibility.COMPATIBLE.protocolVersion();
 
         Long leaderOffset = ensureLeaderConfig(maxOffset, coordinator);
         if (leaderOffset == null) {
@@ -369,7 +366,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()))
                 .entrySet().stream()
                 .filter(entry -> entry.getValue() > 1L)
-                .map(entry -> entry.getKey())
+                .map(Map.Entry::getKey)
                 .collect(Collectors.toSet());
 
         Set<ConnectorTaskId> tasks = memberConfigs.values().stream()
@@ -377,7 +374,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()))
                 .entrySet().stream()
                 .filter(entry -> entry.getValue() > 1L)
-                .map(entry -> entry.getKey())
+                .map(Map.Entry::getKey)
                 .collect(Collectors.toSet());
         return new ConnectorsAndTasks.Builder().with(connectors, tasks).build();
     }
@@ -390,30 +387,24 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
 
         Map<String, ConnectorsAndTasks> toRevoke = new HashMap<>();
         if (!duplicatedAssignments.connectors().isEmpty()) {
-            connectorAssignments.entrySet().stream()
-                    .forEach(entry -> {
-                        Set<String> duplicatedConnectors = new HashSet<>(duplicatedAssignments.connectors());
-                        duplicatedConnectors.retainAll(entry.getValue());
-                        if (!duplicatedConnectors.isEmpty()) {
-                            toRevoke.computeIfAbsent(
-                                entry.getKey(),
-                                v -> new ConnectorsAndTasks.Builder().build()
-                            ).connectors().addAll(duplicatedConnectors);
-                        }
-                    });
+            connectorAssignments.forEach((key, value) -> {
+                Set<String> duplicatedConnectors = new HashSet<>(duplicatedAssignments.connectors());
+                duplicatedConnectors.retainAll(value);
+                if (!duplicatedConnectors.isEmpty()) {
+                    toRevoke.computeIfAbsent(key, v -> new ConnectorsAndTasks.Builder().build()
+                    ).connectors().addAll(duplicatedConnectors);
+                }
+            });
         }
         if (!duplicatedAssignments.tasks().isEmpty()) {
-            taskAssignment.entrySet().stream()
-                    .forEach(entry -> {
-                        Set<ConnectorTaskId> duplicatedTasks = new HashSet<>(duplicatedAssignments.tasks());
-                        duplicatedTasks.retainAll(entry.getValue());
-                        if (!duplicatedTasks.isEmpty()) {
-                            toRevoke.computeIfAbsent(
-                                entry.getKey(),
-                                v -> new ConnectorsAndTasks.Builder().build()
-                            ).tasks().addAll(duplicatedTasks);
-                        }
-                    });
+            taskAssignment.forEach((key, value) -> {
+                Set<ConnectorTaskId> duplicatedTasks = new HashSet<>(duplicatedAssignments.tasks());
+                duplicatedTasks.retainAll(value);
+                if (!duplicatedTasks.isEmpty()) {
+                    toRevoke.computeIfAbsent(key, v -> new ConnectorsAndTasks.Builder().build()
+                    ).tasks().addAll(duplicatedTasks);
+                }
+            });
         }
         return toRevoke;
     }
@@ -514,9 +505,6 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
      * each existing worker. The revoked tasks, once assigned to the new workers will maintain
      * a balanced load among the group.
      *
-     * @param activeAssignments
-     * @param completeWorkerAssignment
-     * @return
      */
     private Map<String, ConnectorsAndTasks> performTaskRevocation(ConnectorsAndTasks activeAssignments,
                                                                   Collection<WorkerLoad> completeWorkerAssignment) {
@@ -623,9 +611,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
     protected Map<String, ByteBuffer> serializeAssignments(Map<String, ExtendedAssignment> assignments) {
         return assignments.entrySet()
                 .stream()
-                .collect(Collectors.toMap(
-                    Map.Entry::getKey,
-                    e -> IncrementalCooperativeConnectProtocol.serializeAssignment(e.getValue())));
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> ExtendedAssignment.toByteBuffer(e.getValue())));
     }
 
     private static ConnectorsAndTasks diff(ConnectorsAndTasks base,

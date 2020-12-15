@@ -1946,6 +1946,32 @@ project(':connect:runtime') {
     enabled = false
   }
 
+  task processMessages(type:JavaExec) {
+    main = "org.apache.kafka.message.MessageGenerator"
+    classpath = project(':generator').sourceSets.main.runtimeClasspath
+    args = [ "-p", "org.apache.kafka.connect.internals.generated",
+             "-o", "src/generated/java/org/apache/kafka/connect/internals/generated",
+             "-i", "src/main/resources/common/message",
+             "-m", "MessageDataGenerator"]
+    inputs.dir("src/main/resources/common/message")
+    outputs.dir("src/generated/java/org/apache/kafka/connect/internals/generated")
+  }
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/generated/java", "src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/generated/java", "src/test/java"]
+      }
+    }
+  }
+
+  compileJava.dependsOn 'processMessages'
+
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.testRuntime) {
       include('slf4j-log4j12*')

@@ -91,9 +91,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
-import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.CONNECT_PROTOCOL_V0;
-import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.EAGER;
-import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V2;
 
 /**
  * <p>
@@ -392,7 +389,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         AtomicReference<Set<ConnectorTaskId>> taskConfigUpdatesCopy = new AtomicReference<>();
 
         boolean shouldReturn;
-        if (member.currentProtocolVersion() == CONNECT_PROTOCOL_V0) {
+        if (member.currentProtocolVersion() == ConnectProtocolCompatibility.EAGER.protocolVersion()) {
             shouldReturn = updateConfigsWithEager(connectorConfigUpdatesCopy,
                     connectorTargetStateChangesCopy);
             // With eager protocol we should return immediately if needsReconfigRebalance has
@@ -1166,7 +1163,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     private void backoff(long ms) {
-        if (ConnectProtocolCompatibility.fromProtocolVersion(currentProtocolVersion) == EAGER) {
+        if (ConnectProtocolCompatibility.fromProtocolVersion(currentProtocolVersion) == ConnectProtocolCompatibility.EAGER) {
             time.sleep(ms);
             return;
         }
@@ -1229,7 +1226,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         startAndStop(callables);
 
         synchronized (this) {
-            runningAssignment = member.currentProtocolVersion() == CONNECT_PROTOCOL_V0
+            runningAssignment = member.currentProtocolVersion() == ConnectProtocolCompatibility.EAGER.protocolVersion()
                                 ? ExtendedAssignment.empty()
                                 : assignment;
         }
@@ -1495,7 +1492,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     private static boolean internalRequestValidationEnabled(short protocolVersion) {
-        return protocolVersion >= CONNECT_PROTOCOL_V2;
+        return protocolVersion >= ConnectProtocolCompatibility.SESSIONED.protocolVersion();
     }
 
     private DistributedHerderRequest peekWithoutException() {

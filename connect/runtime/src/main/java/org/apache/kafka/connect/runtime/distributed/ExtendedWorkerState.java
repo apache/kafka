@@ -16,10 +16,58 @@
  */
 package org.apache.kafka.connect.runtime.distributed;
 
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.MessageUtil;
+import org.apache.kafka.common.protocol.types.SchemaException;
+import org.apache.kafka.connect.internals.generated.ExtendedWorkerMetadata;
+
+import java.nio.ByteBuffer;
+
 /**
  * A class that captures the deserialized form of a worker's metadata.
  */
-public class ExtendedWorkerState extends ConnectProtocol.WorkerState {
+public class ExtendedWorkerState extends WorkerState {
+
+    /**
+     * The fields are serialized in sequence as follows:
+     * Subscription V1:
+     * <pre>
+     *   Version            => Int16
+     *   Url                => [String]
+     *   ConfigOffset       => Int64
+     *   Current Assignment => [Byte]
+     * </pre>
+     */
+    public static ByteBuffer toByteBuffer(ExtendedWorkerState workerState, boolean sessioned) {
+        short version = sessioned
+                ? ConnectProtocolCompatibility.SESSIONED.protocolVersion()
+                : ConnectProtocolCompatibility.COMPATIBLE.protocolVersion();
+        return MessageUtil.toVersionPrefixedByteBuffer(version, new ExtendedWorkerMetadata()
+                .setUrl(workerState.url())
+                .setConfigOffset(workerState.offset())
+                .setAssignmentByteBuffer(ExtendedAssignment.toByteBuffer(workerState.assignment())));
+    }
+    /**
+     * Given a byte buffer that contains protocol metadata return the deserialized form of the
+     * metadata.
+     *
+     * @param buffer A buffer containing the protocols metadata
+     * @return the deserialized metadata
+     * @throws SchemaException on incompatible Connect protocol version
+     */
+    public static ExtendedWorkerState of(ByteBuffer buffer) {
+        if (buffer == null) return null;
+        short version = buffer.getShort();
+        if (version >= ExtendedWorkerMetadata.LOWEST_SUPPORTED_VERSION && version <= ExtendedWorkerMetadata.HIGHEST_SUPPORTED_VERSION) {
+            ExtendedWorkerMetadata metadata = new ExtendedWorkerMetadata(new ByteBufferAccessor(buffer), version);
+            return new ExtendedWorkerState(
+                    metadata.url(),
+                    metadata.configOffset(),
+                    // Protocol version is embedded with the assignment in the metadata
+                    ExtendedAssignment.of(metadata.assignmentByteBuffer()));
+        } else throw new SchemaException("Unsupported subscription version: " + version);
+    }
+
     private final ExtendedAssignment assignment;
 
     public ExtendedWorkerState(String url, long offset, ExtendedAssignment assignment) {

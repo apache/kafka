@@ -185,7 +185,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
 
     @Override
     protected void onJoinComplete(int generation, String memberId, String protocol, ByteBuffer memberAssignment) {
-        ExtendedAssignment newAssignment = IncrementalCooperativeConnectProtocol.deserializeAssignment(memberAssignment);
+        ExtendedAssignment newAssignment = ExtendedAssignment.of(memberAssignment);
         log.debug("Deserialized new assignment: {}", newAssignment);
         currentConnectProtocol = ConnectProtocolCompatibility.fromProtocol(protocol);
         // At this point we always consider ourselves to be a member of the cluster, even if there was an assignment
