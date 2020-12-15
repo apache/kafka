@@ -22,7 +22,9 @@ import org.apache.kafka.common.protocol.types.Type;
 import org.apache.kafka.common.record.RecordBatch;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
@@ -96,19 +98,10 @@ public enum ApiKeys {
     UPDATE_FEATURES(ApiMessageType.UPDATE_FEATURES, false, true),
     ENVELOPE(ApiMessageType.ENVELOPE, true, RecordBatch.MAGIC_VALUE_V0, false, false);
 
-    private static final ApiKeys[] ID_TO_TYPE;
-    private static final int MIN_API_KEY = 0;
-    public static final int MAX_API_KEY;
-
+    private static final Map<Integer, ApiKeys> ID_TO_TYPE = new HashMap<>();
     static {
-        int maxKey = -1;
         for (ApiKeys key : ApiKeys.values())
-            maxKey = Math.max(maxKey, key.id);
-        ApiKeys[] idToType = new ApiKeys[maxKey + 1];
-        for (ApiKeys key : ApiKeys.values())
-            idToType[key.id] = key;
-        ID_TO_TYPE = idToType;
-        MAX_API_KEY = maxKey;
+            ID_TO_TYPE.put((int) key.id, key);
     }
 
     /** the permanent and immutable id of an API - this can't change ever */
@@ -198,14 +191,15 @@ public enum ApiKeys {
     }
 
     public static ApiKeys forId(int id) {
-        if (!hasId(id))
-            throw new IllegalArgumentException(String.format("Unexpected ApiKeys id `%s`, it should be between `%s` " +
-                    "and `%s` (inclusive)", id, MIN_API_KEY, MAX_API_KEY));
-        return ID_TO_TYPE[id];
+        ApiKeys apiKey = ID_TO_TYPE.get(id);
+        if (apiKey == null) {
+            throw new IllegalArgumentException("Unexpected api key: " + id);
+        }
+        return apiKey;
     }
 
     public static boolean hasId(int id) {
-        return id >= MIN_API_KEY && id <= MAX_API_KEY;
+        return ID_TO_TYPE.containsKey(id);
     }
 
     public short latestVersion() {

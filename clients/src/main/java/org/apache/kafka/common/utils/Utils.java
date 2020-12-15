@@ -548,15 +548,15 @@ public final class Utils {
     }
 
     /**
-     * Create a string representation of a list joined by the given separator
-     * @param list The list of items
+     * Create a string representation of a collection joined by the given separator
+     * @param collection The list of items
      * @param separator The separator
      * @return The string representation.
      */
-    public static <T> String join(Collection<T> list, String separator) {
-        Objects.requireNonNull(list);
+    public static <T> String join(Collection<T> collection, String separator) {
+        Objects.requireNonNull(collection);
         StringBuilder sb = new StringBuilder();
-        Iterator<T> iter = list.iterator();
+        Iterator<T> iter = collection.iterator();
         while (iter.hasNext()) {
             sb.append(iter.next());
             if (iter.hasNext())
