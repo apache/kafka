@@ -204,7 +204,7 @@ class BrokerToControllerRequestThread(
       requestQueue.putFirst(request)
     } else if (response.responseBody().errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
       // just close the controller connection and wait for metadata cache update in doWork
-      networkClient.close(activeController.get.idString)
+      networkClient.disconnect(activeController.get.idString)
       activeController = None
       requestQueue.putFirst(request)
     } else {
