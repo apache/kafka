@@ -892,7 +892,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
 
     protected synchronized void markCoordinatorUnknown(Errors error) {
-        markCoordinatorUnknown(false, "error response {}" + error.name());
+        markCoordinatorUnknown(false, "error response " + error.name());
     }
 
     protected synchronized void markCoordinatorUnknown(String cause) {
