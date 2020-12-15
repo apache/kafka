@@ -89,7 +89,7 @@ abstract class AbstractIndex(@volatile private var _file: File, val baseOffset: 
       lookup. So that, the entire warm section is really "warm".
       When doing warm-section lookup, following 3 entries are always touched: indexEntry(end), indexEntry(end-N),
       and indexEntry((end*2 -N)/2). If page size >= 4096, all the warm-section pages (3 or fewer) are touched, when we
-      touch those 3 entries. As of 2048, 4096 is the smallest page size for all the processors (x86-32, x86-64, MIPS,
+      touch those 3 entries. As of 2018, 4096 is the smallest page size for all the processors (x86-32, x86-64, MIPS,
       SPARC, Power, ARM etc.).
    2. This number is large enough to guarantee most of the in-sync lookups are in the warm-section. With default Kafka
       settings, 8KB index corresponds to about 4MB (offset index) or 2.7MB (time index) log messages.
