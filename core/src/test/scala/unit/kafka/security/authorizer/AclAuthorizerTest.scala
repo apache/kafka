@@ -52,7 +52,6 @@ import org.scalatest.Assertions.intercept
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
-import scala.collection.mutable.ArrayBuffer
 
 class AclAuthorizerTest extends ZooKeeperTestHarness {
 
@@ -75,7 +74,6 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
   private var config: KafkaConfig = _
   private var zooKeeperClient: ZooKeeperClient = _
 
-  private val aclAdded: ArrayBuffer[(Authorizer, Set[AccessControlEntry], ResourcePattern)] = ArrayBuffer()
   private val authorizerTestFactory = new AuthorizerTestFactory(
     newRequestContext, addAcls, authorizeByResourceType, removeAcls)
 
@@ -105,15 +103,8 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
 
   @After
   override def tearDown(): Unit = {
-    val authorizers = Seq(aclAuthorizer, aclAuthorizer2)
-    authorizers.foreach(a => {
-      a.acls(AclBindingFilter.ANY).forEach(bd => {
-        removeAcls(aclAuthorizer, Set(bd.entry), bd.pattern())
-      })
-    })
-    authorizers.foreach(a => {
-      a.close()
-    })
+    aclAuthorizer.close()
+    aclAuthorizer2.close()
     zooKeeperClient.close()
     super.tearDown()
   }
@@ -1116,7 +1107,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
       securityProtocol, ClientInformation.EMPTY, false)
   }
 
-  private def authorize(authorizer: Authorizer, requestContext: RequestContext, operation: AclOperation, resource: ResourcePattern): Boolean = {
+  private def authorize(authorizer: AclAuthorizer, requestContext: RequestContext, operation: AclOperation, resource: ResourcePattern): Boolean = {
     val action = new Action(operation, resource, 1, true, true)
     authorizer.authorize(requestContext, List(action).asJava).asScala.head == AuthorizationResult.ALLOWED
   }
@@ -1130,7 +1121,6 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     authorizer.createAcls(requestContext, bindings.toList.asJava).asScala
       .map(_.toCompletableFuture.get)
       .foreach { result => result.exception.ifPresent { e => throw e } }
-    aclAdded += Tuple3(authorizer, aces, resourcePattern)
   }
 
   private def removeAcls(authorizer: Authorizer, aces: Set[AccessControlEntry], resourcePattern: ResourcePattern): Boolean = {

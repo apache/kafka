@@ -87,11 +87,6 @@ class AuthorizerWrapperTest extends ZooKeeperTestHarness {
   override def tearDown(): Unit = {
     val authorizers = Seq(wrappedSimpleAuthorizer, wrappedSimpleAuthorizerAllowEveryone)
     authorizers.foreach(a => {
-      a.acls(AclBindingFilter.ANY).forEach(bd => {
-        removeAcls(wrappedSimpleAuthorizer, Set(bd.entry), bd.pattern())
-      })
-    })
-    authorizers.foreach(a => {
       a.close()
     })
     zooKeeperClient.close()

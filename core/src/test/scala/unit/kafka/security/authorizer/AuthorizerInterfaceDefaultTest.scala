@@ -75,11 +75,6 @@ class AuthorizerInterfaceDefaultTest extends ZooKeeperTestHarness {
   override def tearDown(): Unit = {
     val authorizers = Seq(interfaceDefaultAuthorizer)
     authorizers.foreach(a => {
-      a.acls(AclBindingFilter.ANY).forEach(bd => {
-        removeAcls(interfaceDefaultAuthorizer, Set(bd.entry), bd.pattern())
-      })
-    })
-    authorizers.foreach(a => {
       a.close()
     })
     zooKeeperClient.close()
