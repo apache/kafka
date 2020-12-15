@@ -203,11 +203,11 @@ public enum ApiKeys {
     }
 
     public short latestVersion() {
-        return (short) (messageType.requestSchemas().length - 1);
+        return messageType.highestSupportedVersion();
     }
 
     public short oldestVersion() {
-        return 0;
+        return messageType.lowestSupportedVersion();
     }
 
     public boolean isVersionSupported(short apiVersion) {
