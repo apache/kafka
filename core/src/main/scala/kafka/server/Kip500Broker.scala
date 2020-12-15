@@ -185,10 +185,10 @@ class Kip500Broker(
       replicaManager = createReplicaManager(isShuttingDown)
 
       /* start broker-to-controller channel managers */
-      alterIsrChannelManager = new BrokerToControllerChannelManager(controllerNodeProvider,
+      alterIsrChannelManager = BrokerToControllerChannelManager(controllerNodeProvider,
         time, metrics, config, "alterisr", threadNamePrefix)
       alterIsrChannelManager.start()
-      forwardingChannelManager = new BrokerToControllerChannelManager(controllerNodeProvider,
+      forwardingChannelManager = BrokerToControllerChannelManager(controllerNodeProvider,
         time, metrics, config, "forwarding", threadNamePrefix)
       forwardingChannelManager.start()
       val forwardingManager = new ForwardingManager(forwardingChannelManager, time, config.requestTimeoutMs.longValue)
@@ -221,7 +221,7 @@ class Kip500Broker(
       brokerMetadataListener.start()
 
       lifecycleManager.start(() => brokerMetadataListener.currentMetadataOffset(),
-        new BrokerToControllerChannelManager(controllerNodeProvider,
+        BrokerToControllerChannelManager(controllerNodeProvider,
           time, metrics, config, "heartbeat", threadNamePrefix), metaProps.clusterId)
 
       // Register a listener with the Raft layer to receive metadata event notifications

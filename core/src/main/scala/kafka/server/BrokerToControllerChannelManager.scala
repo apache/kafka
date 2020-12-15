@@ -79,35 +79,16 @@ class RaftControllerNodeProvider(val metaLogManager: MetaLogManager,
   }
 }
 
-/**
- * This class manages the connection between a broker and the controller. It runs a single
- * {@link BrokerToControllerRequestThread} which uses the broker's metadata cache as its own metadata to find
- * and connect to the controller. The channel is async and runs the network connection in the background.
- * The maximum number of in-flight requests are set to one to ensure orderly response from the controller, therefore
- * care must be taken to not block on outstanding requests for too long.
- */
-class BrokerToControllerChannelManager(controllerNodeProvider: ControllerNodeProvider,
-                                       time: Time,
-                                       metrics: Metrics,
-                                       config: KafkaConfig,
-                                       managerName: String,
-                                       threadNamePrefix: Option[String] = None,
-                                       val configuredClient: Option[KafkaClient] = None) extends Logging {
-  private val logContext = new LogContext(s"[broker-${config.brokerId}-to-controller-$managerName] ")
-  private val manualMetadataUpdater = new ManualMetadataUpdater()
-  private val requestThread = newRequestThread
-
-  def start(): Unit = {
-    requestThread.start()
-  }
-
-  def shutdown(): Unit = {
-    requestThread.shutdown()
-    requestThread.awaitShutdown()
-  }
-
-  private[server] def newRequestThread = {
-    val networkClient = configuredClient.getOrElse {
+object BrokerToControllerChannelManager {
+  def apply(controllerNodeProvider: ControllerNodeProvider,
+            time: Time,
+            metrics: Metrics,
+            config: KafkaConfig,
+            managerName: String,
+            threadNamePrefix: Option[String]): BrokerToControllerChannelManager = {
+    val logContext = new LogContext(s"[broker-${config.brokerId}-to-controller-$managerName] ")
+    val manualMetadataUpdater = new ManualMetadataUpdater()
+    val networkClient = {
       val brokerToControllerListenerName =
         config.controlPlaneListenerName.getOrElse(config.interBrokerListenerName)
       val brokerToControllerSecurityProtocol =
@@ -152,18 +133,52 @@ class BrokerToControllerChannelManager(controllerNodeProvider: ControllerNodePro
         logContext
       )
     }
+    new BrokerToControllerChannelManager(networkClient,
+      manualMetadataUpdater,
+      controllerNodeProvider,
+      time,
+      config,
+      managerName,
+      threadNamePrefix)
+  }
+}
+
+/**
+ * This class manages the connection between a broker and the controller. It runs a single
+ * {@link BrokerToControllerRequestThread} which uses the broker's metadata cache as its own metadata to find
+ * and connect to the controller. The channel is async and runs the network connection in the background.
+ * The maximum number of in-flight requests are set to one to ensure orderly response from the controller, therefore
+ * care must be taken to not block on outstanding requests for too long.
+ */
+class BrokerToControllerChannelManager(kafkaClient: KafkaClient,
+                                       metadataUpdater: ManualMetadataUpdater,
+                                       controllerNodeProvider: ControllerNodeProvider,
+                                       time: Time,
+                                       config: KafkaConfig,
+                                       managerName: String,
+                                       threadNamePrefix: Option[String]) extends Logging {
+  private val requestThread = {
     val threadName = threadNamePrefix match {
       case None => s"broker-${config.brokerId}-to-controller-${managerName}-sender"
       case Some(name) => s"$name-broker-${config.brokerId}-to-controller-${managerName}-sender"
     }
-
-    new BrokerToControllerRequestThread(networkClient,
-      manualMetadataUpdater,
+    new BrokerToControllerRequestThread(kafkaClient,
+      metadataUpdater,
       controllerNodeProvider,
-      config,
       time,
+      config,
       threadName)
   }
+
+  def start(): Unit = {
+    requestThread.start()
+  }
+
+  def shutdown(): Unit = {
+    requestThread.shutdown()
+    requestThread.awaitShutdown()
+  }
+
 
   /**
    * Send request to the controller.
@@ -208,11 +223,11 @@ case class BrokerToControllerQueueItem(
 )
 
 
-class BrokerToControllerRequestThread(networkClient: KafkaClient,
-                                      metadataUpdater: ManualMetadataUpdater,
+class BrokerToControllerRequestThread(val networkClient: KafkaClient,
+                                      val metadataUpdater: ManualMetadataUpdater,
                                       val controllerNodeProvider: ControllerNodeProvider,
+                                      val time: Time,
                                       config: KafkaConfig,
-                                      time: Time,
                                       threadName: String)
   extends InterBrokerSendThread(threadName, networkClient, config.controllerSocketTimeoutMs, time, isInterruptible = false) {
 

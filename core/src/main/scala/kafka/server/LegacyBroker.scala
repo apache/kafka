@@ -263,7 +263,7 @@ class LegacyBroker(val config: KafkaConfig,
         /* start replica manager */
         val controllerNodeProvider = new MetadataCacheControllerNodeProvider(
           metadataCache, config.interBrokerListenerName)
-        alterIsrChannelManager = new BrokerToControllerChannelManager(controllerNodeProvider,
+        alterIsrChannelManager = BrokerToControllerChannelManager(controllerNodeProvider,
           time, metrics, config, "alterisr", threadNamePrefix)
         replicaManager = createReplicaManager(isShuttingDown)
         replicaManager.startup()
@@ -286,7 +286,7 @@ class LegacyBroker(val config: KafkaConfig,
         var forwardingManager: ForwardingManager = null
         if (config.metadataQuorumEnabled) {
           /* start forwarding manager */
-          forwardingChannelManager = new BrokerToControllerChannelManager(controllerNodeProvider,
+          forwardingChannelManager = BrokerToControllerChannelManager(controllerNodeProvider,
             time, metrics, config, "forwarding", threadNamePrefix)
           forwardingChannelManager.start()
           forwardingManager = new ForwardingManager(forwardingChannelManager, time, config.requestTimeoutMs.longValue())

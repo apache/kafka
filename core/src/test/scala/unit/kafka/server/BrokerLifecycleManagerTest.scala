@@ -18,13 +18,22 @@
 package kafka.server
 
 import java.util.Properties
+import java.util.concurrent.atomic.{AtomicLong, AtomicReference}
 
-import kafka.utils.MockTime
+import kafka.utils.{MockTime, TestUtils}
+import org.apache.kafka.clients.{ManualMetadataUpdater, Metadata, MockClient}
+import org.apache.kafka.common.{Node, Uuid}
+import org.apache.kafka.common.internals.ClusterResourceListeners
+import org.apache.kafka.common.utils.LogContext
+import org.apache.kafka.metadata.BrokerState
 import org.junit.rules.Timeout
-import org.junit.{Rule, Test}
+import org.junit.{Assert, Rule, Test}
 
 class BrokerLifecycleManagerTest {
-  private def configProperties = {
+  @Rule
+  def globalTimeout = Timeout.millis(120000)
+
+  def configProperties = {
     val properties = new Properties()
     properties.setProperty(KafkaConfig.LogDirsProp, "/tmp/foo")
     properties.setProperty(KafkaConfig.ProcessRolesProp, "broker")
@@ -32,14 +41,42 @@ class BrokerLifecycleManagerTest {
     properties
   }
 
-  @Rule
-  def globalTimeout = Timeout.millis(120000)
+  class SimpleControllerNodeProvider extends ControllerNodeProvider {
+    val node = new AtomicReference[Node](null)
+    def controllerNode(): Option[Node] = Option(node.get())
+  }
+
+  class BrokerLifecycleManagerTestContext(properties: Properties) {
+    val config = new KafkaConfig(properties)
+    val time = new MockTime(0, 0)
+    val highestMetadataOffset = new AtomicLong(0)
+    val metadata = new Metadata(1000, 1000, new LogContext(), new ClusterResourceListeners())
+    val mockClient = new MockClient(time, metadata)
+    val metadataUpdater = new ManualMetadataUpdater()
+    val controllerNodeProvider = new SimpleControllerNodeProvider()
+    val channelManager = new BrokerToControllerChannelManager(mockClient,
+      metadataUpdater, controllerNodeProvider, time, config, "channelManager", None)
+    val clusterId = Uuid.fromString("x4AJGXQSRnephtTZzujw4w")
+  }
 
   @Test
   def testCreateAndClose(): Unit = {
-    val config = new KafkaConfig(configProperties)
-    val time = new MockTime(0, 0)
-    val manager = new BrokerLifecycleManager(config, time, None)
+    val context = new BrokerLifecycleManagerTestContext(configProperties)
+    val manager = new BrokerLifecycleManager(context.config, context.time, None)
     manager.close()
+  }
+
+  @Test
+  def testCreateStartAndClose(): Unit = {
+    val context = new BrokerLifecycleManagerTestContext(configProperties)
+    val manager = new BrokerLifecycleManager(context.config, context.time, None)
+    Assert.assertEquals(BrokerState.NOT_RUNNING, manager.state())
+    manager.start(() => context.highestMetadataOffset.get(),
+      context.channelManager, context.clusterId)
+    TestUtils.retry(60000) {
+      Assert.assertEquals(BrokerState.STARTING, manager.state())
+    }
+    manager.close()
+    Assert.assertEquals(BrokerState.SHUTTING_DOWN, manager.state())
   }
 }
