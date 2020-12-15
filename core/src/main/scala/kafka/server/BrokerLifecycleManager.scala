@@ -24,7 +24,6 @@ import org.apache.kafka.clients.{ClientResponse, RequestCompletionHandler}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, ListenerCollection}
 import org.apache.kafka.common.message.{BrokerHeartbeatRequestData, BrokerRegistrationRequestData}
-import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{BrokerHeartbeatRequest, BrokerHeartbeatResponse, BrokerRegistrationRequest, BrokerRegistrationResponse}
 import org.apache.kafka.common.utils.EventQueue.DeadlineFunction
@@ -118,7 +117,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
    * The channel manager, or null if this manager has not been started yet.
    * This variable can only be accessed from the event queue thread.
    */
-  var channelManager: BrokerToControllerChannelManager = null
+  var _channelManager: BrokerToControllerChannelManager = null
 
   /**
    * The event queue.
@@ -131,16 +130,14 @@ class BrokerLifecycleManager(val config: KafkaConfig,
    * Start the BrokerLifecycleManager.
    *
    * @param highestMetadataOffsetProvider Provides the current highest metadata offset.
-   * @param controllerNodeProvider        A provider that lets us know the current controller node.
-   * @param metrics                       The Kafka metrics.
+   * @param channelManager                The brokerToControllerChannelManager to use.
    * @param clusterId                     The cluster ID.
    */
   def start(highestMetadataOffsetProvider: () => Long,
-            controllerNodeProvider: ControllerNodeProvider,
-            metrics: Metrics,
+            channelManager: BrokerToControllerChannelManager,
             clusterId: Uuid): Unit = {
     eventQueue.append(new StartupEvent(highestMetadataOffsetProvider,
-      controllerNodeProvider, metrics, clusterId))
+      channelManager, clusterId))
   }
 
   def setReadyToUnfence(): Unit = {
@@ -174,14 +171,12 @@ class BrokerLifecycleManager(val config: KafkaConfig,
   }
 
   class StartupEvent(highestMetadataOffsetProvider: () => Long,
-                     controllerNodeProvider: ControllerNodeProvider,
-                     metrics: Metrics,
+                     channelManager: BrokerToControllerChannelManager,
                      clusterId: Uuid) extends EventQueue.Event {
     override def run(): Unit = {
       _highestMetadataOffsetProvider = highestMetadataOffsetProvider
-      channelManager = new BrokerToControllerChannelManager(controllerNodeProvider,
-        time, metrics, config, "heartbeat", threadNamePrefix)
-      channelManager.start()
+      _channelManager = channelManager
+      _channelManager.start()
       _state = BrokerState.STARTING
       _clusterId = clusterId
       eventQueue.scheduleDeferred("initialRegistrationTimeout",
@@ -199,7 +194,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
         setIncarnationId(incarnationId).
         setListeners(advertisedListeners).
         setRack(rack)
-    channelManager.sendRequest(new BrokerRegistrationRequest.Builder(data),
+    _channelManager.sendRequest(new BrokerRegistrationRequest.Builder(data),
       new BrokerRegistrationResponseHandler())
   }
 
@@ -257,7 +252,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
       setBrokerId(brokerId).
       setCurrentMetadataOffset(metadataOffset).
       setShouldFence(!readyToUnfence)
-    channelManager.sendRequest(new BrokerHeartbeatRequest.Builder(data),
+    _channelManager.sendRequest(new BrokerHeartbeatRequest.Builder(data),
       new BrokerHeartbeatResponseHandler())
   }
 
@@ -352,7 +347,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
     override def run(): Unit = {
       initialCatchUpFuture.cancel(false)
       _state = BrokerState.SHUTTING_DOWN
-      channelManager.shutdown()
+      _channelManager.shutdown()
     }
   }
 }

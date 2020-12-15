@@ -221,7 +221,8 @@ class Kip500Broker(
       brokerMetadataListener.start()
 
       lifecycleManager.start(() => brokerMetadataListener.currentMetadataOffset(),
-        controllerNodeProvider, metrics, metaProps.clusterId)
+        new BrokerToControllerChannelManager(controllerNodeProvider,
+          time, metrics, config, "heartbeat", threadNamePrefix), metaProps.clusterId)
 
       // Register a listener with the Raft layer to receive metadata event notifications
       metaLogManager.register(brokerMetadataListener)

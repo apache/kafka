@@ -91,7 +91,8 @@ class BrokerToControllerChannelManager(controllerNodeProvider: ControllerNodePro
                                        metrics: Metrics,
                                        config: KafkaConfig,
                                        managerName: String,
-                                       threadNamePrefix: Option[String] = None) extends Logging {
+                                       threadNamePrefix: Option[String] = None,
+                                       val configuredClient: Option[KafkaClient] = None) extends Logging {
   private val logContext = new LogContext(s"[broker-${config.brokerId}-to-controller-$managerName] ")
   private val manualMetadataUpdater = new ManualMetadataUpdater()
   private val requestThread = newRequestThread
@@ -106,10 +107,11 @@ class BrokerToControllerChannelManager(controllerNodeProvider: ControllerNodePro
   }
 
   private[server] def newRequestThread = {
-    val brokerToControllerListenerName = config.controlPlaneListenerName.getOrElse(config.interBrokerListenerName)
-    val brokerToControllerSecurityProtocol = config.controlPlaneSecurityProtocol.getOrElse(config.interBrokerSecurityProtocol)
-
-    val networkClient = {
+    val networkClient = configuredClient.getOrElse {
+      val brokerToControllerListenerName =
+        config.controlPlaneListenerName.getOrElse(config.interBrokerListenerName)
+      val brokerToControllerSecurityProtocol =
+        config.controlPlaneSecurityProtocol.getOrElse(config.interBrokerSecurityProtocol)
       val channelBuilder = ChannelBuilders.clientChannelBuilder(
         brokerToControllerSecurityProtocol,
         JaasContext.Type.SERVER,
