@@ -20,13 +20,15 @@ package kafka.security.authorizer
 import java.net.InetAddress
 import java.util.UUID
 
+import kafka.security.authorizer.AclEntry.{WildcardHost, WildcardPrincipalString}
 import org.apache.kafka.common.acl.AclOperation.{ALL, READ, WRITE}
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclOperation}
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.RequestContext
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
-import org.apache.kafka.common.resource.ResourceType.{GROUP, TOPIC}
+import org.apache.kafka.common.resource.ResourcePattern.WILDCARD_RESOURCE
+import org.apache.kafka.common.resource.ResourceType.{CLUSTER, GROUP, TOPIC, TRANSACTIONAL_ID}
 import org.apache.kafka.common.resource.{ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.server.authorizer.Authorizer
@@ -288,6 +290,32 @@ class AuthorizerTestFactory(val newRequestContext3: (KafkaPrincipal, InetAddress
     addAcls(authorizer, Set(denyAllUser), resource2)
     assertFalse("User2 from host1 now shouldn't have READ access to any topic",
       authorizeByResourceType(authorizer, u2h1Context, READ, ResourceType.TOPIC))
+  }
+
+  def testAuthorzeByResourceTypeSuperUserHasAccess(authorizer: Authorizer, superUserName: String): Unit = {
+    val denyAllAce = new AccessControlEntry(WildcardPrincipalString, WildcardHost, AclOperation.ALL, DENY)
+    val superUser1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, superUserName)
+    val host1 = InetAddress.getByName("192.0.4.4")
+    val allTopicsResource = new ResourcePattern(TOPIC, WILDCARD_RESOURCE, LITERAL)
+    val clusterResource = new ResourcePattern(CLUSTER, WILDCARD_RESOURCE, LITERAL)
+    val groupResource = new ResourcePattern(GROUP, WILDCARD_RESOURCE, LITERAL)
+    val transactionIdResource = new ResourcePattern(TRANSACTIONAL_ID, WILDCARD_RESOURCE, LITERAL)
+
+    addAcls(authorizer, Set(denyAllAce), allTopicsResource)
+    addAcls(authorizer, Set(denyAllAce), clusterResource)
+    addAcls(authorizer, Set(denyAllAce), groupResource)
+    addAcls(authorizer, Set(denyAllAce), transactionIdResource)
+
+    val superUserContext = newRequestContext(superUser1, host1)
+
+    assertTrue("superuser with custom principal always has access, no matter what acls.",
+      authorizeByResourceType(authorizer, superUserContext, READ, ResourceType.TOPIC))
+    assertTrue("superuser with custom principal always has access, no matter what acls.",
+      authorizeByResourceType(authorizer, superUserContext, READ, ResourceType.CLUSTER))
+    assertTrue("superuser with custom principal always has access, no matter what acls.",
+      authorizeByResourceType(authorizer, superUserContext, READ, ResourceType.GROUP))
+    assertTrue("superuser with custom principal always has access, no matter what acls.",
+      authorizeByResourceType(authorizer, superUserContext, READ, ResourceType.TRANSACTIONAL_ID))
   }
 
 }

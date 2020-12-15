@@ -188,13 +188,12 @@ class AuthorizerWrapper(private[kafka] val baseAuthorizer: kafka.security.auth.A
                                        resourceType: ResourceType): AuthorizationResult = {
     SecurityUtils.authorizeByResourceTypeCheckArgs(op, resourceType)
 
-    if (denyAllResource(requestContext, op, resourceType)) {
-      AuthorizationResult.DENIED
-    } else if (shouldAllowEveryoneIfNoAclIsFound) {
+    if (super.authorizeByResourceType(requestContext, op, resourceType) == AuthorizationResult.ALLOWED)
       AuthorizationResult.ALLOWED
-    } else {
-      super.authorizeByResourceType(requestContext, op, resourceType)
-    }
+    else if (denyAllResource(requestContext, op, resourceType) || !shouldAllowEveryoneIfNoAclIsFound)
+      AuthorizationResult.DENIED
+    else
+      AuthorizationResult.ALLOWED
   }
 
   private def denyAllResource(requestContext: AuthorizableRequestContext,
@@ -205,10 +204,13 @@ class AuthorizerWrapper(private[kafka] val baseAuthorizer: kafka.security.auth.A
     val principal = new KafkaPrincipal(
       requestContext.principal.getPrincipalType, requestContext.principal.getName).toString
     val host = requestContext.clientAddress().getHostAddress
-    val accessControlEntry = new AccessControlEntryFilter(null, null, op, AclPermissionType.DENY)
-    val aclFilter = new AclBindingFilter(resourceTypeFilter, accessControlEntry)
+    val entryFilter = new AccessControlEntryFilter(null, null, op, AclPermissionType.DENY)
+    val entryFilterAllOp = new AccessControlEntryFilter(null, null, AclOperation.ALL, AclPermissionType.DENY)
+    val aclFilter = new AclBindingFilter(resourceTypeFilter, entryFilter)
+    val aclFilterAllOp = new AclBindingFilter(resourceTypeFilter, entryFilterAllOp)
 
-    acls(aclFilter).asScala.exists(b => principalHostMatch(b.entry(), principal, host))
+    (acls(aclFilter).asScala.exists(b => principalHostMatch(b.entry(), principal, host))
+      || acls(aclFilterAllOp).asScala.exists(b => principalHostMatch(b.entry(), principal, host)))
   }
 
   private def principalHostMatch(ace: AccessControlEntry,

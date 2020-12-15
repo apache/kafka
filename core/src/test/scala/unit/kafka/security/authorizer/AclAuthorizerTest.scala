@@ -1032,6 +1032,11 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
+  def testAuthorzeByResourceTypeSuperUserHasAccess(): Unit = {
+    authorizerTestFactory.testAuthorzeByResourceTypeSuperUserHasAccess(aclAuthorizer, "superuser1")
+  }
+
+  @Test
   def testAuthorizeByResourceTypeNoAclFoundOverride(): Unit = {
     testAuthorizeByResourceTypeNoAclFoundOverride(aclAuthorizer)
   }

@@ -124,6 +124,11 @@ class AuthorizerInterfaceDefaultTest extends ZooKeeperTestHarness {
     authorizerTestFactory.testAuthorizeByResourceTypeWithAllPrincipalAce(interfaceDefaultAuthorizer)
   }
 
+  @Test
+  def testAuthorzeByResourceTypeSuperUserHasAccess(): Unit = {
+    authorizerTestFactory.testAuthorzeByResourceTypeSuperUserHasAccess(interfaceDefaultAuthorizer, "superuser1")
+  }
+
   private def newRequestContext(principal: KafkaPrincipal, clientAddress: InetAddress, apiKey: ApiKeys = ApiKeys.PRODUCE): RequestContext = {
     val securityProtocol = SecurityProtocol.SASL_PLAINTEXT
     val header = new RequestHeader(apiKey, 2, "", 1) //ApiKeys apiKey, short version, String clientId, int correlation

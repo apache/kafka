@@ -134,6 +134,11 @@ class AuthorizerWrapperTest extends ZooKeeperTestHarness {
   }
 
   @Test
+  def testAuthorzeByResourceTypeSuperUserHasAccess(): Unit = {
+    authorizerTestFactory.testAuthorzeByResourceTypeSuperUserHasAccess(wrappedSimpleAuthorizer, "superuser1")
+  }
+
+  @Test
   def testAuthorizeByResourceTypeEnableAllowEveryOne(): Unit = {
     testAuthorizeByResourceTypeEnableAllowEveryOne(wrappedSimpleAuthorizer)
   }
@@ -144,7 +149,7 @@ class AuthorizerWrapperTest extends ZooKeeperTestHarness {
       authorizeByResourceType(wrappedSimpleAuthorizerAllowEveryone, requestContext, READ, resource.resourceType()))
     val allUser = AclEntry.WildcardPrincipalString
     val allHost = AclEntry.WildcardHost
-    val denyAll = new AccessControlEntry(allUser, allHost, READ, AclPermissionType.DENY)
+    val denyAll = new AccessControlEntry(allUser, allHost, ALL, AclPermissionType.DENY)
     val wildcardResource = new ResourcePattern(resource.resourceType(), AclEntry.WildcardResource, LITERAL)
 
     addAcls(wrappedSimpleAuthorizerAllowEveryone, Set(denyAll), resource)

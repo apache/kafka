@@ -33,6 +33,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.SecurityUtils;
 
 import java.io.Closeable;
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
@@ -160,6 +161,7 @@ public interface Authorizer extends Configurable, Closeable {
      * 1. The interface default iterates all AclBindings multiple times, without any indexing,
      *    which is a CPU intense work.
      * 2. The interface default rebuild several sets of strings, which is a memory intense work.
+     * 3. The interface default cannot perform the audit logging properly
      *
      * @param requestContext Request context including request resourceType, security protocol, and listener name
      * @param op             The ACL operation to check
@@ -170,6 +172,14 @@ public interface Authorizer extends Configurable, Closeable {
      */
     default AuthorizationResult authorizeByResourceType(AuthorizableRequestContext requestContext, AclOperation op, ResourceType resourceType) {
         SecurityUtils.authorizeByResourceTypeCheckArgs(op, resourceType);
+
+        if (authorize(requestContext, Collections.singletonList(new Action(
+                AclOperation.READ,
+                new ResourcePattern(resourceType, "hardcode", PatternType.LITERAL),
+                0, false, false)))
+            .get(0) == AuthorizationResult.ALLOWED) {
+            return AuthorizationResult.ALLOWED;
+        }
 
         // Filter out all the resource pattern corresponding to the RequestContext,
         // AclOperation, and ResourceType

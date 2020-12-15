@@ -315,12 +315,18 @@ class AclAuthorizer extends Authorizer with Logging {
 
     val principal = new KafkaPrincipal(
       requestContext.principal().getPrincipalType,
-      requestContext.principal().getName).toString
+      requestContext.principal().getName)
+
+    if (isSuperUser(principal))
+      return AuthorizationResult.ALLOWED
+
+    val principalStr = principal.toString
+
     val host = requestContext.clientAddress().getHostAddress
     val action = new Action(op, new ResourcePattern(resourceType, "NONE", PatternType.UNKNOWN), 0, true, true)
 
     val denyLiterals = matchingResources(
-      principal, host, op, AclPermissionType.DENY, resourceType, PatternType.LITERAL)
+      principalStr, host, op, AclPermissionType.DENY, resourceType, PatternType.LITERAL)
 
     if (denyAll(denyLiterals)) {
       logAuditMessage(requestContext, action, false)
@@ -333,11 +339,11 @@ class AclAuthorizer extends Authorizer with Logging {
     }
 
     val denyPrefixes = matchingResources(
-      principal, host, op, AclPermissionType.DENY, resourceType, PatternType.PREFIXED)
+      principalStr, host, op, AclPermissionType.DENY, resourceType, PatternType.PREFIXED)
 
     if (denyLiterals.isEmpty && denyPrefixes.isEmpty) {
-      if (hasMatchingResources(principal, host, op, AclPermissionType.ALLOW, resourceType, PatternType.PREFIXED)
-          || hasMatchingResources(principal, host, op, AclPermissionType.ALLOW, resourceType, PatternType.LITERAL)) {
+      if (hasMatchingResources(principalStr, host, op, AclPermissionType.ALLOW, resourceType, PatternType.PREFIXED)
+          || hasMatchingResources(principalStr, host, op, AclPermissionType.ALLOW, resourceType, PatternType.LITERAL)) {
         logAuditMessage(requestContext, action, true)
         return AuthorizationResult.ALLOWED
       } else {
@@ -347,9 +353,9 @@ class AclAuthorizer extends Authorizer with Logging {
     }
 
     val allowLiterals = matchingResources(
-      principal, host, op, AclPermissionType.ALLOW, resourceType, PatternType.LITERAL)
+      principalStr, host, op, AclPermissionType.ALLOW, resourceType, PatternType.LITERAL)
     val allowPrefixes = matchingResources(
-      principal, host, op, AclPermissionType.ALLOW, resourceType, PatternType.PREFIXED)
+      principalStr, host, op, AclPermissionType.ALLOW, resourceType, PatternType.PREFIXED)
 
     if (allowAny(allowLiterals, allowPrefixes, denyLiterals, denyPrefixes)) {
       logAuditMessage(requestContext, action, true)
