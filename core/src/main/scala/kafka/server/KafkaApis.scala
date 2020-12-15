@@ -186,11 +186,12 @@ class KafkaApis(val requestChannel: RequestChannel,
       trace(s"Handling request:${request.requestDesc(true)} from connection ${request.context.connectionId};" +
         s"securityProtocol:${request.context.securityProtocol},principal:${request.context.principal}")
 
-      request.envelope.foreach { envelope =>
-        if (maybeHandleInvalidEnvelope(envelope, request.header.apiKey)) {
-          return
-        }
+      val handled = request.envelope.exists { envelope =>
+        maybeHandleInvalidEnvelope(envelope, request.header.apiKey)
       }
+
+      if (handled)
+        return
 
       request.header.apiKey match {
         case ApiKeys.PRODUCE => handleProduceRequest(request)

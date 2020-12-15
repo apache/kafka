@@ -292,6 +292,24 @@ class KafkaApisTest {
 
   @Test
   def testEnvelopeRequestHandlingAsController(): Unit = {
+    testEnvelopeRequestWithAlterConfig(
+      alterConfigHandler = () => ApiError.NONE,
+      expectedError = Errors.NONE
+    )
+  }
+
+  @Test
+  def testEnvelopeRequestWithAlterConfigUnhandledError(): Unit = {
+    testEnvelopeRequestWithAlterConfig(
+      alterConfigHandler = () => throw new IllegalStateException(),
+      expectedError = Errors.UNKNOWN_SERVER_ERROR
+    )
+  }
+
+  private def testEnvelopeRequestWithAlterConfig(
+    alterConfigHandler: () => ApiError,
+    expectedError: Errors
+  ): Unit = {
     val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
 
     authorizeResource(authorizer, AclOperation.CLUSTER_ACTION, ResourceType.CLUSTER, Resource.CLUSTER_NAME, AuthorizationResult.ALLOWED)
@@ -309,7 +327,9 @@ class KafkaApisTest {
 
     val configResource = new ConfigResource(ConfigResource.Type.TOPIC, resourceName)
     EasyMock.expect(adminManager.alterConfigs(anyObject(), EasyMock.eq(false)))
-      .andReturn(Map(configResource -> ApiError.NONE))
+      .andAnswer(() => {
+        Map(configResource -> alterConfigHandler.apply())
+      })
 
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, authorizer,
       adminManager, controller)
@@ -338,7 +358,7 @@ class KafkaApisTest {
       resourceResponse.resourceName() -> Errors.forCode(resourceResponse.errorCode)
     }.toMap
 
-    assertEquals(Map(resourceName -> Errors.NONE), responseMap)
+    assertEquals(Map(resourceName -> expectedError), responseMap)
 
     verify(authorizer, controller, adminManager)
   }
@@ -378,6 +398,9 @@ class KafkaApisTest {
       Collections.singletonList(new MemberIdentity())).build(requestHeader.apiVersion)
     val serializedRequestData = RequestTestUtils.serializeRequestWithHeader(requestHeader, leaveGroupRequest)
 
+    resetToStrict(requestChannel)
+
+    EasyMock.expect(requestChannel.updateErrorMetrics(ApiKeys.ENVELOPE, Map(Errors.INVALID_REQUEST -> 1)))
     val capturedResponse = expectNoThrottling()
 
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, controller)
@@ -415,7 +438,6 @@ class KafkaApisTest {
   private def testInvalidEnvelopeRequest(expectedError: Errors,
                                          fromPrivilegedListener: Boolean = true,
                                          shouldCloseConnection: Boolean = false,
-                                         principalSerde: Option[KafkaPrincipalSerde] = kafkaPrincipalSerde,
                                          performAuthorize: Boolean = false,
                                          authorizeResult: AuthorizationResult = AuthorizationResult.ALLOWED,
                                          isActiveController: Boolean = true): Unit = {
