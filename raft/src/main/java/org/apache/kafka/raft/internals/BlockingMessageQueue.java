@@ -58,7 +58,7 @@ public class BlockingMessageQueue implements RaftMessageQueue {
     }
 
     @Override
-    public void offer(RaftMessage message) {
+    public void add(RaftMessage message) {
         queue.add(message);
         size.incrementAndGet();
     }

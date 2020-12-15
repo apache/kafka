@@ -38,7 +38,7 @@ public class MockMessageQueue implements RaftMessageQueue {
     }
 
     @Override
-    public void offer(RaftMessage message) {
+    public void add(RaftMessage message) {
         messages.offer(message);
     }
 

@@ -30,7 +30,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, MetadataRequest, MetadataResponse, RequestTestUtils}
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.utils.{MockTime, SystemTime}
+import org.apache.kafka.common.utils.MockTime
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.Test
 import org.mockito.Mockito._
@@ -38,9 +38,40 @@ import org.mockito.Mockito._
 class BrokerToControllerRequestThreadTest {
 
   @Test
+  def testRetryTimeoutWhileControllerNotAvailable(): Unit = {
+    val time = new MockTime()
+    val config = new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181"))
+    val metadata = mock(classOf[Metadata])
+    val mockClient = new MockClient(time, metadata)
+    val metadataCache = mock(classOf[MetadataCache])
+    val listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
+
+    when(metadataCache.getControllerId).thenReturn(None)
+
+    val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), metadataCache,
+      config, listenerName, time, "")
+
+    val retryTimeout = 30000
+    val completionHandler = new TestRequestCompletionHandler(None)
+    val queueItem = BrokerToControllerQueueItem(
+      new MetadataRequest.Builder(new MetadataRequestData()),
+      completionHandler,
+      time.milliseconds() + retryTimeout
+    )
+
+    testRequestThread.enqueue(queueItem)
+    testRequestThread.doWork()
+
+    time.sleep(retryTimeout)
+    testRequestThread.doWork()
+
+    assertTrue(completionHandler.timedOut.get)
+  }
+
+  @Test
   def testRequestsSent(): Unit = {
     // just a simple test that tests whether the request from 1 -> 2 is sent and the response callback is called
-    val time = new SystemTime
+    val time = new MockTime()
     val config = new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181"))
     val controllerId = 2
 
@@ -80,7 +111,7 @@ class BrokerToControllerRequestThreadTest {
   @Test
   def testControllerChanged(): Unit = {
     // in this test the current broker is 1, and the controller changes from 2 -> 3 then back: 3 -> 2
-    val time = new SystemTime
+    val time = new MockTime()
     val config = new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181"))
     val oldControllerId = 1
     val newControllerId = 2
@@ -132,7 +163,7 @@ class BrokerToControllerRequestThreadTest {
 
   @Test
   def testNotController(): Unit = {
-    val time = new SystemTime
+    val time = new MockTime()
     val config = new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181"))
     val oldControllerId = 1
     val newControllerId = 2
@@ -185,7 +216,7 @@ class BrokerToControllerRequestThreadTest {
   }
 
   @Test
-  def testRequestTimeout(): Unit = {
+  def testRetryTimeout(): Unit = {
     val time = new MockTime()
     val config = new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181"))
     val controllerId = 1
@@ -208,24 +239,24 @@ class BrokerToControllerRequestThreadTest {
     val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), metadataCache,
       config, listenerName, time, "")
 
-    val requestTimeout = config.requestTimeoutMs.longValue()
+    val retryTimeout = 30000
     val completionHandler = new TestRequestCompletionHandler()
     val queueItem = BrokerToControllerQueueItem(
       new MetadataRequest.Builder(new MetadataRequestData()
         .setAllowAutoTopicCreation(true)),
       completionHandler,
-      requestTimeout + time.milliseconds()
+      retryTimeout + time.milliseconds()
     )
 
     testRequestThread.enqueue(queueItem)
 
     // initialize to the controller
     testRequestThread.doWork()
+
+    time.sleep(retryTimeout)
+
     // send and process the request
     mockClient.prepareResponse((body: AbstractRequest) => {
-      // Advance time to timeout the response
-      time.sleep(requestTimeout + 1)
-
       body.isInstanceOf[MetadataRequest] &&
         body.asInstanceOf[MetadataRequest].allowAutoTopicCreation()
     }, responseWithNotControllerError)

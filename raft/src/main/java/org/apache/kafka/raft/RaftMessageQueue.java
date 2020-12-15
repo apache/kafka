@@ -35,12 +35,12 @@ public interface RaftMessageQueue {
     RaftMessage poll(long timeoutMs);
 
     /**
-     * Offer a new message to the queue.
+     * Add a new message to the queue.
      *
      * @param message the message to deliver
      * @throws IllegalStateException if the queue cannot accept the message
      */
-    void offer(RaftMessage message);
+    void add(RaftMessage message);
 
     /**
      * Check whether there are pending messages awaiting delivery.

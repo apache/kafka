@@ -1413,7 +1413,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                     );
                 }
 
-                messageQueue.offer(response);
+                messageQueue.add(response);
             });
 
             channel.send(requestMessage);
@@ -1826,7 +1826,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
      * @param request The inbound request
      */
     public void handle(RaftRequest.Inbound request) {
-        messageQueue.offer(Objects.requireNonNull(request));
+        messageQueue.add(Objects.requireNonNull(request));
     }
 
     /**

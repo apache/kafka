@@ -34,15 +34,15 @@ class BlockingMessageQueueTest {
         assertNull(queue.poll(0));
 
         RaftMessage message1 = Mockito.mock(RaftMessage.class);
-        queue.offer(message1);
+        queue.add(message1);
         assertFalse(queue.isEmpty());
         assertEquals(message1, queue.poll(0));
         assertTrue(queue.isEmpty());
 
         RaftMessage message2 = Mockito.mock(RaftMessage.class);
         RaftMessage message3 = Mockito.mock(RaftMessage.class);
-        queue.offer(message2);
-        queue.offer(message3);
+        queue.add(message2);
+        queue.add(message3);
         assertFalse(queue.isEmpty());
         assertEquals(message2, queue.poll(0));
         assertEquals(message3, queue.poll(0));

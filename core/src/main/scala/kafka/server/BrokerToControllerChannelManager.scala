@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import java.util.concurrent.{LinkedBlockingDeque, TimeUnit}
+import java.util.concurrent.LinkedBlockingDeque
 
 import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
 import kafka.utils.Logging
@@ -34,7 +34,7 @@ import scala.jdk.CollectionConverters._
 
 /**
  * This class manages the connection between a broker and the controller. It runs a single
- * {@link BrokerToControllerRequestThread} which uses the broker's metadata cache as its own metadata to find
+ * [[BrokerToControllerRequestThread]] which uses the broker's metadata cache as its own metadata to find
  * and connect to the controller. The channel is async and runs the network connection in the background.
  * The maximum number of in-flight requests are set to one to ensure orderly response from the controller, therefore
  * care must be taken to not block on outstanding requests for too long.
@@ -170,20 +170,27 @@ class BrokerToControllerRequestThread(networkClient: KafkaClient,
   }
 
   override def generateRequests(): Iterable[RequestAndCompletionHandler] = {
-    Option(requestQueue.poll()).map { queueItem =>
-      RequestAndCompletionHandler(
-        time.milliseconds(),
-        activeController.get,
-        queueItem.request,
-        handleResponse(queueItem)
-      )
+    val currentTimeMs = time.milliseconds()
+    val requestIter = requestQueue.iterator()
+    while (requestIter.hasNext) {
+      val request = requestIter.next
+      if (currentTimeMs >= request.deadlineMs) {
+        request.callback.onTimeout()
+        requestIter.remove()
+      } else if (activeController.isDefined) {
+        return Some(RequestAndCompletionHandler(
+          time.milliseconds(),
+          activeController.get,
+          request.request,
+          handleResponse(request)
+        ))
+      }
     }
+    None
   }
 
   private[server] def handleResponse(request: BrokerToControllerQueueItem)(response: ClientResponse): Unit = {
-    if (hasTimedOut(request, response)) {
-      request.callback.onTimeout()
-    } else if (response.wasDisconnected()) {
+    if (response.wasDisconnected()) {
       activeController = None
       requestQueue.putFirst(request)
     } else if (response.responseBody().errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
@@ -195,12 +202,6 @@ class BrokerToControllerRequestThread(networkClient: KafkaClient,
       request.callback.onComplete(response)
     }
   }
-
-  private def hasTimedOut(request: BrokerToControllerQueueItem, response: ClientResponse): Boolean = {
-    response.receivedTimeMs() > request.deadlineMs
-  }
-
-  private[server] def backoff(): Unit = pause(100, TimeUnit.MILLISECONDS)
 
   override def doWork(): Unit = {
     if (activeController.isDefined) {
