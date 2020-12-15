@@ -16,12 +16,15 @@
  */
 package kafka.security.authorizer
 
+import java.{lang, util}
 import java.net.InetAddress
+import java.util.concurrent.CompletionStage
 
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import kafka.zookeeper.ZooKeeperClient
+import org.apache.kafka.common.Endpoint
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.ApiKeys
@@ -154,6 +157,39 @@ class AuthorizerInterfaceDefaultTest extends ZooKeeperTestHarness {
         }
         !result.aclBindingDeleteResults.isEmpty
       }
+  }
+
+
+  class DelegateAuthorizer extends Authorizer {
+    val authorizer = new AclAuthorizer
+
+    override def start(serverInfo: AuthorizerServerInfo): util.Map[Endpoint, _ <: CompletionStage[Void]] = {
+      authorizer.start(serverInfo)
+    }
+
+    override def authorize(requestContext: AuthorizableRequestContext, actions: util.List[Action]): util.List[AuthorizationResult] = {
+      authorizer.authorize(requestContext, actions)
+    }
+
+    override def createAcls(requestContext: AuthorizableRequestContext, aclBindings: util.List[AclBinding]): util.List[_ <: CompletionStage[AclCreateResult]] = {
+      authorizer.createAcls(requestContext, aclBindings)
+    }
+
+    override def deleteAcls(requestContext: AuthorizableRequestContext, aclBindingFilters: util.List[AclBindingFilter]): util.List[_ <: CompletionStage[AclDeleteResult]] = {
+      authorizer.deleteAcls(requestContext, aclBindingFilters)
+    }
+
+    override def acls(filter: AclBindingFilter): lang.Iterable[AclBinding] = {
+      authorizer.acls(filter)
+    }
+
+    override def configure(configs: util.Map[String, _]): Unit = {
+      authorizer.configure(configs)
+    }
+
+    override def close(): Unit = {
+      authorizer.close()
+    }
   }
 
 }
