@@ -1,0 +1,53 @@
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+
+arch: amd64
+os: linux
+dist: bionic
+language: java
+
+services:
+  - docker
+
+jdk:
+  - openjdk8
+
+env:
+  - _DUCKTAPE_OPTIONS="--subset 0  --subsets 15"
+  - _DUCKTAPE_OPTIONS="--subset 1  --subsets 15"
+  - _DUCKTAPE_OPTIONS="--subset 2  --subsets 15"
+  - _DUCKTAPE_OPTIONS="--subset 3  --subsets 15"
+  - _DUCKTAPE_OPTIONS="--subset 4  --subsets 15"
+  - _DUCKTAPE_OPTIONS="--subset 5  --subsets 15"
+  - _DUCKTAPE_OPTIONS="--subset 6  --subsets 15"
+  - _DUCKTAPE_OPTIONS="--subset 7  --subsets 15"
+  - _DUCKTAPE_OPTIONS="--subset 8  --subsets 15"
+  - _DUCKTAPE_OPTIONS="--subset 9  --subsets 15"
+  - _DUCKTAPE_OPTIONS="--subset 10 --subsets 15"
+  - _DUCKTAPE_OPTIONS="--subset 11 --subsets 15"
+  - _DUCKTAPE_OPTIONS="--subset 12 --subsets 15"
+  - _DUCKTAPE_OPTIONS="--subset 13 --subsets 15"
+  - _DUCKTAPE_OPTIONS="--subset 14 --subsets 15"
+
+script:
+  - ./gradlew rat
+  - ./gradlew systemTestLibs && /bin/bash ./tests/docker/run_tests.sh
+
+before_cache:
+  - rm -f  $HOME/.gradle/caches/modules-2/modules-2.lock
+  - rm -fr $HOME/.gradle/caches/*/plugin-resolution/
+
+cache:
+  directories:
+    - "$HOME/.m2/repository"
+    - "$HOME/.gradle/caches/"
+    - "$HOME/.gradle/wrapper/"

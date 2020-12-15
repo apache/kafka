@@ -1,0 +1,43 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "apiKey": 30,
+  "type": "request",
+  "name": "CreateAclsRequest",
+  // Version 1 adds resource pattern type.
+  // Version 2 enables flexible versions.
+  "validVersions": "0-2",
+  "flexibleVersions": "2+",
+  "fields": [
+    { "name": "Creations", "type": "[]AclCreation", "versions": "0+",
+      "about": "The ACLs that we want to create.", "fields": [
+      { "name": "ResourceType", "type": "int8", "versions": "0+",
+        "about": "The type of the resource." },
+      { "name": "ResourceName", "type": "string", "versions": "0+",
+        "about": "The resource name for the ACL." },
+      { "name": "ResourcePatternType", "type": "int8", "versions": "1+", "default": "3",
+        "about": "The pattern type for the ACL." },
+      { "name": "Principal", "type": "string", "versions": "0+",
+        "about": "The principal for the ACL." },
+      { "name": "Host", "type": "string", "versions": "0+",
+        "about": "The host for the ACL." },
+      { "name": "Operation", "type": "int8", "versions": "0+",
+        "about": "The operation type for the ACL (read, write, etc.)." },
+      { "name": "PermissionType", "type": "int8", "versions": "0+",
+        "about": "The permission type for the ACL (allow, deny, etc.)." }
+    ]}
+  ]
+}

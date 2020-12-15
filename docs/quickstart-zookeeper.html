@@ -1,0 +1,277 @@
+<!--
+ Licensed to the Apache Software Foundation (ASF) under one or more
+ contributor license agreements.  See the NOTICE file distributed with
+ this work for additional information regarding copyright ownership.
+ The ASF licenses this file to You under the Apache License, Version 2.0
+ (the "License"); you may not use this file except in compliance with
+ the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+<script>
+  <!--#include virtual="js/templateData.js" -->
+</script>
+
+<script id="quickstart-template" type="text/x-handlebars-template">
+
+      <div class="quickstart-step">
+      <h4 class="anchor-heading">
+          <a class="anchor-link" id="quickstart_download" href="#quickstart_download"></a>
+          <a href="#quickstart_download">Step 1: Get Kafka</a>
+      </h4>
+
+      <p>
+          <a href="https://www.apache.org/dyn/closer.cgi?path=/kafka/2.8.0/kafka_2.13-2.8.0.tgz">Download</a>
+          the latest Kafka release and extract it:
+      </p>
+
+<pre class="line-numbers"><code class="language-bash">$ tar -xzf kafka_2.13-2.8.0.tgz
+$ cd kafka_2.13-2.8.0</code></pre>
+  </div>
+
+  <div class="quickstart-step">
+      <h4 class="anchor-heading">
+          <a class="anchor-link" id="quickstart_startserver" href="#quickstart_startserver"></a>
+          <a href="#quickstart_startserver">Step 2: Start the Kafka environment</a>
+      </h4>
+
+      <p class="note">
+        NOTE: Your local environment must have Java 8+ installed.
+      </p>
+
+      <p>
+          Run the following commands in order to start all services in the correct order:
+      </p>
+
+<pre class="line-numbers"><code class="language-bash"># Start the ZooKeeper service
+# Note: Soon, ZooKeeper will no longer be required by Apache Kafka.
+$ bin/zookeeper-server-start.sh config/zookeeper.properties</code></pre>
+
+      <p>
+          Open another terminal session and run:
+      </p>
+
+<pre class="line-numbers"><code class="language-bash"># Start the Kafka broker service
+$ bin/kafka-server-start.sh config/server.properties</code></pre>
+
+      <p>
+          Once all services have successfully launched, you will have a basic Kafka environment running and ready to use.
+      </p>
+  </div>
+
+  <div class="quickstart-step">
+      <h4 class="anchor-heading">
+          <a class="anchor-link" id="quickstart_createtopic" href="#quickstart_createtopic"></a>
+          <a href="#quickstart_createtopic">Step 3: Create a topic to store your events</a>
+      </h4>
+
+      <p>
+          Kafka is a distributed <em>event streaming platform</em> that lets you read, write, store, and process
+          <a href="/documentation/#messages"><em>events</em></a> (also called <em>records</em> or
+          <em>messages</em> in the documentation)
+          across many machines.
+      </p>
+
+      <p>
+          Example events are payment transactions, geolocation updates from mobile phones, shipping orders, sensor measurements
+          from IoT devices or medical equipment, and much more. These events are organized and stored in
+          <a href="/documentation/#intro_topics"><em>topics</em></a>.
+          Very simplified, a topic is similar to a folder in a filesystem, and the events are the files in that folder.
+      </p>
+
+      <p>
+          So before you can write your first events, you must create a topic.  Open another terminal session and run:
+      </p>
+
+<pre class="line-numbers"><code class="language-bash">$ bin/kafka-topics.sh --create --topic quickstart-events --bootstrap-server localhost:9092</code></pre>
+
+      <p>
+          All of Kafka's command line tools have additional options: run the <code>kafka-topics.sh</code> command without any
+          arguments to display usage information. For example, it can also show you
+          <a href="/documentation/#intro_topics">details such as the partition count</a>
+          of the new topic:
+      </p>
+
+<pre class="line-numbers"><code class="language-bash">$ bin/kafka-topics.sh --describe --topic quickstart-events --bootstrap-server localhost:9092
+Topic:quickstart-events  PartitionCount:1    ReplicationFactor:1 Configs:
+    Topic: quickstart-events Partition: 0    Leader: 0   Replicas: 0 Isr: 0</code></pre>
+  </div>
+
+  <div class="quickstart-step">
+      <h4 class="anchor-heading">
+          <a class="anchor-link" id="quickstart_send" href="#quickstart_send"></a>
+          <a href="#quickstart_send">Step 4: Write some events into the topic</a>
+      </h4>
+
+      <p>
+          A Kafka client communicates with the Kafka brokers via the network for writing (or reading) events.
+          Once received, the brokers will store the events in a durable and fault-tolerant manner for as long as you
+          need—even forever.
+      </p>
+
+      <p>
+          Run the console producer client to write a few events into your topic.
+          By default, each line you enter will result in a separate event being written to the topic.
+      </p>
+
+<pre class="line-numbers"><code class="language-bash">$ bin/kafka-console-producer.sh --topic quickstart-events --bootstrap-server localhost:9092
+This is my first event
+This is my second event</code></pre>
+
+      <p>
+          You can stop the producer client with <code>Ctrl-C</code> at any time.
+      </p>
+  </div>
+
+  <div class="quickstart-step">
+      <h4 class="anchor-heading">
+          <a class="anchor-link" id="quickstart_consume" href="#quickstart_consume"></a>
+          <a href="#quickstart_consume">Step 5: Read the events</a>
+      </h4>
+
+  <p>Open another terminal session and run the console consumer client to read the events you just created:</p>
+
+<pre class="line-numbers"><code class="language-bash">$ bin/kafka-console-consumer.sh --topic quickstart-events --from-beginning --bootstrap-server localhost:9092
+This is my first event
+This is my second event</code></pre>
+
+  <p>You can stop the consumer client with <code>Ctrl-C</code> at any time.</p>
+
+  <p>Feel free to experiment: for example, switch back to your producer terminal (previous step) to write
+  additional events, and see how the events immediately show up in your consumer terminal.</p>
+
+  <p>Because events are durably stored in Kafka, they can be read as many times and by as many consumers as you want.
+  You can easily verify this by opening yet another terminal session and re-running the previous command again.</p>
+  </div>
+
+  <div class="quickstart-step">
+  <h4 class="anchor-heading">
+      <a class="anchor-link" id="quickstart_kafkaconnect" href="#quickstart_kafkaconnect"></a>
+      <a href="#quickstart_kafkaconnect">Step 6: Import/export your data as streams of events with Kafka Connect</a>
+  </h4>
+
+  <p>
+      You probably have lots of data in existing systems like relational databases or traditional messaging systems,
+      along with many applications that already use these systems.
+      <a href="/documentation/#connect">Kafka Connect</a> allows you to continuously ingest
+      data from external systems into Kafka, and vice versa.  It is thus very easy to integrate existing systems with
+      Kafka. To make this process even easier, there are hundreds of such connectors readily available.
+  </p>
+
+  <p>Take a look at the <a href="/documentation/#connect">Kafka Connect section</a>
+  learn more about how to continuously import/export your data into and out of Kafka.</p>
+
+  </div>
+
+  <div class="quickstart-step">
+  <h4 class="anchor-heading">
+      <a class="anchor-link" id="quickstart_kafkastreams" href="#quickstart_kafkastreams"></a>
+      <a href="#quickstart_kafkastreams">Step 7: Process your events with Kafka Streams</a>
+  </h4>
+
+  <p>
+      Once your data is stored in Kafka as events, you can process the data with the
+      <a href="/documentation/streams">Kafka Streams</a> client library for Java/Scala.
+      It allows you to implement mission-critical real-time applications and microservices, where the input
+      and/or output data is stored in Kafka topics.  Kafka Streams combines the simplicity of writing and deploying
+      standard Java and Scala applications on the client side with the benefits of Kafka's server-side cluster
+      technology to make these applications highly scalable, elastic, fault-tolerant, and distributed. The library
+      supports exactly-once processing, stateful operations and aggregations, windowing, joins, processing based
+      on event-time, and much more.
+  </p>
+
+  <p>To give you a first taste, here's how one would implement the popular <code>WordCount</code> algorithm:</p>
+
+<pre class="line-numbers"><code class="language-bash">KStream&lt;String, String&gt; textLines = builder.stream("quickstart-events");
+
+KTable&lt;String, Long&gt; wordCounts = textLines
+            .flatMapValues(line -&gt; Arrays.asList(line.toLowerCase().split(" ")))
+            .groupBy((keyIgnored, word) -&gt; word)
+            .count();
+
+wordCounts.toStream().to("output-topic", Produced.with(Serdes.String(), Serdes.Long()));</code></pre>
+
+  <p>
+      The <a href="/25/documentation/streams/quickstart">Kafka Streams demo</a>
+      and the <a href="/25/documentation/streams/tutorial">app development tutorial</a> 
+      demonstrate how to code and run such a streaming application from start to finish.
+  </p>
+
+  </div>
+
+  <div class="quickstart-step">
+  <h4 class="anchor-heading">
+      <a class="anchor-link" id="quickstart_kafkaterminate" href="#quickstart_kafkaterminate"></a>
+      <a href="#quickstart_kafkaterminate">Step 8: Terminate the Kafka environment</a>
+  </h4>
+
+  <p>
+      Now that you reached the end of the quickstart, feel free to tear down the Kafka environment—or
+      continue playing around.
+  </p>
+
+  <ol>
+      <li>
+          Stop the producer and consumer clients with <code>Ctrl-C</code>, if you haven't done so already.
+      </li>
+      <li>
+          Stop the Kafka broker with <code>Ctrl-C</code>.
+      </li>
+      <li>
+          Lastly, stop the ZooKeeper server with <code>Ctrl-C</code>.
+      </li>
+  </ol>
+
+  <p>
+      If you also want to delete any data of your local Kafka environment including any events you have created
+      along the way, run the command:
+  </p>
+
+<pre class="line-numbers"><code class="language-bash">$ rm -rf /tmp/kafka-logs /tmp/zookeeper</code></pre>
+
+  </div>
+
+  <div class="quickstart-step">
+  <h4 class="anchor-heading">
+      <a class="anchor-link" id="quickstart_kafkacongrats" href="#quickstart_kafkacongrats"></a>
+      <a href="#quickstart_kafkacongrats">Congratulations!</a>
+    </h4>
+
+    <p>You have successfully finished the Apache Kafka quickstart.<div>
+
+    <p>To learn more, we suggest the following next steps:</p>
+
+    <ul>
+        <li>
+            Read through the brief <a href="/intro">Introduction</a>
+            to learn how Kafka works at a high level, its main concepts, and how it compares to other
+            technologies. To understand Kafka in more detail, head over to the
+            <a href="/documentation/">Documentation</a>.
+        </li>
+        <li>
+            Browse through the <a href="/powered-by">Use Cases</a> to learn how 
+            other users in our world-wide community are getting value out of Kafka.
+        </li>
+        <!--
+        <li>
+            Learn how _Kafka compares to other technologies_ you might be familiar with.
+            [note to design team: this new page is not yet written] 
+        </li>
+        -->
+        <li>
+            Join a <a href="/events">local Kafka meetup group</a> and
+            <a href="https://kafka-summit.org/past-events/">watch talks from Kafka Summit</a>,
+            the main conference of the Kafka community.
+        </li>
+    </ul>
+  </div>
+</script>
+
+<div class="p-quickstart"></div>

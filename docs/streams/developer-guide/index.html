@@ -1,0 +1,106 @@
+<!--
+ Licensed to the Apache Software Foundation (ASF) under one or more
+ contributor license agreements.  See the NOTICE file distributed with
+ this work for additional information regarding copyright ownership.
+ The ASF licenses this file to You under the Apache License, Version 2.0
+ (the "License"); you may not use this file except in compliance with
+ the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+<script><!--#include virtual="../../js/templateData.js" --></script>
+
+<script id="content-template" type="text/x-handlebars-template">
+  <h1>Developer Guide for Kafka Streams</h1>
+    <div class="sub-nav-sticky">
+        <div class="sticky-top">
+            <div style="height:35px">
+                <a href="/{{version}}/documentation/streams/">Introduction</a>
+                <a href="/{{version}}/documentation/streams/quickstart">Run Demo App</a>
+                <a href="/{{version}}/documentation/streams/tutorial">Tutorial: Write App</a>
+                <a href="/{{version}}/documentation/streams/core-concepts">Concepts</a>
+                <a href="/{{version}}/documentation/streams/architecture">Architecture</a>
+                <a class="active-menu-item" href="/{{version}}/documentation/streams/developer-guide/">Developer Guide</a>
+                <a href="/{{version}}/documentation/streams/upgrade-guide">Upgrade</a>
+            </div>
+        </div>
+    </div>
+
+                
+  <div class="section" id="developer-guide">
+<!-- span id="streams-developer-guide"></span><h1>Developer Guide<a class="headerlink" href="#developer-guide" title="Permalink to this headline"></a></h1 -->
+<p>This developer guide describes how to write, configure, and execute a Kafka Streams application.</p>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="write-streams.html">Writing a Streams Application</a></li>
+<li class="toctree-l1"><a class="reference internal" href="config-streams.html">Configuring a Streams Application</a></li>
+<li class="toctree-l1"><a class="reference internal" href="dsl-api.html">Streams DSL</a></li>
+<li class="toctree-l1"><a class="reference internal" href="processor-api.html">Processor API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="dsl-topology-naming.html">Naming Operators in a Streams DSL application</a></li>
+<li class="toctree-l1"><a class="reference internal" href="datatypes.html">Data Types and Serialization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="testing.html">Testing a Streams Application</a></li>
+<li class="toctree-l1"><a class="reference internal" href="interactive-queries.html">Interactive Queries</a></li>
+<li class="toctree-l1"><a class="reference internal" href="memory-mgmt.html">Memory Management</a></li>
+<li class="toctree-l1"><a class="reference internal" href="running-app.html">Running Streams Applications</a></li>
+<li class="toctree-l1"><a class="reference internal" href="manage-topics.html">Managing Streams Application Topics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="security.html">Streams Security</a></li>
+<li class="toctree-l1"><a class="reference internal" href="app-reset-tool.html">Application Reset Tool</a></li>
+</ul>
+</div>
+</div>
+
+
+               </div>
+              </div>
+
+    <div class="pagination">
+        <a href="/{{version}}/documentation/streams/architecture" class="pagination__btn pagination__btn__prev">Previous</a>
+        <a href="/{{version}}/documentation/streams/developer-guide/write-streams" class="pagination__btn pagination__btn__next">Next</a>
+    </div>
+</script>
+
+<!--#include virtual="../../../includes/_header.htm" -->
+<!--#include virtual="../../../includes/_top.htm" -->
+<div class="content documentation ">
+    <!--#include virtual="../../../includes/_nav.htm" -->
+    <div class="right">
+        <!--//#include virtual="../../../includes/_docs_banner.htm" -->
+        <ul class="breadcrumbs">
+            <li><a href="/documentation">Documentation</a></li>
+            <li><a href="/documentation/streams">Kafka Streams</a></li>
+        </ul>
+        <div class="p-content"></div>
+    </div>
+</div>
+<!--#include virtual="../../../includes/_footer.htm" -->
+<script>
+    $(function() {
+        // Show selected style on nav item
+        $('.b-nav__streams').addClass('selected');
+
+        //sticky secondary nav
+        var $navbar = $(".sub-nav-sticky"),
+            y_pos = $navbar.offset().top,
+            height = $navbar.height();
+
+        $(window).scroll(function() {
+            var scrollTop = $(window).scrollTop();
+
+            if (scrollTop > y_pos - height) {
+                $navbar.addClass("navbar-fixed")
+            } else if (scrollTop <= y_pos) {
+                $navbar.removeClass("navbar-fixed")
+            }
+        });
+
+        // Display docs subnav items
+        $('.b-nav__docs').parent().toggleClass('nav__item__with__subs--expanded');
+    });
+</script>

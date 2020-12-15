@@ -1,0 +1,45 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "apiKey": 20,
+  "type": "response",
+  "name": "DeleteTopicsResponse",
+  // Version 1 adds the throttle time.
+  //
+  // Starting in version 2, on quota violation, brokers send out responses before throttling.
+  //
+  // Starting in version 3, a TOPIC_DELETION_DISABLED error code may be returned.
+  //
+  // Version 4 is the first flexible version.
+  //
+  // Version 5 adds ErrorMessage in the response and may return a THROTTLING_QUOTA_EXCEEDED error
+  // in the response if the topics deletion is throttled (KIP-599).
+  "validVersions": "0-5",
+  "flexibleVersions": "4+",
+  "fields": [
+    { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,
+      "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
+    { "name": "Responses", "type": "[]DeletableTopicResult", "versions": "0+",
+      "about": "The results for each topic we tried to delete.", "fields": [
+      { "name": "Name", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName",
+        "about": "The topic name" },
+      { "name": "ErrorCode", "type": "int16", "versions": "0+",
+        "about": "The deletion error, or 0 if the deletion succeeded." },
+      { "name": "ErrorMessage", "type": "string", "versions": "5+", "nullableVersions": "5+", "ignorable": true, "default": "null",
+        "about": "The error message, or null if there was no error." }
+    ]}
+  ]
+}

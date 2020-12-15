@@ -1,0 +1,653 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.kafka.test;
+
+import java.io.FileWriter;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.internals.Topic;
+import org.apache.kafka.common.message.MetadataResponseData;
+import org.apache.kafka.common.network.NetworkReceive;
+import org.apache.kafka.common.network.Send;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
+import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.requests.ByteBufferChannel;
+import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.File;
+import java.io.IOException;
+import java.lang.reflect.Field;
+import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Properties;
+import java.util.Random;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Supplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import static java.util.Arrays.asList;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
+
+/**
+ * Helper functions for writing unit tests
+ */
+public class TestUtils {
+    private static final Logger log = LoggerFactory.getLogger(TestUtils.class);
+
+    public static final File IO_TMP_DIR = new File(System.getProperty("java.io.tmpdir"));
+
+    public static final String LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+    public static final String DIGITS = "0123456789";
+    public static final String LETTERS_AND_DIGITS = LETTERS + DIGITS;
+
+    /* A consistent random number generator to make tests repeatable */
+    public static final Random SEEDED_RANDOM = new Random(192348092834L);
+    public static final Random RANDOM = new Random();
+    public static final long DEFAULT_POLL_INTERVAL_MS = 100;
+    public static final long DEFAULT_MAX_WAIT_MS = 15000;
+
+    public static Cluster singletonCluster() {
+        return clusterWith(1);
+    }
+
+    public static Cluster singletonCluster(final String topic, final int partitions) {
+        return clusterWith(1, topic, partitions);
+    }
+
+    public static Cluster clusterWith(int nodes) {
+        return clusterWith(nodes, new HashMap<>());
+    }
+
+    public static Cluster clusterWith(final int nodes, final Map<String, Integer> topicPartitionCounts) {
+        final Node[] ns = new Node[nodes];
+        for (int i = 0; i < nodes; i++)
+            ns[i] = new Node(i, "localhost", 1969);
+        final List<PartitionInfo> parts = new ArrayList<>();
+        for (final Map.Entry<String, Integer> topicPartition : topicPartitionCounts.entrySet()) {
+            final String topic = topicPartition.getKey();
+            final int partitions = topicPartition.getValue();
+            for (int i = 0; i < partitions; i++)
+                parts.add(new PartitionInfo(topic, i, ns[i % ns.length], ns, ns));
+        }
+        return new Cluster("kafka-cluster", asList(ns), parts, Collections.emptySet(), Collections.emptySet());
+    }
+
+    public static MetadataResponse metadataResponse(Collection<Node> brokers,
+                                                    String clusterId, int controllerId,
+                                                    List<MetadataResponse.TopicMetadata> topicMetadataList) {
+        return metadataResponse(MetadataResponse.DEFAULT_THROTTLE_TIME, brokers, clusterId, controllerId,
+                topicMetadataList, MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED);
+    }
+
+    public static MetadataResponse metadataResponse(int throttleTimeMs, Collection<Node> brokers,
+                                                    String clusterId, int controllerId,
+                                                    List<MetadataResponse.TopicMetadata> topicMetadatas,
+                                                    int clusterAuthorizedOperations) {
+        List<MetadataResponseData.MetadataResponseTopic> topics = new ArrayList<>();
+        topicMetadatas.forEach(topicMetadata -> {
+            MetadataResponseData.MetadataResponseTopic metadataResponseTopic = new MetadataResponseData.MetadataResponseTopic();
+            metadataResponseTopic
+                    .setErrorCode(topicMetadata.error().code())
+                    .setName(topicMetadata.topic())
+                    .setIsInternal(topicMetadata.isInternal())
+                    .setTopicAuthorizedOperations(topicMetadata.authorizedOperations());
+
+            for (MetadataResponse.PartitionMetadata partitionMetadata : topicMetadata.partitionMetadata()) {
+                metadataResponseTopic.partitions().add(new MetadataResponseData.MetadataResponsePartition()
+                        .setErrorCode(partitionMetadata.error.code())
+                        .setPartitionIndex(partitionMetadata.partition())
+                        .setLeaderId(partitionMetadata.leaderId.orElse(MetadataResponse.NO_LEADER_ID))
+                        .setLeaderEpoch(partitionMetadata.leaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
+                        .setReplicaNodes(partitionMetadata.replicaIds)
+                        .setIsrNodes(partitionMetadata.inSyncReplicaIds)
+                        .setOfflineReplicas(partitionMetadata.offlineReplicaIds));
+            }
+            topics.add(metadataResponseTopic);
+        });
+        return MetadataResponse.prepareResponse(true, throttleTimeMs, brokers, clusterId, controllerId,
+                topics, clusterAuthorizedOperations); }
+
+    public static MetadataResponse metadataUpdateWith(final int numNodes,
+                                                      final Map<String, Integer> topicPartitionCounts) {
+        return metadataUpdateWith("kafka-cluster", numNodes, topicPartitionCounts);
+    }
+
+    public static MetadataResponse metadataUpdateWith(final int numNodes,
+                                                      final Map<String, Integer> topicPartitionCounts,
+                                                      final Function<TopicPartition, Integer> epochSupplier) {
+        return metadataUpdateWith("kafka-cluster", numNodes, Collections.emptyMap(),
+            topicPartitionCounts, epochSupplier, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion());
+    }
+
+    public static MetadataResponse metadataUpdateWith(final String clusterId,
+                                                      final int numNodes,
+                                                      final Map<String, Integer> topicPartitionCounts) {
+        return metadataUpdateWith(clusterId, numNodes, Collections.emptyMap(),
+            topicPartitionCounts, tp -> null, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion());
+    }
+
+    public static MetadataResponse metadataUpdateWith(final String clusterId,
+                                                      final int numNodes,
+                                                      final Map<String, Errors> topicErrors,
+                                                      final Map<String, Integer> topicPartitionCounts) {
+        return metadataUpdateWith(clusterId, numNodes, topicErrors,
+            topicPartitionCounts, tp -> null, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion());
+    }
+
+    public static MetadataResponse metadataUpdateWith(final String clusterId,
+                                                      final int numNodes,
+                                                      final Map<String, Errors> topicErrors,
+                                                      final Map<String, Integer> topicPartitionCounts,
+                                                      final short responseVersion) {
+        return metadataUpdateWith(clusterId, numNodes, topicErrors,
+            topicPartitionCounts, tp -> null, MetadataResponse.PartitionMetadata::new, responseVersion);
+    }
+
+    public static MetadataResponse metadataUpdateWith(final String clusterId,
+                                                      final int numNodes,
+                                                      final Map<String, Errors> topicErrors,
+                                                      final Map<String, Integer> topicPartitionCounts,
+                                                      final Function<TopicPartition, Integer> epochSupplier) {
+        return metadataUpdateWith(clusterId, numNodes, topicErrors,
+            topicPartitionCounts, epochSupplier, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion());
+    }
+
+    public static MetadataResponse metadataUpdateWith(final String clusterId,
+                                                      final int numNodes,
+                                                      final Map<String, Errors> topicErrors,
+                                                      final Map<String, Integer> topicPartitionCounts,
+                                                      final Function<TopicPartition, Integer> epochSupplier,
+                                                      final PartitionMetadataSupplier partitionSupplier,
+                                                      final short responseVersion) {
+        final List<Node> nodes = new ArrayList<>(numNodes);
+        for (int i = 0; i < numNodes; i++)
+            nodes.add(new Node(i, "localhost", 1969 + i));
+
+        List<MetadataResponse.TopicMetadata> topicMetadata = new ArrayList<>();
+        for (Map.Entry<String, Integer> topicPartitionCountEntry : topicPartitionCounts.entrySet()) {
+            String topic = topicPartitionCountEntry.getKey();
+            int numPartitions = topicPartitionCountEntry.getValue();
+
+            List<MetadataResponse.PartitionMetadata> partitionMetadata = new ArrayList<>(numPartitions);
+            for (int i = 0; i < numPartitions; i++) {
+                TopicPartition tp = new TopicPartition(topic, i);
+                Node leader = nodes.get(i % nodes.size());
+                List<Integer> replicaIds = Collections.singletonList(leader.id());
+                partitionMetadata.add(partitionSupplier.supply(
+                        Errors.NONE, tp, Optional.of(leader.id()), Optional.ofNullable(epochSupplier.apply(tp)),
+                        replicaIds, replicaIds, replicaIds));
+            }
+
+            topicMetadata.add(new MetadataResponse.TopicMetadata(Errors.NONE, topic,
+                    Topic.isInternal(topic), partitionMetadata));
+        }
+
+        for (Map.Entry<String, Errors> topicErrorEntry : topicErrors.entrySet()) {
+            String topic = topicErrorEntry.getKey();
+            topicMetadata.add(new MetadataResponse.TopicMetadata(topicErrorEntry.getValue(), topic,
+                    Topic.isInternal(topic), Collections.emptyList()));
+        }
+
+        return metadataResponse(nodes, clusterId, 0, topicMetadata);
+    }
+
+    public static ByteBuffer serializeRequestHeader(RequestHeader header) {
+        ObjectSerializationCache serializationCache = new ObjectSerializationCache();
+        ByteBuffer buffer = ByteBuffer.allocate(header.size(serializationCache));
+        header.write(buffer, serializationCache);
+        buffer.rewind();
+        return buffer;
+    }
+
+    @FunctionalInterface
+    public interface PartitionMetadataSupplier {
+        MetadataResponse.PartitionMetadata supply(Errors error,
+                              TopicPartition partition,
+                              Optional<Integer> leaderId,
+                              Optional<Integer> leaderEpoch,
+                              List<Integer> replicas,
+                              List<Integer> isr,
+                              List<Integer> offlineReplicas);
+    }
+
+    public static Cluster clusterWith(final int nodes, final String topic, final int partitions) {
+        return clusterWith(nodes, Collections.singletonMap(topic, partitions));
+    }
+
+    /**
+     * Generate an array of random bytes
+     *
+     * @param size The size of the array
+     */
+    public static byte[] randomBytes(final int size) {
+        final byte[] bytes = new byte[size];
+        SEEDED_RANDOM.nextBytes(bytes);
+        return bytes;
+    }
+
+    /**
+     * Generate a random string of letters and digits of the given length
+     *
+     * @param len The length of the string
+     * @return The random string
+     */
+    public static String randomString(final int len) {
+        final StringBuilder b = new StringBuilder();
+        for (int i = 0; i < len; i++)
+            b.append(LETTERS_AND_DIGITS.charAt(SEEDED_RANDOM.nextInt(LETTERS_AND_DIGITS.length())));
+        return b.toString();
+    }
+
+    /**
+     * Create an empty file in the default temporary-file directory, using `kafka` as the prefix and `tmp` as the
+     * suffix to generate its name.
+     */
+    public static File tempFile() throws IOException {
+        final File file = File.createTempFile("kafka", ".tmp");
+        file.deleteOnExit();
+
+        return file;
+    }
+
+    /**
+     * Create a file with the given contents in the default temporary-file directory,
+     * using `kafka` as the prefix and `tmp` as the suffix to generate its name.
+     */
+    public static File tempFile(final String contents) throws IOException {
+        final File file = tempFile();
+        final FileWriter writer = new FileWriter(file);
+        writer.write(contents);
+        writer.close();
+
+        return file;
+    }
+
+    /**
+     * Create a temporary relative directory in the default temporary-file directory with the given prefix.
+     *
+     * @param prefix The prefix of the temporary directory, if null using "kafka-" as default prefix
+     */
+    public static File tempDirectory(final String prefix) {
+        return tempDirectory(null, prefix);
+    }
+
+    /**
+     * Create a temporary relative directory in the default temporary-file directory with a
+     * prefix of "kafka-"
+     *
+     * @return the temporary directory just created.
+     */
+    public static File tempDirectory() {
+        return tempDirectory(null);
+    }
+
+    /**
+     * Create a temporary relative directory in the specified parent directory with the given prefix.
+     *
+     * @param parent The parent folder path name, if null using the default temporary-file directory
+     * @param prefix The prefix of the temporary directory, if null using "kafka-" as default prefix
+     */
+    public static File tempDirectory(final Path parent, String prefix) {
+        final File file;
+        prefix = prefix == null ? "kafka-" : prefix;
+        try {
+            file = parent == null ?
+                Files.createTempDirectory(prefix).toFile() : Files.createTempDirectory(parent, prefix).toFile();
+        } catch (final IOException ex) {
+            throw new RuntimeException("Failed to create a temp dir", ex);
+        }
+        file.deleteOnExit();
+
+        Exit.addShutdownHook("delete-temp-file-shutdown-hook", () -> {
+            try {
+                Utils.delete(file);
+            } catch (IOException e) {
+                log.error("Error deleting {}", file.getAbsolutePath(), e);
+            }
+        });
+
+        return file;
+    }
+
+    public static Properties producerConfig(final String bootstrapServers,
+                                            final Class<?> keySerializer,
+                                            final Class<?> valueSerializer,
+                                            final Properties additional) {
+        final Properties properties = new Properties();
+        properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        properties.put(ProducerConfig.ACKS_CONFIG, "all");
+        properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializer);
+        properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializer);
+        properties.putAll(additional);
+        return properties;
+    }
+
+    public static Properties producerConfig(final String bootstrapServers, final Class<?> keySerializer, final Class<?> valueSerializer) {
+        return producerConfig(bootstrapServers, keySerializer, valueSerializer, new Properties());
+    }
+
+    public static Properties consumerConfig(final String bootstrapServers,
+                                            final String groupId,
+                                            final Class<?> keyDeserializer,
+                                            final Class<?> valueDeserializer,
+                                            final Properties additional) {
+
+        final Properties consumerConfig = new Properties();
+        consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer);
+        consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer);
+        consumerConfig.putAll(additional);
+        return consumerConfig;
+    }
+
+    public static Properties consumerConfig(final String bootstrapServers,
+                                            final String groupId,
+                                            final Class<?> keyDeserializer,
+                                            final Class<?> valueDeserializer) {
+        return consumerConfig(bootstrapServers,
+            groupId,
+            keyDeserializer,
+            valueDeserializer,
+            new Properties());
+    }
+
+    /**
+     * returns consumer config with random UUID for the Group ID
+     */
+    public static Properties consumerConfig(final String bootstrapServers, final Class<?> keyDeserializer, final Class<?> valueDeserializer) {
+        return consumerConfig(bootstrapServers,
+            UUID.randomUUID().toString(),
+            keyDeserializer,
+            valueDeserializer,
+            new Properties());
+    }
+
+    /**
+     * uses default value of 15 seconds for timeout
+     */
+    public static void waitForCondition(final TestCondition testCondition, final String conditionDetails) throws InterruptedException {
+        waitForCondition(testCondition, DEFAULT_MAX_WAIT_MS, () -> conditionDetails);
+    }
+
+    /**
+     * uses default value of 15 seconds for timeout
+     */
+    public static void waitForCondition(final TestCondition testCondition, final Supplier<String> conditionDetailsSupplier) throws InterruptedException {
+        waitForCondition(testCondition, DEFAULT_MAX_WAIT_MS, conditionDetailsSupplier);
+    }
+
+    /**
+     * Wait for condition to be met for at most {@code maxWaitMs} and throw assertion failure otherwise.
+     * This should be used instead of {@code Thread.sleep} whenever possible as it allows a longer timeout to be used
+     * without unnecessarily increasing test time (as the condition is checked frequently). The longer timeout is needed to
+     * avoid transient failures due to slow or overloaded machines.
+     */
+    public static void waitForCondition(final TestCondition testCondition, final long maxWaitMs, String conditionDetails) throws InterruptedException {
+        waitForCondition(testCondition, maxWaitMs, () -> conditionDetails);
+    }
+
+    /**
+     * Wait for condition to be met for at most {@code maxWaitMs} and throw assertion failure otherwise.
+     * This should be used instead of {@code Thread.sleep} whenever possible as it allows a longer timeout to be used
+     * without unnecessarily increasing test time (as the condition is checked frequently). The longer timeout is needed to
+     * avoid transient failures due to slow or overloaded machines.
+     */
+    public static void waitForCondition(final TestCondition testCondition, final long maxWaitMs, Supplier<String> conditionDetailsSupplier) throws InterruptedException {
+        retryOnExceptionWithTimeout(maxWaitMs, () -> {
+            String conditionDetailsSupplied = conditionDetailsSupplier != null ? conditionDetailsSupplier.get() : null;
+            String conditionDetails = conditionDetailsSupplied != null ? conditionDetailsSupplied : "";
+            assertTrue(testCondition.conditionMet(),
+                "Condition not met within timeout " + maxWaitMs + ". " + conditionDetails);
+        });
+    }
+
+    /**
+     * Wait for the given runnable to complete successfully, i.e. throw now {@link Exception}s or
+     * {@link AssertionError}s, or for the given timeout to expire. If the timeout expires then the
+     * last exception or assertion failure will be thrown thus providing context for the failure.
+     *
+     * @param timeoutMs the total time in milliseconds to wait for {@code runnable} to complete successfully.
+     * @param runnable the code to attempt to execute successfully.
+     * @throws InterruptedException if the current thread is interrupted while waiting for {@code runnable} to complete successfully.
+     */
+    public static void retryOnExceptionWithTimeout(final long timeoutMs,
+                                                   final ValuelessCallable runnable) throws InterruptedException {
+        retryOnExceptionWithTimeout(DEFAULT_POLL_INTERVAL_MS, timeoutMs, runnable);
+    }
+
+    /**
+     * Wait for the given runnable to complete successfully, i.e. throw now {@link Exception}s or
+     * {@link AssertionError}s, or for the default timeout to expire. If the timeout expires then the
+     * last exception or assertion failure will be thrown thus providing context for the failure.
+     *
+     * @param runnable the code to attempt to execute successfully.
+     * @throws InterruptedException if the current thread is interrupted while waiting for {@code runnable} to complete successfully.
+     */
+    public static void retryOnExceptionWithTimeout(final ValuelessCallable runnable) throws InterruptedException {
+        retryOnExceptionWithTimeout(DEFAULT_POLL_INTERVAL_MS, DEFAULT_MAX_WAIT_MS, runnable);
+    }
+
+    /**
+     * Wait for the given runnable to complete successfully, i.e. throw now {@link Exception}s or
+     * {@link AssertionError}s, or for the given timeout to expire. If the timeout expires then the
+     * last exception or assertion failure will be thrown thus providing context for the failure.
+     *
+     * @param pollIntervalMs the interval in milliseconds to wait between invoking {@code runnable}.
+     * @param timeoutMs the total time in milliseconds to wait for {@code runnable} to complete successfully.
+     * @param runnable the code to attempt to execute successfully.
+     * @throws InterruptedException if the current thread is interrupted while waiting for {@code runnable} to complete successfully.
+     */
+    public static void retryOnExceptionWithTimeout(final long pollIntervalMs,
+                                                   final long timeoutMs,
+                                                   final ValuelessCallable runnable) throws InterruptedException {
+        final long expectedEnd = System.currentTimeMillis() + timeoutMs;
+
+        while (true) {
+            try {
+                runnable.call();
+                return;
+            } catch (final NoRetryException e) {
+                throw e;
+            } catch (final AssertionError t) {
+                if (expectedEnd <= System.currentTimeMillis()) {
+                    throw t;
+                }
+            } catch (final Exception e) {
+                if (expectedEnd <= System.currentTimeMillis()) {
+                    throw new AssertionError(e);
+                }
+            }
+            Thread.sleep(Math.min(pollIntervalMs, timeoutMs));
+        }
+    }
+
+    /**
+     * Checks if a cluster id is valid.
+     * @param clusterId
+     */
+    public static void isValidClusterId(String clusterId) {
+        assertNotNull(clusterId);
+
+        // Base 64 encoded value is 22 characters
+        assertEquals(clusterId.length(), 22);
+
+        Pattern clusterIdPattern = Pattern.compile("[a-zA-Z0-9_\\-]+");
+        Matcher matcher = clusterIdPattern.matcher(clusterId);
+        assertTrue(matcher.matches());
+
+        // Convert into normal variant and add padding at the end.
+        String originalClusterId = String.format("%s==", clusterId.replace("_", "/").replace("-", "+"));
+        byte[] decodedUuid = Base64.getDecoder().decode(originalClusterId);
+
+        // We expect 16 bytes, same as the input UUID.
+        assertEquals(decodedUuid.length, 16);
+
+        //Check if it can be converted back to a UUID.
+        try {
+            ByteBuffer uuidBuffer = ByteBuffer.wrap(decodedUuid);
+            new UUID(uuidBuffer.getLong(), uuidBuffer.getLong()).toString();
+        } catch (Exception e) {
+            fail(clusterId + " cannot be converted back to UUID.");
+        }
+    }
+
+    /**
+     * Checks the two iterables for equality by first converting both to a list.
+     */
+    public static <T> void checkEquals(Iterable<T> it1, Iterable<T> it2) {
+        assertEquals(toList(it1), toList(it2));
+    }
+
+    public static <T> void checkEquals(Iterator<T> it1, Iterator<T> it2) {
+        assertEquals(Utils.toList(it1), Utils.toList(it2));
+    }
+
+    public static <T> void checkEquals(Set<T> c1, Set<T> c2, String firstDesc, String secondDesc) {
+        if (!c1.equals(c2)) {
+            Set<T> missing1 = new HashSet<>(c2);
+            missing1.removeAll(c1);
+            Set<T> missing2 = new HashSet<>(c1);
+            missing2.removeAll(c2);
+            fail(String.format("Sets not equal, missing %s=%s, missing %s=%s", firstDesc, missing1, secondDesc, missing2));
+        }
+    }
+
+    public static <T> List<T> toList(Iterable<? extends T> iterable) {
+        List<T> list = new ArrayList<>();
+        for (T item : iterable)
+            list.add(item);
+        return list;
+    }
+
+    public static <T> Set<T> toSet(Collection<T> collection) {
+        return new HashSet<>(collection);
+    }
+
+    public static ByteBuffer toBuffer(Send send) {
+        ByteBufferChannel channel = new ByteBufferChannel(send.size());
+        try {
+            assertEquals(send.size(), send.writeTo(channel));
+            channel.close();
+            return channel.buffer();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static Set<TopicPartition> generateRandomTopicPartitions(int numTopic, int numPartitionPerTopic) {
+        Set<TopicPartition> tps = new HashSet<>();
+        for (int i = 0; i < numTopic; i++) {
+            String topic = randomString(32);
+            for (int j = 0; j < numPartitionPerTopic; j++) {
+                tps.add(new TopicPartition(topic, j));
+            }
+        }
+        return tps;
+    }
+
+    /**
+     * Assert that a future raises an expected exception cause type. Return the exception cause
+     * if the assertion succeeds; otherwise raise AssertionError.
+     *
+     * @param future The future to await
+     * @param exceptionCauseClass Class of the expected exception cause
+     * @param <T> Exception cause type parameter
+     * @return The caught exception cause
+     */
+    public static <T extends Throwable> T assertFutureThrows(Future<?> future, Class<T> exceptionCauseClass) {
+        ExecutionException exception = assertThrows(ExecutionException.class, future::get);
+        assertTrue(exceptionCauseClass.isInstance(exception.getCause()),
+            "Unexpected exception cause " + exception.getCause());
+        return exceptionCauseClass.cast(exception.getCause());
+    }
+
+    public static void assertFutureError(Future<?> future, Class<? extends Throwable> exceptionClass)
+        throws InterruptedException {
+        try {
+            future.get();
+            fail("Expected a " + exceptionClass.getSimpleName() + " exception, but got success.");
+        } catch (ExecutionException ee) {
+            Throwable cause = ee.getCause();
+            assertEquals(exceptionClass, cause.getClass(),
+                "Expected a " + exceptionClass.getSimpleName() + " exception, but got " +
+                    cause.getClass().getSimpleName());
+        }
+    }
+
+    public static ApiKeys apiKeyFrom(NetworkReceive networkReceive) {
+        return RequestHeader.parse(networkReceive.payload().duplicate()).apiKey();
+    }
+
+    public static <T> void assertOptional(Optional<T> optional, Consumer<T> assertion) {
+        if (optional.isPresent()) {
+            assertion.accept(optional.get());
+        } else {
+            fail("Missing value from Optional");
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <T> T fieldValue(Object o, Class<?> clazz, String fieldName)  {
+        try {
+            Field field = clazz.getDeclaredField(fieldName);
+            field.setAccessible(true);
+            return (T) field.get(o);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static void setFieldValue(Object obj, String fieldName, Object value) throws Exception {
+        Field field = obj.getClass().getDeclaredField(fieldName);
+        field.setAccessible(true);
+        field.set(obj, value);
+    }
+}

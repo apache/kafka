@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE module PUBLIC
+    "-//Puppy Crawl//DTD Check Configuration 1.3//EN"
+     "http://www.puppycrawl.com/dtds/configuration_1_3.dtd">
+<!--
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+-->
+<module name="Checker">
+  <property name="localeLanguage" value="en"/>
+
+  <module name="FileTabCharacter"/>
+
+  <!-- header -->
+  <module name="Header">
+    <property name="headerFile" value="${headerFile}" />
+  </module>
+
+  <module name="TreeWalker">
+
+    <!-- code cleanup -->
+    <module name="UnusedImports">
+      <property name="processJavadoc" value="true" />
+    </module>
+    <module name="RedundantImport"/>
+    <module name="IllegalImport" />
+    <module name="EqualsHashCode"/>
+    <module name="SimplifyBooleanExpression"/>
+    <module name="OneStatementPerLine"/>
+    <module name="UnnecessaryParentheses" />
+    <module name="SimplifyBooleanReturn"/>
+
+    <!-- style -->
+    <module name="DefaultComesLast"/>
+    <module name="EmptyStatement"/>
+    <module name="ArrayTypeStyle"/>
+    <module name="UpperEll"/>
+    <module name="LeftCurly"/>
+    <module name="RightCurly"/>
+    <module name="EmptyStatement"/>
+    <module name="ConstantName">
+      <property name="format" value="(^[A-Z][A-Z0-9]*(_[A-Z0-9]+)*$)|(^log$)"/>
+    </module>
+    <module name="LocalVariableName"/>
+    <module name="LocalFinalVariableName"/>
+    <module name="MemberName"/>
+    <module name="ClassTypeParameterName">
+      <property name="format" value="^[A-Z][a-zA-Z0-9]*$$"/>
+    </module>
+    <module name="MethodTypeParameterName">
+      <property name="format" value="^[A-Z][a-zA-Z0-9]*$$"/>
+    </module>
+    <module name="InterfaceTypeParameterName">
+      <property name="format" value="^[A-Z][a-zA-Z0-9]*$$"/>
+    </module>
+    <module name="PackageName"/>
+    <module name="ParameterName"/>
+    <module name="StaticVariableName"/>
+    <module name="TypeName"/>
+    <module name="AvoidStarImport"/>
+
+    <!-- variables that can be final should be final (suppressed except for Streams) -->
+    <module name="FinalLocalVariable">
+      <property name="tokens" value="VARIABLE_DEF,PARAMETER_DEF"/>
+      <property name="validateEnhancedForLoopVariable" value="true"/>
+    </module>
+
+    <!-- dependencies -->
+    <module name="ImportControl">
+      <property name="file" value="${importControlFile}"/>
+    </module>
+
+    <!-- whitespace -->
+    <module name="GenericWhitespace"/>
+    <module name="NoWhitespaceBefore"/>
+    <module name="WhitespaceAfter" />
+    <module name="NoWhitespaceAfter"/>
+    <module name="WhitespaceAround">
+      <property name="allowEmptyConstructors" value="true"/>
+      <property name="allowEmptyMethods" value="true"/>
+    </module>
+    <module name="Indentation"/>
+    <module name="MethodParamPad"/>
+    <module name="ParenPad"/>
+    <module name="TypecastParenPad"/>
+
+    <!-- locale-sensitive methods should specify locale -->
+    <module name="Regexp">
+      <property name="format" value="\.to(Lower|Upper)Case\(\)"/>
+      <property name="illegalPattern" value="true"/>
+      <property name="ignoreComments" value="true"/>
+    </module>
+
+    <module name="Regexp">
+      <property name="id" value="dontUseSystemExit"/>
+      <property name="format" value="System\.exit"/>
+      <property name="illegalPattern" value="true"/>
+      <property name="ignoreComments" value="true"/>
+      <property name="message" value="'System.exit': Should not directly call System.exit, but Exit.exit instead."/>
+    </module>
+
+    <!-- code quality -->
+    <module name="MethodLength"/>
+    <module name="ParameterNumber">
+      <!-- default is 8 -->
+      <property name="max" value="13"/>
+    </module>
+    <module name="ClassDataAbstractionCoupling">
+      <!-- default is 7 -->
+      <property name="max" value="25"/>
+    </module>
+    <module name="BooleanExpressionComplexity">
+      <!-- default is 3 -->
+      <property name="max" value="5"/>
+    </module>
+
+    <module name="ClassFanOutComplexity">
+      <!-- default is 20 -->
+      <property name="max" value="50"/>
+    </module>
+    <module name="CyclomaticComplexity">
+      <!-- default is 10-->
+      <property name="max" value="16"/>
+    </module>
+    <module name="JavaNCSS">
+      <!-- default is 50 -->
+      <property name="methodMaximum" value="100"/>
+    </module>
+    <module name="NPathComplexity">
+      <!-- default is 200 -->
+      <property name="max" value="500"/>
+    </module>
+  </module>
+
+  <module name="SuppressionFilter">
+    <property name="file" value="${suppressionsFile}"/>
+  </module>
+</module>

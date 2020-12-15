@@ -1,0 +1,58 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "apiKey": 11,
+  "type": "request",
+  "name": "JoinGroupRequest",
+  // Version 1 adds RebalanceTimeoutMs.
+  //
+  // Version 2 and 3 are the same as version 1.
+  //
+  // Starting from version 4, the client needs to issue a second request to join group
+  //
+  // Starting from version 5, we add a new field called groupInstanceId to indicate member identity across restarts.
+  // with assigned id.
+  //
+  // Version 6 is the first flexible version.
+  //
+  // Version 7 is the same as version 6.
+  "validVersions": "0-7",
+  "flexibleVersions": "6+",
+  "fields": [
+    { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
+      "about": "The group identifier." },
+    { "name": "SessionTimeoutMs", "type": "int32", "versions": "0+",
+      "about": "The coordinator considers the consumer dead if it receives no heartbeat after this timeout in milliseconds." },
+    // Note: if RebalanceTimeoutMs is not present, SessionTimeoutMs should be
+    // used instead.  The default of -1 here is just intended as a placeholder.
+    { "name": "RebalanceTimeoutMs", "type": "int32", "versions": "1+", "default": "-1", "ignorable": true,
+      "about": "The maximum time in milliseconds that the coordinator will wait for each member to rejoin when rebalancing the group." },
+    { "name": "MemberId", "type": "string", "versions": "0+",
+      "about": "The member id assigned by the group coordinator." },
+    { "name": "GroupInstanceId", "type": "string", "versions": "5+", 
+      "nullableVersions": "5+", "default": "null",
+      "about": "The unique identifier of the consumer instance provided by end user." },
+    { "name": "ProtocolType", "type": "string", "versions": "0+",
+      "about": "The unique name the for class of protocols implemented by the group we want to join." },
+    { "name": "Protocols", "type": "[]JoinGroupRequestProtocol", "versions": "0+",
+      "about": "The list of protocols that the member supports.", "fields": [
+      { "name": "Name", "type": "string", "versions": "0+", "mapKey": true,
+        "about": "The protocol name." },
+      { "name": "Metadata", "type": "bytes", "versions": "0+",
+        "about": "The protocol metadata." }
+    ]}
+  ]
+}

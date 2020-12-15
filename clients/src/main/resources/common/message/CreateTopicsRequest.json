@@ -1,0 +1,60 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "apiKey": 19,
+  "type": "request",
+  "name": "CreateTopicsRequest",
+  // Version 1 adds validateOnly.
+  //
+  // Version 4 makes partitions/replicationFactor optional even when assignments are not present (KIP-464)
+  //
+  // Version 5 is the first flexible version.
+  // Version 5 also returns topic configs in the response (KIP-525).
+  //
+  // Version 6 is identical to version 5 but may return a THROTTLING_QUOTA_EXCEEDED error
+  // in the response if the topics creation is throttled (KIP-599).
+  "validVersions": "0-6",
+  "flexibleVersions": "5+",
+  "fields": [
+    { "name": "Topics", "type": "[]CreatableTopic", "versions": "0+",
+      "about": "The topics to create.", "fields": [
+      { "name": "Name", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName",
+        "about": "The topic name." },
+      { "name": "NumPartitions", "type": "int32", "versions": "0+",
+        "about": "The number of partitions to create in the topic, or -1 if we are either specifying a manual partition assignment or using the default partitions." },
+      { "name": "ReplicationFactor", "type": "int16", "versions": "0+",
+        "about": "The number of replicas to create for each partition in the topic, or -1 if we are either specifying a manual partition assignment or using the default replication factor." },
+      { "name": "Assignments", "type": "[]CreatableReplicaAssignment", "versions": "0+",
+        "about": "The manual partition assignment, or the empty array if we are using automatic assignment.", "fields": [
+        { "name": "PartitionIndex", "type": "int32", "versions": "0+", "mapKey": true,
+          "about": "The partition index." },
+        { "name": "BrokerIds", "type": "[]int32", "versions": "0+", "entityType": "brokerId",
+          "about": "The brokers to place the partition on." }
+      ]},
+      { "name": "Configs", "type": "[]CreateableTopicConfig", "versions": "0+",
+        "about": "The custom topic configurations to set.", "fields": [
+        { "name": "Name", "type": "string", "versions": "0+" , "mapKey": true,
+          "about": "The configuration name." },
+        { "name": "Value", "type": "string", "versions": "0+", "nullableVersions": "0+",
+          "about": "The configuration value." }
+      ]}
+    ]},
+    { "name": "timeoutMs", "type": "int32", "versions": "0+", "default": "60000",
+      "about": "How long to wait in milliseconds before timing out the request." },
+    { "name": "validateOnly", "type": "bool", "versions": "1+", "default": "false", "ignorable": false,
+      "about": "If true, check that the topics can be created as specified, but don't create anything." }
+  ]
+}
