@@ -17,6 +17,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.errors.CorruptRecordException;
+import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
@@ -120,4 +121,26 @@ public class ByteBufferLogInputStreamTest {
         logInputStream.nextBatch();
     }
 
+    @Test
+    public void testReadUnsignedIntFromInputStream() {
+        ByteBuffer buffer = ByteBuffer.allocate(5);
+        buffer.put((byte) 10);
+        buffer.put((byte) 20);
+        buffer.put((byte) 30);
+        buffer.rewind();
+
+        byte[] b = new byte[1];
+
+        ByteBufferInputStream inputStream = new ByteBufferInputStream(buffer);
+        assertEquals(10, inputStream.read());
+
+        inputStream.read(b, 0, 0);
+        assertEquals(20, inputStream.read());
+
+        inputStream.read(b, 0, b.length);
+        assertEquals(0, inputStream.read());
+
+        inputStream.read(b, 0, b.length);
+        assertEquals(-1, inputStream.read());
+    }
 }
