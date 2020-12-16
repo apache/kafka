@@ -25,6 +25,7 @@ import org.apache.kafka.clients.{ManualMetadataUpdater, Metadata, MockClient}
 import org.apache.kafka.common.{Node, Uuid}
 import org.apache.kafka.common.internals.ClusterResourceListeners
 import org.apache.kafka.common.message.BrokerRegistrationResponseData
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.BrokerRegistrationResponse
 import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.metadata.BrokerState
@@ -40,6 +41,7 @@ class BrokerLifecycleManagerTest {
     properties.setProperty(KafkaConfig.LogDirsProp, "/tmp/foo")
     properties.setProperty(KafkaConfig.ProcessRolesProp, "broker")
     properties.setProperty(KafkaConfig.BrokerIdProp, "1")
+    properties.setProperty(KafkaConfig.InitialBrokerRegistrationTimeoutMs, "300000")
     properties
   }
 
@@ -91,12 +93,51 @@ class BrokerLifecycleManagerTest {
     context.controllerNodeProvider.node.set(controllerNode)
     context.mockClient.prepareResponseFrom(new BrokerRegistrationResponse(
       new BrokerRegistrationResponseData().setBrokerEpoch(1000)), controllerNode)
-    context.mockClient.delayReady(controllerNode, 0)
     manager.start(() => context.highestMetadataOffset.get(),
       context.channelManager, context.clusterId)
     TestUtils.retry(10000) {
       context.mockClient.wakeup()
       Assert.assertEquals(1000L, manager.brokerEpoch())
+    }
+    manager.close()
+  }
+
+  @Test
+  def testRegistrationTimeout(): Unit = {
+    val context = new BrokerLifecycleManagerTestContext(configProperties)
+    val controllerNode = new Node(3000, "localhost", 8021)
+    val manager = new BrokerLifecycleManager(context.config, context.time, None)
+    context.controllerNodeProvider.node.set(controllerNode)
+    def newDuplicateRegistrationResponse(): Unit = {
+      context.mockClient.prepareResponseFrom(new BrokerRegistrationResponse(
+        new BrokerRegistrationResponseData().
+          setErrorCode(Errors.DUPLICATE_BROKER_REGISTRATION.code())), controllerNode)
+    }
+    newDuplicateRegistrationResponse()
+    Assert.assertEquals(1, context.mockClient.futureResponses().size)
+    manager.start(() => context.highestMetadataOffset.get(),
+      context.channelManager, context.clusterId)
+    // We should send the first registration request and get a failure immediately
+    TestUtils.retry(60000) {
+      context.mockClient.wakeup()
+      Assert.assertEquals(0, context.mockClient.futureResponses().size)
+    }
+    // Verify that we resend the registration request.
+    newDuplicateRegistrationResponse()
+    TestUtils.retry(60000) {
+      context.time.sleep(100)
+      context.mockClient.wakeup()
+      manager.eventQueue.wakeup()
+      Assert.assertEquals(0, context.mockClient.futureResponses().size)
+    }
+    // Verify that we time out eventually.
+    context.time.sleep(300000)
+    TestUtils.retry(60000) {
+      context.mockClient.wakeup()
+      manager.eventQueue.wakeup()
+      Assert.assertEquals(BrokerState.SHUTTING_DOWN, manager.state())
+      Assert.assertTrue(manager.initialCatchUpFuture.isCompletedExceptionally())
+      Assert.assertEquals(-1L, manager.brokerEpoch())
     }
     manager.close()
   }

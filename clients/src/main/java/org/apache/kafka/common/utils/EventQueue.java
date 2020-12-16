@@ -166,6 +166,12 @@ public interface EventQueue extends AutoCloseable {
     void beginShutdown(String source, Event cleanupEvent, TimeUnit timeUnit, long timeSpan);
 
     /**
+     * This method is used during unit tests where MockTime is in use.
+     * It is used to alert the queue that the mock time has changed.
+     */
+    default void wakeup() { }
+
+    /**
      * Synchronously close the event queue and wait for any threads to be joined.
      */
     void close() throws InterruptedException;

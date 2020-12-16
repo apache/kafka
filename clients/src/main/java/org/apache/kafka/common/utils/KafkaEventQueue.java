@@ -401,6 +401,16 @@ public final class KafkaEventQueue implements EventQueue {
     }
 
     @Override
+    public void wakeup() {
+        lock.lock();
+        try {
+            eventHandler.cond.signal();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    @Override
     public void close() throws InterruptedException {
         beginShutdown("KafkaEventQueue#close");
         eventHandlerThread.join();

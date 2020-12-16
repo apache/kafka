@@ -329,6 +329,8 @@ class BrokerLifecycleManager(val config: KafkaConfig,
   }
 
   private def scheduleNextCommunication(intervalNs: Long): Unit = {
+    trace(s"Scheduling next communication at ${MILLISECONDS.convert(intervalNs, NANOSECONDS)} " +
+      "ms from now.")
     val deadlineNs = time.nanoseconds() + intervalNs
     eventQueue.scheduleDeferred("communication",
       new DeadlineFunction(deadlineNs),
