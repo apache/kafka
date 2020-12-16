@@ -300,7 +300,7 @@ public class RestServer {
         contextHandlers.add(new DefaultHandler());
         contextHandlers.add(requestLogHandler);
 
-        handlers.setHandlers(contextHandlers.toArray(new Handler[]{}));
+        handlers.setHandlers(contextHandlers.toArray(new Handler[0]));
         try {
             context.start();
         } catch (Exception e) {
