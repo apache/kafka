@@ -250,6 +250,7 @@ class BrokerToControllerRequestThread(val networkClient: KafkaClient,
   def generateRequests(): (Iterable[RequestAndCompletionHandler], Long) = synchronized {
     if (sendableRequests.isEmpty) {
       waitForControllerRetries = 0
+      trace(s"${threadName}: there are no sendable requests right now.")
       (Seq(), Long.MaxValue)
     } else {
       val nextController: Option[Node] = controllerNodeProvider.controllerNode()
@@ -257,19 +258,22 @@ class BrokerToControllerRequestThread(val networkClient: KafkaClient,
         curController = None
         val waitMs = exponentialBackoff.backoff(waitForControllerRetries)
         waitForControllerRetries = waitForControllerRetries + 1
+        debug(s"${threadName}: waiting ${waitMs} to discover the controller node.")
         (Seq(), waitMs)
       } else {
         waitForControllerRetries = 0
         if (curController.isEmpty || curController.get != nextController.get) {
           curController = nextController
           metadataUpdater.setNodes(Collections.singletonList(curController.get))
-          info(s"Controller node is now ${curController}")
+          info(s"Controller node is now ${curController.get}")
         }
         val requestsToSend = sendableRequests.map {
           request => RequestAndCompletionHandler(curController.get,
               request.request, handleResponse(curController.get, request))
         }
         sendableRequests.clear()
+        debug(s"${threadName}: sending request(s): " +
+          requestsToSend.map(r => r.request.apiKey()).mkString(", ") + ".")
         (requestsToSend, Long.MaxValue)
       }
     }

@@ -24,6 +24,8 @@ import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.clients.{ManualMetadataUpdater, Metadata, MockClient}
 import org.apache.kafka.common.{Node, Uuid}
 import org.apache.kafka.common.internals.ClusterResourceListeners
+import org.apache.kafka.common.message.BrokerRegistrationResponseData
+import org.apache.kafka.common.requests.BrokerRegistrationResponse
 import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.metadata.BrokerState
 import org.junit.rules.Timeout
@@ -31,7 +33,8 @@ import org.junit.{Assert, Rule, Test}
 
 class BrokerLifecycleManagerTest {
   @Rule
-  def globalTimeout = Timeout.millis(120000)
+  def globalTimeout = Timeout.millis(12000)
+  //def globalTimeout = Timeout.millis(120000)
 
   def configProperties = {
     val properties = new Properties()
@@ -48,10 +51,11 @@ class BrokerLifecycleManagerTest {
 
   class BrokerLifecycleManagerTestContext(properties: Properties) {
     val config = new KafkaConfig(properties)
-    val time = new MockTime(0, 0)
+    val time = new MockTime(1, 1)
     val highestMetadataOffset = new AtomicLong(0)
     val metadata = new Metadata(1000, 1000, new LogContext(), new ClusterResourceListeners())
     val mockClient = new MockClient(time, metadata)
+    mockClient.enableBlockingUntilWakeup(10)
     val metadataUpdater = new ManualMetadataUpdater()
     val controllerNodeProvider = new SimpleControllerNodeProvider()
     val channelManager = new BrokerToControllerChannelManager(mockClient,
@@ -78,5 +82,23 @@ class BrokerLifecycleManagerTest {
     }
     manager.close()
     Assert.assertEquals(BrokerState.SHUTTING_DOWN, manager.state())
+  }
+
+  @Test
+  def testSuccessfulRegistration(): Unit = {
+    val context = new BrokerLifecycleManagerTestContext(configProperties)
+    val manager = new BrokerLifecycleManager(context.config, context.time, None)
+    val controllerNode = new Node(3000, "localhost", 8021)
+    context.controllerNodeProvider.node.set(controllerNode)
+    context.mockClient.prepareResponseFrom(new BrokerRegistrationResponse(
+      new BrokerRegistrationResponseData().setBrokerEpoch(1000)), controllerNode)
+    context.mockClient.delayReady(controllerNode, 0)
+    manager.start(() => context.highestMetadataOffset.get(),
+      context.channelManager, context.clusterId)
+    TestUtils.retry(10000) {
+      context.mockClient.wakeup()
+      Assert.assertEquals(1000L, manager.brokerEpoch())
+    }
+    manager.close()
   }
 }

@@ -183,6 +183,8 @@ class BrokerLifecycleManager(val config: KafkaConfig,
         new DeadlineFunction(time.nanoseconds() + initialTimeoutNs),
         new RegistrationTimeoutEvent())
       sendBrokerRegistration()
+      info(s"Incarnation ${incarnationId} of broker ${brokerId} in cluster ${clusterId} " +
+        "is now STARTING.")
     }
   }
 
@@ -225,7 +227,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
           info(s"Successfully registered broker ${brokerId} with broker epoch ${_brokerEpoch}")
           scheduleNextCommunication(false)
         } else {
-          debug(s"Unable to register broker ${brokerId} because the controller returned " +
+          info(s"Unable to register broker ${brokerId} because the controller returned " +
             s"error ${errorCode}")
           handleRetryableRegistrationFailure()
         }
