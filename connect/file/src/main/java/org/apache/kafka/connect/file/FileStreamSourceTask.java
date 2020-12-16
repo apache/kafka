@@ -48,12 +48,21 @@ public class FileStreamSourceTask extends SourceTask {
     private String filename;
     private InputStream stream;
     private BufferedReader reader = null;
-    private char[] buffer = new char[1024];
+    private char[] buffer;
     private int offset = 0;
     private String topic = null;
     private int batchSize = FileStreamSourceConnector.DEFAULT_TASK_BATCH_SIZE;
 
     private Long streamOffset;
+
+    public FileStreamSourceTask() {
+        this(1024);
+    }
+
+    /* visible for testing */
+    FileStreamSourceTask(int initialBufferSize) {
+        buffer = new char[initialBufferSize];
+    }
 
     @Override
     public String version() {
@@ -233,5 +242,10 @@ public class FileStreamSourceTask extends SourceTask {
 
     private String logFilename() {
         return filename == null ? "stdin" : filename;
+    }
+
+    /* visible for testing */
+    int bufferSize() {
+        return buffer.length;
     }
 }
