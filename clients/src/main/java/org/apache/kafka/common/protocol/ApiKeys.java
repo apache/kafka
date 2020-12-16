@@ -100,8 +100,10 @@ public enum ApiKeys {
 
     private static final Map<Integer, ApiKeys> ID_TO_TYPE = new HashMap<>();
     static {
-        for (ApiKeys key : ApiKeys.values())
+        for (ApiKeys key : ApiKeys.values()) {
+            // The generator ensures every `ApiMessageType` has a unique id
             ID_TO_TYPE.put((int) key.id, key);
+        }
     }
 
     /** the permanent and immutable id of an API - this can't change ever */
