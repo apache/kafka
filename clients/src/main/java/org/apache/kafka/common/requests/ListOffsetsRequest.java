@@ -27,28 +27,28 @@ import java.util.Set;
 
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.message.ListOffsetRequestData;
-import org.apache.kafka.common.message.ListOffsetRequestData.ListOffsetPartition;
-import org.apache.kafka.common.message.ListOffsetRequestData.ListOffsetTopic;
-import org.apache.kafka.common.message.ListOffsetResponseData;
-import org.apache.kafka.common.message.ListOffsetResponseData.ListOffsetPartitionResponse;
-import org.apache.kafka.common.message.ListOffsetResponseData.ListOffsetTopicResponse;
+import org.apache.kafka.common.message.ListOffsetsRequestData;
+import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition;
+import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsTopic;
+import org.apache.kafka.common.message.ListOffsetsResponseData;
+import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse;
+import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
-public class ListOffsetRequest extends AbstractRequest {
+public class ListOffsetsRequest extends AbstractRequest {
     public static final long EARLIEST_TIMESTAMP = -2L;
     public static final long LATEST_TIMESTAMP = -1L;
 
     public static final int CONSUMER_REPLICA_ID = -1;
     public static final int DEBUGGING_REPLICA_ID = -2;
 
-    private final ListOffsetRequestData data;
+    private final ListOffsetsRequestData data;
     private final Set<TopicPartition> duplicatePartitions;
 
-    public static class Builder extends AbstractRequest.Builder<ListOffsetRequest> {
-        private final ListOffsetRequestData data;
+    public static class Builder extends AbstractRequest.Builder<ListOffsetsRequest> {
+        private final ListOffsetsRequestData data;
 
         public static Builder forReplica(short allowedVersion, int replicaId) {
             return new Builder((short) 0, allowedVersion, replicaId, IsolationLevel.READ_UNCOMMITTED);
@@ -68,19 +68,19 @@ public class ListOffsetRequest extends AbstractRequest {
                         int replicaId,
                         IsolationLevel isolationLevel) {
             super(ApiKeys.LIST_OFFSETS, oldestAllowedVersion, latestAllowedVersion);
-            data = new ListOffsetRequestData()
+            data = new ListOffsetsRequestData()
                       .setIsolationLevel(isolationLevel.id())
                       .setReplicaId(replicaId);
         }
 
-        public Builder setTargetTimes(List<ListOffsetTopic> topics) {
+        public Builder setTargetTimes(List<ListOffsetsTopic> topics) {
             data.setTopics(topics);
             return this;
         }
 
         @Override
-        public ListOffsetRequest build(short version) {
-            return new ListOffsetRequest(data, version);
+        public ListOffsetsRequest build(short version) {
+            return new ListOffsetsRequest(data, version);
         }
 
         @Override
@@ -92,13 +92,13 @@ public class ListOffsetRequest extends AbstractRequest {
     /**
      * Private constructor with a specified version.
      */
-    private ListOffsetRequest(ListOffsetRequestData data, short version) {
+    private ListOffsetsRequest(ListOffsetsRequestData data, short version) {
         super(ApiKeys.LIST_OFFSETS, version);
         this.data = data;
         duplicatePartitions = new HashSet<>();
         Set<TopicPartition> partitions = new HashSet<>();
-        for (ListOffsetTopic topic : data.topics()) {
-            for (ListOffsetPartition partition : topic.partitions()) {
+        for (ListOffsetsTopic topic : data.topics()) {
+            for (ListOffsetsPartition partition : topic.partitions()) {
                 TopicPartition tp = new TopicPartition(topic.name(), partition.partitionIndex());
                 if (!partitions.add(tp)) {
                     duplicatePartitions.add(tp);
@@ -112,33 +112,33 @@ public class ListOffsetRequest extends AbstractRequest {
         short versionId = version();
         short errorCode = Errors.forException(e).code();
 
-        List<ListOffsetTopicResponse> responses = new ArrayList<>();
-        for (ListOffsetTopic topic : data.topics()) {
-            ListOffsetTopicResponse topicResponse = new ListOffsetTopicResponse().setName(topic.name());
-            List<ListOffsetPartitionResponse> partitions = new ArrayList<>();
-            for (ListOffsetPartition partition : topic.partitions()) {
-                ListOffsetPartitionResponse partitionResponse = new ListOffsetPartitionResponse()
+        List<ListOffsetsTopicResponse> responses = new ArrayList<>();
+        for (ListOffsetsTopic topic : data.topics()) {
+            ListOffsetsTopicResponse topicResponse = new ListOffsetsTopicResponse().setName(topic.name());
+            List<ListOffsetsPartitionResponse> partitions = new ArrayList<>();
+            for (ListOffsetsPartition partition : topic.partitions()) {
+                ListOffsetsPartitionResponse partitionResponse = new ListOffsetsPartitionResponse()
                         .setErrorCode(errorCode)
                         .setPartitionIndex(partition.partitionIndex());
                 if (versionId == 0) {
                     partitionResponse.setOldStyleOffsets(Collections.emptyList());
                 } else {
-                    partitionResponse.setOffset(ListOffsetResponse.UNKNOWN_OFFSET)
-                                     .setTimestamp(ListOffsetResponse.UNKNOWN_TIMESTAMP);
+                    partitionResponse.setOffset(ListOffsetsResponse.UNKNOWN_OFFSET)
+                                     .setTimestamp(ListOffsetsResponse.UNKNOWN_TIMESTAMP);
                 }
                 partitions.add(partitionResponse);
             }
             topicResponse.setPartitions(partitions);
             responses.add(topicResponse);
         }
-        ListOffsetResponseData responseData = new ListOffsetResponseData()
+        ListOffsetsResponseData responseData = new ListOffsetsResponseData()
                 .setThrottleTimeMs(throttleTimeMs)
                 .setTopics(responses);
-        return new ListOffsetResponse(responseData);
+        return new ListOffsetsResponse(responseData);
     }
 
     @Override
-    public ListOffsetRequestData data() {
+    public ListOffsetsRequestData data() {
         return data;
     }
 
@@ -150,7 +150,7 @@ public class ListOffsetRequest extends AbstractRequest {
         return IsolationLevel.forId(data.isolationLevel());
     }
 
-    public List<ListOffsetTopic> topics() {
+    public List<ListOffsetsTopic> topics() {
         return data.topics();
     }
 
@@ -158,24 +158,24 @@ public class ListOffsetRequest extends AbstractRequest {
         return duplicatePartitions;
     }
 
-    public static ListOffsetRequest parse(ByteBuffer buffer, short version) {
-        return new ListOffsetRequest(new ListOffsetRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static ListOffsetsRequest parse(ByteBuffer buffer, short version) {
+        return new ListOffsetsRequest(new ListOffsetsRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
-    public static List<ListOffsetTopic> toListOffsetTopics(Map<TopicPartition, ListOffsetPartition> timestampsToSearch) {
-        Map<String, ListOffsetTopic> topics = new HashMap<>();
-        for (Map.Entry<TopicPartition, ListOffsetPartition> entry : timestampsToSearch.entrySet()) {
+    public static List<ListOffsetsTopic> toListOffsetsTopics(Map<TopicPartition, ListOffsetsPartition> timestampsToSearch) {
+        Map<String, ListOffsetsTopic> topics = new HashMap<>();
+        for (Map.Entry<TopicPartition, ListOffsetsPartition> entry : timestampsToSearch.entrySet()) {
             TopicPartition tp = entry.getKey();
-            ListOffsetTopic topic = topics.computeIfAbsent(tp.topic(), k -> new ListOffsetTopic().setName(tp.topic()));
+            ListOffsetsTopic topic = topics.computeIfAbsent(tp.topic(), k -> new ListOffsetsTopic().setName(tp.topic()));
             topic.partitions().add(entry.getValue());
         }
         return new ArrayList<>(topics.values());
     }
 
-    public static ListOffsetTopic singletonRequestData(String topic, int partitionIndex, long timestamp, int maxNumOffsets) {
-        return new ListOffsetTopic()
+    public static ListOffsetsTopic singletonRequestData(String topic, int partitionIndex, long timestamp, int maxNumOffsets) {
+        return new ListOffsetsTopic()
                 .setName(topic)
-                .setPartitions(Collections.singletonList(new ListOffsetPartition()
+                .setPartitions(Collections.singletonList(new ListOffsetsPartition()
                         .setPartitionIndex(partitionIndex)
                         .setTimestamp(timestamp)
                         .setMaxNumOffsets(maxNumOffsets)));

@@ -16,135 +16,16 @@
  */
 package org.apache.kafka.common.protocol;
 
-import org.apache.kafka.common.message.AddOffsetsToTxnRequestData;
-import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
-import org.apache.kafka.common.message.AddPartitionsToTxnRequestData;
-import org.apache.kafka.common.message.AddPartitionsToTxnResponseData;
-import org.apache.kafka.common.message.AlterClientQuotasRequestData;
-import org.apache.kafka.common.message.AlterClientQuotasResponseData;
-import org.apache.kafka.common.message.AlterConfigsRequestData;
-import org.apache.kafka.common.message.AlterConfigsResponseData;
-import org.apache.kafka.common.message.AlterIsrRequestData;
-import org.apache.kafka.common.message.AlterIsrResponseData;
-import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
-import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
-import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData;
-import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData;
-import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData;
-import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.ApiMessageType;
-import org.apache.kafka.common.message.ApiVersionsRequestData;
-import org.apache.kafka.common.message.ApiVersionsResponseData;
-import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
-import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
-import org.apache.kafka.common.message.ControlledShutdownRequestData;
-import org.apache.kafka.common.message.ControlledShutdownResponseData;
-import org.apache.kafka.common.message.CreateAclsRequestData;
-import org.apache.kafka.common.message.CreateAclsResponseData;
-import org.apache.kafka.common.message.CreateDelegationTokenRequestData;
-import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
-import org.apache.kafka.common.message.CreatePartitionsRequestData;
-import org.apache.kafka.common.message.CreatePartitionsResponseData;
-import org.apache.kafka.common.message.CreateTopicsRequestData;
-import org.apache.kafka.common.message.CreateTopicsResponseData;
-import org.apache.kafka.common.message.DeleteAclsRequestData;
-import org.apache.kafka.common.message.DeleteAclsResponseData;
-import org.apache.kafka.common.message.DeleteGroupsRequestData;
-import org.apache.kafka.common.message.DeleteGroupsResponseData;
-import org.apache.kafka.common.message.DeleteRecordsRequestData;
-import org.apache.kafka.common.message.DeleteRecordsResponseData;
-import org.apache.kafka.common.message.DeleteTopicsRequestData;
-import org.apache.kafka.common.message.DeleteTopicsResponseData;
-import org.apache.kafka.common.message.DescribeAclsRequestData;
-import org.apache.kafka.common.message.DescribeAclsResponseData;
-import org.apache.kafka.common.message.DescribeClientQuotasRequestData;
-import org.apache.kafka.common.message.DescribeClientQuotasResponseData;
-import org.apache.kafka.common.message.DescribeConfigsRequestData;
-import org.apache.kafka.common.message.DescribeConfigsResponseData;
-import org.apache.kafka.common.message.DescribeDelegationTokenRequestData;
-import org.apache.kafka.common.message.DescribeDelegationTokenResponseData;
-import org.apache.kafka.common.message.DescribeGroupsRequestData;
-import org.apache.kafka.common.message.DescribeGroupsResponseData;
-import org.apache.kafka.common.message.DescribeLogDirsRequestData;
-import org.apache.kafka.common.message.DescribeLogDirsResponseData;
-import org.apache.kafka.common.message.DescribeQuorumRequestData;
-import org.apache.kafka.common.message.DescribeQuorumResponseData;
-import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData;
-import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
-import org.apache.kafka.common.message.ElectLeadersRequestData;
-import org.apache.kafka.common.message.ElectLeadersResponseData;
-import org.apache.kafka.common.message.EndQuorumEpochRequestData;
-import org.apache.kafka.common.message.EndQuorumEpochResponseData;
-import org.apache.kafka.common.message.EndTxnRequestData;
-import org.apache.kafka.common.message.EndTxnResponseData;
-import org.apache.kafka.common.message.EnvelopeRequestData;
-import org.apache.kafka.common.message.EnvelopeResponseData;
-import org.apache.kafka.common.message.ExpireDelegationTokenRequestData;
-import org.apache.kafka.common.message.ExpireDelegationTokenResponseData;
-import org.apache.kafka.common.message.FetchRequestData;
-import org.apache.kafka.common.message.FetchResponseData;
-import org.apache.kafka.common.message.FindCoordinatorRequestData;
-import org.apache.kafka.common.message.FindCoordinatorResponseData;
-import org.apache.kafka.common.message.HeartbeatRequestData;
-import org.apache.kafka.common.message.HeartbeatResponseData;
-import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData;
-import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
-import org.apache.kafka.common.message.InitProducerIdRequestData;
-import org.apache.kafka.common.message.InitProducerIdResponseData;
-import org.apache.kafka.common.message.JoinGroupRequestData;
-import org.apache.kafka.common.message.JoinGroupResponseData;
-import org.apache.kafka.common.message.LeaderAndIsrRequestData;
-import org.apache.kafka.common.message.LeaderAndIsrResponseData;
-import org.apache.kafka.common.message.LeaveGroupRequestData;
-import org.apache.kafka.common.message.LeaveGroupResponseData;
-import org.apache.kafka.common.message.ListGroupsRequestData;
-import org.apache.kafka.common.message.ListGroupsResponseData;
-import org.apache.kafka.common.message.ListOffsetRequestData;
-import org.apache.kafka.common.message.ListOffsetResponseData;
-import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
-import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
-import org.apache.kafka.common.message.MetadataRequestData;
-import org.apache.kafka.common.message.MetadataResponseData;
-import org.apache.kafka.common.message.OffsetCommitRequestData;
-import org.apache.kafka.common.message.OffsetCommitResponseData;
-import org.apache.kafka.common.message.OffsetDeleteRequestData;
-import org.apache.kafka.common.message.OffsetDeleteResponseData;
-import org.apache.kafka.common.message.OffsetFetchRequestData;
-import org.apache.kafka.common.message.OffsetFetchResponseData;
-import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData;
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData;
-import org.apache.kafka.common.message.ProduceRequestData;
-import org.apache.kafka.common.message.ProduceResponseData;
-import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
-import org.apache.kafka.common.message.RenewDelegationTokenResponseData;
-import org.apache.kafka.common.message.SaslAuthenticateRequestData;
-import org.apache.kafka.common.message.SaslAuthenticateResponseData;
-import org.apache.kafka.common.message.SaslHandshakeRequestData;
-import org.apache.kafka.common.message.SaslHandshakeResponseData;
-import org.apache.kafka.common.message.StopReplicaRequestData;
-import org.apache.kafka.common.message.StopReplicaResponseData;
-import org.apache.kafka.common.message.SyncGroupRequestData;
-import org.apache.kafka.common.message.SyncGroupResponseData;
-import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
-import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
-import org.apache.kafka.common.message.UpdateFeaturesRequestData;
-import org.apache.kafka.common.message.UpdateFeaturesResponseData;
-import org.apache.kafka.common.message.UpdateMetadataRequestData;
-import org.apache.kafka.common.message.UpdateMetadataResponseData;
-import org.apache.kafka.common.message.VoteRequestData;
-import org.apache.kafka.common.message.VoteResponseData;
-import org.apache.kafka.common.message.WriteTxnMarkersRequestData;
-import org.apache.kafka.common.message.WriteTxnMarkersResponseData;
 import org.apache.kafka.common.protocol.types.Schema;
-import org.apache.kafka.common.protocol.types.SchemaException;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
 import org.apache.kafka.common.record.RecordBatch;
 
-import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.protocol.types.Type.BYTES;
@@ -157,124 +38,74 @@ import static org.apache.kafka.common.protocol.types.Type.RECORDS;
  * Identifiers for all the Kafka APIs
  */
 public enum ApiKeys {
-    PRODUCE(0, "Produce", ProduceRequestData.SCHEMAS, ProduceResponseData.SCHEMAS),
-    FETCH(1, "Fetch", FetchRequestData.SCHEMAS, FetchResponseData.SCHEMAS),
-    LIST_OFFSETS(2, "ListOffsets", ListOffsetRequestData.SCHEMAS, ListOffsetResponseData.SCHEMAS),
-    METADATA(3, "Metadata", MetadataRequestData.SCHEMAS, MetadataResponseData.SCHEMAS),
-    LEADER_AND_ISR(4, "LeaderAndIsr", true, LeaderAndIsrRequestData.SCHEMAS, LeaderAndIsrResponseData.SCHEMAS),
-    STOP_REPLICA(5, "StopReplica", true, StopReplicaRequestData.SCHEMAS, StopReplicaResponseData.SCHEMAS),
-    UPDATE_METADATA(6, "UpdateMetadata", true, UpdateMetadataRequestData.SCHEMAS, UpdateMetadataResponseData.SCHEMAS),
-    CONTROLLED_SHUTDOWN(7, "ControlledShutdown", true, ControlledShutdownRequestData.SCHEMAS,
-            ControlledShutdownResponseData.SCHEMAS),
-    OFFSET_COMMIT(8, "OffsetCommit", OffsetCommitRequestData.SCHEMAS, OffsetCommitResponseData.SCHEMAS),
-    OFFSET_FETCH(9, "OffsetFetch", OffsetFetchRequestData.SCHEMAS, OffsetFetchResponseData.SCHEMAS),
-    FIND_COORDINATOR(10, "FindCoordinator", FindCoordinatorRequestData.SCHEMAS,
-            FindCoordinatorResponseData.SCHEMAS),
-    JOIN_GROUP(11, "JoinGroup", JoinGroupRequestData.SCHEMAS, JoinGroupResponseData.SCHEMAS),
-    HEARTBEAT(12, "Heartbeat", HeartbeatRequestData.SCHEMAS, HeartbeatResponseData.SCHEMAS),
-    LEAVE_GROUP(13, "LeaveGroup", LeaveGroupRequestData.SCHEMAS, LeaveGroupResponseData.SCHEMAS),
-    SYNC_GROUP(14, "SyncGroup", SyncGroupRequestData.SCHEMAS, SyncGroupResponseData.SCHEMAS),
-    DESCRIBE_GROUPS(15, "DescribeGroups", DescribeGroupsRequestData.SCHEMAS,
-            DescribeGroupsResponseData.SCHEMAS),
-    LIST_GROUPS(16, "ListGroups", ListGroupsRequestData.SCHEMAS, ListGroupsResponseData.SCHEMAS),
-    SASL_HANDSHAKE(17, "SaslHandshake", SaslHandshakeRequestData.SCHEMAS, SaslHandshakeResponseData.SCHEMAS),
-    API_VERSIONS(18, "ApiVersions", ApiVersionsRequestData.SCHEMAS, ApiVersionsResponseData.SCHEMAS) {
-        @Override
-        public Struct parseResponse(short version, ByteBuffer buffer) {
-            // Fallback to version 0 for ApiVersions response. If a client sends an ApiVersionsRequest
-            // using a version higher than that supported by the broker, a version 0 response is sent
-            // to the client indicating UNSUPPORTED_VERSION.
-            return parseResponse(version, buffer, (short) 0);
-        }
-    },
-    CREATE_TOPICS(19, "CreateTopics", CreateTopicsRequestData.SCHEMAS, CreateTopicsResponseData.SCHEMAS, true),
-    DELETE_TOPICS(20, "DeleteTopics", DeleteTopicsRequestData.SCHEMAS, DeleteTopicsResponseData.SCHEMAS, true),
-    DELETE_RECORDS(21, "DeleteRecords", DeleteRecordsRequestData.SCHEMAS, DeleteRecordsResponseData.SCHEMAS),
-    INIT_PRODUCER_ID(22, "InitProducerId", InitProducerIdRequestData.SCHEMAS, InitProducerIdResponseData.SCHEMAS),
-    OFFSET_FOR_LEADER_EPOCH(23, "OffsetForLeaderEpoch", false, OffsetForLeaderEpochRequestData.SCHEMAS,
-        OffsetForLeaderEpochResponseData.SCHEMAS),
-    ADD_PARTITIONS_TO_TXN(24, "AddPartitionsToTxn", false, RecordBatch.MAGIC_VALUE_V2,
-            AddPartitionsToTxnRequestData.SCHEMAS, AddPartitionsToTxnResponseData.SCHEMAS),
-    ADD_OFFSETS_TO_TXN(25, "AddOffsetsToTxn", false, RecordBatch.MAGIC_VALUE_V2, AddOffsetsToTxnRequestData.SCHEMAS,
-            AddOffsetsToTxnResponseData.SCHEMAS),
-    END_TXN(26, "EndTxn", false, RecordBatch.MAGIC_VALUE_V2, EndTxnRequestData.SCHEMAS, EndTxnResponseData.SCHEMAS),
-    WRITE_TXN_MARKERS(27, "WriteTxnMarkers", true, RecordBatch.MAGIC_VALUE_V2, WriteTxnMarkersRequestData.SCHEMAS,
-            WriteTxnMarkersResponseData.SCHEMAS),
-    TXN_OFFSET_COMMIT(28, "TxnOffsetCommit", false, RecordBatch.MAGIC_VALUE_V2, TxnOffsetCommitRequestData.SCHEMAS,
-            TxnOffsetCommitResponseData.SCHEMAS),
-    DESCRIBE_ACLS(29, "DescribeAcls", DescribeAclsRequestData.SCHEMAS, DescribeAclsResponseData.SCHEMAS),
-    CREATE_ACLS(30, "CreateAcls", CreateAclsRequestData.SCHEMAS, CreateAclsResponseData.SCHEMAS, true),
-    DELETE_ACLS(31, "DeleteAcls", DeleteAclsRequestData.SCHEMAS, DeleteAclsResponseData.SCHEMAS, true),
-    DESCRIBE_CONFIGS(32, "DescribeConfigs", DescribeConfigsRequestData.SCHEMAS,
-             DescribeConfigsResponseData.SCHEMAS),
-    ALTER_CONFIGS(33, "AlterConfigs", AlterConfigsRequestData.SCHEMAS,
-            AlterConfigsResponseData.SCHEMAS, true),
-    ALTER_REPLICA_LOG_DIRS(34, "AlterReplicaLogDirs", AlterReplicaLogDirsRequestData.SCHEMAS,
-            AlterReplicaLogDirsResponseData.SCHEMAS),
-    DESCRIBE_LOG_DIRS(35, "DescribeLogDirs", DescribeLogDirsRequestData.SCHEMAS,
-            DescribeLogDirsResponseData.SCHEMAS),
-    SASL_AUTHENTICATE(36, "SaslAuthenticate", SaslAuthenticateRequestData.SCHEMAS,
-            SaslAuthenticateResponseData.SCHEMAS),
-    CREATE_PARTITIONS(37, "CreatePartitions", CreatePartitionsRequestData.SCHEMAS,
-            CreatePartitionsResponseData.SCHEMAS, true),
-    CREATE_DELEGATION_TOKEN(38, "CreateDelegationToken", CreateDelegationTokenRequestData.SCHEMAS,
-            CreateDelegationTokenResponseData.SCHEMAS, true),
-    RENEW_DELEGATION_TOKEN(39, "RenewDelegationToken", RenewDelegationTokenRequestData.SCHEMAS,
-            RenewDelegationTokenResponseData.SCHEMAS, true),
-    EXPIRE_DELEGATION_TOKEN(40, "ExpireDelegationToken", ExpireDelegationTokenRequestData.SCHEMAS,
-            ExpireDelegationTokenResponseData.SCHEMAS, true),
-    DESCRIBE_DELEGATION_TOKEN(41, "DescribeDelegationToken", DescribeDelegationTokenRequestData.SCHEMAS,
-            DescribeDelegationTokenResponseData.SCHEMAS),
-    DELETE_GROUPS(42, "DeleteGroups", DeleteGroupsRequestData.SCHEMAS, DeleteGroupsResponseData.SCHEMAS),
-    ELECT_LEADERS(43, "ElectLeaders", ElectLeadersRequestData.SCHEMAS,
-            ElectLeadersResponseData.SCHEMAS),
-    INCREMENTAL_ALTER_CONFIGS(44, "IncrementalAlterConfigs", IncrementalAlterConfigsRequestData.SCHEMAS,
-            IncrementalAlterConfigsResponseData.SCHEMAS, true),
-    ALTER_PARTITION_REASSIGNMENTS(45, "AlterPartitionReassignments", AlterPartitionReassignmentsRequestData.SCHEMAS,
-            AlterPartitionReassignmentsResponseData.SCHEMAS, true),
-    LIST_PARTITION_REASSIGNMENTS(46, "ListPartitionReassignments", ListPartitionReassignmentsRequestData.SCHEMAS,
-            ListPartitionReassignmentsResponseData.SCHEMAS),
-    OFFSET_DELETE(47, "OffsetDelete", OffsetDeleteRequestData.SCHEMAS, OffsetDeleteResponseData.SCHEMAS),
-    DESCRIBE_CLIENT_QUOTAS(48, "DescribeClientQuotas", DescribeClientQuotasRequestData.SCHEMAS,
-            DescribeClientQuotasResponseData.SCHEMAS),
-    ALTER_CLIENT_QUOTAS(49, "AlterClientQuotas", AlterClientQuotasRequestData.SCHEMAS,
-            AlterClientQuotasResponseData.SCHEMAS, true),
-    DESCRIBE_USER_SCRAM_CREDENTIALS(50, "DescribeUserScramCredentials", DescribeUserScramCredentialsRequestData.SCHEMAS,
-            DescribeUserScramCredentialsResponseData.SCHEMAS),
-    ALTER_USER_SCRAM_CREDENTIALS(51, "AlterUserScramCredentials", AlterUserScramCredentialsRequestData.SCHEMAS,
-            AlterUserScramCredentialsResponseData.SCHEMAS, true),
-    VOTE(52, "Vote", true, false,
-        VoteRequestData.SCHEMAS, VoteResponseData.SCHEMAS),
-    BEGIN_QUORUM_EPOCH(53, "BeginQuorumEpoch", true, false,
-        BeginQuorumEpochRequestData.SCHEMAS, BeginQuorumEpochResponseData.SCHEMAS),
-    END_QUORUM_EPOCH(54, "EndQuorumEpoch", true, false,
-        EndQuorumEpochRequestData.SCHEMAS, EndQuorumEpochResponseData.SCHEMAS),
-    DESCRIBE_QUORUM(55, "DescribeQuorum", true, false,
-        DescribeQuorumRequestData.SCHEMAS, DescribeQuorumResponseData.SCHEMAS),
-    ALTER_ISR(56, "AlterIsr", true, AlterIsrRequestData.SCHEMAS, AlterIsrResponseData.SCHEMAS),
-    UPDATE_FEATURES(57, "UpdateFeatures",
-        UpdateFeaturesRequestData.SCHEMAS, UpdateFeaturesResponseData.SCHEMAS, true),
-    ENVELOPE(58, "Envelope", true, false, EnvelopeRequestData.SCHEMAS, EnvelopeResponseData.SCHEMAS);
+    PRODUCE(ApiMessageType.PRODUCE),
+    FETCH(ApiMessageType.FETCH),
+    LIST_OFFSETS(ApiMessageType.LIST_OFFSETS),
+    METADATA(ApiMessageType.METADATA),
+    LEADER_AND_ISR(ApiMessageType.LEADER_AND_ISR, true),
+    STOP_REPLICA(ApiMessageType.STOP_REPLICA, true),
+    UPDATE_METADATA(ApiMessageType.UPDATE_METADATA, true),
+    CONTROLLED_SHUTDOWN(ApiMessageType.CONTROLLED_SHUTDOWN, true),
+    OFFSET_COMMIT(ApiMessageType.OFFSET_COMMIT),
+    OFFSET_FETCH(ApiMessageType.OFFSET_FETCH),
+    FIND_COORDINATOR(ApiMessageType.FIND_COORDINATOR),
+    JOIN_GROUP(ApiMessageType.JOIN_GROUP),
+    HEARTBEAT(ApiMessageType.HEARTBEAT),
+    LEAVE_GROUP(ApiMessageType.LEAVE_GROUP),
+    SYNC_GROUP(ApiMessageType.SYNC_GROUP),
+    DESCRIBE_GROUPS(ApiMessageType.DESCRIBE_GROUPS),
+    LIST_GROUPS(ApiMessageType.LIST_GROUPS),
+    SASL_HANDSHAKE(ApiMessageType.SASL_HANDSHAKE),
+    API_VERSIONS(ApiMessageType.API_VERSIONS),
+    CREATE_TOPICS(ApiMessageType.CREATE_TOPICS, false, true),
+    DELETE_TOPICS(ApiMessageType.DELETE_TOPICS, false, true),
+    DELETE_RECORDS(ApiMessageType.DELETE_RECORDS),
+    INIT_PRODUCER_ID(ApiMessageType.INIT_PRODUCER_ID),
+    OFFSET_FOR_LEADER_EPOCH(ApiMessageType.OFFSET_FOR_LEADER_EPOCH),
+    ADD_PARTITIONS_TO_TXN(ApiMessageType.ADD_PARTITIONS_TO_TXN, false, RecordBatch.MAGIC_VALUE_V2, false),
+    ADD_OFFSETS_TO_TXN(ApiMessageType.ADD_OFFSETS_TO_TXN, false, RecordBatch.MAGIC_VALUE_V2, false),
+    END_TXN(ApiMessageType.END_TXN, false, RecordBatch.MAGIC_VALUE_V2, false),
+    WRITE_TXN_MARKERS(ApiMessageType.WRITE_TXN_MARKERS, true, RecordBatch.MAGIC_VALUE_V2, false),
+    TXN_OFFSET_COMMIT(ApiMessageType.TXN_OFFSET_COMMIT, false, RecordBatch.MAGIC_VALUE_V2, false),
+    DESCRIBE_ACLS(ApiMessageType.DESCRIBE_ACLS),
+    CREATE_ACLS(ApiMessageType.CREATE_ACLS, false, true),
+    DELETE_ACLS(ApiMessageType.DELETE_ACLS, false, true),
+    DESCRIBE_CONFIGS(ApiMessageType.DESCRIBE_CONFIGS),
+    ALTER_CONFIGS(ApiMessageType.ALTER_CONFIGS, false, true),
+    ALTER_REPLICA_LOG_DIRS(ApiMessageType.ALTER_REPLICA_LOG_DIRS),
+    DESCRIBE_LOG_DIRS(ApiMessageType.DESCRIBE_LOG_DIRS),
+    SASL_AUTHENTICATE(ApiMessageType.SASL_AUTHENTICATE),
+    CREATE_PARTITIONS(ApiMessageType.CREATE_PARTITIONS, false, true),
+    CREATE_DELEGATION_TOKEN(ApiMessageType.CREATE_DELEGATION_TOKEN, false, true),
+    RENEW_DELEGATION_TOKEN(ApiMessageType.RENEW_DELEGATION_TOKEN, false, true),
+    EXPIRE_DELEGATION_TOKEN(ApiMessageType.EXPIRE_DELEGATION_TOKEN, false, true),
+    DESCRIBE_DELEGATION_TOKEN(ApiMessageType.DESCRIBE_DELEGATION_TOKEN),
+    DELETE_GROUPS(ApiMessageType.DELETE_GROUPS),
+    ELECT_LEADERS(ApiMessageType.ELECT_LEADERS),
+    INCREMENTAL_ALTER_CONFIGS(ApiMessageType.INCREMENTAL_ALTER_CONFIGS, false, true),
+    ALTER_PARTITION_REASSIGNMENTS(ApiMessageType.ALTER_PARTITION_REASSIGNMENTS, false, true),
+    LIST_PARTITION_REASSIGNMENTS(ApiMessageType.LIST_PARTITION_REASSIGNMENTS),
+    OFFSET_DELETE(ApiMessageType.OFFSET_DELETE),
+    DESCRIBE_CLIENT_QUOTAS(ApiMessageType.DESCRIBE_CLIENT_QUOTAS),
+    ALTER_CLIENT_QUOTAS(ApiMessageType.ALTER_CLIENT_QUOTAS, false, true),
+    DESCRIBE_USER_SCRAM_CREDENTIALS(ApiMessageType.DESCRIBE_USER_SCRAM_CREDENTIALS),
+    ALTER_USER_SCRAM_CREDENTIALS(ApiMessageType.ALTER_USER_SCRAM_CREDENTIALS, false, true),
+    VOTE(ApiMessageType.VOTE, true, RecordBatch.MAGIC_VALUE_V0, false, false),
+    BEGIN_QUORUM_EPOCH(ApiMessageType.BEGIN_QUORUM_EPOCH, true, RecordBatch.MAGIC_VALUE_V0, false, false),
+    END_QUORUM_EPOCH(ApiMessageType.END_QUORUM_EPOCH, true, RecordBatch.MAGIC_VALUE_V0, false, false),
+    DESCRIBE_QUORUM(ApiMessageType.DESCRIBE_QUORUM, true, RecordBatch.MAGIC_VALUE_V0, false, false),
+    ALTER_ISR(ApiMessageType.ALTER_ISR, true),
+    UPDATE_FEATURES(ApiMessageType.UPDATE_FEATURES, false, true),
+    ENVELOPE(ApiMessageType.ENVELOPE, true, RecordBatch.MAGIC_VALUE_V0, false, false);
 
-    private static final ApiKeys[] ID_TO_TYPE;
-    private static final int MIN_API_KEY = 0;
-    public static final int MAX_API_KEY;
+    // The generator ensures every `ApiMessageType` has a unique id
+    private static final Map<Integer, ApiKeys> ID_TO_TYPE = Arrays.stream(ApiKeys.values())
+        .collect(Collectors.toMap(key -> (int) key.id, Function.identity()));
 
-    static {
-        int maxKey = -1;
-        for (ApiKeys key : ApiKeys.values())
-            maxKey = Math.max(maxKey, key.id);
-        ApiKeys[] idToType = new ApiKeys[maxKey + 1];
-        for (ApiKeys key : ApiKeys.values())
-            idToType[key.id] = key;
-        ID_TO_TYPE = idToType;
-        MAX_API_KEY = maxKey;
-    }
-
-    /** the permanent and immutable id of an API--this can't change ever */
+    /** the permanent and immutable id of an API - this can't change ever */
     public final short id;
 
-    /** an english description of the api--this is for debugging and can change */
+    /** An english description of the api - used for debugging and metric names, it can potentially be changed via a KIP */
     public final String name;
 
     /** indicates if this is a ClusterAction request used only by brokers */
@@ -289,63 +120,41 @@ public enum ApiKeys {
     /** indicates whether the API is enabled for forwarding **/
     public final boolean forwardable;
 
-    public final Schema[] requestSchemas;
-    public final Schema[] responseSchemas;
     public final boolean requiresDelayedAllocation;
 
-    ApiKeys(int id, String name, Schema[] requestSchemas, Schema[] responseSchemas) {
-        this(id, name, false, requestSchemas, responseSchemas);
+    public final ApiMessageType messageType;
+
+    ApiKeys(ApiMessageType messageType) {
+        this(messageType, false);
     }
 
-    ApiKeys(int id, String name, boolean clusterAction, Schema[] requestSchemas, Schema[] responseSchemas) {
-        this(id, name, clusterAction, RecordBatch.MAGIC_VALUE_V0, requestSchemas, responseSchemas);
+    ApiKeys(ApiMessageType messageType, boolean clusterAction) {
+        this(messageType, clusterAction, RecordBatch.MAGIC_VALUE_V0, false);
     }
 
-    ApiKeys(int id, String name, Schema[] requestSchemas, Schema[] responseSchemas, boolean forwardable) {
-        this(id, name, false, RecordBatch.MAGIC_VALUE_V0, true, requestSchemas, responseSchemas, forwardable);
+    ApiKeys(ApiMessageType messageType, boolean clusterAction, boolean forwardable) {
+        this(messageType, clusterAction, RecordBatch.MAGIC_VALUE_V0, forwardable);
     }
 
-    ApiKeys(int id, String name, boolean clusterAction, boolean isEnabled, Schema[] requestSchemas, Schema[] responseSchemas) {
-        this(id, name, clusterAction, RecordBatch.MAGIC_VALUE_V0, isEnabled, requestSchemas, responseSchemas, false);
-    }
-
-    ApiKeys(int id, String name, boolean clusterAction, byte minRequiredInterBrokerMagic,
-            Schema[] requestSchemas, Schema[] responseSchemas) {
-        this(id, name, clusterAction, minRequiredInterBrokerMagic, true, requestSchemas, responseSchemas, false);
+    ApiKeys(ApiMessageType messageType, boolean clusterAction, byte minRequiredInterBrokerMagic, boolean forwardable) {
+        this(messageType, clusterAction, minRequiredInterBrokerMagic, forwardable, true);
     }
 
     ApiKeys(
-        int id,
-        String name,
+        ApiMessageType messageType,
         boolean clusterAction,
         byte minRequiredInterBrokerMagic,
-        boolean isEnabled,
-        Schema[] requestSchemas,
-        Schema[] responseSchemas,
-        boolean forwardable
+        boolean forwardable,
+        boolean isEnabled
     ) {
-        if (id < 0)
-            throw new IllegalArgumentException("id must not be negative, id: " + id);
-        this.id = (short) id;
-        this.name = name;
+        this.messageType = messageType;
+        this.id = messageType.apiKey();
+        this.name = messageType.name;
         this.clusterAction = clusterAction;
         this.minRequiredInterBrokerMagic = minRequiredInterBrokerMagic;
         this.isEnabled = isEnabled;
 
-        if (requestSchemas.length != responseSchemas.length)
-            throw new IllegalStateException(requestSchemas.length + " request versions for api " + name
-                    + " but " + responseSchemas.length + " response versions.");
-
-        for (int i = 0; i < requestSchemas.length; ++i) {
-            if (requestSchemas[i] == null)
-                throw new IllegalStateException("Request schema for api " + name + " for version " + i + " is null");
-            if (responseSchemas[i] == null)
-                throw new IllegalStateException("Response schema for api " + name + " for version " + i + " is null");
-        }
-
-        this.requiresDelayedAllocation = forwardable || shouldRetainsBufferReference(requestSchemas);
-        this.requestSchemas = requestSchemas;
-        this.responseSchemas = responseSchemas;
+        this.requiresDelayedAllocation = forwardable || shouldRetainsBufferReference(messageType.requestSchemas());
         this.forwardable = forwardable;
     }
 
@@ -361,57 +170,23 @@ public enum ApiKeys {
     }
 
     public static ApiKeys forId(int id) {
-        if (!hasId(id))
-            throw new IllegalArgumentException(String.format("Unexpected ApiKeys id `%s`, it should be between `%s` " +
-                    "and `%s` (inclusive)", id, MIN_API_KEY, MAX_API_KEY));
-        return ID_TO_TYPE[id];
+        ApiKeys apiKey = ID_TO_TYPE.get(id);
+        if (apiKey == null) {
+            throw new IllegalArgumentException("Unexpected api key: " + id);
+        }
+        return apiKey;
     }
 
     public static boolean hasId(int id) {
-        return id >= MIN_API_KEY && id <= MAX_API_KEY;
+        return ID_TO_TYPE.containsKey(id);
     }
 
     public short latestVersion() {
-        return (short) (requestSchemas.length - 1);
+        return messageType.highestSupportedVersion();
     }
 
     public short oldestVersion() {
-        return 0;
-    }
-
-    public Schema requestSchema(short version) {
-        return schemaFor(requestSchemas, version);
-    }
-
-    public Schema responseSchema(short version) {
-        return schemaFor(responseSchemas, version);
-    }
-
-    public Struct parseRequest(short version, ByteBuffer buffer) {
-        return requestSchema(version).read(buffer);
-    }
-
-    public Struct parseResponse(short version, ByteBuffer buffer) {
-        return responseSchema(version).read(buffer);
-    }
-
-    protected Struct parseResponse(short version, ByteBuffer buffer, short fallbackVersion) {
-        int bufferPosition = buffer.position();
-        try {
-            return responseSchema(version).read(buffer);
-        } catch (SchemaException e) {
-            if (version != fallbackVersion) {
-                buffer.position(bufferPosition);
-                return responseSchema(fallbackVersion).read(buffer);
-            } else
-                throw e;
-        }
-    }
-
-    private Schema schemaFor(Schema[] versions, short version) {
-        if (!isVersionSupported(version))
-            throw new IllegalArgumentException("Invalid version for API key " + this + ": " + version);
-        return versions[version];
+        return messageType.lowestSupportedVersion();
     }
 
     public boolean isVersionSupported(short apiVersion) {
@@ -419,11 +194,11 @@ public enum ApiKeys {
     }
 
     public short requestHeaderVersion(short apiVersion) {
-        return ApiMessageType.fromApiKey(id).requestHeaderVersion(apiVersion);
+        return messageType.requestHeaderVersion(apiVersion);
     }
 
     public short responseHeaderVersion(short apiVersion) {
-        return ApiMessageType.fromApiKey(id).responseHeaderVersion(apiVersion);
+        return messageType.responseHeaderVersion(apiVersion);
     }
 
     private static String toHtml() {

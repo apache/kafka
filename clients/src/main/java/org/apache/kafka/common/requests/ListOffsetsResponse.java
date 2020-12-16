@@ -23,9 +23,9 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.message.ListOffsetResponseData;
-import org.apache.kafka.common.message.ListOffsetResponseData.ListOffsetPartitionResponse;
-import org.apache.kafka.common.message.ListOffsetResponseData.ListOffsetTopicResponse;
+import org.apache.kafka.common.message.ListOffsetsResponseData;
+import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse;
+import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
@@ -47,14 +47,14 @@ import org.apache.kafka.common.record.RecordBatch;
  * - {@link Errors#LEADER_NOT_AVAILABLE} The leader's HW has not caught up after recent election (v4 protocol)
  * - {@link Errors#OFFSET_NOT_AVAILABLE} The leader's HW has not caught up after recent election (v5+ protocol)
  */
-public class ListOffsetResponse extends AbstractResponse {
+public class ListOffsetsResponse extends AbstractResponse {
     public static final long UNKNOWN_TIMESTAMP = -1L;
     public static final long UNKNOWN_OFFSET = -1L;
     public static final int UNKNOWN_EPOCH = RecordBatch.NO_PARTITION_LEADER_EPOCH;
 
-    private final ListOffsetResponseData data;
+    private final ListOffsetsResponseData data;
 
-    public ListOffsetResponse(ListOffsetResponseData data) {
+    public ListOffsetsResponse(ListOffsetsResponseData data) {
         super(ApiKeys.LIST_OFFSETS);
         this.data = data;
     }
@@ -65,11 +65,11 @@ public class ListOffsetResponse extends AbstractResponse {
     }
 
     @Override
-    public ListOffsetResponseData data() {
+    public ListOffsetsResponseData data() {
         return data;
     }
 
-    public List<ListOffsetTopicResponse> topics() {
+    public List<ListOffsetsTopicResponse> topics() {
         return data.topics();
     }
 
@@ -84,8 +84,8 @@ public class ListOffsetResponse extends AbstractResponse {
         return errorCounts;
     }
 
-    public static ListOffsetResponse parse(ByteBuffer buffer, short version) {
-        return new ListOffsetResponse(new ListOffsetResponseData(new ByteBufferAccessor(buffer), version));
+    public static ListOffsetsResponse parse(ByteBuffer buffer, short version) {
+        return new ListOffsetsResponse(new ListOffsetsResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override
@@ -98,10 +98,10 @@ public class ListOffsetResponse extends AbstractResponse {
         return version >= 3;
     }
 
-    public static ListOffsetTopicResponse singletonListOffsetTopicResponse(TopicPartition tp, Errors error, long timestamp, long offset, int epoch) {
-        return new ListOffsetTopicResponse()
+    public static ListOffsetsTopicResponse singletonListOffsetsTopicResponse(TopicPartition tp, Errors error, long timestamp, long offset, int epoch) {
+        return new ListOffsetsTopicResponse()
                  .setName(tp.topic())
-                 .setPartitions(Collections.singletonList(new ListOffsetPartitionResponse()
+                 .setPartitions(Collections.singletonList(new ListOffsetsPartitionResponse()
                          .setPartitionIndex(tp.partition())
                          .setErrorCode(error.code())
                          .setTimestamp(timestamp)

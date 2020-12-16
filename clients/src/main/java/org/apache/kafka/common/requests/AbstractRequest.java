@@ -162,7 +162,7 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
             case FETCH:
                 return FetchRequest.parse(buffer, apiVersion);
             case LIST_OFFSETS:
-                return ListOffsetRequest.parse(buffer, apiVersion);
+                return ListOffsetsRequest.parse(buffer, apiVersion);
             case METADATA:
                 return MetadataRequest.parse(buffer, apiVersion);
             case OFFSET_COMMIT:

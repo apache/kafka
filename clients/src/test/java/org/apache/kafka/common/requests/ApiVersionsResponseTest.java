@@ -53,14 +53,18 @@ public class ApiVersionsResponseTest {
 
             // Check if versions less than min version are indeed set as null, i.e., deprecated.
             for (int i = 0; i < version.minVersion(); ++i) {
-                assertNull("Request version " + i + " for API " + version.apiKey() + " must be null", key.requestSchemas[i]);
-                assertNull("Response version " + i + " for API " + version.apiKey() + " must be null", key.responseSchemas[i]);
+                assertNull("Request version " + i + " for API " + version.apiKey() + " must be null",
+                    key.messageType.requestSchemas()[i]);
+                assertNull("Response version " + i + " for API " + version.apiKey() + " must be null",
+                    key.messageType.responseSchemas()[i]);
             }
 
             // Check if versions between min and max versions are non null, i.e., valid.
             for (int i = version.minVersion(); i <= version.maxVersion(); ++i) {
-                assertNotNull("Request version " + i + " for API " + version.apiKey() + " must not be null", key.requestSchemas[i]);
-                assertNotNull("Response version " + i + " for API " + version.apiKey() + " must not be null", key.responseSchemas[i]);
+                assertNotNull("Request version " + i + " for API " + version.apiKey() + " must not be null",
+                    key.messageType.requestSchemas()[i]);
+                assertNotNull("Response version " + i + " for API " + version.apiKey() + " must not be null",
+                    key.messageType.responseSchemas()[i]);
             }
         }
 

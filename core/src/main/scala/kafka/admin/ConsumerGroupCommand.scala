@@ -19,7 +19,6 @@ package kafka.admin
 
 import java.time.{Duration, Instant}
 import java.util.Properties
-
 import com.fasterxml.jackson.dataformat.csv.CsvMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.fasterxml.jackson.module.scala.experimental.ScalaObjectMapper
@@ -40,9 +39,9 @@ import org.apache.kafka.common.protocol.Errors
 
 import scala.collection.immutable.TreeMap
 import scala.reflect.ClassTag
-import org.apache.kafka.common.requests.ListOffsetResponse
 import org.apache.kafka.common.ConsumerGroupState
 import joptsimple.OptionException
+import org.apache.kafka.common.requests.ListOffsetsResponse
 
 object ConsumerGroupCommand extends Logging {
 
@@ -679,7 +678,7 @@ object ConsumerGroupCommand extends Logging {
         withTimeoutMs(new ListOffsetsOptions)
       ).all.get
       val (successfulOffsetsForTimes, unsuccessfulOffsetsForTimes) =
-        offsets.asScala.partition(_._2.offset != ListOffsetResponse.UNKNOWN_OFFSET)
+        offsets.asScala.partition(_._2.offset != ListOffsetsResponse.UNKNOWN_OFFSET)
 
       val successfulLogTimestampOffsets = successfulOffsetsForTimes.map {
         case (topicPartition, listOffsetsResultInfo) => topicPartition -> LogOffsetResult.LogOffset(listOffsetsResultInfo.offset)

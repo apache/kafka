@@ -136,6 +136,10 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         buffer.printf("%n");
         generateNewApiMessageMethod("response");
         buffer.printf("%n");
+        generateAccessor("lowestSupportedVersion", "short");
+        buffer.printf("%n");
+        generateAccessor("highestSupportedVersion", "short");
+        buffer.printf("%n");
         generateAccessor("apiKey", "short");
         buffer.printf("%n");
         generateAccessor("requestSchemas", "Schema[]");
@@ -158,32 +162,39 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
             ApiData apiData = entry.getValue();
             String name = apiData.name();
             numProcessed++;
-            buffer.printf("%s(\"%s\", (short) %d, %s, %s)%s%n",
+            buffer.printf("%s(\"%s\", (short) %d, %s, %s, (short) %d, (short) %d)%s%n",
                 MessageGenerator.toSnakeCase(name).toUpperCase(Locale.ROOT),
                 MessageGenerator.capitalizeFirst(name),
                 entry.getKey(),
                 apiData.requestSchema(),
                 apiData.responseSchema(),
+                apiData.requestSpec.struct().versions().lowest(),
+                apiData.requestSpec.struct().versions().highest(),
                 (numProcessed == apis.size()) ? ";" : ",");
         }
     }
 
     private void generateInstanceVariables() {
-        buffer.printf("private final String name;%n");
+        buffer.printf("public final String name;%n");
         buffer.printf("private final short apiKey;%n");
         buffer.printf("private final Schema[] requestSchemas;%n");
         buffer.printf("private final Schema[] responseSchemas;%n");
+        buffer.printf("private final short lowestSupportedVersion;%n");
+        buffer.printf("private final short highestSupportedVersion;%n");
         headerGenerator.addImport(MessageGenerator.SCHEMA_CLASS);
     }
 
     private void generateEnumConstructor() {
         buffer.printf("ApiMessageType(String name, short apiKey, " +
-            "Schema[] requestSchemas, Schema[] responseSchemas) {%n");
+            "Schema[] requestSchemas, Schema[] responseSchemas, " +
+            "short lowestSupportedVersion, short highestSupportedVersion) {%n");
         buffer.incrementIndent();
         buffer.printf("this.name = name;%n");
         buffer.printf("this.apiKey = apiKey;%n");
         buffer.printf("this.requestSchemas = requestSchemas;%n");
         buffer.printf("this.responseSchemas = responseSchemas;%n");
+        buffer.printf("this.lowestSupportedVersion = lowestSupportedVersion;%n");
+        buffer.printf("this.highestSupportedVersion = highestSupportedVersion;%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
     }

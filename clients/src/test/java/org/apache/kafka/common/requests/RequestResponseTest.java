@@ -116,11 +116,11 @@ import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
-import org.apache.kafka.common.message.ListOffsetRequestData.ListOffsetPartition;
-import org.apache.kafka.common.message.ListOffsetRequestData.ListOffsetTopic;
-import org.apache.kafka.common.message.ListOffsetResponseData;
-import org.apache.kafka.common.message.ListOffsetResponseData.ListOffsetPartitionResponse;
-import org.apache.kafka.common.message.ListOffsetResponseData.ListOffsetTopicResponse;
+import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition;
+import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsTopic;
+import org.apache.kafka.common.message.ListOffsetsResponseData;
+import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse;
+import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
@@ -1255,40 +1255,40 @@ public class RequestResponseTest {
         );
     }
 
-    private ListOffsetRequest createListOffsetRequest(int version) {
+    private ListOffsetsRequest createListOffsetRequest(int version) {
         if (version == 0) {
-            ListOffsetTopic topic = new ListOffsetTopic()
+            ListOffsetsTopic topic = new ListOffsetsTopic()
                     .setName("test")
-                    .setPartitions(Arrays.asList(new ListOffsetPartition()
+                    .setPartitions(Arrays.asList(new ListOffsetsPartition()
                             .setPartitionIndex(0)
                             .setTimestamp(1000000L)
                             .setMaxNumOffsets(10)
                             .setCurrentLeaderEpoch(5)));
-            return ListOffsetRequest.Builder
+            return ListOffsetsRequest.Builder
                     .forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
                     .setTargetTimes(Collections.singletonList(topic))
                     .build((short) version);
         } else if (version == 1) {
-            ListOffsetTopic topic = new ListOffsetTopic()
+            ListOffsetsTopic topic = new ListOffsetsTopic()
                     .setName("test")
-                    .setPartitions(Arrays.asList(new ListOffsetPartition()
+                    .setPartitions(Arrays.asList(new ListOffsetsPartition()
                             .setPartitionIndex(0)
                             .setTimestamp(1000000L)
                             .setCurrentLeaderEpoch(5)));
-            return ListOffsetRequest.Builder
+            return ListOffsetsRequest.Builder
                     .forConsumer(true, IsolationLevel.READ_UNCOMMITTED)
                     .setTargetTimes(Collections.singletonList(topic))
                     .build((short) version);
         } else if (version >= 2 && version <= LIST_OFFSETS.latestVersion()) {
-            ListOffsetPartition partition = new ListOffsetPartition()
+            ListOffsetsPartition partition = new ListOffsetsPartition()
                     .setPartitionIndex(0)
                     .setTimestamp(1000000L)
                     .setCurrentLeaderEpoch(5);
 
-            ListOffsetTopic topic = new ListOffsetTopic()
+            ListOffsetsTopic topic = new ListOffsetsTopic()
                     .setName("test")
                     .setPartitions(Arrays.asList(partition));
-            return ListOffsetRequest.Builder
+            return ListOffsetsRequest.Builder
                     .forConsumer(true, IsolationLevel.READ_COMMITTED)
                     .setTargetTimes(Collections.singletonList(topic))
                     .build((short) version);
@@ -1297,18 +1297,18 @@ public class RequestResponseTest {
         }
     }
 
-    private ListOffsetResponse createListOffsetResponse(int version) {
+    private ListOffsetsResponse createListOffsetResponse(int version) {
         if (version == 0) {
-            ListOffsetResponseData data = new ListOffsetResponseData()
-                    .setTopics(Collections.singletonList(new ListOffsetTopicResponse()
+            ListOffsetsResponseData data = new ListOffsetsResponseData()
+                    .setTopics(Collections.singletonList(new ListOffsetsTopicResponse()
                             .setName("test")
-                            .setPartitions(Collections.singletonList(new ListOffsetPartitionResponse()
+                            .setPartitions(Collections.singletonList(new ListOffsetsPartitionResponse()
                                     .setPartitionIndex(0)
                                     .setErrorCode(Errors.NONE.code())
                                     .setOldStyleOffsets(asList(100L))))));
-            return new ListOffsetResponse(data);
+            return new ListOffsetsResponse(data);
         } else if (version >= 1 && version <= LIST_OFFSETS.latestVersion()) {
-            ListOffsetPartitionResponse partition = new ListOffsetPartitionResponse()
+            ListOffsetsPartitionResponse partition = new ListOffsetsPartitionResponse()
                     .setPartitionIndex(0)
                     .setErrorCode(Errors.NONE.code())
                     .setTimestamp(10000L)
@@ -1316,11 +1316,11 @@ public class RequestResponseTest {
             if (version >= 4) {
                 partition.setLeaderEpoch(27);
             }
-            ListOffsetResponseData data = new ListOffsetResponseData()
-                    .setTopics(Collections.singletonList(new ListOffsetTopicResponse()
+            ListOffsetsResponseData data = new ListOffsetsResponseData()
+                    .setTopics(Collections.singletonList(new ListOffsetsTopicResponse()
                             .setName("test")
                             .setPartitions(Collections.singletonList(partition))));
-            return new ListOffsetResponse(data);
+            return new ListOffsetsResponse(data);
         } else {
             throw new IllegalArgumentException("Illegal ListOffsetResponse version " + version);
         }

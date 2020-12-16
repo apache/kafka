@@ -20,9 +20,9 @@ package org.apache.kafka.jmh.common;
 import kafka.network.RequestConvertToJson;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.message.ListOffsetRequestData;
+import org.apache.kafka.common.message.ListOffsetsRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.requests.ListOffsetRequest;
+import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -54,9 +54,9 @@ public class ListOffsetRequestBenchmark {
     @Param({"3", "10", "20"})
     private int partitionCount;
 
-    Map<TopicPartition, ListOffsetRequestData.ListOffsetPartition> offsetData;
+    Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition> offsetData;
 
-    ListOffsetRequest offsetRequest;
+    ListOffsetsRequest offsetRequest;
 
     @Setup(Level.Trial)
     public void setup() {
@@ -64,12 +64,12 @@ public class ListOffsetRequestBenchmark {
         for (int topicIdx = 0; topicIdx < topicCount; topicIdx++) {
             String topic = UUID.randomUUID().toString();
             for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
-                ListOffsetRequestData.ListOffsetPartition data = new ListOffsetRequestData.ListOffsetPartition();
+                ListOffsetsRequestData.ListOffsetsPartition data = new ListOffsetsRequestData.ListOffsetsPartition();
                 this.offsetData.put(new TopicPartition(topic, partitionId), data);
             }
         }
 
-        this.offsetRequest = ListOffsetRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
+        this.offsetRequest = ListOffsetsRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
                 .build(ApiKeys.LIST_OFFSETS.latestVersion());
     }
 

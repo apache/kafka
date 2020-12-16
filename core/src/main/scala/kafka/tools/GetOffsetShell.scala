@@ -19,12 +19,11 @@
 package kafka.tools
 
 import java.util.Properties
-
 import joptsimple._
 import kafka.utils.{CommandLineUtils, Exit, ToolsUtils}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
+import org.apache.kafka.common.requests.ListOffsetsRequest
 import org.apache.kafka.common.{PartitionInfo, TopicPartition}
-import org.apache.kafka.common.requests.ListOffsetRequest
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 
 import scala.jdk.CollectionConverters._
@@ -124,8 +123,8 @@ object GetOffsetShell {
 
     /* Note that the value of the map can be null */
     val partitionOffsets: collection.Map[TopicPartition, java.lang.Long] = listOffsetsTimestamp match {
-      case ListOffsetRequest.EARLIEST_TIMESTAMP => consumer.beginningOffsets(topicPartitions.asJava).asScala
-      case ListOffsetRequest.LATEST_TIMESTAMP => consumer.endOffsets(topicPartitions.asJava).asScala
+      case ListOffsetsRequest.EARLIEST_TIMESTAMP => consumer.beginningOffsets(topicPartitions.asJava).asScala
+      case ListOffsetsRequest.LATEST_TIMESTAMP => consumer.endOffsets(topicPartitions.asJava).asScala
       case _ =>
         val timestampsToSearch = topicPartitions.map(tp => tp -> (listOffsetsTimestamp: java.lang.Long)).toMap.asJava
         consumer.offsetsForTimes(timestampsToSearch).asScala.map { case (k, x) =>
