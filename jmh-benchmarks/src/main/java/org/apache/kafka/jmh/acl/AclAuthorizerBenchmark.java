@@ -24,7 +24,6 @@ import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
-import org.apache.kafka.common.acl.ResourceIndex;
 import org.apache.kafka.common.network.ClientInformation;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -50,9 +49,7 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 import scala.collection.JavaConverters;
-import scala.collection.immutable.TreeMap;
 
-import java.lang.reflect.Field;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -90,9 +87,6 @@ public class AclAuthorizerBenchmark {
     private RequestContext authorizeByResourceTypeContext;
     private String authorizeByResourceTypeHostName = "127.0.0.2";
 
-    private TreeMap<ResourcePattern, VersionedAcls> aclCache = new TreeMap<>(new AclAuthorizer.ResourceOrdering());
-    private scala.collection.mutable.HashMap<ResourceIndex, scala.collection.mutable.HashSet<String>> resourceCache =
-        new scala.collection.mutable.HashMap<>();
     private HashMap<ResourcePattern, AclAuthorizer.VersionedAcls> aclToUpdate = new HashMap<>();
 
     Random rand = new Random(System.currentTimeMillis());
@@ -102,8 +96,6 @@ public class AclAuthorizerBenchmark {
     public void setup() throws Exception {
         prepareAclCache();
         prepareAclToUpdate();
-        setFieldValue(aclAuthorizer, AclAuthorizer.class.getDeclaredField("aclCache").getName(), aclCache);
-        setFieldValue(aclAuthorizer, AclAuthorizer.class.getDeclaredField("resourceCache").getName(), resourceCache);
         // By adding `-95` to the resource name prefix, we cause the `TreeMap.from/to` call to return
         // most map entries. In such cases, we rely on the filtering based on `String.startsWith`
         // to return the matching ACLs. Using a more efficient data structure (e.g. a prefix
@@ -117,12 +109,6 @@ public class AclAuthorizerBenchmark {
         authorizeByResourceTypeContext = new RequestContext(new RequestHeader(ApiKeys.PRODUCE, Integer.valueOf(1).shortValue(),
             "someclient", 1), "1", InetAddress.getByName(authorizeByResourceTypeHostName), principal,
             ListenerName.normalised("listener"), SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false);
-    }
-
-    private void setFieldValue(Object obj, String fieldName, Object value) throws Exception {
-        Field field = obj.getClass().getDeclaredField(fieldName);
-        field.setAccessible(true);
-        field.set(obj, value);
     }
 
     private void prepareAclCache() {
@@ -192,16 +178,8 @@ public class AclAuthorizerBenchmark {
         }
 
         for (Map.Entry<ResourcePattern, Set<AclEntry>> entryMap : aclEntries.entrySet()) {
-            aclCache = aclCache.updated(entryMap.getKey(),
+            aclAuthorizer.updateCache(entryMap.getKey(),
                 new VersionedAcls(JavaConverters.asScalaSetConverter(entryMap.getValue()).asScala().toSet(), 1));
-            for (AclEntry entry : entryMap.getValue()) {
-                ResourcePattern resource = entryMap.getKey();
-                ResourceIndex resourceIndex = new ResourceIndex(
-                    entry.ace(), resource.resourceType(), resource.patternType());
-                scala.collection.mutable.HashSet<String> resources = resourceCache.getOrElseUpdate(
-                    resourceIndex, scala.collection.mutable.HashSet::new);
-                resources.add(resource.name());
-            }
         }
     }
 

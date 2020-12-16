@@ -16,6 +16,7 @@
  */
 package kafka.security.authorizer
 
+import java.util.Objects
 import java.{lang, util}
 import java.util.concurrent.{CompletableFuture, CompletionStage}
 
@@ -131,7 +132,7 @@ class AclAuthorizer extends Authorizer with Logging {
   @volatile
   private var aclCache = new scala.collection.immutable.TreeMap[ResourcePattern, VersionedAcls]()(new ResourceOrdering)
 
-  private val resourceCache = new scala.collection.mutable.HashMap[ResourceIndex,
+  private val resourceCache = new scala.collection.mutable.HashMap[ResourceTypeKey,
     scala.collection.mutable.HashSet[String]]()
 
   private val lock = new Object()
@@ -372,7 +373,7 @@ class AclAuthorizer extends Authorizer with Logging {
     for (p <- Set(principal, AclEntry.WildcardPrincipalString)) {
       for (h <- Set(host, AclEntry.WildcardHost)) {
         for (o <- Set(op, AclOperation.ALL)) {
-          val resourceIndex = new ResourceIndex(
+          val resourceIndex = new ResourceTypeKey(
             new AccessControlEntry(p, h, o, permission), resourceType, patternType)
           resourceCache.get(resourceIndex) match {
             case Some(resources) => matched = matched :+ resources
@@ -389,7 +390,7 @@ class AclAuthorizer extends Authorizer with Logging {
     for (p <- Set(principal, AclEntry.WildcardPrincipalString)) {
       for (h <- Set(host, AclEntry.WildcardHost)) {
         for (o <- Set(op, AclOperation.ALL)) {
-          val resourceIndex = new ResourceIndex(
+          val resourceIndex = new ResourceTypeKey(
             new AccessControlEntry(p, h, o, permission), resourceType, patternType)
           resourceCache.get(resourceIndex) match {
             case Some(_) => return true
@@ -693,14 +694,14 @@ class AclAuthorizer extends Authorizer with Logging {
     val acesToRemove = currentAces.diff(newAces)
 
     acesToAdd.foreach(ace => {
-      val resourceIndex = new ResourceIndex(ace, resource.resourceType(), resource.patternType())
+      val resourceIndex = new ResourceTypeKey(ace, resource.resourceType(), resource.patternType())
       resourceCache.get(resourceIndex) match {
         case Some(resources) => resources.add(resource.name())
         case None => resourceCache.put(resourceIndex, scala.collection.mutable.HashSet(resource.name()))
       }
     })
     acesToRemove.foreach(ace => {
-      val resourceIndex = new ResourceIndex(ace, resource.resourceType(), resource.patternType())
+      val resourceIndex = new ResourceTypeKey(ace, resource.resourceType(), resource.patternType())
       resourceCache.get(resourceIndex) match {
         case Some(resources) =>
           resources.remove(resource.name())
@@ -744,5 +745,22 @@ class AclAuthorizer extends Authorizer with Logging {
     override def processNotification(resource: ResourcePattern): Unit = {
       processAclChangeNotification(resource)
     }
+  }
+
+  private class ResourceTypeKey(val ace: AccessControlEntry,
+                              val resourceType: ResourceType,
+                              val patternType: PatternType) {
+    override def equals(o: Any): Boolean = o match {
+      case that : ResourceTypeKey =>
+        if (this eq that) true
+        else if (that == null) false
+        else ace == that.ace && resourceType == that.resourceType && patternType == that.patternType
+      case _ => false
+    }
+
+    override def hashCode: Int = Objects.hash(ace, resourceType, patternType)
+
+    override def toString: String = "ResourceIndex{" + "ace=" + ace + ", " +
+      "resourceType=" + resourceType + ", patternType=" + patternType + '}'
   }
 }
