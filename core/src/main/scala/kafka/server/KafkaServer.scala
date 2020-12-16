@@ -346,7 +346,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
             config,
             metadataCache,
             time,
-            metrics
+            metrics,
+            threadNamePrefix
           )
           forwardingManager.start()
         }

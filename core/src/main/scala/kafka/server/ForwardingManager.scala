@@ -42,13 +42,13 @@ trait ForwardingManager {
 }
 
 object ForwardingManager {
-  private val ThreadNamePrefix = "controller-forwarder"
 
   def apply(
     config: KafkaConfig,
     metadataCache: MetadataCache,
     time: Time,
-    metrics: Metrics
+    metrics: Metrics,
+    threadNamePrefix: Option[String]
   ): ForwardingManager = {
     val channelManager = new BrokerToControllerChannelManager(
       metadataCache = metadataCache,
@@ -56,7 +56,7 @@ object ForwardingManager {
       metrics = metrics,
       config = config,
       channelName = "forwardingChannel",
-      threadNamePrefix = Some(ThreadNamePrefix),
+      threadNamePrefix = threadNamePrefix,
       retryTimeoutMs = config.requestTimeoutMs.longValue
     )
     new ForwardingManagerImpl(channelManager)
