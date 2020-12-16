@@ -20,8 +20,10 @@ import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ByteBufferChannelTest {
 
@@ -45,4 +47,41 @@ public class ByteBufferChannelTest {
         assertEquals("hello", Utils.utf8(channelBuffer));
     }
 
+    @Test
+    public void testWriteMultiplesByteBuffers() {
+        ByteBuffer[] buffers = new ByteBuffer[] {
+            ByteBuffer.wrap(Utils.utf8("hello")),
+            ByteBuffer.wrap(Utils.utf8("world"))
+        };
+        int size = Arrays.stream(buffers).mapToInt(ByteBuffer::remaining).sum();
+        ByteBuffer buf;
+        try (ByteBufferChannel channel = new ByteBufferChannel(size)) {
+            channel.write(buffers, 1, 1);
+            buf = channel.buffer();
+        }
+        assertEquals("world", Utils.utf8(buf));
+
+        try (ByteBufferChannel channel = new ByteBufferChannel(size)) {
+            channel.write(buffers, 0, 1);
+            buf = channel.buffer();
+        }
+        assertEquals("hello", Utils.utf8(buf));
+
+        try (ByteBufferChannel channel = new ByteBufferChannel(size)) {
+            channel.write(buffers, 0, 2);
+            buf = channel.buffer();
+        }
+        assertEquals("helloworld", Utils.utf8(buf));
+    }
+
+    @Test
+    public void testInvalidArgumentsInWritsMultiplesByteBuffers() {
+        try (ByteBufferChannel channel = new ByteBufferChannel(10)) {
+            assertThrows(IndexOutOfBoundsException.class, () -> channel.write(new ByteBuffer[0], 1, 1));
+            assertThrows(IndexOutOfBoundsException.class, () -> channel.write(new ByteBuffer[0], -1, 1));
+            assertThrows(IndexOutOfBoundsException.class, () -> channel.write(new ByteBuffer[0], 0, -1));
+            assertThrows(IndexOutOfBoundsException.class, () -> channel.write(new ByteBuffer[0], 0, 1));
+            assertEquals(0, channel.write(new ByteBuffer[0], 0, 0));
+        }
+    }
 }

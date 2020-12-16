@@ -17,7 +17,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.network.TransportLayer;
+import org.apache.kafka.common.network.TransferableChannel;
 import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Time;
@@ -29,7 +29,6 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-import java.nio.channels.GatheringByteChannel;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.Objects;
@@ -270,7 +269,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     @Override
-    public long writeTo(GatheringByteChannel destChannel, long offset, int length) throws IOException {
+    public long writeTo(TransferableChannel destChannel, long offset, int length) throws IOException {
         long newSize = Math.min(channel.size(), end) - start;
         int oldSize = sizeInBytes();
         if (newSize < oldSize)
@@ -280,14 +279,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
 
         long position = start + offset;
         int count = Math.min(length, oldSize);
-        final long bytesTransferred;
-        if (destChannel instanceof TransportLayer) {
-            TransportLayer tl = (TransportLayer) destChannel;
-            bytesTransferred = tl.transferFrom(channel, position, count);
-        } else {
-            bytesTransferred = channel.transferTo(position, count, destChannel);
-        }
-        return bytesTransferred;
+        return destChannel.transferFrom(channel, position, count);
     }
 
     /**
