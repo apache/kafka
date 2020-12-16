@@ -16,7 +16,6 @@
  */
 package kafka.security.authorizer
 
-import java.net.InetAddress
 import java.util.concurrent.CompletionStage
 import java.{lang, util}
 
@@ -26,30 +25,15 @@ import kafka.zk.ZooKeeperTestHarness
 import kafka.zookeeper.ZooKeeperClient
 import org.apache.kafka.common.Endpoint
 import org.apache.kafka.common.acl._
-import org.apache.kafka.common.network.{ClientInformation, ListenerName}
-import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
-import org.apache.kafka.common.resource.{ResourcePattern, ResourceType}
-import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.authorizer._
 import org.junit.{After, Before}
 
-import scala.jdk.CollectionConverters._
-
 class AuthorizerInterfaceDefaultTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
 
   private val interfaceDefaultAuthorizer = new DelegateAuthorizer
-  private val superUsers = "User:superuser1; User:superuser2"
-  private val username = "alice"
-  private val principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
-  private val requestContext = newRequestContext(principal, InetAddress.getByName("192.168.0.1"))
-  private var config: KafkaConfig = _
-  private var zooKeeperClient: ZooKeeperClient = _
 
-  class CustomPrincipal(principalType: String, name: String) extends KafkaPrincipal(principalType, name) {
-    override def equals(o: scala.Any): Boolean = false
-  }
+  override def authorizer: Authorizer = interfaceDefaultAuthorizer
 
   @Before
   override def setUp(): Unit = {
@@ -79,45 +63,6 @@ class AuthorizerInterfaceDefaultTest extends ZooKeeperTestHarness with BaseAutho
     zooKeeperClient.close()
     super.tearDown()
   }
-
-  @Override
-  def newRequestContext(principal: KafkaPrincipal, clientAddress: InetAddress, apiKey: ApiKeys = ApiKeys.PRODUCE): RequestContext = {
-    val securityProtocol = SecurityProtocol.SASL_PLAINTEXT
-    val header = new RequestHeader(apiKey, 2, "", 1) //ApiKeys apiKey, short version, String clientId, int correlation
-    new RequestContext(header, "", clientAddress, principal, ListenerName.forSecurityProtocol(securityProtocol),
-      securityProtocol, ClientInformation.EMPTY, false)
-  }
-
-  @Override
-  def authorizeByResourceType(authorizer: Authorizer, requestContext: RequestContext, operation: AclOperation, resourceType: ResourceType) : Boolean = {
-    authorizer.authorizeByResourceType(requestContext, operation, resourceType) == AuthorizationResult.ALLOWED
-  }
-
-  @Override
-  def addAcls(authorizer: Authorizer, aces: Set[AccessControlEntry], resourcePattern: ResourcePattern): Unit = {
-    val bindings = aces.map { ace => new AclBinding(resourcePattern, ace) }
-    authorizer.createAcls(requestContext, bindings.toList.asJava).asScala
-      .map(_.toCompletableFuture.get)
-      .foreach { result => result.exception.ifPresent { e => throw e } }
-  }
-
-  @Override
-  def removeAcls(authorizer: Authorizer, aces: Set[AccessControlEntry], resourcePattern: ResourcePattern): Boolean = {
-    val bindings = if (aces.isEmpty)
-      Set(new AclBindingFilter(resourcePattern.toFilter, AccessControlEntryFilter.ANY) )
-    else
-      aces.map { ace => new AclBinding(resourcePattern, ace).toFilter }
-    authorizer.deleteAcls(requestContext, bindings.toList.asJava).asScala
-      .map(_.toCompletableFuture.get)
-      .forall { result =>
-        result.exception.ifPresent { e => throw e }
-        result.aclBindingDeleteResults.forEach { r =>
-          r.exception.ifPresent { e => throw e }
-        }
-        !result.aclBindingDeleteResults.isEmpty
-      }
-  }
-
 
   class DelegateAuthorizer extends Authorizer {
     val authorizer = new AclAuthorizer
@@ -150,7 +95,5 @@ class AuthorizerInterfaceDefaultTest extends ZooKeeperTestHarness with BaseAutho
       authorizer.close()
     }
   }
-
-  override def authorizer: Authorizer = interfaceDefaultAuthorizer
 
 }

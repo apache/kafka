@@ -21,33 +21,37 @@ import java.net.InetAddress
 import java.util.UUID
 
 import kafka.security.authorizer.AclEntry.{WildcardHost, WildcardPrincipalString}
+import kafka.server.KafkaConfig
+import kafka.zookeeper.ZooKeeperClient
 import org.apache.kafka.common.acl.AclOperation.{ALL, READ, WRITE}
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
-import org.apache.kafka.common.acl.{AccessControlEntry, AclOperation}
+import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter, AclOperation}
+import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.requests.RequestContext
+import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.resource.ResourcePattern.WILDCARD_RESOURCE
 import org.apache.kafka.common.resource.ResourceType.{CLUSTER, GROUP, TOPIC, TRANSACTIONAL_ID}
 import org.apache.kafka.common.resource.{ResourcePattern, ResourceType}
-import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.server.authorizer.Authorizer
+import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.server.authorizer.{AuthorizationResult, Authorizer}
 import org.junit.Assert.{assertFalse, assertTrue}
 import org.junit.Test
 
+import scala.jdk.CollectionConverters._
+
 trait BaseAuthorizerTest {
-
-  def addAcls(authorizer: Authorizer, aces: Set[AccessControlEntry], pattern: ResourcePattern): Unit
-
-  def authorizeByResourceType(authorizer: Authorizer, requestContext: RequestContext, aclOperation: AclOperation, resourceType: ResourceType): Boolean
-
-  def removeAcls(authorizer: Authorizer, aces: Set[AccessControlEntry], pattern: ResourcePattern): Boolean
-
-  def newRequestContext(kafkaPrincipal: KafkaPrincipal, inetAddress: InetAddress, apiKey: ApiKeys = ApiKeys.PRODUCE): RequestContext
 
   def authorizer: Authorizer
 
+  val superUsers = "User:superuser1; User:superuser2"
+  val username = "alice"
+  val principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
+  val requestContext: RequestContext = newRequestContext(principal, InetAddress.getByName("192.168.0.1"))
   val superUserName = "superuser1"
+  var config: KafkaConfig = _
+  var zooKeeperClient: ZooKeeperClient = _
+  var resource: ResourcePattern = _
 
   @Test
   def testAuthorizeByResourceTypeMultipleAddAndRemove(): Unit = {
@@ -332,6 +336,40 @@ trait BaseAuthorizerTest {
       authorizeByResourceType(authorizer, superUserContext, READ, ResourceType.GROUP))
     assertTrue("superuser always has access, no matter what acls.",
       authorizeByResourceType(authorizer, superUserContext, READ, ResourceType.TRANSACTIONAL_ID))
+  }
+
+  def newRequestContext(principal: KafkaPrincipal, clientAddress: InetAddress, apiKey: ApiKeys = ApiKeys.PRODUCE): RequestContext = {
+    val securityProtocol = SecurityProtocol.SASL_PLAINTEXT
+    val header = new RequestHeader(apiKey, 2, "", 1) //ApiKeys apiKey, short version, String clientId, int correlation
+    new RequestContext(header, "", clientAddress, principal, ListenerName.forSecurityProtocol(securityProtocol),
+      securityProtocol, ClientInformation.EMPTY, false)
+  }
+
+  def authorizeByResourceType(authorizer: Authorizer, requestContext: RequestContext, operation: AclOperation, resourceType: ResourceType) : Boolean = {
+    authorizer.authorizeByResourceType(requestContext, operation, resourceType) == AuthorizationResult.ALLOWED
+  }
+
+  def addAcls(authorizer: Authorizer, aces: Set[AccessControlEntry], resourcePattern: ResourcePattern): Unit = {
+    val bindings = aces.map { ace => new AclBinding(resourcePattern, ace) }
+    authorizer.createAcls(requestContext, bindings.toList.asJava).asScala
+      .map(_.toCompletableFuture.get)
+      .foreach { result => result.exception.ifPresent { e => throw e } }
+  }
+
+  def removeAcls(authorizer: Authorizer, aces: Set[AccessControlEntry], resourcePattern: ResourcePattern): Boolean = {
+    val bindings = if (aces.isEmpty)
+      Set(new AclBindingFilter(resourcePattern.toFilter, AccessControlEntryFilter.ANY) )
+    else
+      aces.map { ace => new AclBinding(resourcePattern, ace).toFilter }
+    authorizer.deleteAcls(requestContext, bindings.toList.asJava).asScala
+      .map(_.toCompletableFuture.get)
+      .forall { result =>
+        result.exception.ifPresent { e => throw e }
+        result.aclBindingDeleteResults.forEach { r =>
+          r.exception.ifPresent { e => throw e }
+        }
+        !result.aclBindingDeleteResults.isEmpty
+      }
   }
 
 }
