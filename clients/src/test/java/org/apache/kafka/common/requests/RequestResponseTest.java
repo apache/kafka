@@ -315,13 +315,12 @@ public class RequestResponseTest {
             checkResponse(createStopReplicaResponse(), v, true);
         }
 
-        checkRequest(createLeaderAndIsrRequest(0), true);
-        checkErrorResponse(createLeaderAndIsrRequest(0), unknownServerException, false);
-        checkRequest(createLeaderAndIsrRequest(1), true);
-        checkErrorResponse(createLeaderAndIsrRequest(1), unknownServerException, false);
-        checkRequest(createLeaderAndIsrRequest(2), true);
-        checkErrorResponse(createLeaderAndIsrRequest(2), unknownServerException, false);
-        checkResponse(createLeaderAndIsrResponse(), 0, true);
+        for (int v = ApiKeys.LEADER_AND_ISR.oldestVersion(); v <= ApiKeys.LEADER_AND_ISR.latestVersion(); v++) {
+            checkRequest(createLeaderAndIsrRequest(v), true);
+            checkErrorResponse(createLeaderAndIsrRequest(v), unknownServerException, false);
+            checkResponse(createLeaderAndIsrResponse(v), v, true);
+        }
+        
         checkRequest(createSaslHandshakeRequest(), true);
         checkErrorResponse(createSaslHandshakeRequest(), unknownServerException, true);
         checkResponse(createSaslHandshakeResponse(), 0, true);
@@ -1563,7 +1562,7 @@ public class RequestResponseTest {
                 new Node(1, "test1", 1223)
         );
 
-        HashMap<String, Uuid> topicIds = new HashMap<>();
+        Map<String, Uuid> topicIds = new HashMap<>();
         topicIds.put("topic5", Uuid.randomUuid());
         topicIds.put("topic20", Uuid.randomUuid());
 
@@ -1571,15 +1570,28 @@ public class RequestResponseTest {
                 partitionStates, topicIds, leaders).build();
     }
 
-    private LeaderAndIsrResponse createLeaderAndIsrResponse() {
-        List<LeaderAndIsrResponseData.LeaderAndIsrPartitionError> partitions = new ArrayList<>();
-        partitions.add(new LeaderAndIsrResponseData.LeaderAndIsrPartitionError()
-            .setTopicName("test")
-            .setPartitionIndex(0)
-            .setErrorCode(Errors.NONE.code()));
-        return new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
-            .setErrorCode(Errors.NONE.code())
-            .setPartitionErrors(partitions));
+    private LeaderAndIsrResponse createLeaderAndIsrResponse(int version) {
+        if (version < 5) {
+            List<LeaderAndIsrResponseData.LeaderAndIsrPartitionError> partitions = new ArrayList<>();
+            partitions.add(new LeaderAndIsrResponseData.LeaderAndIsrPartitionError()
+                    .setTopicName("test")
+                    .setPartitionIndex(0)
+                    .setErrorCode(Errors.NONE.code()));
+            return new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
+                    .setErrorCode(Errors.NONE.code())
+                    .setPartitionErrors(partitions), (short) version);
+        } else {
+            List<LeaderAndIsrResponseData.LeaderAndIsrPartitionError> partition = Collections.singletonList(
+                    new LeaderAndIsrResponseData.LeaderAndIsrPartitionError()
+                    .setPartitionIndex(0)
+                    .setErrorCode(Errors.NONE.code()));
+            List<LeaderAndIsrResponseData.LeaderAndIsrTopicError> topics = new ArrayList<>();
+            topics.add(new LeaderAndIsrResponseData.LeaderAndIsrTopicError()
+                    .setTopicId(Uuid.randomUuid())
+                    .setPartitionErrors(partition));
+            return new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
+                    .setTopics(topics), (short) version);
+        }
     }
 
     private UpdateMetadataRequest createUpdateMetadataRequest(int version, String rack) {
@@ -1618,7 +1630,7 @@ public class RequestResponseTest {
                 .setReplicas(replicas)
                 .setOfflineReplicas(offlineReplicas));
 
-        HashMap<String, Uuid> topicIds = new HashMap<>();
+        Map<String, Uuid> topicIds = new HashMap<>();
         topicIds.put("topic5", Uuid.randomUuid());
         topicIds.put("topic20", Uuid.randomUuid());
 

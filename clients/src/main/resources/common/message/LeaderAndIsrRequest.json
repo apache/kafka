@@ -25,7 +25,7 @@
   //
   // Version 4 is the first flexible version.
   //
-  // Version 5 adds Topic ID to the TopicStates.
+  // Version 5 adds Topic ID and Type to the TopicStates, as described in KIP-516.
   "validVersions": "0-5",
   "flexibleVersions": "4+",
   "fields": [
@@ -35,7 +35,7 @@
       "about": "The current controller epoch." },
     { "name": "BrokerEpoch", "type": "int64", "versions": "2+", "ignorable": true, "default": "-1",
       "about": "The current broker epoch." },
-    { "name":  "Type", "type":  "int8", "versions": "5+",
+    { "name": "Type", "type": "int8", "versions": "5+",
       "about": "The type that indicates whether all topics are included in the request"},
     { "name": "UngroupedPartitionStates", "type": "[]LeaderAndIsrPartitionState", "versions": "0-1",
       "about": "The state of each partition, in a v0 or v1 message." },

@@ -30,11 +30,11 @@ import org.apache.kafka.common.utils.Utils
 
 
 object PartitionMetadataFile {
-  private val LeaderEpochCheckpointFilename = "partition.metadata"
+  private val PartitionMetadataFilename = "partition.metadata"
   private val WhiteSpacesPattern = Pattern.compile(":\\s+")
   private val CurrentVersion = 0
 
-  def newFile(dir: File): File = new File(dir, LeaderEpochCheckpointFilename)
+  def newFile(dir: File): File = new File(dir, PartitionMetadataFilename)
 
   object PartitionMetadataFileFormatter {
     def toFile(data: PartitionMetadata): String = {
@@ -64,7 +64,7 @@ object PartitionMetadataFile {
               }
               new PartitionMetadata(CurrentVersion, metadataTopicId)
             } else {
-              throw new IOException(s"Unrecognized version of the checkpoint file ($location): " + version)
+              throw new IOException(s"Unrecognized version of partition metadata file ($location): " + version)
             }
           case _ => throw malformedLineException(line)
         }

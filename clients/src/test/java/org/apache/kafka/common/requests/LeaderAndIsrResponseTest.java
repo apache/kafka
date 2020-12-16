@@ -27,11 +27,11 @@ import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.common.protocol.ApiKeys.LEADER_AND_ISR;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -60,8 +60,7 @@ public class LeaderAndIsrResponseTest {
             .setZkVersion(20)
             .setReplicas(Collections.singletonList(10))
             .setIsNew(false));
-        HashMap<String, Uuid> topicIds = new HashMap<>();
-        topicIds.put("foo", Uuid.randomUuid());
+        Map<String, Uuid> topicIds = Collections.singletonMap("foo", Uuid.randomUuid());
 
         LeaderAndIsrRequest request = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion(),
                 15, 20, 0, partitionStates, topicIds, Collections.emptySet()).build();
@@ -71,39 +70,89 @@ public class LeaderAndIsrResponseTest {
 
     @Test
     public void testErrorCountsWithTopLevelError() {
-        Uuid id = Uuid.randomUuid();
-        List<LeaderAndIsrTopicError> topics = createTopic(id, asList(Errors.NONE, Errors.NOT_LEADER_OR_FOLLOWER));
-        LeaderAndIsrResponse response = new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
-            .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
-            .setTopics(topics));
-        assertEquals(Collections.singletonMap(Errors.UNKNOWN_SERVER_ERROR, 2), response.errorCounts());
+        for (short version = LEADER_AND_ISR.oldestVersion(); version < LEADER_AND_ISR.latestVersion(); version++) {
+            LeaderAndIsrResponse response;
+            if (version < 5) {
+                List<LeaderAndIsrPartitionError> partitions = createPartitions("foo",
+                        asList(Errors.NONE, Errors.NOT_LEADER_OR_FOLLOWER));
+                response = new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
+                        .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
+                        .setPartitionErrors(partitions), version);
+            } else {
+                Uuid id = Uuid.randomUuid();
+                List<LeaderAndIsrTopicError> topics = createTopic(id, asList(Errors.NONE, Errors.NOT_LEADER_OR_FOLLOWER));
+                response = new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
+                        .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
+                        .setTopics(topics), version); 
+            }
+            assertEquals(Collections.singletonMap(Errors.UNKNOWN_SERVER_ERROR, 2), response.errorCounts());
+        }
     }
 
     @Test
     public void testErrorCountsNoTopLevelError() {
-        Uuid id = Uuid.randomUuid();
-        List<LeaderAndIsrTopicError> topics = createTopic(id, asList(Errors.NONE, Errors.CLUSTER_AUTHORIZATION_FAILED));
-        LeaderAndIsrResponse response = new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
-            .setErrorCode(Errors.NONE.code())
-            .setTopics(topics));
-        Map<Errors, Integer> errorCounts = response.errorCounts();
-        assertEquals(2, errorCounts.size());
-        assertEquals(1, errorCounts.get(Errors.NONE).intValue());
-        assertEquals(1, errorCounts.get(Errors.CLUSTER_AUTHORIZATION_FAILED).intValue());
+        for (short version = LEADER_AND_ISR.oldestVersion(); version < LEADER_AND_ISR.latestVersion(); version++) {
+            LeaderAndIsrResponse response;
+            if (version < 5) {
+                List<LeaderAndIsrPartitionError> partitions = createPartitions("foo",
+                        asList(Errors.NONE, Errors.CLUSTER_AUTHORIZATION_FAILED));
+                response = new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
+                        .setErrorCode(Errors.NONE.code())
+                        .setPartitionErrors(partitions), version);
+            } else {
+                Uuid id = Uuid.randomUuid();
+                List<LeaderAndIsrTopicError> topics = createTopic(id, asList(Errors.NONE, Errors.CLUSTER_AUTHORIZATION_FAILED));
+                response = new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
+                        .setErrorCode(Errors.NONE.code())
+                        .setTopics(topics), version);
+            }
+            Map<Errors, Integer> errorCounts = response.errorCounts();
+            assertEquals(2, errorCounts.size());
+            assertEquals(1, errorCounts.get(Errors.NONE).intValue());
+            assertEquals(1, errorCounts.get(Errors.CLUSTER_AUTHORIZATION_FAILED).intValue());
+        }
     }
 
     @Test
     public void testToString() {
-        Uuid id = Uuid.randomUuid();
-        List<LeaderAndIsrTopicError> topics = createTopic(id, asList(Errors.NONE, Errors.CLUSTER_AUTHORIZATION_FAILED));
-        LeaderAndIsrResponse response = new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
-            .setErrorCode(Errors.NONE.code())
-            .setTopics(topics));
-        String responseStr = response.toString();
-        assertTrue(responseStr.contains(LeaderAndIsrResponse.class.getSimpleName()));
-        assertTrue(responseStr.contains(topics.toString()));
-        assertTrue(responseStr.contains(id.toString()));
-        assertTrue(responseStr.contains("errorCode=" + Errors.NONE.code()));
+        for (short version = LEADER_AND_ISR.oldestVersion(); version < LEADER_AND_ISR.latestVersion(); version++) {
+            LeaderAndIsrResponse response;
+            if (version < 5) {
+                List<LeaderAndIsrPartitionError> partitions = createPartitions("foo",
+                        asList(Errors.NONE, Errors.CLUSTER_AUTHORIZATION_FAILED));
+                response = new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
+                        .setErrorCode(Errors.NONE.code())
+                        .setPartitionErrors(partitions), version);
+                String responseStr = response.toString();
+                assertTrue(responseStr.contains(LeaderAndIsrResponse.class.getSimpleName()));
+                assertTrue(responseStr.contains(partitions.toString()));
+                assertTrue(responseStr.contains("errorCode=" + Errors.NONE.code()));
+
+            } else {
+                Uuid id = Uuid.randomUuid();
+                List<LeaderAndIsrTopicError> topics = createTopic(id, asList(Errors.NONE, Errors.CLUSTER_AUTHORIZATION_FAILED));
+                response = new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
+                        .setErrorCode(Errors.NONE.code())
+                        .setTopics(topics), version);
+                String responseStr = response.toString();
+                assertTrue(responseStr.contains(LeaderAndIsrResponse.class.getSimpleName()));
+                assertTrue(responseStr.contains(topics.toString()));
+                assertTrue(responseStr.contains(id.toString()));
+                assertTrue(responseStr.contains("errorCode=" + Errors.NONE.code()));
+            }
+        }
+    }
+
+    private List<LeaderAndIsrPartitionError> createPartitions(String topicName, List<Errors> errors) {
+        List<LeaderAndIsrPartitionError> partitions = new ArrayList<>();
+        int partitionIndex = 0;
+        for (Errors error : errors) {
+            partitions.add(new LeaderAndIsrPartitionError()
+                    .setTopicName(topicName)
+                    .setPartitionIndex(partitionIndex++)
+                    .setErrorCode(error.code()));
+        }
+        return partitions;
     }
 
     private List<LeaderAndIsrTopicError> createTopic(Uuid id, List<Errors> errors) {

@@ -485,8 +485,8 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
         val brokerEpoch = controllerContext.liveBrokerIdAndEpochs(broker)
         val topicIds = leaderAndIsrPartitionStates.keys
           .map(_.topic)
-          .toSet
-          .map((topic: String) => (topic, controllerContext.topicIds(topic)))
+          .toSet[String]
+          .map(topic => (topic, controllerContext.topicIds(topic)))
           .toMap
         val leaderAndIsrRequestBuilder = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId,
           controllerEpoch, brokerEpoch, leaderAndIsrPartitionStates.values.toBuffer.asJava, topicIds.asJava, leaders.asJava)

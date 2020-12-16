@@ -1464,8 +1464,8 @@ class ReplicaManager(val config: KafkaConfig,
                   // There is not yet a topic ID stored in the log.
                   // Write the partition metadata file if it is empty.
                   if (log.partitionMetadataFile.get.isEmpty()) {
-                    log.partitionMetadataFile.get.write(topicIds.get(topicPartition.topic))
-                    log.topicId = topicIds.get(topicPartition.topic)
+                    log.partitionMetadataFile.get.write(id)
+                    log.topicId = id
                   } else {
                     stateChangeLogger.warn("Partition metadata file already contains content.")
                   }
@@ -1492,7 +1492,7 @@ class ReplicaManager(val config: KafkaConfig,
             }.toBuffer
             new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
               .setErrorCode(Errors.NONE.code)
-              .setPartitionErrors(responsePartitions.asJava))
+              .setPartitionErrors(responsePartitions.asJava), leaderAndIsrRequest.version())
           } else {
             val topics = new mutable.HashMap[String, List[LeaderAndIsrPartitionError]]
             responseMap.asJava.forEach { case (tp, error) =>
@@ -1503,7 +1503,7 @@ class ReplicaManager(val config: KafkaConfig,
               } else {
                 topics.put(tp.topic, new LeaderAndIsrPartitionError()
                   .setPartitionIndex(tp.partition)
-                  .setErrorCode(error.code)::topics.get(tp.topic).get)
+                  .setErrorCode(error.code)::topics(tp.topic))
               }
             }
             val topicErrors = topics.iterator.map { case (topic, partitionError) =>
@@ -1513,7 +1513,7 @@ class ReplicaManager(val config: KafkaConfig,
             }.toBuffer
             new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
               .setErrorCode(Errors.NONE.code)
-              .setTopics(topicErrors.asJava))
+              .setTopics(topicErrors.asJava), leaderAndIsrRequest.version())
           }
         }
       }

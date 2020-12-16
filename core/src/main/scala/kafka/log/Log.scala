@@ -329,8 +329,9 @@ class Log(@volatile private var _dir: File,
     loadProducerState(logEndOffset, reloadFromCleanShutdown = hadCleanShutdown)
 
     // Recover topic ID if present
-    if (!partitionMetadataFile.get.isEmpty()) {
-      topicId = partitionMetadataFile.get.read().topicId
+    partitionMetadataFile.foreach { file =>
+      if (!file.isEmpty())
+        topicId = file.read().topicId
     }
   }
 
@@ -1036,13 +1037,7 @@ class Log(@volatile private var _dir: File,
           // re-initialize leader epoch cache so that LeaderEpochCheckpointFile.checkpoint can correctly reference
           // the checkpoint file in renamed log directory
           initializeLeaderEpochCache()
-          if (!partitionMetadataFile.isEmpty && !partitionMetadataFile.get.isEmpty()) {
-            val partitionMetadata = partitionMetadataFile.get.read()
-            initializePartitionMetadata()
-            partitionMetadataFile.get.write(partitionMetadata.topicId)
-          } else {
-            initializePartitionMetadata()
-          }
+          initializePartitionMetadata()
         }
       }
     }

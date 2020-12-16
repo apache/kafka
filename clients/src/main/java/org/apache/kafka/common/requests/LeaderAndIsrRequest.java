@@ -154,14 +154,15 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
                         .setErrorCode(error.code()));
             }
             responseData.setPartitionErrors(partitions);
-            return new LeaderAndIsrResponse(responseData);
+            return new LeaderAndIsrResponse(responseData, version());
         }
 
-        List<LeaderAndIsrTopicError> topics = new ArrayList<>();
+        List<LeaderAndIsrTopicError> topics = new ArrayList<>(data.topicStates().size());
+        Map<String, Uuid> topicIds = topicIds();
         for (LeaderAndIsrTopicState topicState : data.topicStates()) {
             LeaderAndIsrTopicError topicError = new LeaderAndIsrTopicError();
-            topicError.setTopicId(topicIds().get(topicState.topicName()));
-            List<LeaderAndIsrPartitionError> partitions = new ArrayList<>();
+            topicError.setTopicId(topicIds.get(topicState.topicName()));
+            List<LeaderAndIsrPartitionError> partitions = new ArrayList<>(topicState.partitionStates().size());
             for (LeaderAndIsrPartitionState partition : topicState.partitionStates()) {
                 partitions.add(new LeaderAndIsrPartitionError()
                         .setPartitionIndex(partition.partitionIndex())
@@ -171,7 +172,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
             topics.add(topicError);
         }
         responseData.setTopics(topics);
-        return new LeaderAndIsrResponse(responseData);
+        return new LeaderAndIsrResponse(responseData, version());
     }
 
     @Override
@@ -197,11 +198,8 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
     }
 
     public Map<String, Uuid> topicIds() {
-        Map<String, Uuid> topicIds = new HashMap<>();
-        for (LeaderAndIsrTopicState ts : data.topicStates()) {
-            topicIds.put(ts.topicName(), ts.topicId());
-        }
-        return topicIds;
+        return data.topicStates().stream()
+                .collect(Collectors.toMap(LeaderAndIsrTopicState::topicName, LeaderAndIsrTopicState::topicId));
     }
 
     public List<LeaderAndIsrLiveLeader> liveLeaders() {

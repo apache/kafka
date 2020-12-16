@@ -36,6 +36,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
@@ -59,13 +60,19 @@ public class LeaderAndIsrRequestTest {
 
     @Test
     public void testGetErrorResponse() {
+        Uuid id = Uuid.randomUuid();
         for (short version = LEADER_AND_ISR.oldestVersion(); version < LEADER_AND_ISR.latestVersion(); version++) {
             LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder(version, 0, 0, 0,
-                    Collections.emptyList(), Collections.emptyMap(), Collections.emptySet());
+                    Collections.emptyList(), Collections.singletonMap("topic", id), Collections.emptySet());
             LeaderAndIsrRequest request = builder.build();
             LeaderAndIsrResponse response = request.getErrorResponse(0,
                     new ClusterAuthorizationException("Not authorized"));
             assertEquals(Errors.CLUSTER_AUTHORIZATION_FAILED, response.error());
+            if (version < 5) {
+                assertEquals(0, response.topics().size());
+            } else {
+                assertEquals(id, response.topics().get(0).topicId());
+            }
         }
     }
 
@@ -119,7 +126,7 @@ public class LeaderAndIsrRequestTest {
                 new Node(1, "host1", 9091)
             );
 
-            HashMap<String, Uuid> topicIds = new HashMap<>();
+            Map<String, Uuid> topicIds = new HashMap<>();
             topicIds.put("topic0", Uuid.randomUuid());
             topicIds.put("topic1", Uuid.randomUuid());
 
@@ -174,7 +181,7 @@ public class LeaderAndIsrRequestTest {
     public void testTopicPartitionGroupingSizeReduction() {
         Set<TopicPartition> tps = TestUtils.generateRandomTopicPartitions(10, 10);
         List<LeaderAndIsrPartitionState> partitionStates = new ArrayList<>();
-        HashMap<String, Uuid> topicIds = new HashMap<>();
+        Map<String, Uuid> topicIds = new HashMap<>();
         for (TopicPartition tp : tps) {
             partitionStates.add(new LeaderAndIsrPartitionState()
                 .setTopicName(tp.topic())

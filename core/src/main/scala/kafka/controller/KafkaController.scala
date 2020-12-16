@@ -1378,26 +1378,11 @@ class KafkaController(val config: KafkaConfig,
     val offlineReplicas = new ArrayBuffer[TopicPartition]()
     val onlineReplicas = new ArrayBuffer[TopicPartition]()
 
-    if (leaderAndIsrResponse.topics().isEmpty) {
-      leaderAndIsrResponse.partitions.forEach { partition =>
-        val topicName = partition.topicName
-        val tp = new TopicPartition(topicName, partition.partitionIndex)
-        if (partition.errorCode == Errors.KAFKA_STORAGE_ERROR.code)
-          offlineReplicas += tp
-        else if (partition.errorCode == Errors.NONE.code)
-          onlineReplicas += tp
-      }
-    }
-
-    leaderAndIsrResponse.topics.forEach { topic =>
-      val topicName = controllerContext.topicNames.get(topic.topicId).get
-      topic.partitionErrors().forEach { partition =>
-        val tp = new TopicPartition(topicName, partition.partitionIndex)
-        if (partition.errorCode == Errors.KAFKA_STORAGE_ERROR.code)
-          offlineReplicas += tp
-        else if (partition.errorCode == Errors.NONE.code)
-          onlineReplicas += tp
-      }
+    leaderAndIsrResponse.partitionErrors(controllerContext.topicNames.asJava).forEach{ case (tp, error) =>
+      if (error.code() == Errors.KAFKA_STORAGE_ERROR.code)
+        offlineReplicas += tp
+      else if (error.code() == Errors.NONE.code)
+        onlineReplicas += tp
     }
 
     val previousOfflineReplicas = controllerContext.replicasOnOfflineDirs.getOrElse(brokerId, Set.empty[TopicPartition])
