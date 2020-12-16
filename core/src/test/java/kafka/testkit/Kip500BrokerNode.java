@@ -17,41 +17,50 @@
 
 package kafka.testkit;
 
+import org.apache.kafka.common.Uuid;
+
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-public class ControllerNode implements TestKitNode {
+public class Kip500BrokerNode implements TestKitNode {
     public static class Builder {
         private int id = -1;
-        private String logDirectory = null;
+        private Uuid incarnationId = null;
+        private List<String> logDirectories = null;
 
         public Builder setId(int id) {
             this.id = id;
             return this;
         }
 
-        public Builder setLogDirectory() {
-            this.logDirectory = logDirectory;
+        public Builder setLogDirectories(List<String> logDirectories) {
+            this.logDirectories = logDirectories;
             return this;
         }
 
-        public ControllerNode build() {
+        public Kip500BrokerNode build() {
             if (id == -1) {
                 throw new RuntimeException("You must set the node id");
             }
-            if (logDirectory == null) {
-                logDirectory = String.format("controller_%d", id);
+            if (incarnationId == null) {
+                incarnationId = Uuid.randomUuid();
             }
-            return new ControllerNode(id, logDirectory);
+            if (logDirectories == null) {
+                logDirectories  = Collections.singletonList(String.format("kip500broker_%d", id));
+            }
+            return new Kip500BrokerNode(id, incarnationId, logDirectories);
         }
     }
 
     private final int id;
-    private final String logDirectory;
+    private final Uuid incarnationId;
+    private final List<String> logDirectories;
 
-    private ControllerNode(int id, String logDirectory) {
+    private Kip500BrokerNode(int id, Uuid incarnationId, List<String> logDirectories) {
         this.id = id;
-        this.logDirectory = logDirectory;
+        this.incarnationId = incarnationId;
+        this.logDirectories = new ArrayList<>(logDirectories);
     }
 
     @Override
@@ -59,8 +68,12 @@ public class ControllerNode implements TestKitNode {
         return id;
     }
 
+    public Uuid incarnationId() {
+        return incarnationId;
+    }
+
     @Override
     public List<String> logDirectories() {
-        return Collections.singletonList(logDirectory);
+        return logDirectories;
     }
 }

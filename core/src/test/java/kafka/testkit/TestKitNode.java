@@ -18,10 +18,8 @@
 package kafka.testkit;
 
 import java.util.List;
-import java.util.UUID;
 
 public interface TestKitNode {
     int id();
-    UUID incarnationId();
     List<String> logDirectories();
 }
