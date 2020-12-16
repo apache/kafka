@@ -174,10 +174,9 @@ public interface Authorizer extends Configurable, Closeable {
         SecurityUtils.authorizeByResourceTypeCheckArgs(op, resourceType);
 
         if (authorize(requestContext, Collections.singletonList(new Action(
-                AclOperation.READ,
-                new ResourcePattern(resourceType, "hardcode", PatternType.LITERAL),
-                0, false, false)))
-            .get(0) == AuthorizationResult.ALLOWED) {
+                op, new ResourcePattern(resourceType, "hardcode", PatternType.LITERAL),
+                0, true, false)))
+                .get(0) == AuthorizationResult.ALLOWED) {
             return AuthorizationResult.ALLOWED;
         }
 

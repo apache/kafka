@@ -122,7 +122,7 @@ public class AclAuthorizerBenchmark {
             Set<AclEntry> entries = aclEntries.computeIfAbsent(resource, k -> new HashSet<>());
 
             for (int aclId = 0; aclId < aclCount; aclId++) {
-                // The principle in the request context we are using
+                // The principal in the request context we are using
                 // is principal.toString without any suffix
                 String principalName = principal.toString() + (aclId == 0 ? "" : aclId);
                 AccessControlEntry allowAce = new AccessControlEntry(

@@ -308,13 +308,13 @@ class AuthorizerTestFactory(val newRequestContext3: (KafkaPrincipal, InetAddress
 
     val superUserContext = newRequestContext(superUser1, host1)
 
-    assertTrue("superuser with custom principal always has access, no matter what acls.",
+    assertTrue("superuser always has access, no matter what acls.",
       authorizeByResourceType(authorizer, superUserContext, READ, ResourceType.TOPIC))
-    assertTrue("superuser with custom principal always has access, no matter what acls.",
+    assertTrue("superuser always has access, no matter what acls.",
       authorizeByResourceType(authorizer, superUserContext, READ, ResourceType.CLUSTER))
-    assertTrue("superuser with custom principal always has access, no matter what acls.",
+    assertTrue("superuser always has access, no matter what acls.",
       authorizeByResourceType(authorizer, superUserContext, READ, ResourceType.GROUP))
-    assertTrue("superuser with custom principal always has access, no matter what acls.",
+    assertTrue("superuser always has access, no matter what acls.",
       authorizeByResourceType(authorizer, superUserContext, READ, ResourceType.TRANSACTIONAL_ID))
   }
 

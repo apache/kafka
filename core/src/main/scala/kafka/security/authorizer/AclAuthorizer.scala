@@ -16,7 +16,6 @@
  */
 package kafka.security.authorizer
 
-import java.util.Objects
 import java.{lang, util}
 import java.util.concurrent.{CompletableFuture, CompletionStage}
 
@@ -331,12 +330,12 @@ class AclAuthorizer extends Authorizer with Logging {
       principalStr, host, op, AclPermissionType.DENY, resourceType, PatternType.LITERAL)
 
     if (denyAll(denyLiterals)) {
-      logAuditMessage(requestContext, action, false)
+      logAuditMessage(requestContext, action, authorized = false)
       return AuthorizationResult.DENIED
     }
 
     if (shouldAllowEveryoneIfNoAclIsFound) {
-      logAuditMessage(requestContext, action, true)
+      logAuditMessage(requestContext, action, authorized = true)
       return AuthorizationResult.ALLOWED
     }
 
@@ -346,10 +345,10 @@ class AclAuthorizer extends Authorizer with Logging {
     if (denyLiterals.isEmpty && denyPrefixes.isEmpty) {
       if (hasMatchingResources(principalStr, host, op, AclPermissionType.ALLOW, resourceType, PatternType.PREFIXED)
           || hasMatchingResources(principalStr, host, op, AclPermissionType.ALLOW, resourceType, PatternType.LITERAL)) {
-        logAuditMessage(requestContext, action, true)
+        logAuditMessage(requestContext, action, authorized = true)
         return AuthorizationResult.ALLOWED
       } else {
-        logAuditMessage(requestContext, action, false)
+        logAuditMessage(requestContext, action, authorized = false)
         return AuthorizationResult.DENIED
       }
     }
@@ -360,11 +359,11 @@ class AclAuthorizer extends Authorizer with Logging {
       principalStr, host, op, AclPermissionType.ALLOW, resourceType, PatternType.PREFIXED)
 
     if (allowAny(allowLiterals, allowPrefixes, denyLiterals, denyPrefixes)) {
-      logAuditMessage(requestContext, action, true)
+      logAuditMessage(requestContext, action, authorized = true)
       return AuthorizationResult.ALLOWED
     }
 
-    logAuditMessage(requestContext, action, false)
+    logAuditMessage(requestContext, action, authorized = false)
     AuthorizationResult.DENIED
   }
 
@@ -750,20 +749,7 @@ class AclAuthorizer extends Authorizer with Logging {
     }
   }
 
-  private class ResourceTypeKey(val ace: AccessControlEntry,
-                              val resourceType: ResourceType,
-                              val patternType: PatternType) {
-    override def equals(o: Any): Boolean = o match {
-      case that : ResourceTypeKey =>
-        if (this eq that) true
-        else if (that == null) false
-        else ace == that.ace && resourceType == that.resourceType && patternType == that.patternType
-      case _ => false
-    }
-
-    override def hashCode: Int = Objects.hash(ace, resourceType, patternType)
-
-    override def toString: String = "ResourceIndex{" + "ace=" + ace + ", " +
-      "resourceType=" + resourceType + ", patternType=" + patternType + '}'
-  }
+  private case class ResourceTypeKey(ace: AccessControlEntry,
+                                     resourceType: ResourceType,
+                                     patternType: PatternType)
 }
