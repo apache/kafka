@@ -22,10 +22,10 @@ import org.apache.kafka.common.protocol.types.Type;
 import org.apache.kafka.common.record.RecordBatch;
 
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.protocol.types.Type.BYTES;
@@ -98,13 +98,9 @@ public enum ApiKeys {
     UPDATE_FEATURES(ApiMessageType.UPDATE_FEATURES, false, true),
     ENVELOPE(ApiMessageType.ENVELOPE, true, RecordBatch.MAGIC_VALUE_V0, false, false);
 
-    private static final Map<Integer, ApiKeys> ID_TO_TYPE = new HashMap<>();
-    static {
-        for (ApiKeys key : ApiKeys.values()) {
-            // The generator ensures every `ApiMessageType` has a unique id
-            ID_TO_TYPE.put((int) key.id, key);
-        }
-    }
+    // The generator ensures every `ApiMessageType` has a unique id
+    private static final Map<Integer, ApiKeys> ID_TO_TYPE = Arrays.stream(ApiKeys.values())
+        .collect(Collectors.toMap(key -> (int) key.id, Function.identity()));
 
     /** the permanent and immutable id of an API - this can't change ever */
     public final short id;
