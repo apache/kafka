@@ -25,20 +25,10 @@ import kafka.server.{BrokerMetadataCheckpoint, KafkaConfig, MetaProperties, RawM
 import kafka.utils.{Exit, Logging}
 import net.sourceforge.argparse4j.ArgumentParsers
 import net.sourceforge.argparse4j.impl.Arguments.{store, storeTrue}
-import org.apache.kafka.common.{KafkaException, Uuid}
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.mutable
-
-/**
- * An exception thrown to indicate that the command has failed, but we don't want to
- * print a stack trace.
- *
- * @param message     The message to print out before exiting.  A stack trace will not
- *                    be printed.
- */
-class TerseFailure(message: String) extends KafkaException(message) {
-}
 
 object StorageTool extends Logging {
   def main(args: Array[String]): Unit = {
