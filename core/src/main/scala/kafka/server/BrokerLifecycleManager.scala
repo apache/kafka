@@ -46,7 +46,8 @@ class BrokerLifecycleManager(val config: KafkaConfig,
   /**
    * How long to wait for registration to succeed before failing the startup process.
    */
-  private val initialTimeoutNs = NANOSECONDS.convert(2, TimeUnit.MINUTES)
+  private val initialTimeoutNs = NANOSECONDS.
+    convert(config.initialRegistrationTimeoutMs.longValue(), TimeUnit.MILLISECONDS)
 
   /**
    * The exponential backoff to use for resending communication.
