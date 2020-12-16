@@ -341,7 +341,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   @nowarn("cat=deprecation")
   private def verifyConnection(socket: Socket): Unit = {
     val produceResponse = sendAndReceive[ProduceResponse](produceRequest, socket)
-    assertEquals(1, produceResponse.responses.size)
+    assertEquals(1, produceResponse.data.setResponses(produceResponse.data.responses))
     val (_, partitionResponse) = produceResponse.responses.asScala.head
     assertEquals(Errors.NONE, partitionResponse.error)
   }
