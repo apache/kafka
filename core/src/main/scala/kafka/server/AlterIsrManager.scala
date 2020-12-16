@@ -168,6 +168,7 @@ class DefaultAlterIsrManager(
       new ControllerRequestCompletionHandler {
         override def onComplete(response: ClientResponse): Unit = {
           try {
+            debug(s"Received AlterIsr response $response")
             val body = response.responseBody().asInstanceOf[AlterIsrResponse]
             handleAlterIsrResponse(body, message.brokerEpoch, inflightAlterIsrItems)
           } finally {

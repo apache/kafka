@@ -61,10 +61,11 @@ class BrokerToControllerRequestThreadTest {
 
     testRequestThread.enqueue(queueItem)
     testRequestThread.doWork()
+    assertEquals(1, testRequestThread.queueSize)
 
     time.sleep(retryTimeoutMs)
     testRequestThread.doWork()
-
+    assertEquals(0, testRequestThread.queueSize)
     assertTrue(completionHandler.timedOut.get)
   }
 
@@ -100,11 +101,14 @@ class BrokerToControllerRequestThreadTest {
     )
 
     testRequestThread.enqueue(queueItem)
+    assertEquals(1, testRequestThread.queueSize)
+
     // initialize to the controller
     testRequestThread.doWork()
     // send and process the request
     testRequestThread.doWork()
 
+    assertEquals(0, testRequestThread.queueSize)
     assertTrue(completionHandler.completed.get())
   }
 

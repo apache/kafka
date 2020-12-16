@@ -178,15 +178,20 @@ class BrokerToControllerRequestThread(
     }
   }
 
+  def queueSize: Int = {
+    requestQueue.size
+  }
+
   override def generateRequests(): Iterable[RequestAndCompletionHandler] = {
     val currentTimeMs = time.milliseconds()
     val requestIter = requestQueue.iterator()
     while (requestIter.hasNext) {
       val request = requestIter.next
       if (currentTimeMs - request.createdTimeMs >= retryTimeoutMs) {
-        request.callback.onTimeout()
         requestIter.remove()
+        request.callback.onTimeout()
       } else if (activeController.isDefined) {
+        requestIter.remove()
         return Some(RequestAndCompletionHandler(
           time.milliseconds(),
           activeController.get,
