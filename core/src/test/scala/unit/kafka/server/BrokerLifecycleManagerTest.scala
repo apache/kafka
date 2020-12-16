@@ -33,8 +33,7 @@ import org.junit.{Assert, Rule, Test}
 
 class BrokerLifecycleManagerTest {
   @Rule
-  def globalTimeout = Timeout.millis(12000)
-  //def globalTimeout = Timeout.millis(120000)
+  def globalTimeout = Timeout.millis(120000)
 
   def configProperties = {
     val properties = new Properties()
@@ -59,7 +58,7 @@ class BrokerLifecycleManagerTest {
     val metadataUpdater = new ManualMetadataUpdater()
     val controllerNodeProvider = new SimpleControllerNodeProvider()
     val channelManager = new BrokerToControllerChannelManager(mockClient,
-      metadataUpdater, controllerNodeProvider, time, config, "channelManager", None)
+      metadataUpdater, controllerNodeProvider, time, 60000, config, "channelManager", None)
     val clusterId = Uuid.fromString("x4AJGXQSRnephtTZzujw4w")
   }
 

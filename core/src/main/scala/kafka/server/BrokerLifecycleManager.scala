@@ -27,7 +27,7 @@ import org.apache.kafka.common.message.{BrokerHeartbeatRequestData, BrokerRegist
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{BrokerHeartbeatRequest, BrokerHeartbeatResponse, BrokerRegistrationRequest, BrokerRegistrationResponse}
 import org.apache.kafka.common.utils.EventQueue.DeadlineFunction
-import org.apache.kafka.common.utils.{EventQueue, KafkaEventQueue, LogContext, Time}
+import org.apache.kafka.common.utils.{EventQueue, ExponentialBackoff, KafkaEventQueue, LogContext, Time}
 import org.apache.kafka.metadata.BrokerState
 
 class BrokerLifecycleManager(val config: KafkaConfig,
@@ -47,6 +47,17 @@ class BrokerLifecycleManager(val config: KafkaConfig,
    * How long to wait for registration to succeed before failing the startup process.
    */
   private val initialTimeoutNs = NANOSECONDS.convert(2, TimeUnit.MINUTES)
+
+  /**
+   * The exponential backoff to use for resending communication.
+   */
+  private val resendExponentialBackoff =
+    new ExponentialBackoff(100, 2, config.registrationLeaseTimeoutMs.toLong, 0.1)
+
+  /**
+   * The number of tries we've tried to communicate.
+   */
+  private var failedAttempts = 0L
 
   /**
    * The broker incarnation ID.  This ID uniquely identifies each time we start the broker
@@ -166,7 +177,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
   class SetReadyToUnfenceEvent() extends EventQueue.Event {
     override def run(): Unit = {
       readyToUnfence = true
-      scheduleNextCommunication(false)
+      scheduleNextCommunicationImmediately()
     }
   }
 
@@ -205,45 +216,34 @@ class BrokerLifecycleManager(val config: KafkaConfig,
       if (response.authenticationException() != null) {
         error(s"Unable to register broker ${brokerId} because of an authentication exception.",
           response.authenticationException());
-        handleRegistrationFailure()
+        scheduleNextCommunicationAfterFailure()
       } else if (response.versionMismatch() != null) {
         error(s"Unable to register broker ${brokerId} because of an API version problem.",
           response.versionMismatch());
-        handleRegistrationFailure()
+        scheduleNextCommunicationAfterFailure()
       } else if (response.responseBody() == null) {
-        warn(s"Unable to register broker ${brokerId}. Retrying.")
-        handleRetryableRegistrationFailure()
+        warn(s"Unable to register broker ${brokerId}.")
+        scheduleNextCommunicationAfterFailure()
       } else if (!response.responseBody().isInstanceOf[BrokerRegistrationResponse]) {
         error(s"Unable to register broker ${brokerId} because the controller returned an " +
           "invalid response type.")
-        handleRegistrationFailure()
+        scheduleNextCommunicationAfterFailure()
       } else {
         val message = response.responseBody().asInstanceOf[BrokerRegistrationResponse]
         val errorCode = Errors.forCode(message.data().errorCode())
         if (errorCode == Errors.NONE) {
+          failedAttempts = 0
           _brokerEpoch = message.data().brokerEpoch()
           registered = true
           initialRegistrationSucceeded = true
           info(s"Successfully registered broker ${brokerId} with broker epoch ${_brokerEpoch}")
-          scheduleNextCommunication(false)
+          scheduleNextCommunicationImmediately() // Immediately send a heartbeat
         } else {
           info(s"Unable to register broker ${brokerId} because the controller returned " +
             s"error ${errorCode}")
-          handleRetryableRegistrationFailure()
+          scheduleNextCommunicationAfterFailure()
         }
       }
-    }
-
-    private def handleRegistrationFailure(): Unit = {
-      if (initialRegistrationSucceeded) {
-        sendBrokerRegistration()
-      } else {
-        eventQueue.beginShutdown("registrationFailure", new ShutdownEvent())
-      }
-    }
-
-    private def handleRetryableRegistrationFailure(): Unit = {
-      sendBrokerRegistration()
     }
   }
 
@@ -263,22 +263,23 @@ class BrokerLifecycleManager(val config: KafkaConfig,
       if (response.authenticationException() != null) {
         error(s"Unable to send broker heartbeat for ${brokerId} because of an " +
           "authentication exception.", response.authenticationException());
-        scheduleNextCommunication(true)
+        scheduleNextCommunicationAfterFailure()
       } else if (response.versionMismatch() != null) {
         error(s"Unable to send broker heartbeat for ${brokerId} because of an API " +
           "version problem.", response.versionMismatch());
-        scheduleNextCommunication(true)
+        scheduleNextCommunicationAfterFailure()
       } else if (response.responseBody() == null) {
         warn(s"Unable to send broker heartbeat for ${brokerId}. Retrying.")
-        sendBrokerHeartbeat()
+        scheduleNextCommunicationAfterFailure()
       } else if (!response.responseBody().isInstanceOf[BrokerHeartbeatResponse]) {
         error(s"Unable to send broker heartbeat for ${brokerId} because the controller " +
           "returned an invalid response type.")
-        scheduleNextCommunication(true)
+        scheduleNextCommunicationAfterFailure()
       } else {
         val message = response.responseBody().asInstanceOf[BrokerHeartbeatResponse]
         val errorCode = Errors.forCode(message.data().errorCode())
         if (errorCode == Errors.NONE) {
+          failedAttempts = 0
           if (_state == BrokerState.STARTING) {
             if (message.data().isCaughtUp()) {
               info(s"Broker ${brokerId} has caught up. Transitioning to RECOVERY state.")
@@ -287,7 +288,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
             } else {
               info(s"Broker ${brokerId} is still waiting to catch up.")
             }
-            scheduleNextCommunication(true)
+            scheduleNextCommunicationAfterSuccess()
           } else if (_state == BrokerState.RECOVERY) {
             if (!message.data().isFenced()) {
               info(s"Broker ${brokerId} has been unfenced. Transitioning to RUNNING state.")
@@ -295,31 +296,39 @@ class BrokerLifecycleManager(val config: KafkaConfig,
             } else {
               info(s"Broker ${brokerId} is still waiting to be unfenced.")
             }
-            scheduleNextCommunication(true)
+            scheduleNextCommunicationAfterSuccess()
           } else if (_state == BrokerState.RUNNING) {
             debug(s"Broker ${brokerId} processed heartbeat response from RUNNING state.")
-            scheduleNextCommunication(true)
+            scheduleNextCommunicationAfterSuccess()
           } else if (_state == BrokerState.SHUTTING_DOWN) {
             info(s"Broker ${brokerId} is ignoring the heartbeat response since it is " +
               "SHUTTING_DOWN.")
           } else {
             error(s"Unexpected broker state ${_state}")
-            scheduleNextCommunication(true)
+            scheduleNextCommunicationAfterSuccess()
           }
         } else {
           warn(s"Broker ${brokerId} sent a heartbeat request but received error ${errorCode}.")
-          scheduleNextCommunication(true)
+          scheduleNextCommunicationAfterFailure()
         }
       }
     }
   }
 
-  private def scheduleNextCommunication(delay: Boolean): Unit = {
-    val intervalNs = if (delay) {
-      NANOSECONDS.convert(config.registrationHeartbeatIntervalMs.longValue(), MILLISECONDS)
-    } else {
-      0L
-    }
+  private def scheduleNextCommunicationImmediately(): Unit = scheduleNextCommunication(0)
+
+  private def scheduleNextCommunicationAfterFailure(): Unit = {
+    val delayMs = resendExponentialBackoff.backoff(failedAttempts)
+    failedAttempts = failedAttempts + 1
+    scheduleNextCommunication(NANOSECONDS.convert(delayMs, MILLISECONDS))
+  }
+
+  private def scheduleNextCommunicationAfterSuccess(): Unit = {
+    scheduleNextCommunication(NANOSECONDS.convert(
+      config.registrationHeartbeatIntervalMs.longValue() , MILLISECONDS))
+  }
+
+  private def scheduleNextCommunication(intervalNs: Long): Unit = {
     val deadlineNs = time.nanoseconds() + intervalNs
     eventQueue.scheduleDeferred("communication",
       new DeadlineFunction(deadlineNs),

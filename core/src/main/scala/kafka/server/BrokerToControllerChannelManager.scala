@@ -84,6 +84,7 @@ object BrokerToControllerChannelManager {
             time: Time,
             metrics: Metrics,
             config: KafkaConfig,
+            maxExponentialBackoff: Long,
             managerName: String,
             threadNamePrefix: Option[String]): BrokerToControllerChannelManager = {
     val logContext = new LogContext(s"[broker-${config.brokerId}-to-controller-$managerName] ")
@@ -137,6 +138,7 @@ object BrokerToControllerChannelManager {
       manualMetadataUpdater,
       controllerNodeProvider,
       time,
+      maxExponentialBackoff,
       config,
       managerName,
       threadNamePrefix)
@@ -154,6 +156,7 @@ class BrokerToControllerChannelManager(kafkaClient: KafkaClient,
                                        metadataUpdater: ManualMetadataUpdater,
                                        controllerNodeProvider: ControllerNodeProvider,
                                        time: Time,
+                                       maxExponentialBackoff: Long,
                                        config: KafkaConfig,
                                        managerName: String,
                                        threadNamePrefix: Option[String]) extends Logging {
@@ -166,6 +169,7 @@ class BrokerToControllerChannelManager(kafkaClient: KafkaClient,
       metadataUpdater,
       controllerNodeProvider,
       time,
+      maxExponentialBackoff,
       config,
       threadName)
   }
@@ -227,6 +231,7 @@ class BrokerToControllerRequestThread(val networkClient: KafkaClient,
                                       val metadataUpdater: ManualMetadataUpdater,
                                       val controllerNodeProvider: ControllerNodeProvider,
                                       val time: Time,
+                                      maxExponentialBackoff: Long,
                                       config: KafkaConfig,
                                       threadName: String)
   extends InterBrokerSendThread(threadName, networkClient, config.controllerSocketTimeoutMs, time, isInterruptible = false) {
@@ -243,7 +248,7 @@ class BrokerToControllerRequestThread(val networkClient: KafkaClient,
     networkClient.wakeup()
   }
 
-  private val exponentialBackoff = new ExponentialBackoff(100, 2, 30000, 0.1)
+  private val exponentialBackoff = new ExponentialBackoff(100, 2, maxExponentialBackoff, 0.1)
   private var waitForControllerRetries = 0L
   private var curController: Option[Node] = None
 
