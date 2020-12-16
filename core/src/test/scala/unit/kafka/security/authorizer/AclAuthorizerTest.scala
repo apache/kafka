@@ -53,7 +53,7 @@ import org.scalatest.Assertions.intercept
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 
-class AclAuthorizerTest extends ZooKeeperTestHarness {
+class AclAuthorizerTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
 
   private val allowReadAcl = new AccessControlEntry(WildcardPrincipalString, WildcardHost, READ, ALLOW)
   private val allowWriteAcl = new AccessControlEntry(WildcardPrincipalString, WildcardHost, WRITE, ALLOW)
@@ -73,9 +73,6 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
   private val requestContext = newRequestContext(principal, InetAddress.getByName("192.168.0.1"))
   private var config: KafkaConfig = _
   private var zooKeeperClient: ZooKeeperClient = _
-
-  private val authorizerTestFactory = new AuthorizerTestFactory(
-    newRequestContext, addAcls, authorizeByResourceType, removeAcls)
 
   class CustomPrincipal(principalType: String, name: String) extends KafkaPrincipal(principalType, name) {
     override def equals(o: scala.Any): Boolean = false
@@ -992,51 +989,6 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testAuthorizeByResourceTypeMultipleAddAndRemove(): Unit = {
-    authorizerTestFactory.testAuthorizeByResourceTypeMultipleAddAndRemove(aclAuthorizer)
-  }
-
-  @Test
-  def testAuthorizeByResourceTypeIsolationUnrelatedDenyWontDominateAllow(): Unit = {
-    authorizerTestFactory.testAuthorizeByResourceTypeIsolationUnrelatedDenyWontDominateAllow(aclAuthorizer)
-  }
-
-  @Test
-  def testAuthorizeByResourceTypeDenyTakesPrecedence(): Unit = {
-    authorizerTestFactory.testAuthorizeByResourceTypeDenyTakesPrecedence(aclAuthorizer)
-  }
-
-  @Test
-  def testAuthorizeByResourceTypeWildcardResourceDenyDominate(): Unit = {
-    authorizerTestFactory.testAuthorizeByResourceTypeWildcardResourceDenyDominate(aclAuthorizer)
-  }
-
-  @Test
-  def testAuthorizeByResourceTypePrefixedResourceDenyDominate(): Unit = {
-    authorizerTestFactory.testAuthorizeByResourceTypePrefixedResourceDenyDominate(aclAuthorizer)
-  }
-
-  @Test
-  def testAuthorizeByResourceTypeWithAllOperationAce(): Unit = {
-    authorizerTestFactory.testAuthorizeByResourceTypeWithAllOperationAce(aclAuthorizer)
-  }
-
-  @Test
-  def testAuthorizeByResourceTypeWithAllHostAce(): Unit = {
-    authorizerTestFactory.testAuthorizeByResourceTypeWithAllHostAce(aclAuthorizer)
-  }
-
-  @Test
-  def testAuthorizeByResourceTypeWithAllPrincipalAce(): Unit = {
-    authorizerTestFactory.testAuthorizeByResourceTypeWithAllPrincipalAce(aclAuthorizer)
-  }
-
-  @Test
-  def testAuthorzeByResourceTypeSuperUserHasAccess(): Unit = {
-    authorizerTestFactory.testAuthorzeByResourceTypeSuperUserHasAccess(aclAuthorizer, "superuser1")
-  }
-
-  @Test
   def testAuthorizeByResourceTypeNoAclFoundOverride(): Unit = {
     testAuthorizeByResourceTypeNoAclFoundOverride(aclAuthorizer)
   }
@@ -1105,30 +1057,34 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     acls
   }
 
-  private def newRequestContext(principal: KafkaPrincipal, clientAddress: InetAddress, apiKey: ApiKeys = ApiKeys.PRODUCE): RequestContext = {
+  @Override
+  def newRequestContext(principal: KafkaPrincipal, clientAddress: InetAddress, apiKey: ApiKeys = ApiKeys.PRODUCE): RequestContext = {
     val securityProtocol = SecurityProtocol.SASL_PLAINTEXT
     val header = new RequestHeader(apiKey, 2, "", 1) //ApiKeys apiKey, short version, String clientId, int correlation
     new RequestContext(header, "", clientAddress, principal, ListenerName.forSecurityProtocol(securityProtocol),
       securityProtocol, ClientInformation.EMPTY, false)
   }
 
-  private def authorize(authorizer: AclAuthorizer, requestContext: RequestContext, operation: AclOperation, resource: ResourcePattern): Boolean = {
+  def authorize(authorizer: AclAuthorizer, requestContext: RequestContext, operation: AclOperation, resource: ResourcePattern): Boolean = {
     val action = new Action(operation, resource, 1, true, true)
     authorizer.authorize(requestContext, List(action).asJava).asScala.head == AuthorizationResult.ALLOWED
   }
 
-  private def authorizeByResourceType(authorizer: Authorizer, requestContext: RequestContext, operation: AclOperation, resourceType: ResourceType) : Boolean = {
+  @Override
+  def authorizeByResourceType(authorizer: Authorizer, requestContext: RequestContext, operation: AclOperation, resourceType: ResourceType) : Boolean = {
     authorizer.authorizeByResourceType(requestContext, operation, resourceType) == AuthorizationResult.ALLOWED
   }
 
-  private def addAcls(authorizer: Authorizer, aces: Set[AccessControlEntry], resourcePattern: ResourcePattern): Unit = {
+  @Override
+  def addAcls(authorizer: Authorizer, aces: Set[AccessControlEntry], resourcePattern: ResourcePattern): Unit = {
     val bindings = aces.map { ace => new AclBinding(resourcePattern, ace) }
     authorizer.createAcls(requestContext, bindings.toList.asJava).asScala
       .map(_.toCompletableFuture.get)
       .foreach { result => result.exception.ifPresent { e => throw e } }
   }
 
-  private def removeAcls(authorizer: Authorizer, aces: Set[AccessControlEntry], resourcePattern: ResourcePattern): Boolean = {
+  @Override
+  def removeAcls(authorizer: Authorizer, aces: Set[AccessControlEntry], resourcePattern: ResourcePattern): Boolean = {
     val bindings = if (aces.isEmpty)
       Set(new AclBindingFilter(resourcePattern.toFilter, AccessControlEntryFilter.ANY) )
     else
@@ -1179,4 +1135,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
       file.getAbsolutePath
     } finally writer.close()
   }
+
+  override def authorizer: Authorizer = aclAuthorizer
+
 }

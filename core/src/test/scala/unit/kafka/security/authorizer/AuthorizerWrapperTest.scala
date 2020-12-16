@@ -39,10 +39,9 @@ import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
 import scala.annotation.nowarn
-import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
 
-class AuthorizerWrapperTest extends ZooKeeperTestHarness {
+class AuthorizerWrapperTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
   @nowarn("cat=deprecation")
   private val wrappedSimpleAuthorizer = new AuthorizerWrapper(new SimpleAclAuthorizer)
   @nowarn("cat=deprecation")
@@ -54,10 +53,6 @@ class AuthorizerWrapperTest extends ZooKeeperTestHarness {
   private val requestContext = newRequestContext(principal, InetAddress.getByName("192.168.0.1"))
   private var config: KafkaConfig = _
   private var zooKeeperClient: ZooKeeperClient = _
-
-  private val aclAdded: ArrayBuffer[(Authorizer, Set[AccessControlEntry], ResourcePattern)] = ArrayBuffer()
-  private val authorizerTestFactory = new AuthorizerTestFactory(
-    newRequestContext, addAcls, authorizeByResourceType, removeAcls)
 
   class CustomPrincipal(principalType: String, name: String) extends KafkaPrincipal(principalType, name) {
     override def equals(o: scala.Any): Boolean = false
@@ -91,51 +86,6 @@ class AuthorizerWrapperTest extends ZooKeeperTestHarness {
     })
     zooKeeperClient.close()
     super.tearDown()
-  }
-
-  @Test
-  def testAuthorizeByResourceTypeMultipleAddAndRemove(): Unit = {
-    authorizerTestFactory.testAuthorizeByResourceTypeMultipleAddAndRemove(wrappedSimpleAuthorizer)
-  }
-
-  @Test
-  def testAuthorizeByResourceTypeIsolationUnrelatedDenyWontDominateAllow(): Unit = {
-    authorizerTestFactory.testAuthorizeByResourceTypeIsolationUnrelatedDenyWontDominateAllow(wrappedSimpleAuthorizer)
-  }
-
-  @Test
-  def testAuthorizeByResourceTypeDenyTakesPrecedence(): Unit = {
-    authorizerTestFactory.testAuthorizeByResourceTypeDenyTakesPrecedence(wrappedSimpleAuthorizer)
-  }
-
-  @Test
-  def testAuthorizeByResourceTypeWildcardResourceDenyDominate(): Unit = {
-    authorizerTestFactory.testAuthorizeByResourceTypeWildcardResourceDenyDominate(wrappedSimpleAuthorizer)
-  }
-
-  @Test
-  def testAuthorizeByResourceTypePrefixedResourceDenyDominate(): Unit = {
-    authorizerTestFactory.testAuthorizeByResourceTypePrefixedResourceDenyDominate(wrappedSimpleAuthorizer)
-  }
-
-  @Test
-  def testAuthorizeByResourceTypeWithAllOperationAce(): Unit = {
-    authorizerTestFactory.testAuthorizeByResourceTypeWithAllOperationAce(wrappedSimpleAuthorizer)
-  }
-
-  @Test
-  def testAuthorizeByResourceTypeWithAllHostAce(): Unit = {
-    authorizerTestFactory.testAuthorizeByResourceTypeWithAllHostAce(wrappedSimpleAuthorizer)
-  }
-
-  @Test
-  def testAuthorizeByResourceTypeWithAllPrincipalAce(): Unit = {
-    authorizerTestFactory.testAuthorizeByResourceTypeWithAllPrincipalAce(wrappedSimpleAuthorizer)
-  }
-
-  @Test
-  def testAuthorzeByResourceTypeSuperUserHasAccess(): Unit = {
-    authorizerTestFactory.testAuthorzeByResourceTypeSuperUserHasAccess(wrappedSimpleAuthorizer, "superuser1")
   }
 
   @Test
@@ -173,26 +123,29 @@ class AuthorizerWrapperTest extends ZooKeeperTestHarness {
       authorizeByResourceType(wrappedSimpleAuthorizer, requestContext, READ, resource.resourceType()))
   }
 
-  private def newRequestContext(principal: KafkaPrincipal, clientAddress: InetAddress, apiKey: ApiKeys = ApiKeys.PRODUCE): RequestContext = {
+  @Override
+  def newRequestContext(principal: KafkaPrincipal, clientAddress: InetAddress, apiKey: ApiKeys = ApiKeys.PRODUCE): RequestContext = {
     val securityProtocol = SecurityProtocol.SASL_PLAINTEXT
     val header = new RequestHeader(apiKey, 2, "", 1) //ApiKeys apiKey, short version, String clientId, int correlation
     new RequestContext(header, "", clientAddress, principal, ListenerName.forSecurityProtocol(securityProtocol),
       securityProtocol, ClientInformation.EMPTY, false)
   }
 
-  private def authorizeByResourceType(authorizer: Authorizer, requestContext: RequestContext, operation: AclOperation, resourceType: ResourceType) : Boolean = {
+  @Override
+  def authorizeByResourceType(authorizer: Authorizer, requestContext: RequestContext, operation: AclOperation, resourceType: ResourceType) : Boolean = {
     authorizer.authorizeByResourceType(requestContext, operation, resourceType) == AuthorizationResult.ALLOWED
   }
 
-  private def addAcls(authorizer: Authorizer, aces: Set[AccessControlEntry], resourcePattern: ResourcePattern): Unit = {
+  @Override
+  def addAcls(authorizer: Authorizer, aces: Set[AccessControlEntry], resourcePattern: ResourcePattern): Unit = {
     val bindings = aces.map { ace => new AclBinding(resourcePattern, ace) }
     authorizer.createAcls(requestContext, bindings.toList.asJava).asScala
       .map(_.toCompletableFuture.get)
       .foreach { result => result.exception.ifPresent { e => throw e } }
-    aclAdded += Tuple3(authorizer, aces, resourcePattern)
   }
 
-  private def removeAcls(authorizer: Authorizer, aces: Set[AccessControlEntry], resourcePattern: ResourcePattern): Boolean = {
+  @Override
+  def removeAcls(authorizer: Authorizer, aces: Set[AccessControlEntry], resourcePattern: ResourcePattern): Boolean = {
     val bindings = if (aces.isEmpty)
       Set(new AclBindingFilter(resourcePattern.toFilter, AccessControlEntryFilter.ANY) )
     else
@@ -207,5 +160,7 @@ class AuthorizerWrapperTest extends ZooKeeperTestHarness {
         !result.aclBindingDeleteResults.isEmpty
       }
   }
+
+  override def authorizer: Authorizer = wrappedSimpleAuthorizer
 
 }

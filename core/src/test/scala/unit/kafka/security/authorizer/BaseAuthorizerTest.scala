@@ -33,15 +33,24 @@ import org.apache.kafka.common.resource.{ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.server.authorizer.Authorizer
 import org.junit.Assert.{assertFalse, assertTrue}
+import org.junit.Test
 
-class AuthorizerTestFactory(val newRequestContext3: (KafkaPrincipal, InetAddress, ApiKeys) => RequestContext,
-                            val addAcls: (Authorizer, Set[AccessControlEntry], ResourcePattern) => Unit,
-                            val authorizeByResourceType: (Authorizer, RequestContext, AclOperation, ResourceType) => Boolean,
-                            val removeAcls: (Authorizer, Set[AccessControlEntry], ResourcePattern) => Unit) {
-  def newRequestContext(kafkaPrincipal: KafkaPrincipal, inetAddress: InetAddress): RequestContext =
-    newRequestContext3(kafkaPrincipal, inetAddress, ApiKeys.PRODUCE)
+trait BaseAuthorizerTest {
 
-  def testAuthorizeByResourceTypeMultipleAddAndRemove(authorizer: Authorizer): Unit = {
+  def addAcls(authorizer: Authorizer, aces: Set[AccessControlEntry], pattern: ResourcePattern): Unit
+
+  def authorizeByResourceType(authorizer: Authorizer, requestContext: RequestContext, aclOperation: AclOperation, resourceType: ResourceType): Boolean
+
+  def removeAcls(authorizer: Authorizer, aces: Set[AccessControlEntry], pattern: ResourcePattern): Boolean
+
+  def newRequestContext(kafkaPrincipal: KafkaPrincipal, inetAddress: InetAddress, apiKey: ApiKeys = ApiKeys.PRODUCE): RequestContext
+
+  def authorizer: Authorizer
+
+  val superUserName = "superuser1"
+
+  @Test
+  def testAuthorizeByResourceTypeMultipleAddAndRemove(): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1")
     val host1 = InetAddress.getByName("192.168.1.1")
     val resource1 = new ResourcePattern(TOPIC, "sb1" + UUID.randomUUID(), LITERAL)
@@ -74,7 +83,8 @@ class AuthorizerTestFactory(val newRequestContext3: (KafkaPrincipal, InetAddress
     }
   }
 
-   def testAuthorizeByResourceTypeIsolationUnrelatedDenyWontDominateAllow(authorizer: Authorizer): Unit = {
+  @Test
+  def testAuthorizeByResourceTypeIsolationUnrelatedDenyWontDominateAllow(): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1")
     val user2 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user2")
     val host1 = InetAddress.getByName("192.168.1.1")
@@ -110,7 +120,8 @@ class AuthorizerTestFactory(val newRequestContext3: (KafkaPrincipal, InetAddress
       authorizeByResourceType(authorizer, u1h2Context, READ, ResourceType.TOPIC))
   }
 
-   def testAuthorizeByResourceTypeDenyTakesPrecedence(authorizer: Authorizer): Unit = {
+  @Test
+  def testAuthorizeByResourceTypeDenyTakesPrecedence(): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1")
     val host1 = InetAddress.getByName("192.168.1.1")
     val resource1 = new ResourcePattern(TOPIC, "sb1" + UUID.randomUUID(), LITERAL)
@@ -128,7 +139,8 @@ class AuthorizerTestFactory(val newRequestContext3: (KafkaPrincipal, InetAddress
       authorizeByResourceType(authorizer, u1h1Context, WRITE, ResourceType.TOPIC))
   }
 
-  def testAuthorizeByResourceTypePrefixedResourceDenyDominate(authorizer: Authorizer): Unit = {
+  @Test
+  def testAuthorizeByResourceTypePrefixedResourceDenyDominate(): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1")
     val host1 = InetAddress.getByName("192.168.1.1")
     val a = new ResourcePattern(GROUP, "a", PREFIXED)
@@ -162,7 +174,8 @@ class AuthorizerTestFactory(val newRequestContext3: (KafkaPrincipal, InetAddress
       authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.GROUP))
   }
 
-  def testAuthorizeByResourceTypeWildcardResourceDenyDominate(authorizer: Authorizer): Unit = {
+  @Test
+  def testAuthorizeByResourceTypeWildcardResourceDenyDominate(): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1")
     val host1 = InetAddress.getByName("192.168.1.1")
     val wildcard = new ResourcePattern(GROUP, ResourcePattern.WILDCARD_RESOURCE, LITERAL)
@@ -190,7 +203,8 @@ class AuthorizerTestFactory(val newRequestContext3: (KafkaPrincipal, InetAddress
       authorizeByResourceType(authorizer, u1h1Context, WRITE, ResourceType.GROUP))
   }
 
-  def testAuthorizeByResourceTypeWithAllOperationAce(authorizer: Authorizer): Unit = {
+  @Test
+  def testAuthorizeByResourceTypeWithAllOperationAce(): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1")
     val host1 = InetAddress.getByName("192.168.1.1")
     val resource1 = new ResourcePattern(TOPIC, "sb1" + UUID.randomUUID(), LITERAL)
@@ -211,7 +225,8 @@ class AuthorizerTestFactory(val newRequestContext3: (KafkaPrincipal, InetAddress
       authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC))
   }
 
-  def testAuthorizeByResourceTypeWithAllHostAce(authorizer: Authorizer): Unit = {
+  @Test
+  def testAuthorizeByResourceTypeWithAllHostAce(): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1")
     val host1 = InetAddress.getByName("192.168.1.1")
     val host2 = InetAddress.getByName("192.168.1.2")
@@ -251,8 +266,8 @@ class AuthorizerTestFactory(val newRequestContext3: (KafkaPrincipal, InetAddress
       authorizeByResourceType(authorizer, u1h2Context, READ, ResourceType.TOPIC))
   }
 
-
-  def testAuthorizeByResourceTypeWithAllPrincipalAce(authorizer: Authorizer): Unit = {
+  @Test
+  def testAuthorizeByResourceTypeWithAllPrincipalAce(): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user1")
     val user2 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user2")
     val allUser = AclEntry.WildcardPrincipalString
@@ -292,7 +307,8 @@ class AuthorizerTestFactory(val newRequestContext3: (KafkaPrincipal, InetAddress
       authorizeByResourceType(authorizer, u2h1Context, READ, ResourceType.TOPIC))
   }
 
-  def testAuthorzeByResourceTypeSuperUserHasAccess(authorizer: Authorizer, superUserName: String): Unit = {
+  @Test
+  def testAuthorzeByResourceTypeSuperUserHasAccess(): Unit = {
     val denyAllAce = new AccessControlEntry(WildcardPrincipalString, WildcardHost, AclOperation.ALL, DENY)
     val superUser1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, superUserName)
     val host1 = InetAddress.getByName("192.0.4.4")
