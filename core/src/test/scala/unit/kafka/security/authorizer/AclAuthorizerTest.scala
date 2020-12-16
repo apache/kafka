@@ -1144,18 +1144,18 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
       }
   }
 
-  private def getAcls(authorizer: Authorizer, resourcePattern: ResourcePattern): Set[AccessControlEntry] = {
+  private def getAcls(authorizer: AclAuthorizer, resourcePattern: ResourcePattern): Set[AccessControlEntry] = {
     val acls = authorizer.acls(new AclBindingFilter(resourcePattern.toFilter, AccessControlEntryFilter.ANY)).asScala.toSet
     acls.map(_.entry)
   }
 
-  private def getAcls(authorizer: Authorizer, principal: KafkaPrincipal): Set[AclBinding] = {
+  private def getAcls(authorizer: AclAuthorizer, principal: KafkaPrincipal): Set[AclBinding] = {
     val filter = new AclBindingFilter(ResourcePatternFilter.ANY,
       new AccessControlEntryFilter(principal.toString, null, AclOperation.ANY, AclPermissionType.ANY))
     authorizer.acls(filter).asScala.toSet
   }
 
-  private def getAcls(authorizer: Authorizer): Set[AclBinding] = {
+  private def getAcls(authorizer: AclAuthorizer): Set[AclBinding] = {
     authorizer.acls(AclBindingFilter.ANY).asScala.toSet
   }
 
