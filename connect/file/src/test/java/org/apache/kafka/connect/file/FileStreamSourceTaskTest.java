@@ -78,10 +78,6 @@ public class FileStreamSourceTaskTest extends EasyMockSupport {
 
     @Test
     public void testNormalLifecycle() throws InterruptedException, IOException {
-        normalLifecycle();
-    }
-
-    private void normalLifecycle() throws InterruptedException, IOException {
         expectOffsetLookupReturnNone();
         replay();
 
