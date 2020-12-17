@@ -57,7 +57,7 @@ public class FileStreamSourceTaskTest extends EasyMockSupport {
         config.put(FileStreamSourceConnector.FILE_CONFIG, tempFile.getAbsolutePath());
         config.put(FileStreamSourceConnector.TOPIC_CONFIG, TOPIC);
         config.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, String.valueOf(FileStreamSourceConnector.DEFAULT_TASK_BATCH_SIZE));
-        task = new FileStreamSourceTask();
+        task = new FileStreamSourceTask(2);
         offsetStorageReader = createMock(OffsetStorageReader.class);
         context = createMock(SourceTaskContext.class);
         task.initialize(context);
@@ -78,13 +78,6 @@ public class FileStreamSourceTaskTest extends EasyMockSupport {
 
     @Test
     public void testNormalLifecycle() throws InterruptedException, IOException {
-        normalLifecycle();
-    }
-
-    @Test
-    public void testNormalLifecycleWithResize() throws InterruptedException, IOException {
-        task = new FileStreamSourceTask(2);
-        task.initialize(context);
         normalLifecycle();
     }
 
@@ -153,14 +146,14 @@ public class FileStreamSourceTaskTest extends EasyMockSupport {
                 "Neque porro quisquam est qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit...\n".getBytes()
         );
 
-        assertEquals(1024, task.bufferSize());
+        assertEquals(2, task.bufferSize());
         List<SourceRecord> records = task.poll();
         assertEquals(5000, records.size());
-        assertEquals(1024, task.bufferSize());
+        assertEquals(128, task.bufferSize());
 
         records = task.poll();
         assertEquals(5000, records.size());
-        assertEquals(1024, task.bufferSize());
+        assertEquals(128, task.bufferSize());
 
         os.close();
         task.stop();
@@ -169,8 +162,6 @@ public class FileStreamSourceTaskTest extends EasyMockSupport {
     @Test
     public void testBufferResize() throws IOException, InterruptedException {
         int batchSize = 1000;
-        task = new FileStreamSourceTask(2);
-        task.initialize(context);
         expectOffsetLookupReturnNone();
         replay();
 
