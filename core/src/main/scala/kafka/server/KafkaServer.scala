@@ -95,8 +95,8 @@ class Kip500Server(
     throw new ConfigException(s"Duplicate role names found in roles config $roles")
   }
 
-  if (config.controllerConnect == null || config.controllerConnect.isEmpty) {
-    throw new ConfigException(s"You must specify a value for ${KafkaConfig.ControllerConnectProp}")
+  if (config.controllerQuorumVoters == null || config.controllerQuorumVoters.isEmpty) {
+    throw new ConfigException(s"You must specify a value for ${KafkaConfig.ControllerQuorumVotersProp}")
   }
 
   private val (metaProps, offlineDirs) = loadMetaProperties()
@@ -133,7 +133,7 @@ class Kip500Server(
       time,
       metrics,
       threadNamePrefix,
-      CompletableFuture.completedFuture(config.controllerConnect)
+      CompletableFuture.completedFuture(config.controllerQuorumVoters)
     ))
   } else {
     None

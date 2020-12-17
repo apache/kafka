@@ -53,7 +53,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
    * The exponential backoff to use for resending communication.
    */
   private val resendExponentialBackoff =
-    new ExponentialBackoff(100, 2, config.registrationLeaseTimeoutMs.toLong, 0.1)
+    new ExponentialBackoff(100, 2, config.brokerSessionTimeoutMs.toLong, 0.1)
 
   /**
    * The number of tries we've tried to communicate.
@@ -326,7 +326,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
 
   private def scheduleNextCommunicationAfterSuccess(): Unit = {
     scheduleNextCommunication(NANOSECONDS.convert(
-      config.registrationHeartbeatIntervalMs.longValue() , MILLISECONDS))
+      config.brokerHeartbeatIntervalMs.longValue() , MILLISECONDS))
   }
 
   private def scheduleNextCommunication(intervalNs: Long): Unit = {

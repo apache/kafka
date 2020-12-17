@@ -63,15 +63,15 @@ import java.util.stream.Collectors;
 public class KafkaClusterTestKit implements AutoCloseable {
     /**
      * This class manages a future which is completed with the proper value for
-     * controller.connect once the randomly assigned ports for all the controllers are
+     * controller.quorum.voters once the randomly assigned ports for all the controllers are
      * known.
      */
-    private static class ControllerConnectFutureManager implements AutoCloseable {
+    private static class ControllerQuorumVotersFutureManager implements AutoCloseable {
         private final int expectedControllers;
         private final CompletableFuture<String> future = new CompletableFuture<>();
         private final Map<Integer, Integer> controllerPorts = new TreeMap<>();
 
-        ControllerConnectFutureManager(int expectedControllers) {
+        ControllerQuorumVotersFutureManager(int expectedControllers) {
             this.expectedControllers = expectedControllers;
         }
 
@@ -110,8 +110,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
         public KafkaClusterTestKit build() throws Exception {
             Map<Integer, Kip500Controller> controllers = new HashMap<>();
             ExecutorService executorService = null;
-            ControllerConnectFutureManager connectFutureManager =
-                new ControllerConnectFutureManager(nodes.controllerNodes().size());
+            ControllerQuorumVotersFutureManager connectFutureManager =
+                new ControllerQuorumVotersFutureManager(nodes.controllerNodes().size());
             File baseDirectory = null;
             LocalLogManager metaLogManager = null;
             try {
@@ -133,10 +133,10 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         "CONTROLLER://localhost:0");
                     props.put(KafkaConfig$.MODULE$.ControllerListenerNamesProp(),
                         "CONTROLLER");
-                    // Note: we can't accurately set controller.connect yet, since we don't
+                    // Note: we can't accurately set controller.quorum.voters yet, since we don't
                     // yet know what ports each controller will pick.  Set it to an
                     // empty string for now as a placeholder.
-                    props.put(KafkaConfig$.MODULE$.ControllerConnectProp(), "");
+                    props.put(KafkaConfig$.MODULE$.ControllerQuorumVotersProp(), "");
                     KafkaConfig config = new KafkaConfig(props, false,
                         OptionConverters.toScala(Optional.empty()));
 
@@ -210,18 +210,18 @@ public class KafkaClusterTestKit implements AutoCloseable {
     private final ExecutorService executorService;
     private final TestKitNodes nodes;
     private final Map<Integer, Kip500Controller> controllers;
-    private final ControllerConnectFutureManager controllerConnectFutureManager;
+    private final ControllerQuorumVotersFutureManager controllerQuorumVotersFutureManager;
     private final File baseDirectory;
 
     private KafkaClusterTestKit(ExecutorService executorService,
                                 TestKitNodes nodes,
                                 Map<Integer, Kip500Controller> controllers,
-                                ControllerConnectFutureManager controllerConnectFutureManager,
+                                ControllerQuorumVotersFutureManager controllerQuorumVotersFutureManager,
                                 File baseDirectory) {
         this.executorService = executorService;
         this.nodes = nodes;
         this.controllers = controllers;
-        this.controllerConnectFutureManager = controllerConnectFutureManager;
+        this.controllerQuorumVotersFutureManager = controllerQuorumVotersFutureManager;
         this.baseDirectory = baseDirectory;
     }
 
@@ -290,8 +290,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
         Properties properties = new Properties();
         if (!controllers.isEmpty()) {
             Collection<Node> controllerNodes = JavaConverters.asJavaCollection(
-                KafkaConfig$.MODULE$.controllerConnectStringsToNodes(
-                    controllerConnectFutureManager.future.get()));
+                KafkaConfig$.MODULE$.controllerQuorumVoterStringsToNodes(
+                    controllerQuorumVotersFutureManager.future.get()));
             StringBuilder bld = new StringBuilder();
             String prefix = "";
             for (Node node : controllerNodes) {
@@ -299,7 +299,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 bld.append(node.host()).append(":").append(node.port());
                 prefix = ",";
             }
-            properties.setProperty(KafkaConfig$.MODULE$.ControllerConnectProp(), bld.toString());
+            properties.setProperty(KafkaConfig$.MODULE$.ControllerQuorumVotersProp(), bld.toString());
             properties.setProperty("bootstrap.servers",
                 controllerNodes.stream().map(n -> n.host() + ":" + n.port()).
                     collect(Collectors.joining(",")));
@@ -311,7 +311,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
     public void close() throws Exception {
         List<Future<?>> futures = new ArrayList<>();
         try {
-            controllerConnectFutureManager.close();
+            controllerQuorumVotersFutureManager.close();
             for (Kip500Controller controller : controllers.values()) {
                 futures.add(executorService.submit(() -> {
                     controller.shutdown();

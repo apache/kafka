@@ -57,7 +57,7 @@ class Kip500Controller(
   val time: Time,
   val metrics: Metrics,
   val threadNamePrefix: Option[String],
-  val controllerConnectFuture: CompletableFuture[String]
+  val controllerQuorumVotersFuture: CompletableFuture[String]
 ) extends Logging with KafkaMetricsGroup {
   import kafka.server.KafkaServer._
 
@@ -153,7 +153,7 @@ class Kip500Controller(
         build()
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
       val controllerNodes =
-        KafkaConfig.controllerConnectStringsToNodes(controllerConnectFuture.get())
+        KafkaConfig.controllerQuorumVoterStringsToNodes(controllerQuorumVotersFuture.get())
       controllerApis = new ControllerApis(socketServer.dataPlaneRequestChannel,
         authorizer,
         quotaManagers,

@@ -656,9 +656,10 @@ class KafkaConfigTest {
         case KafkaConfig.ConnectionSetupTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.ConnectionSetupTimeoutMaxMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.ProcessRolesProp => // ignore string
-        case KafkaConfig.ControllerConnectProp => // ignore string
-        case KafkaConfig.RegistrationHeartbeatIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
-        case KafkaConfig.RegistrationLeaseTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.ControllerQuorumVotersProp => // ignore string
+        case KafkaConfig.InitialBrokerRegistrationTimeoutMs => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.BrokerHeartbeatIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.BrokerSessionTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
 
         case KafkaConfig.AuthorizerClassNameProp => //ignore string
         case KafkaConfig.CreateTopicPolicyClassNameProp => //ignore string
@@ -991,7 +992,7 @@ class KafkaConfigTest {
           KafkaConfig.fromProps(props)
         }
       } catch {
-        case e: Throwable => throw new RuntimeException(s"error handling propert $name", e)
+        case e: Throwable => throw new RuntimeException(s"error handling property $name", e)
       }
     })
   }
@@ -1040,12 +1041,12 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testControllerConnectStringsToNodes(): Unit = {
-    assertEquals(Seq.empty, KafkaConfig.controllerConnectStringsToNodes(""))
+  def testControllerQuorumVoterStringsToNodes(): Unit = {
+    assertEquals(Seq.empty, KafkaConfig.controllerQuorumVoterStringsToNodes(""))
     assertEquals(Seq(new Node(3000, "example.com", 9093)),
-      KafkaConfig.controllerConnectStringsToNodes("3000@example.com:9093"))
+      KafkaConfig.controllerQuorumVoterStringsToNodes("3000@example.com:9093"))
     assertEquals(Seq(new Node(3000, "example.com", 9093),
                      new Node(3001, "example.com", 9094)),
-      KafkaConfig.controllerConnectStringsToNodes("3000@example.com:9093,3001@example.com:9094"))
+      KafkaConfig.controllerQuorumVoterStringsToNodes("3000@example.com:9093,3001@example.com:9094"))
   }
 }
