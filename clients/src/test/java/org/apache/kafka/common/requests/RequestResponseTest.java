@@ -1777,17 +1777,6 @@ public class RequestResponseTest {
         return new InitProducerIdResponse(responseData);
     }
 
-    private Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData> createOffsetForLeaderEpochPartitionData() {
-        Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData> epochs = new HashMap<>();
-        epochs.put(new TopicPartition("topic1", 0),
-                new OffsetsForLeaderEpochRequest.PartitionData(Optional.of(0), 1));
-        epochs.put(new TopicPartition("topic1", 1),
-                new OffsetsForLeaderEpochRequest.PartitionData(Optional.of(0), 1));
-        epochs.put(new TopicPartition("topic2", 2),
-                new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty(), 3));
-        return epochs;
-    }
-
     private OffsetForLeaderTopicCollection createOffsetForLeaderTopicCollection() {
         OffsetForLeaderTopicCollection topics = new OffsetForLeaderTopicCollection();
         topics.add(new OffsetForLeaderTopic()
@@ -1817,7 +1806,7 @@ public class RequestResponseTest {
     }
 
     private OffsetsForLeaderEpochRequest createLeaderEpochRequestForReplica(int version, int replicaId) {
-        Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData> epochs = createOffsetForLeaderEpochPartitionData();
+        OffsetForLeaderTopicCollection epochs = createOffsetForLeaderTopicCollection();
         return OffsetsForLeaderEpochRequest.Builder.forFollower((short) version, epochs, replicaId).build();
     }
 

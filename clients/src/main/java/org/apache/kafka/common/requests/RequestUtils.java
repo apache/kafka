@@ -33,7 +33,7 @@ public final class RequestUtils {
 
     private RequestUtils() {}
 
-    static Optional<Integer> getLeaderEpoch(int leaderEpoch) {
+    public static Optional<Integer> getLeaderEpoch(int leaderEpoch) {
         return leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH ?
             Optional.empty() : Optional.of(leaderEpoch);
     }

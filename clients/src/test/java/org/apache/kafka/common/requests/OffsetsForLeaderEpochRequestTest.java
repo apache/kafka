@@ -21,8 +21,6 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetFor
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.junit.Test;
 
-import java.util.Collections;
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 
@@ -47,7 +45,7 @@ public class OffsetsForLeaderEpochRequestTest {
         for (short version = 0; version < ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(); version++) {
             int replicaId = 1;
             OffsetsForLeaderEpochRequest.Builder builder = OffsetsForLeaderEpochRequest.Builder.forFollower(
-                    version, Collections.emptyMap(), replicaId);
+                    version, new OffsetForLeaderTopicCollection(), replicaId);
             OffsetsForLeaderEpochRequest request = builder.build();
             OffsetsForLeaderEpochRequest parsed = OffsetsForLeaderEpochRequest.parse(request.serialize(), version);
             if (version < 3)

@@ -16,11 +16,8 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData;
-import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition;
-import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopicCollection;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
@@ -28,11 +25,8 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetFo
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.RecordBatch;
 
 import java.nio.ByteBuffer;
-import java.util.Map;
-import java.util.Optional;
 
 import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH;
 import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET;
@@ -71,23 +65,10 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
             return new Builder((short) 3, ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(), data);
         }
 
-        public static Builder forFollower(short version, Map<TopicPartition, PartitionData> epochsByPartition, int replicaId) {
+        public static Builder forFollower(short version, OffsetForLeaderTopicCollection epochsByPartition, int replicaId) {
             OffsetForLeaderEpochRequestData data = new OffsetForLeaderEpochRequestData();
             data.setReplicaId(replicaId);
-
-            epochsByPartition.forEach((partitionKey, partitionValue) -> {
-                OffsetForLeaderTopic topic = data.topics().find(partitionKey.topic());
-                if (topic == null) {
-                    topic = new OffsetForLeaderTopic().setTopic(partitionKey.topic());
-                    data.topics().add(topic);
-                }
-                topic.partitions().add(new OffsetForLeaderPartition()
-                    .setPartition(partitionKey.partition())
-                    .setLeaderEpoch(partitionValue.leaderEpoch)
-                    .setCurrentLeaderEpoch(partitionValue.currentLeaderEpoch
-                        .orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
-                );
-            });
+            data.setTopics(epochsByPartition);
             return new Builder(version, version, data);
         }
 
@@ -141,25 +122,6 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
         });
 
         return new OffsetsForLeaderEpochResponse(responseData);
-    }
-
-    public static class PartitionData {
-        public final Optional<Integer> currentLeaderEpoch;
-        public final int leaderEpoch;
-
-        public PartitionData(Optional<Integer> currentLeaderEpoch, int leaderEpoch) {
-            this.currentLeaderEpoch = currentLeaderEpoch;
-            this.leaderEpoch = leaderEpoch;
-        }
-
-        @Override
-        public String toString() {
-            StringBuilder bld = new StringBuilder();
-            bld.append("(currentLeaderEpoch=").append(currentLeaderEpoch).
-                append(", leaderEpoch=").append(leaderEpoch).
-                append(")");
-            return bld.toString();
-        }
     }
 
     /**
