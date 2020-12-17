@@ -319,7 +319,7 @@ public class Fetcher<K, V> implements Closeable {
                                     short responseVersion = resp.requestHeader().apiVersion();
 
                                     completedFetches.add(new CompletedFetch(partition, partitionData,
-                                            metricAggregator, batches, fetchOffset, responseVersion));
+                                            metricAggregator, batches, fetchOffset, responseVersion, resp.receivedTimeMs()));
                                 }
                             }
 
@@ -598,8 +598,8 @@ public class Fetcher<K, V> implements Closeable {
      *         the defaultResetPolicy is NONE
      * @throws TopicAuthorizationException If there is TopicAuthorization error in fetchResponse.
      */
-    public Map<TopicPartition, List<ConsumerRecord<K, V>>> fetchedRecords() {
-        Map<TopicPartition, List<ConsumerRecord<K, V>>> fetched = new HashMap<>();
+    public FetchedRecords<K, V> fetchedRecords() {
+        FetchedRecords<K, V> fetched = new FetchedRecords<>();
         Queue<CompletedFetch> pausedCompletedFetches = new ArrayDeque<>();
         int recordsRemaining = maxPollRecords;
 
@@ -637,11 +637,43 @@ public class Fetcher<K, V> implements Closeable {
                 } else {
                     List<ConsumerRecord<K, V>> records = fetchRecords(nextInLineFetch, recordsRemaining);
 
+                    TopicPartition partition = nextInLineFetch.partition;
+
+                    if (subscriptions.isAssigned(partition)) {
+                        final long receivedTimestamp = nextInLineFetch.receivedTimestamp;
+
+                        final long startOffset = nextInLineFetch.partitionData.logStartOffset();
+
+                        // read_uncommitted:
+                        //that is, the offset of the last successfully replicated message plus one
+                        final long hwm = nextInLineFetch.partitionData.highWatermark();
+                        // read_committed:
+                        //the minimum of the high watermark and the smallest offset of any open transaction
+                        final long lso = nextInLineFetch.partitionData.lastStableOffset();
+
+                        // end offset is:
+                        final long endOffset =
+                            isolationLevel == IsolationLevel.READ_UNCOMMITTED ? hwm : lso;
+
+                        final FetchPosition fetchPosition = subscriptions.position(partition);
+
+                        final FetchedRecords.FetchMetadata fetchMetadata = fetched.metadata().get(partition);
+                        if (fetchMetadata == null
+                            || !fetchMetadata.position().offsetEpoch.isPresent()
+                            || fetchPosition.offsetEpoch.isPresent()
+                            && fetchMetadata.position().offsetEpoch.get() <= fetchPosition.offsetEpoch.get()) {
+
+                            fetched.metadata().put(
+                                partition,
+                                new FetchedRecords.FetchMetadata(receivedTimestamp, fetchPosition, startOffset, endOffset)
+                            );
+                        }
+                    }
+
                     if (!records.isEmpty()) {
-                        TopicPartition partition = nextInLineFetch.partition;
-                        List<ConsumerRecord<K, V>> currentRecords = fetched.get(partition);
+                        List<ConsumerRecord<K, V>> currentRecords = fetched.records().get(partition);
                         if (currentRecords == null) {
-                            fetched.put(partition, records);
+                            fetched.records().put(partition, records);
                         } else {
                             // this case shouldn't usually happen because we only send one fetch at a time per partition,
                             // but it might conceivably happen in some rare cases (such as partition leader changes).
@@ -649,7 +681,7 @@ public class Fetcher<K, V> implements Closeable {
                             List<ConsumerRecord<K, V>> newRecords = new ArrayList<>(records.size() + currentRecords.size());
                             newRecords.addAll(currentRecords);
                             newRecords.addAll(records);
-                            fetched.put(partition, newRecords);
+                            fetched.records().put(partition, newRecords);
                         }
                         recordsRemaining -= records.size();
                     }
@@ -1459,6 +1491,7 @@ public class Fetcher<K, V> implements Closeable {
         private final FetchResponse.PartitionData<Records> partitionData;
         private final FetchResponseMetricAggregator metricAggregator;
         private final short responseVersion;
+        private final long receivedTimestamp;
 
         private int recordsRead;
         private int bytesRead;
@@ -1477,13 +1510,15 @@ public class Fetcher<K, V> implements Closeable {
                                FetchResponseMetricAggregator metricAggregator,
                                Iterator<? extends RecordBatch> batches,
                                Long fetchOffset,
-                               short responseVersion) {
+                               short responseVersion,
+                               final long receivedTimestamp) {
             this.partition = partition;
             this.partitionData = partitionData;
             this.metricAggregator = metricAggregator;
             this.batches = batches;
             this.nextFetchOffset = fetchOffset;
             this.responseVersion = responseVersion;
+            this.receivedTimestamp = receivedTimestamp;
             this.lastEpoch = Optional.empty();
             this.abortedProducerIds = new HashSet<>();
             this.abortedTransactions = abortedTransactions(partitionData);

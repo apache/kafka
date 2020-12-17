@@ -331,9 +331,29 @@ public class StreamThread extends Thread {
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
 
+        log.info("Creating consumer client");
+        final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
+        final Map<String, Object> consumerConfigs = config.getMainConsumerConfigs(applicationId, getConsumerClientId(threadId), threadIdx);
+        consumerConfigs.put(StreamsConfig.InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
+
+        final String originalReset = (String) consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
+        // If there are any overrides, we never fall through to the consumer, but only handle offset management ourselves.
+        if (!builder.latestResetTopicsPattern().pattern().isEmpty() || !builder.earliestResetTopicsPattern().pattern().isEmpty()) {
+            consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
+        }
+
+        final int maxPollTimeMs =
+            new InternalConsumerConfig(config.getMainConsumerConfigs("", "", 0))
+                .getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG);
+
+        // Heuristically bound the topic-partition metadata staleness at twice the max poll interval.
+        // This should typically mean that we get at least four chances to refresh the metadata before it expires.
+        final long metadataStalenessBoundMs = 2L * maxPollTimeMs;
+
         final ActiveTaskCreator activeTaskCreator = new ActiveTaskCreator(
             builder,
             config,
+            metadataStalenessBoundMs,
             streamsMetrics,
             stateDirectory,
             changelogReader,
@@ -363,20 +383,9 @@ public class StreamThread extends Thread {
             builder,
             adminClient,
             stateDirectory,
-            StreamThread.processingMode(config)
+            processingMode(config)
         );
         referenceContainer.taskManager = taskManager;
-
-        log.info("Creating consumer client");
-        final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
-        final Map<String, Object> consumerConfigs = config.getMainConsumerConfigs(applicationId, getConsumerClientId(threadId), threadIdx);
-        consumerConfigs.put(StreamsConfig.InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
-
-        final String originalReset = (String) consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
-        // If there are any overrides, we never fall through to the consumer, but only handle offset management ourselves.
-        if (!builder.latestResetTopicsPattern().pattern().isEmpty() || !builder.earliestResetTopicsPattern().pattern().isEmpty()) {
-            consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
-        }
 
         final Consumer<byte[], byte[]> mainConsumer = clientSupplier.getConsumer(consumerConfigs);
         changelogReader.setMainConsumer(mainConsumer);
@@ -400,7 +409,8 @@ public class StreamThread extends Thread {
             referenceContainer.nextScheduledRebalanceMs,
             shutdownErrorHook,
             streamsUncaughtExceptionHandler,
-            cacheSize -> cache.resize(cacheSize)
+            cacheSize -> cache.resize(cacheSize),
+            maxPollTimeMs
         );
 
         taskManager.setPartitionResetter(partitions -> streamThread.resetOffsets(partitions, null));
@@ -454,7 +464,8 @@ public class StreamThread extends Thread {
                         final AtomicLong nextProbingRebalanceMs,
                         final Runnable shutdownErrorHook,
                         final java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler,
-                        final java.util.function.Consumer<Long> cacheResizer) {
+                        final java.util.function.Consumer<Long> cacheResizer,
+                        final int maxPollTimeMs) {
         super(threadId);
         this.stateLock = new Object();
 
@@ -503,9 +514,7 @@ public class StreamThread extends Thread {
         this.nextProbingRebalanceMs = nextProbingRebalanceMs;
 
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
-        final int dummyThreadIdx = 1;
-        this.maxPollTimeMs = new InternalConsumerConfig(config.getMainConsumerConfigs("dummyGroupId", "dummyClientId", dummyThreadIdx))
-            .getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG);
+        this.maxPollTimeMs = maxPollTimeMs;
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
 
         this.numIterations = 1;

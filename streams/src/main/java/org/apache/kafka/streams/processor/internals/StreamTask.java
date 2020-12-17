@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -67,6 +68,8 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
  */
 public class StreamTask extends AbstractTask implements ProcessorNodePunctuator, Task {
 
+    private static final long IDLE_START_TIME_NOT_SET = -1;
+
     // visible for testing
     static final byte LATEST_MAGIC_BYTE = 1;
 
@@ -78,8 +81,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     // leaked into this class, which is to checkpoint after committing if EOS is not enabled.
     private final boolean eosEnabled;
 
-    private final long maxTaskIdleMs;
     private final int maxBufferedSize;
+    private final long metadataStalenessBound;
     private final PartitionGroup partitionGroup;
     private final RecordCollector recordCollector;
     private final PartitionGroup.RecordInfo recordInfo;
@@ -95,12 +98,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final Sensor processLatencySensor;
     private final Sensor punctuateLatencySensor;
     private final Sensor bufferedRecordsSensor;
-    private final Sensor enforcedProcessingSensor;
     private final Map<String, Sensor> e2eLatencySensors = new HashMap<>();
     private final InternalProcessorContext processorContext;
     private final RecordQueueCreator recordQueueCreator;
 
-    private long idleStartTimeMs;
     private boolean commitNeeded = false;
     private boolean commitRequested = false;
 
@@ -109,6 +110,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                       final ProcessorTopology topology,
                       final Consumer<byte[], byte[]> mainConsumer,
                       final StreamsConfig config,
+                      final long metadataStalenessBound,
                       final StreamsMetricsImpl streamsMetrics,
                       final StateDirectory stateDirectory,
                       final ThreadCache cache,
@@ -139,12 +141,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         this.streamsMetrics = streamsMetrics;
         closeTaskSensor = ThreadMetrics.closeTaskSensor(threadId, streamsMetrics);
         final String taskId = id.toString();
-        if (streamsMetrics.version() == Version.FROM_0100_TO_24) {
-            final Sensor parent = ThreadMetrics.commitOverTasksSensor(threadId, streamsMetrics);
-            enforcedProcessingSensor = TaskMetrics.enforcedProcessingSensor(threadId, taskId, streamsMetrics, parent);
-        } else {
-            enforcedProcessingSensor = TaskMetrics.enforcedProcessingSensor(threadId, taskId, streamsMetrics);
-        }
         processRatioSensor = TaskMetrics.activeProcessRatioSensor(threadId, taskId, streamsMetrics);
         processLatencySensor = TaskMetrics.processLatencySensor(threadId, taskId, streamsMetrics);
         punctuateLatencySensor = TaskMetrics.punctuateSensor(threadId, taskId, streamsMetrics);
@@ -167,8 +163,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         streamTimePunctuationQueue = new PunctuationQueue();
         systemTimePunctuationQueue = new PunctuationQueue();
-        maxTaskIdleMs = config.getLong(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
         maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
+        this.metadataStalenessBound = metadataStalenessBound;
 
         // initialize the consumed and committed offset cache
         consumedOffsets = new HashMap<>();
@@ -176,8 +172,21 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         recordQueueCreator = new RecordQueueCreator(logContext, config.defaultTimestampExtractor(), config.defaultDeserializationExceptionHandler());
 
         recordInfo = new PartitionGroup.RecordInfo();
-        partitionGroup = new PartitionGroup(createPartitionQueues(),
-                TaskMetrics.recordLatenessSensor(threadId, taskId, streamsMetrics));
+
+        final Sensor enforcedProcessingSensor;
+        if (streamsMetrics.version() == Version.FROM_0100_TO_24) {
+            final Sensor parent = ThreadMetrics.commitOverTasksSensor(threadId, streamsMetrics);
+            enforcedProcessingSensor = TaskMetrics.enforcedProcessingSensor(threadId, taskId, streamsMetrics, parent);
+        } else {
+            enforcedProcessingSensor = TaskMetrics.enforcedProcessingSensor(threadId, taskId, streamsMetrics);
+        }
+        final long maxTaskIdleMs = config.getLong(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG);
+        partitionGroup = new PartitionGroup(id,
+                                            createPartitionQueues(),
+                                            TaskMetrics.recordLatenessSensor(threadId, taskId, streamsMetrics),
+                                            enforcedProcessingSensor,
+                                            maxTaskIdleMs,
+                                            metadataStalenessBound);
 
         stateMgr.registerGlobalStateStores(topology.globalStateStores());
     }
@@ -233,7 +242,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 initializeMetadata();
                 initializeTopology();
                 processorContext.initialize();
-                idleStartTimeMs = RecordQueue.UNKNOWN;
 
                 transitionTo(State.RUNNING);
 
@@ -633,26 +641,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             return false;
         }
 
-        if (partitionGroup.allPartitionsBuffered()) {
-            idleStartTimeMs = RecordQueue.UNKNOWN;
-            return true;
-        } else if (partitionGroup.numBuffered() > 0) {
-            if (idleStartTimeMs == RecordQueue.UNKNOWN) {
-                idleStartTimeMs = wallClockTime;
-            }
-
-            if (wallClockTime - idleStartTimeMs >= maxTaskIdleMs) {
-                enforcedProcessingSensor.record(1.0d, wallClockTime);
-                return true;
-            } else {
-                return false;
-            }
-        } else {
-            // there's no data in any of the topics; we should reset the enforced
-            // processing timer
-            idleStartTimeMs = RecordQueue.UNKNOWN;
-            return false;
-        }
+        return partitionGroup.readyToProcess(wallClockTime);
     }
 
     /**
@@ -719,13 +708,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         } catch (final RuntimeException e) {
             final String stackTrace = getStacktraceString(e);
             throw new StreamsException(String.format("Exception caught in process. taskId=%s, " +
-                                                  "processor=%s, topic=%s, partition=%d, offset=%d, stacktrace=%s",
-                                              id(),
-                                              processorContext.currentNode().name(),
-                                              record.topic(),
-                                              record.partition(),
-                                              record.offset(),
-                                              stackTrace
+                                                         "processor=%s, topic=%s, partition=%d, offset=%d, stacktrace=%s",
+                                                     id(),
+                                                     processorContext.currentNode().name(),
+                                                     record.topic(),
+                                                     record.partition(),
+                                                     record.offset(),
+                                                     stackTrace
             ), e);
         } finally {
             processorContext.setCurrentNode(null);
@@ -814,14 +803,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private void initializeMetadata() {
         try {
             final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = mainConsumer.committed(inputPartitions()).entrySet().stream()
-                    .filter(e -> e.getValue() != null)
-                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                                                                                          .filter(e -> e.getValue() != null)
+                                                                                          .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
             initializeTaskTime(offsetsAndMetadata);
         } catch (final TimeoutException timeoutException) {
             log.warn(
                 "Encountered {} while trying to fetch committed offsets, will retry initializing the metadata in the next loop." +
                     "\nConsider overwriting consumer config {} to a larger value to avoid timeout errors",
-                time.toString(),
+                time,
                 ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
 
             // re-throw to trigger `task.timeout.ms`
@@ -840,7 +829,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 final long committedTimestamp = decodeTimestamp(metadata.metadata());
                 partitionGroup.setPartitionTime(partition, committedTimestamp);
                 log.debug("A committed timestamp was detected: setting the partition time of partition {}"
-                    + " to {} in stream task {}", partition, committedTimestamp, id);
+                              + " to {} in stream task {}", partition, committedTimestamp, id);
             } else {
                 log.debug("No committed timestamp was found in metadata for partition {}", partition);
             }
@@ -899,6 +888,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         if (newQueueSize > maxBufferedSize) {
             mainConsumer.pause(singleton(partition));
         }
+    }
+
+    @Override
+    public void addFetchedMetadata(final TopicPartition partition, final ConsumerRecords.Metadata metadata) {
+        partitionGroup.addFetchedMetadata(partition, metadata);
     }
 
     /**
@@ -1137,21 +1131,21 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             final SourceNode<?, ?, ?, ?> source = topology.source(partition.topic());
             if (source == null) {
                 throw new TopologyException(
-                        "Topic is unknown to the topology. " +
-                                "This may happen if different KafkaStreams instances of the same application execute different Topologies. " +
-                                "Note that Topologies are only identical if all operators are added in the same order."
+                    "Topic is unknown to the topology. " +
+                        "This may happen if different KafkaStreams instances of the same application execute different Topologies. " +
+                        "Note that Topologies are only identical if all operators are added in the same order."
                 );
             }
 
             final TimestampExtractor sourceTimestampExtractor = source.getTimestampExtractor();
             final TimestampExtractor timestampExtractor = sourceTimestampExtractor != null ? sourceTimestampExtractor : defaultTimestampExtractor;
             return new RecordQueue(
-                    partition,
-                    source,
-                    timestampExtractor,
-                    defaultDeserializationExceptionHandler,
-                    processorContext,
-                    logContext
+                partition,
+                source,
+                timestampExtractor,
+                defaultDeserializationExceptionHandler,
+                processorContext,
+                logContext
             );
         }
     }

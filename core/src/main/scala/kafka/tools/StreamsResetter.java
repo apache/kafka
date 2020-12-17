@@ -21,7 +21,7 @@ import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
 import joptsimple.OptionSpecBuilder;
-import kafka.utils.CommandLineUtils;
+//import kafka.utils.CommandLineUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsOptions;
@@ -258,17 +258,17 @@ public class StreamsResetter {
         try {
             options = optionParser.parse(args);
             if (args.length == 0 || options.has(helpOption)) {
-                CommandLineUtils.printUsageAndDie(optionParser, USAGE);
+//                CommandLineUtils.printUsageAndDie(optionParser, USAGE);
             }
             if (options.has(versionOption)) {
-                CommandLineUtils.printVersionAndDie();
+//                CommandLineUtils.printVersionAndDie();
             }
         } catch (final OptionException e) {
-            CommandLineUtils.printUsageAndDie(optionParser, e.getMessage());
+//            CommandLineUtils.printUsageAndDie(optionParser, e.getMessage());
         }
 
         if (options.has(executeOption) && options.has(dryRunOption)) {
-            CommandLineUtils.printUsageAndDie(optionParser, "Only one of --dry-run and --execute can be specified");
+//            CommandLineUtils.printUsageAndDie(optionParser, "Only one of --dry-run and --execute can be specified");
         }
 
         final Set<OptionSpec<?>> allScenarioOptions = new HashSet<>();
@@ -295,11 +295,11 @@ public class StreamsResetter {
                                       final OptionSpec<T> option) {
         final Set<OptionSpec<?>> invalidOptions = new HashSet<>(allOptions);
         invalidOptions.remove(option);
-        CommandLineUtils.checkInvalidArgs(
-            optionParser,
-            options,
-            option,
-            JavaConverters.asScalaSetConverter(invalidOptions).asScala());
+//        CommandLineUtils.checkInvalidArgs(
+//            optionParser,
+//            options,
+//            option,
+//            JavaConverters.asScalaSetConverter(invalidOptions).asScala());
     }
 
     private int maybeResetInputAndSeekToEndIntermediateTopicOffsets(final Map<Object, Object> consumerConfig,
