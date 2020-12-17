@@ -2239,11 +2239,11 @@ class ReplicaManagerTest {
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
 
       replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0), (_, _) => ())
-      assertTrue(!replicaManager.localLog(topicPartition).isEmpty)
+      assertFalse(replicaManager.localLog(topicPartition).isEmpty)
       val id = topicIds.get(topicPartition.topic())
       val log = replicaManager.localLog(topicPartition).get
-      assertTrue(!log.partitionMetadataFile.isEmpty)
-      assertTrue(!log.partitionMetadataFile.get.isEmpty())
+      assertFalse(log.partitionMetadataFile.isEmpty)
+      assertFalse(log.partitionMetadataFile.get.isEmpty())
       val partitionMetadata = log.partitionMetadataFile.get.read()
 
       // Current version of PartitionMetadataFile is 0.
@@ -2258,12 +2258,14 @@ class ReplicaManagerTest {
     try {
       val brokerList = Seq[Integer](0, 1).asJava
       val topicPartition = new TopicPartition(topic, 0)
+      val topicPartitionFoo = new TopicPartition("foo", 0)
       replicaManager.createPartition(topicPartition)
         .createLogIfNotExists(isNew = false, isFutureReplica = false,
           new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints))
-      val topicIds = Collections.singletonMap(topic, Uuid.ZERO_UUID)
+      val topicIds = Map(topic -> Uuid.ZERO_UUID, "foo" -> Uuid.randomUuid()).asJava
 
-      def leaderAndIsrRequest(epoch: Int, name: String): LeaderAndIsrRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
+      def leaderAndIsrRequest(epoch: Int, name: String, version: Short): LeaderAndIsrRequest = LeaderAndIsrRequest.parse(
+        new LeaderAndIsrRequest.Builder(version, 0, 0, brokerEpoch,
         Seq(new LeaderAndIsrPartitionState()
           .setTopicName(name)
           .setPartitionIndex(0)
@@ -2275,21 +2277,76 @@ class ReplicaManagerTest {
           .setReplicas(brokerList)
           .setIsNew(true)).asJava,
         topicIds,
-        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
+        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build().serialize(), version)
 
       // The file has no contents if the topic does not have an associated topic ID.
-      replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0, "fakeTopic"), (_, _) => ())
-      assertTrue(!replicaManager.localLog(topicPartition).isEmpty)
+      replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0, "fakeTopic", ApiKeys.LEADER_AND_ISR.latestVersion), (_, _) => ())
+      assertFalse(replicaManager.localLog(topicPartition).isEmpty)
       val log = replicaManager.localLog(topicPartition).get
-      assertTrue(!log.partitionMetadataFile.isEmpty)
+      assertFalse(log.partitionMetadataFile.isEmpty)
       assertTrue(log.partitionMetadataFile.get.isEmpty())
 
       // The file has no contents if the topic has the default UUID.
-      replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0, topic), (_, _) => ())
-      assertTrue(!replicaManager.localLog(topicPartition).isEmpty)
+      replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0, topic, ApiKeys.LEADER_AND_ISR.latestVersion), (_, _) => ())
+      assertFalse(replicaManager.localLog(topicPartition).isEmpty)
       val log2 = replicaManager.localLog(topicPartition).get
-      assertTrue(!log2.partitionMetadataFile.isEmpty)
+      assertFalse(log2.partitionMetadataFile.isEmpty)
       assertTrue(log2.partitionMetadataFile.get.isEmpty())
+
+      // The file has no contents if the request is an older version
+      replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0, "foo", 0), (_, _) => ())
+      assertFalse(replicaManager.localLog(topicPartitionFoo).isEmpty)
+      val log3 = replicaManager.localLog(topicPartitionFoo).get
+      assertFalse(log3.partitionMetadataFile.isEmpty)
+      assertTrue(log3.partitionMetadataFile.get.isEmpty())
+
+      // The file has no contents if the request is an older version
+      replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0, "foo", 4), (_, _) => ())
+      assertFalse(replicaManager.localLog(topicPartitionFoo).isEmpty)
+      val log4 = replicaManager.localLog(topicPartitionFoo).get
+      assertFalse(log4.partitionMetadataFile.isEmpty)
+      assertTrue(log4.partitionMetadataFile.get.isEmpty())
+    } finally replicaManager.shutdown(checkpointHW = false)
+  }
+
+  @Test
+  def testPartitionsArePropagatedOnlyForValidVersion(): Unit = {
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time))
+    try {
+      val brokerList = Seq[Integer](0, 1).asJava
+      val topicPartition = new TopicPartition(topic, 0)
+      replicaManager.createPartition(topicPartition)
+        .createLogIfNotExists(isNew = false, isFutureReplica = false,
+          new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints))
+      val topicIds = Collections.singletonMap("topic", Uuid.randomUuid())
+
+      def leaderAndIsrRequest(epoch: Int, version: Short, partition: Int): LeaderAndIsrRequest = LeaderAndIsrRequest.parse(
+        new LeaderAndIsrRequest.Builder(version, 0, 0, brokerEpoch,
+        Seq(new LeaderAndIsrPartitionState()
+          .setTopicName("topic")
+          .setPartitionIndex(partition)
+          .setControllerEpoch(0)
+          .setLeader(0)
+          .setLeaderEpoch(epoch)
+          . setIsr(brokerList)
+          .setZkVersion(0)
+          .setReplicas(brokerList)
+          .setIsNew(true)).asJava,
+        topicIds,
+        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build().serialize(), version)
+
+
+      val responseVersion0 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(-1, 0, 0), (_, _) => ())
+      assertEquals(1, responseVersion0.errorCounts().get(Errors.STALE_CONTROLLER_EPOCH))
+      val responseVersion4 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(-1, 4, 1), (_, _) => ())
+      assertEquals(1, responseVersion4.errorCounts().get(Errors.STALE_CONTROLLER_EPOCH))
+      // Make a request so the epoch is bumped to a valid number.
+      replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0, 0, 2), (_, _) => ())
+      val responseVersion5 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0, 5, 2), (_, _) => ())
+      assertEquals(null, responseVersion5.errorCounts().get(Errors.STALE_CONTROLLER_EPOCH))
+      // Now that ID was added to log, should be stale again.
+      val responseVersion6 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0, 5, 2), (_, _) => ())
+      assertEquals(1, responseVersion6.errorCounts().get(Errors.STALE_CONTROLLER_EPOCH))
     } finally replicaManager.shutdown(checkpointHW = false)
   }
 }

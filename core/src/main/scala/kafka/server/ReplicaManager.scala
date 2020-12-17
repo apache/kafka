@@ -1374,8 +1374,9 @@ class ReplicaManager(val config: KafkaConfig,
             def propagatePartitionState(requestLeaderEpoch: Int, currentLeaderEpoch: Int, partition: Partition): Boolean = {
               requestLeaderEpoch > currentLeaderEpoch ||
                 (requestLeaderEpoch == currentLeaderEpoch &&
-                  partition.log.map(_.topicId).isEmpty &&
-                  topicIds.get(topicPartition.topic()) != Uuid.ZERO_UUID)
+                  partition.log.filter(_.topicId.equals(Uuid.ZERO_UUID)).isDefined &&
+                  topicIds.get(topicPartition.topic()) != null &&
+                  !topicIds.get(topicPartition.topic()).equals(Uuid.ZERO_UUID))
             }
 
             // Next check partition's leader epoch
