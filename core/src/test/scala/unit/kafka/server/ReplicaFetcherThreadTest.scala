@@ -27,13 +27,14 @@ import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.FetchResponseData
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, Records, SimpleRecord}
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
-import org.apache.kafka.common.requests.{FetchResponse, OffsetsForLeaderEpochRequest}
+import org.apache.kafka.common.requests.FetchResponse
 import org.apache.kafka.common.utils.SystemTime
 import org.easymock.EasyMock._
 import org.easymock.{Capture, CaptureType}
@@ -210,8 +211,12 @@ class ReplicaFetcherThreadTest {
       leaderEndpointBlockingSend = Some(mockBlockingSend))
 
     val result = thread.fetchEpochEndOffsets(Map(
-      t1p0 -> new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty(), 0),
-      t1p1 -> new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty(), 0)))
+      t1p0 -> new OffsetForLeaderPartition()
+        .setPartition(t1p0.partition)
+        .setLeaderEpoch(0),
+      t1p1 -> new OffsetForLeaderPartition()
+        .setPartition(t1p1.partition)
+        .setLeaderEpoch(0)))
 
     val expected = Map(
       t1p0 -> newOffsetForLeaderPartitionResult(t1p0, Errors.UNKNOWN_SERVER_ERROR, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET),
