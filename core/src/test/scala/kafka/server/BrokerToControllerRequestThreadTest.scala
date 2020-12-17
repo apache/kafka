@@ -56,7 +56,7 @@ class BrokerToControllerRequestThreadTest {
     when(metadataCache.getAliveBrokers).thenReturn(Seq(activeController))
     when(metadataCache.getAliveBroker(controllerId)).thenReturn(Some(activeController))
 
-    val expectedResponse = RequestTestUtils.metadataUpdateWith(2, Collections.singletonMap("a", new Integer(2)))
+    val expectedResponse = RequestTestUtils.metadataUpdateWith(2, Collections.singletonMap("a", 2))
     val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), requestQueue, metadataCache,
       config, listenerName, time, "")
     mockClient.prepareResponse(expectedResponse)
@@ -100,7 +100,7 @@ class BrokerToControllerRequestThreadTest {
     when(metadataCache.getAliveBroker(newControllerId)).thenReturn(Some(newController))
     when(metadataCache.getAliveBrokers).thenReturn(Seq(oldController, newController))
 
-    val expectedResponse = RequestTestUtils.metadataUpdateWith(3, Collections.singletonMap("a", new Integer(2)))
+    val expectedResponse = RequestTestUtils.metadataUpdateWith(3, Collections.singletonMap("a", 2))
     val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(),
       requestQueue, metadataCache, config, listenerName, time, "")
 
@@ -157,8 +157,8 @@ class BrokerToControllerRequestThreadTest {
 
     val responseWithNotControllerError = RequestTestUtils.metadataUpdateWith("cluster1", 2,
       Collections.singletonMap("a", Errors.NOT_CONTROLLER),
-      Collections.singletonMap("a", new Integer(2)))
-    val expectedResponse = RequestTestUtils.metadataUpdateWith(3, Collections.singletonMap("a", new Integer(2)))
+      Collections.singletonMap("a", 2))
+    val expectedResponse = RequestTestUtils.metadataUpdateWith(3, Collections.singletonMap("a", 2))
     val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), requestQueue, metadataCache,
       config, listenerName, time, "")
 
@@ -207,7 +207,7 @@ class BrokerToControllerRequestThreadTest {
 
     val responseWithNotControllerError = RequestTestUtils.metadataUpdateWith("cluster1", 2,
       Collections.singletonMap("a", Errors.NOT_CONTROLLER),
-      Collections.singletonMap("a", new Integer(2)))
+      Collections.singletonMap("a", 2))
     val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), requestQueue, metadataCache,
       config, listenerName, time, "")
 
