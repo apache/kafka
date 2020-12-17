@@ -2367,7 +2367,7 @@ class Log(@volatile private var _dir: File,
   @threadsafe
   def addSegment(segment: LogSegment): LogSegment = this.segments.put(segment.baseOffset, segment)
 
-  private[log] def maybeHandleIOException[T](msg: => String)(fun: => T): T = {
+  private def maybeHandleIOException[T](msg: => String)(fun: => T): T = {
     try {
       checkForLogDirFailure()
       fun

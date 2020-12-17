@@ -2820,15 +2820,18 @@ class LogTest {
 
   @Test
   def testAppendToOrReadFromLogInFailedLogDir(): Unit = {
+    val pid = 1L
+    val epoch = 0.toShort
     val log = createLog(logDir, LogConfig())
     log.appendAsLeader(TestUtils.singletonRecords(value = null), leaderEpoch = 0)
     assertEquals(0, readLog(log, 0, 4096).records.records.iterator.next().offset)
-    try {
-      log.maybeHandleIOException("Simulating failed log dir") {
-        throw new IOException("Test failure")
-      }
-    } catch {
-      case e: KafkaStorageException =>
+    val append = appendTransactionalAsLeader(log, pid, epoch)
+    append(10)
+    // Kind of a hack, but renaming the index to a directory ensures that the append
+    // to the index will fail.
+    log.activeSegment.txnIndex.renameTo(log.dir)
+    assertThrows[KafkaStorageException] {
+      appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, coordinatorEpoch = 1)
     }
     assertThrows[KafkaStorageException](log.appendAsLeader(TestUtils.singletonRecords(value = null), leaderEpoch = 0))
     assertThrows[KafkaStorageException](readLog(log, 0, 4096).records.records.iterator.next().offset)
