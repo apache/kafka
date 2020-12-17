@@ -860,7 +860,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
         @Override
         public void onFailure(RuntimeException e, RequestFuture<Void> future) {
-            log.debug("FindCoordinator request failed due to {}", e.getMessage());
+            log.debug("FindCoordinator request failed due to {}", e);
 
             if (!(e instanceof RetriableException)) {
                 // Remember the exception if fatal so we can ensure it gets thrown by the main thread
