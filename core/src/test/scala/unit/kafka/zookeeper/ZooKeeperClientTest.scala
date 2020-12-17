@@ -633,7 +633,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
     val semaphore = new Semaphore(0)
     val closeExecutor = Executors.newSingleThreadExecutor
     try {
-      zooKeeperClient.reinitializeScheduler.scheduleOnce("test", () => semaphore.acquireUninterruptibly())
+      zooKeeperClient.reinitializeScheduler.schedule("test", () => semaphore.acquireUninterruptibly())
       zooKeeperClient.scheduleReinitialize("session-expired", "Session expired.", delayMs = 0L)
       val closeFuture = closeExecutor.submit(new Runnable {
         override def run(): Unit = {

@@ -99,10 +99,6 @@ class KafkaScheduler(val threads: Int,
     }
   }
 
-  def scheduleOnce(name: String, fun: () => Unit, delay: Long = 0L, unit: TimeUnit = TimeUnit.MILLISECONDS): Unit = {
-    schedule(name, fun, delay = delay, period = -1L, unit = unit)
-  }
-
   def schedule(name: String, fun: () => Unit, delay: Long, period: Long, unit: TimeUnit): ScheduledFuture[_] = {
     debug("Scheduling task %s with initial delay %d ms and period %d ms."
         .format(name, TimeUnit.MILLISECONDS.convert(delay, unit), TimeUnit.MILLISECONDS.convert(period, unit)))

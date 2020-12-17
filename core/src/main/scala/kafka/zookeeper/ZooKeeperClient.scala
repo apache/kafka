@@ -430,7 +430,7 @@ class ZooKeeperClient(connectString: String,
 
   // Visibility for testing
   private[zookeeper] def scheduleReinitialize(name: String, message: String, delayMs: Long): Unit = {
-    reinitializeScheduler.scheduleOnce(name, () => {
+    reinitializeScheduler.schedule(name, () => {
       info(message)
       reinitialize()
     }, delayMs)
