@@ -4439,7 +4439,9 @@ class LogTest {
     log.updateHighWatermark(12L)
     assertEquals(0L, log.lastStableOffset)
 
-    log.close()
+    assertThrows[KafkaStorageException] {
+      log.close()
+    }
 
     val reopenedLog = createLog(logDir, logConfig, lastShutdownClean = false)
     assertEquals(11L, reopenedLog.logEndOffset)

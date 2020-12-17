@@ -1572,8 +1572,6 @@ class Log(@volatile private var _dir: File,
           done = fetchDataInfo != null || segmentEntry == null
         }
 
-        checkForLogDirFailure()
-
         if (fetchDataInfo != null) fetchDataInfo
         else {
           // okay we are beyond the end of the last segment with no data fetched although the start offset is in range,
@@ -2371,6 +2369,7 @@ class Log(@volatile private var _dir: File,
 
   private[log] def maybeHandleIOException[T](msg: => String)(fun: => T): T = {
     try {
+      checkForLogDirFailure()
       fun
     } catch {
       case e: IOException =>
