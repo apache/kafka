@@ -266,6 +266,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         // Handle requests that should have been sent to the KIP-500 controller.
         case ApiKeys.BROKER_REGISTRATION => handleBrokerRegistration(request)
         case ApiKeys.BROKER_HEARTBEAT => handleBrokerHeartbeat(request)
+
+        case ApiKeys.DECOMMISSION_BROKER => maybeForward(request, handleDecommissionBrokerRequest)
       }
     } catch {
       case e: FatalExitError => throw e
@@ -3332,6 +3334,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     apisUtils.sendResponseMaybeThrottle(request, requestThrottleMs =>
       heartbeatRequest.getErrorResponse(requestThrottleMs,
         Errors.NOT_CONTROLLER.exception))
+  }
+
+  def handleDecommissionBrokerRequest(request: RequestChannel.Request): Unit = {
+    val decommissionBrokerRequest = request.body[DecommissionBrokerRequest]
+    apisUtils.sendResponseMaybeThrottle(request, requestThrottleMs =>
+      decommissionBrokerRequest.getErrorResponse(requestThrottleMs,
+        Errors.UNSUPPORTED_VERSION.exception))
   }
 
   // private package for testing

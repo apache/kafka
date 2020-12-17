@@ -213,6 +213,18 @@ public class ClusterControlManager {
                 new RegistrationReply(brokerEpoch));
     }
 
+    public ControllerResult<Void> decommissionBroker(int brokerId) {
+        BrokerRegistration existing = brokerRegistrations.get(brokerId);
+        if (existing == null) {
+            return new ControllerResult<>(Collections.emptyList(), null);
+        }
+        return new ControllerResult<>(Collections.singletonList(new ApiMessageAndVersion(
+            new UnregisterBrokerRecord().
+                setBrokerId(brokerId).
+                setBrokerEpoch(existing.epoch()),
+            (short) 0)), null);
+    }
+
     public ControllerResult<HeartbeatReply> processBrokerHeartbeat(BrokerHeartbeatRequestData request,
                                                                    long lastCommittedOffset) {
         int brokerId = request.brokerId();

@@ -21,14 +21,14 @@ import kafka.network.RequestChannel
 import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
-import org.apache.kafka.common.acl.AclOperation.{CLUSTER_ACTION, CREATE, DESCRIBE}
+import org.apache.kafka.common.acl.AclOperation.{ALTER, CLUSTER_ACTION, CREATE, DESCRIBE}
 import org.apache.kafka.common.errors.ApiException
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.message.ApiVersionsResponseData.{ApiVersionsResponseKey, FinalizedFeatureKey, SupportedFeatureKey}
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseBroker
-import org.apache.kafka.common.message.{AlterIsrResponseData, ApiVersionsResponseData, BeginQuorumEpochResponseData, BrokerHeartbeatResponseData, BrokerRegistrationResponseData, CreateTopicsResponseData, DescribeQuorumResponseData, EndQuorumEpochResponseData, FetchResponseData, MetadataResponseData, VoteResponseData}
+import org.apache.kafka.common.message.{AlterIsrResponseData, ApiVersionsResponseData, BeginQuorumEpochResponseData, BrokerHeartbeatResponseData, BrokerRegistrationResponseData, CreateTopicsResponseData, DecommissionBrokerResponseData, DescribeQuorumResponseData, EndQuorumEpochResponseData, FetchResponseData, MetadataResponseData, VoteResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.record.BaseRecords
 import org.apache.kafka.common.requests._
@@ -99,6 +99,7 @@ class ControllerApis(val requestChannel: RequestChannel,
     ApiKeys.ALTER_ISR,
     ApiKeys.BROKER_REGISTRATION,
     ApiKeys.BROKER_HEARTBEAT,
+    ApiKeys.DECOMMISSION_BROKER,
   )
 
   private def maybeHandleInvalidEnvelope(
@@ -140,8 +141,9 @@ class ControllerApis(val requestChannel: RequestChannel,
         case ApiKeys.END_QUORUM_EPOCH => handleEndQuorumEpoch(request)
         case ApiKeys.DESCRIBE_QUORUM => handleDescribeQuorum(request)
         case ApiKeys.ALTER_ISR => handleAlterIsrRequest(request)
-        case ApiKeys.BROKER_HEARTBEAT => handleBrokerHeartBeatRequest(request)
         case ApiKeys.BROKER_REGISTRATION => handleBrokerRegistration(request)
+        case ApiKeys.BROKER_HEARTBEAT => handleBrokerHeartBeatRequest(request)
+        case ApiKeys.DECOMMISSION_BROKER => handleDecommissionBroker(request)
         case _ => throw new ApiException(s"Unsupported ApiKey ${request.context.header.apiKey()}")
       }
     } catch {
@@ -379,6 +381,27 @@ class ControllerApis(val requestChannel: RequestChannel,
       }
       apisUtils.sendResponseMaybeThrottle(request,
         requestThrottleMs => createResponseCallback(requestThrottleMs, reply, e))
+    })
+  }
+
+  def handleDecommissionBroker(request: RequestChannel.Request): Unit = {
+    val decommissionRequest = request.body[DecommissionBrokerRequest]
+    apisUtils.authorizeClusterOperation(request, ALTER)
+
+    controller.decommissionBroker(decommissionRequest.data().brokerId()).handle[Unit]((_, e) => {
+      def createResponseCallback(requestThrottleMs: Int,
+                                 e: Throwable): DecommissionBrokerResponse = {
+        if (e != null) {
+          new DecommissionBrokerResponse(new DecommissionBrokerResponseData().
+            setThrottleTimeMs(requestThrottleMs).
+            setErrorCode(Errors.forException(e).code()))
+        } else {
+          new DecommissionBrokerResponse(new DecommissionBrokerResponseData().
+            setThrottleTimeMs(requestThrottleMs))
+        }
+      }
+      apisUtils.sendResponseMaybeThrottle(request,
+        requestThrottleMs => createResponseCallback(requestThrottleMs, e))
     })
   }
 

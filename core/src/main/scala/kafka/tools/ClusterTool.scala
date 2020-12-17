@@ -19,11 +19,13 @@ package kafka.tools
 
 import java.io.PrintStream
 import java.util.Properties
+import java.util.concurrent.ExecutionException
 
 import kafka.utils.{Exit, Logging}
 import net.sourceforge.argparse4j.ArgumentParsers
 import net.sourceforge.argparse4j.impl.Arguments.store
 import org.apache.kafka.clients.admin.Admin
+import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.utils.Utils
 
 object ClusterTool extends Logging {
@@ -100,20 +102,20 @@ object ClusterTool extends Logging {
   def decommissionCommand(stream: PrintStream,
                           properties: Properties,
                           id: Int): Unit = {
-//    val admin = Admin.create(properties)
-//    try {
-//      Option(admin.decommissionBroker(id).all().get())
-//    } catch {
-//      case e: ExecutionException => {
-//        val cause = e.getCause()
-//        if (cause.isInstanceOf[UnsupportedVersionException]) {
-//          stream.println(s"The target cluster does not support broker decommissioning.")
-//        } else {
-//          throw e
-//        }
-//      }
-//    } finally {
-//      admin.close()
-//    }
+    val admin = Admin.create(properties)
+    try {
+      Option(admin.decommissionBroker(id).all().get())
+    } catch {
+      case e: ExecutionException => {
+        val cause = e.getCause()
+        if (cause.isInstanceOf[UnsupportedVersionException]) {
+          stream.println(s"The target cluster does not support broker decommissioning.")
+        } else {
+          throw e
+        }
+      }
+    } finally {
+      admin.close()
+    }
   }
 }

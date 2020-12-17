@@ -59,6 +59,16 @@ public interface Controller extends AutoCloseable {
         createTopics(CreateTopicsRequestData request);
 
     /**
+     * Decommission a broker.
+     *
+     * @param brokerId      The broker id to decommission.
+     *
+     * @return              A future that is completed successfully hwne the broker is
+     *                      decommissioned, or if it is not registered in the first place.
+     */
+    CompletableFuture<Void> decommissionBroker(int brokerId);
+
+    /**
      * Describe the current configuration of various resources.
      *
      * @param resources     A map from resources to the collection of config keys that we

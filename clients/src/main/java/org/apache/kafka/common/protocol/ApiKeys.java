@@ -51,6 +51,8 @@ import org.apache.kafka.common.message.CreatePartitionsRequestData;
 import org.apache.kafka.common.message.CreatePartitionsResponseData;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
+import org.apache.kafka.common.message.DecommissionBrokerRequestData;
+import org.apache.kafka.common.message.DecommissionBrokerResponseData;
 import org.apache.kafka.common.message.DeleteAclsRequestData;
 import org.apache.kafka.common.message.DeleteAclsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsRequestData;
@@ -262,7 +264,9 @@ public enum ApiKeys {
     BROKER_REGISTRATION(59, "BrokerRegistration", BrokerRegistrationRequestData.SCHEMAS,
                         BrokerRegistrationResponseData.SCHEMAS),
     BROKER_HEARTBEAT(60, "BrokerHeartbeat", BrokerHeartbeatRequestData.SCHEMAS,
-                     BrokerHeartbeatResponseData.SCHEMAS);
+                     BrokerHeartbeatResponseData.SCHEMAS),
+    DECOMMISSION_BROKER(61, "DecommissionBroker", DecommissionBrokerRequestData.SCHEMAS,
+                     DecommissionBrokerResponseData.SCHEMAS);
 
     private static final ApiKeys[] ID_TO_TYPE;
     private static final int MIN_API_KEY = 0;

@@ -613,6 +613,12 @@ public final class QuorumController implements Controller {
     }
 
     @Override
+    public CompletableFuture<Void> decommissionBroker(int brokerId) {
+        return appendWriteEvent("decommissionBroker", () ->
+            clusterControl.decommissionBroker(brokerId));
+    }
+
+    @Override
     public CompletableFuture<Map<ConfigResource, ResultOrError<Map<String, String>>>>
             describeConfigs(Map<ConfigResource, Collection<String>> resources) {
         return appendReadEvent("describeConfigs", () ->

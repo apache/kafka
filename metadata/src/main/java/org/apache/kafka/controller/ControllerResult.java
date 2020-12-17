@@ -34,7 +34,6 @@ class ControllerResult<T> {
 
     public ControllerResult(List<ApiMessageAndVersion> records, T response) {
         Objects.requireNonNull(records);
-        Objects.requireNonNull(response);
         this.records = records;
         this.response = response;
     }
@@ -54,7 +53,7 @@ class ControllerResult<T> {
         }
         ControllerResult other = (ControllerResult) o;
         return records.equals(other.records) &&
-            response.equals(other.response);
+            Objects.equals(response, other.response);
     }
 
     @Override
