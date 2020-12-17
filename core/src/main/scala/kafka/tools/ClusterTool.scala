@@ -54,8 +54,12 @@ object ClusterTool extends Logging {
 
       val namespace = parser.parseArgsOrFail(args)
       val command = namespace.getString("command")
-      val properties = Option(Utils.loadProps(namespace.getString("config"))).
-        getOrElse(new Properties())
+      val configPath = namespace.getString("config")
+      val properties = if (configPath == null) {
+        new Properties()
+      } else {
+        Utils.loadProps(configPath)
+      }
       Option(namespace.getString("bootstrap_server")).
         foreach(b => properties.setProperty("bootstrap.servers", b))
       if (properties.getProperty("bootstrap.servers") == null) {
