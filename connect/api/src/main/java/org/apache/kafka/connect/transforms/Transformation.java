@@ -33,6 +33,11 @@ public interface Transformation<R extends ConnectRecord<R>> extends Configurable
      * Apply transformation to the {@code record} and return another record object (which may be {@code record} itself) or {@code null},
      * corresponding to a map or filter operation respectively.
      *
+     * A transformation must not mutate objects reachable from the given {@code record}
+     * (including, but not limited to, {@link org.apache.kafka.connect.header.Headers Headers},
+     * {@link org.apache.kafka.connect.data.Struct Structs}, {@code Lists}, and {@code Maps}).
+     * If such objects need to be changed, a new ConnectRecord should be created and returned.
+     *
      * The implementation must be thread-safe.
      */
     R apply(R record);

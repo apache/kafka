@@ -23,7 +23,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 
-public abstract class BaseRepartitionNode<K, V> extends StreamsGraphNode {
+public abstract class BaseRepartitionNode<K, V> extends GraphNode {
 
     protected final Serde<K> keySerde;
     protected final Serde<V> valueSerde;

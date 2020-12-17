@@ -24,7 +24,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData;
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult;
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse;
@@ -171,7 +171,7 @@ public class OffsetForLeaderEpochClientTest {
         OffsetForLeaderTopicResult topic = new OffsetForLeaderTopicResult()
             .setTopic(tp.topic());
         data.topics().add(topic);
-        topic.partitions().add(new OffsetForLeaderPartitionResult()
+        topic.partitions().add(new EpochEndOffset()
             .setPartition(tp.partition())
             .setErrorCode(error.code())
             .setLeaderEpoch(leaderEpoch)

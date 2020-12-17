@@ -22,8 +22,8 @@ import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.AppInfoParser;
 
 import java.nio.ByteBuffer;
@@ -60,7 +60,7 @@ public class ApiVersionsRequest extends AbstractRequest {
 
     private final Short unsupportedRequestVersion;
 
-    public final ApiVersionsRequestData data;
+    private final ApiVersionsRequestData data;
 
     public ApiVersionsRequest(ApiVersionsRequestData data, short version) {
         this(data, version, null);
@@ -78,10 +78,6 @@ public class ApiVersionsRequest extends AbstractRequest {
         this.unsupportedRequestVersion = unsupportedRequestVersion;
     }
 
-    public ApiVersionsRequest(Struct struct, short version) {
-        this(new ApiVersionsRequestData(struct, version), version);
-    }
-
     public boolean hasUnsupportedRequestVersion() {
         return unsupportedRequestVersion != null;
     }
@@ -96,8 +92,8 @@ public class ApiVersionsRequest extends AbstractRequest {
     }
 
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
+    public ApiVersionsRequestData data() {
+        return data;
     }
 
     @Override
@@ -124,7 +120,7 @@ public class ApiVersionsRequest extends AbstractRequest {
     }
 
     public static ApiVersionsRequest parse(ByteBuffer buffer, short version) {
-        return new ApiVersionsRequest(ApiKeys.API_VERSIONS.parseRequest(version, buffer), version);
+        return new ApiVersionsRequest(new ApiVersionsRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
 }

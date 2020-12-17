@@ -35,14 +35,14 @@ public class ApiVersionsResponseTest {
     @Test
     public void shouldCreateApiResponseThatHasAllApiKeysSupportedByBroker() {
         assertEquals(apiKeysInResponse(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE), new HashSet<>(ApiKeys.enabledApis()));
-        assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.supportedFeatures().isEmpty());
-        assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.finalizedFeatures().isEmpty());
-        assertEquals(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH, ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.finalizedFeaturesEpoch());
+        assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().supportedFeatures().isEmpty());
+        assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().finalizedFeatures().isEmpty());
+        assertEquals(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH, ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().finalizedFeaturesEpoch());
     }
 
     @Test
     public void shouldHaveCorrectDefaultApiVersionsResponse() {
-        Collection<ApiVersionsResponseKey> apiVersions = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.apiKeys();
+        Collection<ApiVersionsResponseKey> apiVersions = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().apiKeys();
         assertEquals("API versions for all API keys must be maintained.", apiVersions.size(), ApiKeys.enabledApis().size());
 
         for (ApiKeys key : ApiKeys.enabledApis()) {
@@ -53,26 +53,29 @@ public class ApiVersionsResponseTest {
 
             // Check if versions less than min version are indeed set as null, i.e., deprecated.
             for (int i = 0; i < version.minVersion(); ++i) {
-                assertNull("Request version " + i + " for API " + version.apiKey() + " must be null", key.requestSchemas[i]);
-                assertNull("Response version " + i + " for API " + version.apiKey() + " must be null", key.responseSchemas[i]);
+                assertNull("Request version " + i + " for API " + version.apiKey() + " must be null",
+                    key.messageType.requestSchemas()[i]);
+                assertNull("Response version " + i + " for API " + version.apiKey() + " must be null",
+                    key.messageType.responseSchemas()[i]);
             }
 
             // Check if versions between min and max versions are non null, i.e., valid.
             for (int i = version.minVersion(); i <= version.maxVersion(); ++i) {
-                assertNotNull("Request version " + i + " for API " + version.apiKey() + " must not be null", key.requestSchemas[i]);
-                assertNotNull("Response version " + i + " for API " + version.apiKey() + " must not be null", key.responseSchemas[i]);
+                assertNotNull("Request version " + i + " for API " + version.apiKey() + " must not be null",
+                    key.messageType.requestSchemas()[i]);
+                assertNotNull("Response version " + i + " for API " + version.apiKey() + " must not be null",
+                    key.messageType.responseSchemas()[i]);
             }
         }
 
-        assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.supportedFeatures().isEmpty());
-        assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.finalizedFeatures().isEmpty());
-        assertEquals(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH, ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.finalizedFeaturesEpoch());
+        assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().supportedFeatures().isEmpty());
+        assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().finalizedFeatures().isEmpty());
+        assertEquals(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH, ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().finalizedFeaturesEpoch());
     }
-
 
     private Set<ApiKeys> apiKeysInResponse(final ApiVersionsResponse apiVersions) {
         final Set<ApiKeys> apiKeys = new HashSet<>();
-        for (final ApiVersionsResponseKey version : apiVersions.data.apiKeys()) {
+        for (final ApiVersionsResponseKey version : apiVersions.data().apiKeys()) {
             apiKeys.add(ApiKeys.forId(version.apiKey()));
         }
         return apiKeys;

@@ -77,6 +77,7 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
                                     Versions parentVersions) {
         generateRead(name, spec, parentVersions);
         generateWrite(name, spec, parentVersions);
+        generateOverloadWrite(name);
     }
 
     private void generateRead(String className,
@@ -257,11 +258,20 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
         }
     }
 
+    private void generateOverloadWrite(String className) {
+        buffer.printf("public static JsonNode write(%s _object, short _version) {%n",
+                className);
+        buffer.incrementIndent();
+        buffer.printf("return write(_object, _version, true);%n");
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+    }
+
     private void generateWrite(String className,
                                StructSpec struct,
                                Versions parentVersions) {
         headerGenerator.addImport(MessageGenerator.JSON_NODE_CLASS);
-        buffer.printf("public static JsonNode write(%s _object, short _version) {%n",
+        buffer.printf("public static JsonNode write(%s _object, short _version, boolean _serializeRecords) {%n",
             className);
         buffer.incrementIndent();
         VersionConditional.forVersions(struct.versions(), parentVersions).
@@ -377,11 +387,25 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
                 headerGenerator.addImport(MessageGenerator.ARRAYS_CLASS);
                 buffer.printf("%s;%n", target.assignmentStatement(
                     String.format("new BinaryNode(Arrays.copyOf(%s, %s.length))",
-                        target.sourceVariable(), target.sourceVariable())));
+                            target.sourceVariable(), target.sourceVariable())));
             }
         } else if (target.field().type().isRecords()) {
             headerGenerator.addImport(MessageGenerator.BINARY_NODE_CLASS);
+            headerGenerator.addImport(MessageGenerator.INT_NODE_CLASS);
+            // KIP-673: When logging requests/responses, we do not serialize the record, instead we
+            // output its sizeInBytes, because outputting the bytes is not very useful and can be
+            // quite expensive. Otherwise, we will serialize the record.
+            buffer.printf("if (_serializeRecords) {%n");
+            buffer.incrementIndent();
             buffer.printf("%s;%n", target.assignmentStatement("new BinaryNode(new byte[]{})"));
+            buffer.decrementIndent();
+            buffer.printf("} else {%n");
+            buffer.incrementIndent();
+            buffer.printf("_node.set(\"%sSizeInBytes\", new IntNode(%s.sizeInBytes()));%n",
+                    target.field().camelCaseName(),
+                    target.sourceVariable());
+            buffer.decrementIndent();
+            buffer.printf("}%n");
         } else if (target.field().type().isArray()) {
             headerGenerator.addImport(MessageGenerator.ARRAY_NODE_CLASS);
             headerGenerator.addImport(MessageGenerator.JSON_NODE_FACTORY_CLASS);
@@ -402,7 +426,7 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
             buffer.printf("%s;%n", target.assignmentStatement(arrayInstanceName));
         } else if (target.field().type().isStruct()) {
             buffer.printf("%s;%n", target.assignmentStatement(
-                String.format("%sJsonConverter.write(%s, _version)",
+                String.format("%sJsonConverter.write(%s, _version, _serializeRecords)",
                     target.field().type().toString(), target.sourceVariable())));
         } else {
             throw new RuntimeException("unknown type " + target.field().type());

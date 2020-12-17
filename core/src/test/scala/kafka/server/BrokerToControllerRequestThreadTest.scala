@@ -19,18 +19,16 @@ package kafka.server
 
 import java.util.concurrent.{CountDownLatch, LinkedBlockingDeque, TimeUnit}
 import java.util.Collections
-
 import kafka.cluster.{Broker, EndPoint}
 import kafka.utils.TestUtils
-import org.apache.kafka.test.{TestUtils => ClientsTestUtils}
-import org.apache.kafka.clients.{ManualMetadataUpdater, Metadata, MockClient}
+import org.apache.kafka.clients.{ClientResponse, ManualMetadataUpdater, Metadata, MockClient}
 import org.apache.kafka.common.feature.Features
 import org.apache.kafka.common.feature.Features.emptySupportedFeatures
-import org.apache.kafka.common.utils.SystemTime
+import org.apache.kafka.common.utils.{MockTime, SystemTime}
 import org.apache.kafka.common.message.MetadataRequestData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{AbstractRequest, MetadataRequest}
+import org.apache.kafka.common.requests.{AbstractRequest, MetadataRequest, MetadataResponse, RequestTestUtils}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.Test
@@ -58,17 +56,16 @@ class BrokerToControllerRequestThreadTest {
     when(metadataCache.getAliveBrokers).thenReturn(Seq(activeController))
     when(metadataCache.getAliveBroker(controllerId)).thenReturn(Some(activeController))
 
-    val expectedResponse = ClientsTestUtils.metadataUpdateWith(2, Collections.singletonMap("a", new Integer(2)))
+    val expectedResponse = RequestTestUtils.metadataUpdateWith(2, Collections.singletonMap("a", new Integer(2)))
     val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), requestQueue, metadataCache,
       config, listenerName, time, "")
     mockClient.prepareResponse(expectedResponse)
 
     val responseLatch = new CountDownLatch(1)
     val queueItem = BrokerToControllerQueueItem(
-      new MetadataRequest.Builder(new MetadataRequestData()), response => {
-        assertEquals(expectedResponse, response.responseBody())
-        responseLatch.countDown()
-      })
+      new MetadataRequest.Builder(new MetadataRequestData()),
+      new TestRequestCompletionHandler(expectedResponse, responseLatch),
+      Long.MaxValue)
     requestQueue.put(queueItem)
     // initialize to the controller
     testRequestThread.doWork()
@@ -103,17 +100,16 @@ class BrokerToControllerRequestThreadTest {
     when(metadataCache.getAliveBroker(newControllerId)).thenReturn(Some(newController))
     when(metadataCache.getAliveBrokers).thenReturn(Seq(oldController, newController))
 
-    val expectedResponse = ClientsTestUtils.metadataUpdateWith(3, Collections.singletonMap("a", new Integer(2)))
+    val expectedResponse = RequestTestUtils.metadataUpdateWith(3, Collections.singletonMap("a", new Integer(2)))
     val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(),
       requestQueue, metadataCache, config, listenerName, time, "")
 
     val responseLatch = new CountDownLatch(1)
 
     val queueItem = BrokerToControllerQueueItem(
-      new MetadataRequest.Builder(new MetadataRequestData()), response => {
-        assertEquals(expectedResponse, response.responseBody())
-        responseLatch.countDown()
-      })
+      new MetadataRequest.Builder(new MetadataRequestData()),
+      new TestRequestCompletionHandler(expectedResponse, responseLatch),
+      Long.MaxValue)
     requestQueue.put(queueItem)
     mockClient.prepareResponse(expectedResponse)
     // initialize the thread with oldController
@@ -159,20 +155,19 @@ class BrokerToControllerRequestThreadTest {
     when(metadataCache.getAliveBroker(oldControllerId)).thenReturn(Some(oldController))
     when(metadataCache.getAliveBroker(newControllerId)).thenReturn(Some(newController))
 
-    val responseWithNotControllerError = ClientsTestUtils.metadataUpdateWith("cluster1", 2,
+    val responseWithNotControllerError = RequestTestUtils.metadataUpdateWith("cluster1", 2,
       Collections.singletonMap("a", Errors.NOT_CONTROLLER),
       Collections.singletonMap("a", new Integer(2)))
-    val expectedResponse = ClientsTestUtils.metadataUpdateWith(3, Collections.singletonMap("a", new Integer(2)))
+    val expectedResponse = RequestTestUtils.metadataUpdateWith(3, Collections.singletonMap("a", new Integer(2)))
     val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), requestQueue, metadataCache,
       config, listenerName, time, "")
 
     val responseLatch = new CountDownLatch(1)
     val queueItem = BrokerToControllerQueueItem(
       new MetadataRequest.Builder(new MetadataRequestData()
-        .setAllowAutoTopicCreation(true)), response => {
-        assertEquals(expectedResponse, response.responseBody())
-        responseLatch.countDown()
-      })
+        .setAllowAutoTopicCreation(true)),
+      new TestRequestCompletionHandler(expectedResponse, responseLatch),
+      Long.MaxValue)
     requestQueue.put(queueItem)
     // initialize to the controller
     testRequestThread.doWork()
@@ -189,5 +184,74 @@ class BrokerToControllerRequestThreadTest {
     testRequestThread.doWork()
 
     assertTrue(responseLatch.await(10, TimeUnit.SECONDS))
+  }
+
+  @Test
+  def testRequestTimeout(): Unit = {
+    val time = new MockTime()
+    val config = new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181"))
+    val controllerId = 1
+
+    val metadata = mock(classOf[Metadata])
+    val mockClient = new MockClient(time, metadata)
+
+    val requestQueue = new LinkedBlockingDeque[BrokerToControllerQueueItem]()
+    val metadataCache = mock(classOf[MetadataCache])
+    val listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
+    val controller = new Broker(controllerId,
+      Seq(new EndPoint("host1", 1234, listenerName, SecurityProtocol.PLAINTEXT)), None, Features.emptySupportedFeatures)
+
+    when(metadataCache.getControllerId).thenReturn(Some(controllerId))
+    when(metadataCache.getAliveBrokers).thenReturn(Seq(controller))
+    when(metadataCache.getAliveBroker(controllerId)).thenReturn(Some(controller))
+
+    val responseWithNotControllerError = RequestTestUtils.metadataUpdateWith("cluster1", 2,
+      Collections.singletonMap("a", Errors.NOT_CONTROLLER),
+      Collections.singletonMap("a", new Integer(2)))
+    val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), requestQueue, metadataCache,
+      config, listenerName, time, "")
+
+    val responseLatch = new CountDownLatch(1)
+    val requestTimeout = config.requestTimeoutMs.longValue()
+    val queueItem = BrokerToControllerQueueItem(
+      new MetadataRequest.Builder(new MetadataRequestData()
+        .setAllowAutoTopicCreation(true)), new ControllerRequestCompletionHandler {
+        override def onComplete(response: ClientResponse): Unit = {}
+
+        override def onTimeout(): Unit = {
+          responseLatch.countDown()
+        }
+      }, requestTimeout + time.milliseconds())
+    requestQueue.put(queueItem)
+
+    // initialize to the controller
+    testRequestThread.doWork()
+    // send and process the request
+    mockClient.prepareResponse((body: AbstractRequest) => {
+      // Advance time to timeout the response
+      time.sleep(requestTimeout + 1)
+
+      body.isInstanceOf[MetadataRequest] &&
+        body.asInstanceOf[MetadataRequest].allowAutoTopicCreation()
+    }, responseWithNotControllerError)
+
+    testRequestThread.doWork()
+
+    // The queued item should be timed out, instead of
+    // re-enqueue by NOT_CONTROLLER error.
+    assertEquals(0, requestQueue.size())
+
+    assertTrue(responseLatch.await(10, TimeUnit.SECONDS))
+  }
+
+  class TestRequestCompletionHandler(expectedResponse: MetadataResponse,
+                                     responseLatch: CountDownLatch) extends ControllerRequestCompletionHandler {
+    override def onComplete(response: ClientResponse): Unit = {
+      assertEquals(expectedResponse, response.responseBody())
+      responseLatch.countDown()
+    }
+
+    override def onTimeout(): Unit = {
+    }
   }
 }

@@ -22,8 +22,8 @@ import org.apache.kafka.common.message.LeaderAndIsrResponseData;
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicError;
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.FlattenedIterator;
 
 import java.nio.ByteBuffer;
@@ -44,12 +44,8 @@ public class LeaderAndIsrResponse extends AbstractResponse {
     private short version;
 
     public LeaderAndIsrResponse(LeaderAndIsrResponseData data, short version) {
+        super(ApiKeys.LEADER_AND_ISR);
         this.data = data;
-        this.version = version;
-    }
-
-    public LeaderAndIsrResponse(Struct struct, short version) {
-        this.data = new LeaderAndIsrResponseData(struct, version);
         this.version = version;
     }
 
@@ -58,7 +54,7 @@ public class LeaderAndIsrResponse extends AbstractResponse {
     }
 
     public Iterable<LeaderAndIsrPartitionError> partitions() {
-        if (data.topics().isEmpty()) {
+        if (version < 5) {
             return data.partitionErrors();
         }
         return () -> new FlattenedIterator<>(data.topics().iterator(),
@@ -75,14 +71,18 @@ public class LeaderAndIsrResponse extends AbstractResponse {
         if (error != Errors.NONE) {
             // Minor optimization since the top-level error applies to all partitions
             if (version < 5) 
-                return Collections.singletonMap(error, data.partitionErrors().size());
+                return Collections.singletonMap(error, data.partitionErrors().size() + 1);
             return Collections.singletonMap(error, 
-                    data.topics().stream().mapToInt(t -> t.partitionErrors().size()).sum());
+                    data.topics().stream().mapToInt(t -> t.partitionErrors().size()).sum() + 1);
         }
+        Map<Errors, Integer> errors;
         if (version < 5)
-            return errorCounts(data.partitionErrors().stream().map(l -> Errors.forCode(l.errorCode())));
-        return errorCounts(data.topics().stream().flatMap(t -> t.partitionErrors().stream()).map(l ->
+            errors = errorCounts(data.partitionErrors().stream().map(l -> Errors.forCode(l.errorCode())));
+        else
+            errors = errorCounts(data.topics().stream().flatMap(t -> t.partitionErrors().stream()).map(l ->
                 Errors.forCode(l.errorCode())));
+        updateErrorCounts(errors, Errors.NONE);
+        return errors;
     }
 
     public Map<TopicPartition, Errors> partitionErrors(Map<Uuid, String> topicNames) {
@@ -104,13 +104,18 @@ public class LeaderAndIsrResponse extends AbstractResponse {
         return errors;
     }
 
+    @Override
+    public int throttleTimeMs() {
+        return DEFAULT_THROTTLE_TIME;
+    }
+
     public static LeaderAndIsrResponse parse(ByteBuffer buffer, short version) {
-        return new LeaderAndIsrResponse(ApiKeys.LEADER_AND_ISR.parseResponse(version, buffer), version);
+        return new LeaderAndIsrResponse(new LeaderAndIsrResponseData(new ByteBufferAccessor(buffer), version), version);
     }
 
     @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
+    public LeaderAndIsrResponseData data() {
+        return data;
     }
 
     @Override

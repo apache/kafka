@@ -435,7 +435,7 @@ public class TaskManager {
     private void updateInputPartitionsAndResume(final Task task, final Set<TopicPartition> topicPartitions) {
         final boolean requiresUpdate = !task.inputPartitions().equals(topicPartitions);
         if (requiresUpdate) {
-            log.trace("Update task {} inputPartitions: current {}, new {}", task, task.inputPartitions(), topicPartitions);
+            log.debug("Update task {} inputPartitions: current {}, new {}", task, task.inputPartitions(), topicPartitions);
             for (final TopicPartition inputPartition : task.inputPartitions()) {
                 partitionToTask.remove(inputPartition);
             }

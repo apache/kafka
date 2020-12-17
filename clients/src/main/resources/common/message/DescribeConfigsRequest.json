@@ -19,8 +19,9 @@
   "name": "DescribeConfigsRequest",
   // Version 1 adds IncludeSynonyms.
   // Version 2 is the same as version 1.
-  "validVersions": "0-3",
-  "flexibleVersions": "none",
+  // Version 4 enables flexible versions.
+  "validVersions": "0-4",
+  "flexibleVersions": "4+",
   "fields": [
     { "name": "Resources", "type": "[]DescribeConfigsResource", "versions": "0+",
       "about": "The resources whose configurations we want to describe.", "fields": [

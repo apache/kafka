@@ -26,7 +26,6 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrLiveL
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.MessageTestUtil;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
@@ -143,7 +142,7 @@ public class LeaderAndIsrRequestTest {
             assertEquals(2, request.controllerEpoch());
             assertEquals(3, request.brokerEpoch());
 
-            ByteBuffer byteBuffer = MessageTestUtil.messageToByteBuffer(request.data(), request.version());
+            ByteBuffer byteBuffer = request.serialize();
             LeaderAndIsrRequest deserializedRequest = new LeaderAndIsrRequest(new LeaderAndIsrRequestData(
                 new ByteBufferAccessor(byteBuffer), version), version);
 
@@ -193,10 +192,7 @@ public class LeaderAndIsrRequestTest {
 
         LeaderAndIsrRequest v2 = builder.build((short) 2);
         LeaderAndIsrRequest v1 = builder.build((short) 1);
-        int size2 = MessageTestUtil.messageSize(v2.data(), v2.version());
-        int size1 = MessageTestUtil.messageSize(v1.data(), v1.version());
-
-        assertTrue("Expected v2 < v1: v2=" + size2 + ", v1=" + size1, size2 < size1);
+        assertTrue("Expected v2 < v1: v2=" + v2.sizeInBytes() + ", v1=" + v1.sizeInBytes(), v2.sizeInBytes() < v1.sizeInBytes());
     }
 
     private <T> Set<T> iterableToSet(Iterable<T> iterable) {

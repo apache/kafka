@@ -479,14 +479,14 @@ class LogManager(logDirs: Seq[File],
 
     try {
       for ((dir, dirJobs) <- jobs) {
-        val hasErrors = dirJobs.map { future =>
+        val hasErrors = dirJobs.exists  { future =>
           Try(future.get) match {
             case Success(_) => false
             case Failure(e) =>
               warn(s"There was an error in one of the threads during LogManager shutdown: ${e.getCause}")
               true
           }
-        }.contains(true)
+        }
 
         if (!hasErrors) {
           val logs = logsInDir(localLogsByDir, dir)

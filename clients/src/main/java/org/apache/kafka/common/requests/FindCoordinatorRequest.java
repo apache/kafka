@@ -21,11 +21,10 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.FindCoordinatorResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
-
 
 public class FindCoordinatorRequest extends AbstractRequest {
 
@@ -63,11 +62,6 @@ public class FindCoordinatorRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public FindCoordinatorRequest(Struct struct, short version) {
-        super(ApiKeys.FIND_COORDINATOR, version);
-        this.data = new FindCoordinatorRequestData(struct, version);
-    }
-
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         FindCoordinatorResponseData response = new FindCoordinatorResponseData();
@@ -79,14 +73,11 @@ public class FindCoordinatorRequest extends AbstractRequest {
     }
 
     public static FindCoordinatorRequest parse(ByteBuffer buffer, short version) {
-        return new FindCoordinatorRequest(ApiKeys.FIND_COORDINATOR.parseRequest(version, buffer), version);
+        return new FindCoordinatorRequest(new FindCoordinatorRequestData(new ByteBufferAccessor(buffer), version),
+            version);
     }
 
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
-    }
-
     public FindCoordinatorRequestData data() {
         return data;
     }

@@ -23,7 +23,7 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
  * Utility base class containing the common fields between
  * a Stream-Stream join and a Table-Table join
  */
-abstract class BaseJoinProcessorNode<K, V1, V2, VR> extends StreamsGraphNode {
+abstract class BaseJoinProcessorNode<K, V1, V2, VR> extends GraphNode {
 
     private final ProcessorParameters<K, V1, ?, ?> joinThisProcessorParameters;
     private final ProcessorParameters<K, V2, ?, ?> joinOtherProcessorParameters;

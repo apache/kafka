@@ -11,7 +11,10 @@ Running tests using docker
 Docker containers can be used for running kafka system tests locally.
 * Requirements
   - Docker 1.12.3 (or higher) is installed and running on the machine.
-  - Test require that Kafka, including system test libs, is built. This can be done by running ./gradlew clean systemTestLibs
+  - Test requires that Kafka, including system test libs, is built. This can be done by running
+```
+./gradlew clean systemTestLibs
+```
 * Run all tests
 ```
 bash tests/docker/run_tests.sh
@@ -547,8 +550,10 @@ Where are the unit tests?
 * The kafkatest unit tests are located under kafka/tests/unit
 
 How do I run the unit tests?
-* cd kafka/tests # The base system test directory
-* python3 setup.py test
+```bash
+$ cd kafka/tests # The base system test directory
+$ python3 setup.py test
+```
 
 How can I add a unit test?
 * Follow the naming conventions - module name starts with "check", class name begins with "Check", test method name begins with "check"

@@ -20,11 +20,12 @@ import org.apache.kafka.common.protocol.types.BoundField;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.junit.Test;
 
-import java.util.Arrays;
-import java.util.List;
+import java.util.EnumSet;
+import java.util.Set;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ApiKeysTest {
 
@@ -38,9 +39,9 @@ public class ApiKeysTest {
         ApiKeys.forId(10000);
     }
 
-    @Test(expected = IllegalArgumentException.class)
-    public void schemaVersionOutOfRange() {
-        ApiKeys.PRODUCE.requestSchema((short) ApiKeys.PRODUCE.requestSchemas.length);
+    @Test
+    public void testAlterIsrIsClusterAction() {
+        assertTrue(ApiKeys.ALTER_ISR.clusterAction);
     }
 
     /**
@@ -55,11 +56,14 @@ public class ApiKeysTest {
      */
     @Test
     public void testResponseThrottleTime() {
-        List<ApiKeys> authenticationKeys = Arrays.asList(ApiKeys.SASL_HANDSHAKE, ApiKeys.SASL_AUTHENTICATE);
+        Set<ApiKeys> authenticationKeys = EnumSet.of(ApiKeys.SASL_HANDSHAKE, ApiKeys.SASL_AUTHENTICATE);
+        // Newer protocol apis include throttle time ms even for cluster actions
+        Set<ApiKeys> clusterActionsWithThrottleTimeMs = EnumSet.of(ApiKeys.ALTER_ISR);
         for (ApiKeys apiKey: ApiKeys.values()) {
-            Schema responseSchema = apiKey.responseSchema(apiKey.latestVersion());
-            BoundField throttleTimeField = responseSchema.get(CommonFields.THROTTLE_TIME_MS.name);
-            if (apiKey.clusterAction || authenticationKeys.contains(apiKey))
+            Schema responseSchema = apiKey.messageType.responseSchemas()[apiKey.latestVersion()];
+            BoundField throttleTimeField = responseSchema.get("throttle_time_ms");
+            if ((apiKey.clusterAction && !clusterActionsWithThrottleTimeMs.contains(apiKey))
+                || authenticationKeys.contains(apiKey))
                 assertNull("Unexpected throttle time field: " + apiKey, throttleTimeField);
             else
                 assertNotNull("Throttle time field missing: " + apiKey, throttleTimeField);

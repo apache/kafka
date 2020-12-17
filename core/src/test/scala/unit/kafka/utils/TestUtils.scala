@@ -23,12 +23,13 @@ import java.nio.charset.{Charset, StandardCharsets}
 import java.nio.file.{Files, StandardOpenOption}
 import java.security.cert.X509Certificate
 import java.time.Duration
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Arrays, Collections, Properties}
 import java.util.concurrent.{Callable, ExecutionException, Executors, TimeUnit}
 
 import javax.net.ssl.X509TrustManager
 import kafka.api._
-import kafka.cluster.{Broker, EndPoint}
+import kafka.cluster.{Broker, EndPoint, IsrChangeListener}
 import kafka.log._
 import kafka.security.auth.{Acl, Resource, Authorizer => LegacyAuthorizer}
 import kafka.server._
@@ -49,6 +50,7 @@ import org.apache.kafka.common.errors.{KafkaStorageException, UnknownTopicOrPart
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.{ListenerName, Mode}
+import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -1082,6 +1084,28 @@ object TestUtils extends Logging {
     new MockAlterIsrManager()
   }
 
+  class MockIsrChangeListener extends IsrChangeListener {
+    val expands: AtomicInteger = new AtomicInteger(0)
+    val shrinks: AtomicInteger = new AtomicInteger(0)
+    val failures: AtomicInteger = new AtomicInteger(0)
+
+    override def markExpand(): Unit = expands.incrementAndGet()
+
+    override def markShrink(): Unit = shrinks.incrementAndGet()
+
+    override def markFailed(): Unit = failures.incrementAndGet()
+
+    def reset(): Unit = {
+      expands.set(0)
+      shrinks.set(0)
+      failures.set(0)
+    }
+  }
+
+  def createIsrChangeListener(): MockIsrChangeListener = {
+    new MockIsrChangeListener()
+  }
+
   def produceMessages(servers: Seq[KafkaServer],
                       records: Seq[ProducerRecord[Array[Byte], Array[Byte]]],
                       acks: Int = -1): Unit = {
@@ -1527,6 +1551,16 @@ object TestUtils extends Logging {
       Map(new ConfigResource(ConfigResource.Type.BROKER, "") -> configEntries).asJava
     }
     adminClient.incrementalAlterConfigs(configs)
+  }
+
+  def alterClientQuotas(adminClient: Admin, request: Map[ClientQuotaEntity, Map[String, Option[Double]]]): AlterClientQuotasResult = {
+    val entries = request.map { case (entity, alter) =>
+      val ops = alter.map { case (key, value) =>
+        new ClientQuotaAlteration.Op(key, value.map(Double.box).getOrElse(null))
+      }.asJavaCollection
+      new ClientQuotaAlteration(entity, ops)
+    }.asJavaCollection
+    adminClient.alterClientQuotas(entries)
   }
 
   def assertLeader(client: Admin, topicPartition: TopicPartition, expectedLeader: Int): Unit = {

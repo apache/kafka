@@ -65,7 +65,7 @@ public class LeaderAndIsrResponseTest {
         LeaderAndIsrRequest request = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion(),
                 15, 20, 0, partitionStates, topicIds, Collections.emptySet()).build();
         LeaderAndIsrResponse response = request.getErrorResponse(0, Errors.CLUSTER_AUTHORIZATION_FAILED.exception());
-        assertEquals(Collections.singletonMap(Errors.CLUSTER_AUTHORIZATION_FAILED, 2), response.errorCounts());
+        assertEquals(Collections.singletonMap(Errors.CLUSTER_AUTHORIZATION_FAILED, 3), response.errorCounts());
     }
 
     @Test
@@ -85,7 +85,7 @@ public class LeaderAndIsrResponseTest {
                         .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
                         .setTopics(topics), version); 
             }
-            assertEquals(Collections.singletonMap(Errors.UNKNOWN_SERVER_ERROR, 2), response.errorCounts());
+            assertEquals(Collections.singletonMap(Errors.UNKNOWN_SERVER_ERROR, 3), response.errorCounts());
         }
     }
 
@@ -108,7 +108,7 @@ public class LeaderAndIsrResponseTest {
             }
             Map<Errors, Integer> errorCounts = response.errorCounts();
             assertEquals(2, errorCounts.size());
-            assertEquals(1, errorCounts.get(Errors.NONE).intValue());
+            assertEquals(2, errorCounts.get(Errors.NONE).intValue());
             assertEquals(1, errorCounts.get(Errors.CLUSTER_AUTHORIZATION_FAILED).intValue());
         }
     }

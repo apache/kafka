@@ -31,7 +31,6 @@ import org.apache.kafka.common.utils.Java;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -642,7 +641,7 @@ public class SslTransportLayerTest {
         NetworkTestUtils.waitForChannelReady(selector, node);
         int messageSize = 1024 * 1024;
         String message = TestUtils.randomString(messageSize);
-        selector.send(new NetworkSend(node, ByteBuffer.wrap(message.getBytes())));
+        selector.send(new NetworkSend(node, ByteBufferSend.sizePrefixed(ByteBuffer.wrap(message.getBytes()))));
         while (selector.completedReceives().isEmpty()) {
             selector.poll(100L);
         }
@@ -668,28 +667,21 @@ public class SslTransportLayerTest {
         // Send a message of 80K. This is 5X as large as the socket buffer. It should take at least three selector.poll()
         // to read this message from socket if the SslTransportLayer.read() does not read all data from socket buffer.
         String message = TestUtils.randomString(81920);
-        selector.send(new NetworkSend(node, ByteBuffer.wrap(message.getBytes())));
+        selector.send(new NetworkSend(node, ByteBufferSend.sizePrefixed(ByteBuffer.wrap(message.getBytes()))));
 
         // Send the message to echo server
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                try {
-                    selector.poll(100L);
-                } catch (IOException e) {
-                    return false;
-                }
-                return selector.completedSends().size() > 0;
+        TestUtils.waitForCondition(() -> {
+            try {
+                selector.poll(100L);
+            } catch (IOException e) {
+                return false;
             }
+            return selector.completedSends().size() > 0;
         }, "Timed out waiting for message to be sent");
 
         // Wait for echo server to send the message back
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return server.numSent() >= 2;
-            }
-        }, "Timed out waiting for echo server to send message");
+        TestUtils.waitForCondition(() ->
+            server.numSent() >= 2, "Timed out waiting for echo server to send message");
 
         // Read the message from socket with only one poll()
         selector.poll(1000L);
@@ -764,7 +756,7 @@ public class SslTransportLayerTest {
             assertEquals("Time not reset", 0, channel.getAndResetNetworkThreadTimeNanos());
 
             selector.mute(node);
-            selector.send(new NetworkSend(node, ByteBuffer.wrap(message.getBytes())));
+            selector.send(new NetworkSend(node, ByteBufferSend.sizePrefixed(ByteBuffer.wrap(message.getBytes()))));
             while (selector.completedSends().isEmpty()) {
                 selector.poll(100L);
             }
@@ -776,16 +768,13 @@ public class SslTransportLayerTest {
 
             selector.unmute(node);
             // Wait for echo server to send the message back
-            TestUtils.waitForCondition(new TestCondition() {
-                @Override
-                public boolean conditionMet() {
-                    try {
-                        selector.poll(100L);
-                    } catch (IOException e) {
-                        return false;
-                    }
-                    return !selector.completedReceives().isEmpty();
+            TestUtils.waitForCondition(() -> {
+                try {
+                    selector.poll(100L);
+                } catch (IOException e) {
+                    return false;
                 }
+                return !selector.completedReceives().isEmpty();
             }, "Timed out waiting for a message to receive from echo server");
 
             long receiveTimeNanos = channel.getAndResetNetworkThreadTimeNanos();
@@ -956,19 +945,15 @@ public class SslTransportLayerTest {
         int count = 20;
         final int totalSendSize = count * (message.length + 4);
         for (int i = 0; i < count; i++) {
-            selector.send(new NetworkSend(node, ByteBuffer.wrap(message)));
+            selector.send(new NetworkSend(node, ByteBufferSend.sizePrefixed(ByteBuffer.wrap(message))));
             do {
                 selector.poll(0L);
             } while (selector.completedSends().isEmpty());
         }
         server.selector().unmuteAll();
         selector.close(node);
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return bytesOut.toByteArray().length == totalSendSize;
-            }
-        }, 5000, "All requests sent were not processed");
+        TestUtils.waitForCondition(() ->
+            bytesOut.toByteArray().length == totalSendSize, 5000, "All requests sent were not processed");
     }
 
     /**

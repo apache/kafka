@@ -220,18 +220,19 @@ public class AbstractConfigTest {
     }
 
     @Test
-    public void testUnused() {
+    public void testUnusedConfigs() {
         Properties props = new Properties();
         String configValue = "org.apache.kafka.common.config.AbstractConfigTest$ConfiguredFakeMetricsReporter";
         props.put(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, configValue);
-        props.put(FakeMetricsReporterConfig.EXTRA_CONFIG, "my_value");
+        props.put(ConfiguredFakeMetricsReporter.EXTRA_CONFIG, "my_value");
         TestConfig config = new TestConfig(props);
 
-        assertTrue("metric.extra_config should be marked unused before getConfiguredInstances is called",
-            config.unused().contains(FakeMetricsReporterConfig.EXTRA_CONFIG));
+        assertTrue(ConfiguredFakeMetricsReporter.EXTRA_CONFIG + " should be marked unused before getConfiguredInstances is called",
+            config.unused().contains(ConfiguredFakeMetricsReporter.EXTRA_CONFIG));
 
         config.getConfiguredInstances(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, MetricsReporter.class);
-        assertTrue("All defined configurations should be marked as used", config.unused().isEmpty());
+        assertFalse(ConfiguredFakeMetricsReporter.EXTRA_CONFIG + " should be marked as used",
+            config.unused().contains(ConfiguredFakeMetricsReporter.EXTRA_CONFIG));
     }
 
     private void testValidInputs(String configValue) {
@@ -602,26 +603,12 @@ public class AbstractConfigTest {
     }
 
     public static class ConfiguredFakeMetricsReporter extends FakeMetricsReporter {
+        public static final String EXTRA_CONFIG = "metric.extra_config";
         @Override
         public void configure(Map<String, ?> configs) {
-            FakeMetricsReporterConfig config = new FakeMetricsReporterConfig(configs);
-
-            // Calling getString() should have the side effect of marking that config as used.
-            config.getString(FakeMetricsReporterConfig.EXTRA_CONFIG);
-        }
-    }
-
-    public static class FakeMetricsReporterConfig extends AbstractConfig {
-
-        public static final String EXTRA_CONFIG = "metric.extra_config";
-        private static final String EXTRA_CONFIG_DOC = "An extraneous configuration string.";
-        private static final ConfigDef CONFIG = new ConfigDef().define(
-                EXTRA_CONFIG, ConfigDef.Type.STRING, "",
-                ConfigDef.Importance.LOW, EXTRA_CONFIG_DOC);
-
-
-        public FakeMetricsReporterConfig(Map<?, ?> props) {
-            super(CONFIG, props);
+            // Calling get() should have the side effect of marking that config as used.
+            // this is required by testUnusedConfigs
+            configs.get(EXTRA_CONFIG);
         }
     }
 }

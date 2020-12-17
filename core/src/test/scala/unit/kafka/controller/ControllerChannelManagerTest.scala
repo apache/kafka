@@ -18,17 +18,17 @@ package kafka.controller
 
 import java.util.Properties
 
-import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, KAFKA_0_10_2_IV0, KAFKA_0_9_0, KAFKA_1_0_IV0, KAFKA_2_2_IV0, KAFKA_2_4_IV0, KAFKA_2_4_IV1, KAFKA_2_6_IV0, KAFKA_2_8_IV0, LeaderAndIsr}
+import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, KAFKA_0_10_2_IV0, KAFKA_0_9_0, KAFKA_1_0_IV0, KAFKA_2_2_IV0, KAFKA_2_4_IV0, KAFKA_2_4_IV1, KAFKA_2_6_IV0, KAFKA_2_8_IV1, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.common.message.{LeaderAndIsrRequestData, LeaderAndIsrResponseData, StopReplicaResponseData, UpdateMetadataResponseData}
+import org.apache.kafka.common.message.{LeaderAndIsrResponseData, StopReplicaResponseData, UpdateMetadataResponseData}
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState
 import org.apache.kafka.common.message.StopReplicaResponseData.StopReplicaPartitionError
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.{ApiKeys, ByteBufferAccessor, Errors, MessageTestUtil}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AbstractControlRequest, AbstractResponse, LeaderAndIsrRequest, LeaderAndIsrResponse, StopReplicaRequest, StopReplicaResponse, UpdateMetadataRequest, UpdateMetadataResponse}
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicError
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -163,7 +163,7 @@ class ControllerChannelManagerTest {
 
     for (apiVersion <- ApiVersion.allVersions) {
       val leaderAndIsrRequestVersion: Short =
-        if (apiVersion >= KAFKA_2_8_IV0) 5
+        if (apiVersion >= KAFKA_2_8_IV1) 5
         else if (apiVersion >= KAFKA_2_4_IV1) 4
         else if (apiVersion >= KAFKA_2_4_IV0) 3
         else if (apiVersion >= KAFKA_2_2_IV0) 2
@@ -196,11 +196,10 @@ class ControllerChannelManagerTest {
       expectedLeaderAndIsrVersion, leaderAndIsrRequests.head.version)
     
     val request = leaderAndIsrRequests.head
-    val byteBuffer = MessageTestUtil.messageToByteBuffer(request.data, request.version)
-    val deserializedRequest = new LeaderAndIsrRequest(new LeaderAndIsrRequestData(
-      new ByteBufferAccessor(byteBuffer), expectedLeaderAndIsrVersion).toStruct(expectedLeaderAndIsrVersion), expectedLeaderAndIsrVersion)
+    val byteBuffer = request.serialize
+    val deserializedRequest = LeaderAndIsrRequest.parse(byteBuffer, expectedLeaderAndIsrVersion)
     
-    if (interBrokerProtocolVersion >= KAFKA_2_8_IV0) {
+    if (interBrokerProtocolVersion >= KAFKA_2_8_IV1) {
       assertTrue(!request.topicIds().get("foo").equals(Uuid.ZERO_UUID))
       assertTrue(!deserializedRequest.topicIds().get("foo").equals(Uuid.ZERO_UUID))
     } else if (interBrokerProtocolVersion >= KAFKA_2_2_IV0) {

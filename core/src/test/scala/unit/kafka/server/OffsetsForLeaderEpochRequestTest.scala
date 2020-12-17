@@ -89,9 +89,13 @@ class OffsetsForLeaderEpochRequestTest extends BaseRequestTest {
 
   private def assertResponseError(error: Errors, brokerId: Int, request: OffsetsForLeaderEpochRequest): Unit = {
     val response = sendRequest(brokerId, request)
-    assertEquals(request.epochsByTopicPartition.size, response.responses.size)
-    response.responses.asScala.values.foreach { partitionData =>
-      assertEquals(error, partitionData.error)
+    assertEquals(request.data.topics.size, response.data.topics.size)
+    response.data.topics.asScala.foreach { offsetForLeaderTopic =>
+      assertEquals(request.data.topics.find(offsetForLeaderTopic.topic).partitions.size,
+        offsetForLeaderTopic.partitions.size)
+      offsetForLeaderTopic.partitions.asScala.foreach { offsetForLeaderPartition =>
+        assertEquals(error.code(), offsetForLeaderPartition.errorCode())
+      }
     }
   }
 

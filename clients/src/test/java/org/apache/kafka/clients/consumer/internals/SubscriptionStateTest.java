@@ -25,9 +25,8 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState.LogTruncation;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderPartitionResult;
+import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.requests.EpochEndOffset;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
@@ -42,6 +41,8 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 import static java.util.Collections.singleton;
+import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH;
+import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -520,7 +521,7 @@ public class SubscriptionStateTest {
         assertTrue(state.awaitingValidation(tp0));
 
         Optional<LogTruncation> truncationOpt = state.maybeCompleteValidation(tp0, initialPosition,
-                new OffsetForLeaderPartitionResult()
+                new EpochEndOffset()
                     .setLeaderEpoch(initialOffsetEpoch)
                     .setEndOffset(initialOffset + 5));
         assertEquals(Optional.empty(), truncationOpt);
@@ -577,7 +578,7 @@ public class SubscriptionStateTest {
         state.seekUnvalidated(tp0, updatePosition);
 
         Optional<LogTruncation> truncationOpt = state.maybeCompleteValidation(tp0, initialPosition,
-                new OffsetForLeaderPartitionResult()
+                new EpochEndOffset()
                     .setLeaderEpoch(initialOffsetEpoch)
                     .setEndOffset(initialOffset + 5));
         assertEquals(Optional.empty(), truncationOpt);
@@ -602,7 +603,7 @@ public class SubscriptionStateTest {
         state.requestOffsetReset(tp0);
 
         Optional<LogTruncation> truncationOpt = state.maybeCompleteValidation(tp0, initialPosition,
-                new OffsetForLeaderPartitionResult()
+                new EpochEndOffset()
                     .setLeaderEpoch(initialOffsetEpoch)
                     .setEndOffset(initialOffset + 5));
         assertEquals(Optional.empty(), truncationOpt);
@@ -628,7 +629,7 @@ public class SubscriptionStateTest {
         assertTrue(state.awaitingValidation(tp0));
 
         Optional<LogTruncation> truncationOpt = state.maybeCompleteValidation(tp0, initialPosition,
-                new OffsetForLeaderPartitionResult()
+                new EpochEndOffset()
                     .setLeaderEpoch(divergentOffsetEpoch)
                     .setEndOffset(divergentOffset));
         assertEquals(Optional.empty(), truncationOpt);
@@ -657,7 +658,7 @@ public class SubscriptionStateTest {
         assertTrue(state.awaitingValidation(tp0));
 
         Optional<LogTruncation> truncationOpt = state.maybeCompleteValidation(tp0, initialPosition,
-                new OffsetForLeaderPartitionResult()
+                new EpochEndOffset()
                     .setLeaderEpoch(divergentOffsetEpoch)
                     .setEndOffset(divergentOffset));
         assertTrue(truncationOpt.isPresent());
@@ -685,9 +686,9 @@ public class SubscriptionStateTest {
         assertTrue(state.awaitingValidation(tp0));
 
         Optional<LogTruncation> truncationOpt = state.maybeCompleteValidation(tp0, initialPosition,
-                new OffsetForLeaderPartitionResult()
-                    .setLeaderEpoch(EpochEndOffset.UNDEFINED_EPOCH)
-                    .setEndOffset(EpochEndOffset.UNDEFINED_EPOCH_OFFSET));
+                new EpochEndOffset()
+                    .setLeaderEpoch(UNDEFINED_EPOCH)
+                    .setEndOffset(UNDEFINED_EPOCH_OFFSET));
         assertEquals(Optional.empty(), truncationOpt);
         assertFalse(state.awaitingValidation(tp0));
         assertTrue(state.isOffsetResetNeeded(tp0));
@@ -710,9 +711,9 @@ public class SubscriptionStateTest {
         assertTrue(state.awaitingValidation(tp0));
 
         Optional<LogTruncation> truncationOpt = state.maybeCompleteValidation(tp0, initialPosition,
-                new OffsetForLeaderPartitionResult()
-                    .setLeaderEpoch(EpochEndOffset.UNDEFINED_EPOCH)
-                    .setEndOffset(EpochEndOffset.UNDEFINED_EPOCH_OFFSET));
+                new EpochEndOffset()
+                    .setLeaderEpoch(UNDEFINED_EPOCH)
+                    .setEndOffset(UNDEFINED_EPOCH_OFFSET));
         assertTrue(truncationOpt.isPresent());
         LogTruncation truncation = truncationOpt.get();
 

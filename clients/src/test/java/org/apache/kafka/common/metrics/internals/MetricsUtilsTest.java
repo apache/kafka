@@ -14,20 +14,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.network;
+package org.apache.kafka.common.metrics.internals;
 
-import java.nio.channels.GatheringByteChannel;
+import org.junit.Test;
 
-public final class TransportLayers {
+import java.util.Map;
 
-    private TransportLayers() {}
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
-    // This is temporary workaround as Send and Receive interfaces are used by BlockingChannel.
-    // Once BlockingChannel is removed we can make Send and Receive work with TransportLayer rather than
-    // GatheringByteChannel or ScatteringByteChannel.
-    public static boolean hasPendingWrites(GatheringByteChannel channel) {
-        if (channel instanceof TransportLayer)
-            return ((TransportLayer) channel).hasPendingWrites();
-        return false;
+public class MetricsUtilsTest {
+
+    @Test
+    public void testCreatingTags() {
+        Map<String, String> tags = MetricsUtils.getTags("k1", "v1", "k2", "v2");
+        assertEquals("v1", tags.get("k1"));
+        assertEquals("v2", tags.get("k2"));
+        assertEquals(2, tags.size());
+    }
+
+    @Test
+    public void testCreatingTagsWithOddNumberOfTags() {
+        assertThrows(IllegalArgumentException.class, () -> MetricsUtils.getTags("k1", "v1", "k2", "v2", "extra"));
     }
 }

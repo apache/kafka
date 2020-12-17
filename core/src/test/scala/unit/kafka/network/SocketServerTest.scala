@@ -26,6 +26,7 @@ import java.util
 import java.util.concurrent.{CompletableFuture, ConcurrentLinkedQueue, Executors, TimeUnit}
 import java.util.{Properties, Random}
 
+import com.fasterxml.jackson.databind.node.{JsonNodeFactory, ObjectNode, TextNode}
 import com.yammer.metrics.core.{Gauge, Meter}
 import javax.net.ssl._
 import kafka.metrics.KafkaYammerMetrics
@@ -43,7 +44,7 @@ import org.apache.kafka.common.requests
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
-import org.apache.kafka.common.utils.{AppInfoParser, LogContext, MockTime, Time}
+import org.apache.kafka.common.utils.{AppInfoParser, LogContext, MockTime, Time, Utils}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.log4j.Level
 import org.junit.Assert._
@@ -111,11 +112,8 @@ class SocketServerTest {
       outgoing.flush()
   }
 
-  def sendApiRequest(socket: Socket, request: AbstractRequest, header: RequestHeader) = {
-    val byteBuffer = request.serialize(header)
-    byteBuffer.rewind()
-    val serializedBytes = new Array[Byte](byteBuffer.remaining)
-    byteBuffer.get(serializedBytes)
+  def sendApiRequest(socket: Socket, request: AbstractRequest, header: RequestHeader): Unit = {
+    val serializedBytes = Utils.toArray(RequestTestUtils.serializeRequestWithHeader(header, request))
     sendRequest(socket, serializedBytes)
   }
 
@@ -141,11 +139,10 @@ class SocketServerTest {
   }
 
   def processRequest(channel: RequestChannel, request: RequestChannel.Request): Unit = {
-    val byteBuffer = request.body[AbstractRequest].serialize(request.header)
-    byteBuffer.rewind()
-
-    val send = new NetworkSend(request.context.connectionId, byteBuffer)
-    channel.sendResponse(new RequestChannel.SendResponse(request, send, Some(request.header.toString), None))
+    val byteBuffer = RequestTestUtils.serializeRequestWithHeader(request.header, request.body[AbstractRequest])
+    val send = new NetworkSend(request.context.connectionId, ByteBufferSend.sizePrefixed(byteBuffer))
+    val headerLog = RequestConvertToJson.requestHeaderNode(request.header)
+    channel.sendResponse(new RequestChannel.SendResponse(request, send, Some(headerLog), None))
   }
 
   def processRequestNoOpResponse(channel: RequestChannel, request: RequestChannel.Request): Unit = {
@@ -214,22 +211,13 @@ class SocketServerTest {
       .setTransactionalId(null))
       .build()
     val emptyHeader = new RequestHeader(ApiKeys.PRODUCE, emptyRequest.version, clientId, correlationId)
-    val byteBuffer = emptyRequest.serialize(emptyHeader)
-    byteBuffer.rewind()
-
-    val serializedBytes = new Array[Byte](byteBuffer.remaining)
-    byteBuffer.get(serializedBytes)
-    serializedBytes
+    Utils.toArray(RequestTestUtils.serializeRequestWithHeader(emptyHeader, emptyRequest))
   }
 
   private def apiVersionRequestBytes(clientId: String, version: Short): Array[Byte] = {
     val request = new ApiVersionsRequest.Builder().build(version)
     val header = new RequestHeader(ApiKeys.API_VERSIONS, request.version(), clientId, -1)
-    val buffer = request.serialize(header)
-    buffer.rewind()
-    val bytes = new Array[Byte](buffer.remaining())
-    buffer.get(bytes)
-    bytes
+    Utils.toArray(RequestTestUtils.serializeRequestWithHeader(header, request))
   }
 
   @Test
@@ -378,12 +366,9 @@ class SocketServerTest {
     val correlationId = 57
     val header = new RequestHeader(ApiKeys.VOTE, 0, "", correlationId)
     val request = new VoteRequest.Builder(new VoteRequestData()).build()
-    val byteBuffer = request.serialize(header)
-    byteBuffer.rewind()
+    val serializedBytes = Utils.toArray(RequestTestUtils.serializeRequestWithHeader(header, request))
 
     val socket = connect()
-    val serializedBytes = new Array[Byte](byteBuffer.remaining)
-    byteBuffer.get(serializedBytes)
 
     val outgoing = new DataOutputStream(socket.getOutputStream)
     try {
@@ -687,15 +672,16 @@ class SocketServerTest {
     // Mimic a primitive request handler that fetches the request from RequestChannel and place a response with a
     // throttled channel.
     val request = receiveRequest(server.dataPlaneRequestChannel)
-    val byteBuffer = request.body[AbstractRequest].serialize(request.header)
-    val send = new NetworkSend(request.context.connectionId, byteBuffer)
+    val byteBuffer = RequestTestUtils.serializeRequestWithHeader(request.header, request.body[AbstractRequest])
+    val send = new NetworkSend(request.context.connectionId, ByteBufferSend.sizePrefixed(byteBuffer))
     def channelThrottlingCallback(response: RequestChannel.Response): Unit = {
       server.dataPlaneRequestChannel.sendResponse(response)
     }
     val throttledChannel = new ThrottledChannel(request, new MockTime(), 100, channelThrottlingCallback)
+    val headerLog = RequestConvertToJson.requestHeaderNode(request.header)
     val response =
       if (!noOpResponse)
-        new RequestChannel.SendResponse(request, send, Some(request.header.toString), None)
+        new RequestChannel.SendResponse(request, send, Some(headerLog), None)
       else
         new RequestChannel.NoOpResponse(request)
     server.dataPlaneRequestChannel.sendResponse(response)
@@ -875,36 +861,49 @@ class SocketServerTest {
 
   @Test
   def testConnectionRatePerIp(): Unit = {
+    val defaultTimeoutMs = 2000
     val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
     overrideProps.remove(KafkaConfig.MaxConnectionsPerIpProp)
     overrideProps.put(KafkaConfig.NumQuotaSamplesProp, String.valueOf(2))
     val connectionRate = 5
     val time = new MockTime()
     val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), new Metrics(), time, credentialProvider)
+    // update the connection rate to 5
     overrideServer.connectionQuotas.updateIpConnectionRateQuota(None, Some(connectionRate))
     try {
       overrideServer.startup()
-      // make the maximum allowable number of connections
-      (0 until connectionRate).map(_ => connect(overrideServer))
-      // now try one more (should get throttled)
-      var conn = connect(overrideServer)
+      // make the (maximum allowable number + 1) of connections
+      (0 to connectionRate).map(_ => connect(overrideServer))
+
       val acceptors = overrideServer.dataPlaneAcceptors.asScala.values
-      TestUtils.waitUntilTrue(() => acceptors.exists(_.throttledSockets.nonEmpty),
-        "timeout waiting for connection to get throttled",
-        1000)
+      // waiting for 5 connections got accepted and 1 connection got throttled
+      TestUtils.waitUntilTrue(
+        () => acceptors.foldLeft(0)((accumulator, acceptor) => accumulator + acceptor.throttledSockets.size) == 1,
+        "timeout waiting for 1 connection to get throttled",
+        defaultTimeoutMs)
+
+      // now try one more, so that we can make sure this connection will get throttled
+      var conn = connect(overrideServer)
+      // there should be total 2 connection got throttled now
+      TestUtils.waitUntilTrue(
+        () => acceptors.foldLeft(0)((accumulator, acceptor) => accumulator + acceptor.throttledSockets.size) == 2,
+        "timeout waiting for 2 connection to get throttled",
+        defaultTimeoutMs)
       // advance time to unthrottle connections
-      time.sleep(2000)
+      time.sleep(defaultTimeoutMs)
       acceptors.foreach(_.wakeup())
+      // make sure there are no connection got throttled now(and the throttled connections should be closed)
       TestUtils.waitUntilTrue(() => acceptors.forall(_.throttledSockets.isEmpty),
         "timeout waiting for connection to be unthrottled",
-        1000)
+        defaultTimeoutMs)
+      // verify the connection is closed now
       verifyRemoteConnectionClosed(conn)
 
       // new connection should succeed after previous connection closed, and previous samples have been expired
       conn = connect(overrideServer)
       val serializedBytes = producerRequestBytes()
       sendRequest(conn, serializedBytes)
-      val request = overrideServer.dataPlaneRequestChannel.receiveRequest(2000)
+      val request = overrideServer.dataPlaneRequestChannel.receiveRequest(defaultTimeoutMs)
       assertNotNull(request)
     } finally {
       shutdownServerAndMetrics(overrideServer)
@@ -966,11 +965,7 @@ class SocketServerTest {
         .setTransactionalId(null))
         .build()
       val emptyHeader = new RequestHeader(ApiKeys.PRODUCE, emptyRequest.version, clientId, correlationId)
-
-      val byteBuffer = emptyRequest.serialize(emptyHeader)
-      byteBuffer.rewind()
-      val serializedBytes = new Array[Byte](byteBuffer.remaining)
-      byteBuffer.get(serializedBytes)
+      val serializedBytes = Utils.toArray(RequestTestUtils.serializeRequestWithHeader(emptyHeader, emptyRequest))
 
       sendRequest(sslSocket, serializedBytes)
       processRequest(overrideServer.dataPlaneRequestChannel)
@@ -1113,8 +1108,10 @@ class SocketServerTest {
 
       val requestMetrics = channel.metrics(request.header.apiKey.name)
       def totalTimeHistCount(): Long = requestMetrics.totalTimeHist.count
-      val send = new NetworkSend(request.context.connectionId, ByteBuffer.allocate(responseBufferSize))
-      channel.sendResponse(new RequestChannel.SendResponse(request, send, Some("someResponse"), None))
+      val send = new NetworkSend(request.context.connectionId, ByteBufferSend.sizePrefixed(ByteBuffer.allocate(responseBufferSize)))
+      val headerLog = new ObjectNode(JsonNodeFactory.instance)
+      headerLog.set("response", new TextNode("someResponse"))
+      channel.sendResponse(new RequestChannel.SendResponse(request, send, Some(headerLog), None))
 
       val expectedTotalTimeCount = totalTimeHistCount() + 1
       TestUtils.waitUntilTrue(() => totalTimeHistCount() == expectedTotalTimeCount,
@@ -2002,7 +1999,7 @@ class SocketServerTest {
       }
     }
 
-    class CompletedSendsPollData(selector: TestableSelector) extends PollData[Send] {
+    class CompletedSendsPollData(selector: TestableSelector) extends PollData[NetworkSend] {
       override def updateResults(): Unit = {
         val currentSends = update(selector.completedSends.asScala)
         selector.completedSends.clear()
@@ -2059,8 +2056,8 @@ class SocketServerTest {
       }
     }
 
-    override def send(s: Send): Unit = {
-      runOp(SelectorOperation.Send, Some(s.destination)) {
+    override def send(s: NetworkSend): Unit = {
+      runOp(SelectorOperation.Send, Some(s.destinationId)) {
         super.send(s)
       }
     }

@@ -195,7 +195,10 @@ class ZooKeeperClient(connectString: String,
     def responseMetadata(sendTimeMs: Long) = new ResponseMetadata(sendTimeMs, receivedTimeMs = time.hiResClockMs())
 
     val sendTimeMs = time.hiResClockMs()
-    request match {
+
+    // Cast to AsyncRequest to workaround a scalac bug that results in an false exhaustiveness warning
+    // with -Xlint:strict-unsealed-patmat
+    (request: AsyncRequest) match {
       case ExistsRequest(path, ctx) =>
         zooKeeper.exists(path, shouldWatch(request), new StatCallback {
           def processResult(rc: Int, path: String, ctx: Any, stat: Stat): Unit =

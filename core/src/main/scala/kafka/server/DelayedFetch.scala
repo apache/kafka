@@ -25,6 +25,7 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.replica.ClientMetadata
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
+import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 
 import scala.collection._
 
@@ -124,7 +125,9 @@ class DelayedFetch(delayMs: Long,
             // Case H: If truncation has caused diverging epoch while this request was in purgatory, return to trigger truncation
             fetchStatus.fetchInfo.lastFetchedEpoch.ifPresent { fetchEpoch =>
               val epochEndOffset = partition.lastOffsetForLeaderEpoch(fetchLeaderEpoch, fetchEpoch, fetchOnlyFromLeader = false)
-              if (epochEndOffset.error != Errors.NONE || epochEndOffset.hasUndefinedEpochOrOffset) {
+              if (epochEndOffset.errorCode != Errors.NONE.code()
+                  || epochEndOffset.endOffset == UNDEFINED_EPOCH_OFFSET
+                  || epochEndOffset.leaderEpoch == UNDEFINED_EPOCH) {
                 debug(s"Could not obtain last offset for leader epoch for partition $topicPartition, epochEndOffset=$epochEndOffset.")
                 return forceComplete()
               } else if (epochEndOffset.leaderEpoch < fetchEpoch || epochEndOffset.endOffset < fetchStatus.fetchInfo.fetchOffset) {

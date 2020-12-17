@@ -15,21 +15,21 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.protocol;
+package org.apache.kafka.clients.admin;
 
-import java.nio.ByteBuffer;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public final class MessageTestUtil {
-    public static int messageSize(Message message, short version) {
-        return message.size(new ObjectSerializationCache(), version);
+import org.junit.jupiter.api.Test;
+
+class ScramMechanismTest {
+
+    @Test
+    public void testFromMechanismName() {
+        assertEquals(ScramMechanism.UNKNOWN, ScramMechanism.fromMechanismName("UNKNOWN"));
+        assertEquals(ScramMechanism.SCRAM_SHA_256, ScramMechanism.fromMechanismName("SCRAM-SHA-256"));
+        assertEquals(ScramMechanism.SCRAM_SHA_512, ScramMechanism.fromMechanismName("SCRAM-SHA-512"));
+        assertEquals(ScramMechanism.UNKNOWN, ScramMechanism.fromMechanismName("some string"));
+        assertEquals(ScramMechanism.UNKNOWN, ScramMechanism.fromMechanismName("scram-sha-256"));
     }
 
-    public static ByteBuffer messageToByteBuffer(Message message, short version) {
-        ObjectSerializationCache cache = new ObjectSerializationCache();
-        int size = message.size(cache, version);
-        ByteBuffer bytes = ByteBuffer.allocate(size);
-        message.write(new ByteBufferAccessor(bytes), cache, version);
-        bytes.flip();
-        return bytes;
-    }
 }
