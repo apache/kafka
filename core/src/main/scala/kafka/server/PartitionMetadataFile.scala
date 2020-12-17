@@ -62,6 +62,9 @@ object PartitionMetadataFile {
                 case Array(_, topicId) => metadataTopicId = Uuid.fromString(topicId)
                 case _ => throw malformedLineException(line)
               }
+              if (metadataTopicId.equals(Uuid.ZERO_UUID)) {
+                throw new IOException(s"Invalid topic ID in partition metadata file ($location)")
+              }
               new PartitionMetadata(CurrentVersion, metadataTopicId)
             } else {
               throw new IOException(s"Unrecognized version of partition metadata file ($location): " + version)

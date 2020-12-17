@@ -1452,23 +1452,16 @@ class ReplicaManager(val config: KafkaConfig,
               // Ensure we have not received a request from an older protocol
               if (id != null && !id.equals(Uuid.ZERO_UUID)) {
                 val log = localLog(topicPartition).get
-                // Check if the topic ID is in memory, if not, it must be new to the broker.
-                // If the broker previously wrote it to file, it would be recovered on restart after failure.
-                // If the topic ID is not the default (ZERO_UUID), a topic ID is being used for the given topic.
-                // If the topic ID in the log does not match the one in the request, the broker's topic must be stale.
-                if (!log.topicId.equals(Uuid.ZERO_UUID) && !log.topicId.equals(topicIds.get(topicPartition.topic))) {
+                // Check if topic ID is in memory, if not, it must be new to the broker and does not have a metadata file.
+                // This is because if the broker previously wrote it to file, it would be recovered on restart after failure.
+                if (log.topicId.equals(Uuid.ZERO_UUID)) {
+                  log.partitionMetadataFile.get.write(id)
+                  log.topicId = id
+                  // Warn if the topic ID in the request does not match the log.
+                } else if (!log.topicId.equals(id)) {
                   stateChangeLogger.warn(s"Topic Id in memory: ${log.topicId.toString} does not" +
                     s" match the topic Id provided in the request: " +
-                    s"${topicIds.get(topicPartition.topic).toString}.")
-                } else {
-                  // There is not yet a topic ID stored in the log.
-                  // Write the partition metadata file if it is empty.
-                  if (log.partitionMetadataFile.get.isEmpty()) {
-                    log.partitionMetadataFile.get.write(id)
-                    log.topicId = id
-                  } else {
-                    stateChangeLogger.warn("Partition metadata file already contains content.")
-                  }
+                    s"${id.toString}.")
                 }
               }
             }
