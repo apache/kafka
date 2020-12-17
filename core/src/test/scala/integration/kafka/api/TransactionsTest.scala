@@ -356,6 +356,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     producer1.beginTransaction()
     producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "1", "1", willBeCommitted = false))
     producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "3", "3", willBeCommitted = false))
+    producer1.flush()
 
     producer2.initTransactions()  // ok, will abort the open transaction.
     producer2.beginTransaction()
