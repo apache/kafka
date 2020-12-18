@@ -107,7 +107,7 @@ class Kip500Server(
   KafkaBroker.notifyClusterListeners(metaProps.clusterId.toString,
     kafkaMetricsReporters ++ metrics.reporters.asScala)
 
-  private val metadataPartition = new TopicPartition("__cluster_metadata", 0)
+  private val metadataPartition = new TopicPartition(KafkaServer.metadataTopicName, 0)
   private val raftManager = new KafkaRaftManager(metaProps, metadataPartition, config, time, metrics)
 
   val broker: Option[Kip500Broker] = if (roles.contains(BrokerRole)) {
@@ -186,6 +186,8 @@ class Kip500Server(
 }
 
 object KafkaServer {
+  val metadataTopicName = "@metadata"
+
   def apply(
     config: KafkaConfig,
     time: Time = Time.SYSTEM,
