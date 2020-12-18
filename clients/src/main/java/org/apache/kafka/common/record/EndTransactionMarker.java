@@ -16,15 +16,13 @@
  */
 package org.apache.kafka.common.record;
 
-import org.apache.kafka.common.InvalidRecordException;
-import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.protocol.types.Schema;
-import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.protocol.types.Type;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.kafka.common.message.EndTxnMarker;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.MessageUtil;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * This class represents the control record which is written to the log to indicate the completion
@@ -32,25 +30,19 @@ import java.nio.ByteBuffer;
  * value embeds information useful for write validation (for now, just the coordinator epoch).
  */
 public class EndTransactionMarker {
-    private static final Logger log = LoggerFactory.getLogger(EndTransactionMarker.class);
-
-    private static final short CURRENT_END_TXN_MARKER_VERSION = 0;
-    private static final Schema END_TXN_MARKER_SCHEMA_VERSION_V0 = new Schema(
-            new Field("version", Type.INT16),
-            new Field("coordinator_epoch", Type.INT32));
-    static final int CURRENT_END_TXN_MARKER_VALUE_SIZE = 6;
-    static final int CURRENT_END_TXN_SCHEMA_RECORD_SIZE = DefaultRecord.sizeInBytes(0, 0L,
-            ControlRecordType.CURRENT_CONTROL_RECORD_KEY_SIZE,
-            EndTransactionMarker.CURRENT_END_TXN_MARKER_VALUE_SIZE,
-            Record.EMPTY_HEADERS);
 
     private final ControlRecordType type;
     private final int coordinatorEpoch;
+    private final ByteBuffer buffer;
+
+    static final List<ControlRecordType> VALID_CONTROLLER_RECORD_TYPE = Arrays.asList(ControlRecordType.COMMIT, ControlRecordType.ABORT);
 
     public EndTransactionMarker(ControlRecordType type, int coordinatorEpoch) {
         ensureTransactionMarkerControlType(type);
         this.type = type;
         this.coordinatorEpoch = coordinatorEpoch;
+        EndTxnMarker marker = new EndTxnMarker().setCoordinatorEpoch(coordinatorEpoch);
+        this.buffer = MessageUtil.toVersionPrefixedByteBuffer(EndTxnMarker.HIGHEST_SUPPORTED_VERSION, marker);
     }
 
     public int coordinatorEpoch() {
@@ -61,19 +53,8 @@ public class EndTransactionMarker {
         return type;
     }
 
-    private Struct buildRecordValue() {
-        Struct struct = new Struct(END_TXN_MARKER_SCHEMA_VERSION_V0);
-        struct.set("version", CURRENT_END_TXN_MARKER_VERSION);
-        struct.set("coordinator_epoch", coordinatorEpoch);
-        return struct;
-    }
-
     public ByteBuffer serializeValue() {
-        Struct valueStruct = buildRecordValue();
-        ByteBuffer value = ByteBuffer.allocate(valueStruct.sizeOf());
-        valueStruct.writeTo(value);
-        value.flip();
-        return value;
+        return buffer.duplicate();
     }
 
     @Override
@@ -93,8 +74,8 @@ public class EndTransactionMarker {
     }
 
     private static void ensureTransactionMarkerControlType(ControlRecordType type) {
-        if (type != ControlRecordType.COMMIT && type != ControlRecordType.ABORT)
-            throw new IllegalArgumentException("Invalid control record type for end transaction marker" + type);
+        if (!VALID_CONTROLLER_RECORD_TYPE.contains(type))
+            throw new IllegalArgumentException("Invalid control record type for end transaction marker " + type);
     }
 
     public static EndTransactionMarker deserialize(Record record) {
@@ -102,24 +83,20 @@ public class EndTransactionMarker {
         return deserializeValue(type, record.value());
     }
 
+    // Visible for testing
     static EndTransactionMarker deserializeValue(ControlRecordType type, ByteBuffer value) {
         ensureTransactionMarkerControlType(type);
 
-        if (value.remaining() < CURRENT_END_TXN_MARKER_VALUE_SIZE)
-            throw new InvalidRecordException("Invalid value size found for end transaction marker. Must have " +
-                    "at least " + CURRENT_END_TXN_MARKER_VALUE_SIZE + " bytes, but found only " + value.remaining());
+        short version = value.getShort();
+        EndTxnMarker marker = new EndTxnMarker(new ByteBufferAccessor(value), version);
+        return new EndTransactionMarker(type, marker.coordinatorEpoch());
+    }
 
-        short version = value.getShort(0);
-        if (version < 0)
-            throw new InvalidRecordException("Invalid version found for end transaction marker: " + version +
-                    ". May indicate data corruption");
-
-        if (version > CURRENT_END_TXN_MARKER_VERSION)
-            log.debug("Received end transaction marker value version {}. Parsing as version {}", version,
-                    CURRENT_END_TXN_MARKER_VERSION);
-
-        int coordinatorEpoch = value.getInt(2);
-        return new EndTransactionMarker(type, coordinatorEpoch);
+    public int endTxnMarkerValueSize() {
+        return DefaultRecord.sizeInBytes(0, 0L,
+                ControlRecordType.CURRENT_CONTROL_RECORD_KEY_SIZE,
+                buffer.remaining(),
+                Record.EMPTY_HEADERS);
     }
 
 }
