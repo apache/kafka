@@ -35,6 +35,7 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.Set;
 import java.util.HashSet;
+import java.util.Optional;
 
 /**
  * The specification for a benchmark that consumer messages from a set of topic/partitions.
@@ -71,6 +72,9 @@ import java.util.HashSet;
  * explicitly specifying partitions in "activeTopics" when there are multiple "threadsPerWorker"
  * and a particular "consumerGroup" will result in an #{@link ConfigException}, aborting the task.
  *
+ * The "recordProcessor" field allows the specification of tasks to run on records that are consumed.  This is run
+ * immediately after the messages are polled.  See the `RecordProcessor` interface for more information.
+ *
  * An example JSON representation which will result in a consumer that is part of the consumer group "cg" and
  * subscribed to topics foo1, foo2, foo3 and bar.
  * #{@code
@@ -98,6 +102,7 @@ public class ConsumeBenchSpec extends TaskSpec {
     private final List<String> activeTopics;
     private final String consumerGroup;
     private final int threadsPerWorker;
+    private final Optional<RecordProcessor> recordProcessor;
 
     @JsonCreator
     public ConsumeBenchSpec(@JsonProperty("startMs") long startMs,
@@ -111,6 +116,7 @@ public class ConsumeBenchSpec extends TaskSpec {
                             @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
                             @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
                             @JsonProperty("threadsPerWorker") Integer threadsPerWorker,
+                            @JsonProperty("recordProcessor") Optional<RecordProcessor> recordProcessor,
                             @JsonProperty("activeTopics") List<String> activeTopics) {
         super(startMs, durationMs);
         this.consumerNode = (consumerNode == null) ? "" : consumerNode;
@@ -123,6 +129,7 @@ public class ConsumeBenchSpec extends TaskSpec {
         this.activeTopics = activeTopics == null ? new ArrayList<>() : activeTopics;
         this.consumerGroup = consumerGroup == null ? "" : consumerGroup;
         this.threadsPerWorker = threadsPerWorker == null ? 1 : threadsPerWorker;
+        this.recordProcessor = recordProcessor;
     }
 
     @JsonProperty
@@ -153,6 +160,11 @@ public class ConsumeBenchSpec extends TaskSpec {
     @JsonProperty
     public int threadsPerWorker() {
         return threadsPerWorker;
+    }
+
+    @JsonProperty
+    public Optional<RecordProcessor> recordProcessor() {
+        return this.recordProcessor;
     }
 
     @JsonProperty
