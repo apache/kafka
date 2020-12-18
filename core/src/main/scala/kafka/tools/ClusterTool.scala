@@ -70,10 +70,20 @@ object ClusterTool extends Logging {
 
       command match {
         case "cluster-id" =>
-          clusterIdCommand(System.out, properties)
+          val adminClient = Admin.create(properties)
+          try {
+            clusterIdCommand(System.out, adminClient)
+          } finally {
+            adminClient.close()
+          }
           Exit.exit(0)
         case "decommission" =>
-          decommissionCommand(System.out, properties, namespace.getInt("id"))
+          val adminClient = Admin.create(properties)
+          try {
+            decommissionCommand(System.out, adminClient, namespace.getInt("id"))
+          } finally {
+            adminClient.close()
+          }
           Exit.exit(0)
         case _ =>
           throw new RuntimeException(s"Unknown command $command")
@@ -86,25 +96,21 @@ object ClusterTool extends Logging {
   }
 
   def clusterIdCommand(stream: PrintStream,
-                       properties: Properties): Unit = {
-    val admin = Admin.create(properties)
-    try {
-      val clusterId = Option(admin.describeCluster().clusterId().get())
-      clusterId match {
-        case None => stream.println(s"No cluster ID found. The Kafka version is probably too old.")
-        case Some(id) => stream.println(s"Cluster ID: ${id}")
-      }
-    } finally {
-      admin.close()
+                       adminClient: Admin): Unit = {
+    val clusterId = Option(adminClient.describeCluster().clusterId().get())
+    clusterId match {
+      case None => stream.println(s"No cluster ID found. The Kafka version is probably too old.")
+      case Some(id) => stream.println(s"Cluster ID: ${id}")
     }
   }
 
   def decommissionCommand(stream: PrintStream,
-                          properties: Properties,
+                          adminClient: Admin,
                           id: Int): Unit = {
-    val admin = Admin.create(properties)
     try {
-      Option(admin.decommissionBroker(id).all().get())
+      Option(adminClient.decommissionBroker(id).all().get())
+      stream.println(s"Broker ${id} is no longer registered. Note that if the broker " +
+        "is still running, or is restarted, it will re-register.")
     } catch {
       case e: ExecutionException => {
         val cause = e.getCause()
@@ -114,8 +120,6 @@ object ClusterTool extends Logging {
           throw e
         }
       }
-    } finally {
-      admin.close()
     }
   }
 }
