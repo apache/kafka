@@ -244,7 +244,7 @@ public class StickyAssignor extends AbstractStickyAssignor {
     static MemberData deserializeTopicPartitionAssignment(ByteBuffer buffer) {
 
         for (short version = StickyAssignorUserData.HIGHEST_SUPPORTED_VERSION;
-             version >= StickyAssignorUserData.LOWEST_SUPPORTED_VERSION; version --) {
+             version >= StickyAssignorUserData.LOWEST_SUPPORTED_VERSION; version--) {
             ByteBuffer copy = buffer.duplicate();
             try {
                 return deserializeTopicPartitionAssignment(buffer, version);

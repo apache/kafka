@@ -16,15 +16,14 @@
 {
   "type": "data",
   "name": "StickyAssignorUserData",
-  // Used for preserving consumer's previously assigned partitions,
-  // list and sending it as user data to the leader during a rebalance
   "validVersions": "0-1",
   "fields": [
     { "name": "PreviousAssignment", "type": "[]TopicPartitions", "versions": "0+",
       "fields": [
         { "name": "Topic", "type": "string", "versions": "0+" },
         { "name": "Partitions", "type": "[]int32", "versions": "0+" }
-      ]
+      ],
+      "about": "Used for preserving consumer's previously assigned partitions to make the assignment more sticky during a rebalance"
     },
     { "name": "generation", "type": "int32", "versions": "1+", "ignorable": true}
   ]
