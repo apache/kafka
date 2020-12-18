@@ -1378,11 +1378,10 @@ class KafkaController(val config: KafkaConfig,
     val offlineReplicas = new ArrayBuffer[TopicPartition]()
     val onlineReplicas = new ArrayBuffer[TopicPartition]()
 
-    leaderAndIsrResponse.partitions.forEach { partition =>
-      val tp = new TopicPartition(partition.topicName, partition.partitionIndex)
-      if (partition.errorCode == Errors.KAFKA_STORAGE_ERROR.code)
+    leaderAndIsrResponse.partitionErrors(controllerContext.topicNames.asJava).forEach{ case (tp, error) =>
+      if (error.code() == Errors.KAFKA_STORAGE_ERROR.code)
         offlineReplicas += tp
-      else if (partition.errorCode == Errors.NONE.code)
+      else if (error.code() == Errors.NONE.code)
         onlineReplicas += tp
     }
 
