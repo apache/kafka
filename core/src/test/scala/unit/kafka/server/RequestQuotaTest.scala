@@ -286,7 +286,8 @@ class RequestQuotaTest extends BaseRequestTest {
               .setPort(0)
               .setSecurityProtocol(securityProtocol.id)
               .setListener(ListenerName.forSecurityProtocol(securityProtocol).value)).asJava)).asJava
-          new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, brokerId, Int.MaxValue, Long.MaxValue, partitionState, brokers)
+          new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, brokerId, Int.MaxValue, Long.MaxValue,
+            partitionState, brokers, Collections.emptyMap())
 
         case ApiKeys.CONTROLLED_SHUTDOWN =>
           new ControlledShutdownRequest.Builder(

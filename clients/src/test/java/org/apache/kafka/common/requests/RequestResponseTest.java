@@ -1640,7 +1640,7 @@ public class RequestResponseTest {
                 .setRack(rack)
         );
         return new UpdateMetadataRequest.Builder((short) version, 1, 10, 0, partitionStates,
-            liveBrokers).build();
+            liveBrokers, Collections.emptyMap()).build();
     }
 
     private UpdateMetadataResponse createUpdateMetadataResponse() {
