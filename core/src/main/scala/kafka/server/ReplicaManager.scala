@@ -1367,23 +1367,11 @@ class ReplicaManager(val config: KafkaConfig,
                 Some(partition)
             }
 
-            // We propagate the partition state down if:
-            // 1. The leader epoch is higher than the current leader epoch of the partition
-            // 2. The leader epoch is same as the current leader epoch but a new topic id is being assigned. This is
-            //    needed to handle the case where a topic id is assigned for the first time after upgrade.
-            def propagatePartitionState(requestLeaderEpoch: Int, currentLeaderEpoch: Int, partition: Partition): Boolean = {
-              requestLeaderEpoch > currentLeaderEpoch ||
-                (requestLeaderEpoch == currentLeaderEpoch &&
-                  partition.log.filter(_.topicId.equals(Uuid.ZERO_UUID)).isDefined &&
-                  topicIds.get(topicPartition.topic()) != null &&
-                  !topicIds.get(topicPartition.topic()).equals(Uuid.ZERO_UUID))
-            }
-
             // Next check partition's leader epoch
             partitionOpt.foreach { partition =>
               val currentLeaderEpoch = partition.getLeaderEpoch
               val requestLeaderEpoch = partitionState.leaderEpoch
-              if (propagatePartitionState(requestLeaderEpoch, currentLeaderEpoch, partition)) {
+              if (requestLeaderEpoch > currentLeaderEpoch) {
                 // If the leader epoch is valid record the epoch of the controller that made the leadership decision.
                 // This is useful while updating the isr to maintain the decision maker controller's epoch in the zookeeper path
                 if (partitionState.replicas.contains(localBrokerId))

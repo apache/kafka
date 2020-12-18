@@ -2308,45 +2308,4 @@ class ReplicaManagerTest {
       assertTrue(log4.partitionMetadataFile.get.isEmpty())
     } finally replicaManager.shutdown(checkpointHW = false)
   }
-
-  @Test
-  def testPartitionsArePropagatedOnlyForValidVersion(): Unit = {
-    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time))
-    try {
-      val brokerList = Seq[Integer](0, 1).asJava
-      val topicPartition = new TopicPartition(topic, 0)
-      replicaManager.createPartition(topicPartition)
-        .createLogIfNotExists(isNew = false, isFutureReplica = false,
-          new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints))
-      val topicIds = Collections.singletonMap("topic", Uuid.randomUuid())
-
-      def leaderAndIsrRequest(epoch: Int, version: Short, partition: Int): LeaderAndIsrRequest = LeaderAndIsrRequest.parse(
-        new LeaderAndIsrRequest.Builder(version, 0, 0, brokerEpoch,
-        Seq(new LeaderAndIsrPartitionState()
-          .setTopicName("topic")
-          .setPartitionIndex(partition)
-          .setControllerEpoch(0)
-          .setLeader(0)
-          .setLeaderEpoch(epoch)
-          . setIsr(brokerList)
-          .setZkVersion(0)
-          .setReplicas(brokerList)
-          .setIsNew(true)).asJava,
-        topicIds,
-        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build().serialize(), version)
-
-
-      val responseVersion0 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(-1, 0, 0), (_, _) => ())
-      assertEquals(1, responseVersion0.errorCounts().get(Errors.STALE_CONTROLLER_EPOCH))
-      val responseVersion4 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(-1, 4, 1), (_, _) => ())
-      assertEquals(1, responseVersion4.errorCounts().get(Errors.STALE_CONTROLLER_EPOCH))
-      // Make a request so the epoch is bumped to a valid number.
-      replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0, 0, 2), (_, _) => ())
-      val responseVersion5 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0, 5, 2), (_, _) => ())
-      assertEquals(null, responseVersion5.errorCounts().get(Errors.STALE_CONTROLLER_EPOCH))
-      // Now that ID was added to log, should be stale again.
-      val responseVersion6 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0, 5, 2), (_, _) => ())
-      assertEquals(1, responseVersion6.errorCounts().get(Errors.STALE_CONTROLLER_EPOCH))
-    } finally replicaManager.shutdown(checkpointHW = false)
-  }
 }
