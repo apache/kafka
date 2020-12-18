@@ -28,9 +28,13 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
 import org.junit.Assert.assertEquals
-import org.junit.{Assert, Test}
+import org.junit.rules.Timeout
+import org.junit.{Assert, Rule, Test}
 
 class StorageToolTest {
+  @Rule
+  def globalTimeout = Timeout.millis(120000)
+
   private def newKip500Properties(): Properties = {
     val properties = new Properties()
     properties.setProperty(KafkaConfig.LogDirsProp, "/tmp/foo,/tmp/bar")
