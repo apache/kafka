@@ -34,16 +34,13 @@ import org.apache.kafka.common.acl._
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
 import org.apache.kafka.common.errors.{ApiException, UnsupportedVersionException}
-import org.apache.kafka.common.network.ClientInformation
-import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
+import org.apache.kafka.common.requests.RequestContext
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType}
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourcePattern.WILDCARD_RESOURCE
 import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.PatternType.{LITERAL, MATCH, PREFIXED}
-import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.common.utils.{Time, SecurityUtils => JSecurityUtils}
 import org.junit.Assert._
@@ -53,7 +50,7 @@ import org.scalatest.Assertions.intercept
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 
-class AclAuthorizerTest extends ZooKeeperTestHarness {
+class AclAuthorizerTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
 
   private val allowReadAcl = new AccessControlEntry(WildcardPrincipalString, WildcardHost, READ, ALLOW)
   private val allowWriteAcl = new AccessControlEntry(WildcardPrincipalString, WildcardHost, WRITE, ALLOW)
@@ -66,17 +63,12 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
 
   private val aclAuthorizer = new AclAuthorizer
   private val aclAuthorizer2 = new AclAuthorizer
-  private var resource: ResourcePattern = _
-  private val superUsers = "User:superuser1; User:superuser2"
-  private val username = "alice"
-  private val principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
-  private val requestContext = newRequestContext(principal, InetAddress.getByName("192.168.0.1"))
-  private var config: KafkaConfig = _
-  private var zooKeeperClient: ZooKeeperClient = _
 
   class CustomPrincipal(principalType: String, name: String) extends KafkaPrincipal(principalType, name) {
     override def equals(o: scala.Any): Boolean = false
   }
+
+  override def authorizer: Authorizer = aclAuthorizer
 
   @Before
   override def setUp(): Unit = {
@@ -988,6 +980,26 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     }
   }
 
+  @Test
+  def testAuthorizeByResourceTypeNoAclFoundOverride(): Unit = {
+    val props = TestUtils.createBrokerConfig(1, zkConnect)
+    props.put(AclAuthorizer.AllowEveryoneIfNoAclIsFoundProp, "true")
+
+    val cfg = KafkaConfig.fromProps(props)
+    val aclAuthorizer = new AclAuthorizer
+    try {
+      aclAuthorizer.configure(cfg.originals)
+      assertTrue("If allow.everyone.if.no.acl.found = true, " +
+        "caller should have read access to at least one topic",
+        authorizeByResourceType(aclAuthorizer, requestContext, READ, resource.resourceType()))
+      assertTrue("If allow.everyone.if.no.acl.found = true, " +
+        "caller should have write access to at least one topic",
+        authorizeByResourceType(aclAuthorizer, requestContext, WRITE, resource.resourceType()))
+    } finally {
+      aclAuthorizer.close()
+    }
+  }
+
   private def givenAuthorizerWithProtocolVersion(protocolVersion: Option[ApiVersion]): Unit = {
     aclAuthorizer.close()
 
@@ -1033,39 +1045,9 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     acls
   }
 
-  private def newRequestContext(principal: KafkaPrincipal, clientAddress: InetAddress, apiKey: ApiKeys = ApiKeys.PRODUCE): RequestContext = {
-    val securityProtocol = SecurityProtocol.SASL_PLAINTEXT
-    val header = new RequestHeader(apiKey, 2, "", 1) //ApiKeys apiKey, short version, String clientId, int correlation
-    new RequestContext(header, "", clientAddress, principal, ListenerName.forSecurityProtocol(securityProtocol),
-      securityProtocol, ClientInformation.EMPTY, false)
-  }
-
   private def authorize(authorizer: AclAuthorizer, requestContext: RequestContext, operation: AclOperation, resource: ResourcePattern): Boolean = {
     val action = new Action(operation, resource, 1, true, true)
     authorizer.authorize(requestContext, List(action).asJava).asScala.head == AuthorizationResult.ALLOWED
-  }
-
-  private def addAcls(authorizer: AclAuthorizer, aces: Set[AccessControlEntry], resourcePattern: ResourcePattern): Unit = {
-    val bindings = aces.map { ace => new AclBinding(resourcePattern, ace) }
-    authorizer.createAcls(requestContext, bindings.toList.asJava).asScala
-      .map(_.toCompletableFuture.get)
-      .foreach { result => result.exception.ifPresent { e => throw e } }
-  }
-
-  private def removeAcls(authorizer: AclAuthorizer, aces: Set[AccessControlEntry], resourcePattern: ResourcePattern): Boolean = {
-    val bindings = if (aces.isEmpty)
-      Set(new AclBindingFilter(resourcePattern.toFilter, AccessControlEntryFilter.ANY) )
-    else
-      aces.map { ace => new AclBinding(resourcePattern, ace).toFilter }
-    authorizer.deleteAcls(requestContext, bindings.toList.asJava).asScala
-      .map(_.toCompletableFuture.get)
-      .forall { result =>
-        result.exception.ifPresent { e => throw e }
-        result.aclBindingDeleteResults.forEach { r =>
-          r.exception.ifPresent { e => throw e }
-        }
-        !result.aclBindingDeleteResults.isEmpty
-      }
   }
 
   private def getAcls(authorizer: AclAuthorizer, resourcePattern: ResourcePattern): Set[AccessControlEntry] = {

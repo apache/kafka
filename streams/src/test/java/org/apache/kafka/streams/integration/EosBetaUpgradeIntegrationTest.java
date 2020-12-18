@@ -1045,8 +1045,8 @@ public class EosBetaUpgradeIntegrationTest {
                 assertThat(getAllRecordPerKey(key, result), equalTo(getAllRecordPerKey(key, expectedResult)));
             } catch (final AssertionError error) {
                 throw new AssertionError(
-                    "expected result: " + expectedResult.stream().map(KeyValue::toString).reduce("", (kv, str) -> str.isEmpty() ? kv : str + ", " + kv) +
-                    "\nreceived records: " + result.stream().map(KeyValue::toString).reduce("", (kv, str) -> str.isEmpty() ? kv : str + ", " + kv),
+                    "expected result: " + expectedResult.stream().map(KeyValue::toString).collect(Collectors.joining(", ")) +
+                    "\nreceived records: " + result.stream().map(KeyValue::toString).collect(Collectors.joining(", ")),
                     error
                 );
             }

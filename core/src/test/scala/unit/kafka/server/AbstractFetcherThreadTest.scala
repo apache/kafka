@@ -27,6 +27,7 @@ import kafka.message.NoCompressionCodec
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server.AbstractFetcherThread.ReplicaFetch
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
+import kafka.utils.Implicits.MapExtensionMethods
 import kafka.utils.TestUtils
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.TopicPartition
@@ -640,7 +641,7 @@ class AbstractFetcherThreadTest {
   }
 
   private def testLeaderEpochChangeDuringFetchEpochsFromLeader(leaderEpochOnLeader: Int): Unit = {
-    val partition = new TopicPartition("topic", 0)
+    val partition = new TopicPartition("topic", 1)
     val initialLeaderEpochOnFollower = 0
     val nextLeaderEpochOnFollower = initialLeaderEpochOnFollower + 1
 
@@ -1006,7 +1007,9 @@ class AbstractFetcherThreadTest {
     override def logEndOffset(topicPartition: TopicPartition): Long = replicaPartitionState(topicPartition).logEndOffset
 
     override def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Option[OffsetAndEpoch] = {
-      val epochData = new EpochData(Optional.empty[Integer](), epoch)
+      val epochData = new EpochData()
+        .setPartition(topicPartition.partition)
+        .setLeaderEpoch(epoch)
       val result = lookupEndOffsetForEpoch(topicPartition, epochData, replicaPartitionState(topicPartition))
       if (result.endOffset == UNDEFINED_EPOCH_OFFSET)
         None
@@ -1017,7 +1020,15 @@ class AbstractFetcherThreadTest {
     private def checkExpectedLeaderEpoch(expectedEpochOpt: Optional[Integer],
                                          partitionState: PartitionState): Option[Errors] = {
       if (expectedEpochOpt.isPresent) {
-        val expectedEpoch = expectedEpochOpt.get
+        checkExpectedLeaderEpoch(expectedEpochOpt.get, partitionState)
+      } else {
+        None
+      }
+    }
+
+    private def checkExpectedLeaderEpoch(expectedEpoch: Int,
+                                         partitionState: PartitionState): Option[Errors] = {
+      if (expectedEpoch != RecordBatch.NO_PARTITION_LEADER_EPOCH) {
         if (expectedEpoch < partitionState.leaderEpoch)
           Some(Errors.FENCED_LEADER_EPOCH)
         else if (expectedEpoch > partitionState.leaderEpoch)
@@ -1036,12 +1047,15 @@ class AbstractFetcherThreadTest {
       }
     }
 
-    private def divergingEpochAndOffset(partition: TopicPartition,
+    private def divergingEpochAndOffset(topicPartition: TopicPartition,
                                         lastFetchedEpoch: Optional[Integer],
                                         fetchOffset: Long,
                                         partitionState: PartitionState): Option[FetchResponseData.EpochEndOffset] = {
       lastFetchedEpoch.asScala.flatMap { fetchEpoch =>
-        val epochEndOffset = fetchEpochEndOffsets(Map(partition -> new EpochData(Optional.empty[Integer], fetchEpoch)))(partition)
+        val epochEndOffset = fetchEpochEndOffsets(
+          Map(topicPartition -> new EpochData()
+            .setPartition(topicPartition.partition)
+            .setLeaderEpoch(fetchEpoch)))(topicPartition)
 
         if (partitionState.log.isEmpty
             || epochEndOffset.endOffset == UNDEFINED_EPOCH_OFFSET
@@ -1091,7 +1105,9 @@ class AbstractFetcherThreadTest {
 
     override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
       val endOffsets = mutable.Map[TopicPartition, EpochEndOffset]()
-      partitions.foreach { case (partition, epochData) =>
+      partitions.forKeyValue { (partition, epochData) =>
+        assert(partition.partition == epochData.partition,
+          "Partition must be consistent between TopicPartition and EpochData")
         val leaderState = leaderPartitionState(partition)
         val epochEndOffset = lookupEndOffsetForEpoch(partition, epochData, leaderState)
         endOffsets.put(partition, epochEndOffset)
@@ -1137,7 +1153,7 @@ class AbstractFetcherThreadTest {
     }
 
     private def checkLeaderEpochAndThrow(expectedEpoch: Int, partitionState: PartitionState): Unit = {
-      checkExpectedLeaderEpoch(Optional.of[Integer](expectedEpoch), partitionState).foreach { error =>
+      checkExpectedLeaderEpoch(expectedEpoch, partitionState).foreach { error =>
         throw error.exception()
       }
     }
