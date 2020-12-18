@@ -1069,12 +1069,12 @@ object TestUtils extends Logging {
     val isrUpdates: mutable.Queue[AlterIsrItem] = new mutable.Queue[AlterIsrItem]()
     val inFlight: AtomicBoolean = new AtomicBoolean(false)
 
-    override def submit(alterIsrItem: AlterIsrItem, onSubmit: Boolean => Unit): Unit = {
+    override def enqueue(alterIsrItem: AlterIsrItem): Boolean = {
       if (inFlight.compareAndSet(false, true)) {
         isrUpdates += alterIsrItem
-        onSubmit.apply(true)
+        true
       } else {
-        onSubmit.apply(false)
+        false
       }
     }
 
