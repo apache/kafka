@@ -1045,7 +1045,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
     acls
   }
 
-  def authorize(authorizer: AclAuthorizer, requestContext: RequestContext, operation: AclOperation, resource: ResourcePattern): Boolean = {
+  private def authorize(authorizer: AclAuthorizer, requestContext: RequestContext, operation: AclOperation, resource: ResourcePattern): Boolean = {
     val action = new Action(operation, resource, 1, true, true)
     authorizer.authorize(requestContext, List(action).asJava).asScala.head == AuthorizationResult.ALLOWED
   }
@@ -1085,5 +1085,4 @@ class AclAuthorizerTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
       file.getAbsolutePath
     } finally writer.close()
   }
-
 }

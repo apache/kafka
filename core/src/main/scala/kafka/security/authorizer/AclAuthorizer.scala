@@ -343,8 +343,8 @@ class AclAuthorizer extends Authorizer with Logging {
       resourceSnapshot, principalStr, host, op, AclPermissionType.DENY, resourceType, PatternType.PREFIXED)
 
     if (denyLiterals.isEmpty && denyPrefixes.isEmpty) {
-      if (hasMatchingResources(principalStr, host, op, AclPermissionType.ALLOW, resourceType, PatternType.PREFIXED)
-          || hasMatchingResources(principalStr, host, op, AclPermissionType.ALLOW, resourceType, PatternType.LITERAL)) {
+      if (hasMatchingResources(resourceSnapshot, principalStr, host, op, AclPermissionType.ALLOW, resourceType, PatternType.PREFIXED)
+          || hasMatchingResources(resourceSnapshot, principalStr, host, op, AclPermissionType.ALLOW, resourceType, PatternType.LITERAL)) {
         logAuditMessage(requestContext, action, authorized = true)
         return AuthorizationResult.ALLOWED
       } else {
@@ -376,7 +376,7 @@ class AclAuthorizer extends Authorizer with Logging {
          o <- Set(op, AclOperation.ALL)) {
       val resourceTypeKey = ResourceTypeKey(
         new AccessControlEntry(p, h, o, permission), resourceType, patternType)
-      resourceCache.get(resourceTypeKey) match {
+      resourceSnapshot.get(resourceTypeKey) match {
         case Some(resources) => matched.addOne(resources)
         case None =>
       }
@@ -384,14 +384,15 @@ class AclAuthorizer extends Authorizer with Logging {
     matched
   }
 
-  private def hasMatchingResources(principal: String, host: String, op: AclOperation, permission: AclPermissionType,
-                           resourceType: ResourceType, patternType: PatternType): Boolean = {
+  private def hasMatchingResources(resourceSnapshot: immutable.Map[ResourceTypeKey, immutable.Set[String]],
+                                   principal: String, host: String, op: AclOperation, permission: AclPermissionType,
+                                   resourceType: ResourceType, patternType: PatternType): Boolean = {
     for (p <- Set(principal, AclEntry.WildcardPrincipalString);
          h <- Set(host, AclEntry.WildcardHost);
          o <- Set(op, AclOperation.ALL)) {
           val resourceTypeKey = ResourceTypeKey(
             new AccessControlEntry(p, h, o, permission), resourceType, patternType)
-          if (resourceCache.contains(resourceTypeKey))
+          if (resourceSnapshot.contains(resourceTypeKey))
             return true
     }
     false

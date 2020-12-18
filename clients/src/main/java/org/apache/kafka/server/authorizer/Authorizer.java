@@ -159,14 +159,14 @@ public interface Authorizer extends Configurable, Closeable {
      *
      * Custom authorizer implementations should consider overriding this default implementation because:
      * 1. The default implementation iterates all AclBindings multiple times, without any caching
-     *    by principle, host, operation, permission types, and resource types. More efficient
+     *    by principal, host, operation, permission types, and resource types. More efficient
      *    implementations may be added in custom authorizers that directly access cached entries.
      * 2. The default implementation cannot integrate with any audit logging included in the
      *    authorizer implementation.
      * 3. The default implementation does not support any custom authorizer configs or other access
      *    rules apart from ACLs.
      *
-     * @param requestContext Request context including request resourceType, security protocol, and listener name
+     * @param requestContext Request context including request resourceType, security protocol and listener name
      * @param op             The ACL operation to check
      * @param resourceType   The resource type to check
      * @return               Return {@link AuthorizationResult#ALLOWED} if the caller is authorized
@@ -261,7 +261,7 @@ public interface Authorizer extends Configurable, Closeable {
         }
 
         // For any literal allowed, if there's no dominant literal and prefix denied, return allow.
-        // For any prefix allowed, if there's no dominant prefixdenied, return allow.
+        // For any prefix allowed, if there's no dominant prefix denied, return allow.
         for (Map.Entry<PatternType, Set<String>> entry : allowPatterns.entrySet()) {
             for (String allowStr : entry.getValue()) {
                 if (entry.getKey() == PatternType.LITERAL

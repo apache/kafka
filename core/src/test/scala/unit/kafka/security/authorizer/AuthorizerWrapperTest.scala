@@ -99,13 +99,8 @@ class AuthorizerWrapperTest extends ZooKeeperTestHarness with BaseAuthorizerTest
 
   @Test
   def testAuthorizeByResourceTypeDisableAllowEveryoneOverride(): Unit = {
-    testAuthorizeByResourceTypeDisableAllowEveryoneOverride(wrappedSimpleAuthorizer)
-  }
-
-  private def testAuthorizeByResourceTypeDisableAllowEveryoneOverride(authorizer: Authorizer): Unit = {
     assertFalse ("If allow.everyone.if.no.acl.found = false, " +
       "caller shouldn't have read access to any topic",
       authorizeByResourceType(wrappedSimpleAuthorizer, requestContext, READ, resource.resourceType()))
   }
-
 }
