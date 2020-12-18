@@ -319,8 +319,8 @@ class MetadataCache(brokerId: Int) extends Logging {
         .map(topicState => (topicState.topicName(), topicState.topicId()))
         .filter(_._2 != Uuid.ZERO_UUID).toMap
       val topicIds = mutable.Map.empty[String, Uuid]
-      topicIds.addAll(metadataSnapshot.topicIds)
-      topicIds.addAll(newTopicIds)
+      topicIds ++= metadataSnapshot.topicIds
+      topicIds ++= newTopicIds
 
       val deletedPartitions = new mutable.ArrayBuffer[TopicPartition]
       if (!updateMetadataRequest.partitionStates.iterator.hasNext) {
