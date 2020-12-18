@@ -20,6 +20,7 @@ package kafka.testkit;
 import kafka.raft.RaftManager;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaConfig$;
+import kafka.server.Kip500Broker;
 import kafka.server.Kip500Controller;
 import kafka.server.MetaProperties;
 import kafka.tools.StorageTool;
@@ -174,6 +175,22 @@ public class KafkaClusterTestKit implements AutoCloseable {
                             connectFutureManager.registerPort(node.id(), port);
                         }
                     });
+                }
+                for (Kip500BrokerNode node : nodes.brokerNodes().values()) {
+                    Map<String, String> props = new HashMap<>(configProps);
+                    props.put(KafkaConfig$.MODULE$.ProcessRolesProp(), "broker");
+                    props.put(KafkaConfig$.MODULE$.BrokerIdProp(),
+                        Integer.toString(node.id()));
+                    props.put(KafkaConfig$.MODULE$.MetadataLogDirProp(),
+                        Paths.get(baseDirectory.getAbsolutePath(),
+                            node.logDirectories().get(0)).toAbsolutePath().toString());
+                    props.put(KafkaConfig$.MODULE$.ListenerSecurityProtocolMapProp(),
+                        "BROKER:PLAINTEXT,CONTROLLER:PLAINTEXT");
+                    props.put(KafkaConfig$.MODULE$.ListenersProp(),
+                        "BROKER://localhost:0");
+                    props.put(KafkaConfig$.MODULE$.ControllerListenerNamesProp(),
+                        "CONTROLLER");
+
                 }
             } catch (Exception e) {
                 if (executorService != null) {

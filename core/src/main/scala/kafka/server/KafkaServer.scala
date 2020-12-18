@@ -118,7 +118,8 @@ class Kip500Server(
       time,
       metrics,
       threadNamePrefix,
-      offlineDirs
+      offlineDirs,
+      CompletableFuture.completedFuture(config.controllerQuorumVoters)
     ))
   } else {
     None

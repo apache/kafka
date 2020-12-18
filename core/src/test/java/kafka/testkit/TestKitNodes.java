@@ -28,6 +28,7 @@ public class TestKitNodes {
     public static class Builder {
         private Uuid clusterId = null;
         private final NavigableMap<Integer, ControllerNode> controllerNodes = new TreeMap<>();
+        private final NavigableMap<Integer, Kip500BrokerNode> kip500BrokerNodes = new TreeMap<>();
 
         public Builder setClusterId(Uuid clusterId) {
             this.clusterId = clusterId;
@@ -45,6 +46,9 @@ public class TestKitNodes {
             if (node instanceof ControllerNode) {
                 ControllerNode controllerNode = (ControllerNode) node;
                 controllerNodes.put(node.id(), controllerNode);
+            } else if (node instanceof Kip500BrokerNode) {
+                Kip500BrokerNode brokerNode = (Kip500BrokerNode) node;
+                kip500BrokerNodes.put(node.id(), brokerNode);
             } else {
                 throw new RuntimeException("Can't handle TestKitNode subclass " +
                         node.getClass().getSimpleName());
@@ -73,20 +77,45 @@ public class TestKitNodes {
             return this;
         }
 
+        public Builder setNumKip500BrokerNodes(int numBrokerNodes) {
+            if (numBrokerNodes < 0) {
+                throw new RuntimeException("Invalid negative value for numBrokerNodes");
+            }
+            while (kip500BrokerNodes.size() > numBrokerNodes) {
+                Iterator<Map.Entry<Integer, Kip500BrokerNode>> iter =
+                    kip500BrokerNodes.entrySet().iterator();
+                iter.next();
+                iter.remove();
+            }
+            while (kip500BrokerNodes.size() < numBrokerNodes) {
+                int nextId = 0;
+                if (!kip500BrokerNodes.isEmpty()) {
+                    nextId = kip500BrokerNodes.lastKey() + 1;
+                }
+                kip500BrokerNodes.put(nextId, new Kip500BrokerNode.Builder().
+                    setId(nextId).build());
+            }
+            return this;
+        }
+
         public TestKitNodes build() {
             if (clusterId == null) {
                 clusterId = Uuid.randomUuid();
             }
-            return new TestKitNodes(clusterId, controllerNodes);
+            return new TestKitNodes(clusterId, controllerNodes, kip500BrokerNodes);
         }
     }
 
     private final Uuid clusterId;
     private final NavigableMap<Integer, ControllerNode> controllerNodes;
+    private final NavigableMap<Integer, Kip500BrokerNode> brokerNodes;
 
-    private TestKitNodes(Uuid clusterId, NavigableMap<Integer, ControllerNode> controllerNodes) {
+    private TestKitNodes(Uuid clusterId,
+                         NavigableMap<Integer, ControllerNode> controllerNodes,
+                         NavigableMap<Integer, Kip500BrokerNode> brokerNodes) {
         this.clusterId = clusterId;
         this.controllerNodes = controllerNodes;
+        this.brokerNodes = brokerNodes;
     }
 
     public Uuid clusterId() {
@@ -95,5 +124,9 @@ public class TestKitNodes {
 
     public Map<Integer, ControllerNode> controllerNodes() {
         return controllerNodes;
+    }
+
+    public NavigableMap<Integer, Kip500BrokerNode> brokerNodes() {
+        return brokerNodes;
     }
 }

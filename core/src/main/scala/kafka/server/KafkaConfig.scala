@@ -1860,8 +1860,6 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     }
   }
 
-  val controllerQuorumVoterNodes: Seq[Node] = KafkaConfig.controllerQuorumVoterStringsToNodes(Option(controllerQuorumVoters).getOrElse(""))
-
   validateValues()
 
   private def validateValues(): Unit = {
