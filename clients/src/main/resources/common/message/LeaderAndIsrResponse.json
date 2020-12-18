@@ -22,15 +22,29 @@
   // Version 2 is the same as version 1.
   //
   // Version 3 is the same as version 2.
-  "validVersions": "0-4",
+  //
+  // Version 4 is the first flexible version.
+  //
+  // Version 5 removes TopicName and replaces it with TopicId and reorganizes 
+  // the partitions by topic, as described by KIP-516.
+  "validVersions": "0-5",
   "flexibleVersions": "4+",
   "fields": [
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
       "about": "The error code, or 0 if there was no error." },
-    { "name": "PartitionErrors", "type": "[]LeaderAndIsrPartitionError", "versions": "0+",
-      "about": "Each partition.", "fields": [
-      { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
-        "about": "The topic name." },
+    { "name": "PartitionErrors", "type": "[]LeaderAndIsrPartitionError", "versions": "0-4",
+      "about": "Each partition in v0 to v4 message."},
+    { "name":  "Topics", "type": "[]LeaderAndIsrTopicError", "versions": "5+",
+      "about": "Each topic", "fields": [
+      { "name": "TopicId", "type": "uuid", "versions": "5+", "about": "The unique topic ID" },
+      { "name": "PartitionErrors", "type": "[]LeaderAndIsrPartitionError", "versions": "5+",
+        "about": "Each partition."}
+      ]}
+    ],
+    "commonStructs": [
+    { "name": "LeaderAndIsrPartitionError", "versions": "0+", "fields": [
+      { "name": "TopicName", "type": "string", "versions": "0-4", "entityType": "topicName", "ignorable": true,
+        "about": "The topic name."},
       { "name": "PartitionIndex", "type": "int32", "versions": "0+",
         "about": "The partition index." },
       { "name": "ErrorCode", "type": "int16", "versions": "0+",
