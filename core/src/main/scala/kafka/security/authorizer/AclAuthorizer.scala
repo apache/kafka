@@ -377,7 +377,7 @@ class AclAuthorizer extends Authorizer with Logging {
       val resourceTypeKey = ResourceTypeKey(
         new AccessControlEntry(p, h, o, permission), resourceType, patternType)
       resourceSnapshot.get(resourceTypeKey) match {
-        case Some(resources) => matched.addOne(resources)
+        case Some(resources) => matched += resources
         case None =>
       }
     }
