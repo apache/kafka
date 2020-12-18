@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.UpdateMetadataRequestData;
@@ -33,8 +34,10 @@ import org.junit.Test;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
@@ -52,7 +55,7 @@ public class UpdateMetadataRequestTest {
     public void testUnsupportedVersion() {
         UpdateMetadataRequest.Builder builder = new UpdateMetadataRequest.Builder(
                 (short) (UPDATE_METADATA.latestVersion() + 1), 0, 0, 0,
-                Collections.emptyList(), Collections.emptyList());
+                Collections.emptyList(), Collections.emptyList(), Collections.emptyMap());
         assertThrows(UnsupportedVersionException.class, builder::build);
     }
 
@@ -60,7 +63,7 @@ public class UpdateMetadataRequestTest {
     public void testGetErrorResponse() {
         for (short version = UPDATE_METADATA.oldestVersion(); version < UPDATE_METADATA.latestVersion(); version++) {
             UpdateMetadataRequest.Builder builder = new UpdateMetadataRequest.Builder(
-                    version, 0, 0, 0, Collections.emptyList(), Collections.emptyList());
+                    version, 0, 0, 0, Collections.emptyList(), Collections.emptyList(), Collections.emptyMap());
             UpdateMetadataRequest request = builder.build();
             UpdateMetadataResponse response = request.getErrorResponse(0,
                     new ClusterAuthorizationException("Not authorized"));
@@ -76,10 +79,12 @@ public class UpdateMetadataRequestTest {
      */
     @Test
     public void testVersionLogic() {
+        String topic0 = "topic0";
+        String topic1 = "topic1";
         for (short version = UPDATE_METADATA.oldestVersion(); version <= UPDATE_METADATA.latestVersion(); version++) {
             List<UpdateMetadataPartitionState> partitionStates = asList(
                 new UpdateMetadataPartitionState()
-                    .setTopicName("topic0")
+                    .setTopicName(topic0)
                     .setPartitionIndex(0)
                     .setControllerEpoch(2)
                     .setLeader(0)
@@ -89,7 +94,7 @@ public class UpdateMetadataRequestTest {
                     .setReplicas(asList(0, 1, 2))
                     .setOfflineReplicas(asList(2)),
                 new UpdateMetadataPartitionState()
-                    .setTopicName("topic0")
+                    .setTopicName(topic0)
                     .setPartitionIndex(1)
                     .setControllerEpoch(2)
                     .setLeader(1)
@@ -99,7 +104,7 @@ public class UpdateMetadataRequestTest {
                     .setReplicas(asList(1, 2, 3))
                     .setOfflineReplicas(emptyList()),
                 new UpdateMetadataPartitionState()
-                    .setTopicName("topic1")
+                    .setTopicName(topic1)
                     .setPartitionIndex(0)
                     .setControllerEpoch(2)
                     .setLeader(2)
@@ -147,8 +152,12 @@ public class UpdateMetadataRequestTest {
                     ))
             );
 
+            Map<String, Uuid> topicIds = new HashMap<>();
+            topicIds.put(topic0, Uuid.randomUuid());
+            topicIds.put(topic1, Uuid.randomUuid());
+
             UpdateMetadataRequest request = new UpdateMetadataRequest.Builder(version, 1, 2, 3,
-                partitionStates, liveBrokers).build();
+                partitionStates, liveBrokers, topicIds).build();
 
             assertEquals(new HashSet<>(partitionStates), iterableToSet(request.partitionStates()));
             assertEquals(liveBrokers, request.liveBrokers());
@@ -191,6 +200,14 @@ public class UpdateMetadataRequestTest {
                 assertEquals(3, deserializedRequest.brokerEpoch());
             else
                 assertEquals(-1, deserializedRequest.brokerEpoch());
+
+            long topicIdCount = deserializedRequest.data().topicStates().stream()
+                    .map(UpdateMetadataRequestData.UpdateMetadataTopicState::topicId)
+                    .filter(topicId -> topicId != Uuid.ZERO_UUID).count();
+            if (version >= 7)
+                assertEquals(2, topicIdCount);
+            else
+                assertEquals(0, topicIdCount);
         }
     }
 
@@ -204,7 +221,7 @@ public class UpdateMetadataRequestTest {
                 .setPartitionIndex(tp.partition()));
         }
         UpdateMetadataRequest.Builder builder = new UpdateMetadataRequest.Builder((short) 5, 0, 0, 0,
-                partitionStates, Collections.emptyList());
+                partitionStates, Collections.emptyList(), Collections.emptyMap());
 
         assertTrue(builder.build((short) 5).sizeInBytes() <  builder.build((short) 4).sizeInBytes());
     }

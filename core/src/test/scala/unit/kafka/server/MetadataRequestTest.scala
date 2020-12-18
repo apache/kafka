@@ -21,6 +21,7 @@ import java.util.{Optional, Properties}
 
 import kafka.network.SocketServer
 import kafka.utils.TestUtils
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.MetadataRequestData
@@ -221,6 +222,32 @@ class MetadataRequestTest extends BaseRequestTest {
     val metadataResponseV1 = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(1.toShort))
     assertTrue("V1 Response should have no errors", metadataResponseV1.errors.isEmpty)
     assertEquals("V1 Response should have 2 (all) topics", 2, metadataResponseV1.topicMetadata.size())
+  }
+
+  @Test
+  def testTopicIdsInResponse(): Unit = {
+    val replicaAssignment = Map(0 -> Seq(1, 2, 0), 1 -> Seq(2, 0, 1))
+    val topic1 = "topic1"
+    val topic2 = "topic2"
+    createTopic(topic1, replicaAssignment)
+    createTopic(topic2, replicaAssignment)
+
+    // if version < 9, return ZERO_UUID in MetadataResponse
+    val resp1 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic1, topic2).asJava, true, 0, 9).build(), Some(controllerSocketServer))
+    assertEquals(2, resp1.topicMetadata.size)
+    resp1.topicMetadata.forEach { topicMetadata =>
+      assertEquals(Errors.NONE, topicMetadata.error)
+      assertEquals(Uuid.ZERO_UUID, topicMetadata.topicId())
+    }
+
+    // from version 10, UUID will be included in MetadataResponse
+    val resp2 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic1, topic2).asJava, true, 10, 10).build(), Some(notControllerSocketServer))
+    assertEquals(2, resp2.topicMetadata.size)
+    resp2.topicMetadata.forEach { topicMetadata =>
+      assertEquals(Errors.NONE, topicMetadata.error)
+      assertNotEquals(Uuid.ZERO_UUID, topicMetadata.topicId())
+      assertNotNull(topicMetadata.topicId())
+    }
   }
 
   /**

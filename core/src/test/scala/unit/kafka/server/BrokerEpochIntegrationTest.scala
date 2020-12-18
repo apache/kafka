@@ -17,6 +17,8 @@
 
 package kafka.server
 
+import java.util.Collections
+
 import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
 import kafka.controller.{ControllerChannelManager, ControllerContext, StateChangeLogger}
@@ -195,7 +197,7 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
         val requestBuilder = new UpdateMetadataRequest.Builder(
           ApiKeys.UPDATE_METADATA.latestVersion, controllerId, controllerEpoch,
           epochInRequest,
-          partitionStates.asJava, liveBrokers.asJava)
+          partitionStates.asJava, liveBrokers.asJava, Collections.emptyMap())
 
         if (epochInRequestDiffFromCurrentEpoch < 0) {
           // stale broker epoch in UPDATE_METADATA
