@@ -46,7 +46,7 @@ import scala.jdk.CollectionConverters._
 trait AlterIsrManager {
   def start(): Unit
 
-  def enqueue(alterIsrItem: AlterIsrItem): Boolean
+  def submit(alterIsrItem: AlterIsrItem): Boolean
 
   def clearPending(topicPartition: TopicPartition): Unit
 }
@@ -94,7 +94,7 @@ class DefaultAlterIsrManager(val controllerChannelManager: BrokerToControllerCha
     scheduler.schedule("send-alter-isr", propagateIsrChanges, 50, 50, TimeUnit.MILLISECONDS)
   }
 
-  override def enqueue(alterIsrItem: AlterIsrItem): Boolean = {
+  override def submit(alterIsrItem: AlterIsrItem): Boolean = {
     unsentIsrUpdates.putIfAbsent(alterIsrItem.topicPartition, alterIsrItem) == null
   }
 

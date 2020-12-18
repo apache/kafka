@@ -1329,7 +1329,8 @@ class Partition(val topicPartition: TopicPartition,
     val oldState = isrState
     isrState = proposedIsrState
 
-    if (!alterIsrManager.enqueue(alterIsrItem)) {
+    if (!alterIsrManager.submit(alterIsrItem)) {
+      // If the ISR manager did not accept our update, we need to revert back to previous state
       isrState = oldState
       isrChangeListener.markFailed()
       throw new IllegalStateException(s"Failed to enqueue `AlterIsr` request with state " +
