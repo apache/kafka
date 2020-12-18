@@ -411,8 +411,7 @@ class AclAuthorizer extends Authorizer with Logging {
                            denyPrefixes: ArrayBuffer[immutable.Set[String]]): Boolean = {
     literalName match {
       case ResourcePattern.WILDCARD_RESOURCE => true
-      case _ => (denyLiterals.forall(!_.contains(literalName))
-                    && !hasDominantPrefixedDeny(literalName, denyPrefixes))
+      case _ => !denyLiterals.exists(_.contains(literalName)) && !hasDominantPrefixedDeny(literalName, denyPrefixes)
     }
   }
 
