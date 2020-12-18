@@ -50,7 +50,7 @@ class ControllerChannelManagerTest {
 
   @Test
   def testLeaderAndIsrRequestSent(): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
+    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3, Map.empty)
     val batch = new MockControllerBrokerRequestBatch(context)
 
     val partitions = Map(
@@ -98,7 +98,7 @@ class ControllerChannelManagerTest {
 
   @Test
   def testLeaderAndIsrRequestIsNew(): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
+    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3, Map.empty)
     val batch = new MockControllerBrokerRequestBatch(context)
 
     val partition = new TopicPartition("foo", 0)
@@ -126,7 +126,7 @@ class ControllerChannelManagerTest {
 
   @Test
   def testLeaderAndIsrRequestSentToLiveOrShuttingDownBrokers(): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
+    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3, Map.empty)
     val batch = new MockControllerBrokerRequestBatch(context)
 
     // 2 is shutting down, 3 is dead
@@ -176,7 +176,7 @@ class ControllerChannelManagerTest {
 
   private def testLeaderAndIsrRequestFollowsInterBrokerProtocolVersion(interBrokerProtocolVersion: ApiVersion,
                                                                        expectedLeaderAndIsrVersion: Short): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
+    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3, Map.empty)
     val config = createConfig(interBrokerProtocolVersion)
     val batch = new MockControllerBrokerRequestBatch(context, config)
 
@@ -213,7 +213,9 @@ class ControllerChannelManagerTest {
 
   @Test
   def testUpdateMetadataRequestSent(): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
+
+    val topicIds = Map("foo" -> Uuid.randomUuid(), "bar" -> Uuid.randomUuid())
+    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3, topicIds)
     val batch = new MockControllerBrokerRequestBatch(context)
 
     val partitions = Map(
@@ -241,6 +243,12 @@ class ControllerChannelManagerTest {
     assertEquals(partitions.map { case (k, v) => (k, v.isr) },
       partitionStates.map(ps => (new TopicPartition(ps.topicName, ps.partitionIndex), ps.isr.asScala)).toMap)
 
+    val topicStates = updateMetadataRequest.topicStates()
+    assertEquals(2, topicStates.size)
+    for (topicState <- topicStates.asScala) {
+      assertEquals(topicState.topicId(), topicIds(topicState.topicName()))
+    }
+
     assertEquals(controllerId, updateMetadataRequest.controllerId)
     assertEquals(controllerEpoch, updateMetadataRequest.controllerEpoch)
     assertEquals(3, updateMetadataRequest.liveBrokers.size)
@@ -256,7 +264,7 @@ class ControllerChannelManagerTest {
 
   @Test
   def testUpdateMetadataDoesNotIncludePartitionsWithoutLeaderAndIsr(): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
+    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3, Map.empty)
     val batch = new MockControllerBrokerRequestBatch(context)
 
     val partitions = Set(
@@ -284,7 +292,7 @@ class ControllerChannelManagerTest {
 
   @Test
   def testUpdateMetadataRequestDuringTopicDeletion(): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
+    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3, Map.empty)
     val batch = new MockControllerBrokerRequestBatch(context)
 
     val partitions = Map(
@@ -326,7 +334,7 @@ class ControllerChannelManagerTest {
 
   @Test
   def testUpdateMetadataIncludesLiveOrShuttingDownBrokers(): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
+    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3, Map.empty)
     val batch = new MockControllerBrokerRequestBatch(context)
 
     // 2 is shutting down, 3 is dead
@@ -356,7 +364,8 @@ class ControllerChannelManagerTest {
 
     for (apiVersion <- ApiVersion.allVersions) {
       val updateMetadataRequestVersion: Short =
-        if (apiVersion >= KAFKA_2_4_IV1) 6
+        if (apiVersion >= KAFKA_2_8_IV1) 7
+        else if (apiVersion >= KAFKA_2_4_IV1) 6
         else if (apiVersion >= KAFKA_2_2_IV0) 5
         else if (apiVersion >= KAFKA_1_0_IV0) 4
         else if (apiVersion >= KAFKA_0_10_2_IV0) 3
@@ -370,7 +379,7 @@ class ControllerChannelManagerTest {
 
   private def testUpdateMetadataFollowsInterBrokerProtocolVersion(interBrokerProtocolVersion: ApiVersion,
                                                                   expectedUpdateMetadataVersion: Short): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
+    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3, Map.empty)
     val config = createConfig(interBrokerProtocolVersion)
     val batch = new MockControllerBrokerRequestBatch(context, config)
 
@@ -391,7 +400,7 @@ class ControllerChannelManagerTest {
 
   @Test
   def testStopReplicaRequestSent(): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
+    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3, Map.empty)
     val batch = new MockControllerBrokerRequestBatch(context)
 
     val partitions = Map(
@@ -426,7 +435,7 @@ class ControllerChannelManagerTest {
 
   @Test
   def testStopReplicaRequestWithAlreadyDefinedDeletedPartition(): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
+    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3, Map.empty)
     val batch = new MockControllerBrokerRequestBatch(context)
 
     val partition = new TopicPartition("foo", 0)
@@ -454,7 +463,7 @@ class ControllerChannelManagerTest {
   }
 
   private def testStopReplicaRequestsWhileTopicQueuedForDeletion(interBrokerProtocolVersion: ApiVersion): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
+    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3, Map.empty)
     val config = createConfig(interBrokerProtocolVersion)
     val batch = new MockControllerBrokerRequestBatch(context, config)
 
@@ -501,7 +510,7 @@ class ControllerChannelManagerTest {
   }
 
   private def testStopReplicaRequestsWhileTopicDeletionStarted(interBrokerProtocolVersion: ApiVersion): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
+    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3, Map.empty)
     val config = createConfig(interBrokerProtocolVersion)
     val batch = new MockControllerBrokerRequestBatch(context, config)
 
@@ -556,7 +565,7 @@ class ControllerChannelManagerTest {
   }
 
   private def testStopReplicaRequestWithoutDeletePartitionWhileTopicDeletionStarted(interBrokerProtocolVersion: ApiVersion): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
+    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3, Map.empty)
     val config = createConfig(interBrokerProtocolVersion)
     val batch = new MockControllerBrokerRequestBatch(context, config)
 
@@ -614,7 +623,7 @@ class ControllerChannelManagerTest {
 
   private def testMixedDeleteAndNotDeleteStopReplicaRequests(interBrokerProtocolVersion: ApiVersion,
                                                              expectedStopReplicaRequestVersion: Short): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
+    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3, Map.empty)
     val config = createConfig(interBrokerProtocolVersion)
     val batch = new MockControllerBrokerRequestBatch(context, config)
 
@@ -673,7 +682,7 @@ class ControllerChannelManagerTest {
 
   @Test
   def testStopReplicaGroupsByBroker(): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
+    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3, Map.empty)
     val batch = new MockControllerBrokerRequestBatch(context)
 
     val partitions = Map(
@@ -711,7 +720,7 @@ class ControllerChannelManagerTest {
 
   @Test
   def testStopReplicaSentOnlyToLiveAndShuttingDownBrokers(): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3)
+    val context = initContext(Seq(1, 2, 3), Set("foo", "bar"), 2, 3, Map.empty)
     val batch = new MockControllerBrokerRequestBatch(context)
 
     // 2 is shutting down, 3 is dead
@@ -763,7 +772,7 @@ class ControllerChannelManagerTest {
 
   private def testStopReplicaFollowsInterBrokerProtocolVersion(interBrokerProtocolVersion: ApiVersion,
                                                                expectedStopReplicaRequestVersion: Short): Unit = {
-    val context = initContext(Seq(1, 2, 3), Set("foo"), 2, 3)
+    val context = initContext(Seq(1, 2, 3), Set("foo"), 2, 3, Map.empty)
     val config = createConfig(interBrokerProtocolVersion)
     val batch = new MockControllerBrokerRequestBatch(context, config)
 
@@ -877,7 +886,8 @@ class ControllerChannelManagerTest {
   private def initContext(brokers: Seq[Int],
                           topics: Set[String],
                           numPartitions: Int,
-                          replicationFactor: Int): ControllerContext = {
+                          replicationFactor: Int,
+                          topicIds: Map[String, Uuid]): ControllerContext = {
     val context = new ControllerContext
     val brokerEpochs = brokers.map { brokerId =>
       val endpoint = new EndPoint("localhost", 9900 + brokerId, new ListenerName("PLAINTEXT"),
@@ -903,6 +913,9 @@ class ControllerChannelManagerTest {
       context.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(replicas))
       leaderIndex += 1
     }
+
+    context.allTopics ++= topics
+    topicIds.foreach { case (name, id) => context.addTopicId(name, id) }
     context
   }
 
