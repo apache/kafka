@@ -982,25 +982,21 @@ class AclAuthorizerTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
 
   @Test
   def testAuthorizeByResourceTypeNoAclFoundOverride(): Unit = {
-    testAuthorizeByResourceTypeNoAclFoundOverride(aclAuthorizer)
-  }
-
-  private def testAuthorizeByResourceTypeNoAclFoundOverride(authorizer: Authorizer): Unit = {
     val props = TestUtils.createBrokerConfig(1, zkConnect)
     props.put(AclAuthorizer.AllowEveryoneIfNoAclIsFoundProp, "true")
 
     val cfg = KafkaConfig.fromProps(props)
-    val testAuthorizer = new AclAuthorizer
+    val aclAuthorizer = new AclAuthorizer
     try {
-      testAuthorizer.configure(cfg.originals)
+      aclAuthorizer.configure(cfg.originals)
       assertTrue("If allow.everyone.if.no.acl.found = true, " +
         "caller should have read access to at least one topic",
-        authorizeByResourceType(testAuthorizer, requestContext, READ, resource.resourceType()))
+        authorizeByResourceType(aclAuthorizer, requestContext, READ, resource.resourceType()))
       assertTrue("If allow.everyone.if.no.acl.found = true, " +
         "caller should have write access to at least one topic",
-        authorizeByResourceType(testAuthorizer, requestContext, WRITE, resource.resourceType()))
+        authorizeByResourceType(aclAuthorizer, requestContext, WRITE, resource.resourceType()))
     } finally {
-      testAuthorizer.close()
+      aclAuthorizer.close()
     }
   }
 

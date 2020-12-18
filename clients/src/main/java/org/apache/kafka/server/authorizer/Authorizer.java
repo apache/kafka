@@ -157,22 +157,27 @@ public interface Authorizer extends Configurable, Closeable {
      * Check if the caller is authorized to perform the given ACL operation on at least one
      * resource of the given type.
      *
-     * It is important to override this interface default in implementations because
-     * 1. The interface default iterates all AclBindings multiple times, without any indexing,
-     *    which is a CPU intense work.
-     * 2. The interface default rebuild several sets of strings, which is a memory intense work.
-     * 3. The interface default cannot perform the audit logging properly
+     * Custom authorizer implementations should consider overriding this default implementation because:
+     * 1. The default implementation iterates all AclBindings multiple times, without any caching
+     *    by principle, host, operation, permission types, and resource types. More efficient
+     *    implementations may be added in custom authorizers that directly access cached entries.
+     * 2. The default implementation cannot integrate with any audit logging included in the
+     *    authorizer implementation.
+     * 3. The default implementation does not support any custom authorizer configs or other access
+     *    rules apart from ACLs.
      *
      * @param requestContext Request context including request resourceType, security protocol, and listener name
      * @param op             The ACL operation to check
      * @param resourceType   The resource type to check
-     * @return               Return {@link AuthorizationResult#ALLOWED} if the caller is authorized to perform the
-     *                       given ACL operation on at least one resource of the given type.
-     *                       Return {@link AuthorizationResult#DENIED} otherwise.
+     * @return               Return {@link AuthorizationResult#ALLOWED} if the caller is authorized
+     *                       to perform the given ACL operation on at least one resource of the
+     *                       given type. Return {@link AuthorizationResult#DENIED} otherwise.
      */
     default AuthorizationResult authorizeByResourceType(AuthorizableRequestContext requestContext, AclOperation op, ResourceType resourceType) {
         SecurityUtils.authorizeByResourceTypeCheckArgs(op, resourceType);
 
+        // Check a hard-coded name to ensure that super users are granted
+        // access regardless of DENY ACLs.
         if (authorize(requestContext, Collections.singletonList(new Action(
                 op, new ResourcePattern(resourceType, "hardcode", PatternType.LITERAL),
                 0, true, false)))
@@ -255,10 +260,8 @@ public interface Authorizer extends Configurable, Closeable {
             return AuthorizationResult.ALLOWED;
         }
 
-        // For any literal allowed, if there's no dominant literal
-        // and prefix denied, return allow.
-        // For any prefix allowed, if there's no dominant prefix
-        // denied, return allow.
+        // For any literal allowed, if there's no dominant literal and prefix denied, return allow.
+        // For any prefix allowed, if there's no dominant prefixdenied, return allow.
         for (Map.Entry<PatternType, Set<String>> entry : allowPatterns.entrySet()) {
             for (String allowStr : entry.getValue()) {
                 if (entry.getKey() == PatternType.LITERAL

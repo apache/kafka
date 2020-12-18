@@ -39,16 +39,14 @@ class AuthorizerInterfaceDefaultTest extends ZooKeeperTestHarness with BaseAutho
   override def setUp(): Unit = {
     super.setUp()
 
-    val authorizers = Seq(interfaceDefaultAuthorizer.authorizer)
-
     // Increase maxUpdateRetries to avoid transient failures
-    authorizers.foreach(a => a.maxUpdateRetries = Int.MaxValue)
+    interfaceDefaultAuthorizer.authorizer.maxUpdateRetries = Int.MaxValue
 
     val props = TestUtils.createBrokerConfig(0, zkConnect)
     props.put(AclAuthorizer.SuperUsersProp, superUsers)
 
     config = KafkaConfig.fromProps(props)
-    authorizers.foreach(a => a.configure(config.originals))
+    interfaceDefaultAuthorizer.authorizer.configure(config.originals)
 
     zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkMaxInFlightRequests,
       Time.SYSTEM, "kafka.test", "AuthorizerInterfaceDefaultTest")
@@ -56,10 +54,7 @@ class AuthorizerInterfaceDefaultTest extends ZooKeeperTestHarness with BaseAutho
 
   @After
   override def tearDown(): Unit = {
-    val authorizers = Seq(interfaceDefaultAuthorizer)
-    authorizers.foreach(a => {
-      a.close()
-    })
+    interfaceDefaultAuthorizer.close()
     zooKeeperClient.close()
     super.tearDown()
   }

@@ -321,13 +321,13 @@ class AclAuthorizer extends Authorizer with Logging {
     if (isSuperUser(principal))
       return AuthorizationResult.ALLOWED
 
+    val resourceSnapshot = resourceCache
     val principalStr = principal.toString
-
     val host = requestContext.clientAddress().getHostAddress
     val action = new Action(op, new ResourcePattern(resourceType, "NONE", PatternType.UNKNOWN), 0, true, true)
 
     val denyLiterals = matchingResources(
-      principalStr, host, op, AclPermissionType.DENY, resourceType, PatternType.LITERAL)
+      resourceSnapshot, principalStr, host, op, AclPermissionType.DENY, resourceType, PatternType.LITERAL)
 
     if (denyAll(denyLiterals)) {
       logAuditMessage(requestContext, action, authorized = false)
@@ -340,7 +340,7 @@ class AclAuthorizer extends Authorizer with Logging {
     }
 
     val denyPrefixes = matchingResources(
-      principalStr, host, op, AclPermissionType.DENY, resourceType, PatternType.PREFIXED)
+      resourceSnapshot, principalStr, host, op, AclPermissionType.DENY, resourceType, PatternType.PREFIXED)
 
     if (denyLiterals.isEmpty && denyPrefixes.isEmpty) {
       if (hasMatchingResources(principalStr, host, op, AclPermissionType.ALLOW, resourceType, PatternType.PREFIXED)
@@ -354,9 +354,9 @@ class AclAuthorizer extends Authorizer with Logging {
     }
 
     val allowLiterals = matchingResources(
-      principalStr, host, op, AclPermissionType.ALLOW, resourceType, PatternType.LITERAL)
+      resourceSnapshot, principalStr, host, op, AclPermissionType.ALLOW, resourceType, PatternType.LITERAL)
     val allowPrefixes = matchingResources(
-      principalStr, host, op, AclPermissionType.ALLOW, resourceType, PatternType.PREFIXED)
+      resourceSnapshot, principalStr, host, op, AclPermissionType.ALLOW, resourceType, PatternType.PREFIXED)
 
     if (allowAny(allowLiterals, allowPrefixes, denyLiterals, denyPrefixes)) {
       logAuditMessage(requestContext, action, authorized = true)
@@ -367,68 +367,61 @@ class AclAuthorizer extends Authorizer with Logging {
     AuthorizationResult.DENIED
   }
 
-  def matchingResources(principal: String, host: String, op: AclOperation, permission: AclPermissionType,
-                        resourceType: ResourceType, patternType: PatternType): List[immutable.HashSet[String]] = {
-    var matched = List[immutable.HashSet[String]]()
-    for (p <- Set(principal, AclEntry.WildcardPrincipalString)) {
-      for (h <- Set(host, AclEntry.WildcardHost)) {
-        for (o <- Set(op, AclOperation.ALL)) {
-          val resourceIndex = new ResourceTypeKey(
-            new AccessControlEntry(p, h, o, permission), resourceType, patternType)
-          resourceCache.get(resourceIndex) match {
-            case Some(resources) => matched = matched :+ resources
-            case None =>
-          }
-        }
+  private def matchingResources(resourceSnapshot: immutable.Map[ResourceTypeKey, immutable.Set[String]],
+                                principal: String, host: String, op: AclOperation, permission: AclPermissionType,
+                                resourceType: ResourceType, patternType: PatternType): ArrayBuffer[Set[String]] = {
+    val matched = ArrayBuffer[immutable.Set[String]]()
+    for (p <- Set(principal, AclEntry.WildcardPrincipalString);
+         h <- Set(host, AclEntry.WildcardHost);
+         o <- Set(op, AclOperation.ALL)) {
+      val resourceTypeKey = ResourceTypeKey(
+        new AccessControlEntry(p, h, o, permission), resourceType, patternType)
+      resourceCache.get(resourceTypeKey) match {
+        case Some(resources) => matched.addOne(resources)
+        case None =>
       }
     }
     matched
   }
 
-  def hasMatchingResources(principal: String, host: String, op: AclOperation, permission: AclPermissionType,
+  private def hasMatchingResources(principal: String, host: String, op: AclOperation, permission: AclPermissionType,
                            resourceType: ResourceType, patternType: PatternType): Boolean = {
-    for (p <- Set(principal, AclEntry.WildcardPrincipalString)) {
-      for (h <- Set(host, AclEntry.WildcardHost)) {
-        for (o <- Set(op, AclOperation.ALL)) {
-          val resourceIndex = new ResourceTypeKey(
+    for (p <- Set(principal, AclEntry.WildcardPrincipalString);
+         h <- Set(host, AclEntry.WildcardHost);
+         o <- Set(op, AclOperation.ALL)) {
+          val resourceTypeKey = ResourceTypeKey(
             new AccessControlEntry(p, h, o, permission), resourceType, patternType)
-          resourceCache.get(resourceIndex) match {
-            case Some(_) => return true
-            case None =>
-          }
-        }
-      }
+          if (resourceCache.contains(resourceTypeKey))
+            return true
     }
     false
   }
 
-  private def denyAll(denyLiterals: List[immutable.HashSet[String]]): Boolean =
-    denyLiterals.exists(r => r.contains(ResourcePattern.WILDCARD_RESOURCE))
+  private def denyAll(denyLiterals: ArrayBuffer[immutable.Set[String]]): Boolean =
+    denyLiterals.exists(_.contains(ResourcePattern.WILDCARD_RESOURCE))
 
 
-  private def allowAny(allowLiterals: List[immutable.Set[String]], allowPrefixes: List[immutable.Set[String]],
-                       denyLiterals: List[immutable.Set[String]], denyPrefixes: List[immutable.Set[String]]): Boolean = {
-    (allowPrefixes.exists(prefixes =>
-          prefixes.exists(prefix => allowPrefix(prefix, denyPrefixes)))
-      || allowLiterals.exists(literals =>
-            literals.exists(literal => allowLiteral(literal, denyLiterals, denyPrefixes))))
+  private def allowAny(allowLiterals: ArrayBuffer[immutable.Set[String]], allowPrefixes: ArrayBuffer[immutable.Set[String]],
+                       denyLiterals: ArrayBuffer[immutable.Set[String]], denyPrefixes: ArrayBuffer[immutable.Set[String]]): Boolean = {
+    (allowPrefixes.exists(_.exists(prefix => allowPrefix(prefix, denyPrefixes)))
+      || allowLiterals.exists(_.exists(literal => allowLiteral(literal, denyLiterals, denyPrefixes))))
   }
 
-  private def allowLiteral(literalName: String, denyLiterals: List[immutable.Set[String]],
-                           denyPrefixes: List[immutable.Set[String]]): Boolean = {
-    literalName match{
+  private def allowLiteral(literalName: String, denyLiterals: ArrayBuffer[immutable.Set[String]],
+                           denyPrefixes: ArrayBuffer[immutable.Set[String]]): Boolean = {
+    literalName match {
       case ResourcePattern.WILDCARD_RESOURCE => true
-      case _ => (denyLiterals.forall(denyLiterals => !denyLiterals.contains(literalName))
+      case _ => (denyLiterals.forall(!_.contains(literalName))
                     && !hasDominantPrefixedDeny(literalName, denyPrefixes))
     }
   }
 
   private def allowPrefix(prefixName: String,
-                          denyPrefixes: List[immutable.Set[String]]): Boolean = {
+                          denyPrefixes: ArrayBuffer[immutable.Set[String]]): Boolean = {
     !hasDominantPrefixedDeny(prefixName, denyPrefixes)
   }
 
-  private def hasDominantPrefixedDeny(resourceName: String, denyPrefixes: List[immutable.Set[String]]): Boolean = {
+  private def hasDominantPrefixedDeny(resourceName: String, denyPrefixes: ArrayBuffer[immutable.Set[String]]): Boolean = {
     val sb = new StringBuilder
     for (ch <- resourceName.toCharArray) {
       sb.append(ch)
@@ -685,30 +678,27 @@ class AclAuthorizer extends Authorizer with Logging {
 
   // Visible for benchmark
   def updateCache(resource: ResourcePattern, versionedAcls: VersionedAcls): Unit = {
-    val currentAces: Set[AccessControlEntry] = aclCache.get(resource) match {
-      case Some(versionedAcls) => versionedAcls.acls.map(aclEntry => aclEntry.ace)
-      case None => Set.empty
-    }
+    val currentAces: Set[AccessControlEntry] = aclCache.get(resource).map(_.acls.map(_.ace)).getOrElse(Set.empty)
     val newAces: Set[AccessControlEntry] = versionedAcls.acls.map(aclEntry => aclEntry.ace)
     val acesToAdd = newAces.diff(currentAces)
     val acesToRemove = currentAces.diff(newAces)
 
     acesToAdd.foreach(ace => {
-      val resourceIndex = new ResourceTypeKey(ace, resource.resourceType(), resource.patternType())
-      resourceCache.get(resourceIndex) match {
-        case Some(resources) => resourceCache += (resourceIndex -> (resources + resource.name()))
-        case None => resourceCache += (resourceIndex -> immutable.HashSet(resource.name()))
+      val resourceTypeKey = ResourceTypeKey(ace, resource.resourceType(), resource.patternType())
+      resourceCache.get(resourceTypeKey) match {
+        case Some(resources) => resourceCache += (resourceTypeKey -> (resources + resource.name()))
+        case None => resourceCache += (resourceTypeKey -> immutable.HashSet(resource.name()))
       }
     })
     acesToRemove.foreach(ace => {
-      val resourceIndex = new ResourceTypeKey(ace, resource.resourceType(), resource.patternType())
-      resourceCache.get(resourceIndex) match {
+      val resourceTypeKey = ResourceTypeKey(ace, resource.resourceType(), resource.patternType())
+      resourceCache.get(resourceTypeKey) match {
         case Some(resources) =>
           val newResources = resources - resource.name()
           if (newResources.isEmpty) {
-            resourceCache -= resourceIndex
+            resourceCache -= resourceTypeKey
           } else {
-            resourceCache += (resourceIndex -> newResources)
+            resourceCache += (resourceTypeKey -> newResources)
           }
         case None =>
       }

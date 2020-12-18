@@ -172,7 +172,7 @@ public class SecurityUtils {
         }
     }
 
-    public static boolean canDenyAll(ResourcePattern pattern) {
+    public static boolean denyAll(ResourcePattern pattern) {
         return pattern.patternType() == PatternType.LITERAL
             && pattern.name().equals(ResourcePattern.WILDCARD_RESOURCE);
     }
