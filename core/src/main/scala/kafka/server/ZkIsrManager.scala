@@ -62,8 +62,8 @@ class ZkIsrManager(scheduler: Scheduler, time: Time, zkClient: KafkaZkClient) ex
   }
 
   override def submit(alterIsrItem: AlterIsrItem): Boolean = {
-    debug(s"Writing new ISR " + alterIsrItem.leaderAndIsr.isr + " to ZooKeeper with version " +
-      alterIsrItem.leaderAndIsr.zkVersion + " for partition " + alterIsrItem.topicPartition)
+    debug(s"Writing new ISR ${alterIsrItem.leaderAndIsr.isr} to ZooKeeper with version " +
+      s"${alterIsrItem.leaderAndIsr.zkVersion} for partition ${alterIsrItem.topicPartition}")
 
     val (updateSucceeded, newVersion) = ReplicationUtils.updateLeaderAndIsr(zkClient, alterIsrItem.topicPartition,
       alterIsrItem.leaderAndIsr, alterIsrItem.controllerEpoch)
